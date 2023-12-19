@@ -443,7 +443,7 @@ func isSNOCluster(oc *exutil.CLI) bool {
 }
 
 // LoadCPUMemWorkload load cpu and memory workload
-func LoadCPUMemWorkload(oc *exutil.CLI) {
+func LoadCPUMemWorkload(oc *exutil.CLI, workLoadtime int) {
 	var (
 		workerCPUtopstr    string
 		workerCPUtopint    int
@@ -451,10 +451,8 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		workerMEMtopint    int
 		n                  int
 		m                  int
-		c                  int
 		r                  int
 		dn                 int
-		s                  int
 		cpuMetric          = 800
 		memMetric          = 700
 		reserveCPUP        = 50
@@ -471,7 +469,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	defer os.RemoveAll(dirname)
 	os.MkdirAll(dirname, 0755)
 
-	workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", "--no-headers").OutputToFile("load-cpu-mem_" + randomStr + "-log")
+	workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "--no-headers").OutputToFile("load-cpu-mem_" + randomStr + "-log")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cmd := fmt.Sprintf(`cat %v |head -1 | awk '{print $1}'`, workerNode)
 	cmdOut, err := exec.Command("bash", "-c", cmd).Output()
@@ -529,21 +527,17 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	if n <= 0 {
 		e2e.Logf("No more CPU resource is available, no load will be added!")
 	} else {
-		p := workerNodeCount
 		if workerNodeCount == 1 {
 			dn = 1
 			r = 2
-			c = 3
 		} else {
 			dn = 2
-			c = 3
 			if n > workerNodeCount {
 				r = 3
 			} else {
 				r = workerNodeCount
 			}
 		}
-		s = int(500 / n / dn)
 		// Get the available pods of worker nodes, based on this, the upper limit for a namespace is calculated
 		cmd1 := fmt.Sprintf(`oc describe node/%s | grep 'Non-terminated Pods' | grep -oP "[0-9]+"`, worker1)
 		cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
@@ -563,14 +557,13 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 			n = 1
 			r = 1
 			dn = 1
-			c = 3
-			s = 10
 		}
 		e2e.Logf("Start CPU load ...")
-		cpuloadCmd := fmt.Sprintf(`clusterbuster -N %v -B cpuload -P server -b 5 -r %v -p %v -d %v -c %v -s %v -W -m 1000 -D .2 -M 1 -t 36000 -x -v > %v`, n, r, p, dn, c, s, dirname+"clusterbuster-cpu-log")
+		cpuloadCmd := fmt.Sprintf(`clusterbuster --basename=cpuload --workload=cpusoaker --namespaces=%v --processes=1 --deployments=%v --node-selector=node-role.kubernetes.io/master --tolerate=node-role.kubernetes.io/master:Equal:NoSchedule --workloadruntime=7200 --report=none > %v &`, n, dn, dirname+"clusterbuster-cpu-log")
 		e2e.Logf("%v", cpuloadCmd)
-		_, err = exec.Command("bash", "-c", cpuloadCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := exec.Command("bash", "-c", cpuloadCmd)
+		cmdErr := cmd.Start()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		// Wait for 3 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
 		time.Sleep(180 * time.Second)
 		e2e.Logf("----> Created cpuload related pods: %v", n*r*dn)
@@ -615,11 +608,9 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	if m <= 0 {
 		e2e.Logf("No more memory resource is available, no load will be added!")
 	} else {
-		p := workerNodeCount
 		if workerNodeCount == 1 {
 			dn = 1
 			r = 2
-			c = 6
 		} else {
 			r = workerNodeCount
 			if m > workerNodeCount {
@@ -627,9 +618,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 			} else {
 				dn = workerNodeCount
 			}
-			c = 3
 		}
-		s = int(500 / m / dn)
 		// Get the available pods of worker nodes, based on this, the upper limit for a namespace is calculated
 		cmd1 := fmt.Sprintf(`oc describe node/%v | grep 'Non-terminated Pods' | grep -oP "[0-9]+"`, worker1)
 		cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
@@ -653,14 +642,13 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 			m = 1
 			r = 1
 			dn = 1
-			c = 3
-			s = 10
 		}
 		e2e.Logf("Start Memory load ...")
-		memloadCmd := fmt.Sprintf(`clusterbuster -N %v -B memload -P server -r %v -p %v -d %v -c %v -s %v -W -x -v > %v`, m, r, p, dn, c, s, dirname+"clusterbuster-mem-log")
+		memloadCmd := fmt.Sprintf(`clusterbuster --basename=memload --workload=memory --namespaces=%v --processes=1 --deployments=%v --node-selector=node-role.kubernetes.io/master --tolerate=node-role.kubernetes.io/master:Equal:NoSchedule --workloadruntime=7200 --report=none> %v &`, m, dn, dirname+"clusterbuster-mem-log")
 		e2e.Logf("%v", memloadCmd)
-		_, err = exec.Command("bash", "-c", memloadCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := exec.Command("bash", "-c", memloadCmd)
+		cmdErr := cmd.Start()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		// Wait for 5 mins, ensure that all load pods are strated up.
 		time.Sleep(300 * time.Second)
 		e2e.Logf("----> Created memload related pods: %v", m*r*dn)

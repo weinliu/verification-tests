@@ -760,7 +760,7 @@ spec:
 		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
 		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", "OCP-40667/nodes.log")
 		if cpuAvgValMaster < 70 && memAvgValMaster < 70 && cpuAvgValWorker < 60 && memAvgValWorker < 60 {
-			LoadCPUMemWorkload(oc)
+			LoadCPUMemWorkload(oc, 7200)
 		}
 
 		exutil.By("Check the abnormal pods")
@@ -841,11 +841,11 @@ spec:
 			e2e.Logf("No errors found in KAS logs")
 		}
 
-		exutil.By("Check the all worker nodes workload are normal")
+		exutil.By("Check the all master nodes workload are normal")
 		var cpuAvgVal int
 		var memAvgVal int
 		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
-			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
+			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "master", "OCP-40667/nodes_new.log")
 			if cpuAvgVal > 70 || memAvgVal > 75 {
 				return false, nil
 			}
@@ -882,13 +882,13 @@ spec:
 		)
 		defer os.RemoveAll(dirname)
 		defer func() {
-			cmdcpu := `clusterbuster --cleanup -B cpuload`
+			cmdcpu := `clusterbuster --cleanup -B cpuload -w cpusoaker`
 			_, err := exec.Command("bash", "-c", cmdcpu).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
 		defer func() {
-			cmdmem := `clusterbuster --cleanup -B memload`
+			cmdmem := `clusterbuster --cleanup -B memload -w memory`
 			_, err := exec.Command("bash", "-c", cmdmem).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
@@ -976,8 +976,8 @@ spec:
 			e2e.Logf("No errors found in KAS logs")
 		}
 
-		exutil.By("Check the all worker nodes workload are normal")
-		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
+		exutil.By("Check the all master nodes workload are normal")
+		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "master", "OCP-40667/nodes_new.log")
 		if cpuAvgVal > 75 || memAvgVal > 85 {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
@@ -1014,13 +1014,13 @@ spec:
 		)
 
 		defer func() {
-			cmdcpu := `clusterbuster --cleanup -B cpuload`
+			cmdcpu := `clusterbuster --cleanup -B cpuload -w cpusoaker`
 			_, err := exec.Command("bash", "-c", cmdcpu).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
 		defer func() {
-			cmdmem := `clusterbuster --cleanup -B memload`
+			cmdmem := `clusterbuster --cleanup -B memload -w memory`
 			_, err := exec.Command("bash", "-c", cmdmem).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
@@ -1041,7 +1041,7 @@ spec:
 		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", nodesLogFile)
 		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", nodesLogFile)
 		if cpuAvgValMaster < 70 && memAvgValMaster < 70 && cpuAvgValWorker < 60 && memAvgValWorker < 60 {
-			LoadCPUMemWorkload(oc)
+			LoadCPUMemWorkload(oc, 300)
 		}
 
 		exutil.By("Check the abnormal pods")
@@ -1117,11 +1117,11 @@ spec:
 			e2e.Logf("No errors found in KAS logs")
 		}
 
-		exutil.By("Check the all worker nodes workload are normal")
+		exutil.By("Check the all master nodes workload are normal")
 		var cpuAvgVal int
 		var memAvgVal int
 		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
-			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", caseID+"/nodes_new.log")
+			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "master", caseID+"/nodes_new.log")
 			if cpuAvgVal > 75 || memAvgVal > 85 {
 				return false, nil
 			}
