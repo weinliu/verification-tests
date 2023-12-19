@@ -361,6 +361,36 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from catalog CR", func() {
+		var (
+			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
+			catalog         = olmv1util.CatalogDescription{
+				Name:     "catalog-69242",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69242",
+				Template: catalogTemplate,
+			}
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("get the old related crd package/bundlemetadata/bundledeployment")
+		packageOutput, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("package").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(packageOutput)).To(o.ContainSubstring("error: the server doesn't have a resource type \"package\""))
+
+		bundlemetadata, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("bundlemetadata").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(bundlemetadata)).To(o.ContainSubstring("error: the server doesn't have a resource type \"bundlemetadata\""))
+
+		catalogmetadata, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalogmetadata").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(catalogmetadata)).To(o.ContainSubstring("error: the server doesn't have a resource type \"catalogmetadata\""))
+
+	})
+
 	// var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// For now, for 4.15, OLM removes the Package and CatalogMetadata resources,
