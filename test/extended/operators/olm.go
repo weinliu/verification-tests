@@ -8487,12 +8487,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 				queryContent := fmt.Sprintf("https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=%s", metric)
 				msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", olmPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), queryContent).Outputs()
-				e2e.Logf("%s %v: %v", metric, err, msg)
+				e2e.Logf("metric:%s, err:%v, msg:%v", metric, err, msg)
 				if msg == "" {
 					return false, nil
 				}
 				json.Unmarshal([]byte(msg), &data)
-				if len(data.Data.Result[0].Value) < 2 {
+				if len(data.Data.Result) < 1 || len(data.Data.Result[0].Value) < 2 {
 					return false, nil
 				}
 				metricsAfter.subscriptionSyncTotal = 0
