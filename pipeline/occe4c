@@ -90,6 +90,35 @@ else
       echo $https_proxy_value $http_proxy_value
     fi
   fi
+
+  #setup bastion information
+  CLUSTER_INFO_YAML=${FLEXYURLBASE}${BUILD_NUM_FOR_CONF}"/artifact/workdir/install-dir/cluster_info.yaml"
+  ret_code=`curl -s -k ${CLUSTER_INFO_YAML} -o ./cluster_info.yaml  -w "%{http_code}" || true `
+  if [ "${ret_code}" == "000" ]; then
+    echo "there is problem to access jenkins server to get cluster_info.yaml. sleep 10s and try it again"
+    sleep 10
+    ret_code=`curl -s -k ${CLUSTER_INFO_YAML} -o ./cluster_info.yaml  -w "%{http_code}" || true `
+    if [ "${ret_code}" == "000" ]; then
+      echo "there is still problem to access jenkins server to get cluster_info.yaml. treate it as no cluster_info to continue the testing"
+    fi
+  fi
+  if [ "${ret_code}" == "404" ]; then
+    echo "there is no cluster_info.yaml provided by installation job. continue to test. if you need it, please contact with installation team about why no file."
+  fi
+  if [ "${ret_code}" == "200" ]; then
+    bastion=`cat ./cluster_info.yaml | jq -r .INSTALLER.BASTION`
+    bastion_internal_ip=`cat ./cluster_info.yaml | jq -r .INSTALLER.BASTION_INTERNAL_IP`
+    bastion_ssh_user=`cat ./cluster_info.yaml | jq -r .INSTALLER.BASTION_SSH_USER`
+    if [ "${bastion}" != "null" ]; then
+      export QE_BASTION_PUBLIC_ADDRESS=${bastion}
+    fi
+    if [ "${bastion_internal_ip}" != "null" ]; then
+      export QE_BASTION_PRIVATE_ADDRESS=${bastion_internal_ip}
+    fi
+    if [ "${bastion_ssh_user}" != "null" ]; then
+      export QE_BASTION_SSH_USER=${bastion_ssh_user}
+    fi
+  fi
 fi
 if ! [ -e "/root/gce.key" ]; then
     echo "the gce authentication file does not exit"
@@ -103,8 +132,9 @@ echo "the gce file is ${config_name}"
 cp -fr /root/gce.key ${config_name}
 eval export GOOGLE_APPLICATION_CREDENTIALS="${config_name}"
 eval export SSH_CLOUD_PRIV_KEY="${WORKDIRBASE}/internal/config/keys/openshift-qe.pem"
-export SSH_CLOUD_PRIV_GCP_USER="core"
-export SSH_CLOUD_PRIV_AWS_USER="core"
+export SSH_CLOUD_PRIV_GCP_USER="${QE_BASTION_SSH_USER:-core}"
+export SSH_CLOUD_PRIV_AWS_USER="${QE_BASTION_SSH_USER:-core}"
+export SSH_CLOUD_PRIV_AZURE_USER="${QE_BASTION_SSH_USER:-core}"
 export GITHUB_TOKEN=`cat /root/github.key || true `
 env | grep proxy || true
 
