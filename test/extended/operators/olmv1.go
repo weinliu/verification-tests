@@ -347,7 +347,7 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
 			catalog         = olmv1util.CatalogDescription{
 				Name:     "catalog-69123",
-				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69123",
 				Template: catalogTemplate,
 			}
 		)
@@ -357,7 +357,7 @@ var _ = g.Describe("[sig-operators] OLM v1 should", func() {
 
 		exutil.By("get the index content through http service on cluster")
 		curlOutput := catalog.GetContent(oc)
-		o.Expect(strings.Contains(string(curlOutput), "\"name\":\"nginx68821\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(string(curlOutput), "\"name\":\"nginx69123\"")).To(o.BeTrue())
 
 	})
 
