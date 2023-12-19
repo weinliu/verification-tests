@@ -454,6 +454,34 @@ func (a *AwsClient) GetDefaultSecurityGroupByVpcID(vpcID string) (*ec2.SecurityG
 	return ep.SecurityGroups[0], nil
 }
 
+func (a *AwsClient) GetSecurityGroupByGroupName(groupName string) (*ec2.SecurityGroup, error) {
+	filters := []*ec2.Filter{
+		{
+			Name: aws.String("group-name"),
+			Values: []*string{
+				aws.String(groupName),
+			},
+		},
+	}
+	input := ec2.DescribeSecurityGroupsInput{Filters: filters}
+	ep, err := a.svc.DescribeSecurityGroups(&input)
+	if err != nil {
+		return nil, err
+	}
+
+	return ep.SecurityGroups[0], nil
+}
+
+func (a *AwsClient) GetSecurityGroupByGroupID(groupID string) (*ec2.SecurityGroup, error) {
+	input := ec2.DescribeSecurityGroupsInput{GroupIds: []*string{aws.String(groupID)}}
+	ep, err := a.svc.DescribeSecurityGroups(&input)
+	if err != nil {
+		return nil, err
+	}
+
+	return ep.SecurityGroups[0], nil
+}
+
 func (a *AwsClient) GetAvailabilityZoneNames() ([]string, error) {
 	zones, err := a.svc.DescribeAvailabilityZones(&ec2.DescribeAvailabilityZonesInput{})
 	if err != nil {

@@ -1,9 +1,15 @@
 package clusterinfrastructure
 
 import (
+	"path/filepath"
+	"strings"
+	"time"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -136,5 +142,66 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("Alibaba platform is currently tech preview, upgrades are not allowed"))
 
+	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Author:huliu-Medium-70019-[CCM]Security Group and rules resource should be deleted when deleting a Ingress Controller", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		// skip on UPI because there is a bug: https://issues.redhat.com/browse/OCPBUGS-8213
+		exutil.SkipConditionally(oc)
+		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
+		ingressControllerTemplate := filepath.Join(ccmBaseDir, "ingressController70019.yaml")
+		ingressController := ingressControllerDescription{
+			template: ingressControllerTemplate,
+			name:     "test-swtch-lb",
+		}
+		g.By("Create ingressController")
+		defer ingressController.deleteIngressController(oc)
+		ingressController.createIngressController(oc)
+
+		g.By("Get the dns")
+		var dns string
+		err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+			dnsfetched, dnsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("DNSRecord", ingressController.name+"-wildcard", "-n", "openshift-ingress-operator", "-o=jsonpath={.spec.targets[0]}").Output()
+			if dnsErr != nil {
+				e2e.Logf("hasn't got the dns ...")
+				return false, nil
+			}
+			dns = dnsfetched
+			e2e.Logf("got the dns, dns is: %s", dns)
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "got the dns failed")
+
+		dnskeys := strings.Split(dns, "-")
+		groupname := "k8s-elb-" + dnskeys[1]
+		e2e.Logf("groupname: %s", groupname)
+
+		g.By("Get the security group id")
+		exutil.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		sg, err := awsClient.GetSecurityGroupByGroupName(groupname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sgId := *sg.GroupId
+		e2e.Logf("sgId: %s", sgId)
+
+		ingressController.deleteIngressController(oc)
+
+		g.By("Wait the dns deleted")
+		err = wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+			dnsfetched, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("DNSRecord", ingressController.name+"-wildcard", "-n", "openshift-ingress-operator", "-o=jsonpath={.spec.targets[0]}").Output()
+			if strings.Contains(dnsfetched, "NotFound") {
+				e2e.Logf("dns has been deleted")
+				return true, nil
+			}
+			e2e.Logf("still can get the dns, dns is: %s", dnsfetched)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "wait the dns delete failed")
+
+		g.By("Check the security group has also been deleted")
+		_, err = awsClient.GetSecurityGroupByGroupID(sgId)
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(err.Error(), "InvalidGroup.NotFound")).To(o.BeTrue())
 	})
 })

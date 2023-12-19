@@ -11,6 +11,21 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type ingressControllerDescription struct {
+	template string
+	name     string
+}
+
+func (ingressController *ingressControllerDescription) createIngressController(oc *exutil.CLI) {
+	e2e.Logf("Creating ingressController ...")
+	exutil.CreateNsResourceFromTemplate(oc, "openshift-ingress-operator", "--ignore-unknown-parameters=true", "-f", ingressController.template, "-p", "NAME="+ingressController.name)
+}
+
+func (ingressController *ingressControllerDescription) deleteIngressController(oc *exutil.CLI) error {
+	e2e.Logf("Deleting ingressController ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("ingressController", ingressController.name, "-n", "openshift-ingress-operator").Execute()
+}
+
 // waitForClusterHealthy check if new machineconfig is applied successfully
 func waitForClusterHealthy(oc *exutil.CLI) {
 	e2e.Logf("Waiting for the cluster healthy ...")
