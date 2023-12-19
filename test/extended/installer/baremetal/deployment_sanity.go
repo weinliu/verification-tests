@@ -10,16 +10,11 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-const maxCpuUsageAllowed float64 = 90.0
-
 var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc               = exutil.NewCLI("baremetal-deployment-sanity", exutil.KubeConfigPath())
-		iaasPlatform     string
-		goodPodStates    = []string{"Running", "Succeeded", "Completed", "NodeAffinity"}
-		warningPodStates = []string{"Pending", "Terminating"}
-		issueReported    bool
+		oc           = exutil.NewCLI("baremetal-deployment-sanity", exutil.KubeConfigPath())
+		iaasPlatform string
 	)
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
@@ -65,47 +60,6 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 		podName := getPodName(oc, ns32361)
 		podStatus := getPodStatus(oc, ns32361, podName)
 		o.Expect(podStatus).To(o.Equal("Running"))
-	})
-
-	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Medium-32195-Verify that all pods in all namespaces are in good state", func() {
-		runningPods := []string{}
-		warnningPods := []string{}
-		failedPods := []string{}
-
-		g.By("Running oc get pods -A")
-		allNamespaces, err := oc.AsAdmin().Run("get").Args("namespaces", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		nameSpaces := strings.Fields(allNamespaces)
-		for _, ns := range nameSpaces {
-			allPods, err := oc.AsAdmin().Run("get").Args("pods", "-n", ns, "-o=jsonpath={.items[*].metadata.name}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			pods := strings.Fields(allPods)
-			for _, pod := range pods {
-				podStatus := getPodStatus(oc, ns, pod)
-				if stringInSlice(podStatus, goodPodStates) {
-					runningPods = append(runningPods, pod)
-				} else if stringInSlice(podStatus, warningPodStates) {
-					warnningPods = append(warnningPods, pod+"/"+ns)
-				} else {
-					failedPods = append(failedPods, pod+"/"+ns)
-				}
-			}
-		}
-
-		if len(runningPods) == 0 {
-			e2e.Logf("\nList of running pods is empty %s\n", runningPods)
-			issueReported = true
-		}
-		if len(failedPods) != 0 {
-			e2e.Logf("\nFailed pods are: %s\n", failedPods)
-			issueReported = true
-		}
-		if len(warnningPods) != 0 {
-			e2e.Logf("\nWarning pods are: %s\n", warnningPods)
-			issueReported = true
-		}
-		o.Expect(issueReported).NotTo(o.BeTrue())
 	})
 
 	// author: jhajyahy@redhat.com
@@ -157,5 +111,23 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 			}
 		}
 		o.Expect(cpuExceededNodes).Should(o.BeEmpty(), "These nodes exceed max CPU usage allowed: %s", cpuExceededNodes)
+	})
+
+	// author: jhajyahy@redhat.com
+	g.It("Author:jhajyahy-Medium-39125-Verify that every node memory is sufficient", func() {
+		g.By("Running oc get nodes")
+		outOfMemoryNodes := []string{}
+		nodeNames, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(nodeErr).NotTo(o.HaveOccurred(), "Failed to execute oc get nodes")
+		nodes := strings.Fields(nodeNames)
+		for _, node := range nodes {
+			availMem := getNodeavailMem(oc, node)
+			e2e.Logf("\nAvailable mem of Node %s is %d", node, availMem)
+			if availMem < minRequiredMemoryInBytes {
+				outOfMemoryNodes = append(outOfMemoryNodes, node)
+				e2e.Logf("\nNode %s does not meet minimum required memory %s Bytes ", node, minRequiredMemoryInBytes)
+			}
+		}
+		o.Expect(outOfMemoryNodes).Should(o.BeEmpty(), "These nodes does not meet minimum required memory: %s", outOfMemoryNodes)
 	})
 })

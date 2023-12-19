@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,12 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+)
+
+const (
+	machineAPINamespace              = "openshift-machine-api"
+	maxCpuUsageAllowed       float64 = 90.0
+	minRequiredMemoryInBytes         = 1000000000
 )
 
 type Response struct {
@@ -101,15 +108,6 @@ func getPodStatus(oc *exutil.CLI, namespace string, podName string) string {
 	return podStatus
 }
 
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
 func getNodeCpuUsage(oc *exutil.CLI, node string, sampling_time int) float64 {
 	samplingTime := strconv.Itoa(sampling_time)
 
@@ -142,4 +140,47 @@ func getClusterUptime(oc *exutil.CLI) (int, error) {
 	uptime := now.Sub(returnTime)
 	uptimeByMin := int(uptime.Minutes())
 	return uptimeByMin, nil
+}
+
+func getNodeavailMem(oc *exutil.CLI, node string) int {
+	query := "query=node_memory_MemAvailable_bytes%7Binstance%3D%27" + node + "%27%7D"
+	url := "http://localhost:9090/api/v1/query?" + query
+
+	jsonString, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-s", url).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var response Response
+	unmarshalErr := json.Unmarshal([]byte(jsonString), &response)
+	o.Expect(unmarshalErr).NotTo(o.HaveOccurred())
+	memUsage := response.Data.Result[0].Value[1].(string)
+	availableMem, err := strconv.Atoi(memUsage)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return availableMem
+}
+
+// make sure operator is not processing and degraded
+func checkOperator(oc *exutil.CLI, operatorName string) (bool, error) {
+	output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
+		e2e.Logf("clusteroperator %s is abnormal\n", operatorName)
+		return false, nil
+	}
+	return true, nil
+}
+
+func waitForPodNotFound(oc *exutil.CLI, podName string, nameSpace string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (bool, error) {
+		out, err := oc.AsAdmin().Run("get").Args("-n", nameSpace, "pods", "-o=jsonpath={.items[*].metadata.name}").Output()
+		if err != nil {
+			return false, err
+		}
+		if !strings.Contains(out, podName) {
+			e2e.Logf("Pod %v still exists is", podName)
+			return true, nil
+		}
+		e2e.Logf("Pod %v exists, Trying again", podName)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The test deployment job is running")
 }

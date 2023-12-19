@@ -7,8 +7,6 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-const machineAPINamespace = "openshift-machine-api"
-
 var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
