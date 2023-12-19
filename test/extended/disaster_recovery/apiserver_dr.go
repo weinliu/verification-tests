@@ -354,8 +354,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			e2e.Logf("Post restarting the cluster, cluster health check passed")
 			// Output mem usage of top 3 system processes of work nodes for debugging
 			cmd := "ps -o pid,user,%mem,vsz,rss,command ax | sort -b -k3 -r | head -3"
-			for _, node := range workerNodes {
-				out, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "openshift-kube-apiserver", "node/"+node.GetName(), "--", "chroot", "/host", "bash", "-c", cmd).Output()
+			workerNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
+			for _, node := range workerNodeList {
+				out, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "openshift-kube-apiserver", "node/"+node, "--", "chroot", "/host", "bash", "-c", cmd).Output()
 				e2e.Logf("-----------------\n%s", out)
 			}
 		} else {
