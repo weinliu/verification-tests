@@ -339,6 +339,26 @@ func (pvc *persistentVolumeClaim) waitResizeSuccess(oc *exutil.CLI, expandedCapa
 	waitPVCVolSizeToGetResized(oc, pvc.namespace, pvc.name, expandedCapactiy)
 }
 
+// Resizes the volume and checks data integrity
+func (pvc *persistentVolumeClaim) resizeAndCheckDataIntegrity(oc *exutil.CLI, dep deployment, expandedCapacity string) {
+	exutil.By("#. Apply the patch to resize the pvc volume")
+	o.Expect(applyVolumeResizePatch(oc, pvc.name, pvc.namespace, expandedCapacity)).To(o.ContainSubstring("patched"))
+	pvc.capacity = expandedCapacity
+
+	exutil.By("#. Waiting for the pvc capacity update sucessfully")
+	waitPVVolSizeToGetResized(oc, pvc.namespace, pvc.name, pvc.capacity)
+	pvc.waitResizeSuccess(oc, pvc.capacity)
+
+	exutil.By("#. Check origin data intact and write new data in pod")
+	if dep.typepath == "mountPath" {
+		dep.checkPodMountedVolumeDataExist(oc, true)
+		dep.checkPodMountedVolumeCouldRW(oc)
+	} else {
+		dep.checkDataBlockType(oc)
+		dep.writeDataBlockType(oc)
+	}
+}
+
 // Get the VolumeMode expected to equal
 func (pvc *persistentVolumeClaim) checkVolumeModeAsexpected(oc *exutil.CLI, vm string) {
 	pvcVM, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvc.name, "-n", pvc.namespace, "-o=jsonpath={.spec.volumeMode}").Output()

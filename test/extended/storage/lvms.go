@@ -1071,6 +1071,91 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		expectedErrorSubStr := "error: optional device path /dev/diskpath-1 is specified at multiple places in deviceClass " + lvmCluster.deviceClassName
 		o.Expect(strings.ToLower(errorMsg)).To(o.ContainSubstring(strings.ToLower(expectedErrorSubStr)))
 	})
+
+	// OCP-69191-[LVMS] [Filesystem] Support provisioning less than 1Gi size PV and re-size
+	g.It("Author:rdeore-Critical-69191-[LVMS] [Filesystem] Support provisioning less than 1Gi size PV and re-size", func() {
+		//Set the resource template for the scenario
+		var (
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			volumeGroup        = "vg1"
+			storageClassName   = "lvms-" + volumeGroup
+		)
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassName),
+			setPersistentVolumeClaimCapacity("14Mi"), setPersistentVolumeClaimNamespace(oc.Namespace()))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentNamespace(oc.Namespace()))
+
+		exutil.By("#. Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create deployment with the created pvc and wait for the pod ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+
+		exutil.By("#. Wait for the deployment ready")
+		dep.waitReady(oc)
+
+		exutil.By("#. Write data in pod mounted volume")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		exutil.By("#. Resize PVC storage capacity to a value bigger than previous value and less than 1Gi")
+		pvcSizeInt64, _ := strconv.ParseInt(pvc.capacity, 10, 64)
+		newPvcSizeInt64 := getRandomNum(pvcSizeInt64+50, pvcSizeInt64+1000)
+		newPvcSize := strconv.FormatInt(newPvcSizeInt64, 10) + "Mi"
+		pvc.resizeAndCheckDataIntegrity(oc, dep, newPvcSize)
+
+		exutil.By("#. Resize PVC storage capacity to a value bigger than 1Gi")
+		pvc.resizeAndCheckDataIntegrity(oc, dep, "2Gi")
+	})
+
+	// OCP-69753-[LVMS] [Block] Support provisioning less than 1Gi size PV and re-size
+	g.It("Author:rdeore-Critical-69753-[LVMS] [Block] Support provisioning less than 1Gi size PV and re-size", func() {
+		//Set the resource template for the scenario
+		var (
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			volumeGroup        = "vg1"
+			storageClassName   = "lvms-" + volumeGroup
+		)
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassName),
+			setPersistentVolumeClaimCapacity("14Mi"), setPersistentVolumeClaimNamespace(oc.Namespace()), setPersistentVolumeClaimVolumemode("Block"))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentVolumeType("volumeDevices"),
+			setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"), setDeploymentNamespace(oc.Namespace()))
+
+		exutil.By("#. Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create deployment with the created pvc and wait for the pod ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+
+		exutil.By("#. Wait for the deployment ready")
+		dep.waitReady(oc)
+
+		exutil.By("#. Write data in pod mounted volume")
+		dep.writeDataBlockType(oc)
+
+		exutil.By("#. Resize PVC storage capacity to a value bigger than previous value and less than 1Gi")
+		pvcSizeInt64, _ := strconv.ParseInt(pvc.capacity, 10, 64)
+		newPvcSizeInt64 := getRandomNum(pvcSizeInt64+50, pvcSizeInt64+1000)
+		newPvcSize := strconv.FormatInt(newPvcSizeInt64, 10) + "Mi"
+		pvc.resizeAndCheckDataIntegrity(oc, dep, newPvcSize)
+
+		exutil.By("#. Resize PVC storage capacity to a value bigger than 1Gi")
+		pvc.resizeAndCheckDataIntegrity(oc, dep, "2Gi")
+	})
 })
 
 func checkVolumeBiggerThanDisk(oc *exutil.CLI, pvcName string, pvcNamespace string, thinPoolSize int) {
