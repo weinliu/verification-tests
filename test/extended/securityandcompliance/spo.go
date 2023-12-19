@@ -1464,6 +1464,44 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		checkPrfolieStatus(oc, "SeccompProfile", ns2, "Installed")
 	})
 
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-Author:xiyuan-Medium-69598-check the http version for the metrics, webhook and profilefing service endpoints [Serial]", func() {
+		g.By("Check http version for metric serive")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		url := fmt.Sprintf("https://metrics.%v/metrics-spod", subD.namespace)
+		keywords := `HTTP/1.1 200 OK`
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-i", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), keywords)).To(o.BeTrue())
+
+		g.By("Check http version for profilebinding webhook-service")
+		url = fmt.Sprintf("https://webhook-service.%v.svc/mutate-v1-pod-binding", subD.namespace)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-i", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(keywords))
+
+		g.By("Check http version for profilerecording webhook-service")
+		url = fmt.Sprintf("https://webhook-service.%v.svc/mutate-v1-pod-recording", subD.namespace)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-i", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), keywords)).To(o.BeTrue())
+
+		g.By("check the http version for profiling endpoints")
+		patch := fmt.Sprintf("{\"spec\":{\"enableProfiling\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+		podName, err := oc.AsAdmin().Run("get").Args("pods", "-n", subD.namespace, "-l", "name=spod", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podIP, err := oc.AsAdmin().Run("get").Args("pod", "-n", subD.namespace, podName, "-o=jsonpath={.status.podIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podPort, err := oc.AsAdmin().Run("get").Args("pod", "-n", subD.namespace, podName, "-o=jsonpath={.spec.containers[?(@.name==\"security-profiles-operator\")].env[?(@.name==\"SPO_PROFILING_PORT\")].value}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		url = fmt.Sprintf("http://%v:%v/debug/pprof/heap", podIP, podPort)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-i", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), keywords)).To(o.BeTrue())
+	})
+
 	// author: bgudi@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
 	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
