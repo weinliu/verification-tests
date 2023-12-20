@@ -1,15 +1,18 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -1215,7 +1218,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: tagao@redhat.com
-		g.It("Author:tagao-Medium-43286-Allow sending alerts to external Alertmanager for user workload monitoring components - enabled in-cluster alertmanager", func() {
+		g.It("ConnectedOnly-Author:tagao-Medium-43286-Allow sending alerts to external Alertmanager for user workload monitoring components - enabled in-cluster alertmanager", func() {
 			var (
 				testAlertmanager = filepath.Join(monitoringBaseDir, "example-alertmanager.yaml")
 				exampleAlert     = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
@@ -1225,7 +1228,25 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
 
 			g.By("check alertmanager pod is created")
-			exutil.AssertPodToBeReady(oc, "alertmanager-test-alertmanager-0", "openshift-user-workload-monitoring")
+			err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+				podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
+				if err != nil || strings.Contains(podStats, "not found") {
+					return false, nil
+				}
+				if err != nil || strings.Contains(podStats, "Init:0/1") {
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "pod not created")
+
+			g.By("skip case on disconnected cluster")
+			output, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("the pod condition: %s", output)
+			if output != "{}" && strings.Contains(output, "ImagePullBackOff") {
+				g.Skip("This case can not execute on a disconnected cluster!")
+			}
 
 			g.By("create example PrometheusRule under user namespace")
 			oc.SetupProject()
