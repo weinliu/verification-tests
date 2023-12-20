@@ -158,4 +158,56 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
+	g.It("Author:rioliu-NonPreRelease-Medium-69205-MachineConfigNode corresponding condition status is Unknown when node is degraded [Disruptive]", func() {
+
+		var (
+			mcName            = "change-workers-extension-usbguard"
+			mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			expectedMCState   = "Degraded"
+			expectedMCNStatus = "Unknown"
+			degradedNode      Node
+		)
+
+		exutil.By("Create invalid MC")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.SetMCOTemplate(GenericMCTemplate)
+		mc.SetParams(`EXTENSIONS=["usbguard","zsh"]`)
+		mc.skipWaitForMcp = true
+
+		defer func() {
+			logger.Infof("\nStart to recover degraded mcp")
+			mc.deleteNoWait()
+			mcp.RecoverFromDegraded()
+		}()
+		mc.create()
+
+		exutil.By("Check mcp worker is degraded")
+		o.Eventually(mcp.getDegradedMachineCount, "3m", "5s").Should(o.BeNumerically("==", 1), "Degraded machine count is not ==1")
+		logger.Infof("OK\n")
+
+		exutil.By("Get degraded node")
+		allNodes := mcp.GetNodesOrFail()
+		for _, node := range allNodes {
+			if node.GetMachineConfigState() == expectedMCState {
+				degradedNode = node
+				break
+			}
+		}
+		o.Expect(degradedNode).NotTo(o.BeNil(), "Degraded node not found")
+		o.Expect(degradedNode.GetMachineConfigReason()).Should(o.ContainSubstring(`invalid extensions found: [zsh]`), "value of annotation machine config reason is not expected")
+		logger.Infof("Found degraded node %s", degradedNode.GetName())
+		logger.Infof("OK\n")
+
+		exutil.By("Check corresponding MCN")
+		mcn := NewMachineConfigNode(oc.AsAdmin(), degradedNode.GetName())
+		o.Expect(mcn.Exists()).Should(o.BeTrue(), "Cannot find MCN %s", degradedNode.GetName())
+		logger.Infof("OK\n")
+
+		exutil.By("Check MCN conditions")
+		o.Expect(mcn.GetAppliedFilesAndOS()).Should(o.Equal(expectedMCNStatus), "status of MCN condition UPDATEDFILESANDOS is not expected")
+		o.Expect(mcn.GetUpdateExecuted()).Should(o.Equal(expectedMCNStatus), "status of MCN condition UPDATEEXECUTED is not expected")
+		logger.Infof("OK\n")
+
+	})
+
 })

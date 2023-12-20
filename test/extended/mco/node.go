@@ -287,6 +287,11 @@ func (n Node) GetMachineConfigState() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/state}`)
 }
 
+// GetMachineConfigReason returns the Reason of machineconfiguration on this node
+func (n Node) GetMachineConfigReason() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/reason}`)
+}
+
 // GetDesiredConfig returns the desired machine config for this node
 func (n Node) GetDesiredConfig() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig}`)
