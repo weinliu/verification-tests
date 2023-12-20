@@ -35,13 +35,20 @@ describe('(OCP-60701 NETOBSERV) Connection tracking test', { tags: ['NETOBSERV']
             cy.byTestID("table-composable").should('exist')
         })
 
-        it("(OCP-60701, aramesha) Update Logtype to Conversations and verify Query Summary panel", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-60701, aramesha) should validate default conversation tracking columns", { tags: ['e2e', 'admin'] }, function () {
+            cy.byTestID('table-composable').should('exist').within(() => {
+                cy.get(colSelectors.RecordType).should('exist')
+                cy.get(colSelectors.conversationID).should('exist')
+            })
+        })
+
+        it("(OCP-60701, aramesha) should verify Query Summary panel", { tags: ['e2e', 'admin'] }, function () {
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
             cy.get('#query-options-dropdown').click();
             cy.get('#recordType-allConnections').click()
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
 
-            //Validate Query Summary panel
+            // validate Query Summary panel
             let warningExists = false
             cy.get(querySumSelectors.queryStatsPanel).should('exist').then(qrySum => {
                 if (Cypress.$(querySumSelectors.queryStatsPanel + ' svg.query-summary-warning').length > 0) {
@@ -59,16 +66,6 @@ describe('(OCP-60701 NETOBSERV) Connection tracking test', { tags: ['NETOBSERV']
                 }
                 cy.wait(10)
                 expect(nflows).to.be.gte(0)
-            })
-        })
-
-        it("(OCP-60701, aramesha) should validate default conversation tracking columns", { tags: ['e2e', 'admin'] }, function () {
-            cy.byTestID("show-view-options-button").should('exist').click()
-            netflowPage.stopAutoRefresh()
-
-            cy.byTestID('table-composable').should('exist').within(() => {
-                cy.get(colSelectors.RecordType).should('exist')
-                cy.get(colSelectors.conversationID).should('exist')
             })
         })
     })

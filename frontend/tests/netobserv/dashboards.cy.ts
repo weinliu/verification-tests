@@ -12,6 +12,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
+        cy.switchPerspective('Administrator');
 
         // specify --env noo_release=upstream to run tests 
         // from most recent "main" image

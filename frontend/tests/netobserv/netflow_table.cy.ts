@@ -3,11 +3,11 @@ import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, genSelectors, colSelectors, querySumSelectors, histogramSelectors } from "../../views/netflow-page"
 
 function getTableLimitURL(limit: string): string {
-    return `**/netflow-traffic?timeRange=300&match=all&reporter=destination&function=last&type=bytes&packetLoss=all&recordType=flowLog&filters=&showDup=false&limit=${limit}`
+    return `**/netflow-traffic**limit=${limit}`
 }
 
 function getTableDuplicatesURL(duplicates: string): string {
-    return `**/netflow-traffic?timeRange=300&match=all&reporter=destination&function=last&type=bytes&packetLoss=all&recordType=flowLog&filters=&limit=50&showDup=${duplicates}`
+    return `**/netflow-traffic**showDup=${duplicates}`
 }
 
 describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table view tests', { tags: ['NETOBSERV'] }, function () {
@@ -237,10 +237,9 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID('autocomplete-search').type(project + '{enter}')
             cy.get('#filters div.custom-chip > p').should('contain.text', `${project}`)
 
-            // verify NS column for all rows
-            cy.get('td:nth-child(3) span.co-resource-item__resource-name').should('exist').each(row => {
-                // can match with openshift-netobserv-operator too
-                cy.wrap(row).should('contain.text', project)
+            // Verify SrcNS column for all rows
+            cy.get('[data-test-td-column-id=SrcK8S_Namespace]').each((td) => {
+                expect(td).attr("data-test-td-value").to.contain(`${project}`)
             })
 
             // verify swap button
@@ -248,6 +247,11 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
                 cy.contains("Swap").should('exist').click()
             })
             cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Destination Namespace')
+
+            // Verify DstNS column for all rows
+            cy.get('[data-test-td-column-id=DstK8S_Namespace]').each((td) => {
+                expect(td).attr("data-test-td-value").to.contain(`${project}`)
+            })
 
             netflowPage.clearAllFilters()
             cy.get('div.custom-chip').should('not.exist')
@@ -290,9 +294,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID('autocomplete-search').type('3100{enter}')
             cy.get('#filters div.custom-chip > p').should('have.text', 'loki')
 
-            // Verify first row has correct text
-            cy.get('#table-body tr:nth-child(1) td:nth-child(4) span').should('have.text', 'loki (3100)')
-
             // check enabled or disabling filter
             cy.get(':nth-child(1) > .pf-c-chip-group__label').click()
             cy.get('#filters  > .pf-c-toolbar__item > :nth-child(1)').should('have.class', 'disabled-group')
@@ -301,12 +302,19 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.get('[data-test=th-SrcPort] > .pf-c-table__button').click()
             // cy.reload()
             // cy.get('#tabs-container li:nth-child(2)').click()
-            cy.get('#table-body > tr:nth-child(1) > td:nth-child(4) > div > div > span').should('not.have.text', 'loki (3100)')
+
+            // Verify SrcPort doesnt not have text loki for all rows
+            cy.get('[data-test-td-column-id=SrcPort]').each((td) => {
+                cy.get('[data-test-td-column-id=SrcPort] > div > div > span').should('not.contain.text', 'loki (3100)')
+            })
 
             cy.get(':nth-child(1) > .pf-c-chip-group__label').click()
             cy.get('#filters  > .pf-c-toolbar__item > :nth-child(1)').should('not.have.class', '.disabled-value')
 
-            cy.get('#table-body tr:nth-child(1) td:nth-child(4) span').should('have.text', 'loki (3100)')
+            // Verify SrcPort has text loki for all rows
+            cy.get('[data-test-td-column-id=SrcPort]').each((td) => {
+                cy.get('[data-test-td-column-id=SrcPort] > div > div > span').should('contain.text', 'loki (3100)')
+            })
 
             netflowPage.clearAllFilters()
             cy.get('div.custom-chip').should('not.exist')
@@ -453,6 +461,12 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 NETOBSERV) Netflow Table v
             cy.byTestID('dscp').click()
             cy.byTestID('autocomplete-search').type('0' + '{enter}')
             cy.get('#filters div.custom-chip > p').should('contain.text', 'Standard')
+
+            // Verify DSCP value is Standard for all rows
+            cy.get('[data-test-td-column-id=Dscp]').each((td) => {
+                expect(td).attr("data-test-td-value").to.contain(0)
+                cy.get('[data-test-td-column-id=Dscp] > div > div > span').should('contain.text', 'Standard')
+            })
         })
     })
 

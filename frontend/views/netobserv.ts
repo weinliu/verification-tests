@@ -82,6 +82,9 @@ export const Operator = {
                 if (parameters == "PacketDrop") {
                     Operator.enablePacketDrop()
                 }
+                if (parameters == "DNSTracking") {
+                    Operator.enableDNSTracking()
+                }
                 Operator.configureLoki(namespace)
                 cy.get('#root_spec_namespace').clear().type(namespace)
                 if (parameters == "Conversations") {
@@ -91,6 +94,7 @@ export const Operator = {
                     Operator.enableAllFLPMetrics()
                 }
                 cy.byTestID('create-dynamic-form').click()
+                cy.wait(5000)
                 cy.byTestID('status-text').should('exist').should('contain.text', 'Ready')
                 cy.byTestID('status-text').should('exist').should('contain.text', 'FLPMonolithReady')
                 cy.byTestID('status-text').should('exist').should('contain.text', 'FLPParentReady')
@@ -122,6 +126,35 @@ export const Operator = {
             cy.contains("PacketDrop").should('exist')
             cy.get('#PacketDrop-link').click()
         })
+        // Deploy PacketDrop metrics to includeList
+        cy.get('#root_spec_processor_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_includeList_accordion-toggle').should('exist').click()
+        cy.enableFLPMetrics([
+            "namespace_drop_bytes_total",
+            "namespace_drop_packets_total",
+            "node_drop_bytes_total",
+            "node_drop_packets_total",
+            "workload_drop_bytes_total",
+            "workload_drop_packets_total"
+        ]);
+    },
+    enableDNSTracking: () => {
+        cy.get('#root_spec_agent_ebpf_features_accordion-toggle').click()
+        cy.get('#root_spec_agent_ebpf_features_add-btn').click()
+        cy.get('#root_spec_agent_ebpf_features_0').click().then(features => {
+            cy.contains("DNSTracking").should('exist')
+            cy.get('#DNSTracking-link').click()
+        })
+        // Deploy DNS metrics to includeList
+        cy.get('#root_spec_processor_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_includeList_accordion-toggle').should('exist').click()
+        cy.enableFLPMetrics([
+            "namespace_dns_latency_seconds",
+            "node_dns_latency_seconds",
+            "workload_dns_latency_seconds"
+        ]);
     },
     configureLoki: (namespace: string) => {
         cy.get('#root_spec_loki_accordion-toggle').click()

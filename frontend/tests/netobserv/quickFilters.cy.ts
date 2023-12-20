@@ -60,12 +60,12 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
         cy.contains("Quick filters").should('exist').click()
         cy.get('#quick-filters-dropdown').should('exist').contains("Test NS").children('[type="checkbox"]').check()
 
-        // verify source namespace and destination NS are test-server and test-client
-        cy.get('td:nth-child(3) span.co-resource-item__resource-name').should('exist').each(row => {
-            cy.wrap(row).should('have.text', "test-server")
+        // verify source and destination NS are test-server and test-client respectively
+        cy.get('[data-test-td-column-id=SrcK8S_Namespace]').each((td) => {
+            expect(td).attr("data-test-td-value").to.contain('test-server')
         })
-        cy.get('td:nth-child(6) span.co-resource-item__resource-name').should('exist').each(row => {
-            cy.wrap(row).should('have.text', "test-client")
+        cy.get('[data-test-td-column-id=DstK8S_Namespace]').each((td) => {
+            expect(td).attr("data-test-td-value").to.contain('test-client')
         })
 
         cy.get('[role="listbox"]').contains("Test NS").children('[type="checkbox"]').uncheck()

@@ -14,11 +14,11 @@ const metricType = [
 ]
 
 function getTopologyScopeURL(scope: string): string {
-    return `**/flow/metrics?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
+    return `**/flow/metrics**aggregateBy=${scope}`
 }
 
 function getTopologyResourceScopeGroupURL(groups: string): string {
-    return `**/flow/metrics?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=resource&groups=${groups}`
+    return `**/flow/metrics**groups=${groups}`
 }
 
 describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOBSERV'] }, function () {
