@@ -32,6 +32,54 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
+var _ = g.Describe("[sig-operators] OLM optional", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("olm-optional-"+getRandomString(), exutil.KubeConfigPath())
+	// author: jiazha@redhat.com
+	g.It("Author:jiazha-High-70162-Leverage Composable OpenShift feature to make OLM optional", func() {
+		capability := "OperatorLifecycleManager"
+		knownCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.knownCapabilities}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		enabledCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(knownCapabilities, capability) && !strings.Contains(enabledCapabilities, capability) {
+			cos := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
+			resources := []string{"subscription", "csv", "installplan", "operatorgroup", "operatorhub", "operatorgroup", "catalogsource", "packagemanifest", "olmconfig", "operatorcondition", "operator.operators.coreos.com"}
+			clusterroles := []string{"aggregate-olm-edit", "aggregate-olm-view", "cluster-olm-operator"}
+			ns := "openshift-operator-lifecycle-manager"
+			for _, co := range cos {
+				_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", co).Output()
+				if err == nil {
+					e2e.Failf("should not get %v cluster operator", co)
+				}
+			}
+			for _, resource := range resources {
+				_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource).Output()
+				if err == nil {
+					e2e.Failf("should not get %v resource", resource)
+				}
+			}
+			for _, clusterrole := range clusterroles {
+				// when TP enable, the "cluster-olm-operator" exist
+				if exutil.IsTechPreviewNoUpgrade(oc) && clusterrole == "cluster-olm-operator" {
+					continue
+				}
+				_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole", clusterrole).Output()
+				if err == nil {
+					e2e.Failf("should not get %v cluster role", clusterrole)
+				}
+			}
+			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Output()
+			if err == nil {
+				e2e.Failf("should not get %v project", ns)
+			}
+		} else {
+			g.Skip(fmt.Sprintf("the cluster has capability %v and skip it", capability))
+		}
+	})
+})
+
 var _ = g.Describe("[sig-operators] OLM should", func() {
 	defer g.GinkgoRecover()
 
