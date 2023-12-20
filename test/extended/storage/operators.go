@@ -231,6 +231,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		}
 
+		exutil.By("# Create new project verify")
+		oc.SetupProject()
+
 		for _, provisioner = range supportProvisioners {
 			func() {
 
@@ -267,9 +270,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				}
 
 				// Check after the webhook Pods restarted the snapshot function should be still worked well
-				exutil.By("# Create new project verify")
-				oc.SetupProject()
-
 				exutil.By("Create a pvc with the preset csi storageclass")
 				pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 				pvcOri.create(oc)
