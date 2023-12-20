@@ -666,6 +666,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
+		nodeName := exutil.GetNodeNameFromMachine(oc, exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0])
+		e2e.Logf("nodeName:%s", nodeName)
+		o.Expect(strings.HasPrefix(nodeName, "ip-")).To(o.BeTrue())
 	})
 
 	// author: huliu@redhat.com
