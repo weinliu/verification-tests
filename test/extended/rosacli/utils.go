@@ -239,4 +239,4 @@ func generateMultipleHtpasswdPairs(pairNum int) ([]string, error) {
 	return multipleuserPasswd, nil
 }
 
-var defaultWorkerPool = "worker"
+var defaultClassicWorkerPool = "worker"

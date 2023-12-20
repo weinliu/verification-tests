@@ -30,9 +30,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 	g.It("Author:xueli-Critical-66359-Create rosa cluster with volume size will work via rosacli [Serial]", func() {
+		g.By("Classic cluster check")
 		isHosted, err := isHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
-
 		if isHosted {
 			g.Skip("This case is only working for classic right now")
 		}
@@ -47,7 +47,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		if expectedDiskSize == "" {
 			expectedDiskSize = "300GiB" // if no worker disk size set, it will use default value
 		}
-		defaultWorkerPool := "worker"
 
 		g.By("Check the machinepool list")
 		output, err := machinePoolService.ListMachinePool(clusterID)
@@ -56,13 +55,13 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		mplist, err := machinePoolService.ReflectMachinePoolList(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		workPool, err := mplist.Machinepool(defaultWorkerPool)
+		workPool, err := mplist.Machinepool(defaultClassicWorkerPool)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(workPool).ToNot(o.BeNil(), "worker pool is not found for the cluster")
 		o.Expect(alignDiskSize(workPool.DiskSize)).To(o.Equal(expectedDiskSize))
 
 		g.By("Check the default worker pool description")
-		output, err = machinePoolService.DescribeMachinePool(clusterID, defaultWorkerPool)
+		output, err = machinePoolService.DescribeMachinePool(clusterID, defaultClassicWorkerPool)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		mpD, err := machinePoolService.ReflectMachinePoolDescription(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
@@ -71,6 +70,13 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 	})
 
 	g.It("Author:xueli-Critical-57056-Create ROSA cluster with default-mp-labels option will succeed [Serial]", func() {
+		g.By("Classic cluster check")
+		isHosted, err := isHostedCPCluster(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		if isHosted {
+			g.Skip("This case is only working for classic right now")
+		}
+
 		g.By("Check the cluster config")
 		mpLables := strings.Join(strings.Split(clusterConfig.DefaultMpLabels, ","), ", ")
 
@@ -81,13 +87,13 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		mplist, err := machinePoolService.ReflectMachinePoolList(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		workPool, err := mplist.Machinepool(defaultWorkerPool)
+		workPool, err := mplist.Machinepool(defaultClassicWorkerPool)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(workPool).ToNot(o.BeNil(), "worker pool is not found for the cluster")
 		o.Expect(workPool.Lables).To(o.Equal(mpLables))
 
 		g.By("Check the default worker pool description")
-		output, err = machinePoolService.DescribeMachinePool(clusterID, defaultWorkerPool)
+		output, err = machinePoolService.DescribeMachinePool(clusterID, defaultClassicWorkerPool)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		mpD, err := machinePoolService.ReflectMachinePoolDescription(output)
