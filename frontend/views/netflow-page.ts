@@ -94,6 +94,7 @@ export namespace colSelectors {
     export const packets = '[data-test=th-Packets] > .pf-c-table__button'
     export const RecordType = '[data-test=th-RecordType] > .pf-c-table__button'
     export const conversationID = '[data-test=th-_HashId] > .pf-c-table__button'
+    export const flowRTT = '[data-test=th-TimeFlowRttMs] > .pf-c-table__button'
     export const DSCP = '[data-test=th-Dscp] > .pf-c-table__button'
     export const DNSLatency = '[data-test=th-DNSLatency] > .pf-c-table__column-help > .pf-c-table__button'
     export const DNSResponseCode = '[data-test=th-DNSResponseCode] > .pf-c-table__column-help > .pf-c-table__button'
@@ -111,6 +112,7 @@ export namespace querySumSelectors {
     export const bytesCount = "#bytesCount"
     export const packetsCount = "#packetsCount"
     export const bpsCount = "#bytesPerSecondsCount"
+    export const avgRTT = "#rttAvg"
     export const dnsAvg = "#dnsAvg"
     export const droppedBytesCount = "#droppedBytesCount"
     export const droppedBpsCount = "#droppedBytesPerSecondsCount"
@@ -146,12 +148,15 @@ export namespace overviewSelectors {
     export const managePanelsList = ['Top X average rates (donut)', 'Top X latest rates (donut)', 'Top X flow rates stacked (bars)', 'Total rate (line)', 'Top X flow rates stacked with total (bars)', 'Top X flow rates (lines)']
     export const managePacketDropPanelsList = ['Top X packet dropped state stacked with total (donut or bars and lines)', 'Top X packet dropped cause stacked with total (donut or bars and lines)', 'Top X average dropped bytes rates (donut)', 'Top X dropped bytes rates stacked with total (bars and lines)', 'Top X average dropped packets rates (donut)', 'Top X dropped packets rates stacked with total (bars and lines)']
     export const manageDNSTrackingPanelsList = ['Top X DNS response code with total (donut or bars and lines)', 'Top X average DNS latencies with overall (donut or lines)', 'Bottom X minimum DNS latencies with overall (donut or lines)', 'Top X maximum DNS latencies with overall (donut or lines)', 'Top X 90th percentile DNS latencies with overall (donut or lines)']
+    export const manageFlowRTTPanelsList = ['Top X average TCP handshake Round Trip Time with overall (donut or lines)', 'Bottom X minimum TCP handshake Round Trip Time with overall (donut or lines)', 'Top X maximum TCP handshake Round Trip Time with overall (donut or lines)', 'Top X 90th percentile TCP handshake Round Trip Time with overall (donut or lines)', 'Top X 99th percentile TCP handshake Round Trip Time with overall (donut or lines)']
     export const defaultPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
     export const defaultPacketDropPanels = ['Top 5 packet dropped state stacked with total', 'Top 5 packet dropped cause stacked with total', 'Top 5 average dropped packets rates', 'Top 5 dropped packets rates stacked with total']
     export const defaultDNSTrackingPanels = ['Top 5 DNS response code', 'Top 5 average DNS latencies with overall', 'Top 5 90th percentile DNS latencies']
+    export const defaultFlowRTTPanels = ['Top 5 average TCP handshake Round Trip Time with overall', 'Bottom 5 minimum TCP handshake Round Trip Time', 'Top 5 90th percentile TCP handshake Round Trip Time']
     export const allPanels = ['Top 5 average rates', 'Top 5 latest rates', 'Top 5 flow rates stacked', 'Total rate', 'Top 5 flow rates stacked with total', 'Top 5 flow rates']
     export const allPacketDropPanels = defaultPacketDropPanels.concat(['Top 5 average dropped bytes rates', 'Top 5 dropped bytes rates stacked with total'])
     export const allDNSTrackingPanels = defaultDNSTrackingPanels.concat(['Bottom 5 minimum DNS latencies', 'Top 5 maximum DNS latencies'])
+    export const allFlowRTTPanels = defaultFlowRTTPanels.concat(['Top 5 maximum TCP handshake Round Trip Time', 'Top 5 99th percentile TCP handshake Round Trip Time'])
 }
 
 export const loadTimes = {

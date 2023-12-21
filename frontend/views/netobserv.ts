@@ -82,6 +82,9 @@ export const Operator = {
                 if (parameters == "PacketDrop") {
                     Operator.enablePacketDrop()
                 }
+                if (parameters == "FlowRTT") {
+                    Operator.enableFlowRTT()
+                }
                 if (parameters == "DNSTracking") {
                     Operator.enableDNSTracking()
                 }
@@ -154,6 +157,23 @@ export const Operator = {
             "namespace_dns_latency_seconds",
             "node_dns_latency_seconds",
             "workload_dns_latency_seconds"
+        ]);
+    },
+    enableFlowRTT: () => {
+        cy.get('#root_spec_agent_ebpf_features_accordion-toggle').click()
+        cy.get('#root_spec_agent_ebpf_features_add-btn').click()
+        cy.get('#root_spec_agent_ebpf_features_0').click().then(features => {
+            cy.contains("FlowRTT").should('exist')
+            cy.get('#FlowRTT-link').click()
+        })
+        // Deploy FlowRTT metrics to includeList
+        cy.get('#root_spec_processor_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_accordion-toggle').click()
+        cy.get('#root_spec_processor_metrics_includeList_accordion-toggle').should('exist').click()
+        cy.enableFLPMetrics([
+            "namespace_rtt_seconds",
+            "node_rtt_seconds",
+            "workload_rtt_seconds"
         ]);
     },
     configureLoki: (namespace: string) => {
