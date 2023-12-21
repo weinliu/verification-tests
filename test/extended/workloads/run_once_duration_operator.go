@@ -149,27 +149,21 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.0.1")).To(o.BeTrue())
 
-		//Add the k8 dependencies checkpoint for RODO and SSO
+		//Add the k8 dependencies checkpoint for RODO
 		g.By("Get the latest version of Kubernetes")
 		ocVersion, versionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(versionErr).NotTo(o.HaveOccurred())
 		kubenetesVersion := strings.Split(strings.Split(ocVersion, "+")[0], "v")[1]
 		kuberVersion := strings.Split(kubenetesVersion, ".")[0] + "." + strings.Split(kubenetesVersion, ".")[1]
 
-		g.By("Check the minkubeversion for rodo operator")
-		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-			minkuberversion, rodoErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
-			if rodoErr != nil {
-				e2e.Logf("Fail to get csv, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString(kuberVersion, minkuberversion); matched {
-				e2e.Logf("RODO operator rebased with latest kubernetes")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "RODO operator not rebased with latest Kubernetes")
+		g.By("Get rebased version of kubernetes from runoncedurationoverride operator")
+		minkuberversion, rodoErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/run-once-duration-override-operator.openshift-run-once-duration=", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
+		o.Expect(rodoErr).NotTo(o.HaveOccurred())
+		rebasedVersion := strings.Split(minkuberversion, ".")[0] + "." + strings.Split(minkuberversion, ".")[1]
+
+		if !strings.Contains(rebasedVersion, kuberVersion) || !strings.Contains(rebasedVersion, "1.26") {
+			e2e.Failf("RODO operator not rebased with latest kubernetes")
+		}
 
 		// Create test project
 		g.By("Create test project")
