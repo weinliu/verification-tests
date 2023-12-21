@@ -174,5 +174,21 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(machineControllerLog, "categories cache miss, trying to find category by name, it might take time") || strings.Contains(machineControllerLog, "found cached category id value")).To(o.BeTrue())
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Low-70124-system:openshift:kube-controller-manager:gce-cloud-provider referencing non existing serviceAccount", func() {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding", "system:openshift:kube-controller-manager:gce-cloud-provider").Output()
+		o.Expect(err).To(o.HaveOccurred())
+
+		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if platformType == "GCP" {
+			sa, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "cloud-provider", "-n", "kube-system").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(sa, "cloud-provider")).To(o.BeTrue())
+		} else {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "cloud-provider", "-n", "kube-system").Output()
+			o.Expect(err).To(o.HaveOccurred())
+		}
+	})
 
 })
