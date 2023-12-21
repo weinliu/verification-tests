@@ -3176,3 +3176,60 @@ func waitMachineOnROSAReady(oc *exutil.CLI, machineName string, namespace string
 		return true, nil
 	})
 }
+
+type apbStaticExternalRoute struct {
+	name       string
+	labelkey   string
+	labelvalue string
+	ip         string
+	bfd        bool
+	template   string
+}
+
+func (sgwpr *apbStaticExternalRoute) deleteAPBExternalRoute(oc *exutil.CLI) {
+	removeResource(oc, true, true, "apbexternalroute", sgwpr.name)
+}
+
+func (sgwpr *apbStaticExternalRoute) createAPBExternalRoute(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sgwpr.template, "-p", "NAME="+sgwpr.name, "LABELKEY="+sgwpr.labelkey, "LABELVALUE="+sgwpr.labelvalue, "IP="+sgwpr.ip, "BFD="+strconv.FormatBool(sgwpr.bfd))
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create apbexternalroute %v", sgwpr.name))
+}
+
+func checkAPBExternalRouteStatus(oc *exutil.CLI, gwName string, expectedStatus string) error {
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, gwErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", gwName).Output()
+		if gwErr != nil {
+			e2e.Logf("Failed to get apbexternalroute %v, error: %s. Trying again", gwName, gwErr)
+			return false, nil
+		}
+		if !strings.Contains(output, expectedStatus) {
+			e2e.Logf("Expected status is %v, the apbexternalroute status is %v, trying again.", expectedStatus, output)
+			return false, nil
+		}
+		return true, nil
+	})
+	return checkErr
+}
+
+func checkEgressFWStatus(oc *exutil.CLI, fwName string, ns string, expectedStatus string) error {
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, fwErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", "-n", ns, fwName).Output()
+		if fwErr != nil {
+			e2e.Logf("Failed to get egressfirewall %v, error: %s. Trying again", fwName, fwErr)
+			return false, nil
+		}
+		if !strings.Contains(output, expectedStatus) {
+			e2e.Logf("Expected status is %v, the egressfirewall status is %v, trying again.", expectedStatus, output)
+			return false, nil
+		}
+		return true, nil
+	})
+	return checkErr
+}

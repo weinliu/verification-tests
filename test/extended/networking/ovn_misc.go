@@ -406,4 +406,77 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		_, delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "name=completed-pod", "-n", ns).Output()
 		o.Expect(delPodErr).NotTo(o.HaveOccurred())
 	})
+
+	g.It("Author:qiowang-Medium-69761-Check apbexternalroute status when all zones reported success", func() {
+		ipStackType := checkIPStackType(oc)
+		var externalGWIP string
+		if ipStackType == "ipv6single" {
+			externalGWIP = "2011::11"
+		} else {
+			externalGWIP = "1.1.1.1"
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		apbExternalRouteTemplate := filepath.Join(buildPruningBaseDir, "apbexternalroute-static-template.yaml")
+
+		exutil.By("1. Create apbexternalroute object")
+		ns := oc.Namespace()
+		apbExternalRoute := apbStaticExternalRoute{
+			name:       "externalgw-69761",
+			labelkey:   "kubernetes.io/metadata.name",
+			labelvalue: ns,
+			ip:         externalGWIP,
+			bfd:        false,
+			template:   apbExternalRouteTemplate,
+		}
+		defer apbExternalRoute.deleteAPBExternalRoute(oc)
+		apbExternalRoute.createAPBExternalRoute(oc)
+
+		exutil.By("2. Check status of apbexternalroute object")
+		checkErr := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Success")
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("apbexternalroute %s doesn't succeed in time", apbExternalRoute.name))
+		messages, messagesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(messagesErr).NotTo(o.HaveOccurred())
+		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		for _, node := range nodes {
+			o.Expect(messages).Should(o.ContainSubstring(node + ": configured external gateway IPs: " + apbExternalRoute.ip))
+		}
+	})
+
+	g.It("Author:qiowang-Medium-69762-Check egressfirewall status when all zones reported success", func() {
+		ipStackType := checkIPStackType(oc)
+		var egressFWCIDR string
+		if ipStackType == "ipv6single" {
+			egressFWCIDR = "::/0"
+		} else {
+			egressFWCIDR = "0.0.0.0/0"
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
+
+		exutil.By("1. Create egressfirewall object")
+		ns := oc.Namespace()
+		egressFW := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Allow",
+			cidr:      egressFWCIDR,
+			template:  egressFWTemplate,
+		}
+		defer egressFW.deleteEgressFW2Object(oc)
+		egressFW.createEgressFW2Object(oc)
+
+		exutil.By("2. Check status of egressfirewall object")
+		checkErr := checkEgressFWStatus(oc, egressFW.name, ns, "EgressFirewall Rules applied")
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("EgressFirewall Rule %s doesn't apply in time", egressFW.name))
+		messages, messagesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(messagesErr).NotTo(o.HaveOccurred())
+		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		for _, node := range nodes {
+			o.Expect(messages).Should(o.ContainSubstring(node + ": EgressFirewall Rules applied"))
+		}
+	})
 })
