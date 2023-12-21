@@ -621,4 +621,70 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlPod2SvcPass(oc, ns, ns, pod1.name, svc.servicename)
 	})
 
+	// author: asood@redhat.com
+	g.It("Author:asood-High-46015-Verify traffic to outside the cluster redirected when OVN is used and NodePort service is configured.", func() {
+		// Customer bug https://bugzilla.redhat.com/show_bug.cgi?id=1946696
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+		)
+		exutil.By("0. Check the network plugin")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("Unsupported network plugin for this test")
+		}
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+
+		exutil.By("1. Get list of worker nodes")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough node available, need at least two nodes for the test, skip the case!!")
+		}
+
+		exutil.By("2. Get namespace ")
+		ns := oc.Namespace()
+
+		exutil.By("3. Create a hello pod in ns")
+		pod := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		exutil.By("4. Create a nodePort type service fronting the above pod")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "NodePort",
+			ipFamilyPolicy:        "",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
+		}
+
+		svc.ipFamilyPolicy = "SingleStack"
+		defer removeResource(oc, true, true, "service", svc.servicename, "-n", svc.namespace)
+		svc.createServiceFromParams(oc)
+		exutil.By("5. Get NodePort at which service listens.")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6. Validate external traffic to node port is redirected.")
+		CurlNodePortPass(oc, nodeList.Items[1].Name, nodeList.Items[0].Name, nodePort)
+		curlCmd := fmt.Sprintf("curl -4 -v http://www.google.de:%s --connect-timeout 5", nodePort)
+		resp, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[1].Name, "/bin/bash", "-c", curlCmd)
+		if (err != nil) || (resp != "") {
+			o.Expect(strings.Contains(resp, "Hello OpenShift")).To(o.BeFalse())
+		}
+	})
+
 })
