@@ -1664,31 +1664,73 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check default profiles name.. !!!\n")
 		arch := architecture.ClusterArchitecture(oc)
 
+		allProfilesOnPpc64le := []string{
+			"ocp4-cis",
+			"ocp4-cis-1-4",
+			"ocp4-cis-node",
+			"ocp4-cis-node-1-4",
+			"ocp4-moderate",
+			"ocp4-moderate-node",
+			"ocp4-moderate-node-rev-4",
+			"ocp4-moderate-rev-4",
+			"ocp4-pci-dss",
+			"ocp4-pci-dss-3-2",
+			"ocp4-pci-dss-node",
+			"ocp4-pci-dss-node-3-2"}
+		allProfilesOnS390x := []string{
+			"ocp4-cis",
+			"ocp4-cis-1-4",
+			"ocp4-cis-node",
+			"ocp4-cis-node-1-4",
+			"ocp4-moderate",
+			"ocp4-moderate-node",
+			"ocp4-moderate-node-rev-4",
+			"ocp4-moderate-rev-4"}
+		allProfilesOnAmd64 := []string{
+			"ocp4-cis",
+			"ocp4-cis-1-4",
+			"ocp4-cis-node",
+			"ocp4-cis-node-1-4",
+			"ocp4-e8",
+			"ocp4-high",
+			"ocp4-high-node",
+			"ocp4-high-node-rev-4",
+			"ocp4-high-rev-4",
+			"ocp4-moderate",
+			"ocp4-moderate-node",
+			"ocp4-moderate-node-rev-4",
+			"ocp4-moderate-rev-4",
+			"ocp4-nerc-cip",
+			"ocp4-nerc-cip-node",
+			"ocp4-pci-dss",
+			"ocp4-pci-dss-3-2",
+			"ocp4-pci-dss-node",
+			"ocp4-pci-dss-node-3-2",
+			"ocp4-stig",
+			"ocp4-stig-node",
+			"ocp4-stig-node-v1r1",
+			"ocp4-stig-v1r1",
+			"rhcos4-e8",
+			"rhcos4-high",
+			"rhcos4-high-rev-4",
+			"rhcos4-moderate",
+			"rhcos4-moderate-rev-4",
+			"rhcos4-nerc-cip",
+			"rhcos4-stig",
+			"rhcos4-stig-v1r1"}
+
 		if arch.String() == "ppc64le" {
-			subD.getProfileName(oc, "ocp4-cis")
-			subD.getProfileName(oc, "ocp4-cis-node")
-			subD.getProfileName(oc, "ocp4-moderate")
-			subD.getProfileName(oc, "ocp4-moderate-node")
-			subD.getProfileName(oc, "ocp4-pci-dss")
-			subD.getProfileName(oc, "ocp4-pci-dss-node")
+			for _, profile := range allProfilesOnPpc64le {
+				subD.getProfileName(oc, profile)
+			}
 		} else if arch.String() == "s390x" {
-			subD.getProfileName(oc, "ocp4-cis")
-			subD.getProfileName(oc, "ocp4-cis-node")
-			subD.getProfileName(oc, "ocp4-moderate")
-			subD.getProfileName(oc, "ocp4-moderate-node")
+			for _, profile := range allProfilesOnS390x {
+				subD.getProfileName(oc, profile)
+			}
 		} else {
-			subD.getProfileName(oc, "ocp4-cis")
-			subD.getProfileName(oc, "ocp4-cis-node")
-			subD.getProfileName(oc, "ocp4-e8")
-			subD.getProfileName(oc, "ocp4-moderate")
-			subD.getProfileName(oc, "ocp4-moderate-node")
-			subD.getProfileName(oc, "ocp4-nerc-cip")
-			subD.getProfileName(oc, "ocp4-nerc-cip-node")
-			subD.getProfileName(oc, "ocp4-pci-dss")
-			subD.getProfileName(oc, "ocp4-pci-dss-node")
-			subD.getProfileName(oc, "rhcos4-e8")
-			subD.getProfileName(oc, "rhcos4-moderate")
-			subD.getProfileName(oc, "rhcos4-nerc-cip")
+			for _, profile := range allProfilesOnAmd64 {
+				subD.getProfileName(oc, profile)
+			}
 		}
 
 		g.By("The Compliance Operator by default created ProfileBundles and profiles are verified successfully.. !!!\n")
