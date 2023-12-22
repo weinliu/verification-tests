@@ -826,7 +826,10 @@ func forceOnlyOneDnsPodExist(oc *exutil.CLI) string {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", nodeName, "ne-dns-testing=true").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		patchGlobalResourceAsAdmin(oc, "dnses.operator.openshift.io/default", dnsNodeSelector)
-		ensureClusterOperatorNormal(oc, "dns", 1, 90)
+		err1 := waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnsPodName)
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("max time reached but pod %s is not terminated", dnsPodName))
+		err2 := waitForPodWithLabelReady(oc, "openshift-dns", "dns.operator.openshift.io/daemonset-dns=default")
+		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("max time reached but no dns pod ready"))
 	}
 	return getDNSPodName(oc)
 }
