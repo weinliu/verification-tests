@@ -479,4 +479,90 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(messages).Should(o.ContainSubstring(node + ": EgressFirewall Rules applied"))
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huirwang-High-69198-Oversized UDP packet handling. [Disruptive]", func() {
+		//It is for customer bug https://issues.redhat.com/browse/OCPBUGS-23334
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			egressIPTemplate    = filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		)
+
+		// This case needs an external host, will run it on rdu1 cluster only.
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com")) {
+			g.Skip("This case will only run on rdu1 cluster, skip for other envrionment!!!")
+		}
+
+		exutil.By("Switch to local gate way mode.")
+		defer switchOVNGatewayMode(oc, "shared")
+		switchOVNGatewayMode(oc, "local")
+
+		ns1 := oc.Namespace()
+		workers := excludeSriovNodes(oc)
+		o.Expect(len(workers) > 0).Should(o.BeTrue())
+		exutil.By("create a hello pod in first namespace")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns1,
+			nodename:  workers[0],
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("Label one worker node as egress node")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], "k8s.ovn.org/egress-assignable")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], "k8s.ovn.org/egress-assignable", "true")
+
+		exutil.By("Create egressIP object")
+		freeIPs := findFreeIPs(oc, workers[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		egressip1 := egressIPResource1{
+			name:      "egressip-69198",
+			template:  egressIPTemplate,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		defer removeResource(oc, true, true, "egressip", egressip1.name)
+		egressip1.createEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("Add matched label to test namespace")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start iperf3 on external host")
+		iperfServerCmd := "nohup iperf3 -s &"
+		exteranlHost := "10.8.1.181"
+		defer func() {
+			err = sshRunCmd(exteranlHost, "root", "pkill iperf3 &")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		go func() {
+			err = sshRunCmd(exteranlHost, "root", iperfServerCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		// iperf3 would start in parallel, adding wait time to ensure iperf3 started.
+		time.Sleep(10 * time.Second)
+		exutil.By("Start iperf3 client on test pod and send udp traffic")
+		iperfClientCmd := "iperf3 -u -n 1647 -l 1647 -c 192.168.111.1 -R -d -i 10"
+		res, err := exutil.RemoteShPodWithBash(oc, ns1, pod1.name, iperfClientCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(res, "iperf Done")).Should(o.BeTrue(), fmt.Sprintf("The client sent large packet to server failed with message: %s", res))
+		o.Expect(strings.Contains(res, "iperf3: error - control socket has closed unexpectedly")).ShouldNot(o.BeTrue(), fmt.Sprintf("The client sokcet was closed unexpectedly with error :%s", res))
+
+		exutil.By("Remove matched label to test namespace")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Again--start iperf3 client on test pod and send udp traffic")
+		res, err = exutil.RemoteShPodWithBash(oc, ns1, pod1.name, iperfClientCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(res, "iperf Done")).Should(o.BeTrue(), fmt.Sprintf("The client sent large packet to server failed with message: %s", res))
+		o.Expect(strings.Contains(res, "iperf3: error - control socket has closed unexpectedly")).ShouldNot(o.BeTrue(), fmt.Sprintf("The client sokcet was closed unexpectedly with error :%s", res))
+	})
+
 })

@@ -2116,7 +2116,7 @@ func getOVNGatewayMode(oc *exutil.CLI) string {
 	if len(nodeList.Items) < 1 {
 		g.Skip("This case requires at least one schedulable node")
 	}
-	output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", nodeList.Items[0].Name).Output()
+	output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("describe").Args("node", nodeList.Items[0].Name).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	str := "local"
 	modeString := strconv.Quote(str)
