@@ -14,6 +14,10 @@ import (
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 )
 
+type command struct {
+	cmd string
+}
+
 // Get the clusterID env.
 func getClusterIDENVExisted() string {
 	return os.Getenv("CLUSTER_ID")
@@ -240,3 +244,68 @@ func generateMultipleHtpasswdPairs(pairNum int) ([]string, error) {
 }
 
 var defaultClassicWorkerPool = "worker"
+
+// Get the rosa command for creating cluster from ${SHARED_DIR}/create_cluster.sh
+func (c *command) getClusterCreationCommand() error {
+	sharedDIR := os.Getenv("SHARED_DIR")
+	filePath := sharedDIR + "/create_cluster.sh"
+	fileContents, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	c.cmd = string(fileContents)
+	return err
+}
+
+// a function to replace any flag in the command with the key-value map passed to the function
+func (c *command) replaceFlagValue(flags map[string]string) command {
+	elements := strings.Split(c.cmd, " ")
+	for i, e := range elements {
+		if value, ok := flags[e]; ok {
+			elements[i+1] = value
+		}
+	}
+	c.cmd = strings.Join(elements, " ")
+	return *c
+}
+
+// a function to delete any flag in the command
+func (c *command) deleteFlag(flag string, flagWithVaue bool) (command, error) {
+	elements := strings.Split(c.cmd, " ")
+	for i, e := range elements {
+		if e == flag {
+			if flagWithVaue {
+				elements = append(elements[:i], elements[i+2:]...)
+			} else {
+				elements = append(elements[:i], elements[i+1:]...)
+			}
+			c.cmd = strings.Join(elements, " ")
+			return *c, nil
+		}
+	}
+	return *c, fmt.Errorf("cannot find flag %s in command %s", flag, c.cmd)
+}
+
+// Get the value of a flag from the command
+func (c *command) getFlagValue(flag string, flagWithVaue bool) string {
+	elements := strings.Split(c.cmd, " ")
+	for i, e := range elements {
+		if e == flag {
+			if flagWithVaue {
+				return elements[i+1]
+			} else {
+				return ""
+			}
+		}
+	}
+	return ""
+}
+
+// Add flags to the command
+func (c *command) addFlags(flags ...string) command {
+	for _, flag := range flags {
+		// combine the command with space
+		c.cmd += " " + flag
+	}
+	return *c
+}

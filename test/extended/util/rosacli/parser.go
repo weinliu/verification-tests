@@ -196,8 +196,22 @@ func tableLine(line []byte, offsetMap map[int]string) map[string]interface{} {
 
 // Parse the table output of the rosa cmd
 func (tab *tableData) Parse() *tableData {
+	var results bytes.Buffer
 	input := tab.input
 	lines := ReadLines(input)
+	reg1 := regexp.MustCompile(`.*[IEW].*:\x20\S.*\s+\S+`)
+	reg2 := regexp.MustCompile("^```\\s*")
+	for _, line := range lines {
+		strline := string(line)
+		if reg2.FindString(strline) != "" {
+			continue
+		}
+		result := reg1.FindString(strline)
+		if result == "" {
+			results.WriteString(strline)
+		}
+	}
+	lines = ReadLines(results)
 	titleLine := lines[0]
 	offsetMap := tableTitle(titleLine)
 

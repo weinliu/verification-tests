@@ -1,6 +1,9 @@
 package rosacli
 
 import (
+	"fmt"
+	"strings"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
@@ -136,5 +139,61 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Error: unknown flag: --interactive"))
 
+	})
+	g.It("Author:yuwan-High-45161-Allow sts cluster installation with compatible policies [Serial]", func() {
+		g.By("Check the cluster is STS cluater or skip")
+		isSTSCluster, err := isSTSCluster(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		if !isSTSCluster {
+			g.Skip("This case 45161 is only supported on STS cluster")
+		}
+
+		clusterName := "cluster-45161"
+		operatorPrefix := "cluster-45161-asdf"
+
+		g.By("Create cluster with one Y-1 version")
+		ocmResourceService := rosaClient.OCMResource
+		versionService := rosaClient.Version
+		accountRoleList, _, err := ocmResourceService.ListAccountRole()
+		o.Expect(err).To(o.BeNil())
+		rosalCommand := command{}
+		err = rosalCommand.getClusterCreationCommand()
+		o.Expect(err).To(o.BeNil())
+
+		installerRole := rosalCommand.getFlagValue("--role-arn", true)
+		ar := accountRoleList.AccountRole(installerRole)
+		o.Expect(ar).ToNot(o.Equal(rosacli.AccountRole{}))
+
+		cg := rosalCommand.getFlagValue("--channel-group", true)
+		if cg == "" {
+			cg = "stable"
+		}
+
+		versionList, _, err := versionService.ListClassicVersions("--channel-group", cg)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(versionList).ToNot(o.BeNil())
+		foundVersion, err := (*versionList).FindNearestBackwardYVersion(ar.OpenshiftVersion)
+		o.Expect(err).To(o.BeNil())
+
+		replacingFlags := map[string]string{
+			"--version":               foundVersion,
+			"--cluster-name":          clusterName,
+			"--operator-roles-prefix": operatorPrefix,
+		}
+
+		if rosalCommand.getFlagValue("--https-proxy", true) != "" {
+			rosalCommand, err = rosalCommand.deleteFlag("--https-proxy", true)
+			o.Expect(err).To(o.BeNil())
+		}
+		if rosalCommand.getFlagValue("--http-proxy", true) != "" {
+			rosalCommand, err = rosalCommand.deleteFlag("--http-proxy", true)
+			o.Expect(err).To(o.BeNil())
+		}
+
+		rosalCommand = rosalCommand.replaceFlagValue(replacingFlags)
+		rosalCommand = rosalCommand.addFlags("--dry-run")
+		stdout, err := rosaClient.Runner.RunCMD(strings.Split(rosalCommand.cmd, " "))
+		o.Expect(err).To(o.BeNil())
+		o.Expect(strings.Contains(stdout.String(), fmt.Sprintf("Creating cluster '%s' should succeed", clusterName))).Should(o.BeTrue())
 	})
 })

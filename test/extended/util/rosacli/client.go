@@ -12,6 +12,7 @@ type Client struct {
 	User          UserService
 	MachinePool   MachinePoolService
 	KubeletConfig KubeletConfigService
+	Version       VersionService
 	// Addon AddonService
 	// IDP IDPService
 	// Network NetworkService
@@ -35,6 +36,7 @@ func NewClient() *Client {
 	client.User = &userService{Client: client}
 	client.MachinePool = &machinepoolService{Client: client}
 	client.KubeletConfig = &kubeletConfigService{Client: client}
+	client.Version = &versionService{Client: client}
 
 	return client
 }

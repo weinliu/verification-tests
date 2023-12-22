@@ -285,6 +285,16 @@ func (arl AccountRoleList) AccountRoles(prefix string) (accountRoles []AccountRo
 	return
 }
 
+// Get specified account role by the arn
+func (arl AccountRoleList) AccountRole(arn string) (accountRole AccountRole) {
+	for _, roleItme := range arl.AccountRoleList {
+		if roleItme.RoleArn == arn {
+			return roleItme
+		}
+	}
+	return
+}
+
 // run `rosa upgrade account-roles` command
 func (ors *ocmResourceService) UpgradeAccountRole(flags ...string) (bytes.Buffer, error) {
 	upgradeAccountRole := ors.Client.Runner
@@ -460,7 +470,7 @@ func (ors *ocmResourceService) DeleteOperatorRoles(flags ...string) (bytes.Buffe
 	return deleteOperatorRoles.Run()
 }
 
-// run `rosa create oidc-proviedr` command
+// run `rosa create oidc-provider` command
 func (ors *ocmResourceService) CreateOIDCProvider(flags ...string) (bytes.Buffer, error) {
 	createODICProvider := ors.Client.Runner
 	createODICProvider = createODICProvider.Cmd("create", "oidc-provider").CmdFlags(flags...)
