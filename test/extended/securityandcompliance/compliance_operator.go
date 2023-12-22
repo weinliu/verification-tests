@@ -508,7 +508,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-High-61422-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-High-61422-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "cis-test" + getRandomString(),
@@ -516,6 +516,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				profilekind1:    "Profile",
 				profilename1:    "ocp4-cis",
 				profilename2:    "ocp4-cis-node",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			ssbWithVersionSuffix = scanSettingBindingDescription{
+				name:            "cis-test-1-4-" + getRandomString(),
+				namespace:       "",
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis-1-4",
+				profilename2:    "ocp4-cis-node-1-4",
 				scansettingname: "default",
 				template:        scansettingbindingTemplate,
 			}
@@ -529,18 +538,19 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				"ocp4-cis-node-master-file-permissions-etcd-pki-cert-files",
 				"ocp4-cis-node-master-file-permissions-openshift-pki-cert-files",
 				"ocp4-cis-node-master-file-permissions-openshift-pki-key-files",
-				"ocp4-cis-kubelet-enable-streaming-connections",
-				"ocp4-cis-kubelet-eviction-thresholds-set-hard-imagefs-available",
-				"ocp4-cis-kubelet-eviction-thresholds-set-hard-memory-available",
-				"ocp4-cis-kubelet-eviction-thresholds-set-hard-nodefs-available",
-				"ocp4-cis-kubelet-eviction-thresholds-set-hard-nodefs-inodesfree"}
+				"ocp4-cis-node-master-kubelet-enable-streaming-connections",
+				"ocp4-cis-node-master-kubelet-configure-event-creation",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-imagefs-available",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-memory-available",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-nodefs-available",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-nodefs-inodesfree"}
 			ccrsShouldNotExist = []string{
-				"ocp4-cis-kubelet-eviction-thresholds-set-hard-imagefs-inodesfree",
-				"ocp4-cis-kubelet-eviction-thresholds-set-soft-imagefs-available",
-				"ocp4-cis-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree",
-				"ocp4-cis-kubelet-eviction-thresholds-set-soft-memory-available",
-				"ocp4-cis-kubelet-eviction-thresholds-set-soft-nodefs-available",
-				"ocp4-cis-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree"}
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-imagefs-inodesfree",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-imagefs-available",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-memory-available",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-nodefs-available",
+				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree"}
 		)
 
 		g.By("Check default profiles name ocp4-cis .. !!!\n")
@@ -550,18 +560,27 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Create scansettingbinding !!!\n")
 		ssb.namespace = subD.namespace
+		ssbWithVersionSuffix.namespace = subD.namespace
 		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbWithVersionSuffix.name})
 		ssb.create(oc)
+		ssbWithVersionSuffix.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithVersionSuffix.name, ok, []string{"scansettingbinding", "-n", ssbWithVersionSuffix.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status !!!\n")
 		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
+		checkComplianceSuiteStatus(oc, ssbWithVersionSuffix.name, subD.namespace, "DONE")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
+		subD.complianceSuiteName(oc, ssbWithVersionSuffix.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbWithVersionSuffix.name, "NON-COMPLIANT INCONSISTENT")
 		g.By("Check complianceSuite result through exit-code.. !!!\n")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersionSuffix.name, "2")
 
 		g.By("Check ccr should exist and pass by default.. !!!\n")
 		for _, ccrShouldPass := range ccrsShouldPass {
@@ -1656,7 +1675,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
-
 		g.By("Check default profilebundles name and status.. !!!\n")
 		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
 		subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
