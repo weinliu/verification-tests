@@ -118,4 +118,54 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A machinepool", func() {
 		o.Expect(mp.InstanceType).To(o.Equal(machineType))
 
 	})
+
+	g.It("Author:mgahagan-High-43251-rosacli user can create spot machinepool by the rosacli command [Serial]", func() {
+		if isHosted {
+			g.Skip("This test case only work for classic cluster")
+			return
+		}
+		g.By("Create a spot machinepool on the cluster")
+		machinePoolName := "spotmp"
+		output, err := machinePoolService.CreateMachinePool(clusterID, "--name", machinePoolName, "--spot-max-price", "10.2", "--use-spot-instances",
+			"--replicas", "0")
+		o.Expect(err).ToNot(o.HaveOccurred())
+		defer mpClean(clusterID, machinePoolName)
+		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Machine pool '%s' created successfully on cluster '%s'", machinePoolName, clusterID))
+
+		g.By("Create another machinepool without spot instances")
+		machinePoolName = "nospotmp"
+		output, err = machinePoolService.CreateMachinePool(clusterID, "--name", machinePoolName, "--replicas", "0")
+		o.Expect(err).ToNot(o.HaveOccurred())
+		defer mpClean(clusterID, machinePoolName)
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Machine pool '%s' created successfully on cluster '%s'", machinePoolName, clusterID))
+
+		g.By("Create another machinepool with use-spot-instances but no spot-max-price set")
+		machinePoolName = "nopricemp"
+		output, err = machinePoolService.CreateMachinePool(clusterID, "--name", machinePoolName, "--use-spot-instances", "--replicas", "0")
+		o.Expect(err).ToNot(o.HaveOccurred())
+		defer mpClean(clusterID, machinePoolName)
+		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
+		o.Expect(textData).Should(o.ContainSubstring("Machine pool '%s' created successfully on cluster '%s'", machinePoolName, clusterID))
+
+		g.By("Confirm list of machinepools contains all created machinepools with SpotInstance field set appropriately")
+		output, err = machinePoolService.ListMachinePool(clusterID)
+		o.Expect(err).To(o.BeNil())
+		mpTab, err := machinePoolService.ReflectMachinePoolList(output)
+		o.Expect(err).To(o.BeNil())
+		for _, mp := range mpTab.MachinePools {
+			switch mp.ID {
+			case "spotmp":
+				o.Expect(mp.SpotInstances).To(o.Equal("Yes (max $10.2)"))
+			case "nospotmp":
+				o.Expect(mp.SpotInstances).To(o.Equal("No"))
+			case "nopricemp":
+				o.Expect(mp.SpotInstances).To(o.Equal("Yes (on-demand)"))
+			default:
+				continue
+			}
+		}
+
+	})
 })
