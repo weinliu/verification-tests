@@ -12,7 +12,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A oidc provider test", fun
 	defer g.GinkgoRecover()
 
 	var (
-		clusterID string
+		clusterID          string
+		rosaClient         *rosacli.Client
+		ocmResourceService rosacli.OCMResourceService
 	)
 
 	g.BeforeEach(func() {
@@ -20,6 +22,14 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A oidc provider test", fun
 		clusterID = getClusterIDENVExisted()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+	})
+
+	g.AfterEach(func() {
+		g.By("Clean remaining resources")
+		err := rosaClient.CleanResources(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
 	g.It("Author:yuwan-High-43046-Validation will work when user create oidc-provider to cluster [Serial]", func() {
@@ -32,8 +42,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A oidc provider test", fun
 		o.Expect(err).To(o.BeNil())
 
 		notExistedClusterID := "notexistedclusterid111"
-		rosaClient := rosacli.NewClient()
-		ocmResourceService := rosaClient.OCMResource
 
 		switch StsCluster {
 		case true:

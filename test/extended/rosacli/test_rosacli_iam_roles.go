@@ -20,14 +20,26 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 	var (
 		accountRolePrefixesNeedCleanup  = make([]string, 0)
 		operatorRolePrefixedNeedCleanup = make([]string, 0)
-		rosaClient                      *rosacli.Client
-		ocmResourceService              rosacli.OCMResourceService
+
+		clusterID          string
+		rosaClient         *rosacli.Client
+		ocmResourceService rosacli.OCMResourceService
 	)
 	g.BeforeEach(func() {
+		g.By("Get the cluster id")
+		clusterID = getClusterIDENVExisted()
+		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
+
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
 		ocmResourceService = rosaClient.OCMResource
 		rosaClient.Runner.CloseFormat()
+	})
+
+	g.AfterEach(func() {
+		g.By("Clean remaining resources")
+		err := rosaClient.CleanResources(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
 	g.It("Longduration-NonPreRelease-Author:yuwan-High-43070-Create/List/Delete account-roles via rosacli [Serial]", func() {
@@ -443,10 +455,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 	})
 
 	g.It("Author:yuwan-High-43051-Validation will work when user create operator-roles to cluster [Serial]", func() {
-		g.By("Get the cluster id")
-		clusterID := getClusterIDENVExisted()
-		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
-
 		g.By("Check if cluster is sts cluster")
 		StsCluster, err := isSTSCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
@@ -456,8 +464,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 		o.Expect(err).To(o.BeNil())
 
 		notExistedClusterID := "notexistedclusterid111"
-		rosaClient := rosacli.NewClient()
-		ocmResourceService := rosaClient.OCMResource
 
 		switch StsCluster {
 		case true:
@@ -608,6 +614,29 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing", func() {
 	defer g.GinkgoRecover()
+
+	var (
+		clusterID          string
+		rosaClient         *rosacli.Client
+		ocmResourceService rosacli.OCMResourceService
+	)
+
+	g.BeforeEach(func() {
+		g.By("Get the cluster id")
+		clusterID = getClusterIDENVExisted()
+		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
+
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+		ocmResourceService = rosaClient.OCMResource
+	})
+
+	g.AfterEach(func() {
+		g.By("Clean remaining resources")
+		err := rosaClient.CleanResources(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
+	})
+
 	g.It("Author:yuwan-High-52580-Validations for create/link/unlink user-role by the rosacli command [Serial]", func() {
 		var (
 			userRolePrefix                                string
@@ -618,8 +647,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 			userRoleArnInWrongFormat                      string
 			foundUserRole                                 rosacli.UserRole
 		)
-		rosaClient := rosacli.NewClient()
-		ocmResourceService := rosaClient.OCMResource
 		rosaClient.Runner.Format("json")
 		whoamiOutput, err := ocmResourceService.Whoami()
 		o.Expect(err).To(o.BeNil())
@@ -729,8 +756,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
 			ocmRoleList                                   rosacli.OCMRoleList
 			ocmRoleNeedRecoved                            rosacli.OCMRole
 		)
-		rosaClient := rosacli.NewClient()
-		ocmResourceService := rosaClient.OCMResource
 		rosaClient.Runner.Format("json")
 		whoamiOutput, err := ocmResourceService.Whoami()
 		o.Expect(err).To(o.BeNil())
@@ -871,8 +896,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing",
                         ]
                   }`
 
-		rosaClient := rosacli.NewClient()
-		ocmResourceService := rosaClient.OCMResource
 		rosaClient.Runner.Format("json")
 		whoamiOutput, err := ocmResourceService.Whoami()
 		o.Expect(err).To(o.BeNil())

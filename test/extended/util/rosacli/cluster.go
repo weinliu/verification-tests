@@ -3,21 +3,33 @@ package rosacli
 import (
 	"bytes"
 
+	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"gopkg.in/yaml.v3"
 )
 
 type ClusterService interface {
+	ResourcesCleaner
+
 	DescribeCluster(clusterID string) (bytes.Buffer, error)
-	ReflectClusterDescription(result bytes.Buffer) *ClusterDescription
+	ReflectClusterDescription(result bytes.Buffer) (*ClusterDescription, error)
+	DescribeClusterAndReflect(clusterID string) (*ClusterDescription, error)
 	List() (bytes.Buffer, error)
 	CreateDryRun(clusterName string, flags ...string) (bytes.Buffer, error)
 	EditCluster(clusterID string, flags ...string) (bytes.Buffer, error)
 	DeleteUpgrade(flags ...string) (bytes.Buffer, error)
 }
 
-var _ ClusterService = &clusterService{}
+type clusterService struct {
+	ResourcesService
+}
 
-type clusterService Service
+func NewClusterService(client *Client) ClusterService {
+	return &clusterService{
+		ResourcesService: ResourcesService{
+			client: client,
+		},
+	}
+}
 
 // Struct for the 'rosa describe cluster' output
 type ClusterDescription struct {
@@ -41,7 +53,7 @@ type ClusterDescription struct {
 	ScheduledUpgrade         string                   `yaml:"Scheduled Upgrade,omitempty"`
 	InfraID                  string                   `yaml:"Infra ID,omitempty"`
 	AdditionalTrustBundle    string                   `yaml:"Additional trust bundle,omitempty"`
-	Ec2MetadataHttpToken     string                   `yaml:"Ec2 Metadata Http Token,omitempty"`
+	Ec2MetadataHttpTokens    string                   `yaml:"Ec2 Metadata Http Tokens,omitempty"`
 	Availability             []map[string]string      `yaml:"Availability,omitempty"`
 	Nodes                    []map[string]interface{} `yaml:"Nodes,omitempty"`
 	Network                  []map[string]string      `yaml:"Network,omitempty"`
@@ -49,7 +61,7 @@ type ClusterDescription struct {
 	STSRoleArn               string                   `yaml:"STS Role ARN,omitempty"`
 	STSExternalID            string                   `yaml:"STS External ID,omitempty"`
 	SupportRoleARN           string                   `yaml:"Support Role ARN,omitempty"`
-	OperatorIAMRoles         []map[string]string      `yaml:"Operator IAM Roles,omitempty"`
+	OperatorIAMRoles         []string                 `yaml:"Operator IAM Roles,omitempty"`
 	InstanceIAMRoles         []map[string]string      `yaml:"Instance IAM Roles,omitempty"`
 	ManagedPolicies          string                   `yaml:"Managed Policies,omitempty"`
 	UserWorkloadMonitoring   string                   `yaml:"User Workload Monitoring,omitempty"`
@@ -60,12 +72,11 @@ type ClusterDescription struct {
 	ProvisioningErrorMessage string                   `yaml:"Provisioning Error Message,omitempty"`
 	ProvisioningErrorCode    string                   `yaml:"Provisioning Error Code,omitempty"`
 	LimitedSupport           []map[string]string      `yaml:"Limited Support,omitempty"`
-	Ec2MetadataHttpTokens    []map[string]string      `yaml:"Ec2 Metadata Http Tokens,omitempty"`
 	AuditLogRoleARN          []map[string]string      `yaml:"Audit Log Role ARN,omitempty"`
 }
 
 func (c *clusterService) DescribeCluster(clusterID string) (bytes.Buffer, error) {
-	describe := c.Client.Runner.
+	describe := c.client.Runner.
 		Cmd("describe", "cluster").
 		CmdFlags("-c", clusterID).
 		OutputFormat()
@@ -76,23 +87,38 @@ func (c *clusterService) DescribeCluster(clusterID string) (bytes.Buffer, error)
 	return describe.Run()
 }
 
+func (c *clusterService) DescribeClusterAndReflect(clusterID string) (res *ClusterDescription, err error) {
+	output, err := c.DescribeCluster(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	return c.ReflectClusterDescription(output)
+}
+
 // Pasrse the result of 'rosa describe cluster' to the RosaClusterDescription struct
-func (c *clusterService) ReflectClusterDescription(result bytes.Buffer) *ClusterDescription {
-	res := new(ClusterDescription)
-	theMap, _ := c.Client.Parser.TextData.Input(result).Parse().YamlToMap()
-	data, _ := yaml.Marshal(&theMap)
-	yaml.Unmarshal(data, res)
-	return res
+func (c *clusterService) ReflectClusterDescription(result bytes.Buffer) (res *ClusterDescription, err error) {
+	var data []byte
+	res = new(ClusterDescription)
+	theMap, err := c.client.Parser.TextData.Input(result).Parse().YamlToMap()
+	if err != nil {
+		return
+	}
+	data, err = yaml.Marshal(&theMap)
+	if err != nil {
+		return
+	}
+	err = yaml.Unmarshal(data, res)
+	return res, err
 }
 
 func (c *clusterService) List() (bytes.Buffer, error) {
-	list := c.Client.Runner.Cmd("list", "cluster")
+	list := c.client.Runner.Cmd("list", "cluster")
 	return list.Run()
 }
 
 func (c *clusterService) CreateDryRun(clusterName string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterName, "--dry-run"}, flags...)
-	createDryRun := c.Client.Runner.
+	createDryRun := c.client.Runner.
 		Cmd("create", "cluster").
 		CmdFlags(combflags...)
 	return createDryRun.Run()
@@ -100,15 +126,20 @@ func (c *clusterService) CreateDryRun(clusterName string, flags ...string) (byte
 
 func (c *clusterService) EditCluster(clusterID string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterID}, flags...)
-	editCluster := c.Client.Runner.
+	editCluster := c.client.Runner.
 		Cmd("edit", "cluster").
 		CmdFlags(combflags...)
 	return editCluster.Run()
 }
 
 func (c *clusterService) DeleteUpgrade(flags ...string) (bytes.Buffer, error) {
-	DeleteUpgrade := c.Client.Runner.
+	DeleteUpgrade := c.client.Runner.
 		Cmd("delete", "upgrade").
 		CmdFlags(flags...)
 	return DeleteUpgrade.Run()
+}
+
+func (c *clusterService) CleanResources(clusterID string) (errors []error) {
+	logext.Debugf("Nothing releated to cluster was done there")
+	return
 }

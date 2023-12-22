@@ -1,6 +1,31 @@
 package rosacli
 
+import (
+	"bytes"
+	"errors"
+)
+
+type ResourcesCleaner interface {
+	CleanResources(clusterID string) []error
+}
+
+type CLDNamedResourceService interface {
+	ResourcesCleaner
+
+	List(clusterID string) (bytes.Buffer, error)
+	Describe(clusterID string, name string) (bytes.Buffer, error)
+	Create(clusterID string, name string, flags ...string) (bytes.Buffer, error)
+	Edit(clusterID string, name string, flags ...string) (bytes.Buffer, error)
+	Delete(clusterID string, name string) (bytes.Buffer, error)
+}
+
+type ResourcesService struct {
+	client *Client
+}
+
 type Client struct {
+	clusterID string
+
 	// Clients
 	Runner *runner
 	Parser *Parser
@@ -8,17 +33,11 @@ type Client struct {
 	// services
 	Cluster       ClusterService
 	IDP           IDPService
+	KubeletConfig KubeletConfigService
+	MachinePool   MachinePoolService
 	OCMResource   OCMResourceService
 	User          UserService
-	MachinePool   MachinePoolService
-	KubeletConfig KubeletConfigService
 	Version       VersionService
-	// Addon AddonService
-	// IDP IDPService
-	// Network NetworkService
-	// MachinePool MachinepPoolService
-	// OCMRole OCMRoleService
-	// OCMResource OCMResourceService
 }
 
 func NewClient() *Client {
@@ -30,17 +49,34 @@ func NewClient() *Client {
 		Parser: parser,
 	}
 
-	client.Cluster = &clusterService{Client: client}
-	client.IDP = &idpService{Client: client}
-	client.OCMResource = &ocmResourceService{Client: client}
-	client.User = &userService{Client: client}
-	client.MachinePool = &machinepoolService{Client: client}
-	client.KubeletConfig = &kubeletConfigService{Client: client}
-	client.Version = &versionService{Client: client}
+	client.Cluster = NewClusterService(client)
+	client.IDP = NewIDPService(client)
+	client.KubeletConfig = NewKubeletConfigService(client)
+	client.MachinePool = NewMachinePoolService(client)
+	client.OCMResource = NewOCMResourceService(client)
+	client.User = NewUserService(client)
+	client.Version = NewVersionService(client)
 
 	return client
 }
 
-type Service struct {
-	Client *Client
+func NewSensitiveClient() *Client {
+	client := NewClient()
+	client.Runner.Sensitive(true)
+	return client
+}
+
+func (c *Client) CleanResources(clusterID string) error {
+	var errorList []error
+
+	errorList = append(errorList, c.Cluster.CleanResources(clusterID)...)
+	errorList = append(errorList, c.IDP.CleanResources(clusterID)...)
+	errorList = append(errorList, c.KubeletConfig.CleanResources(clusterID)...)
+	errorList = append(errorList, c.MachinePool.CleanResources(clusterID)...)
+	errorList = append(errorList, c.OCMResource.CleanResources(clusterID)...)
+	errorList = append(errorList, c.User.CleanResources(clusterID)...)
+	errorList = append(errorList, c.Version.CleanResources(clusterID)...)
+
+	return errors.Join(errorList...)
+
 }

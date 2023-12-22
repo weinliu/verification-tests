@@ -15,6 +15,14 @@ import (
 var _ = g.Describe("[sig-rosacli] Service_Development_A verify test", func() {
 	defer g.GinkgoRecover()
 
+	var (
+		rosaSensitiveClient *rosacli.Client
+	)
+
+	g.BeforeEach(func() {
+		rosaSensitiveClient = rosacli.NewSensitiveClient()
+	})
+
 	g.It("Author:yingzhan-Medium-64040-rosacli testing: Test rosa window certificates expiration [Serial]", func() {
 		//If the case fails,please open a card to ask dev update windows certificates.
 		//Example card: https://issues.redhat.com/browse/SDA-8990
@@ -29,7 +37,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A verify test", func() {
 
 		g.By("Check the domains certificates if it is updated")
 		domains := []string{"api.openshift.com", "sso.redhat.com"}
-		rosaSensitiveClient := rosacli.NewClient()
 		for _, url := range domains {
 			cmd := fmt.Sprintf("openssl s_client -connect %s:443 -showcerts 2>&1  | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'", url)
 			stdout, err := rosaSensitiveClient.Runner.RunCMD([]string{"bash", "-c", cmd})

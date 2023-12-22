@@ -3,10 +3,13 @@ package rosacli
 import (
 	"bytes"
 
+	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"gopkg.in/yaml.v3"
 )
 
 type KubeletConfigService interface {
+	ResourcesCleaner
+
 	DescribeKubeletConfig(clusterID string) (bytes.Buffer, error)
 	ReflectKubeletConfigDescription(result bytes.Buffer) *KubeletConfigDescription
 	EditKubeletConfig(clusterID string, flags ...string) (bytes.Buffer, error)
@@ -14,9 +17,20 @@ type KubeletConfigService interface {
 	CreateKubeletConfig(clusterID string, flags ...string) (bytes.Buffer, error)
 }
 
-var _ KubeletConfigService = &kubeletConfigService{}
+type kubeletConfigService struct {
+	ResourcesService
 
-type kubeletConfigService Service
+	created map[string]bool
+}
+
+func NewKubeletConfigService(client *Client) KubeletConfigService {
+	return &kubeletConfigService{
+		ResourcesService: ResourcesService{
+			client: client,
+		},
+		created: make(map[string]bool),
+	}
+}
 
 // Struct for the 'rosa describe kubeletconfig' output
 type KubeletConfigDescription struct {
@@ -25,7 +39,7 @@ type KubeletConfigDescription struct {
 
 // Describe Kubeletconfig
 func (k *kubeletConfigService) DescribeKubeletConfig(clusterID string) (bytes.Buffer, error) {
-	describe := k.Client.Runner.
+	describe := k.client.Runner.
 		Cmd("describe", "kubeletconfig").
 		CmdFlags("-c", clusterID).
 		OutputFormat()
@@ -39,7 +53,7 @@ func (k *kubeletConfigService) DescribeKubeletConfig(clusterID string) (bytes.Bu
 // Pasrse the result of 'rosa describe kubeletconfig' to the KubeletConfigDescription struct
 func (k *kubeletConfigService) ReflectKubeletConfigDescription(result bytes.Buffer) *KubeletConfigDescription {
 	res := new(KubeletConfigDescription)
-	theMap, _ := k.Client.Parser.TextData.Input(result).Parse().YamlToMap()
+	theMap, _ := k.client.Parser.TextData.Input(result).Parse().YamlToMap()
 	data, _ := yaml.Marshal(&theMap)
 	yaml.Unmarshal(data, res)
 	return res
@@ -48,26 +62,45 @@ func (k *kubeletConfigService) ReflectKubeletConfigDescription(result bytes.Buff
 // Edit the kubeletconfig
 func (k *kubeletConfigService) EditKubeletConfig(clusterID string, flags ...string) (bytes.Buffer, error) {
 	combflags := append([]string{"-c", clusterID}, flags...)
-	editCluster := k.Client.Runner.
+	editCluster := k.client.Runner.
 		Cmd("edit", "kubeletconfig").
 		CmdFlags(combflags...)
 	return editCluster.Run()
 }
 
 // Delete the kubeletconfig
-func (k *kubeletConfigService) DeleteKubeletConfig(clusterID string, flags ...string) (bytes.Buffer, error) {
+func (k *kubeletConfigService) DeleteKubeletConfig(clusterID string, flags ...string) (output bytes.Buffer, err error) {
 	combflags := append([]string{"-c", clusterID}, flags...)
-	editCluster := k.Client.Runner.
+	editCluster := k.client.Runner.
 		Cmd("delete", "kubeletconfig").
 		CmdFlags(combflags...)
-	return editCluster.Run()
+	output, err = editCluster.Run()
+	if err == nil {
+		k.created[clusterID] = false
+	}
+	return
 }
 
 // Create the kubeletconfig
-func (k *kubeletConfigService) CreateKubeletConfig(clusterID string, flags ...string) (bytes.Buffer, error) {
+func (k *kubeletConfigService) CreateKubeletConfig(clusterID string, flags ...string) (output bytes.Buffer, err error) {
 	combflags := append([]string{"-c", clusterID}, flags...)
-	editCluster := k.Client.Runner.
+	createCluster := k.client.Runner.
 		Cmd("create", "kubeletconfig").
 		CmdFlags(combflags...)
-	return editCluster.Run()
+	output, err = createCluster.Run()
+	if err == nil {
+		k.created[clusterID] = true
+	}
+	return
+}
+
+func (k *kubeletConfigService) CleanResources(clusterID string) (errors []error) {
+	if k.created[clusterID] {
+		logext.Infof("Remove remaining kubelet config")
+		_, err := k.DeleteKubeletConfig(clusterID)
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+	return
 }

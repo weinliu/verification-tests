@@ -32,12 +32,13 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 	})
 
 	g.AfterEach(func() {
-		kubeletService.DeleteKubeletConfig(clusterID, "-y")
+		g.By("Clean the cluster")
+		rosaClient.CleanResources(clusterID)
 	})
 
 	g.It("Author:xueli-Critical-68828-Create podPidLimit via rosacli will work well [Serial]", func() {
 		g.By("Run the command to create a kubeletconfig to the cluster")
-		output, _ := rosaClient.KubeletConfig.CreateKubeletConfig(clusterID,
+		output, _ := kubeletService.CreateKubeletConfig(clusterID,
 			"--pod-pids-limit", "12345")
 		if isHosted {
 			o.Expect(output.String()).To(o.ContainSubstring("Hosted Control Plane clusters do not support custom KubeletConfig configuration."))
@@ -52,7 +53,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		g.By("Run the command to ignore the warning")
-		output, err = rosaClient.KubeletConfig.CreateKubeletConfig(clusterID, "-y",
+		output, err = kubeletService.CreateKubeletConfig(clusterID, "-y",
 			"--pod-pids-limit", "12345")
 
 		if isHostedCluster {
@@ -64,10 +65,10 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", fun
 		o.Expect(output.String()).To(o.ContainSubstring("Successfully created custom KubeletConfig for cluster '%s'", clusterID))
 
 		g.By("Describe the kubeletconfig")
-		output, err = rosaClient.KubeletConfig.DescribeKubeletConfig(clusterID)
+		output, err = kubeletService.DescribeKubeletConfig(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		kubeletConfig := rosaClient.KubeletConfig.ReflectKubeletConfigDescription(output)
+		kubeletConfig := kubeletService.ReflectKubeletConfigDescription(output)
 		o.Expect(kubeletConfig.PodPidsLimit).To(o.Equal(12345))
 	})
 

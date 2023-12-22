@@ -11,7 +11,7 @@ import (
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func() {
+var _ = g.Describe("[sig-rosacli] Service_Development_A oidc config test", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -20,6 +20,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		installerRoleArn         string
 		hostedCP                 bool
 		err                      error
+
+		rosaClient         *rosacli.Client
+		ocmResourceService rosacli.OCMResourceService
 	)
 
 	g.BeforeEach(func() {
@@ -29,6 +32,15 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 		hostedCP, err = isHostedCPCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
 
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+		ocmResourceService = rosaClient.OCMResource
+	})
+
+	g.AfterEach(func() {
+		g.By("Clean remaining resources")
+		err := rosaClient.CleanResources(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
 	g.It("Author:yuwan-High-57570-Create/List/Delete BYO oidc config in auto mode via rosacli [Serial]", func() {
@@ -36,8 +48,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 			g.By("make sure that all oidc configs created during the testing")
 			if len(oidcConfigIDsNeedToClean) > 0 {
 				g.By("Delete oidc configs")
-				rosaClient := rosacli.NewClient()
-				ocmResourceService := rosaClient.OCMResource
 				for _, id := range oidcConfigIDsNeedToClean {
 					output, err := ocmResourceService.DeleteOIDCConfig(
 						"--oidc-config-id", id,
@@ -65,8 +75,6 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func
 			managedOIDCConfigID    string
 			accountRolePrefix      string
 		)
-		rosaClient := rosacli.NewClient()
-		ocmResourceService := rosaClient.OCMResource
 		g.By("Create account-roles for testing")
 		rand.Seed(time.Now().UnixNano())
 		accountRolePrefix = fmt.Sprintf("QEAuto-accr60971-%s", time.Now().UTC().Format("20060102"))

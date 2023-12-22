@@ -10,9 +10,21 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A region testing", func() 
 	defer g.GinkgoRecover()
 
 	var (
-		rosaClient         = rosacli.NewClient()
-		ocmResourceService = rosaClient.OCMResource
+		clusterID          string
+		rosaClient         *rosacli.Client
+		ocmResourceService rosacli.OCMResourceService
 	)
+
+	g.BeforeEach(func() {
+
+		g.By("Get the cluster")
+		clusterID = getClusterIDENVExisted()
+		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
+
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+		ocmResourceService = rosaClient.OCMResource
+	})
 
 	g.It("Author:yuwan-High-55729-rosacli List regions via rosacli command [Serial]", func() {
 

@@ -1,7 +1,7 @@
 package rosacli
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"regexp"
 	"strings"
@@ -10,18 +10,39 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func() {
 	defer g.GinkgoRecover()
 
-	var clusterID string
+	var (
+		clusterID string
+
+		rosaClient *rosacli.Client
+		idpService rosacli.IDPService
+
+		rosaSensitiveClient *rosacli.Client
+		idpServiceSensitive rosacli.IDPService
+	)
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
 		clusterID = getClusterIDENVExisted()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
+
+		g.By("Init the clients")
+		rosaClient = rosacli.NewClient()
+		idpService = rosaClient.IDP
+		rosaSensitiveClient = rosacli.NewSensitiveClient()
+		idpServiceSensitive = rosaSensitiveClient.IDP
+	})
+
+	g.AfterEach(func() {
+		g.By("Clean remaining resources")
+		var errorList []error
+		errorList = append(errorList, rosaClient.CleanResources(clusterID))
+		errorList = append(errorList, rosaSensitiveClient.CleanResources(clusterID))
+		o.Expect(errors.Join(errorList...)).ToNot(o.HaveOccurred())
 	})
 
 	g.It("Author:yuwan-Critical-35878-rosacli Create/describe/delete admin user by the rosacli command [Serial]", func() {
@@ -30,14 +51,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 			idpName    = "myhtpasswd"
 			usersValue = "testuser:asCHS-MSV5R-bUwmc-5qb9F"
 		)
-		rosaClient := rosacli.NewClient()
-		idpService := rosaClient.IDP
-
-		rosaSensitiveClient := rosacli.NewClient()
-		rosaSensitiveClient.Runner.Sensitive(true)
 
 		g.By("Create admin")
-
 		output, err := rosaSensitiveClient.User.CreateAdmin(clusterID)
 		o.Expect(err).To(o.BeNil())
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
@@ -72,35 +87,19 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(idpTab.IsExist("cluster-admin")).To(o.BeFalse())
 
 		g.By("Create one htpasswd idp")
-		output, err = idpService.CreateIDP(
-			clusterID,
+		output, err = idpService.CreateIDP(clusterID, idpName,
 			"--type", idpType,
-			"--name", idpName,
 			"--users", usersValue,
 			"-y")
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idpName))
-		defer func() {
-			g.By("Delete idp")
-			output, err = idpService.DeleteIDP(clusterID, idpName)
-			o.Expect(err).To(o.BeNil())
-			textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(textData).Should(o.ContainSubstring("Successfully deleted identity provider '%s' from cluster '%s'", idpName, clusterID))
-		}()
 
 		g.By("Create admin")
 		output, err = rosaSensitiveClient.User.CreateAdmin(clusterID)
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Admin account has been added"))
-		defer func() {
-			g.By("Delete admin")
-			output, err = rosaClient.User.DeleteAdmin(clusterID)
-			o.Expect(err).To(o.BeNil())
-			textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(textData).Should(o.ContainSubstring("Admin user 'cluster-admin' has been deleted"))
-		}()
 		commandOutput := rosaClient.Parser.TextData.Input(output).Parse().Output()
 		command := strings.TrimLeft(commandOutput, " ")
 		command = strings.TrimLeft(command, " ")
@@ -113,7 +112,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("There is an admin on cluster"))
 
 		g.By("List IDP")
-		idpTab, output, err = idpService.ListIDP(clusterID)
+		idpTab, _, err = idpService.ListIDP(clusterID)
 		o.Expect(err).To(o.BeNil())
 		o.Expect(idpTab.IsExist("cluster-admin")).To(o.BeTrue())
 		o.Expect(idpTab.IsExist(idpName)).To(o.BeTrue())
@@ -182,33 +181,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 			usernameClaim: "usrnc",
 			extraScopes:   "exts",
 		}
-		var createdIDPs []string
-		rosaClient := rosacli.NewClient()
-		idpService := rosaClient.IDP
-		defer func() {
-			g.By("Delete idp")
-			var failRemove bool
-			for k := range createdIDPs {
-				output, err := idpService.DeleteIDP(clusterID, createdIDPs[k])
-				if err != nil {
-					e2e.Logf("%v with %v is failed to be removed with error %v", clusterID, createdIDPs[k], err.Error())
-					failRemove = true
-					continue
-				}
-				textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-				if !strings.Contains(textData, fmt.Sprintf("Successfully deleted identity provider '%s' from cluster '%s'", createdIDPs[k], clusterID)) {
-					e2e.Logf("the removal fails with %v", textData)
-					failRemove = true
-					continue
-				}
-			}
-			o.Expect(failRemove).To(o.BeFalse())
-		}()
 
 		g.By("Create Github IDP")
-		createdIDPs = append(createdIDPs, idp["Github"].name)
-		output, err := idpService.CreateIDP(clusterID,
-			"--name", idp["Github"].name,
+		output, err := idpService.CreateIDP(clusterID, idp["Github"].name,
 			"--mapping-method", mappingMethod,
 			"--client-id", clientID,
 			"--client-secret", clientSecret,
@@ -220,9 +195,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idp["Github"].name))
 
 		g.By("Create Gitlab IDP")
-		createdIDPs = append(createdIDPs, idp["Gitlab"].name)
-		output, err = idpService.CreateIDP(clusterID,
-			"--name", idp["Gitlab"].name,
+		output, err = idpService.CreateIDP(clusterID, idp["Gitlab"].name,
 			"--mapping-method", mappingMethod,
 			"--client-id", clientID,
 			"--client-secret", clientSecret,
@@ -234,9 +207,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idp["Gitlab"].name))
 
 		g.By("Create Google IDP")
-		createdIDPs = append(createdIDPs, idp["Google"].name)
-		output, err = idpService.CreateIDP(clusterID,
-			"--name", idp["Google"].name,
+		output, err = idpService.CreateIDP(clusterID, idp["Google"].name,
 			"--mapping-method", mappingMethod,
 			"--client-id", clientID,
 			"--client-secret", clientSecret,
@@ -247,9 +218,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idp["Google"].name))
 
 		g.By("Create LDAP IDP")
-		createdIDPs = append(createdIDPs, idp["LDAP"].name)
-		output, err = idpService.CreateIDP(clusterID,
-			"--name", idp["LDAP"].name,
+		output, err = idpService.CreateIDP(clusterID, idp["LDAP"].name,
 			"--mapping-method", mappingMethod,
 			"--bind-dn", idp["LDAP"].bindDN,
 			"--bind-password", idp["LDAP"].bindPassword,
@@ -265,9 +234,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idp["LDAP"].name))
 
 		g.By("Create OpenID IDP")
-		createdIDPs = append(createdIDPs, idp["OpenID"].name)
-		output, err = idpService.CreateIDP(clusterID,
-			"--name", idp["OpenID"].name,
+		output, err = idpService.CreateIDP(clusterID, idp["OpenID"].name,
 			"--mapping-method", mappingMethod,
 			"--client-id", clientID,
 			"--client-secret", clientSecret,
@@ -297,44 +264,23 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 			singleUserPasswd   string
 			multipleuserPasswd []string
 		)
-		rosaClient := rosacli.NewClient()
-		idpService := rosaClient.IDP
-
-		rosaSensitiveClient := rosacli.NewClient()
-		rosaSensitiveClient.Runner.Sensitive(true)
-		idpServiceSensitive := rosaSensitiveClient.IDP
 
 		g.By("Create admin")
 		output, err := rosaSensitiveClient.User.CreateAdmin(clusterID)
 		o.Expect(err).To(o.BeNil())
 		textData := rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Admin account has been added"))
-		defer func() {
-			g.By("Delete admin")
-			output, err = rosaSensitiveClient.User.DeleteAdmin(clusterID)
-			o.Expect(err).To(o.BeNil())
-			textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(textData).Should(o.ContainSubstring("Admin user 'cluster-admin' has been deleted"))
-		}()
 
 		g.By("Create one htpasswd idp with multiple users")
 		_, singleUserName, singleUserPasswd, err = generateHtpasswdPair("user1", "pass1")
 		o.Expect(err).To(o.BeNil())
 		output, err = idpServiceSensitive.CreateIDP(
-			clusterID,
+			clusterID, idpNames[0],
 			"--type", idpType,
-			"--name", idpNames[0],
 			"--username", singleUserName,
 			"--password", singleUserPasswd,
 			"-y")
 		o.Expect(err).To(o.BeNil())
-		defer func() {
-			g.By("Delete idp")
-			output, err = idpService.DeleteIDP(clusterID, idpNames[0])
-			o.Expect(err).To(o.BeNil())
-			textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(textData).Should(o.ContainSubstring("Successfully deleted identity provider '%s' from cluster '%s'", idpNames[0], clusterID))
-		}()
 		textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idpNames[0]))
 		o.Expect(textData).Should(o.ContainSubstring("To log in to the console, open"))
@@ -344,17 +290,11 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		multipleuserPasswd, err = generateMultipleHtpasswdPairs(2)
 		o.Expect(err).To(o.BeNil())
 		output, err = idpServiceSensitive.CreateIDP(
-			clusterID,
+			clusterID, idpNames[1],
 			"--type", idpType,
-			"--name", idpNames[1],
 			"--users", strings.Join(multipleuserPasswd, ","),
 			"-y")
 		o.Expect(err).To(o.BeNil())
-		defer func() {
-			g.By("Delete idp")
-			output, err = idpService.DeleteIDP(clusterID, idpNames[1])
-			o.Expect(err).To(o.BeNil())
-		}()
 		textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idpNames[1]))
 		o.Expect(textData).Should(o.ContainSubstring("To log in to the console, open"))
@@ -367,17 +307,11 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func
 		o.Expect(err).To(o.BeNil())
 		defer os.RemoveAll(location)
 		output, err = idpServiceSensitive.CreateIDP(
-			clusterID,
+			clusterID, idpNames[2],
 			"--type", idpType,
-			"--name", idpNames[2],
 			"--from-file", location,
 			"-y")
 		o.Expect(err).To(o.BeNil())
-		defer func() {
-			g.By("Delete idp")
-			output, err = idpService.DeleteIDP(clusterID, idpNames[2])
-			o.Expect(err).To(o.BeNil())
-		}()
 		textData = rosaSensitiveClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Identity Provider '%s' has been created", idpNames[2]))
 		o.Expect(textData).Should(o.ContainSubstring("To log in to the console, open"))

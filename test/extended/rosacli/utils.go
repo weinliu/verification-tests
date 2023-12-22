@@ -18,6 +18,8 @@ type command struct {
 	cmd string
 }
 
+var defaultWorkerPool = "worker"
+
 // Get the clusterID env.
 func getClusterIDENVExisted() string {
 	return os.Getenv("CLUSTER_ID")
@@ -308,4 +310,12 @@ func (c *command) addFlags(flags ...string) command {
 		c.cmd += " " + flag
 	}
 	return *c
+}
+
+func parseLabels(labels string) []string {
+	return strings.Split(strings.ReplaceAll(labels, " ", ""), ",")
+}
+
+func parseTaints(taints string) []string {
+	return strings.Split(strings.ReplaceAll(taints, " ", ""), ",")
 }

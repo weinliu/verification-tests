@@ -11,21 +11,34 @@ import (
 var _ = g.Describe("[sig-rosacli] Service_Development_A Decribe resources", func() {
 	defer g.GinkgoRecover()
 
-	var clusterID string
+	var (
+		clusterID      string
+		rosaClient     *rosacli.Client
+		clusterService rosacli.ClusterService
+	)
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
 		clusterID = getClusterIDENVExisted()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
+
+		g.By("Init the client")
+		rosaClient = rosacli.NewClient()
+		clusterService = rosaClient.Cluster
+	})
+
+	g.AfterEach(func() {
+		g.By("Clean remaining resources")
+		err := rosaClient.CleanResources(clusterID)
+		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
 	g.It("Author:yuwan-Medium-34102-rosacli testing: Check the description of the cluster [Serial]", func() {
 		g.By("Describe cluster in text format")
-		var rosaClient = rosacli.NewClient()
-		clusterService := rosaClient.Cluster
 		output, err := clusterService.DescribeCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
-		CD := clusterService.ReflectClusterDescription(output)
+		CD, err := clusterService.ReflectClusterDescription(output)
+		o.Expect(err).To(o.BeNil())
 
 		g.By("Describe cluster in json format")
 		rosaClient.Runner.Format("json")

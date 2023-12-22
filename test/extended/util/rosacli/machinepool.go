@@ -3,42 +3,41 @@ package rosacli
 import (
 	"bytes"
 
+	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"gopkg.in/yaml.v3"
 )
 
 type MachinePoolService interface {
+	ResourcesCleaner
+
 	ListMachinePool(clusterID string) (bytes.Buffer, error)
-	ReflectNodePoolList(result bytes.Buffer) (npl NodePoolList, err error)
-	ReflectMachinePoolList(result bytes.Buffer) (mpl MachinePoolList, err error)
-	CreateMachinePool(clusterID string, flags ...string) (bytes.Buffer, error)
+	DescribeMachinePool(clusterID string, mpID string) (bytes.Buffer, error)
+	CreateMachinePool(clusterID string, name string, flags ...string) (bytes.Buffer, error)
 	EditMachinePool(clusterID string, machinePoolName string, flags ...string) (bytes.Buffer, error)
 	DeleteMachinePool(clusterID string, machinePoolName string) (bytes.Buffer, error)
-	DescribeMachinePool(clusterID string, mpID string) (bytes.Buffer, error)
+
+	ReflectMachinePoolList(result bytes.Buffer) (mpl MachinePoolList, err error)
 	ReflectMachinePoolDescription(result bytes.Buffer) (*MachinePoolDescription, error)
+
+	ReflectNodePoolList(result bytes.Buffer) (*NodePoolList, error)
+	ListAndReflectNodePools(clusterID string) (*NodePoolList, error)
+	ReflectNodePoolDescription(result bytes.Buffer) (npd *NodePoolDescription, err error)
+	DescribeAndReflectNodePool(clusterID string, name string) (*NodePoolDescription, error)
 }
 
-var _ MachinePoolService = &machinepoolService{}
+type machinepoolService struct {
+	ResourcesService
 
-type machinepoolService Service
-
-// Struct for the 'rosa list machinepool' output for hosted-cp clusters
-type NodePool struct {
-	ID               string `json:"ID,omitempty"`
-	AutoScaling      string `json:"AUTOSCALING,omitempty"`
-	DesiredReplicas  string `json:"DESIRED REPLICAS,omitempty"`
-	CurrentReplicas  string `json:"CURRENT REPLICAS,omitempty"`
-	InstanceType     string `json:"INSTANCE TYPE,omitempty"`
-	Lables           string `json:"LABELS,omitempty"`
-	Taints           string `json:"TAINTS,omitempty"`
-	AvaliablityZones string `json:"AVAILABILITY ZONES,omitempty"`
-	Subnet           string `json:"SUBNET,omitempty"`
-	Version          string `json:"VERSION,omitempty"`
-	AutoRepair       string `json:"AUTOREPAIR,omitempty"`
-	TuningConfigs    string `json:"TUNING CONFIGS,omitempty"`
-	Message          string `json:"MESSAGE,omitempty"`
+	machinePools map[string][]string
 }
-type NodePoolList struct {
-	NodePools []NodePool `json:"NodePools,omitempty"`
+
+func NewMachinePoolService(client *Client) MachinePoolService {
+	return &machinepoolService{
+		ResourcesService: ResourcesService{
+			client: client,
+		},
+		machinePools: make(map[string][]string),
+	}
 }
 
 // Struct for the 'rosa list machinepool' output for non-hosted-cp clusters
@@ -47,9 +46,9 @@ type MachinePool struct {
 	AutoScaling      string `json:"AUTOSCALING,omitempty"`
 	Replicas         string `json:"REPLICAS,omitempty"`
 	InstanceType     string `json:"INSTANCE TYPE,omitempty"`
-	Lables           string `json:"LABELS,omitempty"`
+	Labels           string `json:"LABELS,omitempty"`
 	Taints           string `json:"TAINTS,omitempty"`
-	AvaliablityZones string `json:"AVAILABILITY ZONES,omitempty"`
+	AvalaiblityZones string `json:"AVAILABILITY ZONES,omitempty"`
 	Subnets          string `json:"SUBNETS,omitempty"`
 	SpotInstances    string `json:"SPOT INSTANCES,omitempty"`
 	DiskSize         string `json:"DISK SIZE,omitempty"`
@@ -65,28 +64,72 @@ type MachinePoolDescription struct {
 	AutoScaling      string `yaml:"Autoscaling,omitempty"`
 	Replicas         string `yaml:"Replicas,omitempty"`
 	InstanceType     string `yaml:"Instance type,omitempty"`
-	Lables           string `yaml:"Labels,omitempty"`
+	Labels           string `yaml:"Labels,omitempty"`
 	Taints           string `yaml:"Taints,omitempty"`
-	AvaliablityZones string `yaml:"Availability zones,omitempty"`
+	AvailablityZones string `yaml:"Availability zones,omitempty"`
 	Subnets          string `yaml:"Subnets,omitempty"`
 	SpotInstances    string `yaml:"Spot instances,omitempty"`
 	DiskSize         string `yaml:"Disk size,omitempty"`
 	SecurityGroupIDs string `yaml:"Security Group IDs,omitempty"`
 }
 
+// Struct for the 'rosa list machinepool' output for hosted-cp clusters
+type NodePool struct {
+	ID               string `json:"ID,omitempty"`
+	AutoScaling      string `json:"AUTOSCALING,omitempty"`
+	Replicas         string `json:"REPLICAS,omitempty"`
+	InstanceType     string `json:"INSTANCE TYPE,omitempty"`
+	Labels           string `json:"LABELS,omitempty"`
+	Taints           string `json:"TAINTS,omitempty"`
+	AvalaiblityZones string `json:"AVAILABILITY ZONES,omitempty"`
+	Subnet           string `json:"SUBNET,omitempty"`
+	Version          string `json:"VERSION,omitempty"`
+	AutoRepair       string `json:"AUTOREPAIR,omitempty"`
+	TuningConfigs    string `json:"TUNING CONFIGS,omitempty"`
+	Message          string `json:"MESSAGE,omitempty"`
+}
+
+type NodePoolList struct {
+	NodePools []NodePool `json:"NodePools,omitempty"`
+}
+
+type NodePoolDescription struct {
+	ID               string `yaml:"ID,omitempty"`
+	ClusterID        string `yaml:"Cluster ID,omitempty"`
+	AutoScaling      string `yaml:"Autoscaling,omitempty"`
+	DesiredReplicas  string `yaml:"Desired replicas,omitempty"`
+	CurrentReplicas  string `yaml:"Current replicas,omitempty"`
+	InstanceType     string `yaml:"Instance type,omitempty"`
+	Labels           string `yaml:"Labels,omitempty"`
+	Taints           string `yaml:"Taints,omitempty"`
+	AvalaiblityZones string `yaml:"Availability zone,omitempty"`
+	Subnet           string `yaml:"Subnet,omitempty"`
+	Version          string `yaml:"Version,omitempty"`
+	AutoRepair       string `yaml:"Autorepair,omitempty"`
+	TuningConfigs    string `yaml:"Tuning configs,omitempty"`
+	Message          string `yaml:"Message,omitempty"`
+}
+
 // Create MachinePool
-func (m *machinepoolService) CreateMachinePool(clusterID string, flags ...string) (bytes.Buffer, error) {
-	combflags := append([]string{"-c", clusterID}, flags...)
-	createMachinePool := m.Client.Runner.
+func (m *machinepoolService) CreateMachinePool(clusterID string, name string, flags ...string) (output bytes.Buffer, err error) {
+	output, err = m.create(clusterID, name, flags...)
+	if err == nil {
+		m.machinePools[clusterID] = append(m.machinePools[clusterID], name)
+	}
+	return
+}
+
+func (m *machinepoolService) create(clusterID string, name string, flags ...string) (bytes.Buffer, error) {
+	createMachinePool := m.client.Runner.
 		Cmd("create", "machinepool").
-		CmdFlags(combflags...)
+		CmdFlags(append(flags, "-c", clusterID, "--name", name)...)
 
 	return createMachinePool.Run()
 }
 
 // List MachinePool
 func (m *machinepoolService) ListMachinePool(clusterID string) (bytes.Buffer, error) {
-	listMachinePool := m.Client.Runner.
+	listMachinePool := m.client.Runner.
 		Cmd("list", "machinepool").
 		CmdFlags("-c", clusterID)
 	return listMachinePool.Run()
@@ -94,16 +137,23 @@ func (m *machinepoolService) ListMachinePool(clusterID string) (bytes.Buffer, er
 
 // Describe MachinePool
 func (m *machinepoolService) DescribeMachinePool(clusterID string, mpID string) (bytes.Buffer, error) {
-	describeMp := m.Client.Runner.
+	describeMp := m.client.Runner.
 		Cmd("describe", "machinepool").
-		CmdFlags(mpID,
-			"-c", clusterID)
+		CmdFlags(mpID, "-c", clusterID)
 	return describeMp.Run()
 }
 
 // Delete MachinePool
-func (m *machinepoolService) DeleteMachinePool(clusterID string, machinePoolName string) (bytes.Buffer, error) {
-	deleteMachinePool := m.Client.Runner.
+func (m *machinepoolService) DeleteMachinePool(clusterID string, machinePoolName string) (output bytes.Buffer, err error) {
+	output, err = m.delete(clusterID, machinePoolName)
+	if err == nil {
+		m.machinePools[clusterID] = removeFromStringSlice(m.machinePools[clusterID], machinePoolName)
+	}
+	return
+}
+
+func (m *machinepoolService) delete(clusterID string, machinePoolName string) (bytes.Buffer, error) {
+	deleteMachinePool := m.client.Runner.
 		Cmd("delete", "machinepool").
 		CmdFlags("-c", clusterID, machinePoolName, "-y")
 
@@ -112,11 +162,9 @@ func (m *machinepoolService) DeleteMachinePool(clusterID string, machinePoolName
 
 // Edit MachinePool
 func (m *machinepoolService) EditMachinePool(clusterID string, machinePoolName string, flags ...string) (bytes.Buffer, error) {
-	combflags := append([]string{"-c", clusterID}, flags...)
-	combflags = append(combflags, machinePoolName)
-	editMachinePool := m.Client.Runner.
-		Cmd("edit", "machinepool").
-		CmdFlags(combflags...)
+	editMachinePool := m.client.Runner.
+		Cmd("edit", "machinepool", machinePoolName).
+		CmdFlags(append(flags, "-c", clusterID)...)
 
 	return editMachinePool.Run()
 }
@@ -124,7 +172,7 @@ func (m *machinepoolService) EditMachinePool(clusterID string, machinePoolName s
 // Pasrse the result of 'rosa list machinepool' to MachinePoolList struct
 func (m *machinepoolService) ReflectMachinePoolList(result bytes.Buffer) (mpl MachinePoolList, err error) {
 	mpl = MachinePoolList{}
-	theMap := m.Client.Parser.TableData.Input(result).Parse().Output()
+	theMap := m.client.Parser.TableData.Input(result).Parse().Output()
 	for _, machinepoolItem := range theMap {
 		mp := &MachinePool{}
 		err = MapStructure(machinepoolItem, mp)
@@ -139,17 +187,55 @@ func (m *machinepoolService) ReflectMachinePoolList(result bytes.Buffer) (mpl Ma
 // Pasrse the result of 'rosa list machinepool' to MachinePoolList struct
 func (m *machinepoolService) ReflectMachinePoolDescription(result bytes.Buffer) (mp *MachinePoolDescription, err error) {
 	mp = new(MachinePoolDescription)
-	theMap, _ := m.Client.Parser.TextData.Input(result).Parse().YamlToMap()
+	theMap, _ := m.client.Parser.TextData.Input(result).Parse().YamlToMap()
 
 	data, _ := yaml.Marshal(&theMap)
 	err = yaml.Unmarshal(data, mp)
 	return mp, err
 }
 
-// Pasrse the result of 'rosa list machinepool' to NodePoolList struc
-func (m *machinepoolService) ReflectNodePoolList(result bytes.Buffer) (npl NodePoolList, err error) {
-	npl = NodePoolList{}
-	theMap := m.Client.Parser.TableData.Input(result).Parse().Output()
+func (m *machinepoolService) CleanResources(clusterID string) (errors []error) {
+	for _, mpName := range m.machinePools[clusterID] {
+		logext.Infof("Remove remaining machinepool '%s'", mpName)
+		_, err := m.delete(clusterID, mpName)
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	return
+}
+
+// Get specified machinepool by machinepool id
+func (mpl MachinePoolList) Machinepool(id string) (mp *MachinePool) {
+	for _, mpItem := range mpl.MachinePools {
+		if mpItem.ID == id {
+			mp = &mpItem
+			return
+		}
+	}
+	return
+}
+
+func (m *machinepoolService) ListAndReflectNodePools(clusterID string) (npl *NodePoolList, err error) {
+	output, err := m.ListMachinePool(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	return m.ReflectNodePoolList(output)
+}
+
+func (m *machinepoolService) DescribeAndReflectNodePool(clusterID string, mpID string) (npd *NodePoolDescription, err error) {
+	output, err := m.DescribeMachinePool(clusterID, mpID)
+	if err != nil {
+		return nil, err
+	}
+	return m.ReflectNodePoolDescription(output)
+}
+
+func (m *machinepoolService) ReflectNodePoolList(result bytes.Buffer) (npl *NodePoolList, err error) {
+	npl = new(NodePoolList)
+	theMap := m.client.Parser.TableData.Input(result).Parse().Output()
 	for _, nodepoolItem := range theMap {
 		np := &NodePool{}
 		err = MapStructure(nodepoolItem, np)
@@ -161,22 +247,26 @@ func (m *machinepoolService) ReflectNodePoolList(result bytes.Buffer) (npl NodeP
 	return npl, err
 }
 
-// Get specified machinepool by machinepool id
-func (mpl MachinePoolList) Machinepool(id string) (mp MachinePool, err error) {
-	for _, mpItem := range mpl.MachinePools {
-		if mpItem.ID == id {
-			mp = mpItem
-			return
-		}
+// Pasrse the result of 'rosa describe cluster' to the RosaClusterDescription struct
+func (m *machinepoolService) ReflectNodePoolDescription(result bytes.Buffer) (*NodePoolDescription, error) {
+	theMap, err := m.client.Parser.TextData.Input(result).Parse().YamlToMap()
+	if err != nil {
+		return nil, err
 	}
-	return
+	data, err := yaml.Marshal(&theMap)
+	if err != nil {
+		return nil, err
+	}
+	npd := new(NodePoolDescription)
+	err = yaml.Unmarshal(data, npd)
+	return npd, err
 }
 
-// Get specified nodepool by machinepool id
-func (npl NodePoolList) Nodepool(id string) (np NodePool, err error) {
+// Get specified nodepool by nodepool id
+func (npl NodePoolList) Nodepool(id string) (np *NodePool) {
 	for _, npItem := range npl.NodePools {
 		if npItem.ID == id {
-			np = npItem
+			np = &npItem
 			return
 		}
 	}

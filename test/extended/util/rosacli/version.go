@@ -5,9 +5,12 @@ import (
 	"fmt"
 
 	semver "github.com/hashicorp/go-version"
+	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type VersionService interface {
+	ResourcesCleaner
+
 	ReflectVersions(result bytes.Buffer, hostedCP bool) (versionList *OpenShiftVersionList, err error)
 	ReflecttClassicVersions(output bytes.Buffer) (*OpenShiftVersionList, error)
 	ReflectHostedCPVersions(output bytes.Buffer) (*OpenShiftVersionList, error)
@@ -16,9 +19,17 @@ type VersionService interface {
 	ListHostedCPVersions(flags ...string) (*OpenShiftVersionList, bytes.Buffer, error)
 }
 
-var _ VersionService = &versionService{}
+type versionService struct {
+	ResourcesService
+}
 
-type versionService Service
+func NewVersionService(client *Client) VersionService {
+	return &versionService{
+		ResourcesService: ResourcesService{
+			client: client,
+		},
+	}
+}
 
 type OpenShiftVersion struct {
 	Version           string `json:"VERSION,omitempty"`
@@ -51,7 +62,7 @@ type HostedCPVersionList struct {
 func (v *versionService) ReflectVersions(result bytes.Buffer, hostedCP bool) (versionList *OpenShiftVersionList, err error) {
 	versionList = &OpenShiftVersionList{}
 	if hostedCP {
-		theMap := v.Client.Parser.TableData.Input(result).Parse().Output()
+		theMap := v.client.Parser.TableData.Input(result).Parse().Output()
 		for _, hvItem := range theMap {
 			hVersion := &HostedCPVersion{}
 			version := OpenShiftVersion{}
@@ -65,7 +76,7 @@ func (v *versionService) ReflectVersions(result bytes.Buffer, hostedCP bool) (ve
 		}
 
 	} else {
-		theMap := v.Client.Parser.TableData.Input(result).Parse().Output()
+		theMap := v.client.Parser.TableData.Input(result).Parse().Output()
 		for _, cvItem := range theMap {
 			cVersion := &ClassicVersion{}
 			version := OpenShiftVersion{}
@@ -96,7 +107,7 @@ func (v *versionService) ReflectHostedCPVersions(output bytes.Buffer) (*OpenShif
 
 // list version `rosa list version` or `rosa list version --hosted-cp`
 func (v *versionService) ListVersions(hostedCP bool, flags ...string) (versionList *OpenShiftVersionList, output bytes.Buffer, err error) {
-	listVersion := v.Client.Runner.
+	listVersion := v.client.Runner.
 		Cmd("list", "versions").
 		CmdFlags(flags...)
 
@@ -135,6 +146,11 @@ func (v *versionService) ListHostedCPVersions(flags ...string) (*OpenShiftVersio
 		return &OpenShiftVersionList{}, output, err
 	}
 	return versionList, output, err
+}
+
+func (v *versionService) CleanResources(clusterID string) (errors []error) {
+	logext.Debugf("Nothing to clean in Version Service")
+	return
 }
 
 func ParseVersion(version string) (string, error) {

@@ -3,23 +3,41 @@ package rosacli
 import (
 	"bytes"
 
-	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type UserService interface {
+	ResourcesCleaner
+
 	ListUsers(clusterID string) (GroupUserList, bytes.Buffer, error)
 	ReflectUsersList(result bytes.Buffer) (gul GroupUserList, err error)
-	RevokeUser(clusterID string, flags ...string) (bytes.Buffer, error)
-	GrantUser(clusterID string, flags ...string) (bytes.Buffer, error)
-	RemoveAllUsers(clusterID string) (err error)
+	RevokeUser(clusterID string, role string, user string, flags ...string) (bytes.Buffer, error)
+	GrantUser(clusterID string, role string, user string, flags ...string) (bytes.Buffer, error)
 	CreateAdmin(clusterID string) (bytes.Buffer, error)
 	DescribeAdmin(clusterID string) (bytes.Buffer, error)
 	DeleteAdmin(clusterID string) (bytes.Buffer, error)
 }
 
-var _ UserService = &userService{}
+type userService struct {
+	ResourcesService
 
-type userService Service
+	usersGranted map[string][]*userRole
+	adminCreated []string
+}
+
+type userRole struct {
+	user string
+	role string
+}
+
+func NewUserService(client *Client) UserService {
+	return &userService{
+		ResourcesService: ResourcesService{
+			client: client,
+		},
+		usersGranted: make(map[string][]*userRole),
+	}
+}
 
 // Struct for the 'rosa list users' output
 type GroupUser struct {
@@ -31,41 +49,66 @@ type GroupUserList struct {
 }
 
 // Grant user
-func (c *userService) GrantUser(clusterID string, flags ...string) (bytes.Buffer, error) {
-	grantUser := c.Client.Runner.
-		Cmd("grant", "user").
-		CmdFlags(append([]string{"-c", clusterID}, flags...)...)
+func (us *userService) GrantUser(clusterID string, role string, user string, flags ...string) (output bytes.Buffer, err error) {
+	output, err = us.grantUser(clusterID, role, user, flags...)
+	if err == nil {
+		createdUserRole := &userRole{
+			user: user,
+			role: role,
+		}
+		us.usersGranted[clusterID] = append(us.usersGranted[clusterID], createdUserRole)
+	}
+	return
+}
+
+func (us *userService) grantUser(clusterID string, role string, user string, flags ...string) (bytes.Buffer, error) {
+	grantUser := us.client.Runner.
+		Cmd("grant", "user", role).
+		CmdFlags(append(flags, "-c", clusterID, "--user", user)...)
 
 	return grantUser.Run()
 }
 
 // Revoke user
-func (c *userService) RevokeUser(clusterID string, flags ...string) (bytes.Buffer, error) {
-	combflags := append([]string{"-c", clusterID}, flags...)
-	revokeUser := c.Client.Runner.
-		Cmd("revoke", "user").
-		CmdFlags(combflags...)
+func (us *userService) RevokeUser(clusterID string, role string, user string, flags ...string) (output bytes.Buffer, err error) {
+	output, err = us.revokeUser(clusterID, role, user, flags...)
+	if err == nil {
+		var newRoles []*userRole
+		for _, createdUserRole := range us.usersGranted[clusterID] {
+			if createdUserRole.user != user || createdUserRole.role != role {
+				newRoles = append(newRoles, createdUserRole)
+			}
+		}
+		us.usersGranted[clusterID] = newRoles
+	}
+	return
+}
+
+func (us *userService) revokeUser(clusterID string, role string, user string, flags ...string) (bytes.Buffer, error) {
+	revokeUser := us.client.Runner.
+		Cmd("revoke", "user", role).
+		CmdFlags(append(flags, "-y", "-c", clusterID, "--user", user)...)
 
 	return revokeUser.Run()
 }
 
 // List users
-func (c *userService) ListUsers(clusterID string) (GroupUserList, bytes.Buffer, error) {
-	listUsers := c.Client.Runner.
+func (us *userService) ListUsers(clusterID string) (GroupUserList, bytes.Buffer, error) {
+	listUsers := us.client.Runner.
 		Cmd("list", "users").
 		CmdFlags("-c", clusterID)
 	output, err := listUsers.Run()
 	if err != nil {
 		return GroupUserList{}, output, err
 	}
-	gul, err := c.ReflectUsersList(output)
+	gul, err := us.ReflectUsersList(output)
 	return gul, output, err
 }
 
 // Pasrse the result of 'rosa list user' to  []*GroupUser struct
-func (c *userService) ReflectUsersList(result bytes.Buffer) (gul GroupUserList, err error) {
+func (us *userService) ReflectUsersList(result bytes.Buffer) (gul GroupUserList, err error) {
 	gul = GroupUserList{}
-	theMap := c.Client.Parser.TableData.Input(result).Parse().Output()
+	theMap := us.client.Parser.TableData.Input(result).Parse().Output()
 	for _, userItem := range theMap {
 		user := &GroupUser{}
 		err = MapStructure(userItem, user)
@@ -75,33 +118,6 @@ func (c *userService) ReflectUsersList(result bytes.Buffer) (gul GroupUserList, 
 		gul.GroupUsers = append(gul.GroupUsers, *user)
 	}
 	return gul, err
-}
-
-// Delete all users. NOTE: User named 'rosa-admin' in cluster-admins group is the default one created with the cluster, it won't be deleted by this function.
-func (c *userService) RemoveAllUsers(clusterID string) (err error) {
-	gul, _, err := c.ListUsers(clusterID)
-	if err != nil {
-		return err
-	}
-	if len(gul.GroupUsers) != 0 {
-		for _, uitem := range gul.GroupUsers {
-			if uitem.ID == "rosa-admin" && uitem.Groups == "cluster-admins" {
-				continue
-			}
-			_, err = c.RevokeUser(clusterID,
-				uitem.Groups,
-				"--user", uitem.ID,
-				"-y",
-			)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		logger.Infof("There is no user existed on cluster %s ~", clusterID)
-		return nil
-	}
-	return err
 }
 
 // Get specified user by user name
@@ -116,17 +132,23 @@ func (gl GroupUserList) User(userName string) (user GroupUser, err error) {
 }
 
 // Create admin
-func (c *userService) CreateAdmin(clusterID string) (bytes.Buffer, error) {
-	createAdmin := c.Client.Runner.
+func (us *userService) CreateAdmin(clusterID string) (output bytes.Buffer, err error) {
+	createAdmin := us.client.Runner.
 		Cmd("create", "admin").
 		CmdFlags("-c", clusterID, "-y")
 
-	return createAdmin.Run()
+	output, err = createAdmin.Run()
+	if err == nil {
+		us.adminCreated = appendToStringSliceIfNotExist(us.adminCreated, clusterID)
+		logext.Infof("Add admin to Cluster %v", clusterID)
+		logext.Infof("Admin created =  %v", us.adminCreated)
+	}
+	return
 }
 
 // describe admin
-func (c *userService) DescribeAdmin(clusterID string) (bytes.Buffer, error) {
-	describeAdmin := c.Client.Runner.
+func (us *userService) DescribeAdmin(clusterID string) (bytes.Buffer, error) {
+	describeAdmin := us.client.Runner.
 		Cmd("describe", "admin").
 		CmdFlags("-c", clusterID)
 
@@ -134,10 +156,33 @@ func (c *userService) DescribeAdmin(clusterID string) (bytes.Buffer, error) {
 }
 
 // delete admin
-func (c *userService) DeleteAdmin(clusterID string) (bytes.Buffer, error) {
-	deleteAdmin := c.Client.Runner.
+func (us *userService) DeleteAdmin(clusterID string) (output bytes.Buffer, err error) {
+	deleteAdmin := us.client.Runner.
 		Cmd("delete", "admin").
 		CmdFlags("-c", clusterID, "-y")
 
-	return deleteAdmin.Run()
+	output, err = deleteAdmin.Run()
+	if err == nil {
+		us.adminCreated = removeFromStringSlice(us.adminCreated, clusterID)
+	}
+	return
+}
+
+func (us *userService) CleanResources(clusterID string) (errors []error) {
+	if sliceContains(us.adminCreated, clusterID) {
+		logext.Infof("Remove remaining admin")
+		if _, err := us.DeleteAdmin(clusterID); err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	for _, grantedUserRole := range us.usersGranted[clusterID] {
+		logext.Infof("Remove remaining granted user '%s' with role '%s'", grantedUserRole.user, grantedUserRole.role)
+		_, err := us.RevokeUser(clusterID, grantedUserRole.role, grantedUserRole.user)
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	return
 }

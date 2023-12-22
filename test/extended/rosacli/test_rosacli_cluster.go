@@ -34,6 +34,11 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
+	g.AfterEach(func() {
+		g.By("Clean the cluster")
+		rosaClient.CleanResources(clusterID)
+	})
+
 	g.It("Author:yuwan-High-38850-Restrict master API endpoint to direct, private connectivity or not [Serial]", func() {
 		g.By("Check the cluster is not private cluster")
 		private, err := isPrivateCluster(clusterID)
@@ -66,14 +71,16 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 			g.By("Describe cluster to check Private is true")
 			output, err := clusterService.DescribeCluster(clusterID)
 			o.Expect(err).To(o.BeNil())
-			CD := clusterService.ReflectClusterDescription(output)
+			CD, err := clusterService.ReflectClusterDescription(output)
+			o.Expect(err).To(o.BeNil())
 			o.Expect(CD.Private).To(o.Equal("No"))
 		}()
 
 		g.By("Describe cluster to check Private is true")
 		output, err := clusterService.DescribeCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
-		CD := clusterService.ReflectClusterDescription(output)
+		CD, err := clusterService.ReflectClusterDescription(output)
+		o.Expect(err).To(o.BeNil())
 		o.Expect(CD.Private).To(o.Equal("Yes"))
 
 	})
@@ -84,7 +91,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		output, err := clusterService.DescribeCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		clusterDetail := clusterService.ReflectClusterDescription(output)
+		clusterDetail, err := clusterService.ReflectClusterDescription(output)
+		o.Expect(err).ToNot(o.HaveOccurred())
 		expectedUWMValue := "Enabled"
 		if clusterConfig.DisableWorkloadMonitoring {
 			expectedUWMValue = "Disabled"
@@ -102,7 +110,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		output, err = clusterService.DescribeCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		clusterDetail = clusterService.ReflectClusterDescription(output)
+		clusterDetail, err = clusterService.ReflectClusterDescription(output)
+		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(clusterDetail.UserWorkloadMonitoring).To(o.Equal(expectedUWMValue))
 
 		g.By("Enable the UWM again")
@@ -116,7 +125,8 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		output, err = clusterService.DescribeCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		clusterDetail = clusterService.ReflectClusterDescription(output)
+		clusterDetail, err = clusterService.ReflectClusterDescription(output)
+		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(clusterDetail.UserWorkloadMonitoring).To(o.Equal(expectedUWMValue))
 	})
 

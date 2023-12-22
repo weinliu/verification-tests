@@ -1,6 +1,7 @@
 package rosacli
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -113,10 +114,39 @@ func (td *textData) Parse() *textData {
 	return td
 }
 
-func (td *textData) YamlToMap() (map[string]interface{}, error) {
-	res := make(map[string]interface{})
-	err := yaml.Unmarshal([]byte(td.output), &res)
-	return res, err
+func (td *textData) YamlToMap() (res map[string]interface{}, err error) {
+	res = make(map[string]interface{})
+
+	// Escape value(s) with quote due to https://github.com/go-yaml/yaml/issues/784
+	// This happens sometimes in NodePool Message like `WaitingForAvailableMachines: InstanceNotReady,WaitingForNodeRef`
+	// This would fail to unmarshal due to the `: ` in the value ...
+	escapedOutput, err := escapeYamlStringValues(td.output)
+	if err != nil {
+		return
+	}
+	err = yaml.Unmarshal([]byte(escapedOutput), &res)
+	return
+}
+
+// escapeYamlStringValues escapes yaml values if they contain any special characters: https://www.yaml.info/learn/quote.html#noplain
+// Checks have to be completed on demande...
+func escapeYamlStringValues(input string) (string, error) {
+	var lines []string
+	scanner := bufio.NewScanner(strings.NewReader(input))
+	for scanner.Scan() {
+		line := scanner.Text()
+		key, value, found := strings.Cut(line, ":")
+		if found {
+			value = strings.TrimSpace(value)
+
+			// Checks to perform
+			if !strings.HasPrefix(value, "'") && strings.Contains(value, ": ") {
+				line = fmt.Sprintf("%s: '%s'", key, value)
+			}
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n"), scanner.Err()
 }
 
 func (td *textData) JsonToMap() (map[string]interface{}, error) {

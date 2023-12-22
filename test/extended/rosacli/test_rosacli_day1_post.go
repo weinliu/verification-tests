@@ -9,6 +9,7 @@ import (
 )
 
 var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", func() {
+	defer g.GinkgoRecover()
 	var (
 		clusterID          string
 		rosaClient         *rosacli.Client
@@ -29,6 +30,12 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		clusterConfig, err = parseProfile(getClusterConfigFile())
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
+
+	g.AfterEach(func() {
+		g.By("Clean the cluster")
+		rosaClient.CleanResources(clusterID)
+	})
+
 	g.It("Author:xueli-Critical-66359-Create rosa cluster with volume size will work via rosacli [Serial]", func() {
 		g.By("Classic cluster check")
 		isHosted, err := isHostedCPCluster(clusterID)
@@ -55,8 +62,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		mplist, err := machinePoolService.ReflectMachinePoolList(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		workPool, err := mplist.Machinepool(defaultClassicWorkerPool)
-		o.Expect(err).ToNot(o.HaveOccurred())
+		workPool := mplist.Machinepool(defaultClassicWorkerPool)
 		o.Expect(workPool).ToNot(o.BeNil(), "worker pool is not found for the cluster")
 		o.Expect(alignDiskSize(workPool.DiskSize)).To(o.Equal(expectedDiskSize))
 
@@ -87,10 +93,9 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 		mplist, err := machinePoolService.ReflectMachinePoolList(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		workPool, err := mplist.Machinepool(defaultClassicWorkerPool)
-		o.Expect(err).ToNot(o.HaveOccurred())
+		workPool := mplist.Machinepool(defaultWorkerPool)
 		o.Expect(workPool).ToNot(o.BeNil(), "worker pool is not found for the cluster")
-		o.Expect(workPool.Lables).To(o.Equal(mpLables))
+		o.Expect(workPool.Labels).To(o.Equal(mpLables))
 
 		g.By("Check the default worker pool description")
 		output, err = machinePoolService.DescribeMachinePool(clusterID, defaultClassicWorkerPool)
@@ -98,7 +103,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Cluster Verification", f
 
 		mpD, err := machinePoolService.ReflectMachinePoolDescription(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
-		o.Expect(mpD.Lables).To(o.Equal(mpLables))
+		o.Expect(mpD.Labels).To(o.Equal(mpLables))
 
 	})
 })
