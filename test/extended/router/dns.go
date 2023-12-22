@@ -25,56 +25,36 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			cfgPolicyRr     = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/policy\", \"value\":\"RoundRobin\"}]"
 			cfgPolicySeq    = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/policy\", \"value\":\"Sequential\"}]"
 		)
-		defer restoreDNSOperatorDefault(oc)
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
 
-		g.By("Check default values of forward policy for CoreDNS")
-		podList := getAllDNSPodsNames(oc)
-		dnsPodName := getRandomDNSPodName(podList)
-		policyOutput := readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(policyOutput).To(o.ContainSubstring("policy sequential"))
+		exutil.By("Check default values of forward policy for CoreDNS")
+		policy := pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "policy sequential")
+		o.Expect(policy).To(o.ContainSubstring("policy sequential"))
 
-		g.By("Patch dns operator with multiple ipv4 upstreams")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList := getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with multiple ipv4 upstreams, and check multiple ipv4 forward upstreams in CoreDNS")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgMulIPv4Upstreams)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check multiple ipv4 forward upstreams in CoreDNS")
-		upstreams := readDNSCorefile(oc, dnsPodName, "forward", "-A2")
+		upstreams := pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "10.100.1.11")
 		o.Expect(upstreams).To(o.ContainSubstring("forward . 10.100.1.11:53 10.100.1.12:53 10.100.1.13:5353"))
-		g.By("Check default forward policy in the CM after multiple ipv4 forward upstreams are configured")
-		outputPcfg, errPcfg := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
-		o.Expect(errPcfg).NotTo(o.HaveOccurred())
-		o.Expect(outputPcfg).To(o.ContainSubstring("policy sequential"))
-		g.By("Check default forward policy in CoreDNS after multiple ipv4 forward upstreams are configured")
-		policyOutput = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(policyOutput).To(o.ContainSubstring("policy sequential"))
 
-		g.By("Patch dns operator with policy random for upstream resolvers")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Check default forward policy in CoreDNS after multiple ipv4 forward upstreams are configured")
+		o.Expect(upstreams).To(o.ContainSubstring("policy sequential"))
+
+		exutil.By("Patch dns operator with policy random for upstream resolvers, and then check forward policy random in Corefile of coredns")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgPolicyRandom)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check forward policy random in Corefile of coredns")
-		policyOutput = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(policyOutput).To(o.ContainSubstring("policy random"))
+		policy = pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "policy random")
+		o.Expect(policy).To(o.ContainSubstring("policy random"))
 
-		g.By("Patch dns operator with policy roundrobin for upstream resolvers")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with policy roundrobin for upstream resolvers, and then check forward policy roundrobin in Corefile of coredns")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgPolicyRr)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check forward policy roundrobin in Corefile of coredns")
-		policyOutput = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(policyOutput).To(o.ContainSubstring("policy round_robin"))
+		policy = pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "policy round_robin")
+		o.Expect(policy).To(o.ContainSubstring("policy round_robin"))
 
-		g.By("Patch dns operator with policy sequential for upstream resolvers")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with policy sequential for upstream resolvers, and then check forward policy sequential in Corefile of coredns")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgPolicySeq)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check forward policy sequential in Corefile of coredns")
-		policyOutput = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
-		o.Expect(policyOutput).To(o.ContainSubstring("policy sequential"))
+		policy = pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "policy sequential")
+		o.Expect(policy).To(o.ContainSubstring("policy sequential"))
 	})
 
 	// author: shudili@redhat.com
@@ -84,33 +64,22 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			cfgLogLevelDebug = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Debug\"}]"
 			cfgLogLevelTrace = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Trace\"}]"
 		)
-		defer restoreDNSOperatorDefault(oc)
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
 
-		g.By("Check default log level of CoreDNS")
-		podList := getAllDNSPodsNames(oc)
-		dnsPodName := getRandomDNSPodName(podList)
-		logOutput := readDNSCorefile(oc, dnsPodName, "log", "-A2")
+		exutil.By("Check default log level of CoreDNS")
+		logOutput := pollReadDnsCorefile(oc, oneDnsPod, "log", "-A2", "class error")
 		o.Expect(logOutput).To(o.ContainSubstring("class error"))
 
-		g.By("Patch dns operator with logLevel Debug for CoreDNS")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList := getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with logLevel Debug for CoreDNS, and then check log class for logLevel Debug in both CM and the Corefile of coredns")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgLogLevelDebug)
-		waitCorefileUpdated(oc, attrList)
-		outputLcfg, errLcfg := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
-		o.Expect(errLcfg).NotTo(o.HaveOccurred())
-		o.Expect(outputLcfg).To(o.ContainSubstring("class denial error"))
-		g.By("Check log class for logLevel Debug in Corefile of coredns")
-		logOutput = readDNSCorefile(oc, dnsPodName, "log", "-A2")
+		logOutput = pollReadDnsCorefile(oc, oneDnsPod, "log", "-A2", "class denial error")
 		o.Expect(logOutput).To(o.ContainSubstring("class denial error"))
 
-		g.By("Patch dns operator with logLevel Trace for CoreDNS")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with logLevel Trace for CoreDNS, and then check log class for logLevel Trace in Corefile of coredns")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgLogLevelTrace)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check log class for logLevel Trace in Corefile of coredns")
-		logOutput = readDNSCorefile(oc, dnsPodName, "log", "-A2")
+		logOutput = pollReadDnsCorefile(oc, oneDnsPod, "log", "-A2", "class all")
 		o.Expect(logOutput).To(o.ContainSubstring("class all"))
 	})
 
@@ -150,52 +119,34 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 				"{\"address\":\"1001::cccc\",\"port\":53,\"type\":\"Network\"}]}]"
 			expMulIPv6Upstreams = "forward . [1001::AAAA]:5353 [1001::BBBB]:53 [1001::CCCC]:53"
 		)
-		defer restoreDNSOperatorDefault(oc)
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
 
-		g.By("Check default values of forward upstream resolvers for CoreDNS")
-		podList := getAllDNSPodsNames(oc)
-		dnsPodName := getRandomDNSPodName(podList)
-		upstreams := readDNSCorefile(oc, dnsPodName, "forward", "-A2")
+		exutil.By("Check default values of forward upstream resolvers for CoreDNS")
+		upstreams := pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "resolv.conf")
 		o.Expect(upstreams).To(o.ContainSubstring("forward . /etc/resolv.conf"))
 
-		g.By("Patch dns operator with multiple ipv4 upstreams")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList := getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with multiple ipv4 upstreams")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgMulIPv4Upstreams)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check multiple ipv4 forward upstream resolvers in config map")
-		outputCfg, errCfg := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
-		o.Expect(errCfg).NotTo(o.HaveOccurred())
-		o.Expect(outputCfg).To(o.ContainSubstring(expMulIPv4Upstreams))
-		g.By("Check multiple ipv4 forward upstream resolvers in CoreDNS")
-		upstreams = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
+
+		exutil.By("Check multiple ipv4 forward upstream resolvers in CoreDNS")
+		upstreams = pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", expMulIPv4Upstreams)
 		o.Expect(upstreams).To(o.ContainSubstring(expMulIPv4Upstreams))
 
-		g.By("Patch dns operator with a single ipv4 upstream")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with a single ipv4 upstream, and then check the single ipv4 forward upstream resolver for CoreDNS")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgOneIPv4Upstreams)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check a single ipv4 forward upstream resolver for CoreDNS")
-		upstreams = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
+		upstreams = pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", expOneIPv4Upstreams)
 		o.Expect(upstreams).To(o.ContainSubstring(expOneIPv4Upstreams))
 
-		g.By("Patch dns operator with max 15 ipv4 upstreams")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with max 15 ipv4 upstreams, and then the max 15 ipv4 forward upstream resolvers for CoreDNS")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgMax15Upstreams)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check max 15 ipv4 forward upstream resolvers for CoreDNS")
-		upstreams = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
+		upstreams = pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", expMax15Upstreams)
 		o.Expect(upstreams).To(o.ContainSubstring(expMax15Upstreams))
 
-		g.By("Patch dns operator with multiple ipv6 upstreams")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with multiple ipv6 upstreams, and then check the multiple ipv6 forward upstream resolvers for CoreDNS")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgMulIPv6Upstreams)
-		waitCorefileUpdated(oc, attrList)
-		g.By("Check multiple ipv6 forward upstream resolvers for CoreDNS")
-		upstreams = readDNSCorefile(oc, dnsPodName, "forward", "-A2")
+		upstreams = pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "1001")
 		o.Expect(upstreams).To(o.ContainSubstring(expMulIPv6Upstreams))
 	})
 
@@ -227,29 +178,31 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			invalidCfgNumberPolicy = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/policy\", \"value\":\"2\"}]"
 			invalidCfgRandomPolicy = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/policy\", \"value\":\"random\"}]"
 		)
-		defer restoreDNSOperatorDefault(oc)
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		forceOnlyOneDnsPodExist(oc)
 
-		g.By("Try to add one more upstream resolver, totally 16 upstream resolvers by patching dns operator")
+		exutil.By("Try to add one more upstream resolver, totally 16 upstream resolvers by patching dns operator")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+cfgAddOneUpstreams, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("have at most 15 items"))
 
-		g.By("Try to add a upstream resolver with a string as an address")
+		exutil.By("Try to add a upstream resolver with a string as an address")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgStringUpstreams, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"str_test\""))
 
-		g.By("Try to add a upstream resolver with a number as an address")
+		exutil.By("Try to add a upstream resolver with a number as an address")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgNumberUpstreams, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"100\""))
 
-		g.By("Try to configure the polciy with a string")
+		exutil.By("Try to configure the polciy with a string")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgSringPolicy, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"string_test\""))
 
-		g.By("Try to configure the polciy with a number")
+		exutil.By("Try to configure the polciy with a number")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgNumberPolicy, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"2\""))
 
-		g.By("Try to configure the polciy with a similar string like random")
+		exutil.By("Try to configure the polciy with a similar string like random")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgRandomPolicy, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"random\""))
 	})
@@ -264,34 +217,36 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			invalidCfgNumberOPLogLevel = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"2\"}]"
 			invalidCfgTraceOPLogLevel  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"trace\"}]"
 		)
-		defer restoreDNSOperatorDefault(oc)
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		forceOnlyOneDnsPodExist(oc)
 
-		g.By("Try to configure log level with a string")
+		exutil.By("Try to configure log level with a string")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgStringLogLevel, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"string_test\""))
 
-		g.By("Try to configure log level with a number")
+		exutil.By("Try to configure log level with a number")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgNumberLogLevel, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"2\""))
 
-		g.By("Try to configure log level with a similar string like trace")
+		exutil.By("Try to configure log level with a similar string like trace")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgTraceLogLevel, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"trace\""))
 
-		g.By("Try to configure dns operator log level with a string")
+		exutil.By("Try to configure dns operator log level with a string")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgStringOPLogLevel, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"string_test\""))
 
-		g.By("Try to configure dns operator log level with a number")
+		exutil.By("Try to configure dns operator log level with a number")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgNumberOPLogLevel, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"2\""))
 
-		g.By("Try to configure dns operator log level with a similar string like trace")
+		exutil.By("Try to configure dns operator log level with a similar string like trace")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgTraceOPLogLevel, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"trace\""))
 	})
 
-	g.It("Author:shudili-NonPreRelease-Longduration-Low-46875-Different LogLevel logging function of CoreDNS flag [Disruptive]", func() {
+	g.It("Author:shudili-Low-46875-Different LogLevel logging function of CoreDNS flag [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
@@ -304,16 +259,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			nxDNSReq            = "notexist.myocp-test.com"
 			normalDNSReq        = "www.myocp-test.com"
 			resourceName        = "dns.operator.openshift.io/default"
-			defaultUpstreams    = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[{\"port\":53,\"type\":\"SystemResolvConf\"}]}]"
 			cfgDebug            = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Debug\"}]"
 			cfgTrace            = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Trace\"}]"
 		)
-		defer restoreDNSOperatorDefault(oc)
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
+		podList := []string{oneDnsPod}
 
-		g.By("Delete all dns pods and the new ones will be created, which is helpful for getting dns logs")
-		delAllDNSPods(oc)
-
-		g.By("Create a dns server pod")
+		exutil.By("Create a dns server pod")
 		project1 := oc.Namespace()
 		defer exutil.RecoverNamespaceRestricted(oc, project1)
 		exutil.SetNamespacePrivileged(oc, project1)
@@ -322,60 +276,37 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
 		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
 
-		g.By("get the user's dns server pod's IP")
+		exutil.By("get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
 
-		g.By("patch upstream dns resolver with the user's dns server")
+		exutil.By("patch upstream dns resolver with the user's dns server, and then wait the corefile is updated")
 		dnsUpstreamResolver := "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[{\"address\":\"" + srvPodIP + "\",\"port\":53,\"type\":\"Network\"}]}]"
-		podList := getAllDNSPodsNames(oc)
-		dnsPodName := getRandomDNSPodName(podList)
-		attrList := getOneCorefileStat(oc, dnsPodName)
-		defer patchGlobalResourceAsAdmin(oc, resourceName, defaultUpstreams)
 		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
-		waitCorefileUpdated(oc, attrList)
+		pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", srvPodIP)
 
-		g.By("wait the upstream resolver's IP(srvPodIP) appearing in all dns pods")
-		keepSearchInAllDNSPods(oc, podList, srvPodIP)
-
-		g.By("create a client pod")
+		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
 
-		g.By("Let client send out a SERVFAIL nslookup to the dns server")
-		_, err = oc.Run("exec").Args(cltPodName, "--", "nslookup", failedDNSReq+".").Output()
-		o.Expect(err).To(o.HaveOccurred())
-
-		g.By("get the desired SERVFAIL logs from a coredns pod")
-		output := waitDNSLogsAppear(oc, podList, failedDNSReq)
+		exutil.By("Let client send out SERVFAIL nslookup to the dns server, and check the desired SERVFAIL logs from a coredns pod")
+		output := nslookupsAndWaitForDNSlog(oc, cltPodName, failedDNSReq, podList, failedDNSReq+".")
 		o.Expect(output).To(o.ContainSubstring(failedDNSReq))
 
-		g.By("Patch dns operator with logLevel Debug for CoreDNS")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with logLevel Debug for CoreDNS, and wait the Corefile is updated")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgDebug)
-		waitCorefileUpdated(oc, attrList)
+		pollReadDnsCorefile(oc, oneDnsPod, "log", "-A2", "class denial error")
 
-		g.By("Let client send out a NXDOMAIN nslookup to the dns server")
-		_, err = oc.Run("exec").Args(cltPodName, "--", "nslookup", "-type=mx", nxDNSReq+".").Output()
-		o.Expect(err).To(o.HaveOccurred())
-
-		g.By("get the desired NXDOMAIN logs from a coredns pod")
-		output = waitDNSLogsAppear(oc, podList, nxDNSReq)
+		exutil.By("Let client send out NXDOMAIN nslookup to the dns server, and check the desired NXDOMAIN logs from a coredns pod")
+		output = nslookupsAndWaitForDNSlog(oc, cltPodName, nxDNSReq, podList, "-type=mx", nxDNSReq+".")
 		o.Expect(output).To(o.ContainSubstring(nxDNSReq))
 
-		g.By("Patch dns operator with logLevel Trace for CoreDNS")
-		dnsPodName = getRandomDNSPodName(podList)
-		attrList = getOneCorefileStat(oc, dnsPodName)
+		exutil.By("Patch dns operator with logLevel Trace for CoreDNS, and wait the Corefile is updated")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgTrace)
-		waitCorefileUpdated(oc, attrList)
-		keepSearchInAllDNSPods(oc, podList, "class all")
+		pollReadDnsCorefile(oc, oneDnsPod, "log", "-A2", "class all")
 
-		g.By("Let client send out a nslookup and get correct response")
-		oc.Run("exec").Args(cltPodName, "--", "nslookup", normalDNSReq+".").Execute()
-
-		g.By("get the desired TRACE logs from a coredns pod")
-		output = waitDNSLogsAppear(oc, podList, normalDNSReq)
+		exutil.By("Let client send out normal nslookup which will get correct response, and check the desired TRACE logs from a coredns pod")
+		output = nslookupsAndWaitForDNSlog(oc, cltPodName, normalDNSReq, podList, normalDNSReq+".")
 		o.Expect(output).To(o.ContainSubstring(normalDNSReq))
 	})
 
@@ -484,20 +415,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// Bug: 2006803
 	g.It("Author:shudili-Medium-56047-Set CoreDNS cache entries for forwarded zones [Disruptive]", func() {
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
+
+		exutil.By("patch the dns.operator/default and add a custom forward zone config")
 		resourceName := "dns.operator.openshift.io/default"
 		jsonPatch := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Random\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
-		defer restoreDNSOperatorDefault(oc)
-
-		g.By("patch the dns.operator/default and add a custom forward zone config")
-		podList := getAllDNSPodsNames(oc)
-		attrList := getAllCorefilesStat(oc, podList)
 		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
-		waitAllCorefilesUpdated(oc, attrList)
-		ensureClusterOperatorNormal(oc, "dns", 5, 300)
 
-		g.By("check the cache entries of the custom forward zone in CoreDNS")
-		dnsPodName := getRandomDNSPodName(podList)
-		zoneInCoreFile := readDNSCorefile(oc, dnsPodName, "mytest.ocp:5353", "-A15")
+		exutil.By("check the cache entries of the custom forward zone in CoreDNS")
+		zoneInCoreFile := pollReadDnsCorefile(oc, oneDnsPod, "mytest.ocp", "-A15", "cache 900")
 		o.Expect(zoneInCoreFile).Should(o.And(
 			o.ContainSubstring("cache 900"),
 			o.ContainSubstring("denial 9984 30")))

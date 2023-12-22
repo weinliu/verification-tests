@@ -1311,6 +1311,24 @@ func waitForCurl(oc *exutil.CLI, podName, baseDomain string, routestring string,
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route is not reachable"))
 }
 
+// used to send the nslookup command until the desired dns logs appear
+func nslookupsAndWaitForDNSlog(oc *exutil.CLI, podName, searchLog string, dnsPodList []string, nslookupCmdPara ...string) string {
+	e2e.Logf("Polling for executing nslookupCmd and waiting the dns logs appear")
+	output := ""
+	cmd := append([]string{podName, "--", "nslookup"}, nslookupCmdPara...)
+	waitErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		oc.Run("exec").Args(cmd...).Execute()
+		output = searchLogFromDNSPods(oc, dnsPodList, searchLog)
+		primary := false
+		if len(output) > 1 && output != "none" {
+			primary = true
+		}
+		return primary, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached,but expected string \"%s\" is not found in the dns logs", searchLog))
+	return output
+}
+
 // this function will get the route detail
 func getRoutes(oc *exutil.CLI, ns string) string {
 	output, err := oc.Run("get").Args("route", "-n", ns).Output()
