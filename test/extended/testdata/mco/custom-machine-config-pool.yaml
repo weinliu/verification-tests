@@ -7,6 +7,8 @@ objects:
     apiVersion: machineconfiguration.openshift.io/v1
     metadata:
       name: "${NAME}"
+      labels:
+        pools.operator.machineconfiguration.openshift.io/${NAME}: ""
     spec:
       machineConfigSelector:
         matchExpressions:

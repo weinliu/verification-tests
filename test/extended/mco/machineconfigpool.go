@@ -961,6 +961,26 @@ func CreateCustomMCPByLabel(oc *exutil.CLI, name, label string, numNodes int) (*
 	return CreateCustomMCPByNodes(oc, name, customMcpNodes)
 }
 
+// CreateCustomMCP create a new custom MCP with the given name and the given number of nodes
+// Nodes will be taken from the worker pool
+func CreateCustomMCP(oc *exutil.CLI, name string, numNodes int) (*MachineConfigPool, error) {
+	var (
+		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+	)
+
+	workerNodes, err := wMcp.GetNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	if numNodes > len(workerNodes) {
+		return nil, fmt.Errorf("A %d nodes custom pool cannot be created because there are only %d nodes in the %s pool",
+			numNodes, len(workerNodes), wMcp.GetName())
+	}
+
+	return CreateCustomMCPByNodes(oc, name, workerNodes[0:numNodes])
+}
+
 // CreateCustomMCPByNodes creates a new MCP containing the nodes provided in the "nodes" parameter
 func CreateCustomMCPByNodes(oc *exutil.CLI, name string, nodes []Node) (*MachineConfigPool, error) {
 	exutil.By(fmt.Sprintf("Creating custom MachineConfigPool %s with %d nodes", name, len(nodes)))

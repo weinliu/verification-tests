@@ -3950,6 +3950,73 @@ nulla pariatur.`
 
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonPreRelease-Medium-68797-Custom pool configs take priority over worker configs [Disruptive]", func() {
+		if IsCompactOrSNOCluster(oc.AsAdmin()) {
+			g.Skip("The cluster is SNO/Compact. This test cannot be executed in SNO/Compact clusters")
+		}
+
+		var (
+			kubeletConfPath           = "/etc/kubernetes/kubelet.conf"
+			wMcp                      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			createdCustomPoolName     = "mco-test-68797"
+			kcTemplate                = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
+			workerKcName              = "worker-tc-68797-kubeburst"
+			workerKubeletConfig       = `{"kubeAPIBurst": 7000}`
+			infraFirstKcName          = "infra-first-tc-68797-kubeburst"
+			infraFirstKubeletConfig   = `{"kubeAPIBurst": 8000}`
+			infraSecondKcName         = "infra-second-tc-68797-kubeburst"
+			infraSeconddKubeletConfig = `{"kubeAPIBurst": 9000}`
+		)
+
+		// In DeleteCustomMCP deffered function, when we delete a MCP, we wait first for the worker MCP to be updated.
+		//   No need to defer the worker MCP WaitForComplete logic.
+		defer DeleteCustomMCP(oc.AsAdmin(), createdCustomPoolName)
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), createdCustomPoolName, 1)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Could not create a new custom MCP")
+
+		exutil.By("Create Kubelet Configurations")
+		logger.Infof("Create worker KubeletConfig")
+		wKc := NewKubeletConfig(oc.AsAdmin(), workerKcName, kcTemplate)
+		defer wKc.Delete()
+		wKc.create("KUBELETCONFIG="+workerKubeletConfig, "POOL="+wMcp.GetName())
+
+		exutil.By("Wait for configurations to be applied in worker pool")
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		logger.Infof("Create first infra KubeletConfig")
+		infraFirstKc := NewKubeletConfig(oc.AsAdmin(), infraFirstKcName, kcTemplate)
+		defer infraFirstKc.Delete()
+		infraFirstKc.create("KUBELETCONFIG="+infraFirstKubeletConfig, "POOL="+infraMcp.GetName())
+
+		logger.Infof("Create second infra KubeletConfig")
+		infraSecondKc := NewKubeletConfig(oc.AsAdmin(), infraSecondKcName, kcTemplate)
+		defer infraSecondKc.Delete()
+		infraSecondKc.create("KUBELETCONFIG="+infraSeconddKubeletConfig, "POOL="+infraMcp.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for configurations to be applied in custom pool")
+		infraMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check kubelet configuration in worker pool")
+		o.Expect(
+			NewRemoteFile(wMcp.GetNodesOrFail()[0], kubeletConfPath),
+		).To(
+			HaveContent(o.ContainSubstring(`"kubeAPIBurst": 7000`)),
+		)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check kubelet configuration in infra pool")
+		o.Expect(
+			NewRemoteFile(infraMcp.GetNodesOrFail()[0], kubeletConfPath),
+		).To(o.And(
+			HaveContent(o.ContainSubstring(`"kubeAPIBurst": 9000`)),
+			o.Not(HaveContent(o.ContainSubstring(`"kubeAPIBurst": 8000`))),
+		))
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
