@@ -5245,6 +5245,92 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
 		}
 	})
+	// author: chaoyang@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-68766-[CSI-Driver] [Filesystem] Check selinux label is added to mount option when mount volumes with RWOP ", func() {
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			// Need to set csidriver.spec.seLinuxMount is true. This should be default value since OCP4.15
+			selinuxMount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csidriver/"+provisioner, `-o=jsonpath={.spec.seLinuxMount}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(selinuxMount).To(o.Equal("true"))
+
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvcA := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pvcB := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOncePod"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+
+			podA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcA.name))
+			podB := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcB.name))
+
+			exutil.By("#. Create storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc)
+
+			// Only support for RWOP accessModes
+			exutil.By("#. Create a pvcA with RWOP accessModes by new created storageclass")
+			pvcA.create(oc)
+			defer pvcA.deleteAsAdmin(oc)
+
+			//default selinux is "level": "s0:c13,c2"
+			exutil.By("#. Create Pod with items.0.spec.securityContext.seLinuxOptions")
+			podA.createWithSecurity(oc)
+			defer podA.deleteAsAdmin(oc)
+			podA.waitReady(oc)
+
+			exutil.By("#. Check volume mounted option from worker for PodA")
+			pvAName := pvcA.getVolumeName(oc)
+			nodeAName := getNodeNameByPod(oc, podA.namespace, podA.name)
+			outputA, err := execCommandInSpecificNode(oc, nodeAName, "mount | grep "+pvAName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(outputA).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+
+			exutil.By("#. Create a pvcB with RWOP accessModes by new created storageclass")
+			pvcB.create(oc)
+			defer pvcB.deleteAsAdmin(oc)
+
+			exutil.By("#. Create Pod with pod.spec.containers.securityContext.seLinuxOptions.level")
+			selinuxLevel := map[string]string{
+				"level": "s0:c13,c2",
+			}
+			extraParameters := map[string]interface{}{
+				"jsonPath":       `items.0.spec.containers.0.securityContext.`,
+				"runAsUser":      1000,
+				"runAsGroup":     3000,
+				"seLinuxOptions": selinuxLevel,
+			}
+			podB.createWithExtraParameters(oc, extraParameters)
+			defer podB.deleteAsAdmin(oc)
+			podB.waitReady(oc)
+
+			exutil.By("#. Check volume mounted option from worker for PodB")
+			pvBName := pvcB.getVolumeName(oc)
+			nodeBName := getNodeNameByPod(oc, podB.namespace, podB.name)
+			outputB, err := execCommandInSpecificNode(oc, nodeBName, "mount | grep "+pvBName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(outputB).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+
+		}
+	})
 })
 
 // Performing test steps for Online Volume Resizing
