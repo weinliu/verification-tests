@@ -3,6 +3,7 @@ package workloads
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -341,7 +342,12 @@ func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName str
 	o.Expect(err).NotTo(o.HaveOccurred())
 	endpointIP, epGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-descheduler-operator", "endpoints", "metrics", "-o", fmt.Sprintf(`jsonpath={.subsets[*].addresses[*].ip}`)).Output()
 	o.Expect(epGetErr).NotTo(o.HaveOccurred())
-	metricsUrl := fmt.Sprintf(`https://%v:10258/metrics`, string(endpointIP))
+	var metricsUrl = fmt.Sprintf(`https://%v:10258/metrics`, string(endpointIP))
+	//Add code to check if ip address is ipv6 and add braces around it
+	endpointAddress := net.ParseIP(endpointIP)
+	if endpointAddress.To4() == nil {
+		metricsUrl = fmt.Sprintf(`https://[%v]:10258/metrics`, string(endpointIP))
+	}
 	err = wait.Poll(6*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-kube-descheduler-operator", podName, "-c", "openshift-descheduler", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), metricsUrl).Output()
 		if err != nil {
