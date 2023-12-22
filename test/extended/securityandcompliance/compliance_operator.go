@@ -136,7 +136,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Skip test when precondition not meet !!!")
 		exutil.SkipNoOLMCore(oc)
 		subD.skipMissingCatalogsources(oc)
-		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
+		architecture.SkipNonAmd64SingleArch(oc)
 		SkipMissingDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
 		SkipClustersWithRhelNodes(oc)
