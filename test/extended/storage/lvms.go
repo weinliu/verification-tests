@@ -267,6 +267,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("Check the file exist in restored volume")
 		podRestore.checkMountedVolumeDataExist(oc, true)
+
+		// Check original pod and restored pod are deployed on same worker node, when cluster is multi-node
+		if !exutil.IsSNOCluster(oc) {
+			exutil.By("Check original pod and restored pod are deployed on same worker node")
+			o.Expect(getNodeNameByPod(oc, podOri.namespace, podOri.name) == getNodeNameByPod(oc, podRestore.namespace, podRestore.name)).To(o.BeTrue())
+		}
 	})
 
 	// author: rdeore@redhat.com
@@ -1155,6 +1161,108 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("#. Resize PVC storage capacity to a value bigger than 1Gi")
 		pvc.resizeAndCheckDataIntegrity(oc, dep, "2Gi")
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-69611-[LVMS] Check optionalPaths work as expected with nodeSelector on multi-node OCP cluster
+	g.It("Author:rdeore-High-69611-[LVMS] Check optionalPaths work as expected with nodeSelector on multi-node OCP cluster [Disruptive]", func() {
+		//Set the resource template for the scenario
+		var (
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-with-optional-paths-template.yaml")
+			volumeGroup        = "vg1"
+		)
+
+		if exutil.IsSNOCluster(oc) {
+			g.Skip("Skipped: test case is only applicable to multi-node/SNO with additional worker-node cluster")
+		}
+
+		exutil.By("#. Get list of available block devices/disks attached to all worker ndoes")
+		freeDiskNameCountMap := getListOfFreeDisksFromWorkerNodes(oc)
+		if len(freeDiskNameCountMap) < 1 { // this test requires atleast 1 unique disk for optional Device Path
+			g.Skip("Skipped: Cluster's Worker nodes does not have minimum two required free block devices/disks attached")
+		}
+		workerNodeList := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
+		workerNodeCount := len(workerNodeList)
+		var optionalDisk string
+		isDiskFound := false
+		for diskName, count := range freeDiskNameCountMap {
+			if count == int64(workerNodeCount) { // optional disk with same device-path should be present on all worker nodes as per LVMS requriement
+				optionalDisk = diskName
+				isDiskFound = true
+				break
+			}
+		}
+		if !isDiskFound { // If all worker nodes doesn't have atleast one disk with same device-path, skip the test scenario
+			g.Skip("Skipped: All Worker nodes does not have a free block device/disk attached with same device-path")
+		}
+
+		exutil.By("#. Copy and save existing LVMCluster configuration in JSON format")
+		lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originLvmCluster := newLvmCluster(setLvmClusterName(lvmClusterName), setLvmClusterNamespace("openshift-storage"))
+		originLVMJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", originLvmCluster.name, "-n", "openshift-storage", "-o", "json").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.By("#. Delete existing LVMCluster resource")
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "lvmcluster/"+originLvmCluster.name, "openshift-storage") {
+				originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
+			}
+			originLvmCluster.waitReady(oc)
+		}()
+		deleteSpecifiedResource(oc.AsAdmin(), "lvmcluster", originLvmCluster.name, "openshift-storage")
+
+		exutil.By("#. Create a new LVMCluster resource with node-selector and optional paths")
+		lvmCluster := newLvmCluster(setLvmClustertemplate(lvmClusterTemplate), setLvmClusterPaths([]string{""}),
+			setLvmClusterOptionalPaths([]string{"/dev/" + optionalDisk, "/dev/invalid-path"}))
+		defer lvmCluster.deleteLVMClusterSafely(oc) // If new lvmCluster creation fails, need to remove finalizers if present
+		lvmCluster.createWithNodeSelector(oc, "kubernetes.io/hostname", "In", []string{workerNodeList[0].name, workerNodeList[1].name})
+		lvmCluster.waitReady(oc)
+
+		exutil.By("#. Check LVMCluster CR definition has entry for only two worker nodes")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=jsonpath={.items[0].status.deviceClassStatuses[0].nodeStatus[*].node}").Output()
+		workerNodesInUse := strings.Split(output, " ")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(workerNodesInUse) == 2).To(o.BeTrue())
+		matchedWorkers := sliceIntersect([]string{workerNodeList[0].name, workerNodeList[1].name}, workerNodesInUse)
+		o.Expect(len(matchedWorkers) == 2).To(o.BeTrue())
+
+		exutil.By("#. Check there are exactly two pods with component name 'vg-manager' and 'topolvm-node' in LVMS namespace")
+		vgManagerPodList, err := getPodsListByLabel(oc.AsAdmin(), "openshift-storage", "app.kubernetes.io/component=vg-manager")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(vgManagerPodList) == 2).To(o.BeTrue())
+		topoLvmNodePodList, err := getPodsListByLabel(oc.AsAdmin(), "openshift-storage", "app.kubernetes.io/component=topolvm-node")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(topoLvmNodePodList) == 2).To(o.BeTrue())
+
+		exutil.By("#. Create a new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		exutil.By("#. Create a pvc with the pre-set lvms csi storageclass")
+		pvc.scname = "lvms-" + volumeGroup
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("#. Write file to volume")
+		pod.checkMountedVolumeCouldRW(oc)
+
+		exutil.By("Delete Pod and PVC")
+		deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
+		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
+
+		exutil.By("Delete newly created LVMCluster resource")
+		lvmCluster.deleteLVMClusterSafely(oc)
 	})
 })
 

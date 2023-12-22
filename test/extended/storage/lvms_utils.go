@@ -110,6 +110,19 @@ func (lvm *lvmCluster) createWithoutMandatoryPaths(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create new LVMCluster with extra parameters for nodeSelector, key, operator and values should be provided in matchExpressions
+func (lvm *lvmCluster) createWithNodeSelector(oc *exutil.CLI, key string, operator string, values []string) {
+	extraParameters := map[string]interface{}{
+		"jsonPath": `items.0.spec.storage.deviceClasses.0.nodeSelector.nodeSelectorTerms.0.matchExpressions.0.`,
+		"key":      key,
+		"operator": operator,
+		"values":   values,
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
+		"FSTYPE="+lvm.fsType, "PATH="+lvm.paths[0], "OPTIONALPATH1="+lvm.optionalPaths[0], "OPTIONALPATH2="+lvm.optionalPaths[1])
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Create a new customized lvmCluster to return expected error
 func (lvm *lvmCluster) createToExpectError(oc *exutil.CLI) (string, error) {
 	output, err := applyResourceFromTemplateWithOutput(oc.AsAdmin(), "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
