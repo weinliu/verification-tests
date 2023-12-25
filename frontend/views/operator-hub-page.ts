@@ -86,13 +86,21 @@ export const operatorHubPage = {
     cy.get('#confirm-action').click();
     cy.get(`[data-test-operator-row="${csvName}"]`).should('not.exist');
   },
-  checkSTSwarningOnOperator: (operatorName, catalogSource, installNamespace, roleARN) => {
+  checkWarningInfo: (warningInfo) => { cy.get('h4.pf-v5-c-alert__title').should('contain', `${warningInfo}`); },
+  checkSTSwarningOnOperator: (operatorName, catalogSource, warningInfo, installNamespace, clusterType) => {
     cy.visit(`/operatorhub/all-namespaces?keyword=${operatorName}&catalogSourceDisplayName=%5B"${catalogSource}"%5D`);
     cy.get('.co-catalog-tile').click();
-    cy.get('h4.pf-c-alert__title').should('contain', 'Cluster in STS Mode');
+    operatorHubPage.checkWarningInfo(`${warningInfo}`);
     cy.get('a[data-test-id="operator-install-btn"]').click({force: true});
-    cy.get('h4.pf-c-alert__title').should('contain', 'Cluster in STS Mode');
-    cy.get('input[aria-label="role ARN"]').type(`${roleARN}`);
+    operatorHubPage.checkWarningInfo(`${warningInfo}`);
+    if ( clusterType == 'aws' ) {
+      cy.get('input[aria-label="role ARN"]').clear().type('testrolearn');
+    }
+    if ( clusterType == 'azure' ) {
+      cy.get('input[aria-label="Azure Client ID"]').clear().type('testazureclientid');
+      cy.get('input[aria-label="Azure Tenant ID"]').clear().type('testazuretenantid');
+      cy.get('input[aria-label="Azure Subscription ID"]').clear().type('testazuresubscriptionid');
+    }
     if (installNamespace) {
       cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
       cy.get('button#dropdown-selectbox').click();
@@ -101,7 +109,8 @@ export const operatorHubPage = {
     cy.get('input[value="Manual"]').should('have.attr', 'data-checked-state', 'true');
     cy.get('[data-test="install-operator"]').click();
     cy.contains('Approve').click();
-  }
+  },
+
 };
 
 export namespace OperatorHubSelector {

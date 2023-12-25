@@ -120,10 +120,19 @@ Cypress.Commands.add("isEdgeCluster", () => {
 });
 Cypress.Commands.add("isAWSSTSCluster", (credentialMode: string, infraPlatform: string, authIssuer: string) => {
   if(credentialMode == 'Manual' && infraPlatform == 'AWS' && authIssuer != ''){
-    cy.log('Testing on STS cluster!');
+    cy.log('Testing on AWS STS cluster!');
     return cy.wrap(true);
   }else{
-    cy.log('Not STS cluster, skip!');
+    cy.log('Not AWS STS cluster, skip!');
+    return cy.wrap(false);
+  }
+});
+Cypress.Commands.add("isAzureWIFICluster", (credentialMode: string, infraPlatform: string, authIssuer: string) => {
+  if(credentialMode == 'Manual' && infraPlatform == 'Azure' && authIssuer != ''){
+    cy.log('Testing on Azure WIFI cluster!');
+    return cy.wrap(true);
+  }else{
+    cy.log('Not Azure WIFI cluster, skip!');
     return cy.wrap(false);
   }
 });
