@@ -4880,6 +4880,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-22259-marketplace operator CR status on a running cluster [Exclusive]", func() {
 
 		exutil.SkipForSNOCluster(oc)
+		exutil.SkipNoCapabilities(oc, "marketplace")
 		exutil.By("check marketplace status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace",
 			"-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
@@ -11458,6 +11459,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	g.It("ConnectedOnly-Author:kuiwang-High-25679-Medium-21418-Cluster resource created and deleted correctly [Serial]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipNoCapabilities(oc, "marketplace")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
@@ -11545,6 +11547,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipNoCapabilities(oc, "marketplace")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
@@ -11609,6 +11612,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	// It will cover test case: OCP-21484, OCP-21532(actually it covers OCP-21484), author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21484-High-21532-watch special or all namespace by operator group", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipNoCapabilities(oc, "marketplace")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11677,6 +11681,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24906-Operators requesting cluster-scoped permission can trigger kube GC bug [Serial]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipNoCapabilities(oc, "marketplace")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
@@ -11727,6 +11732,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	// It will cover test case: OCP-33241, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-33241-Enable generated operator component adoption for operators with all ns mode [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipNoCapabilities(oc, "marketplace")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
