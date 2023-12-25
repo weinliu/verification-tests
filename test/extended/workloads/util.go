@@ -868,6 +868,9 @@ func checkPodStatus(oc *exutil.CLI, podLabel string, namespace string, expected 
 		}
 		return false, nil
 	})
+	if err != nil {
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel, "-o", "yaml").Execute()
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
 }
 
@@ -1024,6 +1027,7 @@ func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dock
 	if ok := waitForAvailableRsRunning(oc, "deployment", "mydauth", namespace, "1"); ok {
 		e2e.Logf("All pods are runnnig now\n")
 	} else {
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "mydauth", "-o", "yaml", "-n", namespace).Execute()
 		e2e.Failf("docker_auth pod is not running even afer waiting for about 3 minutes")
 	}
 
@@ -1041,6 +1045,7 @@ func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dock
 	if ok := waitForAvailableRsRunning(oc, "deployment", "myregistry", namespace, "1"); ok {
 		e2e.Logf("All pods are runnnig now\n")
 	} else {
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "myregistry", "-o", "yaml", "-n", namespace).Execute()
 		e2e.Failf("private registry pod is not running even afer waiting for about 3 minutes")
 	}
 	return registryHost
