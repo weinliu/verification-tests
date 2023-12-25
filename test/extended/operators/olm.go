@@ -1501,6 +1501,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// that means may leads to other etcd-opertor subscription fail if in Parallel
 	g.It("ConnectedOnly-VMonly-Author:jiazha-High-37826-use an PullSecret for the private Catalog Source image [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipNoCapabilities(oc, "marketplace")
 		exutil.By("1) Create a pull secert for CatalogSource")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dockerConfig := filepath.Join("/home", "cloud-user", ".docker", "auto", "config.json")
