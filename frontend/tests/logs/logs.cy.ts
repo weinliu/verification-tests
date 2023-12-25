@@ -1,6 +1,7 @@
 import { testName } from '../../upstream/support';
 import { logsPage } from '../../views/logs';
 import { guidedTour } from '../../upstream/views/guided-tour';
+import { podsPage } from '../../views/pods';
 
 describe('logs related features', () => {
   before(() => {
@@ -13,15 +14,29 @@ describe('logs related features', () => {
   after(() => {
     cy.exec(`oc delete project ${testName}`);
     cy.cliLogout();
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
+  it('(OCP-69245,yanpzhan) Add option to enable/disable tailing to Pod log viewer', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI(`oc get pods -n openshift-kube-apiserver -l apiserver=true -ojsonpath='{.items[0].metadata.name}'`).then((result)=> {
+     const podname = result.stdout;
+     cy.log(podname);
+     podsPage.goToPodsLogTab('openshift-kube-apiserver',podname);
+    })
+    cy.get('div[data-test="no-log-lines"]').should('contain', '1000 lines');
+    cy.get('input[data-test="show-full-log"]').click();
+    cy.wait(10000);
+    cy.log('Show full logs!');
+    cy.get('div[data-test="no-log-lines"]').should('not.contain', '1000 lines');
+  }),
   it('(OCP-68420,yanpzhan) Should maintain white-space in pod log on console', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     cy.exec(`oc create -f ./fixtures/pods/pod-with-white-space-logs.yaml -n ${testName}`);
     cy.visit(`/k8s/ns/${testName}/pods/example/logs`);
     logsPage.selectContainer('container2');
     logsPage.setLogWrap('true');
-    cy.get('span.pf-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
+    cy.get('span.pf-v5-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
     logsPage.setLogWrap('false');
-    cy.get('span.pf-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
+    cy.get('span.pf-v5-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
   });
   it('(OCP-54875,yanpzhan) Configure default behavior for "Wrap lines" in log viewers by pod annotation', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     cy.exec(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testName}`);
