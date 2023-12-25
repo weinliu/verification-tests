@@ -715,13 +715,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-60192-Verify metrics for egress ip unreachable and re-balance total [Disruptive] [Slow]", func() {
 		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "nutanix")
+		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal/Nutanix cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 
 		var (
-			metricName1         = "ovnkube_clustermanager_egress_ips_node_unreachable_total"
-			metricName2         = "ovnkube_clustermanager_egress_ips_rebalance_total"
+			metricName1         = "ovnkube_clustermanager_egress_ips_rebalance_total"
+			metricName2         = "ovnkube_clustermanager_egress_ips_node_unreachable_total"
 			egressNodeLabel     = "k8s.ovn.org/egress-assignable"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
@@ -781,39 +783,48 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		metric1BeforeReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName1)
 		metric2BeforeReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName2)
 
-		exutil.By("4. Label one more EgressIP node")
+		exutil.By("4. Label one more EgressIP node and remove label from the previous one to trigger egressip rebalance")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
+		o.Eventually(func() bool {
+			egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
+			return len(egressIPMaps2) == 1 && egressIPMaps2[0]["node"] == egressNodes[1]
+		}, "300s", "10s").Should(o.BeTrue(), "egressIP was not failover to the new egress node!")
+		e2e.Logf("egressip is assigned to:%v", egressNodes[1])
 
-		exutil.By("5. Reboot the egressip assigned node, to trigger egressip unreachable and rebalance")
-		defer checkNodeStatus(oc, egressNodes[0], "Ready")
-		rebootNode(oc, egressNodes[0])
-		checkNodeStatus(oc, egressNodes[0], "NotReady")
-		checkNodeStatus(oc, egressNodes[0], "Ready")
-
-		exutil.By("6. Check egressip failover to a new egress node")
-		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps2)).Should(o.Equal(1))
-		egressipAssignedNode2 := egressIPMaps2[0]["node"]
-		e2e.Logf("egressip is assigned to:%v", egressipAssignedNode2)
-		o.Expect(egressipAssignedNode2).To(o.ContainSubstring(egressNodes[1]))
-
-		exutil.By("7. Get the metrics after egressip re-balance")
+		exutil.By("5. Get the metrics after egressip re-balance")
 		metric1ValueInt, parseIntErr1 := strconv.Atoi(metric1BeforeReboot)
 		o.Expect(parseIntErr1).NotTo(o.HaveOccurred())
 		expectedMetric1Value := strconv.Itoa(metric1ValueInt + 1)
 		e2e.Logf("The expected value of the %s is : %v", metricName1, expectedMetric1Value)
+		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			metric1AfterReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName1)
+			if metric1AfterReboot == expectedMetric1Value {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s, try again", metricName1)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
+
+		exutil.By("6. Reboot the egressip assigned node, to trigger egressip node unreachable")
+		defer checkNodeStatus(oc, egressNodes[1], "Ready")
+		rebootNode(oc, egressNodes[1])
+		checkNodeStatus(oc, egressNodes[1], "NotReady")
+		checkNodeStatus(oc, egressNodes[1], "Ready")
+
+		exutil.By("7. Get the metrics after egressip node unreachable")
 		metric2ValueInt, parseIntErr2 := strconv.Atoi(metric2BeforeReboot)
 		o.Expect(parseIntErr2).NotTo(o.HaveOccurred())
 		expectedMetric2Value := strconv.Itoa(metric2ValueInt + 1)
 		e2e.Logf("The expected value of the %s is : %v", metricName2, expectedMetric2Value)
-		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			metric1AfterReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName1)
+		metricIncOutput = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 			metric2AfterReboot := getOVNMetricsInSpecificContainer(oc, containerName, ovnMasterPodName, prometheusURL, metricName2)
-			if (metric1AfterReboot == expectedMetric1Value) && (metric2AfterReboot == expectedMetric2Value) {
+			if metric2AfterReboot == expectedMetric2Value {
 				return true, nil
 			}
-			e2e.Logf("Can't get correct metrics value of %s or %s, try again", metricName1, metricName2)
+			e2e.Logf("Can't get correct metrics value of %s, try again", metricName2)
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
