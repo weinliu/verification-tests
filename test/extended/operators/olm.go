@@ -797,7 +797,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-Medium-49352-SNO Leader election conventions for cluster topology", func() {
 		exutil.By("1) get the cluster topology")
-		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the cluster infra: %s, error:%v", infra, err)
 		}
