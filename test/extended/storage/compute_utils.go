@@ -171,7 +171,7 @@ func getSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSame
 			}
 			if _, ok := schedulableWorkersWithAz[azName]; ok {
 				e2e.Logf("Schedulable workers %s,%s in the same az %s", worker, schedulableWorkersWithAz[azName], azName)
-				return append(schedulableWorkersWithSameAz, worker, schedulableWorkersWithAz[azName]), azName
+				return append(schedulableWorkersWithSameAz, strings.Trim(worker, `"`), strings.Trim(schedulableWorkersWithAz[azName], `"`)), azName
 			}
 			schedulableWorkersWithAz[azName] = worker
 		}

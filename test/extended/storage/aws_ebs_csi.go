@@ -325,4 +325,128 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(myPod.execCommand(oc, "stat -f /mnt/storage/|grep -Eo '^Block size: [0-9]{4}'|awk '{print $3}'")).Should(o.BeElementOf(validFsFormatBlockSizeValues), "The actual filesystem format blocksize setting is not as expected")
 		})
 	}
+
+	// author: pewang@redhat.com
+	g.It("ConnectedOnly-ROSA-OSD_CCS-Author:pewang-Medium-70014-[AWS-EBS-CSI] [Filesystem] [ext4] supports clustered allocation when formatting filesystem", func() {
+
+		// Set the resource objects definition for the scenario
+		var (
+			storageClass           = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("ebs.csi.aws.com"))
+			pvc                    = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pod                    = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			ext4ClusterSize        = "16384"
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+				"ext4BigAlloc":              "true",
+				"ext4ClusterSize":           ext4ClusterSize,
+			}
+			ext4ClusterSizeExtraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		exutil.By("# Create new project for the scenario")
+		oc.SetupProject()
+		testNs := oc.Namespace()
+		// tune2fs commands(check the ext4ClusterSize) needs root user which need set the ns to privileged
+		o.Expect(exutil.SetNamespacePrivileged(oc, testNs)).ShouldNot(o.HaveOccurred())
+
+		exutil.By("# Create aws-ebs-csi storageclass with ext4 filesystem")
+		storageClass.createWithExtraParameters(oc, ext4ClusterSizeExtraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
+
+		exutil.By("# Create a pvc with the aws-ebs-csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("# Create a privileged pod with the created pvc and wait for the pod ready")
+		podObjJSONBatchActions := []map[string]string{{"items.0.spec.securityContext": "delete"}, {"items.0.spec.containers.0.securityContext": "delete"}, {"items.0.spec.containers.0.securityContext.": "set"}}
+		multiExtraParameters := []map[string]interface{}{{}, {}, {"privileged": true}}
+		pod.createWithMultiExtraParameters(oc.AsAdmin(), podObjJSONBatchActions, multiExtraParameters)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("# Check the pod volume can be read and write")
+		pod.checkMountedVolumeCouldRW(oc.AsAdmin())
+
+		exutil.By("# Check the ext4 volume ext4ClusterSize set as expected")
+		o.Expect(pod.execCommand(oc.AsAdmin(), "dnf install -y e2fsprogs && tune2fs -l $(df -h|grep '/mnt/storage'|awk '{print $1}')|grep 'Cluster size'")).Should(o.ContainSubstring(ext4ClusterSize))
+	})
+
+	// author: pewang@redhat.com
+	g.It("ROSA-OSD_CCS-Author:pewang-High-70017-[AWS-EBS-CSI] [Block] io2 volume supports Multi-Attach to different nodes", func() {
+
+		schedulableWorkersWithSameAz, _ := getSchedulableWorkersWithSameAz(oc)
+		if len(schedulableWorkersWithSameAz) == 0 {
+			g.Skip("Skip: The test cluster has less than two schedulable workers in each available zone and no nonZonedProvisioners!!")
+		}
+
+		if isGP2volumeSupportOnly(oc) || strings.HasPrefix(getClusterRegion(oc), "us-gov-") {
+			g.Skip("Skipped: io2 volumeType is not supported on the test clusters")
+		}
+
+		// Set the resource objects definition for the scenario
+		var (
+			storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("ebs.csi.aws.com"))
+			pvc          = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name),
+				setPersistentVolumeClaimCapacity(getValidRandomCapacityByCsiVolType("ebs.csi.aws.com", "io2")), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
+			podA                   = newPod(setPodName("pod-a"), setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			podB                   = newPod(setPodName("pod-b"), setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			storageClassParameters = map[string]string{
+				"type": "io2",
+				"iops": "1000",
+			}
+			io2VolumeExtraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		exutil.By("# Create new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("# Create aws-ebs-csi storageclass with io2 volume type")
+		storageClass.createWithExtraParameters(oc, io2VolumeExtraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
+
+		exutil.By("# Create a pvc with the aws-ebs-csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("# Create podA and podB with the created pvc and wait for the pod ready")
+		podA.createWithNodeSelector(oc, "kubernetes\\.io/hostname", schedulableWorkersWithSameAz[0])
+		defer podA.deleteAsAdmin(oc)
+		podB.createWithNodeSelector(oc, "kubernetes\\.io/hostname", schedulableWorkersWithSameAz[1])
+		defer podB.deleteAsAdmin(oc)
+
+		podA.waitReady(oc)
+		podB.waitReady(oc)
+
+		exutil.By("# Check both podA and podB could write and read data in the same raw block volume")
+		// TODO: Currently seems there's no way really write data by podA and read the data by podB in the same raw block volume
+		// Will do more research later try to find a better way
+		podA.writeDataIntoRawBlockVolume(oc)
+		podA.checkDataInRawBlockVolume(oc)
+		podB.writeDataIntoRawBlockVolume(oc)
+		podB.checkDataInRawBlockVolume(oc)
+
+	})
+
+	// author: pewang@redhat.com
+	g.It("HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Medium-70018-[AWS-EBS-CSI-Driver-Operator] batching DescribeVolume API requests should be enabled in driver controller", func() {
+
+		// Set the resource objects definition for the scenario
+		var (
+			enableBatchingDescribeVolumeAPIArg = "--batching=true"
+			awsEbsCsiDriverController          = newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"), setDeploymentReplicasNo("2"))
+		)
+
+		exutil.By("# Check the batching DescribeVolume API requests should be enabled in aws ebs csi driver controller")
+		if hostedClusterName, _, hostedClusterNS := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc); hostedClusterNS != "" {
+			awsEbsCsiDriverController.namespace = hostedClusterNS + "-" + hostedClusterName
+		}
+		o.Expect(awsEbsCsiDriverController.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.containers[?(@.name=="csi-driver")].args}`)).Should(o.ContainSubstring(enableBatchingDescribeVolumeAPIArg))
+	})
+
 })
