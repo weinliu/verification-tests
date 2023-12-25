@@ -229,7 +229,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author: sgao@redhat.com refactored:v1
 	g.It("Smokerun-Author:sgao-Critical-32273-Configure kube proxy and external networking check", func() {
-		if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" {
+		if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" || iaasPlatform == "none" {
 			g.Skip(fmt.Sprintf("Platform %s does not support Load balancer, skipping", iaasPlatform))
 		}
 		namespace := "winc-32273"
@@ -340,6 +340,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42496-byoh-Configure Windows instance with DNS [Slow] [Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support BYOH tests")
+		}
 		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
 		defer deleteResource(oc, "configmap", "windows-instances", wmcoNamespace, "--ignore-not-found")
@@ -370,6 +373,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42484-byoh-Configure Windows instance with IP [Slow][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support BYOH tests")
+		}
 		namespace := "winc-42484"
 		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
@@ -402,6 +408,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42516-byoh-Configure a Windows instance with both IP and DNS [Slow][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support BYOH tests")
+		}
 		namespace := "winc-42516"
 		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
@@ -421,6 +430,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Smokerun-Author:rrasouli-NonPreRelease-Longduration-High-39451-Access Windows workload through clusterIP [Slow][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support scaling up machineset tests")
+		}
 		namespace := "winc-39451"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -476,32 +488,28 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Scale up the MachineSet")
-		e2e.Logf("Scalling up the Windows node to 3")
-		zone := getAvailabilityZone(oc)
-		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 15, 3, false)
-		waitWindowsNodesReady(oc, 3, 1200*time.Second)
-		// Testing the Windows server is reachable via Linux pod
-		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "Windows Container Web Server") {
-			e2e.Failf("Failed to curl Windows ClusterIP from a Linux pod")
-		}
-		// Testing the Linux server is reachable with the second windows pod created
-		command = []string{"exec", "-n", namespace, winPodArray[1], "--", "curl", linuxClusterIP + ":8080"}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "Linux Container Web Server") {
-			e2e.Failf("Failed to curl Linux ClusterIP from a windows pod")
-		}
-		// Testing the Linux server is reachable with the first Windows pod created.
-		command = []string{"exec", "-n", namespace, winPodArray[0], "--", "curl", linuxClusterIP + ":8080"}
-		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "Linux Container Web Server") {
-			e2e.Failf("Failed to curl Linux ClusterIP from a windows pod")
+		if iaasPlatform != "none" {
+			e2e.Logf("Scalling up the Windows node to 3")
+			zone := getAvailabilityZone(oc)
+			windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
+			defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
+			scaleWindowsMachineSet(oc, windowsMachineSetName, 15, 3, false)
+			waitWindowsNodesReady(oc, 3, 1200*time.Second)
+			// Testing the Windows server is reachable via Linux pod
+			command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
+			msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+			e2e.Logf("msg: %v", msg)
+			o.Expect(strings.Contains(msg, "Windows Container Web Server")).To(o.BeTrue(), fmt.Sprintf("Failed to curl Windows ClusterIP from a Linux pod:  %v", err))
+			// Testing the Linux server is reachable with the second windows pod created
+			command = []string{"exec", "-n", namespace, winPodArray[1], "--", "curl", linuxClusterIP + ":8080"}
+			msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+			e2e.Logf("msg: %v", msg)
+			o.Expect(strings.Contains(msg, "Windows Container Web Server")).To(o.BeTrue(), fmt.Sprintf("Failed to curl Linux ClusterIP from Windows pod:    %v", err))
+			// Testing the Linux server is reachable with the first Windows pod created.
+			command = []string{"exec", "-n", namespace, winPodArray[0], "--", "curl", linuxClusterIP + ":8080"}
+			msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+			e2e.Logf("msg: %v", msg)
+			o.Expect(strings.Contains(msg, "Windows Container Web Server")).To(o.BeTrue(), fmt.Sprintf("Failed to curl Windows ClusterIP from Windows pod:  %v", err))
 		}
 	})
 
@@ -718,8 +726,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Smokerun-Author:rrasouli-NonPreRelease-Longduration-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
 		// vSphere contains a builtin private and public key with it's template, currently changing its private key is super challenging
 		// it implies generating a new template with a different key.
-		if iaasPlatform == "vsphere" {
-			g.Skip("vSphere does not support key replacement, skipping")
+		if iaasPlatform == "vsphere" || iaasPlatform == "none" {
+			g.Skip(fmt.Sprintf("%s does not support key replacement, skipping", iaasPlatform))
 		}
 
 		g.By("Scale WMCO to 0")
@@ -788,6 +796,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author: sgao@redhat.com
 	g.It("Smokerun-Author:sgao-NonPreRelease-Longduration-Medium-37472-Idempotent check of service running in Windows node [Slow][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not load balancer nor external IP tests")
+		}
 		namespace := "winc-37472"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -858,7 +869,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 	// author: rrasouli@redhat.com
 	g.It("Smokerun-Author:rrasouli-High-38186-[wmco] Windows LB service [Slow]", func() {
-		if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" {
+		if iaasPlatform == "vsphere" || iaasPlatform == "nutanix" || iaasPlatform == "none" {
 			g.Skip(fmt.Sprintf("Platform %s does not support Load balancer, skipping", iaasPlatform))
 		}
 		namespace := "winc-38186"
@@ -978,10 +989,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: rrasouli@redhat.com refactored:v1
 	g.It("Smokerun-Author:rrasouli-Critical-48873-Add description OpenShift managed to Openshift services", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
-		zone := getAvailabilityZone(oc)
-		// use config map to fetch the actual Windows version
-		machineset := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
-		address := fetchAddress(oc, "InternalIP", machineset)
+		address := getWindowsInternalIPs(oc)
 		for _, machineIP := range address {
 			svcDescription, err := getSVCsDescription(bastionHost, machineIP, privateKey, iaasPlatform)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -998,6 +1006,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Longduration-Smokerun-Author:rrasouli-NonPreRelease-Critical-39858-Windows servicemonitor and endpoints check [Slow][Serial][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none is not supporting scaling up machineset tests")
+		}
 		g.By("Get Endpoints and service monitor values")
 		// need to fetch service monitor age
 		serviceMonitorAge1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
@@ -1371,8 +1382,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Longduration-Author:rrasouli-NonPreRelease-High-39640-Replace private key during Windows machine configuration [Slow][Serial][Disruptive]", func() {
 		// vSphere contains a builtin private and public key with it's template, currently changing its private key is super challenging
 		// it implies generating a new template with a different key.
-		if iaasPlatform == "vsphere" {
-			g.Skip("vSphere does not support key replacement, skipping")
+		if iaasPlatform == "vsphere" || iaasPlatform == "none" {
+			g.Skip(fmt.Sprintf("%s does not support key replacement, skipping", iaasPlatform))
 		}
 		g.By("Scalling down the machineset to 1")
 		// defer
@@ -1413,6 +1424,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Longduration-Author:rrasouli-NonPreRelease-Medium-44099-Secure Windows workers username annotation [Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support BYOH tests")
+		}
 		g.By(" Creating new BYOH node ")
 		zone := getAvailabilityZone(oc)
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)

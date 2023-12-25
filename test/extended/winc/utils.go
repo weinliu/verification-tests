@@ -241,17 +241,23 @@ func getWindowsInternalIPs(oc *exutil.CLI) []string {
 }
 
 func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
-	if iaasPlatform == "vsphere" {
+	e2e.Logf("Platform is %v", iaasPlatform)
+	switch iaasPlatform {
+	case "vsphere":
 		return vsphere_bastion
-	}
-	if iaasPlatform == "nutanix" {
+	case "nutanix":
 		return nutanix_proxy_host
+	case "none":
+		sshBastion := os.Getenv("QE_BASTION_PUBLIC_ADDRESS")
+		e2e.Logf("sshBastion: %v", sshBastion)
+		return sshBastion
+	default:
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).NotTo(o.BeEmpty())
+		msg = removeOuterQuotes(msg)
+		return string(msg)
 	}
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(msg).NotTo(o.BeEmpty())
-	msg = removeOuterQuotes(msg)
-	return (msg)
 }
 
 // A private function to determine username by platform
@@ -265,6 +271,12 @@ func getAdministratorNameByPlatform(iaasPlatform string) (admin string) {
 func getBastionSSHUser(iaasPlatform string) (user string) {
 	if iaasPlatform == "nutanix" || iaasPlatform == "vsphere" {
 		return sshProxyUser
+	} else {
+		sshUser := os.Getenv("QE_BASTION_SSH_USER")
+		e2e.Logf("sshUser: %v", sshUser)
+		if sshUser != "" {
+			return sshUser
+		}
 	}
 	return "core"
 }
