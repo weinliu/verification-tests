@@ -283,4 +283,86 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkPass(oc, ns1, podList[0], pod2ns1IPv4, pod2ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, podList[1], pod1ns1IPv4, pod1ns1IPv6)
 	})
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-69947-The macvlan pod will send Unsolicited Neighbor Advertisements after it is created", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			dualstackNADTemplate   = filepath.Join(buildPruningBaseDir, "multus/dualstack-NAD-template.yaml")
+			multihomingPodTemplate = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			nadName                = "whereabouts-dualstack"
+			sniffMultusPodTemplate = filepath.Join(buildPruningBaseDir, "multus/sniff-multus-pod-template.yaml")
+		)
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("This case requires at least one worker node")
+		}
+
+		exutil.By("Get the name of namespace")
+		ns := oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		exutil.By("Create a custom resource network-attach-defintion")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nadName, "-n", ns).Execute()
+		nadns := dualstackNAD{
+			nadname:        nadName,
+			namespace:      ns,
+			plugintype:     "macvlan",
+			mode:           "bridge",
+			ipamtype:       "whereabouts",
+			ipv4range:      "192.168.10.0/24",
+			ipv6range:      "fd00:dead:beef:10::/64",
+			ipv4rangestart: "",
+			ipv4rangeend:   "",
+			ipv6rangestart: "",
+			ipv6rangeend:   "",
+			template:       dualstackNADTemplate,
+		}
+		nadns.createDualstackNAD(oc)
+
+		exutil.By("Check if the network-attach-defintion is created")
+		if checkNAD(oc, ns, nadName) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
+		}
+
+		exutil.By("Create a sniff pod to capture the traffic from pod's secondary network")
+		pod1 := testPodMultinetwork{
+			name:      "sniff-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[0].Name,
+			nadname:   nadName,
+			labelname: "sniff-pod",
+			template:  sniffMultusPodTemplate,
+		}
+		pod1.createTestPodMultinetwork(oc)
+		exutil.AssertWaitPollNoErr(waitForPodWithLabelReady(oc, ns, "name="+pod1.labelname), fmt.Sprintf("Waiting for pod with label name=%s become ready timeout", pod1.labelname))
+
+		exutil.By("The sniff pod start to capture the Unsolicited Neighbor Advertisements from pod's secondary network")
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod1.labelname, "bash", "-c",
+			`timeout --preserve-status 30 tcpdump -e -i net1 icmp6 and icmp6[0] = 136 -nvvv`).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a pod consuming above network-attach-defintion")
+		pod2 := testMultihomingPod{
+			name:       "dualstack-pod",
+			namespace:  ns,
+			podlabel:   "dualstack-pod",
+			nadname:    nadName,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod2.createTestMultihomingPod(oc)
+		exutil.AssertWaitPollNoErr(waitForPodWithLabelReady(oc, ns, "name="+pod2.podlabel), fmt.Sprintf("Waiting for pod with label name=%s become ready timeout", pod2.podlabel))
+
+		exutil.By("The sniff pod will get Unsolicited Neighbor Advertisements, not neighbor solicitation")
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(cmdOutput.String(), "Flags [solicited]")).NotTo(o.BeTrue(), cmdOutput.String())
+	})
 })

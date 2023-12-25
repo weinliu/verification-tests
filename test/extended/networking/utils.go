@@ -290,7 +290,7 @@ func (pod *pingPodResourceWinNode) createPingPodWinNode(oc *exutil.CLI) {
 
 func (pod *testPodMultinetwork) createTestPodMultinetwork(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename, "LABELNAME="+pod.labelname, "NADNAME="+pod.nadname)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename, "LABELNAME="+pod.labelname, "NADNAME="+pod.nadname)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
