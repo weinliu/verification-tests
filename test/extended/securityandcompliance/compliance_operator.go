@@ -2138,25 +2138,26 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			template:     csuiteTemplate,
 		}
 
+		fsGroup, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subD.namespace, "-lname=compliance-operator", "-o=jsonpath={.items[0].spec.securityContext.fsGroup}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		securityContextLevel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subD.namespace, "-lname=compliance-operator", "-o=jsonpath={.items[0].spec.securityContext.seLinuxOptions.level}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		keyword := fmt.Sprintf(`{"fsGroup":%s,"runAsNonRoot":true,"runAsUser":%s,"seLinuxOptions":{"level":%s},"seccompProfile":{"type":"RuntimeDefault"}}`, fsGroup, fsGroup, securityContextLevel)
+
 		// These are special steps to overcome problem which are discussed in [1] so that namespace should not stuck in 'Terminating' state
 		// [1] https://bugzilla.redhat.com/show_bug.cgi?id=1858186
-		defer cleanupObjects(oc,
-			objectTableRef{"compliancesuite", subD.namespace, csuiteMD.name})
-
-		g.By("check role resultserver")
-		rsRoleName := getResourceNameWithKeyword(oc, "role", subD.namespace, "resultserver")
-		e2e.Logf("rs role name: %v\n", rsRoleName)
-		rsRoleRules := "[{\"apiGroups\":[\"security.openshift.io\"],\"resourceNames\":[\"restricted\"],\"resources\":[\"securitycontextconstraints\"],\"verbs\":[\"use\"]},{\"apiGroups\":[\"scheduling.k8s.io\"],\"resources\":[\"priorityclasses\"],\"verbs\":[\"get\",\"list\",\"watch\"]}]"
-		newCheck("expect", asAdmin, withoutNamespace, contain, rsRoleRules, ok, []string{"role", rsRoleName, "-n", subD.namespace, "-o=jsonpath={.rules}"}).check(oc)
+		defer cleanupObjects(oc, objectTableRef{"compliancesuite", subD.namespace, csuiteMD.name})
 
 		g.By("create compliancesuite")
 		csuiteMD.namespace = subD.namespace
 		csuiteMD.create(oc)
 
 		g.By("check the scc and securityContext for the rs pod")
-		rsPodName := getResourceNameWithKeywordFromResourceList(oc, "pod", subD.namespace, "-rs-")
-		//could not use newCheck as rs pod will be deleted soon
-		checkKeyWordsForRspod(oc, rsPodName, subD.namespace, [...]string{"restricted", "fsGroup", "resultserver"})
+		label := "compliance.openshift.io/scan-name=" + csuiteMD.scanname + ",workload=resultserver"
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"pod", "-l", label, "-n", subD.namespace}).check(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[0].spec.securityContext}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), keyword))
 	})
 
 	// author: xiyuan@redhat.com

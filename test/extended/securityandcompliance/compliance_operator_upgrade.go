@@ -1,9 +1,10 @@
 package securityandcompliance
 
 import (
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strconv"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
