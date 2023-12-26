@@ -501,11 +501,11 @@ func SkipClustersWithRhelNodes(oc *exutil.CLI) {
 
 func assertKeywordsExistsInFile(oc *exutil.CLI, keywords string, filePath string, flag bool) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos",
-			"-o=jsonpath={.items[0].metadata.name}").Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("securityprofilenodestatuses", "-o=jsonpath={.items[0].nodeName}",
+			"-o=jsonpath={.items[0].nodeName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		standOut, _, _ := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, mnodeName, []string{"-q"}, "ls", "-ltr", filePath)
-		content, _, _ := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, mnodeName, []string{"-q"}, "cat", filePath)
+		standOut, _, _ := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeName, []string{"-q"}, "ls", "-ltr", filePath)
+		content, _, _ := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeName, []string{"-q"}, "cat", filePath)
 		filePathMatched, _ := regexp.MatchString(filePath, string(standOut))
 		contentMatched, _ := regexp.MatchString(keywords, string(content))
 
