@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -393,5 +394,61 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			e2e.Logf("The nodeSelectorTerms in PV is: %v.", nodeSelectorTerms)
 			o.Expect(nodeSelectorTerms).To(o.ContainSubstring(region))
 		}
+	})
+
+	// author: wduan@redhat.com
+	// OCP-66392 - [Azure-Disk-CSI-Driver] support enablePerformancePlus in storageclass
+	g.It("ARO-Author:wduan-Medium-66392-[Azure-Disk-CSI-Driver] support enablePerformancePlus in storageclass", func() {
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+		)
+
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource definition for the scenario
+		storageClassParameters := map[string]string{
+			"enablePerformancePlus": "true",
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("disk.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		// set pvcLarge.Capacity greater than 512 which required by enabling performance plus setting
+		pvcLargeCapacity := strconv.FormatInt(getRandomNum(513, 1024), 10) + "Gi"
+		pvcLarge := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimCapacity(pvcLargeCapacity))
+		// set pvcSmall.Capacity less than 512, the Driver will auto scale to 513
+		pvcSmallCapacity := strconv.FormatInt(getRandomNum(1, 512), 10) + "Gi"
+		pvcSmall := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimCapacity(pvcSmallCapacity))
+
+		exutil.By("Create csi storageclass with enablePerformancePlus")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		exutil.By("Create pvcs with the csi storageclass")
+		e2e.Logf("Creating PVC 'pvcLarge' with capacity in Gi: %s", pvcLargeCapacity)
+		pvcLarge.create(oc)
+		defer pvcLarge.deleteAsAdmin(oc)
+		e2e.Logf("Creating PVC 'pvcSmall' with capacity in Gi: %s", pvcLargeCapacity)
+		pvcSmall.create(oc)
+		defer pvcSmall.deleteAsAdmin(oc)
+
+		exutil.By("Wait pvcs all bound")
+		pvcLarge.waitStatusAsExpected(oc, "Bound")
+		pvcSmall.waitStatusAsExpected(oc, "Bound")
+
+		exutil.By("Check the pvc.status.capacity is expected")
+		o.Expect(pvcLarge.getSizeFromStatus(oc)).To(o.Equal(pvcLargeCapacity))
+		o.Expect(pvcSmall.getSizeFromStatus(oc)).To(o.Equal("513Gi"))
+
+		exutil.By("Check the pvc.spec.csi.volumeAttributes contains enablePerformancePlus")
+		pvName := pvcLarge.getVolumeName(oc)
+		volumeAttributes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.enablePerformancePlus}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(volumeAttributes).Should(o.ContainSubstring("true"))
 	})
 })

@@ -287,10 +287,17 @@ func (pvc *persistentVolumeClaim) expand(oc *exutil.CLI, expandCapacity string) 
 	pvc.capacity = expandCapacity
 }
 
+// Get pvc.status.capacity.storage value, sometimes it is different from request one
+func (pvc *persistentVolumeClaim) getSizeFromStatus(oc *exutil.CLI) string {
+	pvcSize, err := getVolSizeFromPvc(oc, pvc.name, pvc.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The PVC %s status.capacity.storage is %s", pvc.name, pvcSize)
+	return pvcSize
+}
+
 // Get specified PersistentVolumeClaim status
 func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", namespace, pvcName, "-o=jsonpath={.status.phase}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The PVC  %s status in namespace %s is %q", pvcName, namespace, pvcStatus)
 	return pvcStatus, err
 }
@@ -298,7 +305,6 @@ func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName st
 // Describe specified PersistentVolumeClaim
 func describePersistentVolumeClaim(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	output, err := oc.WithoutNamespace().Run("describe").Args("pvc", "-n", namespace, pvcName).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("****** The PVC  %s in namespace %s detail info: ******\n %s", pvcName, namespace, output)
 	return output, err
 }
@@ -306,7 +312,6 @@ func describePersistentVolumeClaim(oc *exutil.CLI, namespace string, pvcName str
 // Get specified PersistentVolumeClaim status type during Resize
 func getPersistentVolumeClaimStatusType(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", pvcName, "-n", namespace, "-o=jsonpath={.status.conditions[0].type}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The PVC  %s status in namespace %s is %q", pvcName, namespace, pvcStatus)
 	return pvcStatus, err
 }
@@ -329,7 +334,6 @@ func applyVolumeResizePatch(oc *exutil.CLI, pvcName string, namespace string, vo
 // Use persistent volume claim name to get the volumeSize in status.capacity
 func getVolSizeFromPvc(oc *exutil.CLI, pvcName string, namespace string) (string, error) {
 	volumeSize, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvcName, "-n", namespace, "-o=jsonpath={.status.capacity.storage}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The PVC %s volumesize is %s", pvcName, volumeSize)
 	return volumeSize, err
 }
