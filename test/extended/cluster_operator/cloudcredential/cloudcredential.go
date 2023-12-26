@@ -1,9 +1,12 @@
 package cloudcredential
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,19 +17,27 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
+	"gopkg.in/yaml.v3"
+
+	"github.com/google/go-github/v57/github"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cco] Cluster_Operator CCO should", func() {
+var _ = g.Describe("[sig-cco] Cluster_Operator CCO is enabled", func() {
 	defer g.GinkgoRecover()
 
 	var (
 		oc           = exutil.NewCLI("default-cco", exutil.KubeConfigPath())
 		modeInMetric string
 	)
+
+	g.BeforeEach(func() {
+		exutil.SkipNoCapabilities(oc, ccoCap)
+	})
 
 	g.It("NonHyperShiftHOST-PstChkUpgrade-Author:mihuang-High-23352-Cloud credential operator resets progressing transition timestamp when it upgrades", func() {
 		exutil.By("Check if ns-23352 namespace exists")
@@ -479,7 +490,7 @@ data:
 			template:  filepath.Join(testDataDir, "credentials_request.yaml"),
 		}
 		defer func() {
-			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("CredentialsRequest", crName, "-n", CCONs).Execute()
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("CredentialsRequest", crName, "-n", ccoNs).Execute()
 		}()
 		cr.create(oc)
 
@@ -495,7 +506,7 @@ spec:
 			AsAdmin().
 			WithoutNamespace().
 			Run("patch").
-			Args("CredentialsRequest", crName, "-n", CCONs, "--type", "merge", "-p", stsIAMRoleARNPatch).
+			Args("CredentialsRequest", crName, "-n", ccoNs, "--type", "merge", "-p", stsIAMRoleARNPatch).
 			Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -523,7 +534,7 @@ spec:
 			AsAdmin().
 			WithoutNamespace().
 			Run("patch").
-			Args("CredentialsRequest", crName, "-n", CCONs, "--type", "merge", "-p", cloudTokenPathPatch).
+			Args("CredentialsRequest", crName, "-n", ccoNs, "--type", "merge", "-p", cloudTokenPathPatch).
 			Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -540,5 +551,145 @@ spec:
 			e2e.Logf("Secret extracted = %v", stdout)
 			return strings.Contains(stdout, "web_identity_token_file = "+cloudTokenPath)
 		}).WithTimeout(DefaultTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
+	})
+})
+
+var _ = g.Describe("[sig-cco] Cluster_Operator CCO is disabled", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc = exutil.NewCLI("cco", exutil.KubeConfigPath())
+	)
+
+	g.BeforeEach(func() {
+		exutil.SkipIfCapEnabled(oc, ccoCap)
+	})
+
+	/*
+		Only deals with the first half of OCP-68220 (makes sure CCO-related resources are not found in-cluster).
+		The second half of OCP-68220 (day-2 enablement) will be covered by CI Profiles in Prow.
+
+		Hard-coding resources-to-check is avoided since:
+		- It leaves us a maintenance burden
+		- The test case will not be able to detect such scenario when a resource is added (but not annotated) in the future
+	*/
+	g.It("NonHyperShiftHOST-Author:fxie-Critical-68220-Leverage Composable OpenShift feature to make cloud-credential optional", func() {
+		var (
+			getManifestContent = func(manifest *github.RepositoryContent) []byte {
+				// Prefer manifest.Content
+				if content, _ := manifest.GetContent(); content != "" {
+					return []byte(content)
+				}
+
+				// Fall back to downloadURL
+				downloadURL := manifest.GetDownloadURL()
+				o.Expect(downloadURL).NotTo(o.BeEmpty())
+				req, err := http.NewRequest("GET", downloadURL, nil)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				res, err := http.DefaultClient.Do(req)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer func() {
+					_ = res.Body.Close()
+				}()
+				content, err := io.ReadAll(res.Body)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return content
+			}
+
+			/*
+				Here we avoid deserializing manifests through a runtime.Scheme since
+				installing all required types (to the scheme) would bring in quite a few
+				dependencies, making our test repo unnecessarily heavy.
+			*/
+			resourceInfoFromManifest = func(manifest []byte) (string, string, string) {
+				var deserializedManifest map[string]any
+				err := yaml.Unmarshal(manifest, &deserializedManifest)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				groupVersion, ok := deserializedManifest["apiVersion"].(string)
+				o.Expect(ok).To(o.BeTrue())
+				groupVersionSlice := strings.Split(groupVersion, "/")
+				kind, ok := deserializedManifest["kind"].(string)
+				o.Expect(ok).To(o.BeTrue())
+
+				// The oc client is smart enough to map kind to resource before making an API call.
+				// There's no need to query the discovery endpoint of the API server ourselves to obtain the gvr.
+				var resourceType, namespace, name string
+				switch len(groupVersionSlice) {
+				// The resource is a part of the core group
+				case 1:
+					resourceType = kind
+				// The resource is not a part of the core group
+				case 2:
+					resourceType = fmt.Sprintf("%s.%s.%s", kind, groupVersionSlice[1], groupVersionSlice[0])
+				default:
+					e2e.Failf("Unexpected apiVersion format")
+				}
+
+				metadata, ok := deserializedManifest["metadata"].(map[string]any)
+				o.Expect(ok).To(o.BeTrue())
+				if _, isNamespaced := metadata["namespace"]; isNamespaced {
+					namespace, ok = metadata["namespace"].(string)
+					o.Expect(ok).To(o.BeTrue())
+				}
+				name, ok = metadata["name"].(string)
+				o.Expect(ok).To(o.BeTrue())
+				e2e.Logf("Resource type = %v, namespace = %v, name = %v", resourceType, namespace, name)
+				return resourceType, namespace, name
+			}
+		)
+
+		// Get GitHub client
+		ghClient := github.NewClient(nil)
+		// Authenticate for a much larger rate limit
+		if ghToken := os.Getenv("GITHUB_TOKEN"); ghToken != "" {
+			ghClient = ghClient.WithAuthToken(ghToken)
+		}
+
+		// Get cluster version
+		majorMinorVersion, _, err := exutil.GetClusterVersion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		targetBranch := fmt.Sprintf("release-%s", majorMinorVersion)
+
+		// Get manifest dir of the CCO repo
+		// There's no need to verify the absence of CredentialsRequests defined in other repos.
+		// We only need to make sure the corresponding CRD is not found in-cluster.
+		e2e.Logf("Listing manifest directory of branch %v", targetBranch)
+		_, dir, _, err := ghClient.
+			Repositories.
+			GetContents(context.Background(), "openshift", ccoRepo, ccoManifestPath, &github.RepositoryContentGetOptions{
+				Ref: targetBranch,
+			})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Iterate through items in the manifest dir
+		for _, manifest := range dir {
+			if manifest.GetType() != "file" {
+				continue
+			}
+			manifestName := manifest.GetName()
+			if !strings.HasSuffix(manifestName, ".yaml") && !strings.HasSuffix(manifestName, ".yml") {
+				continue
+			}
+
+			e2e.Logf("Getting content of manifest %v", manifestName)
+			content := getManifestContent(manifest)
+
+			e2e.Logf("Extracting resource info from manifest")
+			resourceType, namespace, name := resourceInfoFromManifest(content)
+
+			e2e.Logf("Requesting manifest against the API server")
+			getReqArgs := []string{resourceType, name}
+			if namespace != "" {
+				getReqArgs = append(getReqArgs, "-n", namespace)
+			}
+			// err is the error returned by executing an exec.Command
+			// stderr captures the original error message return by the API server
+			_, stderr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(getReqArgs...).Outputs()
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(stderr).To(o.Or(
+				o.ContainSubstring("not found"),
+				o.ContainSubstring("the server doesn't have a resource type"),
+			))
+		}
 	})
 })

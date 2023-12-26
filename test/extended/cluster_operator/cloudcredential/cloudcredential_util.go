@@ -15,7 +15,10 @@ import (
 )
 
 const (
-	CCONs                    = "openshift-cloud-credential-operator"
+	ccoNs                    = "openshift-cloud-credential-operator"
+	ccoCap                   = "CloudCredential"
+	ccoRepo                  = "cloud-credential-operator"
+	ccoManifestPath          = "manifests"
 	defaultSTSCloudTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	DefaultTimeout           = 120
 )

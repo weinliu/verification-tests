@@ -124,6 +124,31 @@ func SkipNoCapabilities(oc *CLI, capability string) {
 	}
 }
 
+// SkipIfCapEnabled skips the test if a capability is enabled
+func SkipIfCapEnabled(oc *CLI, capability string) {
+	clusterversion, err := oc.
+		AdminConfigClient().
+		ConfigV1().
+		ClusterVersions().
+		Get(context.Background(), "version", metav1.GetOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var capKnown bool
+	for _, knownCap := range clusterversion.Status.Capabilities.KnownCapabilities {
+		if capability == string(knownCap) {
+			capKnown = true
+			break
+		}
+	}
+	if !capKnown {
+		g.Skip(fmt.Sprintf("Will skip as capability %s is unknown (i.e. cannot be disabled in the first place)", capability))
+	}
+	for _, enabledCap := range clusterversion.Status.Capabilities.EnabledCapabilities {
+		if capability == string(enabledCap) {
+			g.Skip(fmt.Sprintf("Will skip as capability %s is enabled", capability))
+		}
+	}
+}
+
 // SkipNoOLMCore skip the test if the cluster has no OLM component
 // from 4.15, OLM become optional core component. it means there is no OLM component for some profiles.
 // so, the OLM case and optioinal operator case can not run on such cluster.
