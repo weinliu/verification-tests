@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testd
+spec:
+  selector:
+    matchLabels:
+      app: testd
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: testd
+    spec:
+      containers:
+        - name: container
+          image: >-
+            image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env: []
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256M
+      imagePullSecrets: []
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  paused: false

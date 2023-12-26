@@ -1,4 +1,5 @@
 import { listPage } from "../upstream/views/list-page";
+import { helperfuncs } from 'views/utils';
 export const operatorHubPage = {
   goTo: () => {
     cy.visit('/operatorhub/all-namespaces');
@@ -70,6 +71,7 @@ export const operatorHubPage = {
     cy.get('body').should('be.visible');
     if (installNamespace) {
       cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
+      helperfuncs.clickIfExist('input[data-test="Select a Namespace-radio-input"]');
       cy.get('button#dropdown-selectbox').click();
       cy.contains('span', `${installNamespace}`).click();
     }

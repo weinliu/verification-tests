@@ -16,6 +16,8 @@ export const Deployment = {
     cy.exec(`oc get pods -n ${nameSpace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -l ${label}`, {failOnNonZeroExit: false}).then(result => {
       expect(result.stdout).contains(`${podStatus}`)
     });
+  },
+  checkDetailItem: (key, value) => {
+    cy.contains('dt', `${key}`).next().should('contain', `${value}`);
   }
-
 }
