@@ -1331,7 +1331,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 				e2e.Logf("Failed to get egressfirewall %v, error: %s. Trying again", egressFW2, efErr)
 				return false, nil
 			}
-			if !strings.Contains(output, "EgressFirewall Rules not correctly added") {
+			if !strings.Contains(output, "EgressFirewall Rules not correctly applied") {
 				e2e.Logf("The egressfirewall output message not expexted, trying again. \n %s", output)
 				return false, nil
 			}
