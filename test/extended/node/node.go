@@ -3,15 +3,18 @@ package node
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"github.com/tidwall/sjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -1255,6 +1258,132 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "scaling failed")
 		exutil.By("Kafka scaling is up and ready")
+	})
+
+	// author: weinliu@redhat.com
+	g.It("ConnectedOnly-Author:weinliu-Critical-52385-Automatically scaling pods based on Prometheus metrics[Serial]", func() {
+		exutil.By("Create a kedacontroller with default template")
+		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default52384.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		var scaledObjectStatus string
+		triggerAuthenticationTempl := filepath.Join(buildPruningBaseDir, "triggerauthentication-52385.yaml")
+		triggerAuthentication52385 := triggerAuthenticationDescription{
+			secretname: "",
+			namespace:  "",
+			template:   triggerAuthenticationTempl,
+		}
+		cmaNs := "cma-52385"
+		defer deleteProject(oc, cmaNs)
+		createProject(oc, cmaNs)
+
+		exutil.By("1) Create OpenShift monitoring for user-defined projects")
+		// Look for cluster-level monitoring configuration
+		getOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Enable user workload monitoring
+		if len(getOutput) > 0 {
+			exutil.By("ConfigMap cluster-monitoring-config exists, extracting cluster-monitoring-config ...")
+			extractOutput, _, _ := oc.AsAdmin().WithoutNamespace().Run("extract").Args("ConfigMap/cluster-monitoring-config", "-n", "openshift-monitoring", "--to=-").Outputs()
+			//if strings.Contains(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(extractOutput, "'", ""), "\"", ""), " ", ""), "enableUserWorkload:true") {
+			cleanedOutput := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(extractOutput, "'", ""), "\"", ""), " ", "")
+			e2e.Logf("cleanedOutput is  %s", cleanedOutput)
+			if matched, _ := regexp.MatchString("enableUserWorkload:\\s*true", cleanedOutput); matched {
+				exutil.By("User workload is enabled, doing nothing ... ")
+			} else {
+				exutil.By("User workload is not enabled, enabling ...")
+				exutil.By("Get current monitoring configuration to recover")
+				originclusterMonitoringConfig, getContentError := oc.AsAdmin().Run("get").Args("ConfigMap/cluster-monitoring-config", "-ojson", "-n", "openshift-monitoring").Output()
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originclusterMonitoringConfig, getContentError = sjson.Delete(originclusterMonitoringConfig, `metadata.resourceVersion`)
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originclusterMonitoringConfig, getContentError = sjson.Delete(originclusterMonitoringConfig, `metadata.uid`)
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originclusterMonitoringConfigFilePath := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-52385.json")
+				o.Expect(ioutil.WriteFile(originclusterMonitoringConfigFilePath, []byte(originclusterMonitoringConfig), 0644)).NotTo(o.HaveOccurred())
+				defer func() {
+					errReplace := oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originclusterMonitoringConfigFilePath).Execute()
+					o.Expect(errReplace).NotTo(o.HaveOccurred())
+				}()
+				exutil.By("Deleting current monitoring configuration")
+				oc.WithoutNamespace().AsAdmin().Run("delete").Args("ConfigMap/cluster-monitoring-config", "-n", "openshift-monitoring").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				exutil.By("Create my monitoring configuration")
+				prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap-52385.yaml")
+				_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f=" + prometheusConfigmap).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		} else {
+			e2e.Logf("ConfigMap cluster-monitoring-config does not exist, creating ...")
+			prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap-52385.yaml")
+			defer func() {
+				errDelete := oc.WithoutNamespace().AsAdmin().Run("delete").Args("-f=" + prometheusConfigmap).Execute()
+				o.Expect(errDelete).NotTo(o.HaveOccurred())
+			}()
+			_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f=" + prometheusConfigmap).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		exutil.By("2) Deploy application that exposes Prometheus metrics")
+		prometheusComsumer := filepath.Join(buildPruningBaseDir, "prometheus-comsumer-deployment-52385.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+prometheusComsumer, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+prometheusComsumer, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3) Create a Service Account")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("sa", "thanos-52385", "-n", cmaNs).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "thanos-52385", "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.1) Get the SA token name")
+		cmd := `oc describe sa thanos-52385 -n cma-52385 | awk '/Tokens:/ {printf "%s",$2}'`
+		saTokenName, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("----- saTokenName is %v -----, error is %v", saTokenName[0], err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("3.2) Define TriggerAuthentication with the Service Account's token")
+		triggerAuthentication52385.secretname = string(saTokenName[:])
+		triggerAuthentication52385.namespace = cmaNs
+		defer oc.AsAdmin().Run("delete").Args("-n", cmaNs, "TriggerAuthentication", "keda-trigger-auth-prometheus").Execute()
+		triggerAuthentication52385.create(oc)
+
+		exutil.By("4) Create a role for reading metric from Thanos")
+		role := filepath.Join(buildPruningBaseDir, "role-52385.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+role, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+role, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5) Add the role for reading metrics from Thanos to the Service Account")
+		rolebinding := filepath.Join(buildPruningBaseDir, "rolebinding-52385.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+rolebinding, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+rolebinding, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6) Deploy ScaledObject to enable application autoscaling")
+		scaledobject := filepath.Join(buildPruningBaseDir, "scaledobject-52385.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+scaledobject, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+scaledobject, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("7) Generate requests to test the application autoscaling")
+		load := filepath.Join(buildPruningBaseDir, "load-52385.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+load, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+load, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("8) Check ScaledObject is up")
+		err = wait.Poll(3*time.Second, 100*time.Second, func() (bool, error) {
+			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "prometheus-scaledobject", "-o=jsonpath={.status.health.s0-prometheus-http_requests_total.status}", "-n", cmaNs).Output()
+			if scaledObjectStatus == "Happy" {
+				e2e.Logf("ScaledObject is up and working")
+				return true, nil
+			}
+			e2e.Logf("ScaledObject is not in working status, current status: %v", scaledObjectStatus)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "scaling failed")
+		exutil.By("prometheus scaling is up and ready")
 	})
 })
 

@@ -195,6 +195,12 @@ type deployment struct {
 	template  string
 }
 
+type triggerAuthenticationDescription struct {
+	secretname string
+	namespace  string
+	template   string
+}
+
 func (podLogLink *podLogLinkDescription) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podLogLink.template, "-p", "NAME="+podLogLink.name, "NAMESPACE="+podLogLink.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1912,4 +1918,9 @@ func createProject(oc *exutil.CLI, namespace string) {
 // this function delete a workspace, we intend to do it after each test case run
 func deleteProject(oc *exutil.CLI, namespace string) {
 	oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
+}
+
+func (triggerAuthentication *triggerAuthenticationDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", triggerAuthentication.template, "-p", "SECRET_NAME="+triggerAuthentication.secretname, "NAMESPACE="+triggerAuthentication.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
