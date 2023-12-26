@@ -1227,7 +1227,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
+	g.It("NonHyperShiftHOST-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
 		skipForSingleNodeCluster(oc)
 
 		var (
@@ -1254,9 +1254,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			}
 
 			csuiteRD = complianceSuiteDescription{
-				name:         "rhcos-compliancesuite" + getRandomString(),
+				name:         "cis-node-" + getRandomString(),
 				namespace:    "",
-				scanname:     "rhcos-scan" + getRandomString(),
+				scanname:     "cis-node-" + getRandomString(),
 				profile:      "xccdf_org.ssgproject.content_profile_cis-node",
 				content:      "ssg-ocp4-ds.xml",
 				contentImage: "ghcr.io/complianceascode/k8scontent:latest",
@@ -1321,16 +1321,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Check master-compliancesuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteRD.name)
-		subD.complianceSuiteResult(oc, csuiteRD.name, "INCONSISTENT")
+		subD.complianceSuiteResult(oc, csuiteRD.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Check master-compliancesuite result through exit-code ..!!!\n")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, csuiteRD.name, "2")
 
 		g.By("Verify compliance scan result compliancecheckresult through label ...!!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, csuiteRD.scanname+"-etcd-unique-ca", ok, []string{"compliancecheckresult",
-			"--selector=compliance.openshift.io/check-status=INCONSISTENT", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "INCONSISTENT", ok, []string{"compliancecheckresult",
-			csuiteRD.scanname + "-etcd-unique-ca", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, csuiteRD.scanname+"-file-owner-ovs-conf-db", ok, []string{"compliancecheckresult",
+			"--selector=compliance.openshift.io/check-status=PASS,compliance.openshift.io/scan-name=" + csuiteRD.scanname, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			csuiteRD.scanname + "-file-owner-ovs-conf-db", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By(" ocp-37063 The complianceSuite object successfully triggered scan for cis node profile.. !!!\n")
 	})
