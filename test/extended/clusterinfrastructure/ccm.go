@@ -204,4 +204,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(err.Error(), "InvalidGroup.NotFound")).To(o.BeTrue())
 	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Author:huliu-Medium-70296-[CCM] AWS should not use external-cloud-volume-plugin post CSI migration", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		cmKubeControllerManager, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "config", "-n", "openshift-kube-controller-manager", "-o=yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cmKubeControllerManager).NotTo(o.ContainSubstring("external-cloud-volume-plugin"))
+	})
 })
