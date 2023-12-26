@@ -71,6 +71,10 @@ export const Pages = {
     cy.visit('/k8s/cluster/apiextensions.k8s.io~v1~CustomResourceDefinition');
     listPage.rows.shouldBeLoaded();
   },
+  gotoOneCRDDetailsPage: (crdname) => {
+    cy.visit(`/k8s/cluster/customresourcedefinitions/${crdname}`);
+    cy.get('[data-test-id="horizontal-link-Details"]').should('be.visible');
+  },
   gotoOneNetworkPolicyDetails: (namespace: string, npname: string) => {
     cy.visit(`/k8s/ns/${namespace}/networkpolicies/${npname}`);
   },
