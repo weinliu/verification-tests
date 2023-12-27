@@ -2087,6 +2087,120 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		defer cmd2.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:yinzhou-High-68647-oc whoami must work without oauth-apiserver [Slow][Disruptive]", func() {
+		exutil.By("Create new namespace")
+		oc.SetupProject()
+		workloadsBaseDir := exutil.FixturePath("testdata", "workloads")
+		keycloakFile := filepath.Join(workloadsBaseDir, "keycloak.yaml")
+		exutil.By("Create keycloak app")
+		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", keycloakFile, "-p", "KEYCLOAK_ADMIN=admin", "KEYCLOAK_ADMIN_PASSWORD="+exutil.GetRandomString(), "NAMESPACE=="+oc.Namespace())
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		if ok := waitForAvailableRsRunning(oc, "deployment", "keycloak", oc.Namespace(), "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			err := oc.Run("get").Args("pod", "-n", "-o", "yaml").Execute()
+			if err != nil {
+				e2e.Logf("Failed to get pod info with err %v", err)
+			}
+			e2e.Failf("Keycloak pods are not running as expected")
+		}
+
+		kc_Host, kcerr := oc.Run("get").Args("route", "keycloak", "-o=jsonpath={.spec.host}").Output()
+		o.Expect(kc_Host).NotTo(o.BeEmpty())
+		o.Expect(kcerr).NotTo(o.HaveOccurred())
+		kc_URL := fmt.Sprintf("https://%s/realms/master", kc_Host)
+
+		exutil.By("Set the cluster with external OIDC issuer")
+		privateCert, certErr := oc.AsAdmin().Run("patch").Args("cm", "-n", "openshift-config-managed", "default-ingress-cert", "-p", "{\"metadata\":{\"namespace\":\"openshift-config\",\"name\":\"default-ingress-cert-68647\"}}", "--dry-run=client", "-o", "yaml").OutputToFile(getRandomString() + "workload-cm.yaml")
+		o.Expect(certErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().Run("delete").Args("-f", privateCert, "-n", "openshift-config").Execute()
+		cmErr := oc.AsAdmin().Run("apply").Args("-f", privateCert, "-n", "openshift-config").Execute()
+		o.Expect(cmErr).NotTo(o.HaveOccurred())
+
+		defaultCert, defaultCertErr := oc.AsAdmin().Run("get").Args("proxy", "cluster", "-o=jsonpath={.spec.trustedCA.name}").Output()
+		o.Expect(defaultCertErr).NotTo(o.HaveOccurred())
+
+		var proxyrestorePatch = `[{"op": "replace", "path": "/spec/trustedCA/name", "value": ""}]`
+		if len(defaultCert) != 0 {
+			proxyrestorePatch = fmt.Sprintf(`[{"op": "replace", "path": "/spec/trustedCA/name", "value": %s}]`, defaultCert)
+		}
+
+		defer oc.AsAdmin().Run("patch").Args("proxy", "cluster", "--type=json", "-p", proxyrestorePatch).Execute()
+		patch := `[{"op": "replace", "path": "/spec/trustedCA/name", "value": default-ingress-cert-68647}]`
+		patchProxyErr := oc.AsAdmin().Run("patch").Args("proxy", "cluster", "-p", patch, "--type=json").Execute()
+		o.Expect(patchProxyErr).NotTo(o.HaveOccurred())
+		defer os.RemoveAll("/tmp/oauthMetadata")
+		curlCMD := fmt.Sprintf(`curl -o /tmp/oauthMetadata -k %s/.well-known/openid-configuration`, kc_URL)
+		_, curlErr := exec.Command("bash", "-c", curlCMD).Output()
+		o.Expect(curlErr).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().Run("delete").Args("cm", "oauth-meta-68647", "-n", "openshift-config").Execute()
+		cmErr = oc.AsAdmin().Run("create").Args("configmap", "oauth-meta-68647", "--from-file", "/tmp/oauthMetadata", "-n", "openshift-config").Execute()
+		o.Expect(cmErr).NotTo(o.HaveOccurred())
+
+		originApiunsupportedConfigOverrides, err := oc.AsAdmin().Run("get").Args("kubeapiserver", "cluster", "-o=jsonpath={.spec.unsupportedConfigOverrides}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(originApiunsupportedConfigOverrides)
+		originoauthMetadataName, err := oc.AsAdmin().Run("get").Args("authentication", "cluster", "-o=jsonpath={.spec.oauthMetadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originoauthType, err := oc.AsAdmin().Run("get").Args("authentication", "cluster", "-o=jsonpath={.spec.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("Restoring the apiserver cluster's configure")
+			apiReStoreYaml := ""
+			if originApiunsupportedConfigOverrides == "<nil>" {
+				apiReStoreYaml = `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": null}]`
+			} else {
+				apiReStoreYaml = fmt.Sprintf(`[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": %v}]`, originApiunsupportedConfigOverrides)
+			}
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver", "cluster", "--type=json", "-p", apiReStoreYaml).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			authRestore := `{"spec":{"oauthMetadata":{"name":""},"type":""}}`
+			if len(originoauthMetadataName) != 0 && len(originoauthType) != 0 {
+				authRestore = fmt.Sprintf(`{"spec":{"oauthMetadata":{"name":"%s"},"type":"%s"}}`, originoauthMetadataName, originoauthType)
+			} else if len(originoauthMetadataName) != 0 && len(originoauthType) == 0 {
+				authRestore = fmt.Sprintf(`{"spec":{"oauthMetadata":{"name":"%s"},"type":""}}`, originoauthMetadataName)
+			} else if len(originoauthMetadataName) == 0 && len(originoauthType) != 0 {
+				authRestore = fmt.Sprintf(`{"spec":{"oauthMetadata":{"name":""},"type":"%s"}}`, originoauthType)
+			}
+
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("authentication", "cluster", "--type=merge", "-p", authRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-apiserver operator should be restored in 1800 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-apiserver", 1800, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not restored in 1800 seconds")
+			err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 240 seconds")
+
+		}()
+		authenticationErr := oc.AsAdmin().Run("patch").Args("authentication", "cluster", "-p", "{\"spec\":{\"oauthMetadata\":{\"name\":\"oauth-meta-68647\"},\"type\":\"None\"}}", "--type=merge").Execute()
+		o.Expect(authenticationErr).NotTo(o.HaveOccurred())
+		caBundle := "/etc/kubernetes/static-pod-certs/configmaps/trusted-ca-bundle/ca-bundle.crt"
+		apiserverPatch := fmt.Sprintf(`{"spec":{"unsupportedConfigOverrides":{"apiServerArguments":{"oidc-ca-file":["%s"],"oidc-client-id":["admin-cli"], "oidc-issuer-url":["%s"]}}}}`, caBundle, kc_URL)
+		apiserverErr := oc.AsAdmin().Run("patch").Args("kubeapiserver", "cluster", "-p", apiserverPatch, "--type=merge").Execute()
+		o.Expect(apiserverErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-apiserver operator should be Available in 1800 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-apiserver", 1800, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1800 seconds")
+		err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 240 seconds")
+		err = oc.AsAdmin().Run("whoami").Args("").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
 
 // ClientVersion ...
