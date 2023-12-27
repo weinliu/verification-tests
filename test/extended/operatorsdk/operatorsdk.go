@@ -184,7 +184,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("Author:jfan-High-34441-SDK commad operator sdk support init help message", func() {
 		output, err := operatorsdkCLI.Run("init").Args("--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("--component-config"))
+		o.Expect(output).To(o.ContainSubstring("--project-name"))
 	})
 
 	// author: jfan@redhat.com
