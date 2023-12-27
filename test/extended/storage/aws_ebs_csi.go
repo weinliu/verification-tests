@@ -327,7 +327,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	}
 
 	// author: pewang@redhat.com
-	g.It("ConnectedOnly-ROSA-OSD_CCS-Author:pewang-Medium-70014-[AWS-EBS-CSI] [Filesystem] [ext4] supports clustered allocation when formatting filesystem", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-Medium-70014-[AWS-EBS-CSI] [Filesystem] [ext4] supports clustered allocation when formatting filesystem", func() {
 
 		// Set the resource objects definition for the scenario
 		var (
@@ -371,7 +371,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pod.checkMountedVolumeCouldRW(oc.AsAdmin())
 
 		exutil.By("# Check the ext4 volume ext4ClusterSize set as expected")
-		o.Expect(pod.execCommand(oc.AsAdmin(), "dnf install -y e2fsprogs && tune2fs -l $(df -h|grep '/mnt/storage'|awk '{print $1}')|grep 'Cluster size'")).Should(o.ContainSubstring(ext4ClusterSize))
+		checkExt4ClusterSizeCmd := fmt.Sprintf("sudo tune2fs -l $(df -h|grep '%s'|awk '{print $1}')|grep 'Cluster size'", pvc.getVolumeName(oc))
+		o.Expect(execCommandInSpecificNode(oc, getNodeNameByPod(oc, pod.namespace, pod.name), checkExt4ClusterSizeCmd)).Should(o.ContainSubstring(ext4ClusterSize))
 	})
 
 	// author: pewang@redhat.com
