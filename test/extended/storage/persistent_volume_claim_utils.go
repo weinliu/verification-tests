@@ -14,14 +14,15 @@ import (
 )
 
 type persistentVolumeClaim struct {
-	name           string
-	namespace      string
-	scname         string
-	template       string
-	volumemode     string
-	accessmode     string
-	capacity       string
-	dataSourceName string
+	name             string
+	namespace        string
+	scname           string
+	template         string
+	volumemode       string
+	accessmode       string
+	capacity         string
+	dataSourceName   string
+	maxWaitReadyTime time.Duration
 }
 
 // function option mode to change the default values of PersistentVolumeClaim parameters, e.g. name, namespace, accessmode, capacity, volumemode etc.
@@ -86,13 +87,14 @@ func setPersistentVolumeClaimDataSourceName(name string) persistentVolumeClaimOp
 // Create a new customized PersistentVolumeClaim object
 func newPersistentVolumeClaim(opts ...persistentVolumeClaimOption) persistentVolumeClaim {
 	defaultPersistentVolumeClaim := persistentVolumeClaim{
-		name:       "my-pvc-" + getRandomString(),
-		template:   "pvc-template.yaml",
-		namespace:  "",
-		capacity:   getValidVolumeSize(),
-		volumemode: "Filesystem",
-		scname:     "gp2-csi",
-		accessmode: "ReadWriteOnce",
+		name:             "my-pvc-" + getRandomString(),
+		template:         "pvc-template.yaml",
+		namespace:        "",
+		capacity:         getValidVolumeSize(),
+		volumemode:       "Filesystem",
+		scname:           "gp2-csi",
+		accessmode:       "ReadWriteOnce",
+		maxWaitReadyTime: defaultMaxWaitingTime,
 	}
 
 	for _, o := range opts {
@@ -439,7 +441,7 @@ func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedS
 		err    error
 	)
 	if expectedStatus == "deleted" {
-		err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
+		err = wait.Poll(pvc.maxWaitReadyTime/defaultIterationTimes, pvc.maxWaitReadyTime, func() (bool, error) {
 			status, err = pvc.getStatus(oc)
 			if err != nil && strings.Contains(interfaceToString(err), "not found") {
 				e2e.Logf("The persist volume claim '%s' becomes to expected status: '%s' ", pvc.name, expectedStatus)
@@ -449,7 +451,7 @@ func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedS
 			return false, nil
 		})
 	} else {
-		err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
+		err = wait.Poll(pvc.maxWaitReadyTime/defaultIterationTimes, pvc.maxWaitReadyTime, func() (bool, error) {
 			status, err = pvc.getStatus(oc)
 			if err != nil {
 				e2e.Logf("Get persist volume claim '%s' status failed of: %v.", pvc.name, err)
@@ -535,4 +537,12 @@ func getValidRandomCapacityByCsiVolType(csiProvisioner string, volumeType string
 		validRandomCapacityInt64 = getRandomNum(1, 10)
 	}
 	return strconv.FormatInt(validRandomCapacityInt64, 10) + "Gi"
+}
+
+// longerTime changes pvc.maxWaitReadyTime to specifiedDuring max wait time
+// Used for some Longduration test
+func (pvc *persistentVolumeClaim) specifiedLongerTime(specifiedDuring time.Duration) *persistentVolumeClaim {
+	newPVC := *pvc
+	newPVC.maxWaitReadyTime = specifiedDuring
+	return &newPVC
 }

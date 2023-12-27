@@ -313,14 +313,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: chaoyang@redhat.com
-	// Test case exec with featuregate enabled TechPreviewNoUpgrade
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-60581-[Storageclass] Pending pvc will be bound after there is a default storageclass created [Serial]", func() {
 
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
 			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
-			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 		)
 
 		//Get the default storageclass
@@ -355,10 +353,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc.createWithoutStorageclassname(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-		pod.create(oc)
-		defer pod.deleteAsAdmin(oc)
-
 		//Check pvc status is pending
 		exutil.By("#Check pvc status stuck at Pending")
 		o.Consistently(func() string {
@@ -370,7 +364,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Get the provisioner from the cluster
 		provisioner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc/"+oriDefaultSc[0], "-o", "jsonpath={.provisioner}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassReclaimPolicy("Delete"))
 		storageClass.provisioner = provisioner
 
 		if provisioner == "efs.csi.aws.com" {
@@ -391,13 +385,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer storageClass.deleteAsAdmin(oc)
 		setSpecifiedStorageClassAsDefault(oc, storageClass.name)
 
-		exutil.By("Waiting for pod status is Running")
-		pvc.waitStatusAsExpected(oc, "Bound")
-		pod.waitReady(oc)
+		exutil.By("Waiting for pvc status is Bound")
+		pvc.specifiedLongerTime(600*time.Second).waitStatusAsExpected(oc, "Bound")
 
 		exutil.By("Check the PV's storageclass should be newly create storageclass")
 		o.Expect(getScNamesFromSpecifiedPv(oc, pvc.getVolumeName(oc))).To(o.Equal(storageClass.name))
-
 	})
-
 })
