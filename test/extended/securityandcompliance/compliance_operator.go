@@ -5222,6 +5222,19 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", subD.namespace, "-c", "pauser", ocp4ProfileparserPodName, "curl", "-Iksv", url).Output()
 		o.Expect(strings.Contains(string(output), `HEAD / HTTP/1.1`)).To(o.BeTrue())
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-High-70206-Check the profiles annotation avaiable in the rules", func() {
+		g.By("Check rule ocp4-accounts-restrict-service-account-tokens has the profiles annotation")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "rule", "ocp4-accounts-restrict-service-account-tokens", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), `"compliance.openshift.io/profiles":"ocp4-cis,ocp4-pci-dss,ocp4-high,ocp4-moderate,ocp4-stig-v1r1,ocp4-moderate-rev-4,ocp4-nerc-cip,ocp4-pci-dss-3-2,ocp4-stig,ocp4-cis-1-4,ocp4-high-rev-4"`))
+
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("rule", `-o=jsonpath={.items[?(@.metadata.annotations.compliance\.openshift\.io/profiles!="")].metadata.name}`, "-n", subD.namespace).Output()
+		o.Expect(strings.Contains(string(output), `ocp4-file-groupowner-ovs-conf-db`))
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("rule", `-o=jsonpath={.items[?(@.metadata.annotations.compliance\.openshift\.io/profiles=="")].metadata.name}`, "-n", subD.namespace).Output()
+		o.Expect(strings.Contains(string(output), `rhcos4-wireless-disable-interfaces`))
+	})
 })
 
 var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on hypershift hosted cluster", func() {
