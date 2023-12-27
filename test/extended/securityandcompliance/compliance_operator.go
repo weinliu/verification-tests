@@ -2078,9 +2078,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Get the default storageClass provisioner & volumeBindingMode from cluster .. !!!\n")
 		storageClass.name = "gold"
-		storageClass.provisioner = getStorageClassProvisioner(oc)
+		scName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o=jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class==\"true\")].metadata.name}", "-n", oc.Namespace()).Output()
+		provisioner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", string(scName), "-n", subD.namespace, "-o=jsonpath={.provisioner}").Output()
+		storageClass.provisioner = provisioner
+		o.Expect(err).NotTo(o.HaveOccurred())
 		storageClass.reclaimPolicy = "Delete"
-		storageClass.volumeBindingMode = getStorageClassVolumeBindingMode(oc)
+		volumeBindingMode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", string(scName), "-n", subD.namespace, "-o=jsonpath={.volumeBindingMode}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		storageClass.volumeBindingMode = volumeBindingMode
 		storageClass.create(oc)
 
 		csuiteD.namespace = subD.namespace

@@ -559,40 +559,6 @@ func assertCoPodNumerEqualNodeNumber(oc *exutil.CLI, namespace string, nodeLabel
 	}
 }
 
-func getStorageClassProvisioner(oc *exutil.CLI) string {
-	scname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(scname, "nfs") {
-		scpro, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", "nfs", "-o=jsonpath={.provisioner}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("the result of StorageClassProvisioner:%v", scpro)
-		return scpro
-	}
-	scs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass").OutputToFile(getRandomString() + "isc-config.json")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the result of scs:%v", scs)
-	result, err := exec.Command("bash", "-c", "cat "+scs+" | grep \"default\" | awk '{print $3}'; rm -rf "+scs).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	res := strings.TrimSpace(string(result))
-	e2e.Logf("the result of StorageClassProvisioner:%v", res)
-	return res
-}
-
-func getStorageClassVolumeBindingMode(oc *exutil.CLI) string {
-	scname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(scname, "nfs") {
-		scvbm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", "nfs", "-o=jsonpath={.volumeBindingMode}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("the result of StorageClassVolumeBindingMode:%v", scvbm)
-		return scvbm
-	}
-	sclassvbm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", "-o=jsonpath={.items[0].volumeBindingMode}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the result of StorageClassVolumeBindingMode:%v", sclassvbm)
-	return sclassvbm
-}
-
 func getResourceNameWithKeyword(oc *exutil.CLI, rs string, namespace string, keyword string) string {
 	var resourceName string
 	rsList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(rs, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
