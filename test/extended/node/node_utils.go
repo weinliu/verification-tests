@@ -180,6 +180,12 @@ type podLogLinkDescription struct {
 	template  string
 }
 
+type podWASM struct {
+	name      string
+	namespace string
+	template  string
+}
+
 type podDisruptionBudget struct {
 	name         string
 	namespace    string
@@ -199,6 +205,16 @@ type triggerAuthenticationDescription struct {
 	secretname string
 	namespace  string
 	template   string
+}
+
+func (podWASM *podWASM) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podWASM.template, "-p", "NAME="+podWASM.name, "NAMESPACE="+podWASM.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podWASM *podWASM) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podWASM.namespace, "pod", podWASM.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (podLogLink *podLogLinkDescription) create(oc *exutil.CLI) {
@@ -826,8 +842,8 @@ func getPodNetNs(oc *exutil.CLI, hostname string) (string, error) {
 	return NetNs[1], nil
 }
 
-func addLabelToNode(oc *exutil.CLI, label string, workerNodeName string, resource string) {
-	_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args(resource, workerNodeName, label, "--overwrite").Output()
+func addLabelToResource(oc *exutil.CLI, label string, resourceName string, resource string) {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args(resource, resourceName, label, "--overwrite").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("\nLabel Added")
 }

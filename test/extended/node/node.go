@@ -50,9 +50,9 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		systemreserveTemp         = filepath.Join(buildPruningBaseDir, "kubeletconfig-defaultsysres.yaml")
 		podLogLinkTemp            = filepath.Join(buildPruningBaseDir, "pod-loglink.yaml")
 		livenessProbeTemp         = filepath.Join(buildPruningBaseDir, "livenessProbe-terminationPeriod.yaml")
-
-		podDisruptionBudgetTemp = filepath.Join(buildPruningBaseDir, "pod-disruption-budget.yaml")
-		genericDeploymentTemp   = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
+		podWASMTemp               = filepath.Join(buildPruningBaseDir, "pod-wasm.yaml")
+		podDisruptionBudgetTemp   = filepath.Join(buildPruningBaseDir, "pod-disruption-budget.yaml")
+		genericDeploymentTemp     = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
 
 		podLogLink65404 = podLogLinkDescription{
 			name:      "",
@@ -395,7 +395,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		g.By("Get Worker Node and Add label app=sleep\n")
 		workerNodeName := getSingleWorkerNode(oc)
-		addLabelToNode(oc, "app=sleep", workerNodeName, "nodes")
+		addLabelToResource(oc, "app=sleep", workerNodeName, "nodes")
 		defer removeLabelFromNode(oc, "app-", workerNodeName, "nodes")
 
 		g.By("Create a 50 pods on the same node\n")
@@ -442,7 +442,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		memHog.labelvalue = kubeletConfig.labelvalue
 
 		g.By("Get Worker Node and Add label custom-kubelet-ocp11600=hard-eviction\n")
-		addLabelToNode(oc, "custom-kubelet-ocp11600=hard-eviction", "worker", "mcp")
+		addLabelToResource(oc, "custom-kubelet-ocp11600=hard-eviction", "worker", "mcp")
 		defer removeLabelFromNode(oc, "custom-kubelet-ocp11600-", "worker", "mcp")
 
 		g.By("Create Kubelet config \n")
@@ -734,7 +734,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		runtimeTimeout.labelvalue = "test-timeout"
 
 		g.By("Label mcp worker custom-kubelet as test-timeout \n")
-		addLabelToNode(oc, "custom-kubelet=test-timeout", "worker", "mcp")
+		addLabelToResource(oc, "custom-kubelet=test-timeout", "worker", "mcp")
 		defer removeLabelFromNode(oc, "custom-kubelet-", "worker", "mcp")
 
 		g.By("Create KubeletConfig \n")
@@ -954,7 +954,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		systemReserveES.labelvalue = "reserve-space"
 
 		exutil.By("Label mcp worker custom-kubelet as reserve-space \n")
-		addLabelToNode(oc, "custom-kubelet=reserve-space", "worker", "mcp")
+		addLabelToResource(oc, "custom-kubelet=reserve-space", "worker", "mcp")
 		defer removeLabelFromNode(oc, "custom-kubelet-", "worker", "mcp")
 
 		exutil.By("Create KubeletConfig \n")
@@ -1085,6 +1085,64 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("check metrics failed after pod restart! Metric result is: \n %v \n", cmdOut2))
+	})
+
+	//author: minmli@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-Medium-66398-Enable WASM workloads in OCP", func() {
+		podWASM66398 := podWASM{
+			name:      "wasm-http",
+			namespace: oc.Namespace(),
+			template:  podWASMTemp,
+		}
+
+		exutil.By("Apply a machineconfig to configure crun-wasm as the default runtime")
+		mcWASM := filepath.Join(buildPruningBaseDir, "machineconfig-wasm.yaml")
+		mcpName := "worker"
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + mcWASM).Execute()
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + mcWASM).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the machine config pool finish updating")
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("Verify the crun-wasm is configured as expected")
+		wasmConfig := []string{"crio.runtime", "default_runtime = \"crun-wasm\"", "crio.runtime.runtimes.crun-wasm", "runtime_path = \"/usr/bin/crun\"", "crio.runtime.runtimes.crun-wasm.platform_runtime_paths", "\"wasi/wasm32\" = \"/usr/bin/crun-wasm\""}
+		configPath := "/etc/crio/crio.conf.d/99-crun-wasm.conf"
+		err = crioConfigExist(oc, wasmConfig, configPath)
+		exutil.AssertWaitPollNoErr(err, "crun-wasm is not set as expected")
+
+		exutil.By("Check if wasm bits are enabled appropriately")
+		exutil.By("1)label namespace pod-security.kubernetes.io/enforce=baseline")
+		addLabelToResource(oc, "pod-security.kubernetes.io/enforce=baseline", oc.Namespace(), "namespace")
+		exutil.By("2)Create a pod")
+		defer podWASM66398.delete(oc)
+		podWASM66398.create(oc)
+
+		exutil.By("3)Check pod status")
+		err = podStatus(oc, podWASM66398.namespace, podWASM66398.name)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		exutil.By("4)Expose the pod as a service")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("pod", podWASM66398.name, "-n", podWASM66398.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5)Expose the service as a route")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("service", podWASM66398.name, "-n", podWASM66398.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6)Get the route name")
+		routeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", podWASM66398.name, "-ojsonpath={.spec.host}", "-n", podWASM66398.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("7)Curl the route name")
+		out, err := exec.Command("bash", "-c", "curl "+routeName+" -d \"Hello world!\"").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(out), "echo: Hello world!")).Should(o.BeTrue())
 	})
 
 	//author: jfrancoa@redhat.com
