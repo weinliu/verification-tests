@@ -1,6 +1,7 @@
 package container
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -190,7 +191,9 @@ func (c *QuayCLI) GetTags(imageIndex string) ([]TagInfo, error) {
 
 	client := &http.Client{}
 	reqest, err := http.NewRequest("GET", endpoint, nil)
-	reqest.Header.Add("Authorization", c.Authorization)
+	if strings.Compare(c.Authorization, "") != 0 {
+		reqest.Header.Add("Authorization", c.Authorization)
+	}
 	if err != nil {
 		return result, err
 	}
@@ -238,4 +241,48 @@ func (c *QuayCLI) GetImageDigest(imageIndex string) (string, error) {
 	e2e.Logf("Can't get the digest, Manifest_digest not found.")
 	return result, nil
 
+}
+
+func (c *QuayCLI) TryChangeTag(imageTag, manifestDigest string) (bool, error) {
+	if strings.Contains(imageTag, ":") {
+		imageTag = strings.Replace(imageTag, ":", "/tag/", 1)
+	}
+	endpoint := c.EndPointPre + imageTag
+	e2e.Logf("endpoint is %s", endpoint)
+
+	payload := ("{\"manifest_digest\": \"" + manifestDigest + "\"}")
+
+	client := &http.Client{}
+	request, err := http.NewRequest("PUT", endpoint, bytes.NewBuffer([]byte(payload)))
+	if strings.Compare(c.Authorization, "") != 0 {
+		request.Header.Add("Authorization", c.Authorization)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	if err != nil {
+		return false, err
+	}
+	response, err := client.Do(request)
+	defer response.Body.Close()
+	if err != nil {
+		return false, err
+	}
+	if response.StatusCode != 201 {
+		e2e.Logf("change %s failed, response code is %d", imageTag, response.StatusCode)
+		return false, nil
+	}
+	return true, nil
+}
+
+// ChangeTag will change the image tag
+func (c *QuayCLI) ChangeTag(imageTag, manifestDigest string) (bool, error) {
+	rc, error := c.TryChangeTag(imageTag, manifestDigest)
+	if rc != true {
+		e2e.Logf("try to tag %s again", manifestDigest)
+		rc, error = c.TryChangeTag(imageTag, manifestDigest)
+		if rc != true {
+			e2e.Logf("Change tag failed on quay.io")
+		}
+	}
+	return rc, error
 }

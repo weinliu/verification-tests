@@ -2,6 +2,7 @@ package olmv1util
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -122,14 +123,251 @@ func (catalog *CatalogDescription) Delete(oc *exutil.CLI) {
 	//add check later
 }
 
+// Get catalog info content
 func (catalog *CatalogDescription) GetContent(oc *exutil.CLI) []byte {
 	if catalog.ContentURL == "" {
 		catalog.GetcontentURL(oc)
 	}
 	resp, err := http.Get(catalog.ContentURL)
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			e2e.Logf("Error closing body:", err)
+		}
+	}()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	curlOutput, err := io.ReadAll(resp.Body)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return curlOutput
+}
+
+// RelatedImagesInfo returns the relatedImages info
+type RelatedImagesInfo struct {
+	Image string `json:"image"`
+	Name  string `json:"name"`
+}
+
+// BundleData returns the bundle info
+type BundleData struct {
+	Image         string              `json:"image"`
+	Name          string              `json:"name"`
+	Package       string              `json:"package"`
+	RelatedImages []RelatedImagesInfo `json:"relatedImages"`
+	Schema        string              `json:"schema"`
+	Properties    json.RawMessage     `json:"properties"` // properties data are complex and will be output as strings
+}
+
+func GetBundlesName(bundlesDataOut []BundleData) []string {
+
+	var bundlesName []string
+	var singleBundleData BundleData
+
+	for _, singleBundleData = range bundlesDataOut {
+		bundlesName = append(bundlesName, singleBundleData.Name)
+	}
+	return bundlesName
+}
+
+func GetBundlesNameByPakcage(bundlesDataOut []BundleData, packageName string) []string {
+
+	var bundlesName []string
+	var singleBundleData BundleData
+
+	for _, singleBundleData = range bundlesDataOut {
+		if singleBundleData.Package == packageName {
+			bundlesName = append(bundlesName, singleBundleData.Name)
+		}
+	}
+	return bundlesName
+}
+
+func GetBundlesImageTag(bundlesDataOut []BundleData) []string {
+
+	var bundlesName []string
+	var singleBundleData BundleData
+
+	for _, singleBundleData = range bundlesDataOut {
+		bundlesName = append(bundlesName, singleBundleData.Image)
+	}
+	return bundlesName
+}
+
+func GetBundleInfoByName(bundlesDataOut []BundleData, packageName string, bundleName string) *BundleData {
+
+	var singleBundleData BundleData
+
+	for _, singleBundleData = range bundlesDataOut {
+		if singleBundleData.Name == bundleName && singleBundleData.Package == packageName {
+			return &singleBundleData
+		}
+	}
+	return nil
+}
+
+// EntriesInfo returns the entries info
+type EntriesInfo struct {
+	Name     string   `json:"name"`
+	Replaces string   `json:"replaces"`
+	Skips    []string `json:"skips"`
+}
+
+// ChannelData returns the channel info
+type ChannelData struct {
+	Entries []EntriesInfo `json:"entries"`
+	Name    string        `json:"name"`
+	Package string        `json:"package"`
+	Schema  string        `json:"schema"`
+}
+
+func GetChannelByPakcage(channelDataOut []ChannelData, packageName string) []ChannelData {
+
+	var channelDataByPackage []ChannelData
+	var singleChannelData ChannelData
+	for _, singleChannelData = range channelDataOut {
+		if singleChannelData.Package == packageName {
+			channelDataByPackage = append(channelDataByPackage, singleChannelData)
+		}
+	}
+	return channelDataByPackage
+}
+
+func GetChannelNameByPakcage(channelDataOut []ChannelData, packageName string) []string {
+
+	var channelsName []string
+	var singleChannelData ChannelData
+
+	for _, singleChannelData = range channelDataOut {
+		if singleChannelData.Package == packageName {
+			channelsName = append(channelsName, singleChannelData.Name)
+		}
+	}
+	return channelsName
+}
+
+// PackageData returns the channel info
+type PackageData struct {
+	DefaultChannel string `json:"defaultChannel"`
+	Name           string `json:"name"`
+	Schema         string `json:"schema"`
+}
+
+func ListPackagesName(packageDataOut []PackageData) []string {
+
+	var packagesName []string
+	var singlePackageData PackageData
+
+	for _, singlePackageData = range packageDataOut {
+		packagesName = append(packagesName, singlePackageData.Name)
+	}
+	return packagesName
+}
+
+type ContentData struct {
+	Packages []PackageData
+	Channels []ChannelData
+	Bundles  []BundleData
+	//Deprecations []Deprecation
+}
+
+// Unmarshal Content
+func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema string) (ContentData, error) {
+	var (
+		singlePackageData PackageData
+		singleChannelData ChannelData
+		singleBundleData  BundleData
+		ContentData       ContentData
+		targetData        interface{}
+		err               error
+	)
+
+	switch schema {
+	case "all":
+		return catalog.UnmarshalAllContent(oc)
+	case "bundle":
+		targetData = &singleBundleData
+	case "channel":
+		targetData = &singleChannelData
+	case "package":
+		targetData = &singlePackageData
+	default:
+		return ContentData, fmt.Errorf("unsupported schema: %s", schema)
+	}
+
+	contents := catalog.GetContent(oc)
+	lines := strings.Split(string(contents), "\n")
+
+	for _, line := range lines {
+		if strings.Contains(line, "\"schema\":\"olm."+schema+"\"") {
+			if err = json.Unmarshal([]byte(line), targetData); err != nil {
+				return ContentData, err
+			}
+
+			switch schema {
+			case "bundle":
+				ContentData.Bundles = append(ContentData.Bundles, singleBundleData)
+			case "channel":
+				ContentData.Channels = append(ContentData.Channels, singleChannelData)
+			case "package":
+				ContentData.Packages = append(ContentData.Packages, singlePackageData)
+			}
+		}
+	}
+
+	err = nil
+
+	switch schema {
+	case "bundle":
+		if len(ContentData.Bundles) == 0 {
+			err = fmt.Errorf("can not get Bundles")
+		}
+	case "channel":
+		if len(ContentData.Channels) == 0 {
+			err = fmt.Errorf("can not get Channels")
+		}
+	case "package":
+		if len(ContentData.Packages) == 0 {
+			err = fmt.Errorf("can not get Packages")
+		}
+	}
+	return ContentData, err
+
+}
+
+func (catalog *CatalogDescription) UnmarshalAllContent(oc *exutil.CLI) (ContentData, error) {
+	var ContentData ContentData
+
+	contents := catalog.GetContent(oc)
+	lines := strings.Split(string(contents), "\n")
+
+	for _, line := range lines {
+		if strings.Contains(line, "\"schema\":\"olm.bundle\"") || strings.Contains(line, "\"schema\":\"olm.channel\"") || strings.Contains(line, "\"schema\":\"olm.package\"") {
+
+			var targetData interface{}
+			switch {
+			case strings.Contains(line, "\"schema\":\"olm.bundle\""):
+				targetData = new(BundleData)
+			case strings.Contains(line, "\"schema\":\"olm.channel\""):
+				targetData = new(ChannelData)
+			case strings.Contains(line, "\"schema\":\"olm.package\""):
+				targetData = new(PackageData)
+			}
+
+			if err := json.Unmarshal([]byte(line), targetData); err != nil {
+				return ContentData, err
+			}
+
+			switch data := targetData.(type) {
+			case *BundleData:
+				ContentData.Bundles = append(ContentData.Bundles, *data)
+			case *ChannelData:
+				ContentData.Channels = append(ContentData.Channels, *data)
+			case *PackageData:
+				ContentData.Packages = append(ContentData.Packages, *data)
+			}
+		}
+	}
+	if len(ContentData.Bundles) == 0 && len(ContentData.Channels) == 0 && len(ContentData.Packages) == 0 {
+		return ContentData, fmt.Errorf("no any bundle, channel or package are got")
+	}
+	return ContentData, nil
 }
