@@ -1097,4 +1097,61 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		deleteSpecifiedResource(oc.AsAdmin(), "pv", lvPvs[0], "")
 		deleteSpecifiedResource(oc.AsAdmin(), "pv", lvsPvs[0], "")
 	})
+
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:chaoyang-Medium-69955-[LSO] localvolume disk is force wipe when forceWipeDevicesAndDestroyAllData is true", func() {
+
+		// Set the resource definition for the scenario
+		var (
+			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
+			podTemplate = filepath.Join(lsoBaseDir, "pod-template.yaml")
+			lvTemplate  = filepath.Join(lsoBaseDir, "/lso/localvolume-template.yaml")
+			mylv        = newLocalVolume(setLvNamespace(myLso.namespace), setLvTemplate(lvTemplate), setLvFstype("xfs"))
+		)
+
+		exutil.By("# Create a new project for the scenario")
+		oc.SetupProject() //create new project
+
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate),
+			setPersistentVolumeClaimStorageClassName(mylv.scname))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		myWorker := getOneSchedulableWorker(allNodes)
+		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
+		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolume.createAndReadyToUse(ac)
+		// Attach the volume to a schedulable linux worker node
+		defer myVolume.detachSucceed(ac)
+		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
+
+		exutil.By("# Format myVolume to ext4")
+		_, err := execCommandInSpecificNode(oc, myWorker.name, "mkfs.ext4 "+myVolume.DeviceByID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("# Create sc with parameter forceWipeDevicesAndDestroyAllData is true")
+		mylv.deviceID = myVolume.DeviceByID
+		forceWipeParameters := map[string]interface{}{
+			"jsonPath":                          `items.0.spec.storageClassDevices.0.`,
+			"forceWipeDevicesAndDestroyAllData": true,
+		}
+		mylv.createWithExtraParameters(oc, forceWipeParameters)
+		defer mylv.deleteAsAdmin(oc)
+
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		exutil.By("#. Check the volume fsType as expected")
+		volName := pvc.getVolumeName(oc)
+		checkVolumeMountCmdContain(oc, volName, myWorker.name, "xfs")
+
+		exutil.By("# Check the pod volume can be read and write and have the exec right")
+		pod.checkMountedVolumeCouldRW(oc)
+		pod.checkMountedVolumeHaveExecRight(oc)
+
+	})
 })
