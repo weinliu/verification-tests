@@ -45,6 +45,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: chaoyang@redhat.com
 	// [GKE-PD-CSI] [Dynamic Regional PV] regional pv should store data and sync in different available zones
 	g.It("NonHyperShiftHOST-OSD_CCS-Author:chaoyang-Critical-37490-[GKE-PD-CSI] regional pv should store data and sync in different available zones", func() {
+
+		if exutil.IsSNOCluster(oc) {
+			g.Skip("SNO test clusters do not satisfy the scenario")
+		}
+
 		var (
 			storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("pd.csi.storage.gke.io"))
 			// Regional diskDisk size minim size is 200 GB
@@ -76,18 +81,23 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pvc.deleteAsAdmin(oc)
 
 		exutil.By("# Create deployment A with the created pvc and wait for it becomes ready")
-		depA.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", myWorkers[0].availableZone)
 		defer depA.deleteAsAdmin(oc)
+		if len(myWorkers) != 2 {
+			depA.create(oc)
+		} else {
+			depA.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", myWorkers[0].availableZone)
+		}
 		depA.waitReady(oc)
 
 		exutil.By("# Check deployment's pod mount volume could read and write")
 		depA.checkPodMountedVolumeCouldRW(oc)
 
+		// Regional volumes have 2 available zones volumes
+		exutil.By("Check the regional volume should have 2 available zones")
+		volAvailableZones := pvc.getVolumeNodeAffinityAvailableZones(oc)
+		o.Expect(volAvailableZones).Should(o.HaveLen(2))
+
 		if len(myWorkers) == 2 {
-			// Regional volumes have 2 available zones volumes
-			exutil.By("Get the regional volume available zones")
-			volAvailableZones := pvc.getVolumeNodeAffinityAvailableZones(oc)
-			o.Expect(volAvailableZones).Should(o.HaveLen(2))
 
 			exutil.By("# Delete the deployment A")
 			deleteSpecifiedResource(oc, "deployment", depA.name, depA.namespace)
