@@ -653,7 +653,7 @@ func (lvd *localVolumeDiscovery) deleteAsAdmin(oc *exutil.CLI) {
 }
 
 func (lvd *localVolumeDiscovery) waitDiscoveryAvailable(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		lvdAvailableStatus, getLvdStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lvd.namespace, "localVolumeDiscovery/"+lvd.name, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
 		if getLvdStatusErr != nil {
 			e2e.Logf("Failed to get localvolumediscovery: %v", getLvdStatusErr)
@@ -667,7 +667,10 @@ func (lvd *localVolumeDiscovery) waitDiscoveryAvailable(oc *exutil.CLI) {
 		return false, nil
 	})
 	if err != nil {
-		getOcDescribeInfo(oc, lvd.namespace, "localVolumeDiscovery", "auto-discover-devices")
+		getOcDescribeInfo(oc.AsAdmin(), lvd.namespace, "localVolumeDiscovery", "auto-discover-devices")
+		diskmakerDiscoveryLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", lvd.namespace, "-l", "app=diskmaker-discovery", "-c", "diskmaker-discovery", "--tail=100").Output()
+		e2e.Logf("***$ oc logs -l app=diskmaker-discovery -c diskmaker-discovery --tail=100***\n%s", diskmakerDiscoveryLogs)
+		e2e.Logf("**************************************************************************")
 	}
 	exutil.AssertWaitPollNoErr(err, "Wait Localvolumediscovery become Available timeout")
 }
