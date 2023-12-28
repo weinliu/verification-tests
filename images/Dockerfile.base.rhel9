@@ -1,0 +1,59 @@
+FROM registry.ci.openshift.org/ocp/4.16:base-rhel9
+RUN echo "it refer to https://github.com/openshift/oc/blob/master/images/cli/Dockerfile.rhel and https://github.com/openshift/oc/blob/master/images/tools/Dockerfile" && \
+    for i in kubectl openshift-deploy openshift-docker-build openshift-sti-build openshift-git-clone openshift-manage-dockerfile openshift-extract-image-content openshift-recycle; do ln -sf /usr/bin/oc /usr/bin/$i; done && \
+    INSTALL_PKGS="\
+        bash-completion \
+        bc \
+        bind-utils \
+        blktrace \
+        crash \
+        e2fsprogs \
+        ethtool \
+        file \
+        git \
+        glibc-utils \
+        gzip \
+        hwloc \
+        iotop \
+        iproute \
+        iputils \
+        jq \
+        less \
+        ltrace \
+        s-nail \
+        net-tools \
+        nmap-ncat \
+        parted \
+        pciutils \
+        procps-ng \
+        psmisc \
+        perf \
+        strace \
+        sysstat \
+        tcpdump \
+        tmux \
+        util-linux \
+        vim-enhanced \
+        wget \
+        xfsprogs \
+        fio \
+        stress-ng \
+        " && \
+        yum -y install $INSTALL_PKGS && rpm -V --nosize --nofiledigest --nomtime --nomode $INSTALL_PKGS && yum clean all && rm -rf /var/cache/*
+CMD ["/usr/bin/bash"]
+RUN sh -c 'echo -e "[google-cloud-sdk]\nname=Google Cloud SDK\nbaseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el7-x86_64\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg\n       https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg" > /etc/yum.repos.d/google-cloud-sdk.repo' && \
+    sh -c 'echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" >/etc/yum.repos.d/azure-cli.repo' && \
+    PACKAGES="azure-cli google-cloud-sdk zip util-linux openssh-clients httpd-tools skopeo java-11-openjdk-headless python3-pip" && \
+    yum update -y && \
+    yum install --setopt=tsflags=nodocs -y $PACKAGES && yum remove python3-requests -y && yum clean all && rm -rf /var/cache/yum/* && \
+    git config --system user.name test-private && \
+    git config --system user.email test-private@test.com && \
+    chmod g+w /etc/passwd && \
+    rm -rf /root/.config/gcloud
+RUN pip3 install --upgrade setuptools pip && pip3 install dotmap minio pyyaml requests python-openstackclient && \
+    sh -c 'echo -e "[rhel8.7-baseos]\nname=rhel8.7-baseos\nbaseurl=http://download.eng.rdu.redhat.com/rhel-8/rel-eng/RHEL-8/latest-RHEL-8.7/compose/BaseOS/x86_64/os\nenabled=0\ngpgcheck=1" >/etc/yum.repos.d/rhel8.7-baseos.repo' && \
+    yum -y --enablerepo=rhel8.7-baseos install sos
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip -q awscliv2.zip && \
+    ./aws/install -b /bin && \
+    rm -rf ./aws awscliv2.zip
