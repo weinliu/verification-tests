@@ -77,7 +77,8 @@ func getRandomString() string {
 // the method is to create one resource with template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 15*time.Second, false, func(context.Context) (bool, error) {
+
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "cluster-monitoring.json")
 		if err != nil {
 			return false, nil
@@ -114,7 +115,7 @@ func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.D
 	var metrics string
 	var err error
 	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
-	err = wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, timeout*time.Second, false, func(context.Context) (bool, error) {
 		metrics, err = exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
 		if err != nil || !strings.Contains(metrics, metricString) {
 			return false, nil
@@ -125,8 +126,7 @@ func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.D
 }
 
 func createResourceFromYaml(oc *exutil.CLI, ns, yamlFile string) {
-	var err error
-	err = oc.AsAdmin().Run("apply").Args("-n", ns, "-f", yamlFile).Execute()
+	err := oc.AsAdmin().Run("apply").Args("-n", ns, "-f", yamlFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -179,8 +179,7 @@ func bindClusterRoleToUser(oc *exutil.CLI, clusterRoleName, userName, clusterRol
 
 func checkRoute(oc *exutil.CLI, ns, name, token, queryString, metricString string, timeout time.Duration) {
 	var metrics string
-	var err error
-	err = wait.Poll(5*time.Second, timeout*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, timeout*time.Second, false, func(context.Context) (bool, error) {
 		path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", name, "-n", ns, "-o=jsonpath={.spec.path}").Output()
 		if err != nil {
 			return false, nil
@@ -205,7 +204,7 @@ func checkRoute(oc *exutil.CLI, ns, name, token, queryString, metricString strin
 
 // check thanos_ruler retention
 func checkRetention(oc *exutil.CLI, ns string, sts string, expectedRetention string, timeout time.Duration) {
-	err := wait.Poll(5*time.Second, timeout*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, timeout*time.Second, false, func(context.Context) (bool, error) {
 		stsObject, err := oc.AdminKubeClient().AppsV1().StatefulSets(ns).Get(context.Background(), sts, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
@@ -232,7 +231,7 @@ func patchAndCheckBodySizeLimit(oc *exutil.CLI, limitValue string, checkValue st
 	o.Expect(patchLimit).NotTo(o.HaveOccurred())
 	e2e.Logf("failed to patch enforcedBodySizeLimit value: %v", limitValue)
 
-	checkLimit := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	checkLimit := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		limit, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "bash", "-c", "cat /etc/prometheus/config_out/prometheus.env.yaml | grep body_size_limit | uniq").Output()
 		if err != nil || !strings.Contains(limit, checkValue) {
 			return false, nil
@@ -244,7 +243,7 @@ func patchAndCheckBodySizeLimit(oc *exutil.CLI, limitValue string, checkValue st
 
 // check remote write config in the pod
 func checkRmtWrtConfig(oc *exutil.CLI, ns string, podName string, checkValue string) {
-	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	envCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "prometheus", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/prometheus/config_out/prometheus.env.yaml | grep '%s'`, checkValue)).Output()
 		if err != nil || !strings.Contains(envOutput, checkValue) {
 			return false, nil
@@ -257,7 +256,7 @@ func checkRmtWrtConfig(oc *exutil.CLI, ns string, podName string, checkValue str
 // check Alerts or Metrics are not exist, Metrics is more recommended to use util `checkMetric`
 func checkAlertNotExist(oc *exutil.CLI, url, token, alertName string, timeout time.Duration) {
 	cmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
-	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, timeout*time.Second, false, func(context.Context) (bool, error) {
 		chk, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil || strings.Contains(chk, alertName) {
@@ -270,7 +269,7 @@ func checkAlertNotExist(oc *exutil.CLI, url, token, alertName string, timeout ti
 
 // check alertmanager config in the pod
 func checkAlertmanagerConfig(oc *exutil.CLI, ns string, podName string, checkValue string, expectExist bool) {
-	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	envCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "alertmanager", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/alertmanager/config_out/alertmanager.env.yaml | grep '%s'`, checkValue)).Output()
 		if expectExist {
 			if err != nil || !strings.Contains(envOutput, checkValue) {
@@ -291,7 +290,7 @@ func checkAlertmanagerConfig(oc *exutil.CLI, ns string, podName string, checkVal
 
 // check prometheus config in the pod
 func checkPrometheusConfig(oc *exutil.CLI, ns string, podName string, checkValue string, expectExist bool) {
-	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	envCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "prometheus", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/prometheus/config_out/prometheus.env.yaml | grep '%s'`, checkValue)).Output()
 		if expectExist {
 			if err != nil || !strings.Contains(envOutput, checkValue) {
@@ -312,7 +311,7 @@ func checkPrometheusConfig(oc *exutil.CLI, ns string, podName string, checkValue
 
 // check configuration in the pod in the given time for specific container
 func checkConfigInPod(oc *exutil.CLI, namespace string, podName string, containerName string, cmd string, checkValue string) {
-	podCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+	podCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		Output, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, namespace, podName, containerName, cmd)
 		if err != nil || !strings.Contains(Output, checkValue) {
 			return false, nil
@@ -324,7 +323,7 @@ func checkConfigInPod(oc *exutil.CLI, namespace string, podName string, containe
 
 // check specific pod logs in container
 func checkLogsInContainer(oc *exutil.CLI, namespace string, podName string, containerName string, checkValue string) {
-	err := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		Output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, podName, "-c", containerName).Output()
 		if err != nil || !strings.Contains(Output, checkValue) {
 			return false, nil
@@ -336,7 +335,7 @@ func checkLogsInContainer(oc *exutil.CLI, namespace string, podName string, cont
 
 // get specific pod name with label then describe pod info
 func getSpecPodInfo(oc *exutil.CLI, ns string, label string, checkValue string) {
-	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	envCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		podName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[].metadata.name}").Output()
 		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", podName, "-n", ns).Output()
 		if err != nil || !strings.Contains(output, checkValue) {
@@ -349,7 +348,7 @@ func getSpecPodInfo(oc *exutil.CLI, ns string, label string, checkValue string) 
 
 // check pods with label that are fully deleted
 func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string) {
-	podCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+	podCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
 		if err != nil || strings.Contains(output, checkValue) {
 			return false, nil
@@ -364,7 +363,7 @@ func queryFromPod(oc *exutil.CLI, url, token, ns, pod, container, metricString s
 	var metrics string
 	var err error
 	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
-	err = wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, timeout*time.Second, false, func(context.Context) (bool, error) {
 		metrics, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", container, pod, "--", "bash", "-c", getCmd).Output()
 		if err != nil || !strings.Contains(metrics, metricString) {
 			return false, nil
@@ -376,7 +375,7 @@ func queryFromPod(oc *exutil.CLI, url, token, ns, pod, container, metricString s
 
 // check config exist or absent in yaml/json
 func checkYamlconfig(oc *exutil.CLI, ns string, components string, componentsName string, cmd string, checkValue string, expectExist bool) {
-	configCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+	configCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(components, componentsName, cmd, "-n", ns).Output()
 		if expectExist {
 			if err != nil || !strings.Contains(output, checkValue) {
@@ -397,7 +396,7 @@ func checkYamlconfig(oc *exutil.CLI, ns string, components string, componentsNam
 
 // check logs through label
 func checkLogWithLabel(oc *exutil.CLI, namespace string, label string, containerName string, checkValue string, expectExist bool) {
-	err := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, "-l", label, "-c", containerName, "--tail=-1").Output()
 		if expectExist {
 			if err != nil || !strings.Contains(output, checkValue) {

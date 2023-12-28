@@ -442,7 +442,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("able to see error for missing targetLabel in prometheus-operator logs")
 		for _, pod := range strings.Fields(PodNames) {
-			checkLogsInContainer(oc, "openshift-monitoring", pod, "prometheus-operator", `error="relabel configuration for replace action needs targetLabel value"`)
+			checkLogsInContainer(oc, "openshift-monitoring", pod, "prometheus-operator", `relabel configuration for replace action needs targetLabel value`)
 		}
 
 		g.By("add targetLabel to ServiceMonitor")
