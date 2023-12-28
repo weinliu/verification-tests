@@ -59,7 +59,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		tprofileHypershfitTemplate       string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
-		tprofileForCustomMcpTemplate     string
 		ogD                              operatorGroupDescription
 		subD                             subscriptionDescription
 		storageClass                     storageClassDescription
@@ -104,7 +103,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		resourceQuotaYAML = filepath.Join(buildPruningBaseDir, "resource-quota.yaml")
 		tprofileWithoutDescriptionYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutdescription.yaml")
 		tprofileWithoutTitleYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withouttitle.yaml")
-		tprofileForCustomMcpTemplate = filepath.Join(buildPruningBaseDir, "tailored_profile_for_custom_mcp.yaml")
 
 		ogD = operatorGroupDescription{
 			name:      "openshift-compliance",
@@ -3865,8 +3863,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
-			ssbCis               = "cis-test" + getRandomString()
-			tprofileForCustomMcp = "cis-example-" + getRandomString()
+			ssbCis = "cis-test" + getRandomString()
 		)
 
 		// checking all nodes are in Ready state before the test case starts
@@ -3882,23 +3879,30 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			checkMachineConfigPoolStatus(oc, "worker")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbCis, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkNodeStatus(oc)
+		}()
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+		defer func() {
+			g.By("Patch all complianceremediaiton to false .. !!!\n")
+			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
+			setApplyToFalseForAllCrs(oc, subD.namespace, ssbCis)
+			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
+			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}()
 
 		g.By("Create wrscan machineconfigpool.. !!!\n")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkMachineConfigPoolStatus(oc, ss.roles1)
-
-		g.By("Create tailoredprofile.. !!!\n")
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileForCustomMcpTemplate, "-p", "NAME="+tprofileForCustomMcp,
-			"NAMESPACE="+subD.namespace, "EXTENDEDPROFILE="+"ocp4-cis", "VALUE="+ss.roles1)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create scansetting... !!!\n")
 		ss.namespace = subD.namespace
@@ -3907,7 +3911,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Create scansettingbinding... !!!\n")
-		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbCis, "-S", ss.name, "profile/ocp4-cis-node", "tailoredprofile/"+tprofileForCustomMcp, "-n", subD.namespace).Output()
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbCis, "-S", ss.name, "profile/ocp4-cis", "profile/ocp4-cis-node", "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbCis, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -3918,11 +3922,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-			tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+			"ocp4-cis", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			tprofileForCustomMcp + "-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			"ocp4-cis-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -3935,7 +3939,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+				"ocp4-cis", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
 
 		g.By("Check all rules with autoremations PASS !!!\n")
@@ -3965,8 +3969,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
-			ssbPci               = "pci-test" + getRandomString()
-			tprofileForCustomMcp = "pci-example-" + getRandomString()
+			ssbPci = "pci-test" + getRandomString()
 		)
 
 		// checking all nodes are in Ready state before the test case starts
@@ -3982,23 +3985,30 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			checkMachineConfigPoolStatus(oc, "worker")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbPci, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkNodeStatus(oc)
+		}()
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+		defer func() {
+			g.By("Patch all complianceremediaiton to false .. !!!\n")
+			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
+			setApplyToFalseForAllCrs(oc, subD.namespace, ssbPci)
+			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
+			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}()
 
 		g.By("Create wrscan machineconfigpool.. !!!\n")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkMachineConfigPoolStatus(oc, ss.roles1)
-
-		g.By("Create tailoredprofile.. !!!\n")
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileForCustomMcpTemplate, "-p", "NAME="+tprofileForCustomMcp,
-			"NAMESPACE="+subD.namespace, "EXTENDEDPROFILE="+"ocp4-pci-dss", "VALUE="+ss.roles1)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create scansetting... !!!\n")
 		ss.namespace = subD.namespace
@@ -4007,7 +4017,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Create scansettingbinding... !!!\n")
-		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbPci, "-S", ss.name, "profile/ocp4-pci-dss-node", "tailoredprofile/"+tprofileForCustomMcp, "-n", subD.namespace).Output()
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbPci, "-S", ss.name, "profile/ocp4-pci-dss", "profile/ocp4-pci-dss-node", "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbPci, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -4018,11 +4028,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-			tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+			"ocp4-pci-dss", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			tprofileForCustomMcp + "-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			"ocp4-pci-dss-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -4036,7 +4046,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+				"ocp4-pci-dss", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
 
 		g.By("Check all rules with autoremations PASS !!!\n")
@@ -4064,8 +4074,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
-			ssbHigh              = "high-test" + getRandomString()
-			tprofileForCustomMcp = "high-example-" + getRandomString()
+			ssbHigh = "high-test" + getRandomString()
 		)
 
 		// checking all nodes are in Ready state before the test case starts
@@ -4081,23 +4090,31 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			checkMachineConfigPoolStatus(oc, "worker")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbHigh, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkNodeStatus(oc)
+		}()
+
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+		defer func() {
+			g.By("Patch all complianceremediaiton to false .. !!!\n")
+			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
+			setApplyToFalseForAllCrs(oc, subD.namespace, ssbHigh)
+			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
+			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}()
 
 		g.By("Create wrscan machineconfigpool.. !!!\n")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkMachineConfigPoolStatus(oc, ss.roles1)
-
-		g.By("Create tailoredprofile.. !!!\n")
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileForCustomMcpTemplate, "-p", "NAME="+tprofileForCustomMcp,
-			"NAMESPACE="+subD.namespace, "EXTENDEDPROFILE="+"ocp4-high", "VALUE="+ss.roles1)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create scansetting... !!!\n")
 		ss.namespace = subD.namespace
@@ -4106,7 +4123,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Create scansettingbinding... !!!\n")
-		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbHigh, "-S", ss.name, "profile/ocp4-high-node", "tailoredprofile/"+tprofileForCustomMcp, "-n", subD.namespace).Output()
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbHigh, "-S", ss.name, "profile/ocp4-high", "profile/ocp4-high-node", "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbHigh, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -4129,12 +4146,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-high-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+				"ocp4-high", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			tprofileForCustomMcp + "-oauth-or-oauthclient-inactivity-timeout", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			"ocp4-high-oauth-or-oauthclient-inactivity-timeout", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -5015,8 +5032,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				debug:                  false,
 				template:               scansettingSingleTemplate,
 			}
-			ssbStig              = "stig-test" + getRandomString()
-			tprofileForCustomMcp = "stig-example-" + getRandomString()
+			ssbStig = "stig-test" + getRandomString()
 		)
 
 		// checking all nodes are in Ready state before the test case starts
@@ -5032,24 +5048,32 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			checkMachineConfigPoolStatus(oc, "worker")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbStig, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
 		}()
 
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+		defer func() {
+			g.By("Patch all complianceremediaiton to false .. !!!\n")
+			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
+			setApplyToFalseForAllCrs(oc, subD.namespace, ssbStig)
+			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
+			checkMachineConfigPoolStatus(oc, ss.roles1)
+		}()
+
 		g.By("Create wrscan machineconfigpool.. !!!\n")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkMachineConfigPoolStatus(oc, ss.roles1)
-
-		g.By("Create tailoredprofile.. !!!\n")
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileForCustomMcpTemplate, "-p", "NAME="+tprofileForCustomMcp,
-			"NAMESPACE="+subD.namespace, "EXTENDEDPROFILE="+"ocp4-stig", "VALUE="+ss.roles1)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create scansetting... !!!\n")
 		ss.namespace = subD.namespace
@@ -5058,7 +5082,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Create scansettingbinding... !!!\n")
-		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbStig, "-S", ss.name, "profile/ocp4-stig-node", "tailoredprofile/"+tprofileForCustomMcp, "-n", subD.namespace).Output()
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbStig, "-S", ss.name, "profile/ocp4-stig", "profile/ocp4-stig-node", "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbStig, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -5069,11 +5093,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-stig-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-			tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+			"ocp4-stig", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			tprofileForCustomMcp + "-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			"ocp4-stig-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -5086,7 +5110,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-stig-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-				tprofileForCustomMcp, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+				"ocp4-stig", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
 
 		g.By("Check all rules with autoremations PASS !!!\n")

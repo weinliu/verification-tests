@@ -1096,3 +1096,20 @@ func IsContainStr(items []string, item string) bool {
 	}
 	return false
 }
+
+func setApplyToFalseForAllCrs(oc *exutil.CLI, namespace string, ssbName string) {
+	crList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("complianceremediaiton", "-n", namespace, "-l", "compliance.openshift.io/suite="+ssbName,
+		"-o=jsonpath={.items[*].metadata.name}").Output()
+	if err != nil || strings.Contains(crList, "NotFound") {
+		return
+	} else {
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	crs := strings.Fields(crList)
+	patch := fmt.Sprintf("{\"spec\":{\"apply\":false}}")
+	for _, cr := range crs {
+		patchResource(oc, asAdmin, withoutNamespace, "complianceremediaiton", cr, "-n", namespace, "--type", "merge", "-p", patch)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NotApplied", ok, []string{"complianceremediaiton", cr, "-n", namespace,
+			"-o=jsonpath={.status.applicationState}"}).check(oc)
+	}
+}
