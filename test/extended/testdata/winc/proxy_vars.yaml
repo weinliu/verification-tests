@@ -5,6 +5,6 @@ metadata:
 spec:
   httpProxy: <http_proxy>
   httpsProxy: <https_proxy>
-  noProxy: test.no-proxy.com
+  noProxy: <no_proxy> 
   trustedCA:
     name: user-ca-bundle

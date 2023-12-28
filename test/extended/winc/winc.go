@@ -1501,7 +1501,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author jfrancoa@redhat.com
-	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Disruptive]", func() {
+	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Serial][Disruptive]", func() {
 		customNamespace := "winc-namespace-test"
 		zone := getAvailabilityZone(oc)
 
@@ -1576,7 +1576,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
-	g.It("Smokerun-Author:rrasouli-Critical-65980-[node-proxy]-Cluster-wide proxy acceptance test", func() {
+	g.It("Smokerun-Author:rrasouli-Critical-65980-[node-proxy]-Cluster-wide proxy acceptance test [Serial][Disruptive]", func() {
 		// checking whether cluster proxy is configured at all, otherwise skip the test
 		if !isProxy(oc) {
 			g.Skip("Cluster proxy not detected, skipping")
@@ -1584,7 +1584,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		// here we are creating a new cluster proxy map that contains similar keys as in WICD
 		clusterEnvVars := getEnvVarProxyMap(oc)
-
+		initialProxySpec := getProxySpec(oc)
 		// here we retrieve the proxy env vars from WICD CM
 		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1604,21 +1604,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Ensure that trusted-ca exists")
 		_, err = popItemFromList(oc, "cm", proxyCAConfigMap, wmcoNamespace)
 		e2e.ExpectNoError(err, "Couldn't find trusted-ca configmap")
-
-		defer func() {
-			// restoring environment files
-			proxyVarsFile, err := exutil.GenerateManifestFile(
-				oc, "winc", "proxy_vars.yaml",
-				map[string]string{"<http_proxy>": clusterEnvVars["HTTP_PROXY"].(string)},
-				map[string]string{"<https_proxy>": clusterEnvVars["HTTPS_PROXY"].(string)},
-			)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer os.Remove(proxyVarsFile)
-			oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", proxyVarsFile).Output()
-			// rebooting instance references should appear
-			waitUntilWMCOStatusChanged(oc, "rebooting instance")
-			waitWindowsNodesReady(oc, 2, 6*time.Minute)
-		}()
+		defer restoreEnvironmentFiles(oc, initialProxySpec)
 
 		// remove here trustedCA
 		g.By("remove proxy trusted CA")
@@ -1685,27 +1671,23 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if !isProxy(oc) {
 			g.Skip("Cluster proxy not detected, skipping")
 		}
-
+		// here we are creating a new cluster proxy map that contains similar keys as in WICD
+		initialProxySpec := getProxySpec(oc)
 		g.By("Check whether the configured cluster proxy exists in windows-services (WICD) CM")
 		noProxy := getClusterProxy(oc, "spec.noProxy")
 
 		g.By("add another record to cluster proxy, example.com to no-proxy")
 		// before patching the cluster we determine WMCO start time
 
-		defer func() {
-			lastTime := getWMCOTimestamp(oc)
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p",
-				"[{\"op\": \"add\", \"path\":\"/spec/noProxy\", \"value\":\""+noProxy+"\"}]").Execute()
-			checkWMCORestarted(oc, lastTime)
-		}()
 		wmcoStartTime := getWMCOTimestamp(oc)
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("proxy/cluster", "--type=json", "-p",
 			"[{\"op\": \"add\", \"path\":\"/spec/noProxy\", \"value\":\""+noProxy+",example.com\"}]").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "could not patch proxy with new noProxy value")
 		// wait here for WMCO to restart and copy the env vars
 		checkWMCORestarted(oc, wmcoStartTime)
 		time.Sleep(60 * time.Second)
 
+		defer restoreEnvironmentFiles(oc, initialProxySpec)
 		g.By("verify that newly added noProxy record exist on WICD Windows Services")
 		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1809,12 +1791,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer func() {
 			configureCertificateToJSONPatch(oc, initalConfigMapContent, configmap, namespace)
 		}()
-
 		e2e.Logf("Appending the new certificate to the existing content")
-
 		newCertificateContent, err := readCertificateContent(fmt.Sprintf("%s-ca.crt", name))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		// newCertificateContent = removeOuterQuotes(newCertificateContent)
 		// Combine the ConfigMap content and new certificate content
 		combinedContent := fmt.Sprintf("%s\n%s", initalConfigMapContent, newCertificateContent)
 		configureCertificateToJSONPatch(oc, combinedContent, configmap, namespace)

@@ -47,6 +47,7 @@ var (
 	wicdConfigMap      = "windows-services"
 	iaasPlatform       string
 	trustedCACM        = "trusted-ca"
+	noProxy            = "test.no-proxy.com"
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "10.0.76.163"
 	wincTestCM         = "winc-test-config"
@@ -1265,7 +1266,7 @@ func getWMCOTimestamp(oc *exutil.CLI) string {
 }
 
 func checkWMCORestarted(oc *exutil.CLI, startTime string) {
-	poolErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	poolErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		actualWMCOTime := getWMCOTimestamp(oc)
 		if startTime == actualWMCOTime {
 			e2e.Logf("WMCO did not restart yet, waiting...")
@@ -1380,4 +1381,29 @@ func configureCertificateToJSONPatch(oc *exutil.CLI, payload, configmap, namespa
 
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error patching ConfigMap with combined data. Output:\n%s", output)
 	}
+}
+
+func restoreEnvironmentFiles(oc *exutil.CLI, clusterEnvVars map[string]interface{}) {
+	// restoring environment files
+	proxyVarsFile, err := exutil.GenerateManifestFile(
+		oc, "winc", "proxy_vars.yaml",
+		map[string]string{"<http_proxy>": clusterEnvVars["HTTP_PROXY"].(string)},
+		map[string]string{"<https_proxy>": clusterEnvVars["HTTPS_PROXY"].(string)},
+		map[string]string{"<no_proxy>": clusterEnvVars["NO_PROXY"].(string)},
+	)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Could not retore environment files!!")
+	defer os.Remove(proxyVarsFile)
+	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", proxyVarsFile).Output()
+	// rebooting instance references should appear
+	waitUntilWMCOStatusChanged(oc, "rebooting instance")
+	waitWindowsNodesReady(oc, 2, 6*time.Minute)
+}
+
+func getProxySpec(oc *exutil.CLI) map[string]interface{} {
+	proxySepc := make(map[string]interface{})
+
+	proxySepc["HTTPS_PROXY"] = getClusterProxy(oc, "spec.httpsProxy")
+	proxySepc["HTTP_PROXY"] = getClusterProxy(oc, "spec.httpProxy")
+	proxySepc["NO_PROXY"] = getClusterProxy(oc, "spec.noProxy")
+	return proxySepc
 }
