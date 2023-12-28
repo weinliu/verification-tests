@@ -167,7 +167,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		dir := "/var/lib/kubelet/seccomp/operator/" + seccompP.namespace + "/"
 		secProfileName := seccompP.name + ".json"
 		filePath := dir + secProfileName
-		assertKeywordsExistsInFile(oc, "mkdir", filePath, false)
+		assertKeywordsExistsInFile(oc, seccompP.namespace, "mkdir", filePath, false)
 
 		g.By("Create seccompprofile stack !!!")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("seccompprofiles", seccompProfilestack.name, "-n", seccompProfilestack.namespace, "--ignore-not-found").Execute()
@@ -178,7 +178,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		dir2 := "/var/lib/kubelet/seccomp/operator/" + seccompProfilestack.namespace + "/"
 		secProfileStackName := seccompProfilestack.name + ".json"
 		stackFilePath := dir2 + secProfileStackName
-		assertKeywordsExistsInFile(oc, "mkdir", stackFilePath, true)
+		assertKeywordsExistsInFile(oc, seccompProfilestack.namespace, "mkdir", stackFilePath, true)
 
 		g.By("Created pods with seccompprofiles and check pods status !!!")
 		testPod1.localhostProfile = "operator/" + ns + "/" + seccompP.name + ".json"
