@@ -149,8 +149,17 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		catalog.Create(oc)
 
 		exutil.By("get the index content through http service on cluster")
-		curlOutput := catalog.GetContent(oc)
-		o.Expect(strings.Contains(string(curlOutput), "\"name\":\"nginx69123\"")).To(o.BeTrue())
+		unmarshalContent, err := catalog.UnmarshalContent(oc, "all")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		allPackageName := olmv1util.ListPackagesName(unmarshalContent.Packages)
+		o.Expect(allPackageName[0]).To(o.ContainSubstring("nginx69123"))
+
+		channelData := olmv1util.GetChannelByPakcage(unmarshalContent.Channels, "nginx69123")
+		o.Expect(channelData[0].Name).To(o.ContainSubstring("candidate-v0.0"))
+
+		bundlesName := olmv1util.GetBundlesNameByPakcage(unmarshalContent.Bundles, "nginx69123")
+		o.Expect(bundlesName[0]).To(o.ContainSubstring("nginx69123.v0.0.1"))
 
 	})
 
