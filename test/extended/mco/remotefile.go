@@ -254,7 +254,8 @@ func (rf RemoteFile) GetFullPath() string {
 }
 
 func (rf RemoteFile) Exists() (bool, error) {
-	output, err := rf.node.DebugNodeWithChroot("stat", statFormat, rf.fullPath)
+	output, err := rf.node.DebugNodeWithChroot("stat", rf.fullPath)
+	logger.Infof("\n%s", output)
 
 	if strings.Contains(output, "No such file or directory") {
 		return false, nil

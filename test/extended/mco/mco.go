@@ -4017,6 +4017,20 @@ nulla pariatur.`
 		))
 		logger.Infof("OK!\n")
 	})
+
+	g.It("NonHyperShiftHOST-Author:rioliu-Critical-70090-apiserver-url.env file can be created on all cluster nodes [Serial]", func() {
+		exutil.By("Check file apiserver-url.env on all linux nodes")
+		apiserverURLEnvFile := "/etc/kubernetes/apiserver-url.env"
+		allNodes, err := NewNodeList(oc.AsAdmin()).GetAllLinux()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Get all linux nodes failed")
+		for _, node := range allNodes {
+			logger.Infof("Check apiserver-url.env file on node %s", node.GetName())
+			rf := NewRemoteFile(node, apiserverURLEnvFile)
+			o.Expect(rf.Exists()).Should(o.BeTrue(), "file %s not found on node %s", apiserverURLEnvFile, node.GetName())
+			logger.Infof("OK\n")
+		}
+	})
+
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
