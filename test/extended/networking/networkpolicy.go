@@ -1655,10 +1655,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonHyperShiftHOST-Author:asood-High-64788-Same network policies across multiple namespaces fail to be recreated [Disruptive].", func() {
 		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-11447
 		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
-			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
-			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-single-CIDR-template.yaml")
-			policyName          = "ipblock-64788"
+			buildPruningBaseDir     = exutil.FixturePath("testdata", "networking")
+			testPodFile             = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			networkPolicyFileSingle = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-single-CIDR-template.yaml")
+			networkPolicyFileDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
+			policyName              = "ipblock-64788"
 		)
 		exutil.By("Check cluster network type")
 		networkType := exutil.CheckNetworkType(oc)
@@ -1687,7 +1688,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		if ipStackType == "dualstack" {
 			npIPBlockNS1 := ipBlockCIDRsDual{
 				name:      policyName,
-				template:  networkPolicyFile,
+				template:  networkPolicyFileDual,
 				cidrIpv4:  helloPod1ns1IPv4WithCidr,
 				cidrIpv6:  helloPod1ns1IPv6WithCidr,
 				namespace: ns,
@@ -1705,7 +1706,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			npIPBlockNS1 := ipBlockCIDRsSingle{
 				name:      policyName,
-				template:  networkPolicyFile,
+				template:  networkPolicyFileSingle,
 				cidr:      helloPod1ns1IPWithCidr,
 				namespace: ns,
 			}
@@ -1735,7 +1736,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		aclMap["name"] = aclName
 
 		exutil.By("Get the port group for the created policy")
-		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group | grep -C 2 %s", ns)
+		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group external_ids='{name=%s_%s}'", ns, policyName)
 		listPGOutput, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listPGCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listPGOutput).NotTo(o.BeEmpty())

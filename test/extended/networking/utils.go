@@ -2998,10 +2998,15 @@ func nbContructToMap(nbConstruct string) map[string]string {
 	var tempMap map[string]string
 	tempMap = make(map[string]string)
 	for _, keyValPair := range listKeyValues {
-		keyValItem := strings.Split(keyValPair, ":")
+		keyValItem := strings.SplitN(keyValPair, ":", 2)
 		key := strings.Trim(keyValItem[0], " ")
+		//Dual stack case when there are two ACLs for a policy with different ip src addresses
+		if key == "" {
+			break
+		}
 		val := strings.TrimLeft(keyValItem[1], " ")
 		tempMap[key] = val
+
 	}
 	return tempMap
 }
