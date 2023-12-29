@@ -69,6 +69,11 @@ func (mcp *MachineConfigPool) pause(enable bool) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// IsPaused return true is mcp is paused
+func (mcp *MachineConfigPool) IsPaused() bool {
+	return mcp.GetOrFail(`{.spec.paused}`) == "true"
+}
+
 // IsCustom returns true if the pool is not the master pool nor the worker pool
 func (mcp *MachineConfigPool) IsCustom() bool {
 	return !mcp.IsMaster() && !mcp.IsWorker()
@@ -720,10 +725,14 @@ func (mcp *MachineConfigPool) RecoverFromDegraded() error {
 	mcpNodes, _ := mcp.GetNodes()
 	for _, node := range mcpNodes {
 		logger.Infof("Restoring desired config in node: %s", node)
-		err := node.RestoreDesiredConfig()
-		if err != nil {
-			return fmt.Errorf("Error restoring desired config in node %s. Error: %s",
-				mcp.GetName(), err)
+		if node.IsUpdated() {
+			logger.Infof("node is updated, don't need to recover")
+		} else {
+			err := node.RestoreDesiredConfig()
+			if err != nil {
+				return fmt.Errorf("Error restoring desired config in node %s. Error: %s",
+					mcp.GetName(), err)
+			}
 		}
 	}
 
