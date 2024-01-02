@@ -36,6 +36,7 @@ class SummaryClient:
                 "INSTALLER":"@jad",
                 "Portfolio_Integration":"",
                 "Service_Development_A":"@yasun",
+                "Cluster_Management_Service":"@yasun",
                 "OLM":"@olm-qe-team ",
                 "Operator_SDK":"@operatorsdk-qe-team ",
                 "App_Migration":"@xjiang",
