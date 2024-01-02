@@ -274,7 +274,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 	})
 
 	//author: jiajliu@redhat.com
-	g.It("ConnectedOnly-Author:jiajliu-High-48621-Updateservice pod should be re-deployed when update graphDataImage of updateservice", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jiajliu-High-48621-Updateservice pod should be re-deployed when update graphDataImage of updateservice", func() {
 		g.By("Install OSUS instance with graph-data:1.0")
 		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
 		us := updateService{
