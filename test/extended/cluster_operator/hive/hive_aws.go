@@ -94,6 +94,224 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run | grep "43974" | ./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Medium-43974-Claims in excess of pool size should work well [Serial]", func() {
+		// Settings
+		var (
+			testCaseID      = "43974"
+			poolName        = "pool-" + testCaseID
+			poolName2       = "pool2-" + testCaseID
+			imageSetName    = poolName + "-imageset"
+			imageSetTemp    = filepath.Join(testDataDir, "clusterimageset.yaml")
+			pool1claimName  = poolName + "-claim"
+			pool1claimName2 = poolName + "-claim2"
+			pool1claimName3 = poolName + "-claim3"
+			pool2claimName  = poolName2 + "-claim"
+			pool2claimName2 = poolName2 + "-claim2"
+			claimTemp       = filepath.Join(testDataDir, "clusterclaim.yaml")
+		)
+
+		// Functions
+		var (
+			checkCDNumberinClusterPool = func(checkPoolName string, expectNum int) bool {
+				var cdNames []string
+				stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cd", "-A", "-o=jsonpath={.items[*].metadata.name}").Outputs()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				for _, cdName := range strings.Split(stdout, " ") {
+					if strings.Contains(cdName, checkPoolName) {
+						cdNames = append(cdNames, cdName)
+					}
+				}
+				e2e.Logf("Number of cd in ClusterPool: %d, expectNum is %d", len(cdNames), expectNum)
+				return len(cdNames) == expectNum
+			}
+			checkCDinClusterPoolnotDeprovisioning = func(cdArray []string) bool {
+				for i := range cdArray {
+					cdName := cdArray[i]
+					condition := getCondition(oc, "cd", cdName, cdName, "Provisioned")
+					if reason, ok := condition["reason"]; !ok || reason == "Deprovisioning" {
+						e2e.Logf("For condition ProvisionFailed, expected reason can not be  Deprovisioning, actual reason is %v, retrying ...", reason)
+						return false
+					}
+				}
+				return true
+			}
+		)
+
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		exutil.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		exutil.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		exutil.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		exutil.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		exutil.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
+		pool := clusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           1,
+			maxSize:        4,
+			runningCount:   0,
+			maxConcurrent:  4,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		exutil.By("Check if ClusterPool created successfully")
+		newCheck("expect", "get", asAdmin, requireNS, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool"}).check(oc)
+
+		exutil.By("Check hive will create a cd")
+		o.Eventually(checkCDNumberinClusterPool).
+			WithTimeout(DefaultTimeout*time.Second).
+			WithPolling(5*time.Second).
+			WithArguments(poolName, 1).
+			Should(o.BeTrue())
+
+		exutil.By("Create claims more than pool size 1,  here creating 3 clusterclaims from above pool")
+		pool1claim := clusterClaim{
+			name:            pool1claimName,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		pool1claim2 := clusterClaim{
+			name:            pool1claimName2,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		pool1claim3 := clusterClaim{
+			name:            pool1claimName3,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), pool1claimName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), pool1claimName2})
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), pool1claimName3})
+		pool1claim.create(oc)
+		pool1claim2.create(oc)
+		pool1claim3.create(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, pool1claimName, ok, DefaultTimeout, []string{"ClusterClaim"}).check(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, pool1claimName2, ok, DefaultTimeout, []string{"ClusterClaim"}).check(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, pool1claimName3, ok, DefaultTimeout, []string{"ClusterClaim"}).check(oc)
+
+		exutil.By("Check hive will create another 3 clusterdeployments for claims")
+		o.Eventually(checkCDNumberinClusterPool).
+			WithTimeout(DefaultTimeout*time.Second).
+			WithPolling(5*time.Second).
+			WithArguments(poolName, 4).
+			Should(o.BeTrue())
+
+		cdNameArray := getCDlistfromPool(oc, poolName)
+		var cdArray []string
+		cdArray = strings.Split(strings.TrimSpace(cdNameArray), "\n")
+		exutil.By("Verify clusterdeployments won't be deleted before assigned to clusterclaims. Wait for cluster finishing installation and assignment, check they won't be deleted")
+
+		o.Consistently(checkCDinClusterPoolnotDeprovisioning).
+			WithTimeout(FakeClusterInstallTimeout * time.Second).
+			WithPolling(60 * time.Second).
+			WithArguments(cdArray).
+			Should(o.BeTrue())
+
+		exutil.By("Check all clusterclaims are assigned the cluster")
+		newCheck("expect", "get", asAdmin, requireNS, contain, poolName, ok, DefaultTimeout, []string{"ClusterClaim", pool1claimName, "-o=jsonpath={.spec.namespace}"}).check(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, poolName, ok, DefaultTimeout, []string{"ClusterClaim", pool1claimName2, "-o=jsonpath={.spec.namespace}"}).check(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, poolName, ok, DefaultTimeout, []string{"ClusterClaim", pool1claimName3, "-o=jsonpath={.spec.namespace}"}).check(oc)
+
+		exutil.By("Test when pool .spec.size=0, it works well too, create a clusterpool with .spec.size=0")
+		pool2 := clusterPool{
+			name:           poolName2,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           0,
+			maxSize:        4,
+			runningCount:   0,
+			maxConcurrent:  4,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName2})
+		pool2.create(oc)
+		exutil.By("Check if ClusterPool created successfully")
+		newCheck("expect", "get", asAdmin, requireNS, contain, poolName2, ok, DefaultTimeout, []string{"ClusterPool"}).check(oc)
+
+		exutil.By("check there will no cd created")
+		o.Consistently(checkCDNumberinClusterPool).
+			WithTimeout(DefaultTimeout*time.Second).
+			WithPolling(5*time.Second).
+			WithArguments(poolName2, 0).
+			Should(o.BeTrue())
+
+		exutil.By("Create 2 clusterclaim from above pool2")
+		pool2claim := clusterClaim{
+			name:            pool2claimName,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName2,
+			template:        claimTemp,
+		}
+		pool2claim2 := clusterClaim{
+			name:            pool2claimName2,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName2,
+			template:        claimTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), pool2claimName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), pool2claimName2})
+		pool2claim.create(oc)
+		pool2claim2.create(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, pool2claimName, ok, DefaultTimeout, []string{"ClusterClaim"}).check(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, pool2claimName2, ok, DefaultTimeout, []string{"ClusterClaim"}).check(oc)
+
+		exutil.By("Check hive will create 2 clusterdeployments for claims")
+		o.Eventually(checkCDNumberinClusterPool).
+			WithTimeout(DefaultTimeout*time.Second).
+			WithPolling(5*time.Second).
+			WithArguments(poolName2, 2).
+			Should(o.BeTrue())
+
+		cdNameArray = getCDlistfromPool(oc, poolName2)
+		cdArray = strings.Split(strings.TrimSpace(cdNameArray), "\n")
+		exutil.By("Verify clusterdeployments won't be deleted before assigned to clusterclaims. Wait for cluster finishing installation and assignment, check they won't be deleted")
+		o.Consistently(checkCDinClusterPoolnotDeprovisioning).
+			WithTimeout(FakeClusterInstallTimeout * time.Second).
+			WithPolling(60 * time.Second).
+			WithArguments(cdArray).
+			Should(o.BeTrue())
+
+		exutil.By("Check all clusterclaims are assigned the cluster")
+		newCheck("expect", "get", asAdmin, requireNS, contain, poolName2, ok, DefaultTimeout, []string{"ClusterClaim", pool2claimName, "-o=jsonpath={.spec.namespace}"}).check(oc)
+		newCheck("expect", "get", asAdmin, requireNS, contain, poolName2, ok, DefaultTimeout, []string{"ClusterClaim", pool2claimName2, "-o=jsonpath={.spec.namespace}"}).check(oc)
+	})
+
+	//author: sguo@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run | grep "46016" | ./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-46016-[HiveSpec] Test HiveConfig.Spec.FailedProvisionConfig.RetryReasons [Disruptive]", func() {
 		// Settings
