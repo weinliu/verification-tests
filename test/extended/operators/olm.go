@@ -128,10 +128,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the olm-operator pod image(%s) not updated after 180s", image))
 		exutil.By("3, delete the existing packageserver cert to initiate the creation of a new one")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "packageserver-service-cert", "-n", "openshift-operator-lifecycle-manager").Output()
-		if err != nil {
-			e2e.Failf("Fail to delete the existing packageserver cert, error:%v", err)
-		}
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			info, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "packageserver-service-cert", "--wait=true", "-n", "openshift-operator-lifecycle-manager").Output()
+			if !strings.Contains(info, "deleted") || err != nil {
+				e2e.Logf("Warning! Fail to delete the old packageserver cert, error:%v, retrying...", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "fail to delete the old packageserver cert after 180s")
 		exutil.By("4, check that the cert has the faster expiration date as expected")
 		certsLastUpdad0, certsRotateAt0 := getCertRotation(oc, "packageserver-service-cert", "openshift-operator-lifecycle-manager")
 		exutil.By("4-1, waiting 5 mins here until the expiration time, and check again if there is a new certificate that has been created.")
