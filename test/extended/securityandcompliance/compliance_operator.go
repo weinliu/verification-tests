@@ -5348,6 +5348,167 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("The ocp-67425 An administrator can suspend the scansettingbinding and resume the scan schedule.. !!!\n")
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-NonPreRelease-Medium-68179-The scansettingbinding will be suspended when the supend field setting to true in the corresponding scansetting [Serial]", func() {
+		var ss = scanSettingDescription{
+			autoapplyremediations:  false,
+			autoupdateremediations: false,
+			name:                   "test-suspend-" + getRandomString(),
+			namespace:              subD.namespace,
+			roles1:                 "master",
+			roles2:                 "worker",
+			rotation:               3,
+			schedule:               "*/3 * * * *",
+			size:                   "2Gi",
+			priorityclassname:      "",
+			debug:                  false,
+			suspend:                true,
+			template:               scansettingTemplate,
+		}
+		var ssbName string = "test-suspend-" + getRandomString()
+
+		defer cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbName},
+			objectTableRef{"ss", subD.namespace, ss.name})
+
+		g.By("Create scansetting !!!\n")
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbName, "-S", ss.name, "profile/ocp4-cis", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "SUSPENDED", ok, []string{"ssb", ssbName, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Patch the ss scansettingbinding to unsuspend the scan and check ssb status !!!\n")
+		patchSuspendTrue := fmt.Sprintf("{\"suspend\":false}")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "--type", "merge", "-p", patchSuspendTrue, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssbName, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Check compliancesuite status.. !!! \n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssbName, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbName+"-rerunner", ok, []string{"cronjob", "-n",
+			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"cronjob", ssbName + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, present, "", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("The ocp-68179 The scansettingbinding will be suspended when the supend field setting to true in the corresponding scansetting.. !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-NonPreRelease-Medium-68189-Verify multiple ScanSettingBindings using the same ScanSetting could be paused together [Serial][Slow]", func() {
+		var ss = scanSettingDescription{
+			autoapplyremediations:  false,
+			autoupdateremediations: false,
+			name:                   "test-suspend-" + getRandomString(),
+			namespace:              subD.namespace,
+			roles1:                 "master",
+			roles2:                 "worker",
+			rotation:               3,
+			schedule:               "*/3 * * * *",
+			size:                   "2Gi",
+			priorityclassname:      "",
+			debug:                  false,
+			suspend:                false,
+			template:               scansettingTemplate,
+		}
+		var ssbNameCis string = "test-cis-" + getRandomString()
+		var ssbNamePcidss string = "test-pci-dss-" + getRandomString()
+
+		defer cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbNameCis},
+			objectTableRef{"ssb", subD.namespace, ssbNamePcidss},
+			objectTableRef{"ss", subD.namespace, ss.name})
+
+		g.By("Create scansetting !!!\n")
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbNameCis, "-S", ss.name, "profile/ocp4-cis", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbNamePcidss, "-S", ss.name, "profile/ocp4-pci-dss", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssbNameCis, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssbNamePcidss, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbNameCis, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbNamePcidss, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Patch the ss scansettingbinding to suspend the scan and check ssb status !!!\n")
+		patchSuspendTrue := fmt.Sprintf("{\"suspend\":true}")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "--type", "merge", "-p", patchSuspendTrue, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "SUSPENDED", ok, []string{"ssb", ssbNameCis, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "SUSPENDED", ok, []string{"ssb", ssbNamePcidss, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Check compliancesuite status and make sure ongoing compliancesuite will not be impacted.. !!! \n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbNameCis, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbNamePcidss, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssbNameCis, "NON-COMPLIANT")
+		subD.complianceSuiteResult(oc, ssbNamePcidss, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameCis+"-rerunner", ok, []string{"cronjob", "-n",
+			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNamePcidss+"-rerunner", ok, []string{"cronjob", "-n",
+			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"cronjob", ssbNameCis + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"cronjob", ssbNamePcidss + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbNameCis, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbNamePcidss, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Patch the ss scansettingbinding to resume the scan and check ssb status !!!\n")
+		patchSuspendFalse := fmt.Sprintf("{\"suspend\":false}")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "--type", "merge", "-p", patchSuspendFalse, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssbNameCis, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssbNamePcidss, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"cronjob", ssbNameCis + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"cronjob", ssbNamePcidss + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameCis+"-rerunner-", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbNameCis, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNamePcidss+"-rerunner-", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbNamePcidss, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check compliancesuite will become running again.. !!! \n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbNameCis, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbNamePcidss, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("The ocp-68189 Verify multiple ScanSettingBindings using the same ScanSetting could be paused together.. !!!\n")
+	})
 })
 
 var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on hypershift hosted cluster", func() {
