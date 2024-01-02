@@ -786,7 +786,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		defer func() {
 			exutil.By("wait mcp recovered")
 			err := exutil.AssertOrCheckMCP(oc, "sriov", 60*time.Second, 30*time.Minute, false)
-			o.Expect(err).Should(o.BeEmpty())
+			o.Expect(err).Should(o.BeNil())
 		}()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", hugepageMC).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", hugepageMC).Execute()
