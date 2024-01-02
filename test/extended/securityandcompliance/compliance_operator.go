@@ -2662,7 +2662,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			g.By("Remove TokenMaxAge, TokenInactivityTimeout parameters and ldap configuration by patching.. !!!\n")
 			patch1 := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/tokenConfig/accessTokenMaxAgeSeconds\"}]")
 			patch2 := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/tokenConfig/accessTokenInactivityTimeout\"}]")
-			patch3 := fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/identityProviders/1\",\"value\":{\"ldap\":{\"attributes\":{\"id\":[\"dn\"],\"name\":[\"cn\"],\"preferredUsername\":[\"uid\"]},\"bindDN\":\"\",\"bindPassword\":{\"name\":\"\"},\"ca\":{\"name\":\"ad-ldap\"},\"insecure\":false,\"url\":\"ldaps://10.66.147.179/cn=users,dc=ad-example,dc=com?uid\"},\"mappingMethod\":\"claim\",\"name\":\"AD_ldaps_provider\",\"type\":\"LDAP\"}}]")
+			patch3 := fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/identityProviders\",\"value\":[{\"ldap\":{\"attributes\":{\"id\":[\"dn\"],\"name\":[\"cn\"],\"preferredUsername\":[\"uid\"]},\"bindDN\":\"\",\"bindPassword\":{\"name\":\"\"},\"ca\":{\"name\":\"ad-ldap\"},\"insecure\":false,\"url\":\"ldaps://10.66.147.179/cn=users,dc=ad-example,dc=com?uid\"},\"mappingMethod\":\"claim\",\"name\":\"AD_ldaps_provider\",\"type\":\"LDAP\"}]}]")
 			patchResource(oc, asAdmin, withoutNamespace, "oauth", "cluster", "--type", "json", "-p", patch1)
 			patchResource(oc, asAdmin, withoutNamespace, "oauth", "cluster", "--type", "json", "-p", patch2)
 			patchResource(oc, asAdmin, withoutNamespace, "oauth", "cluster", "--type=json", "-p", patch3)
@@ -2697,8 +2697,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"ocp4-moderate-ocp-no-ldap-insecure", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Set TokenMaxAge, TokenInactivityTimeout parameters and ldap configuration by patching.. !!!\n")
-		patch1 := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/identityProviders/-\",\"value\":{\"ldap\":{\"attributes\":{\"email\":[\"mail\"],\"id\":[\"dn\"],\"name\":[\"uid\"],\"preferredUsername\":[\"uid\"]},\"insecure\":true,\"url\":\"ldap://10.66.147.104:389/ou=People,dc=my-domain,dc=com?uid\"},\"mappingMethod\":\"add\",\"name\":\"openldapidp\",\"type\":\"LDAP\"}}]")
-		patch2 := fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/identityProviders/1\",\"value\":{\"ldap\":{\"attributes\":{\"email\":[\"mail\"],\"id\":[\"dn\"],\"name\":[\"uid\"],\"preferredUsername\":[\"uid\"]},\"insecure\":true,\"url\":\"ldap://10.66.147.104:389/ou=People,dc=my-domain,dc=com?uid\"},\"mappingMethod\":\"add\",\"name\":\"openldapidp\",\"type\":\"LDAP\"}}]")
+		patch1 := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/identityProviders\",\"value\":[{\"ldap\":{\"attributes\":{\"email\":[\"mail\"],\"id\":[\"dn\"],\"name\":[\"uid\"],\"preferredUsername\":[\"uid\"]},\"insecure\":true,\"url\":\"ldap://10.66.147.104:389/ou=People,dc=my-domain,dc=com?uid\"},\"mappingMethod\":\"add\",\"name\":\"openldapidp\",\"type\":\"LDAP\"}]}]")
+		patch2 := fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/identityProviders\",\"value\":[{\"ldap\":{\"attributes\":{\"email\":[\"mail\"],\"id\":[\"dn\"],\"name\":[\"uid\"],\"preferredUsername\":[\"uid\"]},\"insecure\":true,\"url\":\"ldap://10.66.147.104:389/ou=People,dc=my-domain,dc=com?uid\"},\"mappingMethod\":\"add\",\"name\":\"openldapidp\",\"type\":\"LDAP\"}]}]")
 		patchResource(oc, asAdmin, withoutNamespace, "oauth", "cluster", "--type", "merge", "-p",
 			"{\"spec\":{\"tokenConfig\":{\"accessTokenMaxAgeSeconds\":28800}}}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "28800", ok, []string{"oauth", "cluster",
@@ -2730,7 +2730,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ldap", nok, []string{"oauth", "cluster", "-o=jsonpath={.spec.identityProviders}"}).check(oc)
 
 		g.By("Apply secure ldap to oauth cluster object by patching.. !!!\n")
-		patch3 := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/identityProviders/-\",\"value\":{\"ldap\":{\"attributes\":{\"id\":[\"dn\"],\"name\":[\"cn\"],\"preferredUsername\":[\"uid\"]},\"bindDN\":\"\",\"bindPassword\":{\"name\":\"\"},\"ca\":{\"name\":\"ad-ldap\"},\"insecure\":false,\"url\":\"ldaps://10.66.147.179/cn=users,dc=ad-example,dc=com?uid\"},\"mappingMethod\":\"claim\",\"name\":\"AD_ldaps_provider\",\"type\":\"LDAP\"}}]")
+		patch3 := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/identityProviders\",\"value\":[{\"ldap\":{\"attributes\":{\"id\":[\"dn\"],\"name\":[\"cn\"],\"preferredUsername\":[\"uid\"]},\"bindDN\":\"\",\"bindPassword\":{\"name\":\"\"},\"ca\":{\"name\":\"ad-ldap\"},\"insecure\":false,\"url\":\"ldaps://10.66.147.179/cn=users,dc=ad-example,dc=com?uid\"},\"mappingMethod\":\"claim\",\"name\":\"AD_ldaps_provider\",\"type\":\"LDAP\"}]}]")
 		patchResource(oc, asAdmin, withoutNamespace, "oauth", "cluster", "--type=json", "-p", patch3)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ldap", ok, []string{"oauth", "cluster", "-o=jsonpath={.spec.identityProviders}"}).check(oc)
 		g.By("Configured ldap to oauth cluster object by patching.. !!!\n")
