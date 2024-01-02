@@ -23,7 +23,7 @@ export const Pages = {
   },
   gotoSearch: () => {
     cy.visit('/search/all-namespaces');
-    cy.get('.pf-c-toolbar__content-section').should('be.visible');
+    cy.get('div#content-scrollable').should('be.visible');
   },
   gotoAPIExplorer: () => {
     cy.visit('/api-explorer');
