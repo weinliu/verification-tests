@@ -549,6 +549,10 @@ func extractIncludedManifestWithInstallcfg(oc *exutil.CLI, creds bool, cfg strin
 
 func getDefaultCapsInCR(version string) []string {
 	switch version {
+	case "4.16":
+		return []string{"CloudCredential", "MachineAPI+CloudCredential", "ImageRegistry+CloudCredential", "Storage+CloudCredential"}
+	case "4.15":
+		return []string{"CloudCredential", "MachineAPI+CloudCredential", "ImageRegistry+CloudCredential", "Storage+CloudCredential"}
 	case "4.14":
 		return []string{"Storage", "MachineAPI"}
 	default:

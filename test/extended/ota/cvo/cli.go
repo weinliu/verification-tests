@@ -25,10 +25,10 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 		g.By("Get expected release image for the test")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		latest4PreviewImage, err := exutil.GetLatest4PreviewImage("amd64")
-		o.Expect(latest4PreviewImage).NotTo(o.BeEmpty())
+		latest4StableImage, err := exutil.GetLatest4StableImage()
+		o.Expect(latest4StableImage).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(latest4PreviewImage, clusterVersion) {
+		if !strings.Contains(latest4StableImage, clusterVersion) {
 			g.Skip("There is not expected release image for the test")
 		}
 
@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 					o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(out))
 				}()
 			}
-			extractedCR, err := extractIncludedManifestWithInstallcfg(oc, true, filepath, latest4PreviewImage, "")
+			extractedCR, err := extractIncludedManifestWithInstallcfg(oc, true, filepath, latest4StableImage, "")
 			defer func() { o.Expect(os.RemoveAll(extractedCR)).NotTo(o.HaveOccurred()) }()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cmd := fmt.Sprintf("grep -r 'release.openshift.io/feature-set\\|capability.openshift.io/name' %s|awk -F\":\" '{print $NF}'|sort -u", extractedCR)
@@ -65,7 +65,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 			extractedCAP := strings.Fields(string(out))
 			switch {
 			case strings.Contains(file.Name(), "featureset"):
-				o.Expect(len(extractedCAP)).To(o.Equal(3))
+				o.Expect(len(extractedCAP)).To(o.Equal(len(caps) + 1))
 				o.Expect(string(out)).To(o.ContainSubstring("TechPreviewNoUpgrade"))
 				for _, cap := range caps {
 					o.Expect(string(out)).To(o.ContainSubstring(cap))
@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 			case strings.Contains(file.Name(), "none"):
 				o.Expect(string(out)).To(o.BeEmpty())
 			case strings.Contains(file.Name(), "4.x"), strings.Contains(file.Name(), "vcurrent"):
-				o.Expect(len(extractedCAP)).To(o.Equal(2))
+				o.Expect(len(extractedCAP)).To(o.Equal(len(caps)))
 				o.Expect(string(out)).NotTo(o.ContainSubstring("TechPreviewNoUpgrade"))
 				for _, cap := range caps {
 					o.Expect(string(out)).To(o.ContainSubstring(cap))
