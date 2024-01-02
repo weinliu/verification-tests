@@ -9,7 +9,6 @@ describe('Dynamic plugins features', () => {
   before(() => {
     const demoPluginNamespace = 'console-demo-plugin';
     cy.adminCLI(`oc create namespace ${demoPluginNamespace}`);
-    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
 
     // deploy plugin manifests
     cy.adminCLI(`oc create -f ./fixtures/demo-plugin-consoleplugin.yaml -n ${demoPluginNamespace}`);
@@ -42,19 +41,11 @@ describe('Dynamic plugins features', () => {
   });
   after(() => {
     cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge`);
-    cy.adminCLI(`oc delete consoleplugin --all`);
+    cy.adminCLI(`oc delete consoleplugin console-customization console-demo-plugin`);
     cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge`);
     cy.adminCLI(`oc delete namespace console-demo-plugin console-customization-plugin`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
-
-  it('(OCP-54170, yapei) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
-      cy.visit('/k8s/cluster/customresourcedefinitions/consoleplugins.console.openshift.io/instances')
-      listPage.rows.shouldExist('console-demo-plugin')
-      cy.exec(`oc get consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -o yaml | grep 'apiVersion'`)
-        .its('stdout')
-        .should('contain', 'apiVersion: console.openshift.io/v1')
-  })
 
   it('(OCP-51743,yapei) Implement check for the new i18n annotation for dynamic plugins', {tags: ['e2e','admin','@osd-ccs']},() => {
     cy.log('Preload - locale files are loaded once plugin is enabled');
@@ -93,30 +84,11 @@ describe('Dynamic plugins features', () => {
       })
   });
 
-  it('(OCP-45629,yapei) dynamic plugins proxy to services on the cluster', {tags: ['e2e','admin','@osd-ccs']},() => {
-    cy.switchPerspective('Developer');
-    nav.sidenav.shouldHaveNavSection(['Demo Plugin']);
-    // demo plugin in Dev perspective
-    cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 1');
-    cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 2');
-    // demo plugin in Administrator perspective
-    cy.switchPerspective('Administrator');
-    nav.sidenav.clickNavLink(['Demo Plugin']);
-    cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 1');
-    cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 2');
-    // demo plugin in Demo Plugin perspective
-    nav.sidenav.switcher.changePerspectiveTo('Demo');
-    cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 1');
-    cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 2');
-    cy.visit('/test-proxy-service');
-    cy.contains('success').should('be.visible');
-  });
-
   it('(OCP-50757,yapei) Support ordering of plugin nav sections in admin perspective', {tags: ['e2e','admin','@osd-ccs','@smoke']}, () => {
     cy.switchPerspective('Administrator');
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
-    cy.get('button.pf-c-nav__link')
+    cy.get('button.pf-v5-c-nav__link')
       .then(($els) => {
         const original_array = Cypress._.map(Cypress.$.makeArray($els), 'innerText');
         const filtered_array = original_array.filter((word) => word ==='Workloads' || word === 'Demo Plugin' || word === 'Networking')
@@ -154,7 +126,7 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc get consoleplugin`).then((result) => {
       total = result.stdout.split(/\r\n|\r|\n/).length - 1
     })
-    cy.get(".pf-c-popover__body").within(($div) => {
+    cy.get(".pf-v5-c-popover").within(($div) => {
       cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
       cy.contains(`${enabled}/${total} enabled`).should('exist')
     })
@@ -170,21 +142,43 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-42537,yapei) Allow disabling dynamic plugins through a query parameter', {tags: ['e2e','admin','@osd-ccs']}, () => {
+    Branding.closeModal()
     cy.switchPerspective('Administrator');
     // disable non-existing plugin will make no changes
     cy.visit('?disable-plugins=foo,bar');
-    cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Demo Plugin');
-    cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Customization');
+    cy.get('a[data-test="nav"]',{timeout: 60000}).should('include.text','Dynamic Nav');
+    cy.get('a[data-test="nav"]',{timeout: 60000}).should('include.text','Customization');
 
     // disable one plugin
     cy.visit('?disable-plugins=console-demo-plugin')
-    cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Demo Plugin');
-    cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Customization');
+    cy.get('a[data-test="nav"]',{timeout: 60000}).should('not.have.text','Dynamic Nav');
+    cy.get('a[data-test="nav"]',{timeout: 60000}).should('include.text','Customization');
 
     // disable all plugins
     cy.visit('?disable-plugins')
-    cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Demo Plugin');
-    cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Customization');
+    cy.get('a[data-test="nav"]',{timeout: 60000}).should('not.have.text','Dynamic Nav');
+    cy.get('a[data-test="nav"]',{timeout: 60000}).should('not.have.text','Customization');
+    cy.visit('/api-explorer');
+  });
+
+  it('(OCP-45629,yapei) dynamic plugins proxy to services on the cluster', {tags: ['e2e','admin','@osd-ccs']},() => {
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.switchPerspective('Developer');
+    nav.sidenav.clickNavLink(['Demo Plugin']);
+    // demo plugin in Dev perspective
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 1');
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 2');
+    // demo plugin in Demo Plugin perspective
+    nav.sidenav.switcher.changePerspectiveTo('Demo');
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 1');
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 2');
+    // demo plugin in Administrator perspective
+    cy.switchPerspective('Administrator');
+    nav.sidenav.clickNavLink(['Demo Plugin']);
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 1');
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 2');
+    cy.visit('/test-proxy-service');
+    cy.contains('success').should('be.visible');
   });
 
   it('(OCP-53123,OCP-41459,yapei) Exposed components in dynamic-plugin-sdk', {tags: ['e2e','admin','@osd-ccs']}, () => {
@@ -210,7 +204,6 @@ describe('Dynamic plugins features', () => {
 
     // NamespaceBar is exposed
     cy.switchPerspective('Demo');
-    nav.sidenav.shouldHaveNavSection(['Example Namespaced Page']);
     nav.sidenav.clickNavLink(['Example Namespaced Page']);
     namespaceDropdown.selectNamespace('openshift-dns');
     cy.get('h1').contains('Currently selected namespace').should('exist');
@@ -220,6 +213,14 @@ describe('Dynamic plugins features', () => {
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "Perspective Changed");
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "identify");
   });
+
+  it('(OCP-54170, yapei) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
+    cy.visit('/k8s/cluster/customresourcedefinitions/consoleplugins.console.openshift.io/instances')
+    listPage.rows.shouldExist('console-demo-plugin')
+    cy.exec(`oc get consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -o yaml | grep 'apiVersion'`)
+      .its('stdout')
+      .should('contain', 'apiVersion: console.openshift.io/v1')
+})
 
   it('(OCP-53234,yapei) Show alert when console operator is Unmanaged', {tags: ['e2e','admin','@osd-ccs']}, () => {
     // set console to Unmanaged

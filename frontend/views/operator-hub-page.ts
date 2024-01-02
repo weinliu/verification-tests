@@ -11,7 +11,7 @@ export const operatorHubPage = {
     cy.get('.co-catalog-page__num-items').should('exist')
   },
   getAllTileLabels: () => {
-    return cy.get('.pf-c-badge')
+    return cy.get('.pf-v5-c-badge')
   },
   checkCustomCatalog: (name: string) => {
     cy.get('form[data-test-group-name="catalogSourceDisplayName"]')
@@ -50,9 +50,7 @@ export const operatorHubPage = {
         cy.byTestID('confirm-action').click()
       }
     })
-    cy.get('.co-catalog-page__overlay-actions > .pf-c-button').should('have.attr', 'href').then((href) => {
-      cy.visit(String(href))
-    })
+    cy.get('[data-test-id="operator-install-btn"]').click();
     if(metrics){
       cy.get('#enable-monitoring-checkbox').should('exist').check()
     }
@@ -155,7 +153,7 @@ export const Operand = {
     // this will expand 'Advanced configuration' where we set all affinities
     cy.get('#root_spec_nodeConfigAdvanced_accordion-content')
       .within(() => {
-        cy.get('button.pf-c-expandable-section__toggle')
+        cy.get('button.pf-v5-c-expandable-section__toggle')
           .first()
           .click()
       })

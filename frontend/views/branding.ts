@@ -9,6 +9,10 @@ export const Branding = {
     cy.get("img").should("have.attr", "alt", "Red Hat OpenShift logo");
   },
   closeModal: () => {
-    cy.get('[aria-label="Close Dialog"]').click();
+    cy.get('body').then(($body) => {
+      if ($body.find(`[aria-label="Close Dialog"]`).length > 0) {
+        cy.get('[aria-label="Close Dialog"]').click();
+      }
+    });
   }
 };
