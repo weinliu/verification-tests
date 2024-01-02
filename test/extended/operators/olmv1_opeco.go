@@ -193,4 +193,60 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-High-69069-Replace pod-based image unpacker with an image registry client", func() {
+		var (
+			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
+			catalog         = olmv1util.CatalogDescription{
+				Name:     "catalog-69069",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69069",
+				Template: catalogTemplate,
+			}
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		initresolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Update the index image with different tag , but the same digestID")
+		err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v1"}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the image is updated without wait but the resolvedSource is still the same and won't unpack again")
+		statusOutput, err := olmv1util.GetNoEmpty(oc, "catalog", catalog.Name, "-o", "jsonpath={.status.phase}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(statusOutput, "Unpacked") {
+			e2e.Failf("status is %v, not Unpacked", statusOutput)
+		}
+		img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(img, "quay.io/olmqe/olmtest-operator-index:nginxolm69069v1")).To(o.BeTrue())
+		v1resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if initresolvedRef != v1resolvedRef {
+			e2e.Failf("initresolvedRef:%v,v1resolvedRef:%v", initresolvedRef, v1resolvedRef)
+		}
+
+		exutil.By("Update the index image with different tag and digestID")
+		err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v2"}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
+			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			v2resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if initresolvedRef == v2resolvedRef || img != "quay.io/olmqe/olmtest-operator-index:nginxolm69069v2" {
+				e2e.Logf("image: %v,v2resolvedRef: %v", img, v2resolvedRef)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "Error image wrong or resolvedRef are same")
+
+	})
+
 })
