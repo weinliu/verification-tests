@@ -78,9 +78,10 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", nodeName))
 			if _, ok := stopStates[vmState]; ok {
-				e2e.Logf("Restarting leader_master_node %s", nodeName)
+				e2e.Logf("Starting leader master node %s", nodeName)
 				err = node.Start()
 				o.Expect(err).NotTo(o.HaveOccurred())
+				time.Sleep(10 * time.Second)
 				err = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
 					vmState, stateErr := node.State()
 					o.Expect(stateErr).NotTo(o.HaveOccurred())
@@ -97,7 +98,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				err = ClusterHealthcheck(oc, "OCP-19941/log")
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else if _, ok := startStates[vmState]; ok {
-				e2e.Logf("leader_master_node %s machine instance state is already %s", nodeName, vmState)
+				e2e.Logf("leader master node %s state is already %s", nodeName, vmState)
 			}
 		}()
 
@@ -190,9 +191,27 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			e2e.Failf("Post down leader master node, cluster availability sanity check failed :: %s ", err)
 		}
 
+		e2e.Logf("Ensure that leader master node has been stopped completedly.")
+		waitTime = 240
+		err = wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+			vmState, stateErr := node.State()
+			o.Expect(stateErr).NotTo(o.HaveOccurred())
+			if _, ok := stopStates[vmState]; ok {
+				e2e.Logf("The leader master node %s has been stopped completely!", nodeName)
+				return true, nil
+			} else {
+				e2e.Logf("The leader master node %s is in %s vmState!", nodeName, vmState)
+				return false, nil
+			}
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The leader master node %s was unable to stop!", nodeName))
+
 		e2e.Logf("Starting leader master node")
 		err = node.Start()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Wait for some time and then check the status to avoid a fake start
+		time.Sleep(10 * time.Second)
 		err = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
 			vmState, stateErr := node.State()
 			o.Expect(stateErr).NotTo(o.HaveOccurred())
