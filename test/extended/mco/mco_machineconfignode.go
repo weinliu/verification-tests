@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"strconv"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -206,6 +207,72 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		exutil.By("Check MCN conditions")
 		o.Expect(mcn.GetAppliedFilesAndOS()).Should(o.Equal(expectedMCNStatus), "status of MCN condition UPDATEDFILESANDOS is not expected")
 		o.Expect(mcn.GetUpdateExecuted()).Should(o.Equal(expectedMCNStatus), "status of MCN condition UPDATEEXECUTED is not expected")
+		logger.Infof("OK\n")
+
+	})
+
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-69755-MachineConfigNode resources should be synced when node is created/deleted [Disruptive]", func() {
+
+		var (
+			provisioningMachine Machine
+			deletingMachine     Machine
+			mcp                 = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		)
+
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+
+		exutil.By("Get one machineset for testing")
+		msl, err := NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Get machinesets failed")
+		o.Expect(msl).ShouldNot(o.BeEmpty(), "Machineset list is empty")
+		ms := msl[0]
+		logger.Infof("Machineset %s will be used for testing", ms.GetName())
+		logger.Infof("OK\n")
+
+		replica, cerr := strconv.Atoi(ms.GetReplicaOfSpec())
+		o.Expect(cerr).NotTo(o.HaveOccurred(), "Convert string to int error")
+
+		defer func() {
+			if serr := ms.ScaleTo(replica); serr != nil {
+				logger.Errorf("Rollback replica for machineset %s failed: %v", ms.GetName(), serr)
+			}
+			mcp.waitForComplete()
+		}()
+
+		exutil.By("Scale up machineset to provision new node")
+		replica++
+		o.Expect(ms.ScaleTo(replica)).NotTo(o.HaveOccurred(), "Machineset %s scale up error", ms.GetName())
+
+		exutil.By("Find new machine")
+		provisioningMachine = ms.GetMachinesByPhaseOrFail(MachinePhaseProvisioning)[0]
+		o.Expect(provisioningMachine).NotTo(o.BeNil(), "Cannot find provisioning machine")
+		logger.Infof("New machine %s is provisioning", provisioningMachine.GetName())
+		o.Eventually(ms.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
+		logger.Infof("OK\n")
+
+		exutil.By("Check new MCN")
+		nodeToBeProvisioned := provisioningMachine.GetNodeOrFail()
+		newMCN := NewMachineConfigNode(oc.AsAdmin(), nodeToBeProvisioned.GetName())
+		o.Eventually(newMCN.Exists, "2m", "5s").Should(o.BeTrue(), "new MCN does not exist")
+		o.Eventually(newMCN.GetDesiredMachineConfigOfSpec, "2m", "5s").Should(o.Equal(mcp.getConfigNameOfSpecOrFail()), "desired config of mcn.spec is not same as same property value in worker pool")
+		o.Eventually(newMCN.GetDesiredMachineConfigOfStatus, "2m", "5s").Should(o.Equal(mcp.getConfigNameOfSpecOrFail()), "desired config of mcn.status is not same as same property value in worker pool")
+		o.Eventually(newMCN.GetCurrentMachineConfigOfStatus, "2m", "5s").Should(o.Equal(mcp.getConfigNameOfStatusOrFail()), "current config of mcn.status is not same as same property value in worker pool")
+		logger.Infof("OK\n")
+
+		exutil.By("Scale down machineset to remove node")
+		replica--
+		o.Expect(ms.ScaleTo(replica)).NotTo(o.HaveOccurred(), "Machineset %s scale down error", ms.GetName())
+		deletingMachine = ms.GetMachinesByPhaseOrFail(MachinePhaseDeleting)[0]
+		o.Expect(deletingMachine).ShouldNot(o.BeNil(), "Cannot find deleting machine")
+		logger.Infof("Machine %s is being deleted", deletingMachine.GetName())
+		nodeToBeDeleted := deletingMachine.GetNodeOrFail()
+		o.Eventually(ms.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
+		logger.Infof("OK\n")
+
+		exutil.By("Check Node and MCN are removed")
+		o.Eventually(nodeToBeDeleted.Exists, "10m", "1m").Should(o.BeFalse(), "Node %s is not deleted successfully", nodeToBeDeleted.GetName())
+		deletedMCN := NewMachineConfigNode(oc.AsAdmin(), nodeToBeDeleted.GetName())
+		o.Eventually(deletedMCN.Exists, "5m", "10s").Should(o.BeFalse(), "MCN % is not deleted successfully", deletedMCN.GetName())
 		logger.Infof("OK\n")
 
 	})

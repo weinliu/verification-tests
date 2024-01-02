@@ -152,6 +152,16 @@ const (
 	IgnitionSecurePort = 22623
 	// InsecurePort is the port to serve ignition configs w/o tls
 	IgnitionInsecurePort = 22624
+
+	// Machine phase Provisioning
+	MachinePhaseProvisioning = "Provisioning"
+	// Machine phase Deleting
+	MachinePhaseDeleting = "Deleting"
+	// We use full name to get machineset/machine xref: https://access.redhat.com/solutions/7040368
+	// Machineset fully qualified name
+	MachineSetFullName = "machineset.machine.openshift.io"
+	// Machine fully qualified name
+	MachineFullName = "machine.machine.openshift.io"
 )
 
 var (

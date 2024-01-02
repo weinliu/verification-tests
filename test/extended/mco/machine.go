@@ -3,7 +3,9 @@ package mco
 import (
 	"fmt"
 
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 // Machine struct to handle Machine resources
@@ -18,7 +20,7 @@ type MachineList struct {
 
 // NewMachine constructs a new Machine struct
 func NewMachine(oc *exutil.CLI, namespace, name string) *Machine {
-	return &Machine{*NewNamespacedResource(oc, "Machine", namespace, name)}
+	return &Machine{*NewNamespacedResource(oc, MachineFullName, namespace, name)}
 }
 
 // GetNode returns the node created by this machine
@@ -42,9 +44,23 @@ func (m Machine) GetNode() (*Node, error) {
 	return &(nodes[0]), nil
 }
 
+// GetNodeOrFail, call GetNode, fail the test if any error occurred
+func (m Machine) GetNodeOrFail() *Node {
+	node, err := m.GetNode()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Get node from machine %s failed", m.GetName())
+	return node
+}
+
+// GetPhase get phase of the machine
+func (m Machine) GetPhase() string {
+	phase := m.GetOrFail(`{.status.phase}`)
+	logger.Infof("machine %s phase is %s", m.GetName(), phase)
+	return phase
+}
+
 // NewMachineList constructs a new MachineList struct to handle all existing Machines
 func NewMachineList(oc *exutil.CLI, namespace string) *MachineList {
-	return &MachineList{*NewNamespacedResourceList(oc, "Machine", namespace)}
+	return &MachineList{*NewNamespacedResourceList(oc, MachineFullName, namespace)}
 }
 
 // GetAll returns a []Machine slice with all existing nodes

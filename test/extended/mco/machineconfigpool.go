@@ -123,10 +123,22 @@ func (mcp *MachineConfigPool) getConfigNameOfSpec() (string, error) {
 	return output, err
 }
 
+func (mcp *MachineConfigPool) getConfigNameOfSpecOrFail() string {
+	config, err := mcp.getConfigNameOfSpec()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Get config name of spec failed")
+	return config
+}
+
 func (mcp *MachineConfigPool) getConfigNameOfStatus() (string, error) {
 	output, err := mcp.Get(`{.status.configuration.name}`)
 	logger.Infof("status.configuration.name of mcp/%v is %v", mcp.name, output)
 	return output, err
+}
+
+func (mcp *MachineConfigPool) getConfigNameOfStatusOrFail() string {
+	config, err := mcp.getConfigNameOfStatus()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Get config name of status failed")
+	return config
 }
 
 func (mcp *MachineConfigPool) getMachineCount() (int, error) {

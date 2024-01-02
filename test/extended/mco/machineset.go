@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -29,12 +30,12 @@ type MachineSetList struct {
 
 // NewMachineSet constructs a new MachineSet struct
 func NewMachineSet(oc *exutil.CLI, namespace, name string) *MachineSet {
-	return &MachineSet{*NewNamespacedResource(oc, "MachineSet", namespace, name)}
+	return &MachineSet{*NewNamespacedResource(oc, MachineSetFullName, namespace, name)}
 }
 
 // NewMachineSetList constructs a new MachineSetListist struct to handle all existing MachineSets
 func NewMachineSetList(oc *exutil.CLI, namespace string) *MachineSetList {
-	return &MachineSetList{*NewNamespacedResourceList(oc, "MachineSet", namespace)}
+	return &MachineSetList{*NewNamespacedResourceList(oc, MachineSetFullName, namespace)}
 }
 
 // String implements the Stringer interface
@@ -45,6 +46,11 @@ func (ms MachineSet) String() string {
 // ScaleTo scales the MachineSet to the exact given value
 func (ms MachineSet) ScaleTo(scale int) error {
 	return ms.Patch("merge", fmt.Sprintf(`{"spec": {"replicas": %d}}`, scale))
+}
+
+// GetReplicaOfSpec return replica number of spec
+func (ms MachineSet) GetReplicaOfSpec() string {
+	return ms.GetOrFail(`{.spec.replicas}`)
 }
 
 // AddToScale scales the MachineSet adding the given value (positive or negative).
@@ -117,6 +123,41 @@ func (ms MachineSet) GetMachines() ([]Machine, error) {
 	ml.ByLabel("machine.openshift.io/cluster-api-machineset=" + ms.GetName())
 	ml.SortByTimestamp()
 	return ml.GetAll()
+}
+
+// GetMachinesOrFail get machines from machineset or fail the test if any error occurred
+func (ms MachineSet) GetMachinesOrFail() []Machine {
+	ml, err := ms.GetMachines()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Get machines of machineset %s failed", ms.GetName())
+	return ml
+}
+
+// GetMachinesByPhase get machine by phase e.g. Running, Provisioning, Provisioned, Deleting etc.
+func (ms MachineSet) GetMachinesByPhase(phase string) ([]Machine, error) {
+	// add poller to check machine phase periodically.
+	machines := []Machine{}
+	pollerr := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 20*time.Second, true, func(ctx context.Context) (bool, error) {
+		ml, err := ms.GetMachines()
+		if err != nil {
+			return false, err
+		}
+		for _, m := range ml {
+			if m.GetPhase() == phase {
+				machines = append(machines, m)
+			}
+		}
+		return len(machines) > 0, nil
+	})
+
+	return machines, pollerr
+}
+
+// GetMachinesByPhaseOrFail call GetMachineByPhase or fail the test if any error occurred
+func (ms MachineSet) GetMachinesByPhaseOrFail(phase string) []Machine {
+	ml, err := ms.GetMachinesByPhase(phase)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Get machine by phase %s failed", phase)
+	o.Expect(ml).ShouldNot(o.BeEmpty(), "No machine found by phase %s in machineset %s", phase, ms.GetName())
+	return ml
 }
 
 // GetNodes returns a slice with all nodes that have been created for this MachineSet
