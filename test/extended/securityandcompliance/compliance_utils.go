@@ -61,6 +61,7 @@ type scanSettingDescription struct {
 	schedule               string
 	size                   string
 	strictnodescan         bool
+	suspend                bool
 	debug                  bool
 	priorityclassname      string
 	template               string
@@ -195,7 +196,8 @@ func (pb *profileBundleDescription) create(oc *exutil.CLI) {
 func (ss *scanSettingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ss.template, "-p", "NAME="+ss.name, "NAMESPACE="+ss.namespace, "PRIORITYCLASSNAME="+ss.priorityclassname,
 		"AUTOAPPLYREMEDIATIONS="+strconv.FormatBool(ss.autoapplyremediations), "SCHEDULE="+ss.schedule, "SIZE="+ss.size, "ROTATION="+strconv.Itoa(ss.rotation), "ROLES1="+ss.roles1,
-		"ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan), "AUTOUPDATEREMEDIATIONS="+strconv.FormatBool(ss.autoupdateremediations), "DEBUG="+strconv.FormatBool(ss.debug))
+		"ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan), "AUTOUPDATEREMEDIATIONS="+strconv.FormatBool(ss.autoupdateremediations), "DEBUG="+strconv.FormatBool(ss.debug),
+		"SUSPEND="+strconv.FormatBool(ss.suspend))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

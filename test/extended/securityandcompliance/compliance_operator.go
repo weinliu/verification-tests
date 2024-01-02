@@ -326,6 +326,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -1982,6 +1983,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -3472,6 +3474,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -3554,6 +3557,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
 			ssb = scanSettingBindingDescription{
@@ -3861,6 +3865,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbCis = "cis-test" + getRandomString()
@@ -3967,6 +3972,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbPci = "pci-test" + getRandomString()
@@ -4072,6 +4078,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbHigh = "high-test" + getRandomString()
@@ -4542,6 +4549,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      prioritym.name,
 				debug:                  true,
+				suspend:                false,
 				template:               scansettingTemplate,
 			}
 			ssbWithPC    = "ssb-with-pc-" + getRandomString()
@@ -4740,6 +4748,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      priorityClassName,
 				debug:                  true,
+				suspend:                false,
 				template:               scansettingTemplate,
 			}
 			ssbWithPC = "ssb-with-pc-" + getRandomString()
@@ -5030,6 +5039,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				size:                   "2Gi",
 				priorityclassname:      "",
 				debug:                  false,
+				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbStig = "stig-test" + getRandomString()
@@ -5134,6 +5144,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				schedule:               "0 1 * * *",
 				strictnodescan:         false,
 				size:                   "2Gi",
+				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
 			ssbStig = "rhcos4-stig-" + getRandomString()
@@ -5258,6 +5269,84 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		o.Expect(strings.Contains(string(output), `ocp4-file-groupowner-ovs-conf-db`))
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("rule", `-o=jsonpath={.items[?(@.metadata.annotations.compliance\.openshift\.io/profiles=="")].metadata.name}`, "-n", subD.namespace).Output()
 		o.Expect(strings.Contains(string(output), `rhcos4-wireless-disable-interfaces`))
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-NonPreRelease-High-67425-An administrator can suspend the scansettingbinding and resume the scan schedule [Serial][Slow]", func() {
+		var ss = scanSettingDescription{
+			autoapplyremediations:  false,
+			autoupdateremediations: false,
+			name:                   "test-suspend-" + getRandomString(),
+			namespace:              subD.namespace,
+			roles1:                 "master",
+			roles2:                 "worker",
+			rotation:               3,
+			schedule:               "*/3 * * * *",
+			size:                   "2Gi",
+			priorityclassname:      "",
+			debug:                  false,
+			suspend:                false,
+			template:               scansettingTemplate,
+		}
+		var ssbName string = "test-suspend-" + getRandomString()
+
+		defer cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbName},
+			objectTableRef{"ss", subD.namespace, ss.name})
+
+		g.By("Create the default value for suspend field in default and default-auto-apply ss !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"scansetting", "default", "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"scansetting", "default", "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+
+		g.By("Create scansetting !!!\n")
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbName, "-S", ss.name, "profile/ocp4-cis", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssbName, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Patch the ss scansettingbinding to suspend the scan and check ssb status !!!\n")
+		patchSuspendTrue := fmt.Sprintf("{\"suspend\":true}")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "--type", "merge", "-p", patchSuspendTrue, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "SUSPENDED", ok, []string{"ssb", ssbName, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Check compliancesuite status and make sure ongoing compliancesuite will not be impacted.. !!! \n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssbName, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbName+"-rerunner", ok, []string{"cronjob", "-n",
+			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"cronjob", ssbName + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Patch the ss scansettingbinding to resume the scan and check ssb status !!!\n")
+		patchSuspendFalse := fmt.Sprintf("{\"suspend\":false}")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "--type", "merge", "-p", patchSuspendFalse, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssbName, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"cronjob", ssbName + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, present, "", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssbName, "NON-COMPLIANT")
+
+		g.By("The ocp-67425 An administrator can suspend the scansettingbinding and resume the scan schedule.. !!!\n")
 	})
 })
 
