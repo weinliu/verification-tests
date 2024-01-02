@@ -565,4 +565,64 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.Contains(res, "iperf3: error - control socket has closed unexpectedly")).ShouldNot(o.BeTrue(), fmt.Sprintf("The client sokcet was closed unexpectedly with error :%s", res))
 	})
 
+	g.It("Author:qiowang-Medium-69875-Check apbexternalroute status when there is zone reported failure [Disruptive]", func() {
+		ipStackType := checkIPStackType(oc)
+		var externalGWIP string
+		if ipStackType == "ipv6single" {
+			externalGWIP = "2011::11"
+		} else {
+			externalGWIP = "1.1.1.1"
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		apbExternalRouteTemplate := filepath.Join(buildPruningBaseDir, "apbexternalroute-static-template.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		workerNode, getWorkerErr := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(getWorkerErr).NotTo(o.HaveOccurred())
+
+		exutil.By("1. Create pod on one worker node")
+		ns := oc.Namespace()
+		pod := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  workerNode,
+			template:  pingPodNodeTemplate,
+		}
+		defer pod.deletePingPodNode(oc)
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		exutil.By("2. Remove node annotation k8s.ovn.org/l3-gateway-config")
+		annotation, getAnnotationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node/"+workerNode, "-o", "jsonpath='{.metadata.annotations.k8s\\.ovn\\.org/l3-gateway-config}'").Output()
+		o.Expect(getAnnotationErr).NotTo(o.HaveOccurred())
+		defer exutil.AddAnnotationsToSpecificResource(oc, "node/"+workerNode, "", "k8s.ovn.org/l3-gateway-config="+strings.Trim(annotation, "'"))
+		exutil.RemoveAnnotationFromSpecificResource(oc, "node/"+workerNode, "", "k8s.ovn.org/l3-gateway-config")
+
+		exutil.By("3. Create apbexternalroute object")
+		apbExternalRoute := apbStaticExternalRoute{
+			name:       "externalgw-69875",
+			labelkey:   "kubernetes.io/metadata.name",
+			labelvalue: ns,
+			ip:         externalGWIP,
+			bfd:        false,
+			template:   apbExternalRouteTemplate,
+		}
+		defer apbExternalRoute.deleteAPBExternalRoute(oc)
+		apbExternalRoute.createAPBExternalRoute(oc)
+
+		exutil.By("4. Check status of apbexternalroute object")
+		checkErr := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Fail")
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("apbexternalroute %s doesn't show Fail in time", apbExternalRoute.name))
+		messages, messagesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(messagesErr).NotTo(o.HaveOccurred())
+		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		for _, node := range nodes {
+			if node == workerNode {
+				o.Expect(messages).Should(o.ContainSubstring(node + ": " + node + " failed to apply policy"))
+			} else {
+				o.Expect(messages).Should(o.ContainSubstring(node + ": configured external gateway IPs: " + apbExternalRoute.ip))
+			}
+		}
+	})
 })
