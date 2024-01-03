@@ -2,6 +2,7 @@ package baremetal
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -183,4 +184,20 @@ func waitForPodNotFound(oc *exutil.CLI, podName string, nameSpace string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "The test deployment job is running")
+}
+
+func getUserFromSecret(oc *exutil.CLI, namespace string, secretName string) string {
+	userbase64, pwderr := oc.AsAdmin().Run("get").Args("secrets", "-n", machineAPINamespace, secretName, "-o=jsonpath={.data.username}").Output()
+	o.Expect(pwderr).ShouldNot(o.HaveOccurred())
+	user, err := base64.StdEncoding.DecodeString(userbase64)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return string(user)
+}
+
+func getPassFromSecret(oc *exutil.CLI, namespace string, secretName string) string {
+	pwdbase64, pwderr := oc.AsAdmin().Run("get").Args("secrets", "-n", machineAPINamespace, secretName, "-o=jsonpath={.data.password}").Output()
+	o.Expect(pwderr).ShouldNot(o.HaveOccurred())
+	pwd, err := base64.StdEncoding.DecodeString(pwdbase64)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return string(pwd)
 }
