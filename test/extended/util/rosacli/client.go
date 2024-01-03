@@ -31,13 +31,15 @@ type Client struct {
 	Parser *Parser
 
 	// services
-	Cluster       ClusterService
-	IDP           IDPService
-	KubeletConfig KubeletConfigService
-	MachinePool   MachinePoolService
-	OCMResource   OCMResourceService
-	User          UserService
-	Version       VersionService
+	Cluster         ClusterService
+	IDP             IDPService
+	KubeletConfig   KubeletConfigService
+	MachinePool     MachinePoolService
+	OCMResource     OCMResourceService
+	User            UserService
+	Version         VersionService
+	NetworkVerifier NetworkVerifierService
+	Ingress         IngressService
 }
 
 func NewClient() *Client {
@@ -56,6 +58,8 @@ func NewClient() *Client {
 	client.OCMResource = NewOCMResourceService(client)
 	client.User = NewUserService(client)
 	client.Version = NewVersionService(client)
+	client.NetworkVerifier = NewNetworkVerifierService(client)
+	client.Ingress = NewIngressService(client)
 
 	return client
 }
@@ -76,6 +80,8 @@ func (c *Client) CleanResources(clusterID string) error {
 	errorList = append(errorList, c.OCMResource.CleanResources(clusterID)...)
 	errorList = append(errorList, c.User.CleanResources(clusterID)...)
 	errorList = append(errorList, c.Version.CleanResources(clusterID)...)
+	errorList = append(errorList, c.NetworkVerifier.CleanResources(clusterID)...)
+	errorList = append(errorList, c.Ingress.CleanResources(clusterID)...)
 
 	return errors.Join(errorList...)
 
