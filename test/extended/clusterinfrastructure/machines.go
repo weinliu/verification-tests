@@ -356,7 +356,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
+		if region == "northcentralus" || region == "westus" || region == "usgovtexas" {
 			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
 		}
 
@@ -562,7 +562,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		storageAccount, _, err1 := exutil.GetAzureStorageAccountFromCluster(oc)
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://`+storageAccount+`.blob.core.windows.net/"}}}}}}}}}`, "--type=merge").Execute()
+		cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		storageAccountURISuffix := ".blob.core.windows.net/"
+		if strings.ToLower(cloudName) == "azureusgovernmentcloud" {
+			storageAccountURISuffix = ".blob.core.usgovcloudapi.net/"
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://`+storageAccount+storageAccountURISuffix+`"}}}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.diagnostics.boot.storageAccountType}").Output()
