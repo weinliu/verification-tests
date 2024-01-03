@@ -155,29 +155,27 @@ func (c *PodmanCLI) GetImageList() ([]string, error) {
 	return imageList, nil
 }
 
-// GetImages parser json to get images
 func (c *PodmanCLI) GetImages() ([]PodmanImage, error) {
-	var images []PodmanImage
 	output, err := c.Run("images").Args("--format", "json").Output()
 	if err != nil {
-		e2e.Logf("run podman images --format json faild")
-		return images, err
+		e2e.Logf("Failed to run 'podman images --format json'")
+		return nil, err
 	}
-	images, err = c.GetImagesByJSON(output)
+
+	images, err := c.GetImagesByJSON(output)
 	if err != nil {
-		return images, err
+		return nil, err
 	}
 	return images, nil
 }
 
-// GetImagesByJSON parser json to get images
 func (c *PodmanCLI) GetImagesByJSON(jsonStr string) ([]PodmanImage, error) {
-	//unmarshal json file
 	var images []PodmanImage
+
 	if err := json.Unmarshal([]byte(jsonStr), &images); err != nil {
-		FatalErr(fmt.Errorf("ummarshal json file failed: %v", err))
-		return images, nil
+		return nil, fmt.Errorf("failed to unmarshal JSON file: %v", err)
 	}
+
 	return images, nil
 }
 
@@ -193,16 +191,10 @@ func (c *PodmanCLI) CheckImageExist(imageIndex string) (bool, error) {
 
 // GetImageID is to get the image ID by image tag
 func (c *PodmanCLI) GetImageID(imageTag string) (string, error) {
-	imageID := ""
-	images, err := c.GetImages()
+	imageID, err := c.Run("images").Args(imageTag, "--format", "{{.ID}}").Output()
 	if err != nil {
-		return imageID, err
-	}
-	for _, image := range images {
-		if strings.Contains(strings.Join(image.Names, ","), imageTag) {
-			e2e.Logf("image ID is %s\n", image.ID)
-			return image.ID, nil
-		}
+		e2e.Logf("Failed to run 'podman images --format {{.ID}}'")
+		return "", err
 	}
 	return imageID, nil
 }
