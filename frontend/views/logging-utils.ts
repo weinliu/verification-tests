@@ -156,6 +156,7 @@ export const logUtils = {
   },
   removeClusterLogging: (namespace: string) => {
     cy.exec(`oc delete cl instance -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+    cy.exec(`oc delete clf instance -n ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
     cy.exec(`oc delete pvc -n ${namespace} -l logging-cluster=elasticsearch --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
   },
   removeLokistack: (lokiName: string, namespace: string) => {

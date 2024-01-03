@@ -1,0 +1,23 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: loki-application-logs-view-rbac
+objects:
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: simple-user-application-logs
+    namespace: ${NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: cluster-logging-application-view
+  subjects:
+  - kind: User
+    name: ${USERNAME}
+    apiGroup: rbac.authorization.k8s.io
+parameters:
+- name: NAMESPACE
+  value: "my-app"
+- name: USERNAME
+  value: "testuser-0"
