@@ -1199,4 +1199,49 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Eventually(hostedCluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout+DefaultTimeout, (LongTimeout+DefaultTimeout)/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
 		o.Expect(doOcpReq(oc, OcpGet, true, "-n", hostedCluster.namespace, "nodepool", npName, "--ignore-not-found", `-o=jsonpath={.spec.release.image}`)).Should(o.ContainSubstring(hcpRelease))
 	})
+
+	// author: heli@redhat.com
+	// only test OCP-62972 step 1: HO install param conflict
+	// the rest of the steps are covered by https://github.com/openshift/release/blob/dbe448dd31754327d60921b3c06d966b5ef8bf7d/ci-operator/step-registry/cucushift/hypershift-extended/install-private/cucushift-hypershift-extended-install-private-commands.sh#L11
+	g.It("Longduration-NonPreRelease-Author:heli-High-62972-[HyperShiftINSTALL] Check conditional updates on HyperShift Hosted Control Plane [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 62972 is for AWS - skipping test ...")
+		}
+
+		caseID := "62972"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Config AWS Bucket And install HyperShift operator")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          dir,
+			iaasPlatform: iaasPlatform,
+			region:       region,
+		}
+
+		installHelper.newAWSS3Client()
+		defer installHelper.deleteAWSS3Bucket()
+		installHelper.createAWSS3Bucket()
+
+		var bashClient = NewCmdClient().WithShowInfo(true)
+		cmd := fmt.Sprintf("hypershift install "+
+			"--oidc-storage-provider-s3-bucket-name %s "+
+			"--oidc-storage-provider-s3-credentials %s "+
+			"--oidc-storage-provider-s3-region %s "+
+			"--enable-cvo-management-cluster-metrics-access=true "+
+			"--rhobs-monitoring=true ",
+			installHelper.bucketName, installHelper.dir+"/credentials", installHelper.region)
+		output, err := bashClient.Run(cmd).Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("when invoking this command with the --rhobs-monitoring flag, the --enable-cvo-management-cluster-metrics-access flag is not supported"))
+	})
+
 })
