@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-51071-Create machineset with CAPI on aws [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-51071-[CAPI] Create machineset with CAPI on aws [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
@@ -200,7 +200,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		capiMachineSetAWS.createCapiMachineSet(oc)
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-53100-Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-53100-[CAPI] Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
 		skipForCAPINotExist(oc)
@@ -252,5 +252,33 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Deleting cluster object in namespace other than openshift-cluster-api, should be successful")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cluster", clusterNotInCapi.name, "-n", clusterNotInCapi.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-62928-[CAPI] Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
+		g.By("Check if cluster api on this platform is supported")
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		skipForCAPINotExist(oc)
+
+		g.By("Create cluster, awscluster, awsmachinetemplate")
+		cluster.createCluster(oc)
+		defer awscluster.deleteAWSCluster(oc)
+		awscluster.createAWSCluster(oc)
+		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
+		awsMachineTemplate.createAWSMachineTemplate(oc)
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("awsmachinetemplate", capiMachineSetAWS.machineTemplateName, "-n", clusterAPINamespace, "-p", `{"spec":{"template":{"spec":{"instanceMetadataOptions":{"httpEndpoint":"enabled","httpPutResponseHopLimit":1,"httpTokens":"required","instanceMetadataTags":"disabled"}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check machineTemplate with httpTokens: required")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("awsmachinetemplate", capiMachineSetAWS.machineTemplateName, "-n", clusterAPINamespace, "-o=jsonpath={.items[0].spec.template.spec.httpTokens}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("required"))
+
+		g.By("Create capi machineset with IMDSv2")
+		capiMachineSetAWS.name = "capi-machineset-62928"
+		defer waitForCapiMachinesDisapper(oc, capiMachineSetAWS.name)
+		defer capiMachineSetAWS.deleteCapiMachineSet(oc)
+		capiMachineSetAWS.createCapiMachineSet(oc)
 	})
 })
