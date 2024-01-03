@@ -221,6 +221,15 @@ type cronJobCreationTZ struct {
 	template  string
 }
 
+type priorityPodDefinition struct {
+	name              string
+	label             string
+	memory            int
+	priorityClassName string
+	namespace         string
+	template          string
+}
+
 func (pod *podNodeSelector) createPodNodeSelector(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
@@ -1741,4 +1750,55 @@ func assertPullSecret(oc *exutil.CLI) bool {
 		return true
 	}
 
+}
+
+func getTotalAllocatableMemory(oc *exutil.CLI, allocatableMemory string, totalRequests string) int {
+	var (
+		totalAllocatableMemoryInBytes int
+		totalRequestedMemoryInBytes   int
+	)
+	if strings.Contains(totalRequests, "Gi") {
+		requestedMemoryInBytesStr := strings.Split(totalRequests, "Gi")[0]
+		requestedMemoryInBytes, _ := strconv.Atoi(requestedMemoryInBytesStr)
+		totalRequestedMemoryInBytes = requestedMemoryInBytes * (1024 * 1024 * 1024)
+	} else if strings.Contains(totalRequests, "Mi") {
+		requestedMemoryInBytesStr := strings.Split(totalRequests, "Mi")[0]
+		requestedMemoryInBytes, _ := strconv.Atoi(requestedMemoryInBytesStr)
+		totalRequestedMemoryInBytes = requestedMemoryInBytes * (1024 * 1024)
+	} else if strings.Contains(totalRequests, "Ki") {
+		requestedMemoryInBytesStr := strings.Split(totalRequests, "Ki")[0]
+		requestedMemoryInBytes, _ := strconv.Atoi(requestedMemoryInBytesStr)
+		totalRequestedMemoryInBytes = requestedMemoryInBytes * 1024
+	} else {
+		totalRequestedMemoryInBytes, _ = strconv.Atoi(totalRequests)
+	}
+	if strings.Contains(allocatableMemory, "Gi") {
+		allocatableMemoryInBytesStr := strings.Split(allocatableMemory, "Ki")[0]
+		allocatableMemoryInBytes, _ := strconv.Atoi(allocatableMemoryInBytesStr)
+		totalAllocatableMemoryInBytes = allocatableMemoryInBytes * (1024 * 1024 * 1024)
+	} else if strings.Contains(allocatableMemory, "Mi") {
+		allocatableMemoryInBytesStr := strings.Split(allocatableMemory, "Mi")[0]
+		allocatableMemoryInBytes, _ := strconv.Atoi(allocatableMemoryInBytesStr)
+		totalAllocatableMemoryInBytes = allocatableMemoryInBytes * (1024 * 1024)
+	} else if strings.Contains(allocatableMemory, "Ki") {
+		allocatableMemoryInBytesStr := strings.Split(allocatableMemory, "Ki")[0]
+		allocatableMemoryInBytes, _ := strconv.Atoi(allocatableMemoryInBytesStr)
+		totalAllocatableMemoryInBytes = allocatableMemoryInBytes * 1024
+	} else {
+		totalAllocatableMemoryInBytes, _ = strconv.Atoi(allocatableMemory)
+	}
+
+	totalMemoryInBytes := totalAllocatableMemoryInBytes - totalRequestedMemoryInBytes
+	return totalMemoryInBytes
+}
+
+func (pd *priorityPodDefinition) createPriorityPod(oc *exutil.CLI) {
+	o.Eventually(func() bool {
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pd.template, "-p", "NAME="+pd.name, "LABEL="+pd.label, "MEMORY="+strconv.Itoa(pd.memory), "PRIORITYCLASSNAME="+pd.priorityClassName, "NAMESPACE="+pd.namespace)
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false
+		}
+		return true
+	}).WithTimeout(20 * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
 }
