@@ -1190,8 +1190,11 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 		localTimeInMinutes := t.In(utc).Minute()
 		if localTimeInHours == 23 && localTimeInMinutes == 59 {
 			schedule = "01 0 * * *"
-		} else if localTimeInMinutes == 59 {
+		} else if localTimeInMinutes == 59 && localTimeInHours != 23 {
 			localTimeInHours = localTimeInHours + 1
+			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+		} else if localTimeInMinutes == 59 && localTimeInHours == 23 {
+			localTimeInHours = 00
 			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 		} else {
 			localTimeInMinutes = localTimeInMinutes + 2
