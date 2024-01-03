@@ -656,14 +656,16 @@ func patchCVOcontArg(oc *exutil.CLI, index int, value string) (string, error) {
 // Returns: true - found, false - not found
 func checkUpdates(oc *exutil.CLI, conditional bool, interval time.Duration, timeout time.Duration, expStrings ...string) bool {
 	var (
-		cmdOut, arg string
-		err         error
+		cmdOut string
+		err    error
 	)
-	if conditional {
-		arg = "--include-not-recommended"
-	}
+
 	if pollErr := wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
-		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", arg).Output()
+		if conditional {
+			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--include-not-recommended").Output()
+		} else {
+			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+		}
 		for _, str := range expStrings {
 			if !strings.Contains(cmdOut, str) || err != nil {
 				return false, err
