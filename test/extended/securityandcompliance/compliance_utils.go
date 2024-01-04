@@ -65,6 +65,8 @@ type scanSettingDescription struct {
 	debug                  bool
 	priorityclassname      string
 	template               string
+	cpu_limit              string
+	memory_limit           string
 }
 
 type scanSettingBindingDescription struct {
@@ -197,7 +199,7 @@ func (ss *scanSettingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ss.template, "-p", "NAME="+ss.name, "NAMESPACE="+ss.namespace, "PRIORITYCLASSNAME="+ss.priorityclassname,
 		"AUTOAPPLYREMEDIATIONS="+strconv.FormatBool(ss.autoapplyremediations), "SCHEDULE="+ss.schedule, "SIZE="+ss.size, "ROTATION="+strconv.Itoa(ss.rotation), "ROLES1="+ss.roles1,
 		"ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan), "AUTOUPDATEREMEDIATIONS="+strconv.FormatBool(ss.autoupdateremediations), "DEBUG="+strconv.FormatBool(ss.debug),
-		"SUSPEND="+strconv.FormatBool(ss.suspend))
+		"SUSPEND="+strconv.FormatBool(ss.suspend), "CPU_LIMIT="+ss.cpu_limit, "MEMORY_LIMIT="+ss.memory_limit)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

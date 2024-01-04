@@ -37,6 +37,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		tprofileTemplate                 string
 		tprofileWithoutVarTemplate       string
 		scansettingTemplate              string
+		scansettingLimitTemplate         string
 		scansettingSingleTemplate        string
 		scansettingbindingTemplate       string
 		scansettingbindingSingleTemplate string
@@ -82,6 +83,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		tprofileHypershfitTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-hypershift.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
 		scansettingTemplate = filepath.Join(buildPruningBaseDir, "scansetting.yaml")
+		scansettingLimitTemplate = filepath.Join(buildPruningBaseDir, "scansettingLimit.yaml")
 		scansettingSingleTemplate = filepath.Join(buildPruningBaseDir, "scansettingsingle.yaml")
 		scansettingbindingTemplate = filepath.Join(buildPruningBaseDir, "scansettingbinding.yaml")
 		scansettingbindingSingleTemplate = filepath.Join(buildPruningBaseDir, "oc-compliance-scansettingbinding.yaml")
@@ -5648,6 +5650,69 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("The ocp-68189 Verify multiple ScanSettingBindings using the same ScanSetting could be paused together.. !!!\n")
+	})
+
+	// author: vahirwad@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:vahirwad-Medium-53920-Check the scanner's and api-resource-collector's limits configurable [Serial]", func() {
+
+		var (
+			ss = scanSettingDescription{
+				name:           "scan-limit-" + getRandomString(),
+				namespace:      "",
+				roles1:         "master",
+				roles2:         "worker",
+				rotation:       3,
+				schedule:       "0 1 * * *",
+				strictnodescan: true,
+				size:           "1Gi",
+				debug:          true,
+				cpu_limit:      "150m",
+				memory_limit:   "512Mi",
+				template:       scansettingLimitTemplate,
+			}
+
+			ssb = scanSettingBindingDescription{
+				name:            "cis-scan-limit-test" + getRandomString(),
+				namespace:       "",
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis",
+				profilename2:    "ocp4-cis-node",
+				scansettingname: ss.name,
+				template:        scansettingbindingTemplate,
+			}
+		)
+
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssb.name})
+			cleanupObjects(oc, objectTableRef{"scansetting", subD.namespace, ss.name})
+		}()
+
+		g.By("Create scansetting !!!\n")
+		ss.namespace = subD.namespace
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssb.namespace = subD.namespace
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
+
+		g.By("Check the scanLimit for the ComplianceSuite.. !!!\n")
+		assertParameterValueForBulkPods(oc, "150m", "suite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.spec.scans[*].scanLimits.cpu}")
+		assertParameterValueForBulkPods(oc, "512Mi", "suite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.spec.scans[*].scanLimits.memory}")
+
+		g.By("Check the scanLimit for the scanner.. !!!\n")
+		assertParameterValueForBulkPods(oc, "150m", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.containers[?(@.name==\"scanner\")].resources.limits.cpu}")
+		assertParameterValueForBulkPods(oc, "512Mi", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.containers[?(@.name==\"scanner\")].resources.limits.memory}")
+
+		g.By("ocp-53920-Check the scanner's and api-resource-collector's limits configurable ..!!!\n")
 	})
 })
 
