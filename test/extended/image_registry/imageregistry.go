@@ -4461,4 +4461,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(endpoint_registry).Should(o.Equal(endpoint_registry))
 		o.Expect(endpoint_registry).NotTo(o.BeEmpty(), "private endpoint name is empty")
 	})
+
+	g.It("Author:wewang-Medium-68733-image registry should use ibmcos object storage on IPI-IBM cluster", func() {
+		g.By("Check platforms")
+		exutil.SkipIfPlatformTypeNot(oc, "IBMCloud")
+		g.By("Check image registry use ibmcos object storage")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.storage.ibmcos}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("bucket"))
+		o.Expect(output).To(o.ContainSubstring("resourceGroupName"))
+		o.Expect(output).To(o.ContainSubstring("location"))
+	})
 })
