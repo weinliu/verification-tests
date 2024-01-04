@@ -686,5 +686,120 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(strings.Contains(resp, "Hello OpenShift")).To(o.BeFalse())
 		}
 	})
+	//asood@redhat.com
+	g.It("NonPreRelease-Longduration-Author:asood-Critical-63301-Kube's API intermitent timeout via sdn or internal services from nodes or pods using hostnetwork. [Disruptive]", func() {
+		// From customer bug https://issues.redhat.com/browse/OCPBUGS-5828
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			hostNetworkPodTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+		)
+		//The test can run on the platforms that have nodes in same subnet as the hostnetworked pod backed service is accessible only such clusters.
+		//The test also adds a bad route on the node from where the service is accessed for testing purpose.
+		exutil.By("Check the platform if it is suitable for running the test")
+		platform := exutil.CheckPlatform(oc)
+		ipStackType := checkIPStackType(oc)
+		if !strings.Contains(platform, "vsphere") && !strings.Contains(platform, "baremetal") {
+			g.Skip("Unsupported platform, skipping the test")
+		}
+		if !strings.Contains(ipStackType, "ipv4single") {
+			g.Skip("Unsupported stack, skipping the test")
+		}
+		exutil.By("Get the schedulable worker nodes in ready state")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This test requires at least two worker nodes")
+		}
+
+		exutil.By("Switch the GW mode to Local")
+		origMode := getOVNGatewayMode(oc)
+		desiredMode := "local"
+		defer switchOVNGatewayMode(oc, origMode)
+		switchOVNGatewayMode(oc, desiredMode)
+
+		exutil.By("Get namespace ")
+		ns := oc.Namespace()
+
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-group", "privileged", "system:serviceaccounts:"+ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Create pod on host network in namespace")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[0].Name,
+			template:  hostNetworkPodTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod1.name)
+		exutil.By("Create a test service which is in front of the above pods")
+		svc := genericServiceResource{
+			servicename:           "test-service-63301",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "SingleStack",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
+		}
+
+		svc.createServiceFromParams(oc)
+
+		exutil.By("Check service status")
+		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
+
+		exutil.By("Get service IP")
+		//nodeIP1 and nodeIP2 will be IPv6 and IPv4 respectively in case of dual stack and IPv4/IPv6 in 2nd var case of single
+		_, nodeIP := getNodeIP(oc, nodeList.Items[0].Name)
+		var curlCmd, addRouteCmd, delRouteCmd string
+
+		svcIPv4 := getSvcIPv4(oc, svc.namespace, svc.servicename)
+		curlCmd = fmt.Sprintf("curl -v %s:27017 --connect-timeout 5", svcIPv4)
+		addRouteCmd = fmt.Sprintf("route add %s gw 127.0.0.1 lo", nodeIP)
+		delRouteCmd = fmt.Sprintf("route delete %s", nodeIP)
+
+		exutil.By("Create another pod for pinging the service")
+		pod2 := pingPodResourceNode{
+			name:      "ping-hello-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+		exutil.LabelPod(oc, pod2.namespace, pod2.name, "name-")
+		exutil.LabelPod(oc, pod2.namespace, pod2.name, "name=ping-hello-pod")
+
+		exutil.By("Validate the service from pod on cluster network")
+		CurlPod2SvcPass(oc, ns, ns, pod2.name, svc.servicename)
+
+		exutil.By("Validate the service from pod on host network")
+		output, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[1].Name, "bash", "-c", curlCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "Hello OpenShift!")).To(o.BeTrue())
+
+		exutil.By("Create a bad route to node where pod backing the service is running, on the host from where service is accessed ")
+
+		defer exutil.DebugNodeWithChroot(oc, nodeList.Items[1].Name, "/bin/bash", "-c", delRouteCmd)
+		_, err = exutil.DebugNodeWithChroot(oc, nodeList.Items[1].Name, "/bin/bash", "-c", addRouteCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Validate the service from pod on cluster network to verify it fails")
+		CurlPod2SvcFail(oc, ns, ns, pod2.name, svc.servicename)
+
+		exutil.By("Validate the service from pod on host network to verify it fails")
+		output, err = exutil.DebugNodeWithChroot(oc, nodeList.Items[1].Name, "bash", "-c", curlCmd)
+		if (err != nil) || (output != "") {
+			o.Expect(strings.Contains(output, "Hello OpenShift!")).To(o.BeFalse())
+		}
+		exutil.By("Delete the route that was added")
+		_, err = exutil.DebugNodeWithChroot(oc, nodeList.Items[1].Name, "/bin/bash", "-c", delRouteCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 
 })
