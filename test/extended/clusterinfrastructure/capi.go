@@ -25,12 +25,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check if cluster api on this platform is supported")
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
 
-		// There is a bug for GCP private cluster enable TechPreviewNoUpgrade https://issues.redhat.com/browse/OCPBUGS-5755
 		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if exutil.CheckPlatform(oc) == "gcp" && publicZone == "" {
-			g.Skip("GCP private cluster if enable TechPreviewNoUpgrade will hit https://issues.redhat.com/browse/OCPBUGS-5755, skip this case!!")
-		}
 
 		g.By("Check if cluster api is deployed, if no, enable it")
 		capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
