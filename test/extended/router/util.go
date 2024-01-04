@@ -842,12 +842,6 @@ func deleteDnsOperatorToRestore(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("label").Args("node", "-l", "ne-dns-testing=true", "ne-dns-testing-").Execute()
 }
 
-// patch the dns.operator/default with the original value
-func restoreDNSOperatorDefault(oc *exutil.CLI) {
-	//temporarily call deleteDnsOperatorToRestore() until all cases are updated
-	deleteDnsOperatorToRestore(oc)
-}
-
 func waitAllDNSPodsAppear(oc *exutil.CLI) {
 	for _, nodeName := range strings.Split(getAllLinuxNodes(oc), " ") {
 		waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
@@ -886,19 +880,6 @@ func getRandomDNSPodName(podList []string) string {
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	index := seed.Intn(len(podList))
 	return podList[index]
-}
-
-// this function is to delete all dns pods
-func delAllDNSPods(oc *exutil.CLI) {
-	podList := getAllDNSPodsNames(oc)
-	o.Expect(podList).NotTo(o.BeEmpty())
-	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns").Execute()
-	waitForRangeOfResourceToDisappear(oc, "openshift-dns", podList)
-}
-
-// this function is to delete all dns pods without wait
-func delAllDNSPodsNoWait(oc *exutil.CLI) {
-	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns", "--wait=false").Execute()
 }
 
 // this function is to check whether the given resource pod's are deleted or not
@@ -971,61 +952,6 @@ func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 	output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return append(attrList, []string{dnspodname, output})
-}
-
-// this function to get all Corefiles' info related to modified time, it looks like  {{"dns-default-0001", "2021-12-30 18.011111 Modified"}, {"dns-default-0002", "2021-12-30 18.021111 Modified"}}
-func getAllCorefilesStat(oc *exutil.CLI, podList []string) [][]string {
-	attrList := [][]string{}
-	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
-	for _, dnspodname := range podList {
-		output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		attrList = append(attrList, []string{dnspodname, output})
-	}
-	return attrList
-}
-
-// this function is to make sure all Corefiles(or one Corefile) of the dns pods are updated
-// the value of parameter attrList should be from the getOneCorefileStat or getAllCorefilesStat function, it is related to the time before patching something to the dns operator
-func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
-	ns := "openshift-dns"
-	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
-	updatedAttrList := [][]string{}
-	for _, dnspod := range attrList {
-		dnspodname := dnspod[0]
-		dnspodattr := dnspod[1]
-		count := 0
-		// fresh configmap by updating pod annotation
-		hackAnnotatePod(oc, ns, dnspodname)
-		waitErr := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
-			output, _ := oc.AsAdmin().Run("exec").Args("-n", ns, dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
-			count++
-			primary := false
-			if dnspodattr != output {
-				e2e.Logf(dnspodname + " Corefile is updated")
-				updatedAttrList = append(updatedAttrList, []string{dnspodname, output})
-				primary = true
-			} else {
-				// reduce the logs and refresh configmap to pod again
-				if count%10 == 1 {
-					e2e.Logf(dnspodname + " Corefile isn't updated , wait and try again...")
-					hackAnnotatePod(oc, ns, dnspodname)
-				}
-			}
-			return primary, nil
-		})
-		if waitErr != nil {
-			updatedAttrList = append(updatedAttrList, []string{dnspodname, dnspodattr})
-		}
-		exutil.AssertWaitPollNoErr(waitErr, dnspodname+" Corefile isn't updated")
-	}
-	return updatedAttrList
-}
-
-// this function is to wait for Corefile(s) is updated
-func waitCorefileUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
-	updatedAttrList := waitAllCorefilesUpdated(oc, attrList)
-	return updatedAttrList
 }
 
 // this fucntion will return the master pod who has the virtual ip

@@ -320,31 +320,31 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 		project1 := oc.Namespace()
 
-		g.By("Check updated value in dns operator file")
+		exutil.By("Check updated value in dns operator file")
 		output, err := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("bufsize 1232"))
 
-		g.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
+		exutil.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
 		podList := getAllDNSPodsNames(oc)
 		keepSearchInAllDNSPods(oc, podList, "bufsize 1232")
 
-		g.By("Create a client pod")
+		exutil.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
 
-		g.By("Client send out a dig for google.com to check response")
+		exutil.By("Client send out a dig for google.com to check response")
 		digOutput, err2 := oc.Run("exec").Args(cltPodName, "--", "dig", "google.com").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).To(o.ContainSubstring("udp: 1232"))
 
-		g.By("Client send out a dig for NXDOMAIN to check response")
+		exutil.By("Client send out a dig for NXDOMAIN to check response")
 		digOutput1, err3 := oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(digOutput1).To(o.ContainSubstring("udp: 1232"))
 
-		g.By("Check the different DNS records")
+		exutil.By("Check the different DNS records")
 		// To find the PTR record
 		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
 		digOutput3, err3 := oc.AsAdmin().Run("exec").Args("-n", "openshift-ingress-operator", ingressContPod[0],
@@ -359,14 +359,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(digOutput4).To(o.ContainSubstring("ingress-canary.openshift-ingress-canary.svc.cluster.local."))
 
 		// bug:- 1884053
-		g.By("Check Readiness probe configured to use the '/ready' path")
+		exutil.By("Check Readiness probe configured to use the '/ready' path")
 		dnsPodName2 := getRandomDNSPodName(podList)
 		output2, err4 := oc.AsAdmin().Run("get").Args("pod/"+dnsPodName2, "-n", "openshift-dns", "-o=jsonpath={.spec.containers[0].readinessProbe.httpGet}").Output()
 		o.Expect(err4).NotTo(o.HaveOccurred())
 		o.Expect(output2).To(o.ContainSubstring(`"path":"/ready"`))
 
 		// bug:- 1756344
-		g.By("Check the policy is sequential in Corefile of coredns under all dns-default-xxx pods")
+		exutil.By("Check the policy is sequential in Corefile of coredns under all dns-default-xxx pods")
 		keepSearchInAllDNSPods(oc, podList, "policy sequential")
 	})
 
@@ -378,36 +378,29 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			cacheDecimalValue = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"1.9s\", \"positiveTTL\":\"1.6m\"}}]"
 			cacheWrongValue   = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"-9s\", \"positiveTTL\":\"1.6\"}}]"
 		)
-		defer restoreDNSOperatorDefault(oc)
 
-		g.By("Patch dns operator with postive and negative cache values")
-		podList := getAllDNSPodsNames(oc)
-		attrList := getAllCorefilesStat(oc, podList)
+		exutil.By("1. Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
+
+		exutil.By("2. Patch the dns.operator/default with postive and negative cache values")
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheValue)
-		waitAllCorefilesUpdated(oc, attrList)
 
-		g.By("Check updated value in dns config map")
-		output1 := waitForConfigMapOutput(oc, "openshift-dns", "cm/dns-default", ".data.Corefile")
-		o.Expect(output1).To(o.ContainSubstring("1800"))
-		o.Expect(output1).To(o.ContainSubstring("604801"))
+		exutil.By("3. Check the cache value in Corefile of coredn")
+		cache := pollReadDnsCorefile(oc, oneDnsPod, "cache", "-A2", "denial")
+		o.Expect(cache).Should(o.And(o.ContainSubstring("1800"), o.ContainSubstring("604801")))
 
-		g.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
-		keepSearchInAllDNSPods(oc, podList, "1800")
-		keepSearchInAllDNSPods(oc, podList, "604801")
-
-		g.By("Patch dns operator with smallest cache values and verify the same")
+		exutil.By("4. Patch the dns.operator/default with smallest cache values and verify the same")
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheSmallValue)
-		output2 := waitForConfigMapOutput(oc, "openshift-dns", "cm/dns-default", ".data.Corefile")
-		o.Expect(output2).To(o.ContainSubstring("cache 1"))
-		o.Expect(output2).To(o.ContainSubstring("denial 9984 1"))
+		cache1 := pollReadDnsCorefile(oc, oneDnsPod, "cache", "-A2", "denial")
+		o.Expect(cache1).Should(o.And(o.ContainSubstring("1"), o.ContainSubstring("denial 9984 1")))
 
-		g.By("Patch dns operator with decimal cache values and verify the same")
+		exutil.By("5. Patch the dns.operator/default with decimal cache values and verify the same")
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheDecimalValue)
-		output3 := waitForConfigMapOutput(oc, "openshift-dns", "cm/dns-default", ".data.Corefile")
-		o.Expect(output3).To(o.ContainSubstring("96"))
-		o.Expect(output3).To(o.ContainSubstring("denial 9984 2"))
+		cache2 := pollReadDnsCorefile(oc, oneDnsPod, "cache", "-A2", "denial")
+		o.Expect(cache2).Should(o.And(o.ContainSubstring("96"), o.ContainSubstring("denial 9984 2")))
 
-		g.By("Patch dns operator with unrelasitc cache values and check the error messages")
+		exutil.By("6. Patch the dns.operator/default with unrelasitc cache values and check the error messages")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+cacheWrongValue, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("spec.cache.positiveTTL: Invalid value: \"1.6\""))
 		o.Expect(output).To(o.ContainSubstring("spec.cache.negativeTTL: Invalid value: \"-9s\""))
@@ -435,7 +428,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	// no master nodes on HyperShift guest cluster so this case is not available
 	g.It("NonHyperShiftHOST-Author:mjoseph-High-56325-DNS pod should not work on nodes with taint configured [Disruptive]", func() {
 
-		g.By("Check whether the dns pods eviction annotation is set or not")
+		exutil.By("Check whether the dns pods eviction annotation is set or not")
 		podList := getAllDNSPodsNames(oc)
 		dnsPodName := getRandomDNSPodName(podList)
 		findAnnotation := getAnnotation(oc, "openshift-dns", "po", dnsPodName)
@@ -447,7 +440,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		masterNodeName := getRandomDNSPodName(strings.Split(masterNodes, " "))
 		workerNodeName := getRandomDNSPodName(strings.Split(workerNodes, " "))
 
-		g.By("Apply NoSchedule taint to worker node and confirm the dns pod is not scheduled")
+		exutil.By("Apply NoSchedule taint to worker node and confirm the dns pod is not scheduled")
 		defer deleteTaint(oc, "node", workerNodeName, "dedicated-")
 		addTaint(oc, "node", workerNodeName, "dedicated=Kafka:NoSchedule")
 		// Confirming one node is not schedulable with dns pod
@@ -457,7 +450,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			e2e.Logf("Number of Nodes Misscheduled: 1 is not expected")
 		}
 
-		g.By("Apply NoSchedule taint to master node and confirm the dns pod is not scheduled on it")
+		exutil.By("Apply NoSchedule taint to master node and confirm the dns pod is not scheduled on it")
 		defer deleteTaint(oc, "node", masterNodeName, "dns-taint-")
 		addTaint(oc, "node", masterNodeName, "dns-taint=test:NoSchedule")
 		// Confirming two nodes are not schedulable with dns pod
@@ -471,7 +464,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	// Bug: 1916907
 	g.It("Author:mjoseph-Longduration-NonPreRelease-High-56539-Disabling internal registry should not corrupt /etc/hosts [Disruptive]", func() {
 
-		g.By("Pre-flight check for the platform type in the environment")
+		exutil.By("Pre-flight check for the platform type in the environment")
 		platformtype := exutil.CheckPlatform(oc)
 		platforms := map[string]bool{
 			// ‘None’ also for Baremetal
@@ -485,12 +478,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 
-		g.By("Get the Cluster IP of image-registry")
+		exutil.By("Get the Cluster IP of image-registry")
 		clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
 			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("SSH to the node and confirm the /etc/hosts have the same clusterIP")
+		exutil.By("SSH to the node and confirm the /etc/hosts have the same clusterIP")
 		allNodeList, _ := exutil.GetAllNodes(oc)
 		// get a random node
 		node := getRandomDNSPodName(allNodeList)
@@ -502,10 +495,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.ContainSubstring(clusterIP)))
 		o.Expect(hostOutput).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
 
-		g.By("Set status variables")
+		exutil.By("Set status variables")
 		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
-		g.By("Delete the image-registry svc and check whether it receives a new Cluster IP")
+		exutil.By("Delete the image-registry svc and check whether it receives a new Cluster IP")
 		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "image-registry", "-n", "openshift-image-registry").Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
@@ -520,7 +513,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(newClusterIP).NotTo(o.ContainSubstring(clusterIP))
 
-		g.By("SSH to the node and confirm the /etc/hosts details, after deletion")
+		exutil.By("SSH to the node and confirm the /etc/hosts details, after deletion")
 		hostOutput1, err3 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(hostOutput1).To(o.And(
@@ -528,9 +521,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6")))
 		o.Expect(hostOutput1).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
 
-		g.By("Disable the internal registry and check /host details")
+		exutil.By("Disable the internal registry and check /host details")
 		defer func() {
-			g.By("Recover image registry change")
+			exutil.By("Recover image registry change")
 			err4 := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", "{\"spec\":{\"managementState\":\"Managed\"}}", "--type=merge").Execute()
 			o.Expect(err4).NotTo(o.HaveOccurred())
 			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
@@ -544,7 +537,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		_, err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("SSH to the node and confirm the /etc/hosts details, after disabling")
+		exutil.By("SSH to the node and confirm the /etc/hosts details, after disabling")
 		hostOutput2, err5 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
 		o.Expect(err5).NotTo(o.HaveOccurred())
 		o.Expect(hostOutput2).To(o.And(
@@ -562,16 +555,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 		project1 := oc.Namespace()
 
-		g.By("Create a pod with 32 DNS search list")
+		exutil.By("Create a pod with 32 DNS search list")
 		createResourceFromFile(oc, project1, clientPod)
 		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
 
-		g.By("Check the pod event logs and confirm there is no Search Line limits")
+		exutil.By("Check the pod event logs and confirm there is no Search Line limits")
 		checkPodEvent := describePodResource(oc, cltPodName, project1)
 		o.Expect(checkPodEvent).NotTo(o.ContainSubstring("Warning  DNSConfigForming"))
 
-		g.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
+		exutil.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
 		execOutput, err := oc.Run("exec").Args(cltPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execOutput).To(o.ContainSubstring("8th.com 9th.com 10th.com 11th.com 12th.com 13th.com 14th.com 15th.com 16th.com 17th.com 18th.com 19th.com 20th.com 21th.com 22th.com 23th.com 24th.com 25th.com 26th.com 27th.com 28th.com 29th.com 30th.com 31th.com 32th.com"))
@@ -586,16 +579,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 		project1 := oc.Namespace()
 
-		g.By("Create a pod with a single search path with 253 characters")
+		exutil.By("Create a pod with a single search path with 253 characters")
 		createResourceFromFile(oc, project1, clientPod)
 		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
 
-		g.By("Check the pod event logs and confirm there is no Search Line limits")
+		exutil.By("Check the pod event logs and confirm there is no Search Line limits")
 		checkPodEvent := describePodResource(oc, cltPodName, project1)
 		o.Expect(checkPodEvent).NotTo(o.ContainSubstring("Warning  DNSConfigForming"))
 
-		g.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
+		exutil.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
 		execOutput, err := oc.Run("exec").Args(cltPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execOutput).To(o.ContainSubstring("t47x6d4lzz1zxm1bakrmiceb0tljzl9n8r19kqu9s3731ectkllp9mezn7cldozt25nlenyh5jus5b9rr687u2icimakjpyf4rsux3c66giulc0d2ipsa6bpa6dykgd0mc25r1m89hvzjcix73sdwfbu5q67t0c131i1fqne0o7we20ve2emh1046h9m854wfxo0spb2gv5d65v9x2ibuiti7rhr2y8u72hil5cutp63sbhi832kf3v4vuxa0"))
