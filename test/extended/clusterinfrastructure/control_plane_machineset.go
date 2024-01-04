@@ -709,4 +709,27 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-70442-[CPMS] A warning should be shown when removing the target pools from cpms [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+
+		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if publicZone == "" {
+			g.Skip("Because on private clusters we don't use target pools so skip this case for private clusters!!")
+		}
+
+		g.By("Remove targetpool")
+		targetPool, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
+		defer waitForClusterStable(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/spec/providerSpec/value/targetPools","value":`+targetPool+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/spec/providerSpec/value/targetPools"}]`, "--type=json", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("Warning: spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools: TargetPools field is not set on ControlPlaneMachineSet"))
+	})
 })
