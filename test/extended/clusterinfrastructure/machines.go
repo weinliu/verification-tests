@@ -741,6 +741,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-Medium-57438-Add support to Shielded VMs on GCP [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		architecture.SkipArchitectures(oc, architecture.ARM64)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-57438"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
