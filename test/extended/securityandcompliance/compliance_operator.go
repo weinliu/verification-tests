@@ -1420,6 +1420,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create worker-compliancesuite.. !!!\n")
 		csuiteD.create(oc)
+
 		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
@@ -1528,7 +1529,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-33453-The Compliance Operator rotates the raw scan results [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-33453-High-54066-The Compliance Operator rotates the raw scan results [Slow]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
@@ -1562,12 +1563,27 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Label all rhcos worker nodes as wscan.. !!!\n")
 		setLabelToNode(oc, "node-role.kubernetes.io/wscan=")
 
+		g.By("Create a compliancesuite anc check the status.. !!!\n")
 		csuiteD.namespace = subD.namespace
 		pvExtract.scanname = csuiteD.scanname
-		g.By("Create worker-compliancesuite.. !!!\n")
 		csuiteD.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Processing", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].reason}"}).check(oc)
+		timestampRunning, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancesuite", csuiteD.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].lastTransitionTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NotRunning", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Done", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].reason}"}).check(oc)
+		timestampDone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancesuite", csuiteD.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].lastTransitionTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(timestampDone).ShouldNot(o.Equal(timestampRunning))
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
@@ -1584,12 +1600,28 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		//Second round of scan and check
 		checkComplianceSuiteStatus(oc, csuiteD.name, subD.namespace, "RUNNING")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Processing", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].reason}"}).check(oc)
+		timestampReRunning, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancesuite", csuiteD.name, "-n", subD.namespace,
+			"-ojsonpath={.status.conditions[?(@.type==\"Processing\")].lastTransitionTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(timestampReRunning).ShouldNot(o.Equal(timestampDone))
 		newCheck("expect", asAdmin, withoutNamespace, contain, "1", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.scanStatuses[*].currentIndex}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"pod", "-l", "compliance.openshift.io/suite=" + csuiteD.name + ",workload=suitererunner", "-n",
 			subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NotRunning", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].reason}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Done", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].reason}"}).check(oc)
+		timestampRerunDone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancesuite", csuiteD.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].lastTransitionTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(timestampRerunDone).ShouldNot(o.Equal(timestampReRunning))
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
