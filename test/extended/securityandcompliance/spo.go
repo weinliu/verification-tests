@@ -730,9 +730,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		g.By("Create profilerecording !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
-			objectTableRef{"profilerecording", profileRecordingNs1.name, ns1},
-			objectTableRef{"profilerecording", profileRecordingNs2.name, ns2},
-			objectTableRef{"profilerecording", profileRecordingNs3.name, ns3})
+			objectTableRef{"profilerecording", ns1, profileRecordingNs1.name},
+			objectTableRef{"profilerecording", ns2, profileRecordingNs2.name},
+			objectTableRef{"profilerecording", ns3, profileRecordingNs3.name})
 		profileRecordingNs1.create(oc)
 		profileRecordingNs2.create(oc)
 		profileRecordingNs3.create(oc)
@@ -873,9 +873,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		g.By("Create profilerecording !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
-			objectTableRef{"profilerecording", profileRecordingNs1.name, ns1},
-			objectTableRef{"profilerecording", profileRecordingNs2.name, ns2},
-			objectTableRef{"profilerecording", profileRecordingNs3.name, ns3})
+			objectTableRef{"profilerecording", ns1, profileRecordingNs1.name},
+			objectTableRef{"profilerecording", ns2, profileRecordingNs2.name},
+			objectTableRef{"profilerecording", ns3, profileRecordingNs3.name})
 		profileRecordingNs1.create(oc)
 		profileRecordingNs2.create(oc)
 		profileRecordingNs3.create(oc)
@@ -977,8 +977,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		g.By("Create seccompprofiles and check status !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
-			objectTableRef{"seccompprofile", seccompNs1.name, ns1},
-			objectTableRef{"seccompprofile", seccompNs1.name, ns2})
+			objectTableRef{"seccompprofile", ns1, seccompNs1.name},
+			objectTableRef{"seccompprofile", ns2, seccompNs1.name})
 		seccompNs1.create(oc)
 		seccompNs2.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", seccompNs1.name, "-n", ns1, "-o=jsonpath={.status.status}"})
@@ -986,8 +986,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		g.By("Create profilebinding !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
-			objectTableRef{"profilebinding", profileBindingNs1.name, ns1},
-			objectTableRef{"profilebinding", profileBindingNs2.name, ns2})
+			objectTableRef{"profilebinding", ns1, profileBindingNs1.name},
+			objectTableRef{"profilebinding", ns2, profileBindingNs2.name})
 		profileBindingNs1.create(oc)
 		profileBindingNs2.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingNs1.name, ok, []string{"profilebinding", "-n", ns1,
@@ -1016,6 +1016,90 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		if strings.Contains(result2, "/tmpo/foo") && !strings.Contains(result2, "Operation not permittedd") {
 			e2e.Logf("%s is expected result", result2)
 		}
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-50077-Check profilebinding working as expected for selinuxprofile", func() {
+		ns1 := "do-binding-" + getRandomString()
+		ns2 := "dont-binding-" + getRandomString()
+		errorLoggerSelTemplate := filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger.yaml")
+		errorLoggerPodTemplate := filepath.Join(buildPruningBaseDir, "spo/pod-errorlogger.yaml")
+		podErrorloggerNs1 := "pod-errorlogger-ns1"
+		podErrorloggerNs2 := "pod-errorlogger-ns2"
+
+		var (
+			selinuxNs1 = selinuxProfile{
+				name:      "error-logger-" + getRandomString(),
+				namespace: ns1,
+				template:  errorLoggerSelTemplate,
+			}
+			profileBindingNs1 = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   ns1,
+				kind:        "SelinuxProfile",
+				profilename: selinuxNs1.name,
+				image:       "quay.io/openshifttest/busybox",
+				template:    profileBindingTemplate,
+			}
+		)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns2)
+
+		g.By("Created a pods with  !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"pod", ns1, podErrorloggerNs1})
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodTemplate, "-p", "NAME="+podErrorloggerNs1, "NAMESPACE="+ns1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertPodToBeReady(oc, podErrorloggerNs1, ns1)
+		newCheck("expect", asAdmin, withoutNamespace, contain, `{"capabilities":{"drop":["MKNOD"]}}`, ok, []string{"pod", podErrorloggerNs1, "-n", ns1,
+			"-o=jsonpath={.spec.initContainers[0].securityContext}"}).check(oc)
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+podErrorloggerNs1, "-c", "errorlogger", "-n", ns1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(msg, `/var/log/test.log: Permission denied`)).To(o.BeTrue())
+
+		g.By("Create selinuxprofile and check status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"selinuxprofile", ns1, selinuxNs1.name})
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxNs1.template, "-p", "NAME="+selinuxNs1.name, "NAMESPACE="+selinuxNs1.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxNs1.name, "-o=jsonpath={.status.status}", "-n", ns1)
+		usageNs1 := selinuxNs1.name + "_" + selinuxNs1.namespace + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usageNs1, ok, []string{"selinuxprofiles", selinuxNs1.name, "-n", selinuxNs1.namespace,
+			"-o=jsonpath={.status.usage}"}).check(oc)
+
+		g.By("Create profilebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilebinding", ns1, profileBindingNs1.name})
+		profileBindingNs1.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingNs1.name, ok, []string{"profilebinding", "-n", ns1,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Created pods with seccompprofiles and check pods status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns1, podErrorloggerNs1},
+			objectTableRef{"pod", ns2, podErrorloggerNs2})
+		cleanupObjectsIgnoreNotFound(oc, objectTableRef{"pod", ns1, podErrorloggerNs1})
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodTemplate, "-p", "NAME="+podErrorloggerNs1, "NAMESPACE="+ns1)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err2 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodTemplate, "-p", "NAME="+podErrorloggerNs2, "NAMESPACE="+ns2)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		exutil.AssertPodToBeReady(oc, podErrorloggerNs1, ns1)
+		exutil.AssertPodToBeReady(oc, podErrorloggerNs2, ns2)
+
+		g.By("Check whether the profilebinding take effect !!!")
+		result1, _ := oc.AsAdmin().Run("logs").Args("pod/"+podErrorloggerNs1, "-n", ns1, "-c", "errorlogger").Output()
+		o.Expect(result1).Should(o.BeEmpty())
+		result2, _ := oc.AsAdmin().Run("logs").Args("pod/"+podErrorloggerNs2, "-n", ns2, "-c", "errorlogger").Output()
+		o.Expect(strings.Contains(result2, "Permission denied")).To(o.BeTrue())
 	})
 
 	// author: xiyuan@redhat.com
@@ -1082,8 +1166,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		g.By("Create selinuxprofile and check status !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
-			objectTableRef{"selinuxprofile", selinuxNs1.name, ns1},
-			objectTableRef{"selinuxprofile", selinuxNs2.name, ns2})
+			objectTableRef{"selinuxprofile", ns1, selinuxNs1.name},
+			objectTableRef{"selinuxprofile", ns2, selinuxNs2.name})
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxNs1.template, "-p", "NAME="+selinuxNs1.name, "NAMESPACE="+selinuxNs1.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxNs2.template, "-p", "NAME="+selinuxNs2.name, "NAMESPACE="+selinuxNs2.namespace)
@@ -1099,8 +1183,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		g.By("Create profilebinding !!!")
 		defer cleanupObjectsIgnoreNotFound(oc,
-			objectTableRef{"profilebinding", profileBindingNs1.name, ns1},
-			objectTableRef{"profilebinding", profileBindingNs2.name, ns2})
+			objectTableRef{"profilebinding", ns1, profileBindingNs1.name},
+			objectTableRef{"profilebinding", ns2, profileBindingNs2.name})
 		profileBindingNs1.create(oc)
 		profileBindingNs2.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingNs1.name, ok, []string{"profilebinding", "-n", ns1,
