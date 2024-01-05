@@ -254,34 +254,35 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// bugzilla: 1934904
+	// Jira: OCPBUGS-9274
 	// no openshift-machine-api namespace on HyperShift guest cluster so this case is not available
-	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-Longduration-High-56240-Canary daemonset can schedule pods to both worker and infra nodes [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-High-56240-Canary daemonset can schedule pods to both worker and infra nodes [Disruptive]", func() {
 		var (
 			machinSetName = "machineset-56240"
 		)
 
-		g.By("Check the intial machines and canary pod details")
+		exutil.By("Check the intial machines and canary pod details")
 		getResourceName(oc, "openshift-machine-api", "machine")
 		getResourceName(oc, "openshift-ingress-canary", "pods")
 
-		g.By("Create a new machineset")
+		exutil.By("Create a new machineset")
 		exutil.SkipConditionally(oc)
 		ms := exutil.MachineSetDescription{Name: machinSetName, Replicas: 1}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
-		g.By("Update machineset to schedule infra nodes")
+		exutil.By("Update machineset to schedule infra nodes")
 		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", "machineset-56240", "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"taints\":null}}}}", "--type=merge").Output()
 		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", "machineset-56240", "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"metadata\":{\"labels\":{\"ingress\": \"true\", \"node-role.kubernetes.io/infra\": \"\"}}}}}}", "--type=merge").Output()
 		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
 		updatedMachineName := exutil.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
 
-		g.By("Reschedule the running machineset with infra details")
+		exutil.By("Reschedule the running machineset with infra details")
 		exutil.DeleteMachine(oc, updatedMachineName[0])
 		updatedMachineName1 := exutil.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
 
-		g.By("Check the canary deamonset is scheduled on infra node which is newly created")
+		exutil.By("Check the canary deamonset is scheduled on infra node which is newly created")
 		// confirm the new machineset is already created
 		updatedMachineSetName := exutil.ListWorkerMachineSetNames(oc)
 		checkGivenStringPresentOrNot(true, updatedMachineSetName, machinSetName)
@@ -290,21 +291,27 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// confirm a canary pod got scheduled on to the infra node
 		searchInDescribeResource(oc, "node", infraNode, "canary")
 
-		g.By("Confirming the canary namespace is over-rided with the default node selector")
+		exutil.By("Confirming the canary namespace is over-rided with the default node selector")
 		annotations, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-ingress-canary", "-ojsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(annotations).To(o.ContainSubstring(`openshift.io/node-selector":""`))
 
-		g.By("Confirming the canary daemonset has the default tolerations included for infra role")
+		exutil.By("Confirming the canary daemonset has the default tolerations included for infra role")
 		tolerations := fetchJSONPathValue(oc, "openshift-ingress-canary", "daemonset/ingress-canary", ".spec.template.spec.tolerations")
-		o.Expect(tolerations).To(o.ContainSubstring(`effect":"NoSchedule`))
 		o.Expect(tolerations).To(o.ContainSubstring(`key":"node-role.kubernetes.io/infra`))
 
-		g.By("Tainting the infra nodes and confirm canary pods continues to remain up and functional on those nodes")
+		exutil.By("Tainting the infra nodes with 'NoSchedule' and confirm canary pods continues to remain up and functional on those nodes")
 		nodeNameOfMachine := exutil.GetNodeNameFromMachine(oc, updatedMachineName1[0])
 		output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "nodes", nodeNameOfMachine, "node-role.kubernetes.io/infra:NoSchedule").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("node/" + nodeNameOfMachine + " tainted"))
+		// confirm the canary pod is still present in the infra node
+		searchInDescribeResource(oc, "node", infraNode, "canary")
+
+		exutil.By("Tainting the infra nodes with 'NoExecute' and confirm canary pods continues to remain up and functional on those nodes")
+		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "nodes", nodeNameOfMachine, "node-role.kubernetes.io/infra:NoExecute").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(output1).To(o.ContainSubstring("node/" + nodeNameOfMachine + " tainted"))
 		// confirm the canary pod is still present in the infra node
 		searchInDescribeResource(oc, "node", infraNode, "canary")
 	})
