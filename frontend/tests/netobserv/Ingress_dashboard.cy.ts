@@ -1,5 +1,12 @@
 import { dashboard } from "views/dashboards-page"
 
+const ingressPanels = [
+    "current-total-incoming-bandwidth-chart",
+    "current-total-outgoing-bandwidth-chart",
+    "http-error-rate-chart",
+    "http-server-average-response-latency-chart"
+]
+
 const bytesHTTP = [
     "incoming-bytes-chart",
     "outgoing-bytes-chart",
@@ -22,7 +29,6 @@ describe('NETOBSERV networking dashboards tests', { tags: ['NETOBSERV'] }, funct
         dashboard.visitDashboard("grafana-dashboard-ingress-operator")
 
         // verify that 'Current Total Incoming Bandwidth', 'Current Total Outgoing Bandwidth', 'HTTP Error Rate' and 'HTTP Server Average Response Latency' panels exist and are populated
-        var ingressPanels: string[] = ['current-total-incoming-bandwidth-chart', 'current-total-outgoing-bandwidth-chart', 'http-error-rate-chart', 'http-server-average-response-latency-chart']
         cy.checkDashboards(ingressPanels)
 
         // verify 'Top 10 Per Route' bytes and HTTP panels exists and are populated
