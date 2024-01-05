@@ -246,10 +246,11 @@ func (tab *tableData) Parse() *tableData {
 	offsetMap := tableTitle(titleLine)
 
 	result := []map[string]interface{}{}
-	for _, line := range lines[1 : len(lines)-1] {
-		result = append(result, tableLine(line, offsetMap))
+	if len(lines) >= 2 {
+		for _, line := range lines[1 : len(lines)-1] {
+			result = append(result, tableLine(line, offsetMap))
+		}
 	}
-
 	tab.output = result
 	return tab
 }

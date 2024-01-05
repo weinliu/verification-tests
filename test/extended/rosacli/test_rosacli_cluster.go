@@ -46,17 +46,23 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		if private {
 			g.Skip("This case needs to test on private cluster as the prerequirement,it was not fullfilled, skip the case!!")
 		}
+		isSTS, err := isSTSCluster(clusterID)
+		o.Expect(err).To(o.BeNil())
 		g.By("Edit cluster to private to true")
 		out, err := clusterService.EditCluster(
 			clusterID,
 			"--private",
 			"-y",
 		)
-		o.Expect(err).To(o.BeNil())
-		textData := rosaClient.Parser.TextData.Input(out).Parse().Tip()
-		o.Expect(textData).Should(o.ContainSubstring("You are choosing to make your cluster API private. You will not be able to access your cluster"))
-		o.Expect(textData).Should(o.ContainSubstring("Updated cluster '%s'", clusterID))
-
+		if !isSTS {
+			o.Expect(err).To(o.BeNil())
+			textData := rosaClient.Parser.TextData.Input(out).Parse().Tip()
+			o.Expect(textData).Should(o.ContainSubstring("You are choosing to make your cluster API private. You will not be able to access your cluster"))
+			o.Expect(textData).Should(o.ContainSubstring("Updated cluster '%s'", clusterID))
+		} else {
+			o.Expect(err).ToNot(o.BeNil())
+			o.Expect(rosaClient.Parser.TextData.Input(out).Parse().Tip()).Should(o.ContainSubstring("Failed to update cluster: Cannot update listening mode of cluster's API on an AWS STS cluster"))
+		}
 		defer func() {
 			g.By("Edit cluster to private back to false")
 			out, err = clusterService.EditCluster(
@@ -65,7 +71,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 				"-y",
 			)
 			o.Expect(err).To(o.BeNil())
-			textData = rosaClient.Parser.TextData.Input(out).Parse().Tip()
+			textData := rosaClient.Parser.TextData.Input(out).Parse().Tip()
 			o.Expect(textData).Should(o.ContainSubstring("Updated cluster '%s'", clusterID))
 
 			g.By("Describe cluster to check Private is true")
@@ -81,8 +87,11 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A Edit cluster", func() {
 		o.Expect(err).To(o.BeNil())
 		CD, err := clusterService.ReflectClusterDescription(output)
 		o.Expect(err).To(o.BeNil())
-		o.Expect(CD.Private).To(o.Equal("Yes"))
-
+		if !isSTS {
+			o.Expect(CD.Private).To(o.Equal("Yes"))
+		} else {
+			o.Expect(CD.Private).To(o.Equal("No"))
+		}
 	})
 
 	// OCM-5231 caused the description parser issue

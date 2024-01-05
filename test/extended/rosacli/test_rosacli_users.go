@@ -95,8 +95,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A users testing", func() {
 
 		g.By("List users")
 		usersList, _, err = userService.ListUsers(clusterID)
-		// o.Expect(err).ToNot(o.HaveOccurred())
-		o.Expect(err).To(o.HaveOccurred()) // To set back once https://issues.redhat.com/browse/OCM-4806 is solved
+		o.Expect(err).ToNot(o.HaveOccurred())
 
 		foundUser, err := usersList.User(dedicatedAdminsUserName)
 		o.Expect(err).ToNot(o.HaveOccurred())

@@ -24,6 +24,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A oidc provider test", fun
 
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
+		ocmResourceService = rosaClient.OCMResource
 	})
 
 	g.AfterEach(func() {
