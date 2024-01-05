@@ -710,18 +710,20 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 func verifyCaps(oc *exutil.CLI, caps []string) (err error) {
 	// Important! this map should be updated each version with new capabilities, as they added to openshift.
 	capability_operators := map[string]string{
-		"Build":             "build",
-		"CSISnapshot":       "csi-snapshot-controller",
-		"Console":           "console",
-		"DeploymentConfig":  "dc",
-		"ImageRegistry":     "image-registry",
-		"Insights":          "insights",
-		"MachineAPI":        "machine-api",
-		"NodeTuning":        "node-tuning",
-		"Storage":           "storage",
-		"baremetal":         "baremetal",
-		"marketplace":       "marketplace",
-		"openshift-samples": "openshift-samples",
+		"Build":                    "build",
+		"CSISnapshot":              "csi-snapshot-controller",
+		"Console":                  "console",
+		"DeploymentConfig":         "dc",
+		"ImageRegistry":            "image-registry",
+		"Insights":                 "insights",
+		"MachineAPI":               "machine-api",
+		"NodeTuning":               "node-tuning",
+		"Storage":                  "storage",
+		"baremetal":                "baremetal",
+		"marketplace":              "marketplace",
+		"openshift-samples":        "openshift-samples",
+		"OperatorLifecycleManager": "operator-lifecycle-manager",
+		"CloudCredential":          "cloud-credential",
 	}
 	for _, op := range caps {
 		prefix := "co"
