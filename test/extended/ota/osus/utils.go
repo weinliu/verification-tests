@@ -169,41 +169,40 @@ func copyFile(source string, dest string) {
 }
 
 // Set ENV for oc-mirror credential
-func locatePodmanCred(oc *exutil.CLI, dst string) (err error) {
+func locatePodmanCred(oc *exutil.CLI, dst string) (dirname string, err error) {
 	e2e.Logf("Setting env for oc-mirror credential")
 	if err = exutil.GetPullSec(oc, dst); err != nil {
-		return fmt.Errorf("extract pull-secret failed: %v", err)
+		return "", fmt.Errorf("extract pull-secret failed: %v", err)
 	}
 	if os.Getenv("CLUSTER_PROFILE_DIR") != "" {
 		cmd := fmt.Sprintf("jq -s '.[0]*.[1]' %s %s > %s", dst+"/.dockerconfigjson", os.Getenv("CLUSTER_PROFILE_DIR")+"/pull-secret", dst+"/auth.json")
 		if _, err = exec.Command("bash", "-c", cmd).CombinedOutput(); err != nil {
-			return fmt.Errorf("%s failed: %v", cmd, err)
+			return "", fmt.Errorf("%s failed: %v", cmd, err)
 		}
 	} else {
 		copyFile(dst+"/.dockerconfigjson", dst+"/auth.json")
 	}
-
 	envDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
 	containerDir := envDir + "/containers/"
 	key := "XDG_RUNTIME_DIR"
 	currentRuntime, ex := os.LookupEnv(key)
 	if !ex {
 		if err = os.MkdirAll(containerDir, 0700); err != nil {
-			return fmt.Errorf("make dir failed: %v", err)
+			return "", fmt.Errorf("make dir failed: %v", err)
 		}
 		os.Setenv(key, envDir)
 		copyFile(dst+"/auth.json", containerDir+"auth.json")
-		return
+		return containerDir, nil
 	}
-	_, err = os.Stat(currentRuntime + "containers/auth.json")
+	runtimeContainerDir := currentRuntime + "/containers/"
+	_, err = os.Stat(runtimeContainerDir + "auth.json")
 	if os.IsNotExist(err) {
-		if err = os.MkdirAll(currentRuntime+"containers", 0700); err != nil {
-			return fmt.Errorf("make dir failed: %v", err)
+		if err = os.MkdirAll(runtimeContainerDir, 0700); err != nil {
+			return "", fmt.Errorf("make dir failed: %v", err)
 		}
-		copyFile(dst+"/auth.json", containerDir+"auth.json")
-		return
+		copyFile(dst+"/auth.json", runtimeContainerDir+"auth.json")
 	}
-	return
+	return runtimeContainerDir, nil
 }
 
 // Mirror OCP release and graph data image to local registry
@@ -410,4 +409,55 @@ func installOSUSAppOC(oc *exutil.CLI, us updateService) (err error) {
 	}
 	waitForPodReady(oc, "app="+us.name, oc.Namespace())
 	return nil
+}
+
+func installOSUSOperator(oc *exutil.CLI, version string, mode string) {
+	e2e.Logf("Install OSUS operator")
+	testDataDir := exutil.FixturePath("testdata", "ota/osus")
+	ogTemp := filepath.Join(testDataDir, "operatorgroup.yaml")
+	subTemp := filepath.Join(testDataDir, "subscription.yaml")
+	var csv string
+	if version == "" {
+		csv = version
+	} else {
+		csv = fmt.Sprintf("update-service-operator.v%s", version)
+	}
+
+	og := operatorGroup{
+		name:      "osus-og",
+		namespace: oc.Namespace(),
+		template:  ogTemp,
+	}
+
+	sub := subscription{
+		name:            "osus-sub",
+		namespace:       oc.Namespace(),
+		channel:         "v1",
+		approval:        mode,
+		operatorName:    "cincinnati-operator",
+		sourceName:      "qe-app-registry",
+		sourceNamespace: "openshift-marketplace",
+		startingCSV:     csv,
+		template:        subTemp,
+	}
+
+	e2e.Logf("Create OperatorGroup...")
+	og.create(oc)
+
+	e2e.Logf("Create Subscription...")
+	sub.create(oc)
+
+	if mode == "Manual" && version != "" {
+		e2e.Logf("Approve installplan manually...")
+		jsonpath := fmt.Sprintf("-o=jsonpath={.items[?(@.spec.clusterServiceVersionNames[]=='%s')].metadata.name}", csv)
+		o.Consistently(func() string {
+			osusIP, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", jsonpath, "-n", oc.Namespace()).Output()
+			e2e.Logf("waiting for ip: %s", osusIP)
+			return osusIP
+		}, 300*time.Second, 60*time.Second).ShouldNot(o.BeEmpty(), "Fail to generate installplan!")
+		osusIP, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", jsonpath, "-n", oc.Namespace()).Output()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("installplan", osusIP, "--type=json", "-p", "[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\": true}]", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	waitForPodReady(oc, "name=updateservice-operator", oc.Namespace())
 }

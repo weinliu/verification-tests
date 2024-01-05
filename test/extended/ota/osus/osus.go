@@ -105,53 +105,94 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		exutil.AssertWaitPollNoErr(err, "updateservice operator is not uninstalled")
 	})
 
+	//author: jiajliu@redhat.com
+	g.It("NonPreRelease-Longduration-DisconnectedOnly-Author:jiajliu-High-44958-z version upgrade OSUS operator and operand for disconnected cluster [Disruptive]", func() {
+		updatePath := map[string]string{
+			"srcver": "5.0.1",
+			"tgtver": "5.0.2",
+		}
+		tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
+		defer os.RemoveAll(tempDataDir)
+		err := os.MkdirAll(tempDataDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oc.SetupProject()
+
+		g.By("Install osus operator with srcver")
+		installOSUSOperator(oc, updatePath["srcver"], "Manual")
+		preOPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=name=updateservice-operator", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		csvInPrePod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", preOPName, "-o=jsonpath={.spec.containers[].env[?(@.name=='OPERATOR_CONDITION_NAME')].value}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(csvInPrePod).To(o.ContainSubstring(updatePath["srcver"]), "Unexpected operator version installed: %s.", csvInPrePod)
+
+		g.By("Install OSUS instance")
+		e2e.Logf("Mirror OCP release and graph data image by oc-mirror...")
+		registry, err := exutil.GetMirrorRegistry(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		credDir, err := locatePodmanCred(oc, tempDataDir)
+		defer os.RemoveAll(credDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		outdir, err := ocmirror(oc, registry+"/oc-mirror", tempDataDir)
+		e2e.Logf("oc mirror output dir is %s", outdir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Configure the Registry Certificate as trusted for cincinnati...")
+		certFile := tempDataDir + "/cert"
+		err = exutil.GetUserCAToFile(oc, certFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA)
+		err = trustCert(oc, registry, certFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Create updateservice...")
+		defer uninstallOSUSApp(oc)
+		err = installOSUSAppOCMirror(oc, outdir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = verifyOSUS(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		preAPPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=app=update-service-oc-mirror", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("z-version upgrade against operator and operand")
+		ips, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(strings.Fields(ips))).To(o.Equal(2), "Unexpected installplan found: %s", ips)
+		e2e.Logf("Manually approve new installplan for update...")
+		jsonpath := fmt.Sprintf("-o=jsonpath={.items[?(@.spec.clusterServiceVersionNames[]=='update-service-operator.v%s')].metadata.name}", updatePath["tgtver"])
+		osusIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", jsonpath, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("installplan", osusIP, "--type=json", "-p", "[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\": true}]", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Waiting for operator and operand pods rolling...")
+		var postOPName string
+		err = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
+			postOPName, errOP := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=name=updateservice-operator", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+			postAPPName, errAPP := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=app=update-service-oc-mirror", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+			if errOP != nil || errAPP != nil || strings.Compare(postOPName, preOPName) == 0 || strings.Compare(postAPPName, preAPPName) == 0 {
+				e2e.Logf("error: %v|%v; running pods after upgrade: %s|%s; while running pods before upgrade: %s|%s", errOP, errAPP, postOPName, postAPPName, preOPName, preAPPName)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod is not rolling successfully after upgrade")
+		csvInPostPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", postOPName, "-o=jsonpath={.spec.containers[].env[?(@.name=='OPERATOR_CONDITION_NAME')].value}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(csvInPostPod).To(o.ContainSubstring(updatePath["tgtver"]), "Unexpected operator version upgraded: %s.", csvInPostPod)
+	})
 })
 
 var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc          = exutil.NewCLI("osusinstace", exutil.KubeConfigPath())
-		testDataDir string
-		ogTemp      string
-		subTemp     string
-		operatorPod string
-	)
+	oc := exutil.NewCLI("osusinstace", exutil.KubeConfigPath())
 
 	g.BeforeEach(func() {
 		exutil.SkipMissingQECatalogsource(oc)
 		arch.SkipNonAmd64SingleArch(oc)
-
-		testDataDir = exutil.FixturePath("testdata", "ota/osus")
-		ogTemp = filepath.Join(testDataDir, "operatorgroup.yaml")
-		subTemp = filepath.Join(testDataDir, "subscription.yaml")
-		operatorPod = "name=updateservice-operator"
-
-		g.By("Install OSUS operator")
-
 		oc.SetupProject()
-
-		og := operatorGroup{
-			name:      "osus-og",
-			namespace: oc.Namespace(),
-			template:  ogTemp,
-		}
-
-		sub := subscription{
-			name:            "osus-sub",
-			namespace:       oc.Namespace(),
-			channel:         "v1",
-			approval:        "Automatic",
-			operatorName:    "cincinnati-operator",
-			sourceName:      "qe-app-registry",
-			sourceNamespace: "openshift-marketplace",
-			template:        subTemp,
-		}
-		e2e.Logf("osus project is %s", oc.Namespace())
-
-		og.create(oc)
-		sub.create(oc)
-		waitForPodReady(oc, operatorPod, oc.Namespace())
+		installOSUSOperator(oc, "", "Automatic")
 	})
 
 	//author: yanyang@redhat.com
@@ -165,7 +206,8 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		defer os.RemoveAll(dirname)
 		err = os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = locatePodmanCred(oc, dirname)
+		credDir, err := locatePodmanCred(oc, dirname)
+		defer os.RemoveAll(credDir)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		outdir, err := ocmirror(oc, registry+"/oc-mirror", dirname)

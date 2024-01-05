@@ -7,7 +7,6 @@ storageConfig:
 mirror:
   platform:
     channels:
-    - name: candidate-4.13
-      minVersion: 4.13.0
-      maxVersion: 4.13.0 
+    - name: candidate-4.14
+      type: ocp 
     graph: true
