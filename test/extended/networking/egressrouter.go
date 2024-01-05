@@ -3,7 +3,6 @@ package networking
 import (
 	"context"
 	"fmt"
-	"net"
 	"path/filepath"
 	"strings"
 
@@ -41,19 +40,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip for single stack cluster!!!")
 		}
 		var (
-			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking")
-			egressBaseDir        = filepath.Join(buildPruningBaseDir, "egressrouter")
-			pingPodTemplate      = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
-			egressRouterTemplate = filepath.Join(egressBaseDir, "egressrouter-multiple-destination-template.yaml")
-			egressRouterService  = filepath.Join(egressBaseDir, "serive-egressrouter.yaml")
-			url                  = "www.google.com"
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
+			egressBaseDir                = filepath.Join(buildPruningBaseDir, "egressrouter")
+			pingPodTemplate              = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			egressRouterTemplate         = filepath.Join(egressBaseDir, "egressrouter-multiple-destination-template.yaml")
+			egressRouterService          = filepath.Join(egressBaseDir, "serive-egressrouter.yaml")
+			egressRouterServiceDualStack = filepath.Join(egressBaseDir, "serive-egressrouter-dualstack.yaml")
+			url                          = "www.google.com"
 		)
 
 		exutil.By("1. nslookup obtain dns server ip for url \n")
-		ips, err := net.LookupIP(url)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("ip address from nslookup for %v: %v", url, ips)
-		destinationIP := ips[0].String()
+		destinationIP := nslookDomainName(url)
+		e2e.Logf("ip address from nslookup for %v: %v", url, destinationIP)
 
 		exutil.By("2. Get gateway for one worker node \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -100,7 +98,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		exutil.By("6. Create service for egress router pod! \n")
-		createResourceFromFile(oc, ns1, egressRouterService)
+		if ipStackType == "dualstack" {
+			createResourceFromFile(oc, ns1, egressRouterServiceDualStack)
+		} else {
+			createResourceFromFile(oc, ns1, egressRouterService)
+		}
 
 		exutil.By("7. create hello pod in ns1 \n")
 		pod1 := pingPodResourceNode{
@@ -112,7 +114,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, ns1, pod1.name)
 
 		exutil.By("8. Get service IP \n")
-		svcIPv4, _ := getSvcIP(oc, ns1, "ovn-egressrouter-multidst-svc")
+		var svcIPv4 string
+		if ipStackType == "dualstack" {
+			_, svcIPv4 = getSvcIP(oc, ns1, "ovn-egressrouter-multidst-svc")
+		} else {
+			svcIPv4, _ = getSvcIP(oc, ns1, "ovn-egressrouter-multidst-svc")
+		}
 
 		exutil.By("9. Check result,the svc for egessrouter can be accessed \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":5000 --connect-timeout 5")
