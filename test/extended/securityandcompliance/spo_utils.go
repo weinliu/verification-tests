@@ -31,9 +31,10 @@ type profileBindingDescription struct {
 }
 
 type selinuxProfile struct {
-	name      string
-	namespace string
-	template  string
+	name       string
+	namespace  string
+	permissive bool
+	template   string
 }
 
 type saRoleRoleBindingDescription struct {
@@ -57,6 +58,12 @@ type workloadDescription struct {
 	image        string
 	imageName    string
 	template     string
+}
+
+func (sp *selinuxProfile) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", sp.namespace, "-f", sp.template, "-p", "NAME="+sp.name,
+		"NAMESPACE="+sp.namespace, "PERMISSIVE="+strconv.FormatBool(sp.permissive))
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func assertKeywordsExistsInSelinuxFile(oc *exutil.CLI, usage string, parameters ...string) {

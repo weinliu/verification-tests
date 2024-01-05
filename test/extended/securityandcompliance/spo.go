@@ -21,29 +21,31 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	defer g.GinkgoRecover()
 
 	var (
-		oc                            = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
-		buildPruningBaseDir           string
-		ogSpoTemplate                 string
-		subSpoTemplate                string
-		secProfileTemplate            string
-		secProfileStackTemplate       string
-		podWithProfileTemplate        string
-		selinuxProfileNginxTemplate   string
-		podWithSelinuxProfileTemplate string
-		profileRecordingTemplate      string
-		profileBindingTemplate        string
-		saRoleRolebindingTemplate     string
-		selinuxProfileCustomTemplate  string
-		workloadDaeTemplate           string
-		workloadDeployTemplate        string
-		pathWebhookBinding            string
-		pathWebhookRecording          string
-		podWithLabelsTemplate         string
-		podWithOneLabelTemplate       string
-		workloadRepTemplate           string
-		workloadCronjobTemplate       string
-		workloadPodTemplate           string
-		workloadJobTemplate           string
+		oc                                        = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir                       string
+		errorLoggerSelEnforcingTemplate           string
+		ogSpoTemplate                             string
+		subSpoTemplate                            string
+		secProfileTemplate                        string
+		secProfileStackTemplate                   string
+		podWithProfileTemplate                    string
+		selinuxProfileNginxTemplate               string
+		podWithSelinuxProfileTemplate             string
+		errorLoggerPodWithSecuritycontextTemplate string
+		profileRecordingTemplate                  string
+		profileBindingTemplate                    string
+		saRoleRolebindingTemplate                 string
+		selinuxProfileCustomTemplate              string
+		workloadDaeTemplate                       string
+		workloadDeployTemplate                    string
+		pathWebhookBinding                        string
+		pathWebhookRecording                      string
+		podWithLabelsTemplate                     string
+		podWithOneLabelTemplate                   string
+		workloadRepTemplate                       string
+		workloadCronjobTemplate                   string
+		workloadPodTemplate                       string
+		workloadJobTemplate                       string
 
 		ogD                 operatorGroupDescription
 		subD                subscriptionDescription
@@ -52,6 +54,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	g.BeforeEach(func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
+		errorLoggerSelEnforcingTemplate = filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger-enforcing.yaml")
+		errorLoggerPodWithSecuritycontextTemplate = filepath.Join(buildPruningBaseDir, "spo/pod-errorlogger-with-securityContext.yaml")
 		ogSpoTemplate = filepath.Join(buildPruningBaseDir, "operator-group-all-namespaces.yaml")
 		subSpoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
 		secProfileTemplate = filepath.Join(buildPruningBaseDir, "seccompprofile.yaml")
@@ -1103,7 +1107,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51408-Check profilebinding could make use of webhookOptions object in webhooks for selinuxprofile [Disruptive]", func() {
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51408-Check profilebinding could make use of webhookOptions object in webhooks for selinuxprofile [Disruptive]", func() {
 		ns1 := "do-binding-" + getRandomString()
 		ns2 := "dont-binding-" + getRandomString()
 		errorLoggerSelTemplate := filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger.yaml")
@@ -1209,6 +1213,67 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		o.Expect(result1).Should(o.BeEmpty())
 		result2, _ := oc.AsAdmin().Run("logs").Args("pod/"+podErrorloggerNs2, "-n", ns2, "-c", "errorlogger").Output()
 		o.Expect(result2).Should(o.ContainSubstring("Permission denied"))
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-56130-Check the permissive boolean works for a selinuxprofile [Slow]", func() {
+		ns := "permissive-test-" + getRandomString()
+		podEnforing := "pod-errorlogger-enforcing"
+		podPermissive := "pod-errorlogger-permissive"
+		var (
+			selinuxProfileEnforcing = selinuxProfile{
+				name:       "error-logger-enforcing",
+				namespace:  ns,
+				permissive: false,
+				template:   errorLoggerSelEnforcingTemplate,
+			}
+			selinuxProfilePermissive = selinuxProfile{
+				name:       "error-logger-permissive",
+				namespace:  ns,
+				permissive: true,
+				template:   errorLoggerSelEnforcingTemplate,
+			}
+		)
+
+		g.By("Create namespace !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns, ns})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns, "-n", ns, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		g.By("Create selinuxprofile and check status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"selinuxprofile", ns, selinuxProfileEnforcing.name},
+			objectTableRef{"selinuxprofile", ns, selinuxProfilePermissive.name})
+		selinuxProfileEnforcing.create(oc)
+		selinuxProfilePermissive.create(oc)
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxProfileEnforcing.name, "-o=jsonpath={.status.status}", "-n", ns)
+		usageEnforcing := selinuxProfileEnforcing.name + "_" + selinuxProfileEnforcing.namespace + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usageEnforcing, ok, []string{"selinuxprofiles", selinuxProfileEnforcing.name, "-n", selinuxProfileEnforcing.namespace,
+			"-o=jsonpath={.status.usage}"}).check(oc)
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxProfilePermissive.name, "-o=jsonpath={.status.status}", "-n", ns)
+		ususagePermissive := selinuxProfilePermissive.name + "_" + selinuxProfilePermissive.namespace + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, ususagePermissive, ok, []string{"selinuxprofiles", selinuxProfilePermissive.name, "-n", selinuxProfilePermissive.namespace,
+			"-o=jsonpath={.status.usage}"}).check(oc)
+
+		g.By("Created pods with seccompprofiles and check pods status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns, podEnforing},
+			objectTableRef{"pod", ns, podPermissive})
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodWithSecuritycontextTemplate, "-p", "NAME="+podEnforing, "NAMESPACE="+ns, "TYPE="+usageEnforcing)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err2 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodWithSecuritycontextTemplate, "-p", "NAME="+podPermissive, "NAMESPACE="+ns, "TYPE="+ususagePermissive)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Error", ok, []string{"pod", podEnforing, "-n", ns,
+			"-o=jsonpath={.status.containerStatuses[?(@.name==\"errorlogger\")].state.terminated.reason}"}).check(oc)
+		exutil.AssertPodToBeReady(oc, podPermissive, ns)
+
+		g.By("Check whether the profilebinding take effect !!!")
+		result1, _ := oc.AsAdmin().Run("logs").Args("pod/"+podEnforing, "-n", ns, "-c", "errorlogger").Output()
+		o.Expect(strings.Contains(result1, "Permission denied")).To(o.BeTrue())
+		result2, _ := oc.AsAdmin().Run("logs").Args("pod/"+podPermissive, "-n", ns, "-c", "errorlogger").Output()
+		o.Expect(strings.Contains(result2, "Permission denied")).To(o.BeFalse())
 	})
 
 	// author: xiyuan@redhat.com
