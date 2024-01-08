@@ -736,6 +736,37 @@ func waitCSOhealthy(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(pollErr, "Waiting for CSO become healthy timeout")
 }
 
+// Check specific Cluster Operator healthy by clusteroperator.status.conditions
+// In storage test, we usually don't care the upgrade condition, some Cluster Operator might be always upgradeableStatus:False in some releases
+func checkCOHealthy(oc *exutil.CLI, coName string) (bool, error) {
+	// CO healthyStatus:[degradedStatus:False, progressingStatus:False, availableStatus:True]
+	var healthyStatus = []string{"False", "False", "True"}
+	coStatusJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", coName, "-o", "json").Output()
+	degradedStatus := gjson.Get(coStatusJSON, `status.conditions.#(type=Degraded).status`).String()
+	progressingStatus := gjson.Get(coStatusJSON, `status.conditions.#(type=Progressing).status`).String()
+	availableStatus := gjson.Get(coStatusJSON, `status.conditions.#(type=Available).status`).String()
+	e2e.Logf("Checking the %v CO status, degradedStatus:%v, progressingStatus:%v, availableStatus:%v.", coName, degradedStatus, progressingStatus, availableStatus)
+	return reflect.DeepEqual([]string{degradedStatus, progressingStatus, availableStatus}, healthyStatus), err
+}
+
+// Wait for Cluster Storage Operator become healthy using checkCOHealthy()
+// Using 20 Second as polling time, consider it when define the maxWaitingSeconds
+func waitCOHealthy(oc *exutil.CLI, coName string, maxWaitingSeconds int) {
+	pollErr := wait.Poll(20*time.Second, time.Duration(maxWaitingSeconds)*time.Second, func() (bool, error) {
+		healthyBool, err := checkCOHealthy(oc, coName)
+		if err != nil {
+			e2e.Logf("Get Cluster status failed of: \"%v\"", err)
+			return false, err
+		}
+		if healthyBool {
+			e2e.Logf("Cluster Operator %v status become healthy", coName)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Waiting for Cluster Operator %v become healthy timeout after %v seconds.", coName, maxWaitingSeconds))
+}
+
 // Check CSI driver successfully installed or no
 func checkCSIDriverInstalled(oc *exutil.CLI, supportProvisioners []string) bool {
 	var provisioner string

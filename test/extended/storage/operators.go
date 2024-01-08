@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -8,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -308,4 +310,134 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: wduan@redhat.com
+	// OCP-70338-[CSI-Driver-Operator] TLSSecurityProfile setting for Kube RBAC cipher suites
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:wduan-Medium-70338-[CSI-Driver-Operator] TLSSecurityProfile setting for Kube RBAC cipher suites. [Disruptive]", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "cinder.csi.openstack.org"}
+		var (
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		type TLSSecurityProfile struct {
+			profileType     string
+			patchCmd        string
+			expectedCipher  string
+			expectedVersion string
+		}
+		// In 4.15 cluster, there is no tlsSecurityProfile defined in apiserver/cluster, it will use the same config with Intermediate mode as below
+		// So test case will first check if storage components follow the default setting
+		var TLSProfileDefault TLSSecurityProfile = TLSSecurityProfile{
+			profileType:     "default",
+			patchCmd:        `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`,
+			expectedCipher:  `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"]`,
+			expectedVersion: "VersionTLS12",
+		}
+
+		// In this test, will change to custom type to check storage components follow the change
+		var TLSProfileCustom TLSSecurityProfile = TLSSecurityProfile{
+			profileType:     "custom",
+			patchCmd:        `[{"op": "add", "path": "/spec/tlsSecurityProfile", "value":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}]`,
+			expectedCipher:  `["TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"]`,
+			expectedVersion: "VersionTLS11",
+		}
+
+		// Get origin TLSSecurityProfile in apiserver/cluster for restore
+		savedTLSSecurityProfile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.tlsSecurityProfile}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		// Check the default setting
+		for _, provisioner = range supportProvisioners {
+			exutil.By("Checking " + cloudProvider + " csi driver: \"" + provisioner + "\" with default setting")
+			// Check TLSSecurityProfile with default setting
+			verifyTLSInCSIDriver(oc, provisioner, TLSProfileDefault.expectedCipher, TLSProfileDefault.expectedVersion)
+			replacer := strings.NewReplacer("[", "", "]", "", `"`, "")
+			expectedCipher := replacer.Replace(TLSProfileDefault.expectedCipher)
+			verifyTLSInCSIController(oc, provisioner, expectedCipher, TLSProfileDefault.expectedVersion)
+		}
+
+		// Apply new TLSSecurityProfile and check
+		exutil.By("Patching the apiserver with ciphers type : " + TLSProfileCustom.profileType)
+		exeErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", TLSProfileCustom.patchCmd).Execute()
+		o.Expect(exeErr).NotTo(o.HaveOccurred())
+		defer func() {
+			exutil.By("Restoring apiserver/cluster's ciphers")
+			patchCmdRestore := fmt.Sprintf(`--patch=[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":%s}]`, savedTLSSecurityProfile)
+			exeErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", patchCmdRestore).Execute()
+			o.Expect(exeErr).ShouldNot(o.HaveOccurred())
+			// wait 1 min to let co delect the changes and wait the key Cluster Operator in healthy status
+			// Check clusterversion/version doesn't work
+			// Todo: We might need a general function to wait cluster healthy before exiting disruptive test,
+			// but the point is do we need to check/wait all CO? Will it cause longer duration for test?
+			// Or we need a CO snapshot and at least make sure not worse than original status?
+			time.Sleep(60 * time.Second)
+			waitCOHealthy(oc, "storage", 120)
+			waitCOHealthy(oc, "kube-apiserver", 900)
+			// The kube-apiserver is almost the last CO to recover, but still check other and usually it will not wait additional time
+			waitCOHealthy(oc, "authentication", 120)
+			waitCOHealthy(oc, "etcd", 120)
+		}()
+
+		for _, provisioner = range supportProvisioners {
+			exutil.By("Checking " + cloudProvider + " csi driver: \"" + provisioner + "\" with new setting")
+			verifyTLSInCSIDriver(oc, provisioner, TLSProfileCustom.expectedCipher, TLSProfileCustom.expectedVersion)
+			// The outputs from the apiserver and container args are different
+			replacer := strings.NewReplacer("[", "", "]", "", `"`, "")
+			expectedCipher := replacer.Replace(TLSProfileCustom.expectedCipher)
+			verifyTLSInCSIController(oc, provisioner, expectedCipher, TLSProfileCustom.expectedVersion)
+		}
+	})
+
 })
+
+func verifyTLSInCSIDriver(oc *exutil.CLI, provisioner string, expectedCipher string, expectedVersion string) {
+	o.Eventually(func() []string {
+		cipherInDriver, operr := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercsidriver", provisioner, "-o=jsonpath={.spec.observedConfig.targetcsiconfig.servingInfo.cipherSuites}").Output()
+		o.Expect(operr).ShouldNot(o.HaveOccurred())
+		versionInDriver, operr := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercsidriver", provisioner, "-o=jsonpath={.spec.observedConfig.targetcsiconfig.servingInfo.minTLSVersion}").Output()
+		o.Expect(operr).ShouldNot(o.HaveOccurred())
+		return []string{cipherInDriver, versionInDriver}
+	}, 120*time.Second, 5*time.Second).Should(o.Equal([]string{expectedCipher, expectedVersion}))
+}
+
+func verifyTLSInCSIController(oc *exutil.CLI, provisioner string, expectedCipher string, expectedVersion string) {
+	// Drivers controller deployment name
+	var (
+		CSIDriverController = map[string]string{
+			"ebs.csi.aws.com":              "aws-ebs-csi-driver-controller",
+			"efs.csi.aws.com":              "aws-efs-csi-driver-controller",
+			"disk.csi.azure.com":           "azure-disk-csi-driver-controller",
+			"file.csi.azure.com":           "azure-file-csi-driver-controller",
+			"pd.csi.storage.gke.io":        "gcp-pd-csi-driver-controller",
+			"filestore.csi.storage.gke.io": "gcp-filestore-csi-driver-controller",
+			"csi.vsphere.vmware.com":       "vmware-vsphere-csi-driver-controller",
+			"vpc.block.csi.ibm.io":         "ibm-vpc-block-csi-controller",
+			"cinder.csi.openstack.org":     "openstack-cinder-csi-driver-controller",
+		}
+		// All tested CSI Driver located in the "openshift-cluster-csi-drivers" namespace
+		CSIDriverNS string = "openshift-cluster-csi-drivers"
+		cipher      string
+		version     string
+	)
+	o.Eventually(func() []string {
+		output, operr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", CSIDriverController[provisioner], "-n", CSIDriverNS, "-o=jsonpath={.spec.template.spec}").Output()
+		o.Expect(operr).ShouldNot(o.HaveOccurred())
+		argsList := gjson.Get(output, "containers.#(name%\"*kube-rbac-proxy*\")#.args").Array()
+		for _, args := range argsList {
+			for _, arg := range args.Array() {
+				if strings.HasPrefix(arg.String(), "--tls-cipher-suites=") {
+					cipher = strings.TrimPrefix(arg.String(), "--tls-cipher-suites=")
+
+				}
+				if strings.HasPrefix(arg.String(), "--tls-min-version=") {
+					version = strings.TrimPrefix(arg.String(), "--tls-min-version=")
+				}
+			}
+		}
+		return []string{cipher, version}
+	}, 120*time.Second, 5*time.Second).Should(o.Equal([]string{expectedCipher, expectedVersion}))
+}
