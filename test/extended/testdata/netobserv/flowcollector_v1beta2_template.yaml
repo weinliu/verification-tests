@@ -43,6 +43,7 @@ objects:
         imagePullPolicy: IfNotPresent
         logLevel: trace
         profilePort: 6060
+        multiClusterDeployment: "${{MultiClusterDeployment}}"
         metrics:
           server:
             port: 9102
@@ -156,6 +157,8 @@ parameters:
     value: "false"
   - name: MetricServerTLSType
     value: "Auto"
+  - name: MultiClusterDeployment
+    value: "false"
   - name: LogType
     value: "Flows"
   - name: LokiEnable

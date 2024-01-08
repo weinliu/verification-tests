@@ -904,6 +904,56 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.Dscp).To(o.Equal(32))
 		}
 	})
+
+	g.It("NonPreRelease-Author:aramesha-High-69218-Verify cluster ID in multiCluster deployment [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Get clusterID of the cluster")
+		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[].spec.clusterID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Cluster ID is %s", clusterID)
+
+		g.By("Deploy FlowCollector with multiCluster enabled")
+		flow := Flowcollector{
+			Namespace:              namespace,
+			MultiClusterDeployment: "true",
+			Template:               flowFixturePath,
+			LokiURL:                lokiURL,
+			LokiTLSCertName:        fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:          namespace,
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		g.By("Ensure flowcollector is ready")
+		flow.waitForFlowcollectorReady(oc)
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		lokilabels := Lokilabels{
+			App:             "netobserv-flowcollector",
+			K8S_ClusterName: clusterID,
+		}
+
+		g.By("Verify K8S_ClusterName = Cluster ID")
+		flowRecords, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
+	})
+
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {

@@ -16,6 +16,7 @@ import (
 type Flowcollector struct {
 	Namespace                 string
 	ProcessorKind             string
+	MultiClusterDeployment    string
 	LogType                   string
 	DeploymentModel           string
 	LokiEnable                string
@@ -83,6 +84,7 @@ type Flowlog struct {
 	IsFirst          bool   `json:"_IsFirst,omitempty"`
 	RecordType       string `json:"_RecordType,omitempty"`
 	NumFlowLogs      int    `json:"numFlowLogs,omitempty"`
+	K8S_ClusterName  string `json:"K8S_ClusterName,omitempty"`
 }
 
 type FlowRecord struct {
@@ -98,6 +100,7 @@ type Lokilabels struct {
 	FlowDirection    string
 	SrcK8S_OwnerName string
 	DstK8S_OwnerName string
+	K8S_ClusterName  string
 }
 
 // create flowcollector CRD for a given manifest file
