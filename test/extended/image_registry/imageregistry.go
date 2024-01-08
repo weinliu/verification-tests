@@ -4472,4 +4472,20 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("resourceGroupName"))
 		o.Expect(output).To(o.ContainSubstring("location"))
 	})
+
+	g.It("Author:wewang-High-69008-Add IBM Cloud service endpoint override support", func() {
+		g.By("Check platforms")
+		exutil.SkipIfPlatformTypeNot(oc, "IBMCloud")
+		g.By("Check the cluster is a disconnected private cluster")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "-o=jsonpath={.items[0].status.platformStatus.ibmcloud.serviceEndpoints[?(@.name==\"IAM\")].url}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "private.iam.cloud") {
+			g.Skip("Skip for no disconnected private cluster")
+		}
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "-o=jsonpath={.items[0].status.platformStatus.ibmcloud.serviceEndpoints[?(@.name==\"COS\")].url}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		s3_endpoint, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.containers[0].env[?(@.name==\"REGISTRY_STORAGE_S3_REGIONENDPOINT\")].value}").Output()
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal(s3_endpoint))
+	})
 })
