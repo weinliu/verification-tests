@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -612,7 +612,7 @@ var _ = g.Describe("[sig-rosacli] Service_Development_A iam roles testing", func
 	})
 })
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A user/ocm roles testing", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service user/ocm roles testing", func() {
 	defer g.GinkgoRecover()
 
 	var (

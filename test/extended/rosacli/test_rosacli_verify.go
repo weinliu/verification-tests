@@ -12,7 +12,7 @@ import (
 	nets "net/http"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A verify test", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service verify test", func() {
 	defer g.GinkgoRecover()
 
 	var (

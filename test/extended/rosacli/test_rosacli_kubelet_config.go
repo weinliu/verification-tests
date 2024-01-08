@@ -6,7 +6,7 @@ import (
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A Edit kubeletconfig", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig", func() {
 	defer g.GinkgoRecover()
 
 	var (

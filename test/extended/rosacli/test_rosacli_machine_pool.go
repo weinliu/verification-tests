@@ -6,7 +6,7 @@ import (
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A machinepool", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service machinepool", func() {
 	defer g.GinkgoRecover()
 	var (
 		clusterID          string

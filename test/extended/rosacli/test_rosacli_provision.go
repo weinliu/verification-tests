@@ -6,7 +6,7 @@ import (
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A rosa create cluster with admin negative testing", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service rosa create cluster with admin negative testing", func() {
 	defer g.GinkgoRecover()
 	var (
 		invalidPassword = "password1" // disallowed password

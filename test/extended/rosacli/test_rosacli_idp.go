@@ -12,7 +12,7 @@ import (
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A IDP/admin testing", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing", func() {
 	defer g.GinkgoRecover()
 
 	var (

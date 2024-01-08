@@ -15,7 +15,7 @@ import (
 	"k8s.io/utils/strings/slices"
 )
 
-var _ = g.Describe("[sig-rosacli] Service_Development_A Node Pools testing", func() {
+var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing", func() {
 	defer g.GinkgoRecover()
 
 	var (
