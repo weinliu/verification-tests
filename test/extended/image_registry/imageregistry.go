@@ -2505,6 +2505,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-Medium-22596-ImageRegistry Create app with template eap74-basic-s2i with jbosseap rhel7 image", func() {
 
+		g.By("Check if it's a https_proxy cluster")
+		trustCAName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.trustedCA.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// because of known issue(https://issues.redhat.com/browse/OCPBUGS-9436) to download independency when build in https_proxy cluster, so skipped the case for https_proxy cluster
+		if trustCAName != "" {
+			g.Skip("Skip for https_proxy platform")
+		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		// Check if openshift-sample operator installed
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
