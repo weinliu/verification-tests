@@ -378,7 +378,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: pewang@redhat.com
 	g.It("ROSA-OSD_CCS-Author:pewang-High-70017-[AWS-EBS-CSI] [Block] io2 volume supports Multi-Attach to different nodes", func() {
 
-		schedulableWorkersWithSameAz, _ := getSchedulableWorkersWithSameAz(oc)
+		schedulableWorkersWithSameAz, _ := getTwoSchedulableWorkersWithSameAz(oc)
 		if len(schedulableWorkersWithSameAz) == 0 {
 			g.Skip("Skip: The test cluster has less than two schedulable workers in each available zone and no nonZonedProvisioners!!")
 		}

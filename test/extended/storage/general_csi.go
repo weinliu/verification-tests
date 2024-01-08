@@ -1076,7 +1076,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate                          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate                   = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 			supportProvisioners                  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
-			schedulableWorkersWithSameAz, azName = getSchedulableWorkersWithSameAz(oc)
+			schedulableWorkersWithSameAz, azName = getTwoSchedulableWorkersWithSameAz(oc)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip: Non-supported provisioner!!!")

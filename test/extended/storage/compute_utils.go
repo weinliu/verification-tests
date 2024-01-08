@@ -152,29 +152,23 @@ func getCompactNodeList(oc *exutil.CLI) []string {
 	return strings.Fields(output)
 }
 
-// Get the cluster schedulable worker nodes names with the same available zone
-func getSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSameAz []string, azName string) {
+// Get the cluster schedulable worker nodes names with the same available zone or without the available zone
+func getTwoSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSameAz []string, azName string) {
 	var (
-		workersInfo              = getWorkersInfo(oc)
-		workers                  = strings.Split(strings.Trim(strings.Trim(gjson.Get(workersInfo, "items.#.metadata.name").String(), "["), "]"), ",")
-		schedulableWorkersWithAz = make(map[string]string)
-		zonePath                 = `metadata.labels.topology\.kubernetes\.io\/zone`
+		allNodes                   = getAllNodesInfo(oc)
+		allSchedulableLinuxWorkers = getSchedulableLinuxWorkers(allNodes)
+		schedulableWorkersWithAz   = make(map[string]string)
 	)
-	for _, worker := range workers {
-		readyStatus := gjson.Get(workersInfo, "items.#(metadata.name="+worker+").status.conditions.#(type=Ready).status").String()
-		scheduleFlag := gjson.Get(workersInfo, "items.#(metadata.name="+worker+").spec.unschedulable").String()
-		workerOS := gjson.Get(workersInfo, "items.#(metadata.name="+worker+").metadata.labels.kubernetes\\.io\\/os").String()
-		if readyStatus == "True" && scheduleFlag != "true" && workerOS == "linux" {
-			azName = gjson.Get(workersInfo, "items.#(metadata.name="+worker+")."+zonePath).String()
-			if azName == "" {
-				azName = "noneAzCluster"
-			}
-			if _, ok := schedulableWorkersWithAz[azName]; ok {
-				e2e.Logf("Schedulable workers %s,%s in the same az %s", worker, schedulableWorkersWithAz[azName], azName)
-				return append(schedulableWorkersWithSameAz, strings.Trim(worker, `"`), strings.Trim(schedulableWorkersWithAz[azName], `"`)), azName
-			}
-			schedulableWorkersWithAz[azName] = worker
+	for _, schedulableLinuxWorker := range allSchedulableLinuxWorkers {
+		azName = schedulableLinuxWorker.availableZone
+		if azName == "" {
+			azName = "noneAzCluster"
 		}
+		if _, ok := schedulableWorkersWithAz[azName]; ok {
+			e2e.Logf("Schedulable workers %s,%s in the same az %s", schedulableLinuxWorker.name, schedulableWorkersWithAz[azName], azName)
+			return append(schedulableWorkersWithSameAz, schedulableLinuxWorker.name, schedulableWorkersWithAz[azName]), azName
+		}
+		schedulableWorkersWithAz[azName] = schedulableLinuxWorker.name
 	}
 	e2e.Logf("*** The test cluster has less than two schedulable linux workers in each available zone! ***")
 	return nil, azName
@@ -256,6 +250,7 @@ type node struct {
 	allocatableEphemeralStorage string
 	ephemeralStorageCapacity    string
 	instanceType                string
+	isTaintsEmpty               bool
 }
 
 // Get cluster all node information
@@ -297,6 +292,7 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		tempSlice := strings.Split(gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
 		nodeInstanceID := tempSlice[len(tempSlice)-1]
 		nodeInstanceType := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.kubernetes\\.io\\/instance-type").String()
+		isTaintsEmpty := !gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.taints").Exists()
 		nodes = append(nodes, node{
 			name:                        nodeName,
 			instanceID:                  nodeInstanceID,
@@ -311,6 +307,7 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 			readyStatus:                 readyStatus,
 			allocatableEphemeralStorage: nodeAllocatableEphemeralStorage,
 			ephemeralStorageCapacity:    nodeEphemeralStorageCapacity,
+			isTaintsEmpty:               isTaintsEmpty,
 		})
 	}
 	e2e.Logf("*** The \"%s\" Cluster nodes info is ***:\n \"%+v\"", cloudProvider, nodes)
@@ -324,7 +321,7 @@ func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 		linuxWorkers = append(linuxWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isTaintsEmpty && myNode.readyStatus == "True" {
 				linuxWorkers = append(linuxWorkers, myNode)
 			}
 		}
@@ -340,7 +337,7 @@ func getSchedulableRhelWorkers(allNodes []node) []node {
 		schedulableRhelWorkers = append(schedulableRhelWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osID == "rhel" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osID == "rhel" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isTaintsEmpty && myNode.readyStatus == "True" {
 				schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
 			}
 		}
@@ -360,7 +357,7 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 		} else {
 			for _, myNode := range allNodes {
 				// For aws local zones cluster the default LOCALZONE_WORKER_SCHEDULABLE value is no in both official document and CI configuration
-				if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.readyStatus == "True" {
+				if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isTaintsEmpty && myNode.readyStatus == "True" {
 					expectedWorker = myNode
 					break
 				}
