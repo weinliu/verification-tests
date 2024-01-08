@@ -41,11 +41,17 @@ var _ = g.Describe("[sig-operators] OLM optional", func() {
 		capability := "OperatorLifecycleManager"
 		knownCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.knownCapabilities}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("knownCapabilities: %s", knownCapabilities)
 		enabledCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("enabledCapabilities: %s", enabledCapabilities)
 		if strings.Contains(knownCapabilities, capability) && !strings.Contains(enabledCapabilities, capability) {
+			// marketplace depnens on olm, so once marketplace enabled, olm enabled
+			if strings.Contains(knownCapabilities, "marketplace") && strings.Contains(enabledCapabilities, "marketplace") {
+				g.Skip("the cluster enabled marketplace cap and skip it")
+			}
 			cos := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
-			resources := []string{"subscription", "csv", "installplan", "operatorgroup", "operatorhub", "operatorgroup", "catalogsource", "packagemanifest", "olmconfig", "operatorcondition", "operator.operators.coreos.com"}
+			resources := []string{"subscription", "csv", "installplan", "operatorgroup", "operatorhub", "catalogsource", "packagemanifest", "olmconfig", "operatorcondition", "operator.operators.coreos.com"}
 			clusterroles := []string{"aggregate-olm-edit", "aggregate-olm-view", "cluster-olm-operator"}
 			ns := "openshift-operator-lifecycle-manager"
 			for _, co := range cos {
