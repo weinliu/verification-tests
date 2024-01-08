@@ -2027,6 +2027,9 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Low-21115-Use kubelet explain to see detailed documentation of resources", func() {
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") && !isEnabledCapability(oc, "DeploymentConfig") {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
+		}
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
 		out, err := oc.WithKubectl().Run("explain").Args("po").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
