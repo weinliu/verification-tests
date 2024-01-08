@@ -571,7 +571,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(metricsOutput1, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput1))
 	})
 
-	g.It("Author:qiowang-Medium-60539-Verify metrics ovs_vswitchd_interfaces_total. [Disruptive]", func() {
+	g.It("Author:qiowang-Medium-60539-Verify metrics ovs_vswitchd_interfaces_total. [Serial]", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
@@ -581,7 +581,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			namespace           = "openshift-ovn-kubernetes"
 			metricName          = "ovs_vswitchd_interfaces_total"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
-			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			delta               = 3
 		)
 		nodes, getNodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath='{.items[*].metadata.name}'").Output()
 		nodeName := strings.Split(strings.Trim(nodes, "'"), " ")[0]
@@ -595,25 +596,27 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		containerName := "kube-rbac-proxy-ovn-metrics"
 		metricValue1 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
 
-		exutil.By("2. Create a pod on the node")
+		exutil.By("2. Create test pods and scale test pods to 10")
 		ns := oc.Namespace()
-		pod := pingPodResourceNode{
-			name:      "hello-pod",
-			namespace: ns,
-			nodename:  nodeName,
-			template:  pingPodNodeTemplate,
-		}
-		defer pod.deletePingPodNode(oc)
-		pod.createPingPodNode(oc)
-		waitPodReady(oc, pod.namespace, pod.name)
+		createResourceFromFile(oc, ns, testPodFile)
+		exutil.AssertWaitPollNoErr(waitForPodWithLabelReady(oc, ns, "name=test-pods"), fmt.Sprintf("Waiting for pod with label name=test-pods become ready timeout"))
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("rc/test-rc", "-n", ns, "-p", "{\"spec\":{\"template\":{\"spec\":{\"nodeName\":\""+nodeName+"\"}}}}", "--type=merge").Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		scaleErr := oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc/test-rc", "--replicas=0", "-n", ns).Execute()
+		o.Expect(scaleErr).NotTo(o.HaveOccurred())
+		scaleErr = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc/test-rc", "--replicas=10", "-n", ns).Execute()
+		o.Expect(scaleErr).NotTo(o.HaveOccurred())
+		exutil.AssertWaitPollNoErr(waitForPodWithLabelReady(oc, ns, "name=test-pods"), fmt.Sprintf("Waiting for pod with label name=test-pods become ready timeout after scale up"))
 
 		exutil.By("3. Get the metrics of " + metricName + " after creating new pod on the node")
 		metricValue1Int, _ := strconv.Atoi(metricValue1)
-		expectedIncValue := strconv.Itoa(metricValue1Int + 1)
-		e2e.Logf("The expected value of the %s is : %v", metricName, expectedIncValue)
+		expectedIncFloor := metricValue1Int + 10 - delta
+		expectedIncCeil := metricValue1Int + 10 + delta
+		e2e.Logf("The expected value of the %s is : %v to %v", metricName, expectedIncFloor, expectedIncCeil)
 		metricIncOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 			metricValue2 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
-			if metricValue2 == expectedIncValue {
+			metricValue2Int, _ := strconv.Atoi(metricValue2)
+			if metricValue2Int >= expectedIncFloor && metricValue2Int <= expectedIncCeil {
 				return true, nil
 			}
 			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
@@ -622,18 +625,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
 
 		exutil.By("4. Delete the pod on the node")
-		pod.deletePingPodNode(oc)
+		scaleErr = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc/test-rc", "--replicas=0", "-n", ns).Execute()
+		o.Expect(scaleErr).NotTo(o.HaveOccurred())
+		delErr := waitForPodWithLabelGone(oc, ns, "name=test-pods")
+		o.Expect(delErr).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Get the metrics of " + metricName + " after deleting the pod on the node")
-		expectedDecValue := metricValue1
-		e2e.Logf("The expected value of the %s is : %v", metricName, expectedDecValue)
+		expectedDecFloor := metricValue1Int - delta
+		expectedDecCeil := metricValue1Int + delta
+		e2e.Logf("The expected value of the %s is : %v to %v", metricName, expectedDecFloor, expectedDecCeil)
 		metricDecOutput := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			output3, err3 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
-			o.Expect(err3).NotTo(o.HaveOccurred())
-			metricOutput3, _ := exec.Command("bash", "-c", "cat "+output3+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-			metricValue3 := strings.TrimSpace(string(metricOutput3))
-			e2e.Logf("The output of the %s is : %v", metricName, metricValue3)
-			if metricValue3 == expectedDecValue {
+			metricValue3 := getOVNMetricsInSpecificContainer(oc, containerName, podName, prometheusURL, metricName)
+			metricValue3Int, _ := strconv.Atoi(metricValue3)
+			if metricValue3Int >= expectedDecFloor && metricValue3Int <= expectedDecCeil {
 				return true, nil
 			}
 			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
