@@ -50,7 +50,7 @@ export const operatorHubPage = {
         cy.byTestID('confirm-action').click()
       }
     })
-    cy.get('[data-test-id="operator-install-btn"]').click();
+    cy.get('[data-test-id="operator-install-btn"]').should('exist').click({ force: true });
     if(metrics){
       cy.get('#enable-monitoring-checkbox').should('exist').check()
     }
