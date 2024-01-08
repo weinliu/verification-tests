@@ -384,7 +384,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Start a new build")
-		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-build").Args("openshift/ruby:2.7-ubi8~https://github.com/sclorg/ruby-ex.git", "-n", oc.Namespace()).Execute()
+		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-build").Args("openshift/ruby:3.1-ubi8~https://github.com/sclorg/ruby-ex.git", "-n", oc.Namespace()).Execute()
 		o.Expect(createAppError).NotTo(o.HaveOccurred())
 
 		g.By("waiting for build to finish")
