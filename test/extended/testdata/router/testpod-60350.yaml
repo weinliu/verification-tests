@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
   - name: myapp-container
-    image: quay.io/openshifttest/busybox:multiarch
+    image: quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f
     name: testpod-60350
     command: ['sh', '-c', 'echo The app is running! && sleep 3600']
   dnsPolicy: ClusterFirst
