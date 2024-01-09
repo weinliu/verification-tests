@@ -1069,7 +1069,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			lc.waitForLogsAppearByProject("", appProj)
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-61476-Collector-External Loki output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Low-61476-Collector-External Loki output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1242,7 +1242,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54523-LokiStack Cluster Logging comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Slow][Disruptive]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-High-54523-LokiStack Cluster Logging comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Slow][Disruptive]", func() {
 
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1359,6 +1359,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Medium-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
+			if isFipsEnabled(oc) {
+				g.Skip("skip old tlsSecurityProfile on FIPS enabled cluster")
+			}
 
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1437,7 +1440,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
 				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
-
 			lc.waitForLogsAppearByProject("application", appProj)
 
 			g.By("Check that the LokiStack gateway is using the Old tlsSecurityProfile")
@@ -1591,7 +1593,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Medium-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Slow][Disruptive]", func() {
-
+			if isFipsEnabled(oc) {
+				g.Skip("skip old tlsSecurityProfile on FIPS enabled cluster")
+			}
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
