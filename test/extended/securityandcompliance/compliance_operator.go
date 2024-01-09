@@ -453,7 +453,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Disruptive]", func() {
-		skipForSingleNodeCluster(oc)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var cscanD = complianceScanDescription{
@@ -865,7 +867,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-NonPreRelease-Longduration-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Disruptive]", func() {
-		skipForSingleNodeCluster(oc)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
@@ -976,7 +980,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:pdhamdhe-High-33610-Verify the tolerations could work for compliancescan [Disruptive]", func() {
-		skipForSingleNodeCluster(oc)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
@@ -1229,7 +1235,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
-		skipForSingleNodeCluster(oc)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -2422,7 +2430,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Disruptive] [Slow]", func() {
-		skipForSingleNodeCluster(oc)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var csuiteD = complianceSuiteDescription{

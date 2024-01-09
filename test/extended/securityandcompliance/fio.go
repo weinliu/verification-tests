@@ -451,7 +451,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-High-33226-enable configuring tolerations in FileIntegrities [Disruptive]", func() {
-		skipForSingleNodeCluster(oc)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 		SkipClustersWithRhelNodes(oc)
 
 		var itName = g.CurrentSpecReport().FullText()
@@ -520,7 +522,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33254-enable configuring tolerations in FileIntegrities when there is more than one taint on one node [Disruptive]", func() {
-		skipForSingleNodeCluster(oc)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 		SkipClustersWithRhelNodes(oc)
 
 		var itName = g.CurrentSpecReport().FullText()
