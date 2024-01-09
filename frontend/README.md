@@ -2,7 +2,7 @@
 openshift web tests relies on upstream [openshift/console](https://github.com/openshift/console/tree/master) which provides fundamental configurations, views that we can reuse in openshift-tests-private web tests
 
 ## Prerequisite
-1. [node.js](https://nodejs.org/) >= 14 & [yarn](https://yarnpkg.com/en/docs/install) >= 1.20
+1. [node.js](https://nodejs.org/) >= 18 & [yarn](https://yarnpkg.com/en/docs/install) >= 1.20
 2. upstream [openshift/console](https://github.com/openshift/console/tree/master) should be cloned locally
 3. upstream openshift/console dependencies need to be installed, for example we cloned openshift/console repo and save it to ~/reops
    - cd ~/reops/console/frontend
@@ -33,7 +33,8 @@ drwxr-xr-x  node_modules
 in order to run Cypress tests, we need to export some environment variables that Cypress can read then pass down to our tests, currently we have following environment variables defined and used.
 ```bash
 export CYPRESS_BASE_URL=https://<console_route_spec_host>
-export CYPRESS_LOGIN_IDP=kube:admin
+export CYPRESS_LOGIN_IDP=flexy-htpasswd-provider
+**[Note] Use `flexy-htpasswd-provider` above when running tests on flexy installed clusters and using any user other than kubeadmin. Use `kube:admin` when running tests as kubeadmin
 export CYPRESS_LOGIN_USERNAME=testuser
 export CYPRESS_LOGIN_PASSWORD=testpassword
 export CYPRESS_KUBECONFIG_PATH=/path/to/kubeconfig
