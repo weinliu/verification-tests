@@ -13,12 +13,13 @@ import (
 )
 
 type profileRecordingDescription struct {
-	name       string
-	namespace  string
-	kind       string
-	labelKey   string
-	labelValue string
-	template   string
+	name          string
+	namespace     string
+	kind          string
+	mergestrategy string
+	labelKey      string
+	labelValue    string
+	template      string
 }
 
 type profileBindingDescription struct {
@@ -115,7 +116,7 @@ func checkPrfolieStatus(oc *exutil.CLI, profileKind string, namespace string, ex
 
 func (profileRecording *profileRecordingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", profileRecording.template, "-p", "NAME="+profileRecording.name, "NAMESPACE="+profileRecording.namespace,
-		"KIND="+profileRecording.kind, "LABELKEY="+profileRecording.labelKey, "LABELVALUE="+profileRecording.labelValue)
+		"KIND="+profileRecording.kind, "MERGESTRATEGY="+profileRecording.mergestrategy, "LABELKEY="+profileRecording.labelKey, "LABELVALUE="+profileRecording.labelValue)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

@@ -38,6 +38,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		selinuxProfileCustomTemplate              string
 		workloadDaeTemplate                       string
 		workloadDeployTemplate                    string
+		workloadDeployHelloTemplate               string
 		pathWebhookBinding                        string
 		pathWebhookRecording                      string
 		podWithLabelsTemplate                     string
@@ -73,6 +74,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		saRoleRolebindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/sa-previleged-role-rolebinding.yaml")
 		workloadDaeTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-daemonset.yaml")
 		workloadDeployTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment.yaml")
+		workloadDeployHelloTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment-hello-openshift.yaml")
 		workloadRepTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-replicaset.yaml")
 		workloadCronjobTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-cronjob.yaml")
 		workloadPodTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
@@ -250,12 +252,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		ns2 := "mytest" + getRandomString()
 		var (
 			profileRecordingDae = profileRecordingDescription{
-				name:       "spo-recording1",
-				namespace:  ns1,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "hello-daemonset",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording1",
+				namespace:     ns1,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-daemonset",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingDae = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa1",
@@ -274,12 +277,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     workloadDaeTemplate,
 			}
 			profileRecordingDep = profileRecordingDescription{
-				name:       "spo-recording2",
-				namespace:  ns2,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "hello-openshift",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording2",
+				namespace:     ns2,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-openshift",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingDep = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa2",
@@ -372,12 +376,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		ns2 := "mytest" + getRandomString()
 		var (
 			profileRecordingDae = profileRecordingDescription{
-				name:       "spo-recording1",
-				namespace:  ns1,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "hello-daemonset",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording1",
+				namespace:     ns1,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-daemonset",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingDae = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa1",
@@ -396,12 +401,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     workloadDaeTemplate,
 			}
 			profileRecordingDep = profileRecordingDescription{
-				name:       "spo-recording2",
-				namespace:  ns2,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "hello-openshift",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording2",
+				namespace:     ns2,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-openshift",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingDep = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa2",
@@ -495,12 +501,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		ns2 := "mytest" + getRandomString()
 		var (
 			profileRecordingSec = profileRecordingDescription{
-				name:       "spo-recording-sec-" + getRandomString(),
-				namespace:  ns1,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "my-app",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sec-" + getRandomString(),
+				namespace:     ns1,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-app",
+				template:      profileRecordingTemplate,
 			}
 			podWithoutLabelSec = workloadDescription{
 				name:         "pod-without-label" + getRandomString(),
@@ -525,12 +532,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     podWithLabelsTemplate,
 			}
 			profileRecordingSel = profileRecordingDescription{
-				name:       "spo-recording-sel-" + getRandomString(),
-				namespace:  ns2,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "my-app",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sel-" + getRandomString(),
+				namespace:     ns2,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-app",
+				template:      profileRecordingTemplate,
 			}
 			podWithoutLabelSel = workloadDescription{
 				name:         "pod-without-label" + getRandomString(),
@@ -641,12 +649,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		var (
 			profileRecordingNs1 = profileRecordingDescription{
-				name:       "spo-recording-sel-" + getRandomString(),
-				namespace:  ns1,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "my-app",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sel-" + getRandomString(),
+				namespace:     ns1,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-app",
+				template:      profileRecordingTemplate,
 			}
 			podNs1 = workloadDescription{
 				name:         "my-pod" + getRandomString(),
@@ -659,12 +668,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     podWithOneLabelTemplate,
 			}
 			profileRecordingNs2 = profileRecordingDescription{
-				name:       "spo-recording-sel-" + getRandomString(),
-				namespace:  ns2,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "my-app",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sel-" + getRandomString(),
+				namespace:     ns2,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-app",
+				template:      profileRecordingTemplate,
 			}
 			podNs2 = workloadDescription{
 				name:         "my-pod" + getRandomString(),
@@ -677,12 +687,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     podWithOneLabelTemplate,
 			}
 			profileRecordingNs3 = profileRecordingDescription{
-				name:       "spo-recording-sel-" + getRandomString(),
-				namespace:  ns3,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "my-test",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sel-" + getRandomString(),
+				namespace:     ns3,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-test",
+				template:      profileRecordingTemplate,
 			}
 			podNs3 = workloadDescription{
 				name:         "my-pod" + getRandomString(),
@@ -784,12 +795,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		var (
 			profileRecordingNs1 = profileRecordingDescription{
-				name:       "spo-recording-sec-" + getRandomString(),
-				namespace:  ns1,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "my-app",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sec-" + getRandomString(),
+				namespace:     ns1,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-app",
+				template:      profileRecordingTemplate,
 			}
 			podNs1 = workloadDescription{
 				name:         "my-pod" + getRandomString(),
@@ -802,12 +814,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     podWithOneLabelTemplate,
 			}
 			profileRecordingNs2 = profileRecordingDescription{
-				name:       "spo-recording-sec-" + getRandomString(),
-				namespace:  ns2,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "my-app",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sec-" + getRandomString(),
+				namespace:     ns2,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-app",
+				template:      profileRecordingTemplate,
 			}
 			podNs2 = workloadDescription{
 				name:         "my-pod" + getRandomString(),
@@ -820,12 +833,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     podWithOneLabelTemplate,
 			}
 			profileRecordingNs3 = profileRecordingDescription{
-				name:       "spo-recording-sec-" + getRandomString(),
-				namespace:  ns3,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "my-test",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording-sec-" + getRandomString(),
+				namespace:     ns3,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-test",
+				template:      profileRecordingTemplate,
 			}
 			podNs3 = workloadDescription{
 				name:         "my-pod" + getRandomString(),
@@ -1425,12 +1439,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingSeccom = profileRecordingDescription{
-				name:       "spo-recording1",
-				namespace:  ns1,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "hello-openshift",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording1",
+				namespace:     ns1,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-openshift",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingSeccom = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa1",
@@ -1533,12 +1548,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		ns2 := "mytest" + getRandomString()
 		var (
 			profileRecordingRep = profileRecordingDescription{
-				name:       "spo-recording1",
-				namespace:  ns1,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "hello-replicaset",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording1",
+				namespace:     ns1,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-replicaset",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingRep = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa1",
@@ -1558,12 +1574,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     workloadRepTemplate,
 			}
 			profileRecordingRepSec = profileRecordingDescription{
-				name:       "spo-recording2",
-				namespace:  ns2,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "hello-replicaset-sec",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording2",
+				namespace:     ns2,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-replicaset-sec",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingRepSec = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa2",
@@ -1696,12 +1713,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		ns2 := "mytest" + getRandomString()
 		var (
 			profileRecordingSeccom = profileRecordingDescription{
-				name:       "spo-recording1",
-				namespace:  ns1,
-				kind:       "SeccompProfile",
-				labelKey:   "app",
-				labelValue: "hello-openshift",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording1",
+				namespace:     ns1,
+				kind:          "SeccompProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-openshift",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingSeccom = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa1",
@@ -1720,12 +1738,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 				template:     workloadCronjobTemplate,
 			}
 			profileRecordingSelinux = profileRecordingDescription{
-				name:       "spo-recording2",
-				namespace:  ns2,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "hello-openshift",
-				template:   profileRecordingTemplate,
+				name:          "spo-recording2",
+				namespace:     ns2,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "hello-openshift",
+				template:      profileRecordingTemplate,
 			}
 			saRoleRoleBindingSelinux = saRoleRoleBindingDescription{
 				saName:          "spo-record-sa2",
@@ -1825,12 +1844,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingPod = profileRecordingDescription{
-				name:       "test-recording",
-				namespace:  ns1,
-				kind:       "SelinuxProfile",
-				labelKey:   "app",
-				labelValue: "my-app",
-				template:   profileRecordingTemplate,
+				name:          "test-recording",
+				namespace:     ns1,
+				kind:          "SelinuxProfile",
+				mergestrategy: "none",
+				labelKey:      "app",
+				labelValue:    "my-app",
+				template:      profileRecordingTemplate,
 			}
 
 			podHello = workloadDescription{
@@ -1904,5 +1924,118 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.limits}`)
 		assertEventMessageRegexpMatch(oc, "cpu.*250m.*memory.*256Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
 			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.requests}`)
+	})
+
+	// author: xiyuan@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-56018-Verify the mergeStrategy wroks for log enricher based selinuxprofile recording for deployment [Slow][Disruptive]", func() {
+		ns := "merge-strategy-" + getRandomString()
+		var (
+			profileRecordingDep = profileRecordingDescription{
+				name:          "spo-recording",
+				namespace:     ns,
+				kind:          "SelinuxProfile",
+				mergestrategy: "containers",
+				labelKey:      "app",
+				labelValue:    "hello-openshift",
+				template:      profileRecordingTemplate,
+			}
+			saRoleRoleBindingDep = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa",
+				namespace:       ns,
+				roleName:        "spo-record" + getRandomString(),
+				roleBindingName: "spo-record" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			deployHello = workloadDescription{
+				name:         "hello-deployment",
+				namespace:    ns,
+				workloadKind: "Deployment",
+				saName:       saRoleRoleBindingDep.saName,
+				labelKey:     profileRecordingDep.labelKey,
+				labelValue:   profileRecordingDep.labelValue,
+				template:     workloadDeployTemplate,
+			}
+			deployHelloOpenshift = workloadDescription{
+				name:         "hello-openshift",
+				namespace:    ns,
+				workloadKind: "Deployment",
+				saName:       saRoleRoleBindingDep.saName,
+				labelKey:     profileRecordingDep.labelKey,
+				labelValue:   profileRecordingDep.labelValue,
+				template:     workloadDeployHelloTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns, ns})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns, "-n", ns, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns, "-n", ns, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilerecording", ns, profileRecordingDep.name})
+		profileRecordingDep.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingDep.name, "-n", ns}).check(oc)
+
+		g.By("Create sa, role, rolebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"sa", ns, saRoleRoleBindingDep.saName},
+			objectTableRef{"role", ns, saRoleRoleBindingDep.roleName},
+			objectTableRef{"rolebinding", ns, saRoleRoleBindingDep.roleBindingName})
+		saRoleRoleBindingDep.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingDep.saName, "-n", ns}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingDep.roleName, "-n", ns}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingDep.roleBindingName, "-n", ns}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", ns, profileRecordingDep.name},
+			objectTableRef{"deploy", ns, deployHello.name},
+			objectTableRef{"selinuxprofiles", ns, "--all"})
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"deploy", ns, deployHello.name})
+		deployHello.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"deploy", deployHello.name, "-n", ns, "-o=jsonpath={.status.availableReplicas}"}).check(oc)
+		assertParameterValueForBulkPods(oc, "Running", "pod", "-l", profileRecordingDep.labelKey+"="+profileRecordingDep.labelValue, "-n", ns, "-o=jsonpath={.items[*].status.phase}")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"deploy", ns, deployHello.name})
+
+		g.By("Check selinuxprofile generated !!!")
+		//sleep 60s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(60 * time.Second)
+		cleanupObjectsIgnoreNotFound(oc, objectTableRef{"deploy", ns, deployHello.name})
+		checkPrfolieNumbers(oc, "selinuxprofiles", ns, 6)
+		checkPrfolieStatus(oc, "selinuxprofiles", ns, "Partial")
+
+		g.By("Create a second deployement !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", ns, profileRecordingDep.name},
+			objectTableRef{"deploy", ns, deployHelloOpenshift.name},
+			objectTableRef{"selinuxprofiles", ns, "--all"})
+		deployHelloOpenshift.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"deploy", deployHelloOpenshift.name, "-n", ns, "-o=jsonpath={.status.availableReplicas}"}).check(oc)
+		assertParameterValueForBulkPods(oc, "Running", "pod", "-l", profileRecordingDep.labelKey+"="+profileRecordingDep.labelValue, "-n", ns, "-o=jsonpath={.items[*].status.phase}")
+
+		g.By("Check selinuxprofiles generated !!!")
+		cleanupObjectsIgnoreNotFound(oc, objectTableRef{"deploy", ns, deployHelloOpenshift.name})
+		assertParameterValueForBulkPods(oc, "Partial", "sp", "-n", ns, "-o=jsonpath={.items[*].status.status}")
+		checkPrfolieNumbers(oc, "selinuxprofiles", ns, 9)
+		//sleep 60s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(60 * time.Second)
+		cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilerecording", ns, profileRecordingDep.name})
+		checkPrfolieNumbers(oc, "selinuxprofiles", ns, 3)
+		spLists, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("selinuxprofiles", "-n", ns, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(spLists, profileRecordingDep.name+"-nginx")).To(o.BeTrue())
+		o.Expect(strings.Contains(spLists, profileRecordingDep.name+"-redis")).To(o.BeTrue())
+		o.Expect(strings.Contains(spLists, profileRecordingDep.name+"-openshift")).To(o.BeTrue())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"selinuxprofiles", profileRecordingDep.name + "-nginx", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"selinuxprofiles", profileRecordingDep.name + "-redis", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"selinuxprofiles", profileRecordingDep.name + "-openshift", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
 	})
 })

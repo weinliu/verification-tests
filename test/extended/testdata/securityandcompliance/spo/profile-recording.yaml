@@ -11,6 +11,7 @@ objects:
   spec:
     kind: "${KIND}"
     recorder: logs
+    mergeStrategy: "${MERGESTRATEGY}"
     podSelector:
       matchLabels:
         "${LABELKEY}": "${LABELVALUE}"
@@ -18,5 +19,6 @@ parameters:
 - name: NAME
 - name: NAMESPACE
 - name: KIND
+- name: MERGESTRATEGY
 - name: LABELKEY
 - name: LABELVALUE
