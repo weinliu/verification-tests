@@ -11,7 +11,7 @@ spec:
     - /etc/coredns/Corefile
     command:
     - coredns
-    image: quay.io/openshift/origin-coredns:latest
+    image: replaced-at-runtime
     imagePullPolicy: IfNotPresent
     name: coredns
     volumeMounts:

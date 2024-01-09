@@ -954,6 +954,24 @@ func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 	return append(attrList, []string{dnspodname, output})
 }
 
+// replace the coredns image that specified by co/dns, currently only for replacement of coreDNS-pod.yaml
+func replaceCoreDnsImage(oc *exutil.CLI, file string) {
+	coreDnsImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/dns", "-o=jsonpath={.status.versions[?(.name == \"coredns\")].version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	result, err := exec.Command("bash", "-c", fmt.Sprintf(`grep "image: " %s`, file)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the result of grep command is: %s", result)
+	if strings.Contains(string(result), coreDnsImage) {
+		e2e.Logf("the image has been updated, no action and continue")
+	} else {
+		// use "|" as delimiter here since the image looks like
+		// "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:xxxxx"
+		sedCmd := fmt.Sprintf(`sed -i 's|replaced-at-runtime|%s|g' %s`, coreDnsImage, file)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
 // this fucntion will return the master pod who has the virtual ip
 func getVipOwnerPod(oc *exutil.CLI, ns string, podname []string, vip string) string {
 	cmd := fmt.Sprintf("ip address |grep %s", vip)
