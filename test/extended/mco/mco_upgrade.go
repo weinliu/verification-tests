@@ -206,4 +206,31 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 			"The old clusterrolebinding for the 'default' service account exists and it should not exist")
 		logger.Infof("OK!\n")
 	})
+
+	g.It("NonHyperShiftHOST-ARO-Author:rioliu-PstChkUpgrade-NonPreRelease-Critical-70577-Run ovs-configuration.service before dnsmasq.service on Azure", func() {
+		skipTestIfSupportedPlatformNotMatched(oc, AzurePlatform)
+
+		var (
+			ovsconfigSvcName = "ovs-configuration.service"
+			dnsmasqSvcName   = "dnsmasq.service"
+			masterNode       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster).GetCoreOsNodesOrFail()[0] // to compatible with SNO/Compact cluster, get a coreOS node from master pool
+		)
+
+		exutil.By("Check service is enabled for ovs-configuration.service")
+		o.Expect(masterNode.IsUnitEnabled(ovsconfigSvcName)).Should(o.BeTrue(), "service %s is not enabled", ovsconfigSvcName)
+
+		exutil.By("Check service dependencies of ovs-configuration.service")
+		o.Expect(masterNode.GetUnitProperties(ovsconfigSvcName)).Should(o.MatchRegexp(fmt.Sprintf(`Before=.*%s.*`, dnsmasqSvcName)), "Cannot find dependent service definition dnsmasq for ovs-configuration")
+		o.Expect(masterNode.GetUnitDependencies(ovsconfigSvcName, "--before")).Should(o.ContainSubstring(dnsmasqSvcName), "Cannot find dependent service dnsmasq for ovs-configuration")
+
+		exutil.By("Check service state of dnsmasq")
+		isActive := masterNode.IsUnitActive(dnsmasqSvcName)
+		if IsAROCluster(oc) {
+			o.Expect(isActive).Should(o.BeTrue(), "on ARO cluster service %s is not active", dnsmasqSvcName)
+		} else {
+			o.Expect(isActive).Should(o.BeFalse(), "on normal Azure cluster service %s should be inactive", dnsmasqSvcName)
+		}
+
+	})
+
 })

@@ -199,6 +199,42 @@ func (n *Node) UnmaskService(svcName string) (string, error) {
 	return n.DebugNodeWithChroot("systemctl", "unmask", svcName)
 }
 
+// GetUnitProperties executes `systemctl show $unitname`, can be used to checkout service dependency
+func (n *Node) GetUnitProperties(unitName string) (string, error) {
+	return n.DebugNodeWithChroot("systemctl", "show", unitName)
+}
+
+// GetUnitDependencies executes `systemctl list-dependencies` with arguments like --before --after
+func (n *Node) GetUnitDependencies(unitName string, opts ...string) (string, error) {
+	options := []string{"systemctl", "list-dependencies", unitName}
+	if len(opts) > 0 {
+		options = append(options, opts...)
+	}
+	return n.DebugNodeWithChroot(options...)
+}
+
+// IsUnitActive check unit is active or inactive
+func (n *Node) IsUnitActive(unitName string) bool {
+	output, _, err := n.DebugNodeWithChrootStd("systemctl", "is-active", unitName)
+	if err != nil {
+		logger.Errorf("Get unit state for %s failed: %v", unitName, err)
+		return false
+	}
+	logger.Infof("Unit %s state is: %s", unitName, output)
+	return output == "active"
+}
+
+// IsUnitEnabled check unit enablement state is enabled/enabled-runtime or others e.g. disabled
+func (n *Node) IsUnitEnabled(unitName string) bool {
+	output, _, err := n.DebugNodeWithChrootStd("systemctl", "is-enabled", unitName)
+	if err != nil {
+		logger.Errorf("Get unit enablement state for %s failed: %v", unitName, err)
+		return false
+	}
+	logger.Infof("Unit %s enablement state is: %s ", unitName, output)
+	return strings.HasPrefix(output, "enabled")
+}
+
 // GetRpmOstreeStatus returns the rpm-ostree status in json format
 func (n Node) GetRpmOstreeStatus(asJSON bool) (string, error) {
 	args := []string{"rpm-ostree", "status"}

@@ -603,6 +603,11 @@ func skipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...string) 
 	}
 }
 
+// IsAROCluster check cluster is ARO or not
+func IsAROCluster(oc *exutil.CLI) bool {
+	return NewResource(oc.AsAdmin(), "clusters.aro.openshift.io", "cluster").Exists()
+}
+
 // skipTestIfRTKernel skips the current test if the cluster is using real time kernel
 func skipTestIfRTKernel(oc *exutil.CLI) {
 	wMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
