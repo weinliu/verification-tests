@@ -1685,12 +1685,7 @@ func getPeerPodMetadataInstanceType(oc *exutil.CLI, opNamespace, podName, provid
 	return oc.AsAdmin().Run("rsh").Args("-T", "-n", opNamespace, podName, "bash", "-c", metadataCurl[provider]).Output()
 }
 
-func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace string) (msg string, err error, value string) {
-
-	var (
-		imageIDParam string
-		imageID      string
-	)
+func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace string) (msg string, err error, imageID string) {
 
 	cloudProviderMap := map[string]string{
 		"aws":   "PODVM_AMI_ID",
@@ -1703,19 +1698,19 @@ func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace st
 		return "Error fetching configmap details", err, ""
 	}
 
-	imageIDParam = cloudProviderMap[provider]
-	if gjson.Get(msg, imageIDParam).Exists() {
-		imageID := gjson.Get(msg, imageIDParam).String()
-		if imageID == "" {
-			// Handle the case when imageIDParam is an empty string
-			e2e.Logf("Image ID parameter found in the config map but is an empty string; Image ID :%s", imageIDParam)
-			return fmt.Sprintf("CM created has an empty value for Image ID : %s", imageIDParam), nil, ""
-		}
-	} else {
+	imageIDParam := cloudProviderMap[provider]
+
+	if !gjson.Get(msg, imageIDParam).Exists() {
 		// Handle the case when imageIDParam is not found
 		e2e.Logf("Image ID parameter '%s' not found in the config map", imageIDParam)
 		return fmt.Sprintf("CM created does not have: %s", imageIDParam), nil, ""
 	}
 
+	imageID = gjson.Get(msg, imageIDParam).String()
+	if imageID == "" {
+		// Handle the case when imageIDParam is an empty string
+		e2e.Logf("Image ID parameter found in the config map but is an empty string; Image ID :%s", imageIDParam)
+		return fmt.Sprintf("CM created has an empty value for Image ID : %s", imageIDParam), nil, ""
+	}
 	return "CM does have the Image ID", nil, imageID
 }
