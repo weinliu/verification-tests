@@ -663,16 +663,24 @@ func (pod *debugPodUsingDefinition) createDebugPodUsingDefinition(oc *exutil.CLI
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod has not been started successfully"))
+		if err != nil {
+			e2e.Logf("Error waiting for pod to be in 'Running' phase: %v", err)
+			return false, nil
+		}
 
 		debugPod, err := oc.Run("debug").Args("-f", outputFile).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf("Error running 'debug' command: %v", err)
+			return false, nil
+		}
 		if match, _ := regexp.MatchString("Starting pod/pod48681-debug", debugPod); !match {
 			e2e.Failf("Image debug container is being started instead of debug pod using the pod definition yaml file")
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s with %s is not created successfully", pod.name, pod.cliImageID))
+	if err != nil {
+		e2e.Failf("Error creating debug pod: %v", err)
+	}
 }
 
 func createDeployment(oc *exutil.CLI, namespace string, deployname string) {
