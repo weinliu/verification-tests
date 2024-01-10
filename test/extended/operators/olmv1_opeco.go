@@ -2,6 +2,7 @@ package operators
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -246,6 +247,58 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(errWait, "Error image wrong or resolvedRef are same")
+
+	})
+
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-High-69869-Catalogd Add metrics to the Storage implementation", func() {
+		var (
+			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
+			catalog         = olmv1util.CatalogDescription{
+				Name:     "catalog-69869",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69869",
+				Template: catalogTemplate,
+			}
+			metricsMsg string
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("Get http content")
+		packageDataOut, err := catalog.UnmarshalContent(oc, "package")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		packageName := olmv1util.ListPackagesName(packageDataOut.Packages)
+		o.Expect(packageName[0]).To(o.ContainSubstring("nginx69869"))
+
+		exutil.By("Get token and clusterIP")
+		promeEp, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("service", "-n", "openshift-catalogd", "catalogd-controller-manager-metrics-service", "-o=jsonpath={.spec.clusterIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(promeEp).NotTo(o.BeEmpty())
+
+		metricsToken, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(metricsToken).NotTo(o.BeEmpty())
+
+		catalogPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=catalog-operator", "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(catalogPodname).NotTo(o.BeEmpty())
+
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			queryContent := "https://" + promeEp + ":8443/metrics"
+			metricsMsg, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", catalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", metricsToken), queryContent).Output()
+			e2e.Logf("err:%v", err)
+			if strings.Contains(metricsMsg, "catalogd_http_request_duration_seconds_bucket{code=\"200\"") {
+				e2e.Logf("found catalogd_http_request_duration_seconds_bucket{code=\"200\"")
+				return true, nil
+			}
+			return false, nil
+		})
+		if errWait != nil {
+			e2e.Logf("%v", metricsMsg)
+			exutil.AssertWaitPollNoErr(errWait, "catalogd_http_request_duration_seconds_bucket{code=\"200\" not found.")
+		}
 
 	})
 
