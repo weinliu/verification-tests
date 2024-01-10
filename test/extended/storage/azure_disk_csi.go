@@ -399,6 +399,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: wduan@redhat.com
 	// OCP-66392 - [Azure-Disk-CSI-Driver] support enablePerformancePlus in storageclass
 	g.It("ARO-Author:wduan-Medium-66392-[Azure-Disk-CSI-Driver] support enablePerformancePlus in storageclass", func() {
+
+		// Azure stack doesn't support enablePerformancePlus
+		// with error: Could not find member 'performancePlus' on object of type 'CreationData'. Path 'properties.creationData.performancePlus'
+		if isAzureStackCluster(oc) {
+			g.Skip("The test cluster is on Azure stack platform which doesn't support PerformancePlus disk.")
+		}
+
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
