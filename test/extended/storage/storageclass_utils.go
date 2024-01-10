@@ -229,7 +229,7 @@ func getClusterDefaultStorageclassByPlatform(cloudProvider string) string {
 }
 
 // Get pre-defined storage class name list from pre-defined-storageclass matrix
-func getClusterPreDefinedStorageclassByPlatform(cloudProvider string) []string {
+func getClusterPreDefinedStorageclassByPlatform(oc *exutil.CLI, cloudProvider string) []string {
 	preDefinedStorageclassMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage", "config"), "pre-defined-storageclass.json"))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	preDefinedStorageclass := []string{}
@@ -237,6 +237,12 @@ func getClusterPreDefinedStorageclassByPlatform(cloudProvider string) []string {
 	for _, v := range sc {
 		preDefinedStorageclass = append(preDefinedStorageclass, v.Str)
 	}
+
+	// AzureStack test clusters don't support azure file storage
+	if isAzureStackCluster(oc) {
+		preDefinedStorageclass = deleteElement(preDefinedStorageclass, "azurefile-csi")
+	}
+
 	e2e.Logf("The pre-defined storageclass list is: %v", preDefinedStorageclass)
 	return preDefinedStorageclass
 }

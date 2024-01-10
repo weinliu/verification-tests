@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		preDefinedStorageclassCheck(cloudProvider)
 		defaultsc := getClusterDefaultStorageclassByPlatform(cloudProvider)
 
-		preDefinedStorageclassList := getClusterPreDefinedStorageclassByPlatform(cloudProvider)
+		preDefinedStorageclassList := getClusterPreDefinedStorageclassByPlatform(oc, cloudProvider)
 		e2e.Logf("The pre-defined storageclass list is: %v", preDefinedStorageclassList)
 
 		// Check the default storageclass is expected, otherwise skip

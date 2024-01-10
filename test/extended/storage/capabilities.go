@@ -31,7 +31,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		expectSpecifiedResourceExist(oc, "storage/cluster", "", false)
 		expectSpecifiedResourceExist(oc, "deployment/cluster-storage-operator", "openshift-cluster-storage-operator", false)
 		// Get pre-defined storageclass from config file and check
-		preDefinedStorageclassList := getClusterPreDefinedStorageclassByPlatform(cloudProvider)
+		preDefinedStorageclassList := getClusterPreDefinedStorageclassByPlatform(oc, cloudProvider)
 		e2e.Logf("The pre-defined storageclass list is: %v", preDefinedStorageclassList)
 		for _, sc := range preDefinedStorageclassList {
 			expectSpecifiedResourceExist(oc, "storage/"+sc, "", false)
