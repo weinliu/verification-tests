@@ -2,7 +2,6 @@ package clusterinfrastructure
 
 import (
 	"math/rand"
-	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -51,9 +50,9 @@ func getRandomString() string {
 }
 
 func skipTestIfSpotWorkers(oc *exutil.CLI) {
-	machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+	machines, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(strings.Split(machine, "")) != 0 {
+	if machines != "" {
 		g.Skip("This case cannot be tested using spot instance!")
 	}
 }

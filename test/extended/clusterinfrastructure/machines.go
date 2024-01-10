@@ -1006,4 +1006,74 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defaultMachinesetAzure.createDefaultMachineSetOnAzure(oc)
 		defer defaultMachinesetAzure.deleteDefaultMachineSetOnAzure(oc)
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-46966-Validation webhook check for gpus on GCP [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		skipTestIfSpotWorkers(oc)
+		architecture.SkipArchitectures(oc, architecture.ARM64)
+
+		g.By("Create a new machineset")
+		machinesetName := "machineset-46966"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(zone, "us-central1-") {
+			g.Skip("not valid zone for GPU machines")
+		}
+
+		g.By("1.Update machineset with A100 GPUs (A family) and set gpus")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","gpus": [ { "count": 1,"type": "nvidia-tesla-p100" }]}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "A2 machine types have already attached gpus, additional gpus cannot be specified")).To(o.BeTrue())
+
+		g.By("2.Update machineset with nvidia-tesla-A100 Type")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"n1-standard-1","gpus": [ { "count": 1,"type": "nvidia-tesla-a100" }]}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "nvidia-tesla-a100 gpus, are only attached to the A2 machine types")).To(o.BeTrue())
+
+		g.By("3.Update machineset with other machine type families and set gpus")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"e2-medium","gpus": [ { "count": 1,"type": "nvidia-tesla-p100" }]}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachineFailed(oc, machinesetName)
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
+		o.Expect(out).Should(o.ContainSubstring("e2-medium does not support accelerators. Only A2 and N1 machine type families support guest acceleartors"))
+		exutil.ScaleMachineSet(oc, machinesetName, 0)
+
+		g.By("4.Update machineset with A100 GPUs (A2 family) nvidia-tesla-a100, onHostMaintenance is set to Migrate")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","onHostMaintenance":"Migrate"}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Forbidden: When GPUs are specified or using machineType with pre-attached GPUs(A2 machine family), onHostMaintenance must be set to Terminate")).To(o.BeTrue())
+
+		g.By("5.Update machineset with A100 GPUs (A2 family) nvidia-tesla-a100, restartPolicy with an invalid value")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","restartPolicy": "Invalid","onHostMaintenance": "Terminate"}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid value: \"Invalid\": restartPolicy must be either Never or Always")).To(o.BeTrue())
+
+		g.By("6.Update machineset with A100 GPUs (A2 family) nvidia-tesla-a100, onHostMaintenance with an invalid value")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","restartPolicy": "Always","onHostMaintenance": "Invalid"}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid value: \"Invalid\": onHostMaintenance must be either Migrate or Terminate")).To(o.BeTrue())
+
+		g.By("7.Update machineset with other GPU types,  count with an invalid value")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n1-standard-1","restartPolicy": "Always","onHostMaintenance": "Terminate","gpus": [ { "count": -1,"type": "nvidia-tesla-p100" }]}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachineFailed(oc, machinesetName)
+		machineName = exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
+		o.Expect(strings.Contains(out, "Number of accelerator cards attached to an instance must be one of [1, 2, 4]") || strings.Contains(out, "AcceleratorType nvidia-tesla-p100 not available in the zone")).To(o.BeTrue())
+		exutil.ScaleMachineSet(oc, machinesetName, 0)
+
+		g.By("8.Update machineset with other GPU types,  type with an empty value")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"n1-standard-1","restartPolicy": "Always","onHostMaintenance": "Terminate","gpus": [ { "count": 1,"type": "" }]}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Required value: Type is required")).To(o.BeTrue())
+
+		g.By("9.Update machineset with other GPU types,  type with an invalid value")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n1-standard-1","restartPolicy": "Always","onHostMaintenance": "Terminate","gpus": [ { "count": 1,"type": "invalid" }]}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachineFailed(oc, machinesetName)
+		machineName = exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
+		o.Expect(out).Should(o.ContainSubstring("AcceleratorType invalid not available"))
+	})
 })
