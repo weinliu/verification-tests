@@ -164,8 +164,8 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		g.By("Retrieve cluster nodes information")
 		CD, err := clusterService.DescribeClusterAndReflect(clusterID)
 		o.Expect(err).To(o.BeNil())
-		initialNodesNumber, isInt := CD.Nodes[0]["Compute (desired)"].(int)
-		o.Expect(isInt).To(o.BeTrue())
+		initialNodesNumber, err := rosacli.RetrieveDesiredComputeNodes(CD)
+		o.Expect(err).To(o.BeNil())
 
 		g.By("List nodepools")
 		npList, err := machinePoolService.ListAndReflectNodePools(clusterID)
@@ -203,7 +203,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		g.By("Check cluster nodes information with new replicas")
 		CD, err = clusterService.DescribeClusterAndReflect(clusterID)
 		o.Expect(err).To(o.BeNil())
-		o.Expect(CD.Nodes[0]["Compute (desired)"]).To(o.Equal(initialNodesNumber + replicasNumber))
+		newNodesNumber, err := rosacli.RetrieveDesiredComputeNodes(CD)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(newNodesNumber).To(o.Equal(initialNodesNumber + replicasNumber))
 
 		g.By("Add autoscaling to nodepool")
 		output, err = machinePoolService.EditMachinePool(clusterID, nodePoolName,
@@ -244,7 +246,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		g.By("Check cluster nodes information after deletion")
 		CD, err = clusterService.DescribeClusterAndReflect(clusterID)
 		o.Expect(err).To(o.BeNil())
-		o.Expect(CD.Nodes[0]["Compute (desired)"]).To(o.Equal(initialNodesNumber))
+		newNodesNumber, err = rosacli.RetrieveDesiredComputeNodes(CD)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(newNodesNumber).To(o.Equal(initialNodesNumber))
 
 		g.By("Create new nodepool with replicas 0")
 		replicas0NPName := rosacli.GenerateRandomName(nodePoolName, 2)
