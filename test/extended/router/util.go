@@ -691,9 +691,11 @@ func pollReadDnsCorefile(oc *exutil.CLI, dnsPodName, searchString1, grepOption, 
 		}
 		return true, nil
 	})
-	// print Corefile for debugging (normally the content is less than 20 lines)
+	// print all dns pods and one Corefile for debugging (normally the content is less than 20 lines)
 	if waitErr != nil {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, dnsPodName, "--", "bash", "-c", "cat /etc/coredns/Corefile").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "dns.operator.openshift.io/daemonset-dns=default").Output()
+		e2e.Logf("All current dns pods are:\n%v", output)
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, dnsPodName, "--", "bash", "-c", "cat /etc/coredns/Corefile").Output()
 		e2e.Logf("The existing Corefile is: %v", output)
 	}
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but Corefile is not updated"))
@@ -811,6 +813,8 @@ func getAllLinuxNodes(oc *exutil.CLI) string {
 // find random linux node and add label "ne-dns-testing=true" to it, then patch spec.nodePlacement.nodeSelector
 // please use func deleteDnsOperatorToRestore() for clear up.
 func forceOnlyOneDnsPodExist(oc *exutil.CLI) string {
+	ns := "openshift-dns"
+	dnsPodLabel := "dns.operator.openshift.io/daemonset-dns=default"
 	dnsNodeSelector := "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"ne-dns-testing\":\"true\"}}]"
 	// ensure no node with the label "ne-dns-testing=true"
 	oc.AsAdmin().WithoutNamespace().Run("label").Args("node", "-l", "ne-dns-testing=true", "ne-dns-testing-").Execute()
@@ -819,16 +823,24 @@ func forceOnlyOneDnsPodExist(oc *exutil.CLI) string {
 		e2e.Logf("Found only one dns-default pod and it looks like SNO cluster. Continue the test...")
 	} else {
 		dnsPodName := getRandomDNSPodName(podList)
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", dnsPodName, "-o=jsonpath={.spec.nodeName}", "-n", "openshift-dns").Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", dnsPodName, "-o=jsonpath={.spec.nodeName}", "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Find random dns pod '%s' and its node '%s' which will be used for the following testing", dnsPodName, nodeName)
 		// add special label "ne-dns-testing=true" to the node and force only one dns pod running on it
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", nodeName, "ne-dns-testing=true").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		patchGlobalResourceAsAdmin(oc, "dnses.operator.openshift.io/default", dnsNodeSelector)
-		err1 := waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnsPodName)
+		err1 := waitForResourceToDisappear(oc, ns, "pod/"+dnsPodName)
+		if err1 != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", dnsPodLabel).Output()
+			e2e.Logf("All current dns pods are:\n%v", output)
+		}
 		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("max time reached but pod %s is not terminated", dnsPodName))
-		err2 := waitForPodWithLabelReady(oc, "openshift-dns", "dns.operator.openshift.io/daemonset-dns=default")
+		err2 := waitForPodWithLabelReady(oc, ns, dnsPodLabel)
+		if err2 != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", dnsPodLabel).Output()
+			e2e.Logf("All current dns pods are:\n%v", output)
+		}
 		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("max time reached but no dns pod ready"))
 	}
 	return getDNSPodName(oc)
