@@ -71,3 +71,56 @@ func SkipIfCloudControllerManagerNotDeployed(oc *exutil.CLI) {
 		}
 	}
 }
+
+// wait for the named resource is disappeared, e.g. used while router deployment rolled out
+func waitForResourceToDisappear(oc *exutil.CLI, ns, rsname string) error {
+	return wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(rsname, "-n", ns).Output()
+		e2e.Logf("check resource %v and got: %v", rsname, status)
+		primary := false
+		if err != nil {
+			if strings.Contains(status, "NotFound") {
+				e2e.Logf("the resource is disappeared!")
+				primary = true
+			} else {
+				e2e.Logf("failed to get the resource: %v, retrying...", err)
+			}
+		} else {
+			e2e.Logf("the resource is still there, retrying...")
+		}
+		return primary, nil
+	})
+}
+
+func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
+	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+		e2e.Logf("the Ready status of pod is %v", status)
+		if err != nil || status == "" {
+			e2e.Logf("failed to get pod status: %v, retrying...", err)
+			return false, nil
+		}
+		if strings.Contains(status, "False") {
+			e2e.Logf("the pod Ready status not met; wanted True but got %v, retrying...", status)
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func waitForClusterOperatorsReady(oc *exutil.CLI, clusterOperators ...string) error {
+	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+		for _, co := range clusterOperators {
+			coState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/"+co, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+			if err != nil || coState == "" {
+				e2e.Logf("failed to get co state: %v, retrying...", err)
+				return false, nil
+			}
+			if !strings.Contains(coState, "TrueFalseFalse") {
+				e2e.Logf("the co: %v status not met; wanted TrueFalseFalse but got %v, retrying...", co, coState)
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+}

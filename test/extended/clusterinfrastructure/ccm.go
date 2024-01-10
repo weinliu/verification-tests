@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -211,5 +212,70 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		cmKubeControllerManager, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "config", "-n", "openshift-kube-controller-manager", "-o=yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmKubeControllerManager).NotTo(o.ContainSubstring("external-cloud-volume-plugin"))
+	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Critical-70618-[CCM] The new created nodes should be added to load balancer [Disruptive][Slow]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
+		var newNodeNames []string
+		g.By("Create a new machineset")
+		machinesetName := "machineset-70618"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer func() {
+			err := waitForClusterOperatorsReady(oc, "ingress", "console", "authentication")
+			exutil.AssertWaitPollNoErr(err, "co recovery fails!")
+		}()
+		defer func() {
+			err := waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default")
+			exutil.AssertWaitPollNoErr(err, "pod recovery fails!")
+		}()
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":2,"template":{"spec":{"taints":null}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineNames := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		newNodeNames = append(newNodeNames, exutil.GetNodeNameFromMachine(oc, machineNames[0]))
+		newNodeNames = append(newNodeNames, exutil.GetNodeNameFromMachine(oc, machineNames[1]))
+		newNodeNameStr := newNodeNames[0] + " " + newNodeNames[1]
+		e2e.Logf("newNodeNames: %s", newNodeNameStr)
+		for _, value := range newNodeNames {
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("node", value, "testcase=70618").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", "openshift-ingress", `scheduler.alpha.kubernetes.io/node-selector=testcase=70618`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", "openshift-ingress", `scheduler.alpha.kubernetes.io/node-selector-`).Execute()
+
+		g.By("Delete router pods and to make new ones running on new workers")
+		routerPodNameStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-ingress").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		routerPodNames := strings.Split(routerPodNameStr, " ")
+		g.By("Delete old router pods")
+		for _, value := range routerPodNames {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", value, "-n", "openshift-ingress").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		g.By("Wait old router pods disappear")
+		for _, value := range routerPodNames {
+			err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+value)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router %v failed to fully terminate", "pod/"+value))
+		}
+		g.By("Wait new router pods ready")
+		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default")
+		exutil.AssertWaitPollNoErr(err, "new router pod failed to be ready state within allowed time!")
+		newRouterPodOnNodeStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[*].spec.nodeName}", "-n", "openshift-ingress").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("newRouterPodOnNodeStr: %s", newRouterPodOnNodeStr)
+		newRouterPodOnNodes := strings.Split(newRouterPodOnNodeStr, " ")
+		g.By("Check new router pods running on new workers")
+		for _, value := range newRouterPodOnNodes {
+			o.Expect(strings.Contains(newNodeNameStr, value)).To(o.BeTrue())
+		}
+		g.By("Check co ingress console authentication are good")
+		err = waitForClusterOperatorsReady(oc, "ingress", "console", "authentication")
+		exutil.AssertWaitPollNoErr(err, "some co failed to be ready state within allowed time!")
 	})
 })
