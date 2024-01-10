@@ -24,8 +24,6 @@ type ResourcesService struct {
 }
 
 type Client struct {
-	clusterID string
-
 	// Clients
 	Runner *runner
 	Parser *Parser
@@ -33,13 +31,14 @@ type Client struct {
 	// services
 	Cluster         ClusterService
 	IDP             IDPService
+	Ingress         IngressService
 	KubeletConfig   KubeletConfigService
 	MachinePool     MachinePoolService
+	NetworkVerifier NetworkVerifierService
 	OCMResource     OCMResourceService
+	TuningConfig    TuningConfigService
 	User            UserService
 	Version         VersionService
-	NetworkVerifier NetworkVerifierService
-	Ingress         IngressService
 }
 
 func NewClient() *Client {
@@ -56,6 +55,7 @@ func NewClient() *Client {
 	client.KubeletConfig = NewKubeletConfigService(client)
 	client.MachinePool = NewMachinePoolService(client)
 	client.OCMResource = NewOCMResourceService(client)
+	client.TuningConfig = NewTuningConfigService(client)
 	client.User = NewUserService(client)
 	client.Version = NewVersionService(client)
 	client.NetworkVerifier = NewNetworkVerifierService(client)
@@ -79,6 +79,7 @@ func (c *Client) CleanResources(clusterID string) error {
 	errorList = append(errorList, c.MachinePool.CleanResources(clusterID)...)
 	errorList = append(errorList, c.OCMResource.CleanResources(clusterID)...)
 	errorList = append(errorList, c.User.CleanResources(clusterID)...)
+	errorList = append(errorList, c.TuningConfig.CleanResources(clusterID)...)
 	errorList = append(errorList, c.Version.CleanResources(clusterID)...)
 	errorList = append(errorList, c.NetworkVerifier.CleanResources(clusterID)...)
 	errorList = append(errorList, c.Ingress.CleanResources(clusterID)...)

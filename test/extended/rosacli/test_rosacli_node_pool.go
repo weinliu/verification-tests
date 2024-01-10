@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 	g.BeforeEach(func() {
 
 		g.By("Get the cluster")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		clusterService = rosaClient.Cluster
 
 		g.By("Check hosted cluster")
-		hosted, err := isHostedCPCluster(clusterID)
+		hosted, err := clusterService.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		if !hosted {
 			g.Skip("Node pools are only supported on Hosted clusters")
@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 	})
 
 	g.It("Author:tradisso-Critical-56782-rosacli Create/Edit/List/Delete node pool of the hosted cluster will succeed [Serial]", func() {
-		nodePoolName := "np-56782" + "-" + strings.ToLower(generateRandomString(2))
+		nodePoolName := rosacli.GenerateRandomName("np-56782", 2)
 		labels := "label1=value1,label2=value2"
 		taints := "t1=v1:NoSchedule,l2=:NoSchedule"
 		instanceType := "m5.2xlarge"
@@ -82,8 +82,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		o.Expect(np.Subnet).ToNot(o.BeNil())
 		o.Expect(np.Version).To(o.Equal(cpVersion))
 		o.Expect(np.AutoRepair).To(o.Equal("Yes"))
-		o.Expect(parseLabels(np.Labels)).To(o.ContainElements(parseLabels(labels)))
-		o.Expect(parseTaints(np.Taints)).To(o.ContainElements(parseTaints(taints)))
+		o.Expect(len(rosacli.ParseLabels(np.Labels))).To(o.Equal(len(rosacli.ParseLabels(labels))))
+		o.Expect(rosacli.ParseLabels(np.Labels)).To(o.ContainElements(rosacli.ParseLabels(labels)))
+		o.Expect(len(rosacli.ParseTaints(np.Taints))).To(o.Equal(len(rosacli.ParseTaints(taints))))
+		o.Expect(rosacli.ParseTaints(np.Taints)).To(o.ContainElements(rosacli.ParseTaints(taints)))
 
 		g.By("Edit nodepool")
 		newLabels := "l3=v3"
@@ -102,8 +104,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		np = npList.Nodepool(nodePoolName)
 		o.Expect(np).ToNot(o.BeNil())
 		o.Expect(np.Replicas).To(o.Equal(fmt.Sprintf("0/%s", replicasNb)))
-		o.Expect(parseLabels(np.Labels)).To(o.BeEquivalentTo(parseLabels(newLabels)))
-		o.Expect(parseTaints(np.Taints)).To(o.BeEquivalentTo(parseTaints(newTaints)))
+		o.Expect(len(rosacli.ParseLabels(np.Labels))).To(o.Equal(len(rosacli.ParseLabels(newLabels))))
+		o.Expect(rosacli.ParseLabels(np.Labels)).To(o.BeEquivalentTo(rosacli.ParseLabels(newLabels)))
+		o.Expect(len(rosacli.ParseTaints(np.Taints))).To(o.Equal(len(rosacli.ParseTaints(newTaints))))
+		o.Expect(rosacli.ParseTaints(np.Taints)).To(o.BeEquivalentTo(rosacli.ParseTaints(newTaints)))
 
 		g.By("Check describe nodepool")
 		npDesc, err := machinePoolService.DescribeAndReflectNodePool(clusterID, nodePoolName)
@@ -118,8 +122,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		o.Expect(npDesc.Subnet).ToNot(o.BeNil())
 		o.Expect(npDesc.Version).To(o.Equal(cpVersion))
 		o.Expect(npDesc.AutoRepair).To(o.Equal("Yes"))
-		o.Expect(parseLabels(npDesc.Labels)).To(o.BeEquivalentTo(parseLabels(newLabels)))
-		o.Expect(parseTaints(npDesc.Taints)).To(o.BeEquivalentTo(parseTaints(newTaints)))
+		o.Expect(len(rosacli.ParseLabels(npDesc.Labels))).To(o.Equal(len(rosacli.ParseLabels(newLabels))))
+		o.Expect(rosacli.ParseLabels(npDesc.Labels)).To(o.BeEquivalentTo(rosacli.ParseLabels(newLabels)))
+		o.Expect(len(rosacli.ParseTaints(npDesc.Taints))).To(o.Equal(len(rosacli.ParseTaints(newTaints))))
+		o.Expect(rosacli.ParseTaints(npDesc.Taints)).To(o.BeEquivalentTo(rosacli.ParseTaints(newTaints)))
 
 		g.By("Wait for nodepool replicas available")
 		err = wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 600*time.Second, false, func(context.Context) (bool, error) {
@@ -151,7 +157,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 
 	g.It("Author:tradisso-Critical-60202-rosacli Create machine pool for the hosted cluster with subnets via rosacli is succeed [Serial]", func() {
 		var subnets []string
-		nodePoolName := "np-60202"
+		nodePoolName := rosacli.GenerateRandomName("np-60202", 2)
 		replicasNumber := 3
 		maxReplicasNumber := 6
 
@@ -166,7 +172,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		o.Expect(err).To(o.BeNil())
 		for _, np := range npList.NodePools {
 			o.Expect(np.ID).ToNot(o.BeNil())
-			if strings.HasPrefix(np.ID, defaultWorkerPool) {
+			if strings.HasPrefix(np.ID, rosacli.DefaultHostedWorkerPool) {
 				o.Expect(np.AutoScaling).ToNot(o.BeNil())
 				o.Expect(np.Subnet).ToNot(o.BeNil())
 				o.Expect(np.AutoRepair).ToNot(o.BeNil())
@@ -241,7 +247,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		o.Expect(CD.Nodes[0]["Compute (desired)"]).To(o.Equal(initialNodesNumber))
 
 		g.By("Create new nodepool with replicas 0")
-		replicas0NPName := nodePoolName + "-" + strings.ToLower(generateRandomString(2))
+		replicas0NPName := rosacli.GenerateRandomName(nodePoolName, 2)
 		_, err = machinePoolService.CreateMachinePool(clusterID, replicas0NPName,
 			"--replicas", strconv.Itoa(0),
 			"--subnet", subnets[0])
@@ -253,7 +259,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 		o.Expect(np.Replicas).To(o.Equal("0/0"))
 
 		g.By("Create new nodepool with min replicas 0")
-		minReplicas0NPName := nodePoolName + "-" + strings.ToLower(generateRandomString(2))
+		minReplicas0NPName := rosacli.GenerateRandomName(nodePoolName, 2)
 		_, err = machinePoolService.CreateMachinePool(clusterID, minReplicas0NPName,
 			"--enable-autoscaling",
 			"--min-replicas", strconv.Itoa(0),
@@ -261,5 +267,71 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Node Pools testing"
 			"--subnet", subnets[0],
 		)
 		o.Expect(err).ToNot(o.BeNil())
+	})
+
+	g.It("Author:tradisso-Critical-63178-rosacli Create Nodepool with tuning config [Serial]", func() {
+		tuningConfigService := rosaClient.TuningConfig
+		nodePoolName := rosacli.GenerateRandomName("np-63178", 2)
+		tuningConfig1Name := rosacli.GenerateRandomName("tuned01", 2)
+		tuningConfig2Name := rosacli.GenerateRandomName("tuned02", 2)
+		tuningConfig3Name := rosacli.GenerateRandomName("tuned03", 2)
+		allTuningConfigNames := []string{tuningConfig1Name, tuningConfig2Name, tuningConfig3Name}
+
+		tuningConfigPayload := `
+		{
+			"profile": [
+			  {
+				"data": "[main]\nsummary=Custom OpenShift profile\ninclude=openshift-node\n\n[sysctl]\nvm.dirty_ratio=\"25\"\n",
+				"name": "%s-profile"
+			  }
+			],
+			"recommend": [
+			  {
+				"priority": 10,
+				"profile": "%s-profile"
+			  }
+			]
+		 }
+		`
+
+		g.By("Prepare tuning configs")
+		_, err := tuningConfigService.CreateTuningConfig(clusterID, tuningConfig1Name, fmt.Sprintf(tuningConfigPayload, tuningConfig1Name, tuningConfig1Name))
+		o.Expect(err).To(o.BeNil())
+		_, err = tuningConfigService.CreateTuningConfig(clusterID, tuningConfig2Name, fmt.Sprintf(tuningConfigPayload, tuningConfig2Name, tuningConfig2Name))
+		o.Expect(err).To(o.BeNil())
+		_, err = tuningConfigService.CreateTuningConfig(clusterID, tuningConfig3Name, fmt.Sprintf(tuningConfigPayload, tuningConfig3Name, tuningConfig3Name))
+		o.Expect(err).To(o.BeNil())
+
+		g.By("Create nodepool with tuning configs")
+		_, err = machinePoolService.CreateMachinePool(clusterID, nodePoolName,
+			"--replicas", "3",
+			"--tuning-configs", strings.Join(allTuningConfigNames, ","),
+		)
+		o.Expect(err).To(o.BeNil())
+
+		g.By("Describe nodepool")
+		np, err := machinePoolService.DescribeAndReflectNodePool(clusterID, nodePoolName)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(len(rosacli.ParseTuningConfigs(np.TuningConfigs))).To(o.Equal(3))
+		o.Expect(rosacli.ParseTuningConfigs(np.TuningConfigs)).To(o.ContainElements(allTuningConfigNames))
+
+		g.By("Update nodepool with only one tuning config")
+		_, err = machinePoolService.EditMachinePool(clusterID, nodePoolName,
+			"--tuning-configs", tuningConfig1Name,
+		)
+		o.Expect(err).To(o.BeNil())
+		np, err = machinePoolService.DescribeAndReflectNodePool(clusterID, nodePoolName)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(len(rosacli.ParseTuningConfigs(np.TuningConfigs))).To(o.Equal(1))
+		o.Expect(rosacli.ParseTuningConfigs(np.TuningConfigs)).To(o.ContainElements([]string{tuningConfig1Name}))
+
+		g.By("Update nodepool with no tuning config")
+		_, err = machinePoolService.EditMachinePool(clusterID, nodePoolName,
+			"--tuning-configs", "",
+		)
+		o.Expect(err).To(o.BeNil())
+		np, err = machinePoolService.DescribeAndReflectNodePool(clusterID, nodePoolName)
+		o.Expect(err).To(o.BeNil())
+		o.Expect(len(rosacli.ParseTuningConfigs(np.TuningConfigs))).To(o.Equal(0))
 	})
 })

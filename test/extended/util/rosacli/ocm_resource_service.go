@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
@@ -50,6 +49,7 @@ type OCMResourceService interface {
 	DeleteOIDCConfig(flags ...string) (bytes.Buffer, error)
 	CreateOIDCConfig(flags ...string) (bytes.Buffer, error)
 	ReflectOIDCConfigList(result bytes.Buffer) (oidclist OIDCConfigList, err error)
+	GetOIDCIdFromList(providerURL string) (string, error)
 
 	DeleteOperatorRoles(flags ...string) (bytes.Buffer, error)
 	CreateOperatorRoles(flags ...string) (bytes.Buffer, error)
@@ -461,6 +461,21 @@ func (ors *ocmResourceService) ReflectOIDCConfigList(result bytes.Buffer) (oidcl
 	return
 }
 
+// Get the oidc id by the provider url
+func (ors *ocmResourceService) GetOIDCIdFromList(providerURL string) (string, error) {
+	oidcConfigList, _, err := ors.ListOIDCConfig()
+	if err != nil {
+		return "", err
+	}
+	for _, item := range oidcConfigList.OIDCConfigList {
+		if strings.Contains(item.IssuerUrl, providerURL) {
+			return item.ID, nil
+		}
+	}
+	logger.Warnf("No oidc with the url %s is found.", providerURL)
+	return "", nil
+}
+
 // Get specified oidc-config by oidc-config-id
 func (oidcl OIDCConfigList) OIDCConfig(id string) (oidc OIDCConfig) {
 	for _, item := range oidcl.OIDCConfigList {
@@ -493,6 +508,6 @@ func (ors *ocmResourceService) CreateOIDCProvider(flags ...string) (bytes.Buffer
 }
 
 func (ors *ocmResourceService) CleanResources(clusterID string) (errors []error) {
-	logext.Debugf("Nothing releated to cluster was done there")
+	logger.Debugf("Nothing releated to cluster was done there")
 	return
 }

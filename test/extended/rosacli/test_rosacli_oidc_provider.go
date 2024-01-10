@@ -14,16 +14,18 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc provider test"
 	var (
 		clusterID          string
 		rosaClient         *rosacli.Client
+		clusterService     rosacli.ClusterService
 		ocmResourceService rosacli.OCMResourceService
 	)
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster id")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
+		clusterService = rosaClient.Cluster
 		ocmResourceService = rosaClient.OCMResource
 	})
 
@@ -35,11 +37,11 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc provider test"
 
 	g.It("Author:yuwan-High-43046-Validation will work when user create oidc-provider to cluster [Serial]", func() {
 		g.By("Check if cluster is sts cluster")
-		StsCluster, err := isSTSCluster(clusterID)
+		StsCluster, err := clusterService.IsSTSCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
 
 		g.By("Check if cluster is using reusable oidc config")
-		UsingReusableOIDCConfig, err := isUsingReusableOIDCConfig(clusterID)
+		UsingReusableOIDCConfig, err := clusterService.IsUsingReusableOIDCConfig(clusterID)
 		o.Expect(err).To(o.BeNil())
 
 		notExistedClusterID := "notexistedclusterid111"

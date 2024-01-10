@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	semver "github.com/hashicorp/go-version"
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type VersionService interface {
@@ -149,7 +149,7 @@ func (v *versionService) ListHostedCPVersions(flags ...string) (*OpenShiftVersio
 }
 
 func (v *versionService) CleanResources(clusterID string) (errors []error) {
-	logext.Debugf("Nothing to clean in Version Service")
+	logger.Debugf("Nothing to clean in Version Service")
 	return
 }
 

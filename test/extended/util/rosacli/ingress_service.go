@@ -3,7 +3,7 @@ package rosacli
 import (
 	"bytes"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type IngressService interface {
@@ -31,9 +31,9 @@ func NewIngressService(client *Client) IngressService {
 }
 
 func (i *ingressService) CleanResources(clusterID string) (errors []error) {
-	logext.Infof("Remove remaining ingress")
+	logger.Infof("Remove remaining ingress")
 	for _, igID := range i.ingress[clusterID] {
-		logext.Infof("Remove remaining ingress '%s'", igID)
+		logger.Infof("Remove remaining ingress '%s'", igID)
 		_, err := i.DeleteIngress(clusterID, igID)
 		if err != nil {
 			errors = append(errors, err)
@@ -104,7 +104,7 @@ func (i *ingressService) ReflectIngressList(result bytes.Buffer) (res *IngressLi
 func (i *ingressService) DeleteIngress(clusterID string, ingressID string) (output bytes.Buffer, err error) {
 	output, err = i.delete(clusterID, ingressID)
 	if err == nil {
-		i.ingress[clusterID] = removeFromStringSlice(i.ingress[clusterID], ingressID)
+		i.ingress[clusterID] = RemoveFromStringSlice(i.ingress[clusterID], ingressID)
 	}
 	return
 }

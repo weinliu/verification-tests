@@ -3,7 +3,7 @@ package rosacli
 import (
 	"bytes"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type UserService interface {
@@ -139,9 +139,9 @@ func (us *userService) CreateAdmin(clusterID string) (output bytes.Buffer, err e
 
 	output, err = createAdmin.Run()
 	if err == nil {
-		us.adminCreated = appendToStringSliceIfNotExist(us.adminCreated, clusterID)
-		logext.Infof("Add admin to Cluster %v", clusterID)
-		logext.Infof("Admin created =  %v", us.adminCreated)
+		us.adminCreated = AppendToStringSliceIfNotExist(us.adminCreated, clusterID)
+		logger.Infof("Add admin to Cluster %v", clusterID)
+		logger.Infof("Admin created =  %v", us.adminCreated)
 	}
 	return
 }
@@ -163,21 +163,21 @@ func (us *userService) DeleteAdmin(clusterID string) (output bytes.Buffer, err e
 
 	output, err = deleteAdmin.Run()
 	if err == nil {
-		us.adminCreated = removeFromStringSlice(us.adminCreated, clusterID)
+		us.adminCreated = RemoveFromStringSlice(us.adminCreated, clusterID)
 	}
 	return
 }
 
 func (us *userService) CleanResources(clusterID string) (errors []error) {
-	if sliceContains(us.adminCreated, clusterID) {
-		logext.Infof("Remove remaining admin")
+	if SliceContains(us.adminCreated, clusterID) {
+		logger.Infof("Remove remaining admin")
 		if _, err := us.DeleteAdmin(clusterID); err != nil {
 			errors = append(errors, err)
 		}
 	}
 
 	for _, grantedUserRole := range us.usersGranted[clusterID] {
-		logext.Infof("Remove remaining granted user '%s' with role '%s'", grantedUserRole.user, grantedUserRole.role)
+		logger.Infof("Remove remaining granted user '%s' with role '%s'", grantedUserRole.user, grantedUserRole.role)
 		_, err := us.RevokeUser(clusterID, grantedUserRole.role, grantedUserRole.user)
 		if err != nil {
 			errors = append(errors, err)

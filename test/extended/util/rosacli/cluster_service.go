@@ -3,7 +3,7 @@ package rosacli
 import (
 	"bytes"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"gopkg.in/yaml.v3"
 )
 
@@ -17,6 +17,11 @@ type ClusterService interface {
 	CreateDryRun(clusterName string, flags ...string) (bytes.Buffer, error)
 	EditCluster(clusterID string, flags ...string) (bytes.Buffer, error)
 	DeleteUpgrade(flags ...string) (bytes.Buffer, error)
+
+	IsHostedCPCluster(clusterID string) (bool, error)
+	IsSTSCluster(clusterID string) (bool, error)
+	IsPrivateCluster(clusterID string) (bool, error)
+	IsUsingReusableOIDCConfig(clusterID string) (bool, error)
 }
 
 type clusterService struct {
@@ -140,6 +145,53 @@ func (c *clusterService) DeleteUpgrade(flags ...string) (bytes.Buffer, error) {
 }
 
 func (c *clusterService) CleanResources(clusterID string) (errors []error) {
-	logext.Debugf("Nothing releated to cluster was done there")
+	logger.Debugf("Nothing releated to cluster was done there")
 	return
+}
+
+// Check if the cluster is hosted-cp cluster
+func (c *clusterService) IsHostedCPCluster(clusterID string) (bool, error) {
+	jsonData, err := c.getJSONClusterDescription(clusterID)
+	if err != nil {
+		return false, err
+	}
+	return jsonData.DigBool("hypershift", "enabled"), nil
+}
+
+// Check if the cluster is sts cluster. hosted-cp cluster is also treated as sts cluster
+func (c *clusterService) IsSTSCluster(clusterID string) (bool, error) {
+	jsonData, err := c.getJSONClusterDescription(clusterID)
+	if err != nil {
+		return false, err
+	}
+	return jsonData.DigBool("aws", "sts", "enabled"), nil
+}
+
+// Check if the cluster is private cluster
+func (c *clusterService) IsPrivateCluster(clusterID string) (bool, error) {
+	jsonData, err := c.getJSONClusterDescription(clusterID)
+	if err != nil {
+		return false, err
+	}
+	return jsonData.DigString("api", "listening") == "internal", nil
+}
+
+// Check if the cluster is using reusable oidc-config
+func (c *clusterService) IsUsingReusableOIDCConfig(clusterID string) (bool, error) {
+	jsonData, err := c.getJSONClusterDescription(clusterID)
+	if err != nil {
+		return false, err
+	}
+	return jsonData.DigBool("aws", "sts", "oidc_config", "reusable"), nil
+}
+
+func (c *clusterService) getJSONClusterDescription(clusterID string) (*jsonData, error) {
+	c.client.Runner.Format("json")
+	output, err := c.DescribeCluster(clusterID)
+	if err != nil {
+		logger.Errorf("it met error when describeCluster in IsUsingReusableOIDCConfig is %v", err)
+		return nil, err
+	}
+	c.client.Runner.CloseFormat()
+	return c.client.Parser.JsonData.Input(output).Parse(), nil
 }

@@ -3,7 +3,7 @@ package rosacli
 import (
 	"bytes"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type IDPService interface {
@@ -99,7 +99,7 @@ func (is *idpService) create(clusterID string, name string, flags ...string) (by
 func (is *idpService) DeleteIDP(clusterID string, idpName string) (output bytes.Buffer, err error) {
 	output, err = is.delete(clusterID, idpName)
 	if err == nil {
-		is.idps[clusterID] = removeFromStringSlice(is.idps[clusterID], idpName)
+		is.idps[clusterID] = RemoveFromStringSlice(is.idps[clusterID], idpName)
 	}
 	return
 }
@@ -128,7 +128,7 @@ func (is *idpService) ListIDP(clusterID string) (IDPList, bytes.Buffer, error) {
 
 func (is *idpService) CleanResources(clusterID string) (errors []error) {
 	for _, idpName := range is.idps[clusterID] {
-		logext.Infof("Remove remaining idp '%s'", idpName)
+		logger.Infof("Remove remaining idp '%s'", idpName)
 		_, err := is.delete(clusterID, idpName)
 		if err != nil {
 			errors = append(errors, err)

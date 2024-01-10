@@ -16,12 +16,12 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 		clusterID      string
 		rosaClient     *rosacli.Client
 		clusterService rosacli.ClusterService
-		clusterConfig  *ClusterConfig
+		clusterConfig  *rosacli.ClusterConfig
 	)
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 
 		g.By("Load the original cluster config")
 		var err error
-		clusterConfig, err = parseProfile(getClusterConfigFile())
+		clusterConfig, err = rosacli.ParseClusterProfile()
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
@@ -41,12 +41,12 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 
 	g.It("Author:yuwan-High-38850-Restrict master API endpoint to direct, private connectivity or not [Serial]", func() {
 		g.By("Check the cluster is not private cluster")
-		private, err := isPrivateCluster(clusterID)
+		private, err := clusterService.IsPrivateCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
 		if private {
 			g.Skip("This case needs to test on private cluster as the prerequirement,it was not fullfilled, skip the case!!")
 		}
-		isSTS, err := isSTSCluster(clusterID)
+		isSTS, err := clusterService.IsSTSCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
 		g.By("Edit cluster to private to true")
 		out, err := clusterService.EditCluster(
@@ -161,7 +161,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 	})
 	g.It("Author:yuwan-High-45161-Allow sts cluster installation with compatible policies [Serial]", func() {
 		g.By("Check the cluster is STS cluater or skip")
-		isSTSCluster, err := isSTSCluster(clusterID)
+		isSTSCluster, err := clusterService.IsSTSCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		if !isSTSCluster {
 			g.Skip("This case 45161 is only supported on STS cluster")
@@ -175,15 +175,14 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 		versionService := rosaClient.Version
 		accountRoleList, _, err := ocmResourceService.ListAccountRole()
 		o.Expect(err).To(o.BeNil())
-		rosalCommand := command{}
-		err = rosalCommand.getClusterCreationCommand()
+		rosalCommand, err := rosacli.RetrieveClusterCreationCommand()
 		o.Expect(err).To(o.BeNil())
 
-		installerRole := rosalCommand.getFlagValue("--role-arn", true)
+		installerRole := rosalCommand.GetFlagValue("--role-arn", true)
 		ar := accountRoleList.AccountRole(installerRole)
 		o.Expect(ar).ToNot(o.Equal(rosacli.AccountRole{}))
 
-		cg := rosalCommand.getFlagValue("--channel-group", true)
+		cg := rosalCommand.GetFlagValue("--channel-group", true)
 		if cg == "" {
 			cg = "stable"
 		}
@@ -200,18 +199,18 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 			"--operator-roles-prefix": operatorPrefix,
 		}
 
-		if rosalCommand.getFlagValue("--https-proxy", true) != "" {
-			rosalCommand, err = rosalCommand.deleteFlag("--https-proxy", true)
+		if rosalCommand.GetFlagValue("--https-proxy", true) != "" {
+			err = rosalCommand.DeleteFlag("--https-proxy", true)
 			o.Expect(err).To(o.BeNil())
 		}
-		if rosalCommand.getFlagValue("--http-proxy", true) != "" {
-			rosalCommand, err = rosalCommand.deleteFlag("--http-proxy", true)
+		if rosalCommand.GetFlagValue("--http-proxy", true) != "" {
+			err = rosalCommand.DeleteFlag("--http-proxy", true)
 			o.Expect(err).To(o.BeNil())
 		}
 
-		rosalCommand = rosalCommand.replaceFlagValue(replacingFlags)
-		rosalCommand = rosalCommand.addFlags("--dry-run")
-		stdout, err := rosaClient.Runner.RunCMD(strings.Split(rosalCommand.cmd, " "))
+		rosalCommand.ReplaceFlagValue(replacingFlags)
+		rosalCommand.AddFlags("--dry-run")
+		stdout, err := rosaClient.Runner.RunCMD(strings.Split(rosalCommand.GetFullCommand(), " "))
 		o.Expect(err).To(o.BeNil())
 		o.Expect(strings.Contains(stdout.String(), fmt.Sprintf("Creating cluster '%s' should succeed", clusterName))).Should(o.BeTrue())
 	})

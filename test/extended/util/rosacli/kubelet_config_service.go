@@ -3,7 +3,7 @@ package rosacli
 import (
 	"bytes"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"gopkg.in/yaml.v3"
 )
 
@@ -96,7 +96,7 @@ func (k *kubeletConfigService) CreateKubeletConfig(clusterID string, flags ...st
 
 func (k *kubeletConfigService) CleanResources(clusterID string) (errors []error) {
 	if k.created[clusterID] {
-		logext.Infof("Remove remaining kubelet config")
+		logger.Infof("Remove remaining kubelet config")
 		_, err := k.DeleteKubeletConfig(clusterID)
 		if err != nil {
 			errors = append(errors, err)

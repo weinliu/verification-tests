@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
+
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type Version struct {
@@ -84,7 +87,8 @@ type ClusterConfig struct {
 	Version                   Version     `json:"version,omitempty"`
 }
 
-func parseProfile(filePath string) (*ClusterConfig, error) {
+func ParseClusterProfile() (*ClusterConfig, error) {
+	filePath := getClusterConfigFile()
 	// Load the JSON file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -99,4 +103,36 @@ func parseProfile(filePath string) (*ClusterConfig, error) {
 	}
 
 	return &config, nil
+}
+
+// Get the cluster config file
+func getClusterConfigFile() string {
+	sharedDir := os.Getenv("SHARED_DIR")
+	return path.Join(sharedDir, "cluster-config")
+}
+
+func GetClusterID() (clusterID string) {
+	clusterID = getClusterIDENVExisted()
+	if clusterID != "" {
+		return
+	}
+
+	if _, err := os.Stat(getClusterIDFile()); err != nil {
+		logger.Errorf("Cluster id file not existing")
+		return ""
+	}
+	fileCont, _ := os.ReadFile(getClusterIDFile())
+	clusterID = string(fileCont)
+	return
+}
+
+// Get the cluster config file, for jean chen
+func getClusterIDFile() string {
+	sharedDir := os.Getenv("SHARED_DIR")
+	return path.Join(sharedDir, "cluster-id")
+}
+
+// Get the clusterID env.
+func getClusterIDENVExisted() string {
+	return os.Getenv("CLUSTER_ID")
 }

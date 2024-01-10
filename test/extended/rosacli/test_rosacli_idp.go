@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing",
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the clients")
@@ -272,7 +272,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing",
 		o.Expect(textData).Should(o.ContainSubstring("Admin account has been added"))
 
 		g.By("Create one htpasswd idp with multiple users")
-		_, singleUserName, singleUserPasswd, err = generateHtpasswdPair("user1", "pass1")
+		_, singleUserName, singleUserPasswd, err = rosacli.GenerateHtpasswdPair("user1", "pass1")
 		o.Expect(err).To(o.BeNil())
 		output, err = idpServiceSensitive.CreateIDP(
 			clusterID, idpNames[0],
@@ -287,7 +287,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing",
 		o.Expect(textData).Should(o.ContainSubstring("and click on '%s'", idpNames[0]))
 
 		g.By("Create one htpasswd idp with single users")
-		multipleuserPasswd, err = generateMultipleHtpasswdPairs(2)
+		multipleuserPasswd, err = rosacli.GenerateMultipleHtpasswdPairs(2)
 		o.Expect(err).To(o.BeNil())
 		output, err = idpServiceSensitive.CreateIDP(
 			clusterID, idpNames[1],
@@ -301,9 +301,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing",
 		o.Expect(textData).Should(o.ContainSubstring("and click on '%s'", idpNames[1]))
 
 		g.By("Create one htpasswd idp with multiple users from the file")
-		multipleuserPasswd, err = generateMultipleHtpasswdPairs(3)
+		multipleuserPasswd, err = rosacli.GenerateMultipleHtpasswdPairs(3)
 		o.Expect(err).To(o.BeNil())
-		location, err := createFileWithContent("htpasswdfile", strings.Join(multipleuserPasswd, "\n"))
+		location, err := rosacli.CreateTempFileWithPrefixAndContent("htpasswdfile", strings.Join(multipleuserPasswd, "\n"))
 		o.Expect(err).To(o.BeNil())
 		defer os.RemoveAll(location)
 		output, err = idpServiceSensitive.CreateIDP(

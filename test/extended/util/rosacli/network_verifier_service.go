@@ -3,7 +3,7 @@ package rosacli
 import (
 	"bytes"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 type NetworkVerifierService interface {
@@ -56,6 +56,6 @@ func (nv *networkVerifierService) GetNetworkVerifierStatus(flags ...string) (byt
 }
 
 func (nv *networkVerifierService) CleanResources(clusterID string) (errors []error) {
-	logext.Debugf("Nothing to clean in NetworkVerifierService Service")
+	logger.Debugf("Nothing to clean in NetworkVerifierService Service")
 	return
 }

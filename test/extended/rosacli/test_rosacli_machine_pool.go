@@ -17,7 +17,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service machinepool", func(
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service machinepool", func(
 		machinePoolService = rosaClient.MachinePool
 
 		var err error
-		isHosted, err = isHostedCPCluster(clusterID)
+		isHosted, err = rosaClient.Cluster.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 

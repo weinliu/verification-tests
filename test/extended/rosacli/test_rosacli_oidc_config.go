@@ -26,15 +26,17 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 	)
 
 	g.BeforeEach(func() {
-		g.By("Get the installer role arn")
-		clusterID = getClusterIDENVExisted()
+		g.By("Get the cluster ID")
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
-		hostedCP, err = isHostedCPCluster(clusterID)
-		o.Expect(err).To(o.BeNil())
 
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
 		ocmResourceService = rosaClient.OCMResource
+
+		g.By("Get if hosted")
+		hostedCP, err = rosaClient.Cluster.IsHostedCPCluster(clusterID)
+		o.Expect(err).To(o.BeNil())
 	})
 
 	g.AfterEach(func() {
@@ -106,10 +108,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(strings.Contains(textData, "Created OIDC provider with ARN")).Should(o.BeTrue())
 
-		oidcPrivodeARNFromOutputMessage := extractOIDCProviderARN(output.String())
-		oidcPrivodeIDFromOutputMessage := extractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
+		oidcPrivodeARNFromOutputMessage := rosacli.ExtractOIDCProviderARN(output.String())
+		oidcPrivodeIDFromOutputMessage := rosacli.ExtractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
 
-		unmanagedOIDCConfigID, err = getOIDCIdFromList(oidcPrivodeIDFromOutputMessage)
+		unmanagedOIDCConfigID, err = ocmResourceService.GetOIDCIdFromList(oidcPrivodeIDFromOutputMessage)
 		o.Expect(err).To(o.BeNil())
 
 		oidcConfigIDsNeedToClean = append(oidcConfigIDsNeedToClean, unmanagedOIDCConfigID)
@@ -128,10 +130,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(strings.Contains(textData, "Created OIDC provider with ARN")).Should(o.BeTrue())
-		oidcPrivodeARNFromOutputMessage = extractOIDCProviderARN(output.String())
-		oidcPrivodeIDFromOutputMessage = extractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
+		oidcPrivodeARNFromOutputMessage = rosacli.ExtractOIDCProviderARN(output.String())
+		oidcPrivodeIDFromOutputMessage = rosacli.ExtractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
 
-		managedOIDCConfigID, err = getOIDCIdFromList(oidcPrivodeIDFromOutputMessage)
+		managedOIDCConfigID, err = ocmResourceService.GetOIDCIdFromList(oidcPrivodeIDFromOutputMessage)
 		o.Expect(err).To(o.BeNil())
 
 		oidcConfigIDsNeedToClean = append(oidcConfigIDsNeedToClean, managedOIDCConfigID)

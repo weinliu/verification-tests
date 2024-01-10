@@ -5,7 +5,7 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
+	"github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 )
 
 var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Cluster Verification", func() {
@@ -13,21 +13,23 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Cluster Verificatio
 	var (
 		clusterID          string
 		rosaClient         *rosacli.Client
+		clusterService     rosacli.ClusterService
 		machinePoolService rosacli.MachinePoolService
-		clusterConfig      *ClusterConfig
+		clusterConfig      *rosacli.ClusterConfig
 	)
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
-		// clusterID = getClusterIDENVExisted()
-		clusterID = getClusterID() // For Jean Chen
+		// clusterID = config.GetClusterID()
+		clusterID = rosacli.GetClusterID() // For Jean Chen
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
+		clusterService = rosaClient.Cluster
 		machinePoolService = rosaClient.MachinePool
 		var err error
-		clusterConfig, err = parseProfile(getClusterConfigFile())
+		clusterConfig, err = rosacli.ParseClusterProfile()
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
@@ -38,7 +40,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Cluster Verificatio
 
 	g.It("Author:xueli-Critical-66359-Create rosa cluster with volume size will work via rosacli [Serial]", func() {
 		g.By("Classic cluster check")
-		isHosted, err := isHostedCPCluster(clusterID)
+		isHosted, err := clusterService.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		if isHosted {
 			g.Skip("This case is only working for classic right now")
@@ -62,12 +64,12 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Cluster Verificatio
 		mplist, err := machinePoolService.ReflectMachinePoolList(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		workPool := mplist.Machinepool(defaultClassicWorkerPool)
+		workPool := mplist.Machinepool(rosacli.DefaultClassicWorkerPool)
 		o.Expect(workPool).ToNot(o.BeNil(), "worker pool is not found for the cluster")
 		o.Expect(alignDiskSize(workPool.DiskSize)).To(o.Equal(expectedDiskSize))
 
 		g.By("Check the default worker pool description")
-		output, err = machinePoolService.DescribeMachinePool(clusterID, defaultClassicWorkerPool)
+		output, err = machinePoolService.DescribeMachinePool(clusterID, rosacli.DefaultClassicWorkerPool)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		mpD, err := machinePoolService.ReflectMachinePoolDescription(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
@@ -77,7 +79,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Cluster Verificatio
 
 	g.It("Author:xueli-Critical-57056-Create ROSA cluster with default-mp-labels option will succeed [Serial]", func() {
 		g.By("Classic cluster check")
-		isHosted, err := isHostedCPCluster(clusterID)
+		isHosted, err := clusterService.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		if isHosted {
 			g.Skip("This case is only working for classic right now")
@@ -93,12 +95,12 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Cluster Verificatio
 		mplist, err := machinePoolService.ReflectMachinePoolList(output)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		workPool := mplist.Machinepool(defaultWorkerPool)
+		workPool := mplist.Machinepool(rosacli.DefaultClassicWorkerPool)
 		o.Expect(workPool).ToNot(o.BeNil(), "worker pool is not found for the cluster")
 		o.Expect(workPool.Labels).To(o.Equal(mpLables))
 
 		g.By("Check the default worker pool description")
-		output, err = machinePoolService.DescribeMachinePool(clusterID, defaultClassicWorkerPool)
+		output, err = machinePoolService.DescribeMachinePool(clusterID, rosacli.DefaultClassicWorkerPool)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		mpD, err := machinePoolService.ReflectMachinePoolDescription(output)

@@ -12,13 +12,14 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 	var (
 		clusterID      string
 		rosaClient     *rosacli.Client
+		clusterService rosacli.ClusterService
 		kubeletService rosacli.KubeletConfigService
 		isHosted       bool
 	)
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
@@ -27,7 +28,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 
 		g.By("Check cluster is hosted")
 		var err error
-		isHosted, err = isHostedCPCluster(clusterID)
+		isHosted, err = clusterService.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 	})
 
@@ -49,7 +50,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 			"This may cause outages to your applications. Do you wish to continue", clusterID))
 
 		g.By("Check if cluster is hosted control plane cluster")
-		isHostedCluster, err := isHostedCPCluster(clusterID)
+		isHostedCluster, err := clusterService.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		g.By("Run the command to ignore the warning")
@@ -99,7 +100,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 
 		g.By("Run the command to ignore the warning")
 		g.By("Check if cluster is hosted control plane cluster")
-		isHostedCluster, err := isHostedCPCluster(clusterID)
+		isHostedCluster, err := clusterService.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		output, err = rosaClient.KubeletConfig.EditKubeletConfig(clusterID, "-y",
@@ -144,7 +145,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 
 		g.By("Run the command to ignore the warning")
 		g.By("Check if cluster is hosted control plane cluster")
-		isHostedCluster, err := isHostedCPCluster(clusterID)
+		isHostedCluster, err := clusterService.IsHostedCPCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		output, err = rosaClient.KubeletConfig.DeleteKubeletConfig(clusterID, "-y")

@@ -3,7 +3,7 @@ package rosacli
 import (
 	"bytes"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"gopkg.in/yaml.v3"
 )
 
@@ -147,7 +147,7 @@ func (m *machinepoolService) DescribeMachinePool(clusterID string, mpID string) 
 func (m *machinepoolService) DeleteMachinePool(clusterID string, machinePoolName string) (output bytes.Buffer, err error) {
 	output, err = m.delete(clusterID, machinePoolName)
 	if err == nil {
-		m.machinePools[clusterID] = removeFromStringSlice(m.machinePools[clusterID], machinePoolName)
+		m.machinePools[clusterID] = RemoveFromStringSlice(m.machinePools[clusterID], machinePoolName)
 	}
 	return
 }
@@ -196,7 +196,7 @@ func (m *machinepoolService) ReflectMachinePoolDescription(result bytes.Buffer) 
 
 func (m *machinepoolService) CleanResources(clusterID string) (errors []error) {
 	for _, mpName := range m.machinePools[clusterID] {
-		logext.Infof("Remove remaining machinepool '%s'", mpName)
+		logger.Infof("Remove remaining machinepool '%s'", mpName)
 		_, err := m.delete(clusterID, mpName)
 		if err != nil {
 			errors = append(errors, err)

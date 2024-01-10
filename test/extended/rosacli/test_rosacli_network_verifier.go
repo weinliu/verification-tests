@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")

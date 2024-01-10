@@ -23,15 +23,17 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		clusterID          string
 		rosaClient         *rosacli.Client
+		clusterService     rosacli.ClusterService
 		ocmResourceService rosacli.OCMResourceService
 	)
 	g.BeforeEach(func() {
 		g.By("Get the cluster id")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
+		clusterService = rosaClient.Cluster
 		ocmResourceService = rosaClient.OCMResource
 		rosaClient.Runner.CloseFormat()
 	})
@@ -299,10 +301,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		o.Expect(err).To(o.BeNil())
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(strings.Contains(textData, "Created OIDC provider with ARN")).Should(o.BeTrue())
-		oidcPrivodeARNFromOutputMessage = extractOIDCProviderARN(output.String())
-		oidcPrivodeIDFromOutputMessage = extractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
+		oidcPrivodeARNFromOutputMessage = rosacli.ExtractOIDCProviderARN(output.String())
+		oidcPrivodeIDFromOutputMessage = rosacli.ExtractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
 
-		managedOIDCConfigID, err = getOIDCIdFromList(oidcPrivodeIDFromOutputMessage)
+		managedOIDCConfigID, err = ocmResourceService.GetOIDCIdFromList(oidcPrivodeIDFromOutputMessage)
 		o.Expect(err).To(o.BeNil())
 		defer func() {
 			output, err := ocmResourceService.DeleteOIDCConfig(
@@ -340,7 +342,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			o.Expect(err).To(o.BeNil())
 			o.Expect(len(roles)).To(o.Equal(0))
 
-			operatorRolePrefixedNeedCleanup = removeStringElementFromArray(operatorRolePrefixedNeedCleanup, classicSTSOperatorRolesPrefix)
+			operatorRolePrefixedNeedCleanup = rosacli.RemoveFromStringSlice(operatorRolePrefixedNeedCleanup, classicSTSOperatorRolesPrefix)
 		}()
 
 		roles, err := iamClient.ListOperatsorRolesByPrefix(classicSTSOperatorRolesPrefix, "")
@@ -378,7 +380,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			o.Expect(err).To(o.BeNil())
 			o.Expect(len(roles)).To(o.Equal(0))
 
-			operatorRolePrefixedNeedCleanup = removeStringElementFromArray(operatorRolePrefixedNeedCleanup, hostedCPOperatorRolesPrefix)
+			operatorRolePrefixedNeedCleanup = rosacli.RemoveFromStringSlice(operatorRolePrefixedNeedCleanup, hostedCPOperatorRolesPrefix)
 		}()
 
 		g.By("Create operator roles with not-existed role")
@@ -456,11 +458,11 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 	g.It("Author:yuwan-High-43051-Validation will work when user create operator-roles to cluster [Serial]", func() {
 		g.By("Check if cluster is sts cluster")
-		StsCluster, err := isSTSCluster(clusterID)
+		StsCluster, err := clusterService.IsSTSCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
 
 		g.By("Check if cluster is using reusable oidc config")
-		UsingReusableOIDCConfig, err := isUsingReusableOIDCConfig(clusterID)
+		UsingReusableOIDCConfig, err := clusterService.IsUsingReusableOIDCConfig(clusterID)
 		o.Expect(err).To(o.BeNil())
 
 		notExistedClusterID := "notexistedclusterid111"
@@ -623,7 +625,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service user/ocm roles test
 
 	g.BeforeEach(func() {
 		g.By("Get the cluster id")
-		clusterID = getClusterIDENVExisted()
+		clusterID = rosacli.GetClusterID()
 		o.Expect(clusterID).ToNot(o.Equal(""), "ClusterID is required. Please export CLUSTER_ID")
 
 		g.By("Init the client")
