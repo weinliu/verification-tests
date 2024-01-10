@@ -6227,4 +6227,54 @@ spec:
 		e2e.Logf("Check if all ClusterDeployments have been deleted")
 		o.Expect(getCDlistfromPool(oc, poolName)).To(o.Equal(""))
 	})
+
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-69203-Add annotation to override installer image name. [Serial]", func() {
+		testCaseID := "69203"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		oc.SetupProject()
+
+		exutil.By("config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		exutil.By("Config ClusterDeployment...")
+		installerType := "installer-altinfra"
+		clusterImageSetName := cdName + "-imageset"
+		cluster := clusterDeployment{
+			fake:                 "false",
+			installerType:        installerType,
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          clusterImageSetName,
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		exutil.By("Check ClusterDeployment installed pod is running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"pods", "-n", oc.Namespace(), "-l", "hive.openshift.io/job-type=provision", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+
+		exutil.By("Check the image used is the version specified.")
+		secretFile, secretErr := getPullSecret(oc)
+		defer os.Remove(secretFile)
+		o.Expect(secretErr).NotTo(o.HaveOccurred())
+		installerImage, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--image-for="+installerType, testOCPImage, "--registry-config="+secretFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("testInstallerImage: %v", installerImage)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, installerImage, ok, DefaultTimeout, []string{"clusterdeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installerImage}"}).check(oc)
+	})
 })

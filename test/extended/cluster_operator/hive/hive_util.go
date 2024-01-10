@@ -122,6 +122,7 @@ type installConfig struct {
 
 type clusterDeployment struct {
 	fake                 string
+	installerType        string
 	name                 string
 	namespace            string
 	baseDomain           string
@@ -658,7 +659,13 @@ func (config *installConfig) create(oc *exutil.CLI) {
 }
 
 func (cluster *clusterDeployment) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "MANAGEDNS="+strconv.FormatBool(cluster.manageDNS), "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef, "INSTALLATTEMPTSLIMIT="+strconv.Itoa(cluster.installAttemptsLimit))
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE=" + cluster.fake, "NAME=" + cluster.name, "NAMESPACE=" + cluster.namespace, "BASEDOMAIN=" + cluster.baseDomain, "CLUSTERNAME=" + cluster.clusterName, "MANAGEDNS=" + strconv.FormatBool(cluster.manageDNS), "PLATFORMTYPE=" + cluster.platformType, "CREDREF=" + cluster.credRef, "REGION=" + cluster.region, "IMAGESETREF=" + cluster.imageSetRef, "INSTALLCONFIGSECRET=" + cluster.installConfigSecret, "PULLSECRETREF=" + cluster.pullSecretRef, "INSTALLATTEMPTSLIMIT=" + strconv.Itoa(cluster.installAttemptsLimit)}
+	if len(cluster.installerType) > 0 {
+		parameters = append(parameters, "INSTALLERTYPE="+cluster.installerType)
+	} else {
+		parameters = append(parameters, "INSTALLERTYPE=installer")
+	}
+	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1767,7 +1774,7 @@ func getHivecontrollersPod(oc *exutil.CLI, namespace string) string {
 }
 
 func getTestOCPImage() string {
-	testImageVersion := "4.14"
+	testImageVersion := "4.16"
 	testOCPImage, err := exutil.GetLatestNightlyImage(testImageVersion)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if testOCPImage == "" {

@@ -8,6 +8,7 @@ objects:
   metadata:
     annotations:
       "hive.openshift.io/fake-cluster": "${FAKE}"
+      "hive.openshift.io/installer-image-name-override": "${INSTALLERTYPE}"
     creationTimestamp: null
     name: "${NAME}"
     namespace: "${NAMESPACE}"
@@ -33,6 +34,7 @@ objects:
     installAttemptsLimit: ${{INSTALLATTEMPTSLIMIT}}
 parameters:
 - name: FAKE
+- name: INSTALLERTYPE
 - name: NAME
 - name: NAMESPACE
 - name: BASEDOMAIN
