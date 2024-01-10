@@ -2012,12 +2012,22 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkPodDeleted(oc, "openshift-monitoring", "alertmanager=main", "alertmanager")
 
 		g.By("check alertmanager resources are removed")
-		resourceNames := []string{"route", "servicemonitor", "serviceaccounts", "statefulset", "services", "endpoints", "alertmanagers", "prometheusrules", "clusterrolebindings", "clusterroles", "roles"}
-		for _, resource := range resourceNames {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-n", "openshift-monitoring").Output()
-			o.Expect(strings.Contains(output, "alertmanager")).NotTo(o.BeTrue())
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 90*time.Second, false, func(context.Context) (bool, error) {
+			resourceNames := []string{"route", "servicemonitor", "serviceaccounts", "statefulset", "services", "endpoints", "alertmanagers", "prometheusrules", "clusterrolebindings", "roles"}
+			for _, resource := range resourceNames {
+				output, outputErr := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-n", "openshift-monitoring").Output()
+				if outputErr != nil || strings.Contains(output, "alertmanager") {
+					return false, nil
+				}
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "one or more alertmanager resources not removed yet")
+
+		g.By("check on clusterroles")
+		clusterroles, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterroles", "-l", "app.kubernetes.io/part-of=openshift-monitoring").Output()
+		o.Expect(clusterroles).NotTo(o.ContainSubstring("alertmanager"))
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("check on configmaps")
 		checkCM, _ := exec.Command("bash", "-c", `oc -n openshift-monitoring get cm -l app.kubernetes.io/managed-by=cluster-monitoring-operator | grep alertmanager`).Output()
