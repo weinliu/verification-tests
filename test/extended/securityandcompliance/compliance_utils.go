@@ -294,7 +294,7 @@ func setLabelToNode(oc *exutil.CLI, label string) {
 }
 
 func getOneRhcosWorkerNodeName(oc *exutil.CLI) string {
-	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/worker=,node.openshift.io/os_id=rhcos",
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/edge!=,node-role.kubernetes.io/worker=,node.openshift.io/os_id=rhcos",
 		"-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the result of nodename:%v", nodeName)
