@@ -786,15 +786,15 @@ func waitResourceSpecifiedEventsOccurred(oc *exutil.CLI, namespace string, resou
 	o.Eventually(func() bool {
 		Info, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespace, "--field-selector=involvedObject.name="+resourceName).Output()
 		if err != nil {
-			e2e.Logf("The events of %s are %s", resourceName, Info)
+			e2e.Logf("Failed to get resource %s events caused by \n %v \n Trying next round.", resourceName, err)
 			return false
 		}
 		for count := range events {
 			if !strings.Contains(Info, events[count]) {
+				e2e.Logf("The events of %s are: \n %s", resourceName, Info)
 				return false
 			}
 		}
-		debugLogf("The events of %s are %s", resourceName, Info)
 		return true
 	}, 60*time.Second, 10*time.Second).Should(o.BeTrue())
 }

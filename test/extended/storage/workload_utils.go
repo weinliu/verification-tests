@@ -494,6 +494,14 @@ func (po *pod) getValueByJSONPath(oc *exutil.CLI, jsonPath string) (string, erro
 	return oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", po.namespace, "pod/"+po.name, "-o", "jsonpath="+jsonPath).Output()
 }
 
+// GetUID gets the pod uid
+func (po *pod) getUID(oc *exutil.CLI) string {
+	podUID, getErr := po.getValueByJSONPath(oc, "{.metadata.uid}")
+	o.Expect(getErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get pod %q uid\n%v", po.name, getErr))
+	e2e.Logf("Pod %q uid is: %q", po.name, podUID)
+	return podUID
+}
+
 // Check Pod status consistently
 func (po *pod) checkStatusConsistently(oc *exutil.CLI, status string, waitTime time.Duration) {
 	o.Consistently(func() string {

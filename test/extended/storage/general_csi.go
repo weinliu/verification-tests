@@ -5048,7 +5048,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod2.createWithExtraParameters(oc, extraParameters_pod2)
 			defer pod2.deleteAsAdmin(oc)
 			pod2.checkStatusEventually(oc, "Running", 60)
-			waitResourceSpecifiedEventsOccurred(oc, pod.namespace, pod.name, "Preempted by a pod on node")
+			waitResourceSpecifiedEventsOccurred(oc, pod.namespace, pod.name, fmt.Sprintf("Preempted by pod %s", pod2.getUID(oc)))
 
 			exutil.By("#. Check the low priority pod is deleted from cluster")
 			checkResourcesNotExist(oc, "pod", pod.name, pod.namespace)
