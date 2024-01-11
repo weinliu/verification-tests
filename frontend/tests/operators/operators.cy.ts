@@ -6,11 +6,15 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc new-project test-ocp40457`);
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`);
+    cy.visit('/k8s/ns/openshift-marketplace/operators.coreos.com~v1alpha1~CatalogSource/custom-catalogsource');
+    cy.contains('READY').should('exist');
   });
 
   after(() => {
-    cy.exec(`oc delete project test1-ocp56081 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 240000, failOnNonZeroExit: false})
-    cy.exec(`oc delete project test2-ocp56081 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 240000, failOnNonZeroExit: false})
+    cy.exec(`oc delete project test1-ocp56081 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 240000, failOnNonZeroExit: false});
+    cy.exec(`oc delete project test2-ocp56081 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 240000, failOnNonZeroExit: false});
+    cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI(`oc delete project test-ocp40457`);
   });
@@ -18,7 +22,7 @@ describe('Operators related features', () => {
   it('(OCP-40457,yanpzhan,UI) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
     operatorHubPage.installOperator('etcd', 'community-operators', 'test-ocp40457');
     cy.wait(20000);
-    operatorHubPage.installOperator('argocd-operator', 'community-operators', 'test-ocp40457');
+    operatorHubPage.installOperator('argocd-operator', 'custom-catalogsource', 'test-ocp40457');
     cy.visit(`/k8s/ns/test-ocp40457/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
     operatorHubPage.checkOperatorStatus('etcd', 'Succeed');
     operatorHubPage.checkOperatorStatus('Argo CD', 'Succeed');
