@@ -8,7 +8,7 @@ describe("Branding check", () => {
     guidedTour.close();
   });
 
-  it("(OCP-48357,yanpzhan) Switch the OCP branding logo and title to Red Hat OpenShift logo and title", {tags: ['e2e','@rosa']}, () => {
+  it("(OCP-48357,yanpzhan,UI) Switch the OCP branding logo and title to Red Hat OpenShift logo and title", {tags: ['e2e','@rosa']}, () => {
     Overview.goToDashboard();
     Overview.checkUpperLeftLogo();
     Overview.toggleAbout();

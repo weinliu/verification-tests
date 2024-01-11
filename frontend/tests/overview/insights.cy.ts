@@ -17,7 +17,7 @@ describe('Insights check', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-48054,yanpzhan) Add severity links on insights popover', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-48054,yanpzhan,UI) Add severity links on insights popover', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     Insights.openInsightsPopup();
     cy.exec(`oc get clusterversions.config.openshift.io version --template={{.spec.clusterID}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       const clusterID = result.stdout;
@@ -26,7 +26,7 @@ describe('Insights check', () => {
     });
   });
 
-  it('(OCP-47571,yapei) Show Cluster Support Level', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-47571,yapei,UI) Show Cluster Support Level', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     let sla_text, cluster_id;
     // get clusterID
     let include_unknown = true;
@@ -69,7 +69,7 @@ describe('Insights check', () => {
           checkSLAInNotificationDrawer()
         }
       })
-    
+
     cy.visit('/settings/cluster');
     ClusterSettingPage.isLoaded();
     cy.get('@sla_text_value').should('exist');

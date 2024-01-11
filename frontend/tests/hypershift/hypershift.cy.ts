@@ -6,13 +6,13 @@ describe('Check on hypershift provisined cluster', () => {
     cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
-  it('(OCP-50740,yanpzhan) Remove manchine related resources for HyperShift Provisioned Clusters', {tags: ['HyperShiftGUEST','admin']}, () => {
+  it('(OCP-50740,yanpzhan,UI) Remove manchine related resources for HyperShift Provisioned Clusters', {tags: ['HyperShiftGUEST','admin']}, () => {
     sideNav.checkNoMachineResources();
     searchPage.checkNoMachineResources();
     crds.checkNoMachineResources();
   });
 
-  it('(OCP-51733,yanpzhan) Check no idp alert for temporary administrative user on HyperShift Provisioned Clusters', {tags: ['HyperShiftGUEST','admin']}, () => {
+  it('(OCP-51733,yanpzhan,UI) Check no idp alert for temporary administrative user on HyperShift Provisioned Clusters', {tags: ['HyperShiftGUEST','admin']}, () => {
     cy.contains('logged in as a temporary administrative user').should('not.exist');
     cy.get('div').should('not.contain', 'allow others to log in');
   });

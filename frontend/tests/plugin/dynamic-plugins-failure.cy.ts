@@ -30,7 +30,7 @@ describe('Dynamic Plugins notification features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   })
 
-  it('(OCP-55427,yapei) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
+  it('(OCP-55427,yapei,UI) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
     cy.adminCLI(`oc get cm console-config -n openshift-console -o yaml`)
       .its('stdout')
       .should('include', 'console-customization')
@@ -41,7 +41,7 @@ describe('Dynamic Plugins notification features', () => {
     checkStatusMessage('Failed', 'ailed to get a valid plugin manifest');
   });
 
-  it('(OCP-52366, yapei) ocp52366-failure add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
+  it('(OCP-52366,yapei,UI) ocp52366-failure add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
     Overview.goToDashboard();
     Overview.isLoaded();
     statusCard.secondaryStatus('Dynamic Plugins', 'Degraded');

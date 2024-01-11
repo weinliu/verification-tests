@@ -21,7 +21,7 @@ describe('Debug console for pods', () => {
     cy.adminCLI(`oc delete project ${testParams.namespace}`);
   })
 
-  it('(OCP-48000, xiyuzhao), Run Pod in Debug mode', {tags: ['e2e']}, () => {
+  it('(OCP-48000,xiyuzhao,UI), Run Pod in Debug mode', {tags: ['e2e']}, () => {
     // Import the nodejs-ex.git and run the invalid command to cause CrashLoopBackoof && Twice
     cy.switchPerspective('Developer');
     cy.visit(`/import/ns/${testParams.namespace}`)

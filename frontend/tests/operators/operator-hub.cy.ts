@@ -24,7 +24,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-45874,yapei) Check source labels on the operator hub page tiles', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-45874,yapei,UI) Check source labels on the operator hub page tiles', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     operatorHubPage.goTo()
     operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG)
     OperatorHubSelector.SOURCE_MAP.forEach((operatorSource, operatorSourceLabel) => {
@@ -45,7 +45,7 @@ describe('Operator Hub tests', () => {
     });
   });
 
-  it('(OCP-54544,yapei) Check OperatorHub filter to use nodeArchitectures instead of GOARCH', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-54544,yapei,UI) Check OperatorHub filter to use nodeArchitectures instead of GOARCH', {tags: ['e2e','admin','@osd-ccs']}, () => {
     // in ocp54544--catalogsource, we have
     // etcd: operatorframework.io/arch.arm64: supported only
     // argocd: didn't define operatorframework.io in CSV, but by default operatorframework.io/arch.amd64 will be added
@@ -73,7 +73,7 @@ describe('Operator Hub tests', () => {
     });
   });
 
-  it('(OCP-55684, xiyuzhao) Allow operator to specitfy where to run with CSV suggested namespace template annotation', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-55684,xiyuzhao,UI) Allow operator to specitfy where to run with CSV suggested namespace template annotation', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.visit(`operatorhub/subscribe?pkg=flux-operator&catalog=${testParams.catalogName}&catalogNamespace=${testParams.catalogNamespace}&targetNamespace=undefined`)
       .get('[data-test-id="resource-title"]')
       .should('contain.text','Install Operator')
@@ -94,7 +94,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`);
   });
 
-  it('(OCP-42671, xiyuzhao) OperatorHub shows correct operator installation states', {tags: ['e2e','admin','@osd-ccs','@rosa']},  () => {
+  it('(OCP-42671,xiyuzhao,UI) OperatorHub shows correct operator installation states', {tags: ['e2e','admin','@osd-ccs','@rosa']},  () => {
     const params ={
       ns: 'test-42671',
       operatorName: 'infinispan-operator',
@@ -123,7 +123,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${params.ns}`);
   });
 
-  it('(OCP-54037,yapei) Affinity definition support',{tags: ['e2e','admin','@osd-ccs','@smoke']}, ()=> {
+  it('(OCP-54037,yapei,UI) Affinity definition support',{tags: ['e2e','admin','@osd-ccs','@smoke']}, ()=> {
     cy.createProject(testParams.testNamespace);
     operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
     cy.wait(60000);
@@ -162,7 +162,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${testParams.testNamespace}`);
   });
 
-  it('(OCP-62266,xiyuzhao)  Filter operators based on nodes OS type', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-62266,xiyuzhao,UI)  Filter operators based on nodes OS type', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     let nodeOS;
     const checkFilterResult = (operator: string, state: string) =>{
       operatorHubPage.filter(operator);

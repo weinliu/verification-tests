@@ -8,7 +8,7 @@ describe('Console plugins features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-69573, yanpzhan) Enable ConsolePlugin v1 CRD storage', {tags: ['e2e', 'admin','@osd-ccs', '@rosa']}, () => {
+  it('(OCP-69573,yanpzhan,UI) Enable ConsolePlugin v1 CRD storage', {tags: ['e2e', 'admin','@osd-ccs', '@rosa']}, () => {
     Pages.gotoOneCRDDetailsPage('consoleplugins.console.openshift.io');
     const versionData = [
      { name: 'v1alpha1', served: 'true', storage: 'false' },

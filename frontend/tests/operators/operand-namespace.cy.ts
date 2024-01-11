@@ -24,7 +24,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
   })
 
-  it('(OCP-50153, xiyuzhao) - Display All Namespace Operands for Global Operators', {tags: ['e2e','admin']}, () => {
+  it('(OCP-50153,xiyuzhao,UI) - Display All Namespace Operands for Global Operators', {tags: ['e2e','admin']}, () => {
     operatorHubPage.installOperator(params.operatorName, params.catalogSourceName);
     cy.contains('View Operator').click();
     cy.exec(`echo '{

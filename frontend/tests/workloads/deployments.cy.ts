@@ -17,7 +17,7 @@ describe('deployment page', () => {
     cy.adminCLI(`oc delete project ${params.ns}`);
   });
 
-  it('(OCP-66094,xiyuzhao) Deprecated DeploymentConfig to Deployments', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-66094,xiyuzhao,UI) Deprecated DeploymentConfig to Deployments', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     /* Defined arry contains all the page that need to check the alert
        Note: The arguments should be passed when call the function within the loop
        */
