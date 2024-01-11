@@ -20,7 +20,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -1103,4 +1105,64 @@ func SkipIfNotOnPremPlatform(oc *exutil.CLI) {
 	if !IsOnPremPlatform(platform) {
 		g.Skip(fmt.Sprintf("Current platform: %s. This test can only be execute in OnPrem platforms.", platform))
 	}
+}
+
+// CloneResource will clone the given resource with the new name and the new namespace. If new namespace is an empty strng, it is ignored and the namespace will not be changed.
+func CloneResource(res *Resource, newName, newNamespace string) (*Resource, error) {
+	logger.Infof("Cloning resource %s with name %s and namespace %s", res, newName, newNamespace)
+
+	jsonRes, err := res.Get(`{}`)
+	if err != nil {
+		return nil, err
+	}
+
+	jsonRes, err = sjson.Delete(jsonRes, "metadata.creationTimestamp")
+	if err != nil {
+		return nil, err
+	}
+	jsonRes, err = sjson.Delete(jsonRes, "metadata.resourceVersion")
+	if err != nil {
+		return nil, err
+	}
+	jsonRes, err = sjson.Delete(jsonRes, "metadata.uid")
+	if err != nil {
+		return nil, err
+	}
+
+	jsonRes, err = sjson.Set(jsonRes, "metadata.name", newName)
+	if err != nil {
+		return nil, err
+	}
+
+	if newNamespace != "" {
+		jsonRes, err = sjson.Set(jsonRes, "metadata.namespace", newNamespace)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		newNamespace = res.GetNamespace()
+	}
+
+	filename := "cloned-" + res.GetKind() + "-" + newName + "-" + uuid.NewString()
+	if newNamespace != "" {
+		filename += "-namespace"
+	}
+	filename += ".json"
+
+	tmpFile := generateTmpFile(res.oc, filename)
+
+	wErr := os.WriteFile(tmpFile, []byte(jsonRes), 0o644)
+	if wErr != nil {
+		return nil, wErr
+	}
+
+	logger.Infof("New resource created using definition file %s", tmpFile)
+
+	_, cErr := res.oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tmpFile).Output()
+
+	if cErr != nil {
+		return nil, cErr
+	}
+
+	return NewNamespacedResource(res.oc, res.GetKind(), newNamespace, newName), nil
 }
