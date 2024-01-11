@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check machineTemplate with httpTokens: required")
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("awsmachinetemplate", capiMachineSetAWS.machineTemplateName, "-n", clusterAPINamespace, "-o=jsonpath={.items[0].spec.template.spec.httpTokens}").Output()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("awsmachinetemplate", capiMachineSetAWS.machineTemplateName, "-n", clusterAPINamespace, "-o=jsonpath={.spec.template.spec.instanceMetadataOptions.httpTokens}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.Equal("required"))
 
