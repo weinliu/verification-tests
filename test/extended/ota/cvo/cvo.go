@@ -1772,4 +1772,148 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		upgradeableOutput, _ = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(string(upgradeableOutput)).ShouldNot(o.ContainSubstring("Detected modified SecurityContextConstraints"), "Error occured in oc adm upgrade")
 	})
+
+	// author: jianl@redhat.com
+	g.It("Longduration-NonPreRelease-Author:jianl-high-68397-CVO reconciles SCC resources which do not have release.openshift.io/create-only: true [Disruptive]", func() {
+		scc := "restricted-v2"
+
+		g.By("Get default SCC spec")
+		sccManifest := "0000_20_kube-apiserver-operator_00_scc-restricted-v2.yaml"
+		tempDataDir, err := extractManifest(oc)
+		defer func() { o.Expect(os.RemoveAll(tempDataDir)).NotTo(o.HaveOccurred()) }()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		goodSCCFile, getSCCFileErr := oc.AsAdmin().WithoutNamespace().
+			Run("get").Args("scc", scc, "-ojson").OutputToFile("ocp-68397-scc.json")
+		o.Expect(getSCCFileErr).NotTo(o.HaveOccurred())
+		defer func() {
+			o.Expect(oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", goodSCCFile, "--force").Execute()).NotTo(o.HaveOccurred())
+			o.Expect(os.RemoveAll(goodSCCFile)).NotTo(o.HaveOccurred())
+			output, _ := oc.AsAdmin().WithoutNamespace().
+				Run("get").Args("scc", scc, "-ojson").Output()
+			e2e.Logf("New scc after runing apply command: \n %s", output)
+		}()
+		originalOutputByte, readFileErr := os.ReadFile(goodSCCFile)
+		o.Expect(readFileErr).NotTo(o.HaveOccurred())
+		originalOutput := string(originalOutputByte)
+		o.Expect(originalOutput).ShouldNot(o.ContainSubstring("release.openshift.io/create-only"))
+
+		// update allowHostIPC should not cause upgradeable=false and will be reconciled
+		originalAllowHostIPC := gjson.Get(originalOutput, "allowHostIPC").Bool()
+		ocJSONPatch(oc, "", fmt.Sprintf("scc/%s", scc), []JSONp{{"replace", "/allowHostIPC", !originalAllowHostIPC}})
+
+		var observedAllowHostIPC bool
+		var output string
+		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+			output, err = oc.AsAdmin().WithoutNamespace().
+				Run("get").Args("scc", scc, "-ojson").Output()
+			if err != nil {
+				return false, err
+			} else {
+				observedAllowHostIPC = gjson.Get(output, "allowHostIPC").Bool()
+				// observedAllowHostIPC == original_allowHostIPC means resource has been reconciled
+				return observedAllowHostIPC == originalAllowHostIPC, nil
+			}
+		})
+		exutil.AssertWaitPollNoErr(err, "AllowHostIPC is not reconciled")
+
+		// there is no Upgradeable=False guard
+		o.Expect(checkUpdates(oc, false, 10, 30,
+			"Detected modified SecurityContextConstraints")).To(o.BeFalse(), "Error occured in oc adm upgrade after updating allowHostIPC")
+
+		// SCC should be recreated after deleting it
+		outputBeforeDelete, _ := oc.AsAdmin().WithoutNamespace().
+			Run("get").Args("scc", scc, "-ojson").Output()
+		resourceVersion := gjson.Get(outputBeforeDelete, "metadata.resourceVersion").String()
+		deleteLog, deleteErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("scc", scc).Output()
+		e2e.Logf("Delete scc %s: %s", scc, deleteLog)
+		o.Expect(deleteErr).NotTo(o.HaveOccurred())
+		// wait some minutes scc will regenerated
+		var newErr error
+		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+			output, newErr = oc.AsAdmin().WithoutNamespace().
+				Run("get").Args("scc", scc, "-ojson").Output()
+
+			if newErr != nil {
+				return false, nil
+			} else {
+				newResourceVersion := gjson.Get(output, "metadata.resourceVersion").String()
+				return resourceVersion != newResourceVersion, nil
+			}
+		})
+		exutil.AssertWaitPollNoErr(err, "Error: SCC have not recreated after 5 minutes")
+
+		o.Expect(checkUpdates(oc, false, 30, 60*3,
+			"Detected modified SecurityContextConstraints")).To(o.BeFalse(), "Error occured in oc adm upgrade after deleting scc")
+
+		manifest := filepath.Join(tempDataDir, "manifest", sccManifest)
+		manifestContent, _ := os.ReadFile(manifest)
+		expectedValues, err := exutil.Yaml2Json(string(manifestContent))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		observedAllowHostIPC = gjson.Get(output, "allowHostIPC").Bool()
+		allowHostIPCManifest := gjson.Get(expectedValues, "allowHostIPC").Bool()
+		o.Expect(allowHostIPCManifest).Should(o.Equal(observedAllowHostIPC), "Error: allowHostIPC is not same with its value in manifest")
+
+		finalVolumes := gjson.Get(output, "volumes").Array()
+		expectedVolumesManifest := gjson.Get(expectedValues, "volumes").Array()
+		o.Expect(len(finalVolumes)).Should(o.Equal(len(expectedVolumesManifest)), "Error: volumes have different number of expected values")
+		var finalResult []string
+		for _, v := range finalVolumes {
+			finalResult = append(finalResult, v.Str)
+		}
+		var expectedResult []string
+		for _, v := range expectedVolumesManifest {
+			expectedResult = append(expectedResult, v.Str)
+		}
+		e2e.Logf("Final volumes are: %v", finalResult)
+		e2e.Logf("Expected volumes in menifest are: %v", expectedResult)
+		o.Expect(finalResult).Should(o.ContainElements(expectedResult), "Error: volumns are not exactly equal to manifest")
+
+		// allowPrivilegeEscalation should be set to true immediately after removing it
+		allowPrivilegeEscalationManifest := gjson.Get(manifest, "allowPrivilegeEscalation").Bool()
+		ocJSONPatch(oc, "", fmt.Sprintf("scc/%s", scc), []JSONp{
+			{"remove", "/allowPrivilegeEscalation", nil},
+		})
+		output, _ = oc.AsAdmin().WithoutNamespace().
+			Run("get").Args("scc", scc, "-ojson").Output()
+		allowPrivilegeEscalation := gjson.Get(output, "allowPrivilegeEscalation").Bool()
+		o.Expect(allowPrivilegeEscalation).Should(o.BeTrue(), "Error: allowPrivilegeEscalation is not be set to true immediately")
+
+		err = wait.Poll(30*time.Second, 10*time.Minute, func() (bool, error) {
+			output, _ = oc.AsAdmin().WithoutNamespace().
+				Run("get").Args("scc", scc, "-ojson").Output()
+			allowPrivilegeEscalation = gjson.Get(output, "allowPrivilegeEscalation").Bool()
+			return allowPrivilegeEscalation == allowPrivilegeEscalationManifest, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Error: allowPrivilegeEscalation is not be set to manifest")
+
+		o.Expect(checkUpdates(oc, false, 30, 60*3,
+			"Detected modified SecurityContextConstraints")).To(o.BeFalse(), "Error: upgrade guard error occured for SecurityContextConstraints")
+
+		ocJSONPatch(oc, "", fmt.Sprintf("scc/%s", scc), []JSONp{
+			{"remove", "/volumes/4", nil},
+			{"add", "/volumes/0", "Test"},
+		})
+		expectedResult = expectedResult[:0]
+		for _, v := range expectedVolumesManifest {
+			expectedResult = append(expectedResult, v.Str)
+		}
+		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+			output, _ = oc.AsAdmin().WithoutNamespace().
+				Run("get").Args("scc", scc, "-ojson").Output()
+			finalVolumes := gjson.Get(output, "volumes").Array()
+			if len(finalVolumes) != len(expectedResult) {
+				return false, nil
+			}
+			finalResult = finalResult[:0]
+			for _, v := range finalVolumes {
+				finalResult = append(finalResult, v.Str)
+			}
+			return reflect.DeepEqual(finalResult, expectedResult), nil
+		})
+		exutil.AssertWaitPollNoErr(err, "volumns are not correct")
+		o.Expect(checkUpdates(oc, false, 1, 10,
+			"Detected modified SecurityContextConstraints")).To(o.BeFalse(), "Error: There should not be upgradeable=false gate for non-4.13 cluster")
+	})
 })
