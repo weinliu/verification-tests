@@ -151,7 +151,6 @@ fi
 
 
 #get opm client
-<< EOF
 if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
     echo "------------------get opm------------------------"
     echo "get latest opm"
@@ -169,30 +168,6 @@ if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
         exit 1
     fi
 fi
-EOF
-if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
-    echo "------------------get opm------------------------"
-    echo "get latest opm"
-    echo "set env http_proxy https_proxy"
-    unset http_proxy https_proxy
-    
-    rm -rf ${WORKSPACE}/opm
-    mkdir ${WORKSPACE}/opm
-    git clone git@github.com:openshift/operator-framework-olm.git ${WORKSPACE}/opm
-    cd ${WORKSPACE}/opm
-    git checkout release-4.15
-    make bin/opm
-    mv bin/opm -f $WORKDIR
-    echo "opm version:"
-    opm version
-    retVal=$?
-    if [ $retVal -ne 0 ]; then
-        echo "get opm failed"
-        exit 1
-    fi
-fi
-
-
 
 cp -f ~/.docker/auto/config.json ~/.docker
 podman login quay.io
