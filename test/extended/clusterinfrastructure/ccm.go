@@ -282,4 +282,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		err = waitForClusterOperatorsReady(oc, "ingress", "console", "authentication")
 		exutil.AssertWaitPollNoErr(err, "some co failed to be ready state within allowed time!")
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-High-70620-[CCM] Region and zone labels should be available on the nodes", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "openstack")
+		nodeLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--show-labels").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(nodeLabel, "failure-domain.beta.kubernetes.io/region") && strings.Contains(nodeLabel, "topology.kubernetes.io/region") && strings.Contains(nodeLabel, "failure-domain.beta.kubernetes.io/zone") && strings.Contains(nodeLabel, "topology.kubernetes.io/zone")).To(o.BeTrue())
+	})
 })
