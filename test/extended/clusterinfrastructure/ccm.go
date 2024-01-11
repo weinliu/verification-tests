@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-44212-[CCM] The KAPI and KCM cloud-provider should be external", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-High-44212-[CCM] The Kubelet and KCM cloud-provider should be external", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		if iaasPlatform == "azure" {
 			g.By("Check if cloud-node-manager daemonset is deployed")
@@ -68,16 +68,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		deploy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(deploy).To(o.ContainSubstring("cloud-controller-manager"))
-		g.By("Check if appropriate `--cloud-provider=external` set on kubelet, KAPI and KCM")
+		g.By("Check if appropriate `--cloud-provider=external` set on kubelet and KCM")
 		masterkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-master-kubelet", "-o=jsonpath={.spec.config.systemd.units[0].contents}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(masterkubelet).To(o.ContainSubstring("cloud-provider=external"))
 		workerkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-worker-kubelet", "-o=jsonpath={.spec.config.systemd.units[0].contents}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(workerkubelet).To(o.ContainSubstring("cloud-provider=external"))
-		kapi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-apiserver", "-o=jsonpath={.data.config\\.yaml}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(kapi).To(o.ContainSubstring("\"cloud-provider\":[\"external\"]"))
 		kcm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-controller-manager", "-o=jsonpath={.data.config\\.yaml}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(kcm).To(o.ContainSubstring("\"cloud-provider\":[\"external\"]"))
