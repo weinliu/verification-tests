@@ -1813,3 +1813,15 @@ func (pd *priorityPodDefinition) createPriorityPod(oc *exutil.CLI) {
 		return true
 	}).WithTimeout(20 * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
 }
+
+func checkStatefulsetRollout(oc *exutil.CLI, namespace string, statefulSetName string) (bool, error) {
+	statefulSet, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), statefulSetName, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+	// Check if the current number of ready replicas equals the desired replicas
+	if statefulSet.Status.ReadyReplicas == *statefulSet.Spec.Replicas {
+		return true, nil
+	}
+	return false, nil
+}

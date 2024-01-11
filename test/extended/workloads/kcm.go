@@ -589,10 +589,21 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
 		// Verify that pods have been rolled out in order
-		if ok := waitForAvailableRsRunning(oc, "statefulset", "web", ns63694, "5"); ok {
-			e2e.Logf("All pods are runnnig now\n")
-		} else {
-			e2e.Failf("All pods related to statefulset web are not running")
+		err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (bool, error) {
+			rolledOut, err := checkStatefulsetRollout(oc, ns63694, "web")
+			if err != nil {
+				e2e.Logf("Error checking rollout status: %v\n", err)
+				return false, nil
+			}
+			if rolledOut {
+				e2e.Logf("StatefulSet pods have been rolled out successfully\n")
+				return true, nil
+			}
+			e2e.Logf("Waiting for StatefulSet pods to be rolled out...\n")
+			return false, nil
+		})
+		if err != nil {
+			e2e.Failf("Timeout waiting for StatefulSet pods rollout: %v\n", err)
 		}
 
 		g.By("Get events sorted by lastTimestamp")
