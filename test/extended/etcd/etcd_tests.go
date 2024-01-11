@@ -14,7 +14,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -135,12 +134,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		etcdPodList := getPodListByLabel(oc, "etcd=true")
 
 		e2e.Logf("get the image id from the etcd pod")
-		arch := architecture.ClusterArchitecture(oc)
-		if arch.String() == "arm64" || arch.String() == "multi" {
-			etcdImageID, errImg = oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.status.containerStatuses[?(@.name==\"etcd\")].image}").Output()
-		} else {
-			etcdImageID, errImg = oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.status.containerStatuses[?(@.name==\"etcd\")].imageID}").Output()
-		}
+		etcdImageID, errImg = oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.status.containerStatuses[?(@.name==\"etcd\")].image}").Output()
 		o.Expect(errImg).NotTo(o.HaveOccurred())
 		e2e.Logf("etcd imagid is %v", etcdImageID)
 
