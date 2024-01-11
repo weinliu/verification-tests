@@ -729,7 +729,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-69870-ClusterResourceQuota should not been stuck in delete state when using foreground deletion cascading strategy", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-69870-ClusterResourceQuota should not been stuck in delete state when using foreground deletion cascading strategy [Flaky]", func() {
 		workloadsBaseDir := exutil.FixturePath("testdata", "workloads")
 		templateYaml := filepath.Join(workloadsBaseDir, "clusterresroucequota.yaml")
 
