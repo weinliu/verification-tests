@@ -29,6 +29,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	var (
 		oc                   = exutil.NewCLI("default-image-registry", exutil.KubeConfigPath())
 		errInfo              = "http.response.status=404"
+		ApiServerInfo        = "unexpected error when reading response body. Please retry. Original error: read tcp"
 		logInfo              = `Unsupported value: "abc": supported values: "", "Normal", "Debug", "Trace", "TraceAll"`
 		updatePolicy         = `"maxSurge":0,"maxUnavailable":"10%"`
 		patchAuthURL         = `"authURL":"invalid"`
@@ -4494,5 +4495,59 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		s3_endpoint, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.containers[0].env[?(@.name==\"REGISTRY_STORAGE_S3_REGIONENDPOINT\")].value}").Output()
 		o.Expect(getErr).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(s3_endpoint))
+	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:wewang-Medium-68181-OpenShift APIServer should performs a GET request to valid endpoint results in API server [Disruptive]", func() {
+		g.By("In default image registry cluster Managed")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.managementState}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("Managed"))
+
+		g.By("Check build works")
+		checkRegistryFunctionFine(oc, "test-68181", oc.Namespace())
+
+		defer func() {
+			exutil.By("Recovering Internal image registry")
+			output, err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "patched (no change)") {
+				e2e.Logf("No changes to the internal image registry.")
+			} else {
+				exutil.By("Waiting KAS and Image registry reboot after the Internal Image Registry was enabled")
+				e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+				expectedStatus := map[string]string{"Progressing": "True"}
+				err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+				e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+				expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+				err = waitCoBecomes(oc, "kube-apiserver", 1500, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+				err = waitCoBecomes(oc, "openshift-apiserver", 100, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 100 seconds")
+				err = waitCoBecomes(oc, "image-registry", 100, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "image-registry operator is not becomes available in 100 seconds")
+			}
+		}()
+
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check image-registry pods are removed")
+		checkRegistrypodsRemoved(oc)
+
+		g.By("Point build out to external registry")
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("bc/test-68181", "-p", `{"spec":{"output":{"to":{"kind":"DockerImage","name":"quay.io/openshifttests/busybox:test"}}}}`, "--type=merge", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("start-build").Args("test-68181").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), fmt.Sprintf("%s-2", "test-68181"), nil, nil, nil)
+		o.Expect(err).To(o.HaveOccurred())
+		g.By("Check the logs of openshift-apiserver")
+		var podsOfOpenshiftApiserver []corev1.Pod
+		podsOfOpenshiftApiserver = listPodStartingWith("apiserver", oc, "openshift-apiserver")
+		if len(podsOfOpenshiftApiserver) == 0 {
+			e2e.Failf("Error retrieving logs")
+		}
+		foundLog := dePodLogs(podsOfOpenshiftApiserver, oc, ApiServerInfo)
+		o.Expect(foundLog).NotTo(o.BeTrue())
 	})
 })
