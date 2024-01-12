@@ -12,21 +12,25 @@ objects:
       CLOUD_PROVIDER: "aws"
       VXLAN_PORT: "${VXLAN_PORT}"
       PODVM_INSTANCE_TYPE: "${PODVM_INSTANCE_TYPE}"
-      PODVM_INSTANCE_TYPES: "t3.small,t3.medium,t3.large,t3.xlarge,t3.2xlarge"
+      PODVM_INSTANCE_TYPES: "${PODVM_INSTANCE_TYPES}"
       PROXY_TIMEOUT: "${PROXY_TIMEOUT}"
-  
+      PODVM_AMI_ID: "${PODVM_AMI_ID}"
+
+# oc process --ignore-unknown-parameters=true -f $L/peer-pod-azure-cm-template.yaml
+# This is for end user/Jenkins to create a configmap and apply it to your cluster
+
 parameters:
   - name: NAME
     value: "peer-pods-cm"
   - name: NAMESPACE
     value: "openshift-sandboxed-containers-operator"
-  - name: VXLAN_PORT 
+  - name: PODVM_AMI_ID
     value: ""
   - name: PODVM_INSTANCE_TYPE
     value: "t3.medium"
+  - name: PODVM_INSTANCE_TYPES
+    value: "t3.small,t3.medium,t3.large,t3.xlarge,t3.2xlarge"
   - name: PROXY_TIMEOUT
-    value: ""
-
-
-# oc process --ignore-unknown-parameters=true -f $L/peer-pod-secret-aws.yaml -p AWS_ACCESS_KEY_ID="" CLOUD_SECRET="" 
-# This is for Jenkins/end user to create a configmap and apply it to your cluster
+    value: "5m"
+  - name: VXLAN_PORT
+    value: "9000"

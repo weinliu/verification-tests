@@ -78,6 +78,7 @@ type PeerpodParam struct {
 	CLOUD_PROVIDER       string
 	AZURE_REGION         string
 	AZURE_RESOURCE_GROUP string
+	AZURE_IMAGE_ID       string
 	AZURE_INSTANCE_SIZE  string
 	AZURE_NSG_ID         string
 	AZURE_SUBNET_ID      string
@@ -877,9 +878,9 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 
 	switch provider {
 	case "azure":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_INSTANCE_SIZE", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_INSTANCE_SIZE", "AZURE_INSTANCE_SIZES", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
 	case "aws":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_INSTANCE_TYPE", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_INSTANCE_TYPE", "PODVM_INSTANCE_TYPES", "VXLAN_PORT")
 	case "libvirt":
 		providerVars = append(providerVars, "CLOUD_PROVIDER")
 	default:
@@ -1465,7 +1466,7 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 	)
 
 	g.By("Checking if peer-pods-cm exists")
-	msg, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
+	_, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
 	if err == nil {
 		//check for IMAGE ID in the configmap
 
