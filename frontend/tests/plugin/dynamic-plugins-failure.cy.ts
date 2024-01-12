@@ -50,7 +50,7 @@ describe('Dynamic Plugins notification features', () => {
     cy.adminCLI(`oc get consoleplugin`).then((result) => {
       total = result.stdout.split(/\r\n|\r|\n/).length - 1
     })
-    cy.get(".pf-c-popover__body").within(($div) => {
+    cy.get('[class*="popover__body"]').within(($div) => {
       cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
       cy.get(`.text-secondary`).should(($element) => {
         const text = $element.text();
