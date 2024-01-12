@@ -42,12 +42,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		archtype := getArchitectureType(oc)
 		machinesetName := "machineset-45377"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
-		ms.CreateMachineSet(oc)
+		archtype := ms.CreateMachineSet(oc)
 		g.By("Update machineset with acceleratedNetworking: true")
 		switch archtype {
 		case "amd64":
@@ -76,12 +75,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		skipTestIfSpotWorkers(oc)
-		archtype := getArchitectureType(oc)
 		machinesetName := "machineset-46967"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
-		ms.CreateMachineSet(oc)
+		archtype := ms.CreateMachineSet(oc)
 		g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
 		switch archtype {
 		case "amd64":

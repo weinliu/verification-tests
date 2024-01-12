@@ -42,9 +42,9 @@ type MachineSetDescription struct {
 }
 
 // CreateMachineSet create a new machineset
-func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) {
+func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) string {
 	e2e.Logf("Creating a new MachineSets ...")
-	machinesetName := GetRandomMachineSetName(oc)
+	machinesetName, arch := GetRandomMachineSetNameWithArch(oc)
 	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -64,6 +64,7 @@ func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) {
 	} else {
 		WaitForMachinesRunning(oc, ms.Replicas, ms.Name)
 	}
+	return arch
 }
 
 // CreateMachineSetByArch create a new machineset by arch
@@ -188,6 +189,17 @@ func GetRandomMachineSetName(oc *CLI) string {
 		g.Skip("Skip this test scenario because there are no linux machinesets in this cluster")
 	}
 	return machinesetNames[rand.Int31n(int32(len(machinesetNames)))]
+}
+
+// GetRandomMachineSetNameWithArch get a random MachineSet name and arch
+func GetRandomMachineSetNameWithArch(oc *CLI) (string, string) {
+	machinesetName := GetRandomMachineSetName(oc)
+	machineSetAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-o=jsonpath={.metadata.annotations.capacity\\.cluster-autoscaler\\.kubernetes\\.io/labels}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	start := strings.Index(machineSetAnnotation, "=")
+	arch := machineSetAnnotation[start+1:]
+	e2e.Logf("arch: %s", arch)
+	return machinesetName, arch
 }
 
 // GetRandomMachineSetNameByArch get a random MachineSet name by arch
