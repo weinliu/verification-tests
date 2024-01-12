@@ -759,6 +759,34 @@ func (iamClient *IAMClient) DeletePolicy(policyArn string) error {
 	return err
 }
 
+// Attach role policy
+func (iamClient *IAMClient) AttachRolePolicy(roleName, policyArn string) error {
+	_, err := iamClient.svc.AttachRolePolicy(&iam.AttachRolePolicyInput{
+		RoleName:  aws.String(roleName),
+		PolicyArn: aws.String(policyArn),
+	})
+
+	if err != nil {
+		e2e.Logf("Failed to AttachRolePolicy for roleName: %s policyArn %s error %s", roleName, policyArn, err.Error())
+	}
+
+	return err
+}
+
+// Detach role policy
+func (iamClient *IAMClient) DetachRolePolicy(roleName, policyArn string) error {
+	_, err := iamClient.svc.DetachRolePolicy(&iam.DetachRolePolicyInput{
+		RoleName:  aws.String(roleName),
+		PolicyArn: aws.String(policyArn),
+	})
+
+	if err != nil {
+		e2e.Logf("Failed to DetachRolePolicy for roleName: %s policyArn %s error %s", roleName, policyArn, err.Error())
+	}
+
+	return err
+}
+
 // convert tags map to []iam.Tag
 func getTags(tagList map[string]string) []*iam.Tag {
 	iamTags := []*iam.Tag{}

@@ -290,4 +290,35 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(nodeLabel, "failure-domain.beta.kubernetes.io/region") && strings.Contains(nodeLabel, "topology.kubernetes.io/region") && strings.Contains(nodeLabel, "failure-domain.beta.kubernetes.io/zone") && strings.Contains(nodeLabel, "topology.kubernetes.io/zone")).To(o.BeTrue())
 	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Author:huliu-High-70744-[CCM] Pull images from ECR repository [Disruptive]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region != "us-east-2" {
+			g.Skip("Not support region " + region + " for the case for now.")
+		}
+		g.By("Add the AmazonEC2ContainerRegistryReadOnly policy to the worker nodes")
+		infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		roleName := infrastructureName + "-worker-role"
+		policyArn := "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+		exutil.GetAwsCredentialFromCluster(oc)
+		iamClient := exutil.NewIAMClient()
+		err = iamClient.AttachRolePolicy(roleName, policyArn)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer iamClient.DetachRolePolicy(roleName, policyArn)
+
+		g.By("Create a new project for testing")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "hello-ecr70744").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "hello-ecr70744").Execute()
+		g.By("Create a new app using the image on ECR")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-ecr", "--image=301721915996.dkr.ecr."+region+".amazonaws.com/hello-ecr:latest", "--allow-missing-images", "-n", "hello-ecr70744").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Wait the pod ready")
+		err = waitForPodWithLabelReady(oc, "hello-ecr70744", "deployment=hello-ecr")
+		exutil.AssertWaitPollNoErr(err, "the pod failed to be ready state within allowed time!")
+	})
 })
