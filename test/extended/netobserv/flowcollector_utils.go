@@ -1,6 +1,7 @@
 package netobserv
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -134,7 +135,7 @@ func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, lokiRoute st
 	lokiQuery := lokilabels.getLokiQuery(parameters...)
 	flowRecords := []FlowRecord{}
 	var res *lokiQueryResponse
-	err := wait.Poll(30*time.Second, 300*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(context.Context) (done bool, err error) {
 		var qErr error
 		res, qErr = lc.searchLogsInLoki(tenantID, lokiQuery)
 		if qErr != nil {

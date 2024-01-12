@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,7 +66,7 @@ func getRouteAddress(oc *exutil.CLI, ns, routeName string) string {
 
 func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 15*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + ".json")
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
@@ -95,7 +96,7 @@ func (r resource) clear(oc *exutil.CLI) error {
 // compare: true means compare the expectedContent with the resource content, false means check if the resource contains the expectedContent;
 // args are the arguments used to execute command `oc.AsAdmin.WithoutNamespace().Run("get").Args(args...).Output()`;
 func checkResource(oc *exutil.CLI, expect, compare bool, expectedContent string, args []string) {
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
 		if err != nil {
 			if strings.Contains(output, "NotFound") {
@@ -136,7 +137,7 @@ func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
 }
 
 func (r resource) waitForResourceToAppear(oc *exutil.CLI) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
 		if err != nil {
 			msg := fmt.Sprintf("%v", output)
@@ -153,7 +154,7 @@ func (r resource) waitForResourceToAppear(oc *exutil.CLI) {
 
 // WaitUntilResourceIsGone waits for the resource to be removed cluster
 func (r resource) waitUntilResourceIsGone(oc *exutil.CLI) error {
-	return wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
 		if err != nil {
 			errstring := fmt.Sprintf("%v", output)
@@ -176,7 +177,7 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 }
 
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			return false, err
@@ -204,7 +205,7 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 
 // WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
 func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -224,7 +225,7 @@ func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 }
 
 func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -245,7 +246,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 
 func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
 	var secrets string
-	err := wait.Poll(10*time.Second, 360*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 360*time.Second, false, func(context.Context) (done bool, err error) {
 		secrets, err = oc.AsAdmin().Run("get").Args("secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}{\" \"}'").Output()
 
 		if err != nil {
@@ -259,7 +260,7 @@ func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
 
 // check pods with label that are fully deleted
 func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string) {
-	podCheck := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
+	podCheck := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
 		if err != nil || strings.Contains(output, checkValue) {
 			return false, nil
@@ -356,4 +357,70 @@ func (testTemplate *TestClientServerTemplate) createTestClientServer(oc *exutil.
 		return err
 	}
 	return nil
+}
+
+// wait until DaemonSet is Ready
+func waitUntilDaemonSetReady(oc *exutil.CLI, daemonset string, namespace string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
+		desiredNumber, err := oc.AsAdmin().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.desiredNumberScheduled}'").Output()
+
+		if err != nil {
+			// loop until daemonset is found or until timeout
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
+			return false, err
+		}
+		numberReady, err := oc.AsAdmin().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.numberReady}'").Output()
+		if err != nil {
+			return false, err
+		}
+		numberReadyi, err := strconv.Atoi(strings.Trim(numberReady, "'"))
+		if err != nil {
+			return false, err
+		}
+
+		desiredNumberi, err := strconv.Atoi(strings.Trim(desiredNumber, "'"))
+		if err != nil {
+			return false, err
+		}
+		if numberReadyi != desiredNumberi {
+			return false, nil
+		}
+		updatedNumber, err := oc.AsAdmin().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.updatedNumberScheduled}'").Output()
+		if err != nil {
+			return false, err
+		}
+		updatedNumberi, err := strconv.Atoi(strings.Trim(updatedNumber, "'"))
+		if err != nil {
+			return false, err
+		}
+		if updatedNumberi != desiredNumberi {
+			return false, nil
+		}
+
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s did not become Ready", daemonset))
+}
+
+// wait until Deployment is Ready
+func waitUntilDeploymentReady(oc *exutil.CLI, deployment string, namespace string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
+		status, err := oc.AsAdmin().Run("get").Args("deployment", deployment, "-n", namespace, "-o", "jsonpath='{.status.conditions[0].type}'").Output()
+
+		if err != nil {
+			// loop until deployment is found or until timeout
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
+			return false, err
+		}
+
+		if strings.Trim(status, "'") != "Available" {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Deployment %s did not become Available", deployment))
 }

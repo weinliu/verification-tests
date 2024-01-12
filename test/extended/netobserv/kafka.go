@@ -1,6 +1,7 @@
 package netobserv
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -123,7 +124,7 @@ func (kafka *Kafka) deleteKafka(oc *exutil.CLI) {
 
 // Poll to wait for kafka to be ready
 func waitForKafkaReady(oc *exutil.CLI, kafkaName string, kafkaNS string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		command := []string{"kafka", kafkaName, "-n", kafkaNS, `-o=jsonpath={.status.conditions[*].type}`}
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(command...).Output()
 		if err != nil {
@@ -140,7 +141,7 @@ func waitForKafkaReady(oc *exutil.CLI, kafkaName string, kafkaNS string) {
 
 // Poll to wait for kafka Topic to be ready
 func waitForKafkaTopicReady(oc *exutil.CLI, kafkaTopicName string, kafkaTopicNS string) {
-	err := wait.Poll(6*time.Second, 360*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 360*time.Second, false, func(context.Context) (done bool, err error) {
 		command := []string{"kafkaTopic", kafkaTopicName, "-n", kafkaTopicNS, `-o=jsonpath='{.status.conditions[*].type}'`}
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(command...).Output()
 		if err != nil {

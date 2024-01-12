@@ -1,6 +1,7 @@
 package netobserv
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,7 +33,7 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 }
 
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
-	errCo := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errCo := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, time.Duration(waitTime)*time.Second, false, func(context.Context) (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)
 		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
 		if eq {

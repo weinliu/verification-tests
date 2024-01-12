@@ -22,12 +22,13 @@ import (
 
 // SubscriptionObjects objects are used to create operators via OLM
 type SubscriptionObjects struct {
-	OperatorName  string
-	Namespace     string
-	OperatorGroup string // the file used to create operator group
-	Subscription  string // the file used to create subscription
-	PackageName   string
-	CatalogSource CatalogSourceObjects `json:",omitempty"`
+	OperatorName     string
+	Namespace        string
+	OperatorGroup    string // the file used to create operator group
+	Subscription     string // the file used to create subscription
+	PackageName      string
+	CatalogSource    CatalogSourceObjects `json:",omitempty"`
+	OperatorPodLabel string
 }
 
 // CatalogSourceObjects defines the source used to subscribe an operator
@@ -165,7 +166,7 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 	} else {
 		args = append(args, so.PackageName)
 	}
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		packages, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
 		if err != nil {
 			msg := fmt.Sprintf("%v", err)
@@ -224,7 +225,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			namespaceTemplate := exutil.FixturePath("testdata", "logging", "subscription", "namespace.yaml")
 			namespaceFile, err := processTemplate(oc, "-f", namespaceTemplate, "-p", "NAMESPACE_NAME="+so.Namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(context.Context) (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", namespaceFile).Output()
 				if err != nil {
 					if strings.Contains(output, "AlreadyExists") {
@@ -246,7 +247,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 		// create operator group
 		ogFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.OperatorGroup, "-p", "OG_NAME="+so.Namespace, "NAMESPACE="+so.Namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(context.Context) (done bool, err error) {
 			output, err := oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", so.Namespace).Output()
 			if err != nil {
 				if strings.Contains(output, "AlreadyExists") {
@@ -268,7 +269,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			//create subscription object
 			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+so.CatalogSource.Channel, "SOURCE="+so.CatalogSource.SourceName, "SOURCE_NAMESPACE="+so.CatalogSource.SourceNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(context.Context) (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
 				if err != nil {
 					if strings.Contains(output, "AlreadyExists") {
@@ -292,7 +293,7 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 		}
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -323,7 +324,7 @@ func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName 
 			csvName, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 			o.Expect(err2).NotTo(o.HaveOccurred())
 			o.Expect(csvName).NotTo(o.BeEmpty())
-			err = wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 360*time.Second, false, func(context.Context) (bool, error) {
 				csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
 				if err != nil {
 					return false, err

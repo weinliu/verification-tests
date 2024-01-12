@@ -1,6 +1,7 @@
 package netobserv
 
 import (
+	"context"
 	"fmt"
 	filePath "path/filepath"
 	"reflect"
@@ -159,9 +160,24 @@ func (crb *ForwardClusterRoleBinding) deployForwardCRB(oc *exutil.CLI) {
 }
 
 func (flow *Flowcollector) waitForFlowcollectorReady(oc *exutil.CLI) {
+	// check FLP status
+	if flow.DeploymentModel == "Kafka" {
+		waitUntilDeploymentReady(oc, "flowlogs-pipeline-transformer", flow.Namespace)
+	} else {
+		waitUntilDaemonSetReady(oc, "flowlogs-pipeline", flow.Namespace)
+	}
+	// check ebpf-agent status
+	waitUntilDaemonSetReady(oc, "netobserv-ebpf-agent", flow.Namespace+"-privileged")
+
+	// check plugin status
+	if flow.LokiEnable != "false" && flow.PluginEnable != "false" {
+		waitUntilDeploymentReady(oc, "netobserv-plugin", flow.Namespace)
+	}
+
 	exutil.AssertAllPodsToBeReady(oc, flow.Namespace)
 	exutil.AssertAllPodsToBeReady(oc, flow.Namespace+"-privileged")
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
+
 		status, err := oc.AsAdmin().Run("get").Args("flowcollector", "-o", "jsonpath='{.items[*].status.conditions[0].reason}'").Output()
 
 		if err != nil {

@@ -1,6 +1,7 @@
 package netobserv
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -101,7 +102,7 @@ func popMetricValue(metrics []metric) int {
 
 // polls any prometheus metrics
 func pollMetrics(oc *exutil.CLI, promQuery string) {
-	err := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 300*time.Second, false, func(context.Context) (bool, error) {
 		metrics, err := getMetric(oc, promQuery)
 		if err != nil {
 			return false, err
