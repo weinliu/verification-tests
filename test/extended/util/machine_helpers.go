@@ -181,14 +181,26 @@ func GetNodeNameFromMachine(oc *CLI, machineName string) string {
 	return nodeName
 }
 
-// GetRandomMachineSetName get a random MachineSet name
+// GetRandomMachineSetName get a random RHCOS MachineSet name
 func GetRandomMachineSetName(oc *CLI) string {
 	e2e.Logf("Getting a random MachineSet ...")
-	machinesetNames := ListWorkerMachineSetNames(oc)
-	if len(machinesetNames) == 0 {
-		g.Skip("Skip this test scenario because there are no linux machinesets in this cluster")
+	allMachineSetNames := ListWorkerMachineSetNames(oc)
+	var filteredMachineSetNames []string
+
+	// Filter out MachineSet names containing 'rhel'
+	for _, name := range allMachineSetNames {
+		if !strings.Contains(name, "rhel") {
+			filteredMachineSetNames = append(filteredMachineSetNames, name)
+		}
 	}
-	return machinesetNames[rand.Int31n(int32(len(machinesetNames)))]
+
+	// Check if there are any machine sets left after filtering
+	if len(filteredMachineSetNames) == 0 {
+		g.Skip("Skip this test scenario because there are no suitable machinesets in this cluster to copy")
+	}
+
+	// Return a random MachineSet name from the filtered list
+	return filteredMachineSetNames[rand.Int31n(int32(len(filteredMachineSetNames)))]
 }
 
 // GetRandomMachineSetNameWithArch get a random MachineSet name and arch
