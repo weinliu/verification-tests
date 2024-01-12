@@ -302,4 +302,47 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
+	// author: xzha@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:xzha-High-70817-catalogd support setting a pull secret", func() {
+		var (
+			baseDir          = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate  = filepath.Join(baseDir, "catalog-secret.yaml")
+			operatorTemplate = filepath.Join(baseDir, "operatorWithoutChannelVersion.yaml")
+			catalog          = olmv1util.CatalogDescription{
+				Name:         "catalog-70817-quay",
+				Imageref:     "quay.io/olmqe/olmtest-operator-index-private:nginxolm70817",
+				PullSecret:   "fake-secret-70817",
+				PollInterval: "1m",
+				Template:     catalogTemplate,
+			}
+			operator = olmv1util.OperatorDescription{
+				Name:        "operator-70817",
+				PackageName: "nginx70817",
+				Template:    operatorTemplate,
+			}
+		)
+
+		exutil.By("1) Create secret")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-catalogd", "secret", "secret-70817-quay").Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-catalogd", "secret", "generic", "secret-70817-quay", "--from-file=.dockerconfigjson=/home/cloud-user/.docker/config.json", "--type=kubernetes.io/dockerconfigjson").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2) Create catalog")
+		defer catalog.Delete(oc)
+		catalog.CreateWithoutCheck(oc)
+		catalog.WaitCatalogStatus(oc, "Failing", 30)
+		conditions, _ := olmv1util.GetNoEmpty(oc, "catalog", catalog.Name, "-o", "jsonpath={.status.conditions}")
+		o.Expect(conditions).To(o.ContainSubstring("error fetching image"))
+		o.Expect(conditions).To(o.ContainSubstring("401 Unauthorized"))
+
+		exutil.By("3) Patch the catalog")
+		patchResource(oc, asAdmin, withoutNamespace, "catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"pullSecret":"secret-70817-quay"}}}}`, "--type=merge")
+		catalog.WaitCatalogStatus(oc, "Unpacked", 0)
+
+		exutil.By("4) install operator")
+		defer operator.Delete(oc)
+		operator.Create(oc)
+		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.0.1"))
+	})
+
 })

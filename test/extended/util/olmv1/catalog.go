@@ -18,13 +18,14 @@ import (
 )
 
 type CatalogDescription struct {
-	Name       string
-	PullSecret string
-	TypeName   string
-	Imageref   string
-	ContentURL string
-	Status     string
-	Template   string
+	Name         string
+	PullSecret   string
+	TypeName     string
+	Imageref     string
+	ContentURL   string
+	Status       string
+	PollInterval string
+	Template     string
 }
 
 func (catalog *CatalogDescription) Create(oc *exutil.CLI) {
@@ -48,6 +49,9 @@ func (catalog *CatalogDescription) CreateWithoutCheck(oc *exutil.CLI) error {
 	}
 	if len(catalog.Imageref) > 0 {
 		paremeters = append(paremeters, "IMAGE="+catalog.Imageref)
+	}
+	if len(catalog.PollInterval) > 0 {
+		paremeters = append(paremeters, "POLLINTERVAL="+catalog.PollInterval)
 	}
 	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, paremeters...)
 	return err
