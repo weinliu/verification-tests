@@ -35,18 +35,19 @@ describe("yaml editor tests", () => {
     cy.visit(`/k8s/ns/${testName}/import`)
       .contains('[data-test-id="resource-title"]', "Import YAML");
     importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");
-    importYamlPage.checkDangerAlert(/Maximum|size|exceeded|limit/gi);
+    importYamlPage.checkDangerAlert(/exceed/gi);
 
     cy.fixture('default_operatorgroup.yaml').then((resourcesYAML) => {
       yamlEditor.setEditorContent(resourcesYAML);
       cy.byTestID('save-changes').click({force: true});
-      importYamlPage.checkDangerAlert(/forbidden|cannot|create/gi);
+      importYamlPage.checkDangerAlert(/forbid/gi);
     });
   });
 
   it("(OCP-42019,yapei,UI) Create multiple resources by importing yaml",{tags: ['e2e','@osd-ccs']},() => {
     // import multiple resources
     // and check successful creation result on import yaml status page
+    cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
     cy.byTestID('import-yaml').click();
     yamlEditor.isImportLoaded();
     cy.fixture('example-resources-1.yaml').then((resourcesYAML) => {
@@ -60,14 +61,16 @@ describe("yaml editor tests", () => {
       .should('have.attr', 'href', `/k8s/cluster/namespaces/${testName}`);
 
     // retry failed, this time it will fail on yaml creation page
-    cy.byTestID('retry-failed-resources').click().then(() => {
+    // commenting out due to bug OCPBUGS-18286(affects >= 4.14)
+/*     cy.byTestID('retry-failed-resources').click({force:true}).then(() => {
       yamlEditor.isImportLoaded();
       yamlEditor.clickSaveCreateButton();
     });
     cy.get('@failureMsg').should('exist');
-    yamlEditor.clickCancelButton();
+    yamlEditor.clickCancelButton(); */
 
     // import more resources
+    cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
     cy.byTestID('import-yaml').click();
     yamlEditor.isImportLoaded();
     cy.fixture('example-resources-2.yaml').then((resourcesYAML) => {

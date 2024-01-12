@@ -1,6 +1,7 @@
 import { guidedTour } from '../../upstream/views/guided-tour';
 import { listPage } from '../../upstream/views/list-page';
 import { projectsPage } from '../../views/projects';
+import { searchPage } from 'views/search';
 
 let login_user_one:any, login_passwd_one:any, login_user_two:any, login_passwd_two:any;
 
@@ -19,6 +20,7 @@ describe('project list tests', () => {
 
     cy.login(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two);
     guidedTour.close();
+    cy.switchPerspective('Administrator');
     cy.createProject('testusertwo-project');
     cy.adminCLI(`oc adm policy add-role-to-user admin ${login_user_two} -n testuserone-project`);
   });
@@ -40,13 +42,13 @@ describe('project list tests', () => {
     projectsPage.filterMyProjects();
     projectsPage.checkProjectExists("testusertwo-project");
     projectsPage.checkProjectNotExists("testuserone-project");
-    listPage.filter.clearAllFilters();
+    searchPage.clearAllFilters();
 
     // filter by User
     projectsPage.filterUserProjects();
     projectsPage.checkProjectExists("testuserone-project");
     projectsPage.checkProjectNotExists("testusertwo-project");
-    listPage.filter.clearAllFilters();
+    searchPage.clearAllFilters();
 
 
     cy.log('cluster admin user able to filter with Requester');
@@ -57,14 +59,14 @@ describe('project list tests', () => {
     projectsPage.checkProjectExists("openshift");
     listPage.filter.byName('testuser');
     projectsPage.checkProjectNotExists("testusertwo-project");
-    listPage.filter.clearAllFilters();
+    searchPage.clearAllFilters();
 
     // filter by User
     listPage.filter.byName('testuser');
     projectsPage.filterUserProjects();
     projectsPage.checkProjectExists("testuserone-project");
     projectsPage.checkProjectNotExists("testusertwo-project");
-    listPage.filter.clearAllFilters();
+    searchPage.clearAllFilters();
 
     // filter by Me
     listPage.filter.byName('testuser');

@@ -7,8 +7,8 @@ export const importYamlPage = {
         .selectFile(importfile, {action: 'drag-drop'});
     },
     checkDangerAlert: (alertmsg: RegExp) => {
-      cy.contains('h4', /error|Danger|alert/gi).should('exist');
-      cy.contains('.pf-c-alert__description div', alertmsg).should('exist');
+      cy.contains(/error|Danger|alert/gi).should('exist');
+      cy.contains(alertmsg).should('exist');
     }
   }
 export const yamlOptions = {

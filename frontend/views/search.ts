@@ -11,6 +11,9 @@ export const searchPage = {
     cy.get('[placeholder="Select Resource"]').type("machine");
     cy.contains('No results found');
   },
+  clearAllFilters: () => {
+    cy.byButtonText('Clear all filters').click();
+  },
   searchMethodValues: (method, value) => {
     cy.get('button[id="toggle-id"]').click();
     cy.get(`button[name="${method}"]`).click();
