@@ -30,14 +30,14 @@ describe('knmstate operator console plugin related features', () => {
     });
   });
 
-  it('(OCP-64784,qiowang) Verify NMState cosole plugin operator installation(GUI)', {tags: ['e2e','admin','@smoke']}, () => {
+  it('(OCP-64784,qiowang,SDN) Verify NMState cosole plugin operator installation(GUI)', {tags: ['e2e','admin','@smoke']}, () => {
     nncpPage.goToNNCP();
     cy.byLegacyTestID('resource-title').contains('NodeNetworkConfigurationPolicy');
     nnsPage.goToNNS();
     cy.byLegacyTestID('resource-title').contains('NodeNetworkState');
   });
 
-  it('(OCP-64981,qiowang) Create NNCP for adding bridge on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
+  it('(OCP-64981,qiowang,SDN) Create NNCP for adding bridge on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
     cy.log("1. Create NNCP");
     let pName = "pname-64981";
     let nncpTest: intPolicy = {
@@ -111,7 +111,7 @@ describe('knmstate operator console plugin related features', () => {
     cy.byTestID(pName).should('not.exist');
   });
 
-  it('(OCP-64982,qiowang) Create NNCP for adding bond on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
+  it('(OCP-64982,qiowang,SDN) Create NNCP for adding bond on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
     cy.log("1. Create NNCP");
     let pName = "pname-64982";
     let nncpTest: intPolicy = {
@@ -184,7 +184,7 @@ describe('knmstate operator console plugin related features', () => {
     cy.byTestID(pName).should('not.exist');
   });
 
-  it('(OCP-64820,qiowang) Verify can configure node selector on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
+  it('(OCP-64820,qiowang,SDN) Verify can configure node selector on web console(from form)', {tags: ['e2e','admin','@smoke']}, function () {
     cy.log("1. Create NNCP with node selector");
     let pName = "pname-64820";
     let nncpTest: intPolicy = {
