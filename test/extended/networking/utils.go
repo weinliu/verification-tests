@@ -3186,7 +3186,8 @@ type apbStaticExternalRoute struct {
 	name       string
 	labelkey   string
 	labelvalue string
-	ip         string
+	ip1        string
+	ip2        string
 	bfd        bool
 	template   string
 }
@@ -3197,7 +3198,7 @@ func (sgwpr *apbStaticExternalRoute) deleteAPBExternalRoute(oc *exutil.CLI) {
 
 func (sgwpr *apbStaticExternalRoute) createAPBExternalRoute(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sgwpr.template, "-p", "NAME="+sgwpr.name, "LABELKEY="+sgwpr.labelkey, "LABELVALUE="+sgwpr.labelvalue, "IP="+sgwpr.ip, "BFD="+strconv.FormatBool(sgwpr.bfd))
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sgwpr.template, "-p", "NAME="+sgwpr.name, "LABELKEY="+sgwpr.labelkey, "LABELVALUE="+sgwpr.labelvalue, "IP1="+sgwpr.ip1, "IP2="+sgwpr.ip2, "BFD="+strconv.FormatBool(sgwpr.bfd))
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil

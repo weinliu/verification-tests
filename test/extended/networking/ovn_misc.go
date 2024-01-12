@@ -409,23 +409,29 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.It("Author:qiowang-Medium-69761-Check apbexternalroute status when all zones reported success", func() {
 		ipStackType := checkIPStackType(oc)
-		var externalGWIP string
-		if ipStackType == "ipv6single" {
-			externalGWIP = "2011::11"
+		var externalGWIP1, externalGWIP2 string
+		if ipStackType == "dualstack" {
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "2011::11"
+		} else if ipStackType == "ipv6single" {
+			externalGWIP1 = "2011::11"
+			externalGWIP2 = "2011::12"
 		} else {
-			externalGWIP = "1.1.1.1"
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "1.1.1.2"
 		}
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		apbExternalRouteTemplate := filepath.Join(buildPruningBaseDir, "apbexternalroute-static-template.yaml")
 
-		exutil.By("1. Create apbexternalroute object")
+		exutil.By("1. Create Admin Policy Based External route object")
 		ns := oc.Namespace()
 		apbExternalRoute := apbStaticExternalRoute{
 			name:       "externalgw-69761",
 			labelkey:   "kubernetes.io/metadata.name",
 			labelvalue: ns,
-			ip:         externalGWIP,
+			ip1:        externalGWIP1,
+			ip2:        externalGWIP2,
 			bfd:        false,
 			template:   apbExternalRouteTemplate,
 		}
@@ -440,33 +446,46 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		for _, node := range nodes {
-			o.Expect(messages).Should(o.ContainSubstring(node + ": configured external gateway IPs: " + apbExternalRoute.ip))
+			o.Expect(messages).Should(o.ContainSubstring(node + ": configured external gateway IPs: " + apbExternalRoute.ip1 + "," + apbExternalRoute.ip2))
 		}
 	})
 
 	g.It("Author:qiowang-Medium-69762-Check egressfirewall status when all zones reported success", func() {
 		ipStackType := checkIPStackType(oc)
-		var egressFWCIDR string
-		if ipStackType == "ipv6single" {
-			egressFWCIDR = "::/0"
+		var egressFWCIDR1, egressFWCIDR2 string
+		if ipStackType == "dualstack" {
+			egressFWCIDR1 = "2.1.1.0/24"
+			egressFWCIDR2 = "2021::/96"
+		} else if ipStackType == "ipv6single" {
+			egressFWCIDR1 = "2021::/96"
+			egressFWCIDR2 = "2022::/96"
 		} else {
-			egressFWCIDR = "0.0.0.0/0"
+			egressFWCIDR1 = "2.1.1.0/24"
+			egressFWCIDR2 = "2.1.2.0/24"
 		}
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
 
 		exutil.By("1. Create egressfirewall object")
 		ns := oc.Namespace()
-		egressFW := egressFirewall2{
-			name:      "default",
-			namespace: ns,
-			ruletype:  "Allow",
-			cidr:      egressFWCIDR,
-			template:  egressFWTemplate,
+		egressFW := egressFirewall5{
+			name:        "default",
+			namespace:   ns,
+			ruletype1:   "Allow",
+			rulename1:   "cidrSelector",
+			rulevalue1:  egressFWCIDR1,
+			protocol1:   "TCP",
+			portnumber1: 80,
+			ruletype2:   "Allow",
+			rulename2:   "cidrSelector",
+			rulevalue2:  egressFWCIDR2,
+			protocol2:   "TCP",
+			portnumber2: 80,
+			template:    egressFWTemplate,
 		}
-		defer egressFW.deleteEgressFW2Object(oc)
-		egressFW.createEgressFW2Object(oc)
+		defer removeResource(oc, true, true, "egressfirewall", egressFW.name, "-n", egressFW.namespace)
+		egressFW.createEgressFW5Object(oc)
 
 		exutil.By("2. Check status of egressfirewall object")
 		checkErr := checkEgressFWStatus(oc, egressFW.name, ns, "EgressFirewall Rules applied")
@@ -567,11 +586,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.It("Author:qiowang-Medium-69875-Check apbexternalroute status when there is zone reported failure [Disruptive]", func() {
 		ipStackType := checkIPStackType(oc)
-		var externalGWIP string
-		if ipStackType == "ipv6single" {
-			externalGWIP = "2011::11"
+		var externalGWIP1, externalGWIP2 string
+		if ipStackType == "dualstack" {
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "2011::11"
+		} else if ipStackType == "ipv6single" {
+			externalGWIP1 = "2011::11"
+			externalGWIP2 = "2011::12"
 		} else {
-			externalGWIP = "1.1.1.1"
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "1.1.1.2"
 		}
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
@@ -598,12 +622,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer exutil.AddAnnotationsToSpecificResource(oc, "node/"+workerNode, "", "k8s.ovn.org/l3-gateway-config="+strings.Trim(annotation, "'"))
 		exutil.RemoveAnnotationFromSpecificResource(oc, "node/"+workerNode, "", "k8s.ovn.org/l3-gateway-config")
 
-		exutil.By("3. Create apbexternalroute object")
+		exutil.By("3. Create Admin Policy Based External route object")
 		apbExternalRoute := apbStaticExternalRoute{
 			name:       "externalgw-69875",
 			labelkey:   "kubernetes.io/metadata.name",
 			labelvalue: ns,
-			ip:         externalGWIP,
+			ip1:        externalGWIP1,
+			ip2:        externalGWIP2,
 			bfd:        false,
 			template:   apbExternalRouteTemplate,
 		}
@@ -621,8 +646,117 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			if node == workerNode {
 				o.Expect(messages).Should(o.ContainSubstring(node + ": " + node + " failed to apply policy"))
 			} else {
-				o.Expect(messages).Should(o.ContainSubstring(node + ": configured external gateway IPs: " + apbExternalRoute.ip))
+				o.Expect(messages).Should(o.ContainSubstring(node + ": configured external gateway IPs: " + apbExternalRoute.ip1 + "," + apbExternalRoute.ip2))
 			}
+		}
+	})
+
+	g.It("Author:qiowang-Medium-69873-Medium-69874-Check apbexternalroute/egressfirewall status when no failure reported and not all zones reported success [Disruptive]", func() {
+		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		if len(nodes) < 2 {
+			g.Skip("Not enough nodes for the test, need at least 2 linux nodes, skip the case!!")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		var externalGWIP1, externalGWIP2, egressFWCIDR1, egressFWCIDR2 string
+		if ipStackType == "dualstack" {
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "2011::11"
+			egressFWCIDR1 = "2.1.1.0/24"
+			egressFWCIDR2 = "2021::/96"
+		} else if ipStackType == "ipv6single" {
+			externalGWIP1 = "2011::11"
+			externalGWIP2 = "2011::12"
+			egressFWCIDR1 = "2021::/96"
+			egressFWCIDR2 = "2022::/96"
+		} else {
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "1.1.1.2"
+			egressFWCIDR1 = "2.1.1.0/24"
+			egressFWCIDR2 = "2.1.2.0/24"
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		apbExternalRouteTemplate := filepath.Join(buildPruningBaseDir, "apbexternalroute-static-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
+
+		exutil.By("1. Reboot one worker node, wait it becomes NotReady")
+		workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer checkNodeStatus(oc, workerNode, "Ready")
+		rebootNode(oc, workerNode)
+		checkNodeStatus(oc, workerNode, "NotReady")
+
+		exutil.By("2. Create Admin Policy Based External route object with static gateway when the worker node in NotReady status")
+		ns := oc.Namespace()
+		apbExternalRoute := apbStaticExternalRoute{
+			name:       "externalgw-69873",
+			labelkey:   "kubernetes.io/metadata.name",
+			labelvalue: ns,
+			ip1:        externalGWIP1,
+			ip2:        externalGWIP2,
+			bfd:        false,
+			template:   apbExternalRouteTemplate,
+		}
+		defer apbExternalRoute.deleteAPBExternalRoute(oc)
+		apbExternalRoute.createAPBExternalRoute(oc)
+
+		exutil.By("3. Create egressfirewall object with allow rule when the worker node in NotReady status")
+		egressFW := egressFirewall5{
+			name:        "default",
+			namespace:   ns,
+			ruletype1:   "Allow",
+			rulename1:   "cidrSelector",
+			rulevalue1:  egressFWCIDR1,
+			protocol1:   "TCP",
+			portnumber1: 80,
+			ruletype2:   "Allow",
+			rulename2:   "cidrSelector",
+			rulevalue2:  egressFWCIDR2,
+			protocol2:   "TCP",
+			portnumber2: 80,
+			template:    egressFWTemplate,
+		}
+		defer removeResource(oc, true, true, "egressfirewall", egressFW.name, "-n", egressFW.namespace)
+		egressFW.createEgressFW5Object(oc)
+
+		exutil.By("4. Check status of apbexternalroute/egressfirewall object")
+		apbExtRouteSta, apbExtRouteStaErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.status}`).Output()
+		o.Expect(apbExtRouteStaErr).NotTo(o.HaveOccurred())
+		o.Expect(apbExtRouteSta).Should(o.BeEmpty())
+		apbExtRouteMsgs, apbExtRouteMsgsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(apbExtRouteMsgsErr).NotTo(o.HaveOccurred())
+		egressFWStatus, egressFWStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.status}`).Output()
+		o.Expect(egressFWStatusErr).NotTo(o.HaveOccurred())
+		o.Expect(egressFWStatus).Should(o.BeEmpty())
+		egressFWMsgs, egressFWMsgsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(egressFWMsgsErr).NotTo(o.HaveOccurred())
+		for _, node := range nodes {
+			if node == workerNode {
+				o.Expect(strings.Contains(apbExtRouteMsgs, node+": configured external gateway IPs: "+apbExternalRoute.ip1+","+apbExternalRoute.ip2)).ShouldNot(o.BeTrue())
+				o.Expect(strings.Contains(egressFWMsgs, node+": EgressFirewall Rules applied")).ShouldNot(o.BeTrue())
+			} else {
+				o.Expect(strings.Contains(apbExtRouteMsgs, node+": configured external gateway IPs: "+apbExternalRoute.ip1+","+apbExternalRoute.ip2)).Should(o.BeTrue())
+				o.Expect(strings.Contains(egressFWMsgs, node+": EgressFirewall Rules applied")).Should(o.BeTrue())
+			}
+		}
+
+		exutil.By("5. Wait for the rebooted worker node back")
+		checkNodeStatus(oc, workerNode, "Ready")
+
+		exutil.By("6. Check status of apbexternalroute/egressfirewall object after the rebooted worker node back")
+		apbExtRouteCheckErr := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Success")
+		exutil.AssertWaitPollNoErr(apbExtRouteCheckErr, fmt.Sprintf("apbexternalroute %s doesn't succeed in time", apbExternalRoute.name))
+		apbExtRouteMsgs2, apbExtRouteMsgsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(apbExtRouteMsgsErr2).NotTo(o.HaveOccurred())
+		egressFWCheckErr := checkEgressFWStatus(oc, egressFW.name, ns, "EgressFirewall Rules applied")
+		exutil.AssertWaitPollNoErr(egressFWCheckErr, fmt.Sprintf("EgressFirewall Rule %s doesn't apply in time", egressFW.name))
+		egressFWMsgs2, egressFWMsgsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(egressFWMsgsErr2).NotTo(o.HaveOccurred())
+		for _, node := range nodes {
+			o.Expect(strings.Contains(apbExtRouteMsgs2, node+": configured external gateway IPs: "+apbExternalRoute.ip1+","+apbExternalRoute.ip2)).Should(o.BeTrue())
+			o.Expect(strings.Contains(egressFWMsgs2, node+": EgressFirewall Rules applied")).Should(o.BeTrue())
 		}
 	})
 })

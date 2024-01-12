@@ -14,13 +14,16 @@ objects:
           "${LABELKEY}": "${LABELVALUE}"
     nextHops:
       static:
-      - ip: ${IP}
+      - ip: ${IP1}
+        bfdEnabled: ${{BFD}}
+      - ip: ${IP2}
         bfdEnabled: ${{BFD}}
 parameters:
 - name: NAME
 - name: NAMESPACE
 - name: LABELKEY
 - name: LABELVALUE
-- name: IP
+- name: IP1
+- name: IP2
 - name: BFD
 
