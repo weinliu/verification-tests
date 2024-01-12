@@ -25,11 +25,11 @@ describe('Administration pages pesudo translation', () => {
     cy.log('cluster settings cluster operators pesudo translation');
     cy.visit('/settings/cluster/clusteroperators?pseudolocalization=true&lng=en');
     listPage.rows.shouldBeLoaded();
-    cy.get(ListPageSelector.tableColumnHeaders).isPseudoLocalized();
+    cy.get('th').isPseudoLocalized();
 
     cy.log('cluster settings configurations pesudo translation');
     cy.visit('/settings/cluster/globalconfig?pseudolocalization=true&lng=en');
-    cy.get('.co-m-table-grid', {timeout: 40000});
+    cy.get('.co-m-table-grid', {timeout: 60000});
     cy.get('.co-help-text').isPseudoLocalized();
     cy.byLegacyTestID('item-filter').isPseudoLocalized();
     cy.get('.co-m-table-grid__head').isPseudoLocalized();
@@ -41,7 +41,7 @@ describe('Administration pages pesudo translation', () => {
     listPage.rows.shouldBeLoaded();
     cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);
     cy.byLegacyTestID('kebab-button').first().click();
-    cy.get('.pf-c-dropdown__menu-item').isPseudoLocalized();
+    cy.get('[class*="menu-item"]').isPseudoLocalized();
 
     //details page
     cy.get('a.co-resource-item__resource-name').first().click();
@@ -49,12 +49,12 @@ describe('Administration pages pesudo translation', () => {
     cy.get(DetailsPageSelector.itemLabels).isPseudoLocalized();
     cy.get(DetailsPageSelector.sectionHeadings).isPseudoLocalized();
     cy.byLegacyTestID('actions-menu-button').click();
-    cy.get('.pf-c-dropdown__menu-item').isPseudoLocalized();
+    cy.get('[class*="menu-item"]').isPseudoLocalized();
 
     // RoleBindings tab
     cy.visit(`/k8s/cluster/namespaces/${test_ns}/roles?pseudolocalization=true&lng=en`);
     listPage.rows.shouldBeLoaded();
-    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);
+    cy.testI18n(['th'], ['item-create']);
 
     // ResourceQuota and LimitRange has been covered in resource-crud.spec
     cy.log('CustomResourceDefinitions list and details pesudo translation');
@@ -70,10 +70,10 @@ describe('Administration pages pesudo translation', () => {
     cy.get(DetailsPageSelector.sectionHeadings).isPseudoLocalized();
     cy.get('.co-m-table-grid__head').isPseudoLocalized();
     cy.byLegacyTestID('actions-menu-button').click();
-    cy.get('.pf-c-dropdown__menu-item').isPseudoLocalized();
+    cy.get('[class*="menu-item"]').isPseudoLocalized();
     // Instances page
     cy.visit(`/k8s/cluster/customresourcedefinitions/${CRD_kind_group}/instances?pseudolocalization=true&lng=en`);
     listPage.rows.shouldBeLoaded();
-    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);
+    cy.testI18n(['th'], ['item-create']);
   });
 })
