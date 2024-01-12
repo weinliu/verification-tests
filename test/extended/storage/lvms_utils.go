@@ -110,6 +110,14 @@ func (lvm *lvmCluster) createWithoutMandatoryPaths(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create a new customized lvmCluster with madatory paths and without optional paths
+func (lvm *lvmCluster) createWithoutOptionalPaths(oc *exutil.CLI) {
+	deletePaths := []string{`items.0.spec.storage.deviceClasses.0.deviceSelector.optionalPaths`}
+	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
+		"FSTYPE="+lvm.fsType, "PATH="+lvm.paths[0])
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Create new LVMCluster with extra parameters for nodeSelector, key, operator and values should be provided in matchExpressions
 func (lvm *lvmCluster) createWithNodeSelector(oc *exutil.CLI, key string, operator string, values []string) {
 	extraParameters := map[string]interface{}{
@@ -230,6 +238,85 @@ func getListOfFreeDisksFromWorkerNodes(oc *exutil.CLI) map[string]int64 {
 
 	}
 	return freeDiskNamesCount
+}
+
+// Get the list of worker nodes along with lvms usable block devices/disks count attached to nodes
+func getLVMSUsableDiskCountFromWorkerNodes(oc *exutil.CLI) map[string]int64 {
+	freeWorkerDiskCount := make(map[string]int64)
+	workerNodes := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
+	for _, workerNode := range workerNodes {
+		output, err := execCommandInSpecificNode(oc, workerNode.name, "lsblk | grep disk | awk '{print $1}'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		diskList := strings.Fields(output)
+		for _, diskName := range diskList {
+			output, _ := execCommandInSpecificNode(oc, workerNode.name, "blkid /dev/"+diskName)
+			if strings.Contains(output, "LVM") || len(strings.TrimSpace(output)) == 0 { // disks that are used by existing LVMCluster have TYPE='LVM' OR  Unused free disk does not return any output
+				freeWorkerDiskCount[workerNode.name] = freeWorkerDiskCount[workerNode.name] + 1
+			}
+		}
+	}
+	return freeWorkerDiskCount
+}
+
+// Creates a sofwtare RAID Level-1 disk using two disks/block devices available on a node
+func createRAIDLevel1Disk(oc *exutil.CLI, nodeName string, raidDiskName string) {
+	var deviceList []string
+	output, err := execCommandInSpecificNode(oc, nodeName, "lsblk | grep disk | awk '{print $1}'")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	diskList := strings.Fields(output)
+	for _, diskName := range diskList {
+		output, _ := execCommandInSpecificNode(oc, nodeName, "blkid /dev/"+diskName)
+		if len(strings.TrimSpace(output)) == 0 { // Unused free disk does not return any output
+			deviceList = append(deviceList, "/dev/"+diskName)
+		}
+		if len(deviceList) > 1 { // need only two disks/block devices
+			break
+		}
+	}
+	o.Expect(len(deviceList) < 2).NotTo(o.BeTrue())
+	raidCreateCmd := "yes | mdadm --create /dev/" + raidDiskName + " --level=1 --raid-devices=2 --assume-clean " + deviceList[0] + " " + deviceList[1]
+	checkRaidStatCmd := "cat /proc/mdstat | grep " + raidDiskName
+	cmdOutput, _err := execCommandInSpecificNode(oc, nodeName, raidCreateCmd)
+	o.Expect(_err).NotTo(o.HaveOccurred())
+	o.Expect(cmdOutput).To(o.ContainSubstring("mdadm: array /dev/" + raidDiskName + " started"))
+	o.Eventually(func() string {
+		raidState, _ := execCommandInSpecificNode(oc, nodeName, checkRaidStatCmd)
+		return raidState
+	}, 120*time.Second, 10*time.Second).Should(o.ContainSubstring(raidDiskName + " : active raid1"))
+}
+
+// Removes a sofwtare RAID disk from a node
+func removeRAIDLevelDisk(oc *exutil.CLI, nodeName string, raidDiskName string) {
+	checkRaidStatCmd := "cat /proc/mdstat"
+	var deviceList []string
+	output, err := execCommandInSpecificNode(oc, nodeName, "lsblk | grep disk | awk '{print $1}'")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	diskList := strings.Fields(output)
+	cmdOutput, _err := execCommandInSpecificNode(oc, nodeName, checkRaidStatCmd+" | grep "+raidDiskName)
+	o.Expect(_err).NotTo(o.HaveOccurred())
+	for _, diskName := range diskList {
+		output, _ := execCommandInSpecificNode(oc, nodeName, "blkid /dev/"+diskName)
+		if strings.Contains(output, "raid_member") { // disks that are used by software RAID have TYPE='raid_member'
+			if strings.Contains(cmdOutput, diskName) {
+				deviceList = append(deviceList, "/dev/"+diskName)
+			}
+		}
+		if len(deviceList) > 1 { // need only two disks/block devices
+			break
+		}
+	}
+	o.Expect(len(deviceList) < 2).NotTo(o.BeTrue())
+	raidStopCmd := "mdadm --stop /dev/" + raidDiskName
+	raidCleanBlockCmd := "mdadm --zero-superblock " + deviceList[0] + " " + deviceList[1]
+	cmdOutput, _err = execCommandInSpecificNode(oc, nodeName, raidStopCmd)
+	o.Expect(_err).NotTo(o.HaveOccurred())
+	o.Expect(cmdOutput).To(o.ContainSubstring("mdadm: stopped /dev/" + raidDiskName))
+	_, err = execCommandInSpecificNode(oc, nodeName, raidCleanBlockCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Eventually(func() string {
+		raidState, _ := execCommandInSpecificNode(oc, nodeName, checkRaidStatCmd)
+		return raidState
+	}, 120*time.Second, 10*time.Second).ShouldNot(o.ContainSubstring(raidDiskName))
 }
 
 // Remove the finalizers from lvmcluster config and then delete LVMCluster
