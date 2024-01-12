@@ -759,4 +759,53 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(strings.Contains(egressFWMsgs2, node+": EgressFirewall Rules applied")).Should(o.BeTrue())
 		}
 	})
+
+	g.It("Author:qiowang-Medium-69876-Check egressfirewall status when there is zone reported failure", func() {
+		ipStackType := checkIPStackType(oc)
+		var egressFWCIDR1, egressFWCIDR2 string
+		if ipStackType == "dualstack" {
+			egressFWCIDR1 = "1.1.1.1"
+			egressFWCIDR2 = "2011::11"
+		} else if ipStackType == "ipv6single" {
+			egressFWCIDR1 = "2011::11"
+			egressFWCIDR2 = "2012::11"
+		} else {
+			egressFWCIDR1 = "1.1.1.1"
+			egressFWCIDR2 = "2.1.1.1"
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
+
+		exutil.By("1. Create egressfirewall object which missing CIDR prefix")
+		ns := oc.Namespace()
+		egressFW := egressFirewall5{
+			name:        "default",
+			namespace:   ns,
+			ruletype1:   "Allow",
+			rulename1:   "cidrSelector",
+			rulevalue1:  egressFWCIDR1,
+			protocol1:   "TCP",
+			portnumber1: 80,
+			ruletype2:   "Allow",
+			rulename2:   "cidrSelector",
+			rulevalue2:  egressFWCIDR2,
+			protocol2:   "TCP",
+			portnumber2: 80,
+			template:    egressFWTemplate,
+		}
+		defer removeResource(oc, true, true, "egressfirewall", egressFW.name, "-n", egressFW.namespace)
+		egressFW.createEgressFW5Object(oc)
+
+		exutil.By("2. Check status of egressfirewall object")
+		checkErr := checkEgressFWStatus(oc, egressFW.name, ns, "EgressFirewall Rules not correctly applied")
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("EgressFirewall Rule %s doesn't show failure in time", egressFW.name))
+		messages, messagesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(messagesErr).NotTo(o.HaveOccurred())
+		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		for _, node := range nodes {
+			o.Expect(strings.Contains(messages, node+": EgressFirewall Rules not correctly applied")).Should(o.BeTrue())
+		}
+	})
 })
