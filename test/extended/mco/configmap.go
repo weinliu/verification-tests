@@ -5,6 +5,7 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"github.com/tidwall/gjson"
 )
 
@@ -80,6 +81,23 @@ func (cm *ConfigMap) GetDataValueOrFail(key string) string {
 	return value
 }
 
+// SetData update the configmap with the given values. Same as "oc set data cm/..."
+func (cm *ConfigMap) SetData(arg string, args ...string) error {
+	params := []string{"data"}
+	params = append(params, cm.Resource.getCommonParams()...)
+	params = append(params, arg)
+	if len(args) > 0 {
+		params = append(params, args...)
+	}
+
+	return cm.Resource.oc.WithoutNamespace().Run("set").Args(params...).Execute()
+}
+
+// RemoveDataKey removes a key from the configmap data values
+func (cm *ConfigMap) RemoveDataKey(key string) error {
+	return cm.Patch("json", `[{"op": "remove", "path": "/data/`+key+`"}]`)
+}
+
 // CreateConfigMapWithRandomCert creates a configmap that stores a random CA in it
 func CreateConfigMapWithRandomCert(oc *exutil.CLI, cmNamespace, cmName, certKey string) (*ConfigMap, error) {
 	_, caPath, err := createCA(createTmpDir(), certKey)
@@ -94,4 +112,17 @@ func CreateConfigMapWithRandomCert(oc *exutil.CLI, cmNamespace, cmName, certKey 
 	}
 
 	return NewConfigMap(oc, cmNamespace, cmName), nil
+}
+
+// GetCloudProviderConfigMap will return the CloudProviderConfigMap or nil if it is not defined in the infrastructure resource
+func GetCloudProviderConfigMap(oc *exutil.CLI) *ConfigMap {
+	infra := NewResource(oc, "infrastructure", "cluster")
+	cmName := infra.GetOrFail(`{.spec.cloudConfig.name}`)
+
+	if cmName == "" {
+		logger.Infof("CloudProviderConfig ConfigMap is not defined in the infrastructure resource: %s", infra.PrettyString())
+		return nil
+	}
+
+	return NewConfigMap(oc, "openshift-config", cmName)
 }

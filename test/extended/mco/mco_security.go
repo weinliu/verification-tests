@@ -143,17 +143,19 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 	})
 	g.It("Author:sregidor-NonHyperShiftHOST-High-67660-MCS generates ignition configs with certs [Disruptive]", func() {
 		var (
-			proxy                 = NewResource(oc.AsAdmin(), "proxy", "cluster")
-			certFileName          = "ca-bundle.crt"
-			userCABundleConfigMap = NewConfigMap(oc.AsAdmin(), "openshift-config", "user-ca-bundle")
-			cmName                = "test-proxy-config"
-			cmNamespace           = "openshift-config"
-			proxyConfigMap        *ConfigMap
-			kubeCloudConfigMap    = NewConfigMap(oc.AsAdmin(), "openshift-config-managed", "kube-cloud-config")
-			kubeCertFile          = "/etc/kubernetes/kubelet-ca.crt"
-			userCABundleCertFile  = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
-			kubeCloudCertFile     = "/etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"
-			ignitionConfig        = "3.4.0"
+			proxy                      = NewResource(oc.AsAdmin(), "proxy", "cluster")
+			certFileKey                = "ca-bundle.crt"
+			cloudCertFileKey           = "ca-bundle.pem"
+			userCABundleConfigMap      = NewConfigMap(oc.AsAdmin(), "openshift-config", "user-ca-bundle")
+			cmName                     = "test-proxy-config"
+			cmNamespace                = "openshift-config"
+			proxyConfigMap             *ConfigMap
+			kubeCloudProviderConfigMap = GetCloudProviderConfigMap(oc.AsAdmin())
+			kubeCloudManagedConfigMap  = NewConfigMap(oc.AsAdmin(), "openshift-config-managed", "kube-cloud-config")
+			kubeCertFile               = "/etc/kubernetes/kubelet-ca.crt"
+			userCABundleCertFile       = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
+			kubeCloudCertFile          = "/etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"
+			ignitionConfig             = "3.4.0"
 		)
 
 		logger.Infof("Using pool %s for testing", mcp.GetName())
@@ -164,7 +166,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			var err error
 			exutil.By("Configure the proxy with an additional trusted CA")
 			logger.Infof("Create a configmap with the CA")
-			proxyConfigMap, err = CreateConfigMapWithRandomCert(oc.AsAdmin(), cmNamespace, cmName, certFileName)
+			proxyConfigMap, err = CreateConfigMapWithRandomCert(oc.AsAdmin(), cmNamespace, cmName, certFileKey)
 			o.Expect(err).NotTo(o.HaveOccurred(),
 				"Error creating a configmap with a CA")
 			defer proxyConfigMap.Delete()
@@ -203,8 +205,8 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		certContent := ""
 		if userCABundleConfigMap.Exists() {
-			userCABundleCert, exists, err := userCABundleConfigMap.HasKey(certFileName)
-			o.Expect(err).NotTo(o.HaveOccurred(), "Error checking if %s contains key '%s'", userCABundleConfigMap, certFileName)
+			userCABundleCert, exists, err := userCABundleConfigMap.HasKey(certFileKey)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error checking if %s contains key '%s'", userCABundleConfigMap, certFileKey)
 			if exists {
 				certContent = userCABundleCert
 			}
@@ -214,7 +216,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		// OCPQE-17800 only merge the cert contents when trusted CA in proxy/cluster is not cm/user-ca-bundle
 		if proxyConfigMap.GetName() != userCABundleConfigMap.GetName() {
-			certContent += proxyConfigMap.GetDataValueOrFail(certFileName)
+			certContent += proxyConfigMap.GetDataValueOrFail(certFileKey)
 		}
 
 		EventuallyFileExistsInNode(userCABundleCertFile, certContent, mcp.GetNodesOrFail()[0], "3m", "20s")
@@ -222,10 +224,24 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By(fmt.Sprintf(`Check that the "%s" is in the ignition config`, kubeCloudCertFile))
-		kubeCloudCertContent, err := kubeCloudConfigMap.GetDataValue("ca-bundle.pem")
+		kubeCloudCertContent, err := kubeCloudManagedConfigMap.GetDataValue("ca-bundle.pem")
 		if err != nil {
-			logger.Infof("No KubeCloud cert configured, skipping validation")
-		} else {
+			logger.Infof("No KubeCloud cert configured, configuring a new value")
+			if kubeCloudProviderConfigMap != nil && kubeCloudProviderConfigMap.Exists() {
+				_, caPath, err := createCA(createTmpDir(), cloudCertFileKey)
+				o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new random certificate")
+				defer kubeCloudProviderConfigMap.RemoveDataKey(cloudCertFileKey)
+				kubeCloudProviderConfigMap.SetData("--from-file=" + cloudCertFileKey + "=" + caPath)
+				kubeCloudCertContent = kubeCloudManagedConfigMap.GetDataValueOrFail(cloudCertFileKey)
+
+			} else {
+				logger.Infof("It is not possible to configure a new CloudCA. CloudProviderConfig configmap is not defined in the infrastructure resource or it does not exist")
+				kubeCloudCertContent = ""
+			}
+
+		}
+
+		if kubeCloudCertContent != "" {
 			logger.Infof("Check that the file is served in the ignition config")
 			jsonPath = fmt.Sprintf(`storage.files.#(path=="%s")`, kubeCloudCertFile)
 			o.Eventually(mcp.GetMCSIgnitionConfig,
@@ -235,8 +251,10 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 			logger.Infof("Check that the file has the right content in the nodes")
 			EventuallyFileExistsInNode(kubeCloudCertFile, kubeCloudCertContent, mcp.GetNodesOrFail()[0], "3m", "20s")
-
+		} else {
+			logger.Infof("No KubeCloud cert was configured and it was not possible to define a new one, we skip the cloudCA validation")
 		}
+
 		logger.Infof("OK!\n")
 
 	})
