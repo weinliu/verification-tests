@@ -51,6 +51,11 @@ type credentialsRequest struct {
 	template  string
 }
 
+type azureCredential struct {
+	key   string
+	value string
+}
+
 type OcpClientVerb = string
 
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
@@ -107,13 +112,13 @@ func getCloudCredentialMode(oc *exutil.CLI) (string, error) {
 		return mode, nil
 	}
 	if iaasPlatform == "aws" {
-		if isSTSMode(oc) {
+		if exutil.IsSTSCluster(oc) {
 			mode = "manualpodidentity"
 			return mode, nil
 		}
 	}
 	if iaasPlatform == "azure" {
-		if isAzureManualMode(oc) {
+		if exutil.IsWorkloadIdentityCluster(oc) {
 			mode = "manualpodidentity"
 			return mode, nil
 		}
@@ -148,17 +153,6 @@ func getRootSecretName(oc *exutil.CLI) (string, error) {
 
 	}
 	return rootSecretName, nil
-}
-
-func isSTSMode(oc *exutil.CLI) bool {
-	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "installer-cloud-credentials", "-n=openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
-	credentials, _ := base64.StdEncoding.DecodeString(output)
-	return strings.Contains(string(credentials), "web_identity_token_file")
-}
-
-func isAzureManualMode(oc *exutil.CLI) bool {
-	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "installer-cloud-credentials", "-n=openshift-image-registry", "-o=jsonpath={.data}").Output()
-	return strings.Contains(output, "azure_federated_token_file") && strings.Contains(output, "azure_tenant_id")
 }
 
 func getIaasPlatform(oc *exutil.CLI) (string, error) {

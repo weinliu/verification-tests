@@ -245,6 +245,13 @@ func IsSTSCluster(oc *CLI) bool {
 	return strings.Contains(tempCredentials, "web_identity_token_file")
 }
 
+// IsWorkloadIdentityCluster judges whether the Azure/GCP cluster is using the Workload Identity
+func IsWorkloadIdentityCluster(oc *CLI) bool {
+	serviceAccountIssuer, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred(), "Failed to get serviceAccountIssuer for checking whether the Azure/GCP cluster is using the Workload Identity")
+	return len(serviceAccountIssuer) > 0
+}
+
 // Skip the test if there is not catalogsource/qe-app-registry in the cluster
 func SkipMissingQECatalogsource(oc *CLI) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()

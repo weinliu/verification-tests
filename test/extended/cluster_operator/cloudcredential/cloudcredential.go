@@ -552,6 +552,92 @@ spec:
 			return strings.Contains(stdout, "web_identity_token_file = "+cloudTokenPath)
 		}).WithTimeout(DefaultTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
 	})
+
+	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:jshu-Critical-69971-Azure workload identity management for olm managed operators", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "azure")
+		if !exutil.IsWorkloadIdentityCluster(oc) {
+			g.Skip("This test case is for Azure Workload Identity only, skipping")
+		}
+		//Provide the following Azure Credentials with fake values
+		azureCredList := []azureCredential{
+			{
+				key:   "azure_subscription_id",
+				value: "12345678-1234-1234-1234-123456789ab",
+			},
+			{
+				key:   "azure_tenant_id",
+				value: "23456789-2345-2345-2345-23456789abcd",
+			},
+			{
+				key:   "azure_region",
+				value: "eastus",
+			},
+			{
+				key:   "azure_client_id",
+				value: "3456789a-3456-3456-3456-23456789abcde",
+			},
+			{
+				key:   "azure_federated_token_file",
+				value: "/var/run/secrets/token",
+			},
+		}
+
+		var (
+			testDataDir      = exutil.FixturePath("testdata", "cluster_operator/cloudcredential")
+			testCaseID       = "69971"
+			crName           = "cr-" + testCaseID
+			targetSecretName = crName
+			targetNs         = oc.Namespace()
+		)
+
+		var (
+			targetSecretCreated = func() bool {
+				stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Secret", "-n", targetNs).Outputs()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return strings.Contains(stdout, targetSecretName)
+			}
+		)
+
+		exutil.By("Creating the dummy CR")
+		cr := credentialsRequest{
+			name:      crName,
+			namespace: targetNs,
+			provider:  "AzureProviderSpec",
+			template:  filepath.Join(testDataDir, "credentials_request.yaml"),
+		}
+		defer func() {
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("CredentialsRequest", crName, "-n", ccoNs).Execute()
+		}()
+		cr.create(oc)
+
+		exutil.By("Making sure the target Secret is not created")
+		o.Consistently(targetSecretCreated).WithTimeout(60 * time.Second).WithPolling(30 * time.Second).Should(o.BeFalse())
+
+		exutil.By("Patching the Azure Credentials and cloudTokenPath to the CR")
+		crPatch := `
+spec:
+  cloudTokenPath: ` + azureCredList[4].value + `
+  providerSpec:
+    azureSubscriptionID: ` + azureCredList[0].value + `
+    azureTenantID: ` + azureCredList[1].value + `
+    azureRegion: ` + azureCredList[2].value + `
+    azureClientID: ` + azureCredList[3].value
+		err := oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("patch").
+			Args("CredentialsRequest", crName, "-n", ccoNs, "--type", "merge", "-p", crPatch).
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Making sure the target Secret is created correctly")
+		o.Eventually(targetSecretCreated).WithTimeout(60 * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
+		for _, azureCred := range azureCredList {
+			credential, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+targetSecretName, "-n", targetNs, "--keys", azureCred.key, "--to", "-").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(credential).To(o.ContainSubstring(azureCred.value))
+		}
+	})
 })
 
 var _ = g.Describe("[sig-cco] Cluster_Operator CCO is disabled", func() {
