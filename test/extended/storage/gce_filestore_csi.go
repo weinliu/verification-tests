@@ -23,7 +23,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcTemplate          string
 		deploymentTemplate   string
 		scName               string
-		network              string
 	)
 	// gcp-csi test suite cloud provider support check
 
@@ -44,7 +43,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		scName = getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
 		checkStorageclassExists(oc, scName)
 
-		network = getNetworkFromStorageClass(oc, scName)
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 		storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -58,7 +56,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set the resource template for the scenario
 		var (
 			storageClassParameters = map[string]string{
-				"network":                     network,
 				"tier":                        "enterprise",
 				"instance-encryption-kms-key": "projects/openshift-qe/locations/us-central1/keyRings/chaoyang/cryptoKeys/chaoyang",
 			}
@@ -124,8 +121,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.It("OSD_CCS-Longduration-NonPreRelease-StagerunBoth-Author:chaoyang-Medium-"+caseIds[i]+"-[GCP-Filestore-CSI-Driver][Dynamic PV] [Filesystem]Dynamic provision volume "+volumeType, func() {
 			var (
 				storageClassParameters = map[string]string{
-					"network": network,
-					"tier":    volumeType,
+					"tier": volumeType,
 				}
 				extraParameters = map[string]interface{}{
 					"parameters":           storageClassParameters,
@@ -168,8 +164,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57349-[GCP-Filestore-CSI-Driver][Dynamic PV]Volume online expansion is successful", func() {
 		var (
 			storageClassParameters = map[string]string{
-				"network": network,
-				"tier":    "standard",
+				"tier": "standard",
 			}
 			extraParameters = map[string]interface{}{
 				"parameters":           storageClassParameters,
@@ -227,9 +222,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		var (
 			storageClassParameters = map[string]string{
-				"network": network,
-				"tier":    "standard",
-				"labels":  "test=qe" + labelString,
+				"tier":   "standard",
+				"labels": "test=qe" + labelString,
 			}
 			extraParameters = map[string]interface{}{
 				"parameters":           storageClassParameters,
@@ -275,8 +269,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
 			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 			storageClassParameters = map[string]string{
-				"network": network,
-				"tier":    "standard",
+				"tier": "standard",
 			}
 			extraParameters = map[string]interface{}{
 				"parameters":           storageClassParameters,

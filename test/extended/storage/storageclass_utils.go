@@ -98,9 +98,7 @@ func (sc *storageClass) create(oc *exutil.CLI) {
 		gp2VolumeTypeParameter := map[string]string{"type": "gp2"}
 		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": gp2VolumeTypeParameter})
 	} else if provisioner == "filestore.csi.storage.gke.io" {
-		scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
-		networkID := getNetworkFromStorageClass(oc, scName)
-		filestoreNetworkParameter := map[string]string{"network": networkID}
+		filestoreNetworkParameter := generateValidfilestoreNetworkParameter(oc)
 		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": filestoreNetworkParameter})
 
 	} else {
@@ -123,12 +121,15 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 	if isGP2volumeSupportOnly(oc) {
 		sc.parameters["type"] = "gp2"
 	}
-	if provisioner == "filestore.csi.storage.gke.io" {
-		scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
-		networkID := getNetworkFromStorageClass(oc, scName)
-		sc.parameters["network"] = networkID
+
+	if sc.provisioner == "filestore.csi.storage.gke.io" {
+		for key, value := range generateValidfilestoreNetworkParameter(oc) {
+			sc.parameters[key] = value
+		}
 	}
+
 	if _, ok := extraParameters["parameters"]; ok || len(sc.parameters) > 0 {
+
 		parametersByte, err := json.Marshal(extraParameters["parameters"])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		finalParameters := make(map[string]interface{}, 10)
@@ -139,6 +140,7 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 		if provisioner == "file.csi.azure.com" && finalParameters["protocol"] == "nfs" && len(getCompactNodeList(oc)) > 0 {
 			sc.parameters["networkEndpointType"] = "privateEndpoint"
 		}
+
 		finalParameters = mergeMaps(sc.parameters, finalParameters)
 		debugLogf("StorageClass/%s final parameter is %v", sc.name, finalParameters)
 		extraParameters["parameters"] = finalParameters
@@ -343,12 +345,7 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 			"fileSystemId":     fsID,
 			"directoryPerms":   "700",
 		}
-	case filestoreCSiDriverProvisioner:
-		scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
-		networkID := getNetworkFromStorageClass(oc, scName)
-		storageClassParameters = map[string]string{
-			"network": networkID,
-		}
+
 	default:
 		storageClassParameters = map[string]string{
 			"type": volumeType}
@@ -358,12 +355,6 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 		"allowVolumeExpansion": true,
 	}
 	return extraParameters
-}
-func getNetworkFromStorageClass(oc *exutil.CLI, scName string) string {
-	networkID, err := oc.WithoutNamespace().Run("get").Args("sc", scName, "-o", "jsonpath={.parameters.network}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The network Id is %s", networkID)
-	return networkID
 }
 
 // Set specified storage class as a default one
@@ -390,4 +381,20 @@ func getAllStorageClass(oc *exutil.CLI) []string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	scArray := strings.Fields(output)
 	return scArray
+}
+
+func getStorageClassJSONPathValue(oc *exutil.CLI, scName, jsonPath string) string {
+	value, err := oc.WithoutNamespace().Run("get").Args("sc", scName, "-o", fmt.Sprintf("jsonpath=%s", jsonPath)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf(`StorageClass/%s jsonPath->"%s" value is %s`, scName, jsonPath, value)
+	return value
+}
+
+func generateValidfilestoreNetworkParameter(oc *exutil.CLI) map[string]string {
+	scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
+	networkID := getStorageClassJSONPathValue(oc, scName, "{.parameters.network}")
+	connectMode := getStorageClassJSONPathValue(oc, scName, "{.parameters.connect-mode}")
+	return map[string]string{
+		"connect-mode": connectMode,
+		"network":      networkID}
 }
