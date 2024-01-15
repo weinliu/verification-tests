@@ -1,15 +1,31 @@
 package hypershift
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/elb"
+
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/utils/ptr"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
@@ -30,8 +46,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
-		var err error
-		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	// author: liangli@redhat.com
@@ -1244,4 +1258,181 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(output).Should(o.ContainSubstring("when invoking this command with the --rhobs-monitoring flag, the --enable-cvo-management-cluster-metrics-access flag is not supported"))
 	})
 
+	// Author: fxie@redhat.com
+	g.It("NonPreRelease-Longduration-Author:fxie-Critical-70614-[HyperShiftINSTALL] Test HostedCluster condition type AWSDefaultSecurityGroupDeleted [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip(fmt.Sprintf("Running on %s while the test case is AWS-only, skipping", iaasPlatform))
+		}
+
+		var (
+			namePrefix          = fmt.Sprintf("70614-%s", strings.ToLower(exutil.RandStrDefault()))
+			tempDir             = path.Join("/tmp", "hypershift", namePrefix)
+			bucketName          = fmt.Sprintf("%s-bucket", namePrefix)
+			hcName              = fmt.Sprintf("%s-hc", namePrefix)
+			lbName              = fmt.Sprintf("%s-lb", namePrefix)
+			targetConditionType = "AWSDefaultSecurityGroupDeleted"
+			watchTimeoutSec     = 900
+		)
+
+		var (
+			unstructured2TypedCondition = func(condition any, typedCondition *metav1.Condition) {
+				g.GinkgoHelper()
+				conditionMap, ok := condition.(map[string]any)
+				o.Expect(ok).To(o.BeTrue(), "Failed to cast condition to map[string]any")
+				conditionJson, err := json.Marshal(conditionMap)
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				err = json.Unmarshal(conditionJson, typedCondition)
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+			}
+		)
+
+		exutil.By("Installing the Hypershift Operator")
+		defer func() {
+			err := os.RemoveAll(tempDir)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := os.MkdirAll(tempDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          tempDir,
+			iaasPlatform: iaasPlatform,
+			region:       region,
+		}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("Creating a HostedCluster")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		// The number of worker nodes (of the hosted cluster) is irrelevant, so we only create one.
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(hcName).
+			withNodePoolReplicas(1).
+			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withReleaseImage(release)
+		defer installHelper.deleteHostedClustersManual(createCluster)
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+
+		exutil.By("Getting default worker SG of the hosted cluster")
+		defaultWorkerSGID := doOcpReq(oc, OcpGet, true, "hc", hostedCluster.name, "-n", hostedCluster.namespace, `-o=jsonpath={.status.platform.aws.defaultWorkerSecurityGroupID}`)
+		e2e.Logf("Found defaultWorkerSecurityGroupID = %s", defaultWorkerSGID)
+
+		exutil.By("Creating a dummy load balancer which has the default worker SG attached")
+		subnet := doOcpReq(oc, OcpGet, true, "hc", hostedCluster.name, "-n", hostedCluster.namespace, `-o=jsonpath={.spec.platform.aws.cloudProviderConfig.subnet.id}`)
+		e2e.Logf("Found subnet of the hosted cluster = %s", subnet)
+		exutil.GetAwsCredentialFromCluster(oc)
+		elbClient := elb.New(session.Must(session.NewSession()), aws.NewConfig().WithRegion(region))
+		defer func() {
+			_, err = elbClient.DeleteLoadBalancer(&elb.DeleteLoadBalancerInput{
+				LoadBalancerName: aws.String(lbName),
+			})
+			// If the load balancer does not exist or has already been deleted, the call to DeleteLoadBalancer still succeeds.
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = elbClient.CreateLoadBalancer(&elb.CreateLoadBalancerInput{
+			Listeners: []*elb.Listener{
+				{
+					InstancePort:     aws.Int64(80),
+					InstanceProtocol: aws.String("HTTP"),
+					LoadBalancerPort: aws.Int64(80),
+					Protocol:         aws.String("HTTP"),
+				},
+			},
+			LoadBalancerName: aws.String(lbName),
+			Subnets:          aws.StringSlice([]string{subnet}),
+			SecurityGroups:   aws.StringSlice([]string{defaultWorkerSGID}),
+		})
+		if err != nil {
+			// Log a more granular error message if possible
+			if aerr, ok := err.(awserr.Error); ok {
+				e2e.Failf("Error creating AWS load balancer (%s): %v", aerr.Code(), aerr)
+			}
+			o.Expect(err).ShouldNot(o.HaveOccurred(), "Error creating AWS load balancer")
+		}
+
+		exutil.By("Delete the HostedCluster without waiting for the finalizers (non-blocking)")
+		doOcpReq(oc, OcpDelete, true, "hc", hostedCluster.name, "-n", hostedCluster.namespace, "--wait=false")
+
+		exutil.By("Polling until the AWSDefaultSecurityGroupDeleted condition is in false status")
+		o.Eventually(func() string {
+			return doOcpReq(oc, OcpGet, false, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, fmt.Sprintf(`-o=jsonpath={.status.conditions[?(@.type=="%s")].status}`, targetConditionType))
+		}, LongTimeout, LongTimeout/10).Should(o.Equal("False"), "Timeout waiting for the AWSDefaultSecurityGroupDeleted condition to be in false status")
+		targetConditionMessage := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, fmt.Sprintf(`-o=jsonpath={.status.conditions[?(@.type=="%s")].message}`, targetConditionType))
+		e2e.Logf("Found message of the AWSDefaultSecurityGroupDeleted condition = %s", targetConditionMessage)
+
+		exutil.By("Start watching the HostedCluster with a timeout")
+		hcRestMapping, err := oc.RESTMapper().RESTMapping(schema.GroupKind{
+			Group: "hypershift.openshift.io",
+			Kind:  "HostedCluster",
+		})
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		w, err := oc.AdminDynamicClient().Resource(hcRestMapping.Resource).Namespace(hostedCluster.namespace).Watch(context.Background(), metav1.ListOptions{
+			FieldSelector:  fields.OneTermEqualSelector("metadata.name", hostedCluster.name).String(),
+			TimeoutSeconds: ptr.To(int64(watchTimeoutSec)),
+		})
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		defer w.Stop()
+
+		exutil.By("Now delete the load balancer created above")
+		_, err = elbClient.DeleteLoadBalancer(&elb.DeleteLoadBalancerInput{
+			LoadBalancerName: aws.String(lbName),
+		})
+		if err != nil {
+			// Log a more granular error message if possible
+			if aerr, ok := err.(awserr.Error); ok {
+				e2e.Failf("Error deleting AWS load balancer (%s): %v", aerr.Code(), aerr)
+			}
+			o.Expect(err).ShouldNot(o.HaveOccurred(), "Error deleting AWS load balancer")
+		}
+
+		exutil.By("Examining MODIFIED events that occurs on the HostedCluster")
+		var typedCondition metav1.Condition
+		var targetConditionExpected bool
+		resultChan := w.ResultChan()
+	outerForLoop:
+		for event := range resultChan {
+			if event.Type != watch.Modified {
+				continue
+			}
+
+			e2e.Logf("MODIFIED event captured")
+			// Avoid conversion to typed object as it'd bring in quite a few dependencies to the repo
+			hcUnstructured, ok := event.Object.(*unstructured.Unstructured)
+			o.Expect(ok).To(o.BeTrue(), "Failed to cast event.Object into *unstructured.Unstructured")
+			conditions, found, err := unstructured.NestedSlice(hcUnstructured.Object, "status", "conditions")
+			o.Expect(err).ShouldNot(o.HaveOccurred())
+			o.Expect(found).To(o.BeTrue())
+			for _, condition := range conditions {
+				unstructured2TypedCondition(condition, &typedCondition)
+				if typedCondition.Type != targetConditionType {
+					continue
+				}
+				if typedCondition.Status == metav1.ConditionTrue {
+					e2e.Logf("Found AWSDefaultSecurityGroupDeleted condition = %s", typedCondition)
+					targetConditionExpected = true
+					break outerForLoop
+				}
+				e2e.Logf("The AWSDefaultSecurityGroupDeleted condition is found to be in %s status, keep waiting", typedCondition.Status)
+			}
+		}
+		// The result channel could be closed since the beginning, e.g. when an inappropriate ListOptions is passed to Watch
+		// We need to ensure this is not the case
+		o.Expect(targetConditionExpected).To(o.BeTrue(), "Result channel closed unexpectedly before the AWSDefaultSecurityGroupDeleted condition becomes true in status")
+
+		exutil.By("Polling until the HostedCluster is gone")
+		o.Eventually(func() bool {
+			_, err := oc.AdminDynamicClient().Resource(hcRestMapping.Resource).Namespace(hostedCluster.namespace).Get(context.Background(), hostedCluster.name, metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				return true
+			}
+			o.Expect(err).ShouldNot(o.HaveOccurred(), fmt.Sprintf("Unexpected error: %s", errors.ReasonForError(err)))
+			e2e.Logf("Still waiting for the HostedCluster to disappear")
+			return false
+		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "Timed out waiting for the HostedCluster to disappear")
+	})
 })

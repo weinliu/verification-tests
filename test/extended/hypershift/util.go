@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/blang/semver"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -25,7 +26,8 @@ import (
 )
 
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
-	res, err := oc.AsAdmin().WithoutNamespace().Run(string(verb)).Args(args...).Output()
+	g.GinkgoHelper()
+	res, err := oc.AsAdmin().WithoutNamespace().Run(verb).Args(args...).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	if notEmpty {
 		o.Expect(res).ShouldNot(o.BeEmpty())
