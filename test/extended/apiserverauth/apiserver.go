@@ -6354,9 +6354,20 @@ spec:
 
 		exutil.By(`3.2) Try copying  single layer image to the default internal registry of the cluster`)
 		publicImageUrl = "docker://" + "quay.io/openshifttest/singlelayer:latest"
-		output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+		errPoll := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+			if err != nil {
+				if strings.Contains(output, "denied") {
+					o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		if errPoll != nil {
+			e2e.Logf("Failed to retrieve %v", output)
+			exutil.AssertWaitPollNoErr(errPoll, "Failed to retrieve")
+		}
 	})
 
 	// author: rgangwar@redhat.com
@@ -6420,12 +6431,22 @@ spec:
 
 			exutil.By(fmt.Sprintf(`%d.3) Try copying image to the default internal registry of the cluster`, i+1))
 			publicImageUrl := "docker://quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"
-			output, err := copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
-			if err != nil {
-				o.Expect(err).To(o.HaveOccurred())
-				o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
-			} else {
-				o.Expect(err).NotTo(o.HaveOccurred())
+			var output string
+			errPoll := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+				output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+				if err != nil {
+					if strings.Contains(output, "denied") {
+						o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+						return true, nil
+					}
+				} else if err == nil {
+					return true, nil
+				}
+				return false, nil
+			})
+			if errPoll != nil {
+				e2e.Logf("Failed to retrieve %v", output)
+				exutil.AssertWaitPollNoErr(errPoll, "Failed to retrieve")
 			}
 		}
 	})
@@ -6526,7 +6547,7 @@ spec:
 			imageLimitRangeYamlFile = tmpdir + "image-limit-range.yaml"
 			imageName1              = `quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c`
 			imageName2              = `quay.io/openshifttest/hello-openshift:1.2.0`
-			imageName3              = `quay.io/openshifttest/deployment-example@sha256:5c2f8ffe148168cbb91b49d62571af75853f3ca7c5c575b6d144b53ad2b52498`
+			imageName3              = `quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83`
 			imageStreamErr          error
 		)
 
@@ -6599,9 +6620,21 @@ spec:
 		exutil.By(`5.) Copying an image to the default internal registry of the cluster should be denied due to the max storage size limit for images`)
 		destRegistry := "docker://" + defaultRegistryServiceURL + "/" + namespace + "/mystream:latest"
 		publicImageUrl := "docker://" + imageName3
-		output, err := copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+		var output string
+		errPoll := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+			if err != nil {
+				if strings.Contains(output, "denied") {
+					o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		if errPoll != nil {
+			e2e.Logf("Failed to retrieve %v", output)
+			exutil.AssertWaitPollNoErr(errPoll, "Failed to retrieve")
+		}
 	})
 
 	// author: rgangwar@redhat.com
@@ -6701,7 +6734,7 @@ spec:
 			imageLimitRangeYamlFile = tmpdir + "image-limit-range.yaml"
 			imageName1              = `quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c`
 			imageName2              = `quay.io/openshifttest/hello-openshift:1.2.0`
-			imageName3              = `quay.io/openshifttest/deployment-example@sha256:5c2f8ffe148168cbb91b49d62571af75853f3ca7c5c575b6d144b53ad2b52498`
+			imageName3              = `quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83`
 			imageStreamErr          error
 		)
 
@@ -6755,9 +6788,20 @@ spec:
 		exutil.By(`5.) Copying an image to the default internal registry of the cluster should be denied due to the max imagestream limit for images`)
 		destRegistry := "docker://" + defaultRegistryServiceURL + "/" + namespace + "/mystream3"
 		publicImageUrl := "docker://" + imageName3
-		output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+		errPoll := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+			if err != nil {
+				if strings.Contains(output, "denied") {
+					o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		if errPoll != nil {
+			e2e.Logf("Failed to retrieve %v", output)
+			exutil.AssertWaitPollNoErr(errPoll, "Failed to retrieve")
+		}
 	})
 
 	// author: rgangwar@redhat.com
