@@ -31,11 +31,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.BeforeEach(func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
-
 		// CredentialReqeust needs to be provioned by Cloud automatically
-		modeInCloudCredential, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredential", "cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
-		if modeInCloudCredential == "Manual" {
-			g.Skip("Skip since CCO mode is Manual")
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skip on STS cluster")
 		}
 	})
 
@@ -101,7 +99,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
-		zoneID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.privateZone.id}").Output()
+		cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.ToLower(cloudName) == "azureusgovernmentcloud" {
+			g.Skip("Skip on MAG (Microsoft Azure Gov) cloud")
+		}
+		zoneID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.privateZone.id}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(zoneID, "openshift") {
 			g.Skip("Skip since no valid DNS privateZone is configured in this cluster")
 		}
@@ -112,7 +116,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
 		time.Sleep(3 * time.Second)
-		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAzure).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAzure).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
