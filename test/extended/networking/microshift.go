@@ -771,7 +771,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 	// author: zzhao@redhat.com
-	g.It("MicroShiftOnly-Author:zzhao-Medium-61161-Expose coredns forward as configurable option[Disruptive]", func() {
+	g.It("MicroShiftOnly-Author:zzhao-Medium-61161-Expose coredns forward as configurable option[Disruptive][Flaky]", func() {
 
 		g.By("Check the default coredns config file")
 		dnsConfigMap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "cm", "dns-default", "-o=jsonpath={.data.Corefile}").Output()
