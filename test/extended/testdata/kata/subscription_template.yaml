@@ -21,7 +21,7 @@ parameters:
   - name: SUBNAMESPACE
     value: "openshift-sandboxed-containers-operator"
   - name: CHANNEL
-    value: "stable-1.2"
+    value: "stable"
   - name: APPROVAL
     value: "Automatic"
   - name: OPERATORNAME

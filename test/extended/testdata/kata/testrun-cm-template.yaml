@@ -21,6 +21,9 @@ objects:
       eligibility: "${ELIGIBILITY}"
       labelSingleNode: "${LABELSINGLENODE}"
 
+# oc process --ignore-unknown-parameters=true -f configmap-input-template.yaml -p [name]=[value] [name]=[value] > osc-config.yaml...
+# oc apply -f osc-config.yaml
+
 parameters:
   - name: NAME
     value: "osc-config"
@@ -31,11 +34,11 @@ parameters:
   - name: ICSPNEEDED
     value: "false"
   - name: OSCCHANNEL
-    value: "stable-1.3"
+    value: "stable"
   - name: OPERATORVER
-    value: "1.3.0"
+    value: "1.5.0"
   - name: MUSTGATHERIMAGE
-    value: "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3"
+    value: "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel9:1.5.0"
   - name: EXISTS
     value: "true"
   - name: RUNTIMECLASSNAME
@@ -48,14 +51,3 @@ parameters:
     value: "false"
   - name: LABELSINGLENODE
     value: "false"
-# oc process --ignore-unknown-parameters=true -f configmap-input-template.yaml -p [name]=[value] [name]=[value] > osc-config.yaml...
-# oc apply -f osc-config.yaml
-# This is for Jenkins/end user to create a configmap and apply it to your cluster
-# The catalog source for pre GA brew images would also be created by jenkins/end user
-#
-# getTestRunInput will read the configmap and its values
-#  subscription
-#  mustgather image
-#  these can be used to alter the intial values in BeforeEach or to upgrade an existing subscription
-#
-

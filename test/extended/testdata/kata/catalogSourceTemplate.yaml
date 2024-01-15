@@ -11,17 +11,17 @@ objects:
     spec:
       image: "${IMAGEINDEX}"
       sourceType: grpc
-      publisher: QE
-      displayName: QE
+      publisher: "${PUBLISHER}"
+      displayName: "${DISPLAYNAME}"
+
 parameters:
   - name: NAME
     value: "kataci-index"
   - name: NAMESPACE
     value: "openshift-marketplace"
   - name: IMAGEINDEX
-    value: "quay.io/openshift_sandboxed_containers/openshift-sandboxed-containers-operator-catalog:1.3.0"
-#    value: "quay.io/openshift_sandboxed_containers/openshift-sandboxed-containers-operator-catalog:1.3.0-19"
-# oc process --ignore-unknown-parameters=true -f catalogSourceTemplate.yaml -p [name]=[value] > catsrc.yaml...
-# oc apply -f catsrc.yaml
-# This is for Jenkins/end user to create a catalog source for a kata specific index
-# An ICSP might be needed to get if the kata index points to brew
+    value: "quay.io/openshift_sandboxed_containers/openshift-sandboxed-containers-operator-catalog:1.5.0"
+  - name: PUBLISHER
+    value: "QE"
+  - name: DISPLAYNAME
+    value: "QE"

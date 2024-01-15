@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		namespace:              opNamespace,
 		catalogSourceName:      "redhat-operators",
 		catalogSourceNamespace: "openshift-marketplace",
-		channel:                "stable-1.3",
+		channel:                "stable",
 		ipApproval:             "Automatic",
 		operatorPackage:        "sandboxed-containers-operator",
 		template:               subTemplate,
