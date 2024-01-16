@@ -145,7 +145,7 @@ func getSecondaryNICip(oc *exutil.CLI) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	//primary nic will have lowest metric of 100 followed by higher metric of secondary nic. So we will look for 2nd default route line on iproute and grep its src ip which will be 2nd nic
 	//nic names keep changing so relying on metric logic
-	cmd := "ip route | sed -n '2p' | grep -oE '\\b([0-9]{1,3}\\.){3}[0-9]{1,3}\\b' | sed -n '2p'"
+	cmd := "ip route | sed -n '/metric 101/p' | grep -oE '\\b([0-9]{1,3}\\.){3}[0-9]{1,3}\\b' | sed -n '2p'"
 	sec_int, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", masterPodName, cmd)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	re := regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`)
