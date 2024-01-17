@@ -388,7 +388,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns := oc.Namespace()
 
 		exutil.By("get controller-managert service ip address")
-		managertServiceIP := getControllerManagerLeaderIP(oc, "openshift-controller-manager", "openshift-master-controllers")
+		managertServiceIP := getControllerManagerLeaderIP(oc)
 		svcURL := net.JoinHostPort(managertServiceIP, "8443")
 		prometheusURL := "https://" + svcURL + "/metrics"
 

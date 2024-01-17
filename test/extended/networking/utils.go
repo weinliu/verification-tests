@@ -1819,15 +1819,12 @@ func checkovnkubeMasterNetworkProgrammingetrics(oc *exutil.CLI, url string, metr
 	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
 }
 
-func getControllerManagerLeaderIP(oc *exutil.CLI, namespace string, cmName string) string {
-	leaderJSONPayload, getJSONPayloadErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").Output()
-	o.Expect(getJSONPayloadErr).NotTo(o.HaveOccurred())
-	holderID, parseHolderIDErr := exec.Command("bash", "-c", fmt.Sprintf("echo '%s' | jq -r .holderIdentity", leaderJSONPayload)).Output()
-	o.Expect(parseHolderIDErr).NotTo(o.HaveOccurred())
-	leaderPodName := strings.TrimSuffix(string(holderID), "\n")
+func getControllerManagerLeaderIP(oc *exutil.CLI) string {
+	leaderPodName, leaderErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "openshift-master-controllers", "-n", "openshift-controller-manager", "-o=jsonpath={.spec.holderIdentity}").Output()
+	o.Expect(leaderErr).NotTo(o.HaveOccurred())
 	o.Expect(leaderPodName).ShouldNot(o.BeEmpty(), "leader pod name is empty")
 	e2e.Logf("The leader pod name is %s", leaderPodName)
-	leaderPodIP := getPodIPv4(oc, namespace, leaderPodName)
+	leaderPodIP := getPodIPv4(oc, "openshift-controller-manager", leaderPodName)
 	return leaderPodIP
 }
 
