@@ -1083,17 +1083,17 @@ func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
 	})
 }
 
-func crioConfigExist(oc *exutil.CLI, crioConfig []string, configPath string) error {
+func configExist(oc *exutil.CLI, config []string, configPath string) error {
 	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
-		crioString, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", configPath)
-		e2e.Logf("the %s is: \n%v", configPath, crioString)
+		configString, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", configPath)
+		e2e.Logf("the %s is: \n%v", configPath, configString)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, config := range crioConfig {
-			if !strings.Contains(string(crioString), config) {
-				e2e.Logf("the config: %s not exist in %s", config, configPath)
+		for _, conf := range config {
+			if !strings.Contains(string(configString), conf) {
+				e2e.Logf("the config: %s not exist in %s", conf, configPath)
 				return false, nil
 			}
 		}
@@ -1630,6 +1630,20 @@ func checkIDMS(oc *exutil.CLI) bool {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(icsp, "No resources found") {
 		e2e.Logf("there is no ImageDigestMirrorSet in this cluster")
+		return false
+	}
+	return true
+}
+
+func checkICSPorIDMSorITMS(oc *exutil.CLI) bool {
+	icsp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	idms, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageDigestMirrorSet").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	itms, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageTagMirrorSet").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(icsp, "No resources found") && strings.Contains(idms, "No resources found") && strings.Contains(itms, "No resources found") {
+		e2e.Logf("there is no ImageContentSourcePolicy, ImageDigestMirrorSet and ImageTagMirrorSet in this cluster")
 		return false
 	}
 	return true

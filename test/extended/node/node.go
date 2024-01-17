@@ -547,7 +547,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.By("Check workload setting is as expected")
 		wkloadConfig := []string{"crio.runtime.workloads.management", "activation_annotation = \"io.openshift.manager\"", "annotation_prefix = \"io.openshift.workload.manager\"", "crio.runtime.workloads.management.resources", "cpushares = 512"}
 		configPath := "/etc/crio/crio.conf.d/01-workload.conf"
-		err = crioConfigExist(oc, wkloadConfig, configPath)
+		err = configExist(oc, wkloadConfig, configPath)
 		exutil.AssertWaitPollNoErr(err, "workload setting is not set as expected")
 
 		exutil.By("Create a pod not specify cpuset in workload setting by annotation")
@@ -591,7 +591,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.By("Check workload setting is as expected")
 		wkloadConfig := []string{"crio.runtime.workloads.management", "activation_annotation = \"io.openshift.manager\"", "annotation_prefix = \"io.openshift.workload.manager\"", "crio.runtime.workloads.management.resources", "cpushares = 512", "cpuset = \"0\""}
 		configPath := "/etc/crio/crio.conf.d/01-workload.conf"
-		err = crioConfigExist(oc, wkloadConfig, configPath)
+		err = configExist(oc, wkloadConfig, configPath)
 		exutil.AssertWaitPollNoErr(err, "workload setting is not set as expected")
 
 		exutil.By("Create a pod with default workload setting by annotation")
@@ -995,7 +995,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.By("Check the crio config as expected")
 		logLinkConfig := []string{"crio.runtime.workloads.linked", "activation_annotation = \"io.kubernetes.cri-o.LinkLogs\"", "allowed_annotations = [ \"io.kubernetes.cri-o.LinkLogs\" ]"}
 		configPath := "/etc/crio/crio.conf.d/99-linked-log.conf"
-		err = crioConfigExist(oc, logLinkConfig, configPath)
+		err = configExist(oc, logLinkConfig, configPath)
 		exutil.AssertWaitPollNoErr(err, "crio config is not set as expected")
 
 		exutil.By("Create a pod with LinkLogs annotation")
@@ -1113,7 +1113,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.By("Verify the crun-wasm is configured as expected")
 		wasmConfig := []string{"crio.runtime", "default_runtime = \"crun-wasm\"", "crio.runtime.runtimes.crun-wasm", "runtime_path = \"/usr/bin/crun\"", "crio.runtime.runtimes.crun-wasm.platform_runtime_paths", "\"wasi/wasm32\" = \"/usr/bin/crun-wasm\""}
 		configPath := "/etc/crio/crio.conf.d/99-crun-wasm.conf"
-		err = crioConfigExist(oc, wasmConfig, configPath)
+		err = configExist(oc, wasmConfig, configPath)
 		exutil.AssertWaitPollNoErr(err, "crun-wasm is not set as expected")
 
 		exutil.By("Check if wasm bits are enabled appropriately")
@@ -1190,6 +1190,114 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podsAfterDrain, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-n", oc.Namespace(), "-o=jsonpath={.items[?(@.spec.nodeName=='"+worker+"')].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podsInWorker).Should(o.BeIdenticalTo(podsAfterDrain))
+	})
+
+	//author: minmli@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-70203-ICSP and IDMS/ITMS can coexist in cluster[Disruptive][Slow]", func() {
+		exutil.By("Check if any ICSP/IDMS/ITMS exist in the cluster")
+		//If a cluster contains any ICSP or IDMS or ITMS, it will skip the case
+		if checkICSPorIDMSorITMS(oc) {
+			g.Skip("This cluster contain ICSP or IDMS or ITMS, skip the test.")
+		}
+
+		exutil.By("1)Create an ICSP")
+		icsp := filepath.Join(buildPruningBaseDir, "ImageContentSourcePolicy-1.yaml")
+		defer func() {
+			err := checkMachineConfigPoolStatus(oc, "master")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+			err = checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + icsp).Execute()
+
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + icsp).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2)Check the mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, "master")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+		err = checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("3)Check the config file /etc/containers/registries.conf update as expected")
+		registryConfig := []string{"location = \"registry.access.redhat.com/ubi8/ubi-minimal\"", "location = \"example.io/example/ubi-minimal\"", "location = \"example.com/example/ubi-minimal\"", "location = \"registry.example.com/example\"", "location = \"mirror.example.net\""}
+		configPath := "/etc/containers/registries.conf"
+		err = configExist(oc, registryConfig, configPath)
+		exutil.AssertWaitPollNoErr(err, "registry config is not set as expected")
+
+		/*
+			//After OCPBUGS-27190 is fixed, will uncomment the code block
+			exutil.By("4)Create an IDMS with the same registry/mirror config as ICSP but with conflicting policy")
+			idms := filepath.Join(buildPruningBaseDir, "ImageDigestMirrorSet-conflict.yaml")
+			out, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", idms).Output()
+			o.Expect(strings.Contains(out, "XXXXX")).To(o.BeTrue())
+		*/
+
+		exutil.By("5)Create an IDMS with the same registry/mirror config as ICSP")
+		idms1 := filepath.Join(buildPruningBaseDir, "ImageDigestMirrorSet-1.yaml")
+		defer func() {
+			err := checkMachineConfigPoolStatus(oc, "master")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+			err = checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + idms1).Execute()
+
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + idms1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6)Check the mcp doesn't get updated after idms created")
+		o.Consistently(func() bool {
+			worker_updated, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updated\")].status}").Output()
+			worker_updating, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updating\")].status}").Output()
+			master_updated, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updated\")].status}").Output()
+			master_updating, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updating\")].status}").Output()
+			return worker_updated == "True" && worker_updating == "False" && master_updated == "True" && master_updating == "False"
+		}).WithTimeout(60 * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
+
+		exutil.By("7)Delete the ICSP")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + icsp).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("8)Check the mcp doesn't get updated after icsp deleted")
+		o.Consistently(func() bool {
+			worker_updated, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updated\")].status}").Output()
+			worker_updating, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updating\")].status}").Output()
+			master_updated, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updated\")].status}").Output()
+			master_updating, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"Updating\")].status}").Output()
+			return worker_updated == "True" && worker_updating == "False" && master_updated == "True" && master_updating == "False"
+		}).WithTimeout(60 * time.Second).WithPolling(5 * time.Second).Should(o.BeTrue())
+
+		exutil.By("9)Check the config file /etc/containers/registries.conf keep the same")
+		registryConfig = []string{"location = \"registry.access.redhat.com/ubi8/ubi-minimal\"", "location = \"example.io/example/ubi-minimal\"", "location = \"example.com/example/ubi-minimal\"", "location = \"registry.example.com/example\"", "location = \"mirror.example.net\""}
+		configPath = "/etc/containers/registries.conf"
+		err = configExist(oc, registryConfig, configPath)
+		exutil.AssertWaitPollNoErr(err, "registry config is not set as expected")
+
+		exutil.By("10)Create an ITMS with different registry/mirror config from IDMS")
+		itms := filepath.Join(buildPruningBaseDir, "ImageTagMirrorSet.yaml")
+		defer func() {
+			err := checkMachineConfigPoolStatus(oc, "master")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+			err = checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + itms).Execute()
+
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + itms).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("11)Check mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, "master")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+		err = checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("12)Check the config file /etc/containers/registries.conf update as expected")
+		registryConfig = []string{"location = \"registry.access.redhat.com/ubi9/ubi-minimal\"", "location = \"registry.redhat.io\"", "location = \"mirror.example.com\""}
+		configPath = "/etc/containers/registries.conf"
+		err = configExist(oc, registryConfig, configPath)
+		exutil.AssertWaitPollNoErr(err, "registry config is not set as expected")
 	})
 })
 
