@@ -808,4 +808,116 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(strings.Contains(messages, node+": EgressFirewall Rules not correctly applied")).Should(o.BeTrue())
 		}
 	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-70011-Medium-70012-Check apbexternalroute/egressfirewall status when machine added/removed [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+
+		ipStackType := checkIPStackType(oc)
+		var externalGWIP1, externalGWIP2, egressFWCIDR1, egressFWCIDR2 string
+		if ipStackType == "dualstack" {
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "2011::11"
+			egressFWCIDR1 = "2.1.1.0/24"
+			egressFWCIDR2 = "2021::/96"
+		} else if ipStackType == "ipv6single" {
+			externalGWIP1 = "2011::11"
+			externalGWIP2 = "2011::12"
+			egressFWCIDR1 = "2021::/96"
+			egressFWCIDR2 = "2022::/96"
+		} else {
+			externalGWIP1 = "1.1.1.1"
+			externalGWIP2 = "1.1.1.2"
+			egressFWCIDR1 = "2.1.1.0/24"
+			egressFWCIDR2 = "2.1.2.0/24"
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		apbExternalRouteTemplate := filepath.Join(buildPruningBaseDir, "apbexternalroute-static-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
+
+		exutil.By("1. Create Admin Policy Based External route object with static gateway")
+		ns := oc.Namespace()
+		apbExternalRoute := apbStaticExternalRoute{
+			name:       "externalgw-70011",
+			labelkey:   "kubernetes.io/metadata.name",
+			labelvalue: ns,
+			ip1:        externalGWIP1,
+			ip2:        externalGWIP2,
+			bfd:        false,
+			template:   apbExternalRouteTemplate,
+		}
+		defer apbExternalRoute.deleteAPBExternalRoute(oc)
+		apbExternalRoute.createAPBExternalRoute(oc)
+
+		exutil.By("2. Create egressfirewall object with allow rule")
+		egressFW := egressFirewall5{
+			name:        "default",
+			namespace:   ns,
+			ruletype1:   "Allow",
+			rulename1:   "cidrSelector",
+			rulevalue1:  egressFWCIDR1,
+			protocol1:   "TCP",
+			portnumber1: 80,
+			ruletype2:   "Allow",
+			rulename2:   "cidrSelector",
+			rulevalue2:  egressFWCIDR2,
+			protocol2:   "TCP",
+			portnumber2: 80,
+			template:    egressFWTemplate,
+		}
+		defer removeResource(oc, true, true, "egressfirewall", egressFW.name, "-n", egressFW.namespace)
+		egressFW.createEgressFW5Object(oc)
+
+		exutil.By("3. Check status of apbexternalroute/egressfirewall object")
+		apbExtRouteCheckErr1 := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Success")
+		exutil.AssertWaitPollNoErr(apbExtRouteCheckErr1, fmt.Sprintf("apbexternalroute %s doesn't succeed in time", apbExternalRoute.name))
+		apbExtRouteMsgs1, apbExtRouteMsgsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(apbExtRouteMsgsErr1).NotTo(o.HaveOccurred())
+		egressFWCheckErr1 := checkEgressFWStatus(oc, egressFW.name, ns, "EgressFirewall Rules applied")
+		exutil.AssertWaitPollNoErr(egressFWCheckErr1, fmt.Sprintf("EgressFirewall Rule %s doesn't apply in time", egressFW.name))
+		egressFWMsgs1, egressFWMsgsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(egressFWMsgsErr1).NotTo(o.HaveOccurred())
+		for _, node := range nodes {
+			o.Expect(strings.Contains(apbExtRouteMsgs1, node+": configured external gateway IPs: "+apbExternalRoute.ip1+","+apbExternalRoute.ip2)).Should(o.BeTrue())
+			o.Expect(strings.Contains(egressFWMsgs1, node+": EgressFirewall Rules applied")).Should(o.BeTrue())
+		}
+
+		exutil.By("4. Add machine")
+		ms := exutil.MachineSetDescription{"machineset-70011", 1}
+		defer exutil.WaitForMachinesDisapper(oc, "machineset-70011")
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		newNode := exutil.GetNodeNameFromMachine(oc, exutil.GetMachineNamesFromMachineSet(oc, "machineset-70011")[0])
+		e2e.Logf("New node is:%s", newNode)
+
+		exutil.By("5. Check status of apbexternalroute/egressfirewall object when new machine added")
+		apbExtRouteCheckErr2 := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Success")
+		exutil.AssertWaitPollNoErr(apbExtRouteCheckErr2, fmt.Sprintf("apbexternalroute %s doesn't succeed in time", apbExternalRoute.name))
+		apbExtRouteMsgs2, apbExtRouteMsgsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(apbExtRouteMsgsErr2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(apbExtRouteMsgs2, newNode+": configured external gateway IPs: "+apbExternalRoute.ip1+","+apbExternalRoute.ip2)).Should(o.BeTrue())
+		egressFWCheckErr2 := checkEgressFWStatus(oc, egressFW.name, ns, "EgressFirewall Rules applied")
+		exutil.AssertWaitPollNoErr(egressFWCheckErr2, fmt.Sprintf("EgressFirewall Rule %s doesn't apply in time", egressFW.name))
+		egressFWMsgs2, egressFWMsgsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(egressFWMsgsErr2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(egressFWMsgs2, newNode+": EgressFirewall Rules applied")).Should(o.BeTrue())
+
+		exutil.By("6. Remove machine")
+		ms.DeleteMachineSet(oc)
+		exutil.WaitForMachinesDisapper(oc, "machineset-70011")
+
+		exutil.By("7. Check status of apbexternalroute/egressfirewall object after machine removed")
+		apbExtRouteCheckErr3 := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Success")
+		exutil.AssertWaitPollNoErr(apbExtRouteCheckErr3, fmt.Sprintf("apbexternalroute %s doesn't succeed in time", apbExternalRoute.name))
+		apbExtRouteMsgs3, apbExtRouteMsgsErr3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("apbexternalroute", apbExternalRoute.name, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(apbExtRouteMsgsErr3).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(apbExtRouteMsgs3, newNode+": configured external gateway IPs: "+apbExternalRoute.ip1+","+apbExternalRoute.ip2)).ShouldNot(o.BeTrue())
+		egressFWCheckErr3 := checkEgressFWStatus(oc, egressFW.name, ns, "EgressFirewall Rules applied")
+		exutil.AssertWaitPollNoErr(egressFWCheckErr3, fmt.Sprintf("EgressFirewall Rule %s doesn't apply in time", egressFW.name))
+		egressFWMsgs3, egressFWMsgsErr3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", egressFW.name, "-n", egressFW.namespace, `-ojsonpath={.status.messages}`).Output()
+		o.Expect(egressFWMsgsErr3).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(egressFWMsgs3, newNode+": EgressFirewall Rules applied")).ShouldNot(o.BeTrue())
+	})
 })
