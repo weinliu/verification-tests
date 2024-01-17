@@ -238,17 +238,15 @@ func IsHypershiftHostedCluster(oc *CLI) bool {
 	return strings.Compare(topology, "External") == 0
 }
 
-// IsSTSCluster judges whether the test cluster is using the STS mode
+// IsSTSCluster determines if an AWS cluster is using STS
 func IsSTSCluster(oc *CLI) bool {
-	tempCredentials, extractErr := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "openshift-image-registry", "secret/installer-cloud-credentials", "--keys=credentials", "--to=-").Output()
-	o.Expect(extractErr).ShouldNot(o.HaveOccurred(), "Failed to extract the temp credentials for checking whether the cluster is using STS mode")
-	return strings.Contains(tempCredentials, "web_identity_token_file")
+	return IsWorkloadIdentityCluster(oc)
 }
 
 // IsWorkloadIdentityCluster judges whether the Azure/GCP cluster is using the Workload Identity
 func IsWorkloadIdentityCluster(oc *CLI) bool {
 	serviceAccountIssuer, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
-	o.Expect(err).ShouldNot(o.HaveOccurred(), "Failed to get serviceAccountIssuer for checking whether the Azure/GCP cluster is using the Workload Identity")
+	o.Expect(err).ShouldNot(o.HaveOccurred(), "Failed to get serviceAccountIssuer")
 	return len(serviceAccountIssuer) > 0
 }
 
