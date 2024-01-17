@@ -69,7 +69,7 @@ describe('operand form view', () => {
       expect(alldivs[51].textContent).to.include('arrayFieldDependency')
       expect(alldivs[53].textContent).to.include('fieldDependencyControl')
       expect(alldivs[54].textContent).to.include('[SCHEMA] Array Field Group')
-      cy.get('button.pf-c-expandable-section__toggle')
+      cy.get('button')
         .contains('Advanced configuration')
         .scrollIntoView()
         .click();
