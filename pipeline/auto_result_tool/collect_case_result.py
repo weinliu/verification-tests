@@ -72,6 +72,7 @@ class SummaryClient:
         self.sub_team = args.subteam
         self.parent_jira_issue = args.parent_jira
         self.sheet_name = args.sheet
+        self.author_map_file = args.author
         self.skip_no_failure_cases = args.skip_no_failure_cases
         
         self.base_url = "https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com"
@@ -364,15 +365,18 @@ class SummaryClient:
         
 
     def update_summary(self, summary_sheet, version, sheet_name):
+        if version == "4.16":
+            column_number = 7
+            column_str = "G"
         if version == "4.15":
-            column_number = 8
-            column_str = "H"
+            column_number = 9
+            column_str = "I"
         elif version == "4.14":
-            column_number = 10
-            column_str = "J"
+            column_number = 11
+            column_str = "K"
         elif version == "4.13":
-            column_number = 12
-            column_str = "L"
+            column_number = 13
+            column_str = "M"
         else:
             return
         self.logger.debug("update_summary: version is %s", version)
@@ -510,7 +514,7 @@ class SummaryClient:
             if pass_ratio < 85:
                 self.logger.info("pass ratio is %f", pass_ratio)
                 comments = self.version+": pass ratio is "+str(pass_ratio)+"%"+os.linesep+values_list[7]
-                jira_link = self.jiraManager.create_sub_task(self.parent_jira_issue, subtasks, caseid, case_title, author, comments)
+                jira_link = self.jiraManager.create_sub_task(self.author_map_file, self.parent_jira_issue, subtasks, caseid, case_title, author, comments)
                 worksheet.update_acell('J'+str(row_number), "https://issues.redhat.com/browse/"+jira_link)
         
     def collectResult(self):
@@ -539,15 +543,21 @@ class JIRAManager:
         #self.logger.debug(json.dumps(issue.raw['fields'], indent=4, sort_keys=True))
         return issues
     
-    def create_sub_task(self, parent_jira, subtasks, case_id, case_title, author, comments):
-        auth_map = {"xzha": "rhn-support-xzha",
-                    "jiazha": "rhn-support-jiazha",
-                    "kuiwang": "rhn-support-kuiwang",
-                    "bandrade":"bandrade@redhat.com",
-                    "scolange": "rhn-support-xzha",
-                    "tbuskey": "rhn-support-xzha",
-                    "jitli": "rhn-support-xzha"
-        }
+    def create_sub_task(self, author_map_file, parent_jira, subtasks, case_id, case_title, author, comments):
+        if author_map_file and os.path.exists(author_map_file):
+            with open(author_map_file, 'r') as outfile:
+                auth_map = json.load(outfile)
+                self.logger.debug("using author config file %s", author_map_file)
+        else:
+            self.logger.debug("using default author configuration")     
+            auth_map = {"xzha": "rhn-support-xzha",
+                        "jiazha": "rhn-support-jiazha",
+                        "kuiwang": "rhn-support-kuiwang",
+                        "bandrade":"bandrade@redhat.com",
+                        "scolange": "rhn-support-xzha",
+                        "tbuskey": "rhn-support-xzha",
+                        "jitli": "rhn-support-jitli"
+            }
         description_str = """
 Hi, @{author}
 {case} {title} is unstable, please help to check it.
@@ -559,7 +569,7 @@ Hi, @{author}
                 self.jira.add_comment(substask, description_str)
                 case_issue = self.jira.issue(substask)
                 if case_issue.fields.status.name in ['Closed']:
-                    self.jira.transition_issue(case_issue, transition='In Progress')
+                    self.jira.transition_issue(case_issue, transition='NEW')
                 return substask 
         self.logger.info("Create sub task for %s", case_id)
         if not case_id:
@@ -567,6 +577,7 @@ Hi, @{author}
         parent_issue = self.jira.issue(parent_jira)
         project_key = parent_issue.fields.project.key
         parent_issue_key = parent_issue.key
+      
         subtask = self.jira.create_issue(
                         project=project_key,
                         summary=case_id+' is unstable',
@@ -575,10 +586,11 @@ Hi, @{author}
                         parent={'key': parent_issue_key},
                         assignee= {"name": auth_map[author]}
         )
+
         self.logger.info("--------- Sub-task %s is created SUCCESS ----------", subtask.key)
         self.logger.debug(json.dumps(subtask.raw['fields'], indent=4, sort_keys=True))
         return subtask.key
-        
+       
 
 ########################################################################################################################################
 if __name__ == "__main__":
@@ -592,7 +604,8 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--days", default=7, type=int, help="the days number")
     parser.add_argument("-p", "--parent_jira", default="", required=False, help="the parent jira issue link")
     parser.add_argument("-jt", "--jira_token", default="", required=False, help="the jira token")
-    parser.add_argument("--sheet", default="", required=False, help="the jira token")
+    parser.add_argument("--sheet", default="", required=False, help="the sheet link")
+    parser.add_argument("--author", required=False, help="the map of the author, key is author in case, value is the jira id")
     parser.add_argument("--skip_no_failure_cases", dest='skip_no_failure_cases', default=False, action='store_true', help="skip cases whose pass ratio is 100%")
     
     args=parser.parse_args()
