@@ -19,6 +19,7 @@ import (
 	"cloud.google.com/go/storage"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -28,6 +29,12 @@ type JSONp struct {
 	Oper string      `json:"op"`
 	Path string      `json:"path"`
 	Valu interface{} `json:"value,omitempty"`
+}
+
+type invalidStore struct {
+	value   []map[string]string
+	path    string
+	errinfo string
 }
 
 // GetDeploymentsYaml dumps out deployment in yaml format in specific namespace
@@ -923,4 +930,48 @@ func recoverReleaseAccepted(oc *exutil.CLI) (err error) {
 		e2e.Logf(err.Error())
 	}
 	return err
+}
+
+func getTargetPayload(oc *exutil.CLI, imageType string) (releasePayload string, err error) {
+	switch imageType {
+	case "stable":
+		latest4StableImage, err := exutil.GetLatest4StableImage()
+		if err != nil {
+			return "", err
+		}
+		imageInfo, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", latest4StableImage, "-ojson").Output()
+		if err != nil {
+			return "", err
+		}
+		imageDigest := gjson.Get(imageInfo, "digest").String()
+		return fmt.Sprintf("quay.io/openshift-release-dev/ocp-release@%s", imageDigest), nil
+	case "nightly":
+		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		if err != nil {
+			return "", err
+		}
+		latest4NightlyImage, err := exutil.GetLatestNightlyImage(clusterVersion)
+		if err != nil {
+			return "", err
+		}
+		tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
+		err = os.Mkdir(tempDataDir, 0755)
+		defer os.RemoveAll(tempDataDir)
+		if err != nil {
+			return "", err
+		}
+		err = exutil.GetPullSec(oc, tempDataDir)
+		if err != nil {
+			return "", err
+		}
+		authFile := tempDataDir + "/.dockerconfigjson"
+		imageInfo, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "-a", authFile, latest4NightlyImage, "-ojson").Output()
+		if err != nil {
+			return "", err
+		}
+		imageDigest := gjson.Get(imageInfo, "digest").String()
+		return fmt.Sprintf("registry.ci.openshift.org/ocp/release@%s", imageDigest), nil
+	default:
+		return "", fmt.Errorf("unrecognized imageType")
+	}
 }

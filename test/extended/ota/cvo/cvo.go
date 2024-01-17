@@ -1610,6 +1610,101 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	})
 
 	//author: jiajliu@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jiajliu-Medium-69950-[connected]signature verification while setting spec.signaturestore to empty or custom store without signature of target release [Serial]", func() {
+		//the check should be removed after the feature ga from tp to non tp.
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("This case is only suitable for techpreview cluster")
+		}
+
+		g.By("Set custom signaturestore with invalid value")
+		resourcePath := "/spec/signatureStores"
+		resource := "clusterversion/version"
+		invalidStores := []invalidStore{
+			{[]map[string]string{{}}, resourcePath, "spec.signatureStores[0].url: Required value"},
+			{[]map[string]string{{"foo": "bar"}}, resourcePath, "Warning: unknown field \"spec.signatureStores[0].foo\""},
+			{[]map[string]string{{"url": "aaa.com"}}, resourcePath, "url must be a valid absolute URL"},
+			{[]map[string]string{{"url": "http://aaa.com"}}, "/spec/signaturestores", "Warning: unknown field \"spec.signaturestores\""},
+		}
+		defer func() {
+			signStore, _ := getCVObyJP(oc, ".spec.signatureStores")
+			if signStore != "null" {
+				_, err := ocJSONPatch(oc, "", resource, []JSONp{{"remove", resourcePath, nil}})
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+
+		for _, store := range invalidStores {
+			cmdOut, _ := ocJSONPatch(oc, "", resource, []JSONp{
+				{"add", store.path, store.value},
+			})
+			o.Expect(cmdOut).To(o.ContainSubstring(store.errinfo))
+		}
+
+		targetSignedPayload, err := getTargetPayload(oc, "stable")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		targetUnSignedPayload, err := getTargetPayload(oc, "nightly")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set custom signaturestore to an unexisted url")
+		testURL := "http://examplefortest.com"
+		_, err = ocJSONPatch(oc, "", resource, []JSONp{
+			{"add", resourcePath, []map[string]string{{"url": testURL}}}})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		storeURL, err := getCVObyJP(oc, ".spec.signatureStores[].url")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(storeURL).To(o.Equal(testURL))
+
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--to-image", targetSignedPayload).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() { o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred()) }()
+		o.Expect(checkUpdates(oc, false, 30, 3*60,
+			"ReleaseAccepted=False", targetSignedPayload,
+			"Reason: RetrievePayload", "The update cannot be verified",
+		)).To(o.BeTrue())
+		o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred())
+
+		g.By("Add one more custom signaturestore")
+		testURLs := []string{"https://mirror.openshift.com/pub/openshift-v4/signatures/openshift/release", "http://examplefortest.com"}
+		_, err = ocJSONPatch(oc, "", resource, []JSONp{
+			{"replace", resourcePath, []map[string]string{{"url": testURLs[0]}, {"url": testURLs[1]}}},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		storeURLs, err := getCVObyJP(oc, ".spec.signatureStores")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(gjson.Parse(storeURLs).Array()).To(o.HaveLen((len(testURLs))))
+
+		for _, url := range testURLs {
+			o.Expect(storeURLs).Should(o.ContainSubstring(url))
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--to-image", targetUnSignedPayload).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(checkUpdates(oc, false, 30, 3*60,
+			"ReleaseAccepted=False", targetUnSignedPayload,
+			"Reason: RetrievePayload", "The update cannot be verified",
+		)).To(o.BeTrue())
+		o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred())
+
+		g.By("Set custom signaturestore to empty")
+		_, err = ocJSONPatch(oc, "", resource, []JSONp{
+			{"replace", resourcePath, []map[string]string{}},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		store, err := getCVObyJP(oc, ".spec.signatureStores")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(store).To(o.Equal("[]"))
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--to-image", targetSignedPayload).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(checkUpdates(oc, false, 30, 3*60,
+			"ReleaseAccepted=False", targetSignedPayload,
+			"Reason: RetrievePayload", "The update cannot be verified",
+		)).To(o.BeTrue())
+	})
+
+	//author: jiajliu@redhat.com
 	g.It("Author:jiajliu-Medium-53906-The architecture info in clusterversion’s status should be correct", func() {
 		const heterogeneousArchKeyword = "multi"
 		g.By("Get release info from current cluster")
