@@ -5,6 +5,7 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 )
 
 var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operator ConnectedOnly", func() {
@@ -16,6 +17,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		region     string
 	)
 	g.BeforeEach(func() {
+		architecture.SkipNonAmd64SingleArch(oc)
 		clID, region = getClusterDetails(oc)
 		g.By("Install Observability Operator and check if it is successfully installed") //57234-Observability Operator installation on OCP hypershift management
 		if !exutil.IsROSA() {
