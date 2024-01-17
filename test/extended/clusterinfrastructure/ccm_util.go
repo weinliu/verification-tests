@@ -16,6 +16,12 @@ type ingressControllerDescription struct {
 	name     string
 }
 
+type loadBalancerServiceDescription struct {
+	template  string
+	name      string
+	namespace string
+}
+
 func (ingressController *ingressControllerDescription) createIngressController(oc *exutil.CLI) {
 	e2e.Logf("Creating ingressController ...")
 	exutil.CreateNsResourceFromTemplate(oc, "openshift-ingress-operator", "--ignore-unknown-parameters=true", "-f", ingressController.template, "-p", "NAME="+ingressController.name)
@@ -24,6 +30,17 @@ func (ingressController *ingressControllerDescription) createIngressController(o
 func (ingressController *ingressControllerDescription) deleteIngressController(oc *exutil.CLI) error {
 	e2e.Logf("Deleting ingressController ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("ingressController", ingressController.name, "-n", "openshift-ingress-operator").Execute()
+}
+
+func (loadBalancerService *loadBalancerServiceDescription) createLoadBalancerService(oc *exutil.CLI) {
+	e2e.Logf("Creating loadBalancerService ...")
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerService.template, "-p", "NAME="+loadBalancerService.name, "NAMESPACE="+loadBalancerService.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (loadBalancerService *loadBalancerServiceDescription) deleteLoadBalancerService(oc *exutil.CLI) error {
+	e2e.Logf("Deleting loadBalancerService ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", loadBalancerService.name, "-n", loadBalancerService.namespace).Execute()
 }
 
 // waitForClusterHealthy check if new machineconfig is applied successfully
@@ -123,4 +140,29 @@ func waitForClusterOperatorsReady(oc *exutil.CLI, clusterOperators ...string) er
 		}
 		return true, nil
 	})
+}
+
+// getLBSvcIP get Load Balancer service IP/Hostname
+func getLBSvcIP(oc *exutil.CLI, loadBalancerService loadBalancerServiceDescription) string {
+	e2e.Logf("Getting the Load Balancer service IP ...")
+	iaasPlatform := exutil.CheckPlatform(oc)
+	var jsonString string
+	if iaasPlatform == "aws" {
+		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}"
+	} else {
+		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].ip}"
+	}
+	err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+		svcStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", loadBalancerService.name, "-n", loadBalancerService.namespace, jsonString).Output()
+		if err != nil || svcStatus == "pending" || svcStatus == "" {
+			e2e.Logf("External-IP is not assigned and waiting up to 20 seconds ...")
+			return false, nil
+		}
+		e2e.Logf("External-IP is assigned: %s" + svcStatus)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "External-IP is not assigned in 5 minite")
+	svcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "-n", loadBalancerService.namespace, loadBalancerService.name, jsonString).Output()
+	e2e.Logf("The %s lb service ip/hostname is %q", loadBalancerService.name, svcStatus)
+	return svcStatus
 }

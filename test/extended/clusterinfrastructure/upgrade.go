@@ -1,6 +1,8 @@
 package clusterinfrastructure
 
 import (
+	"path/filepath"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -63,7 +65,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-61086-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-61086-[Upgrade] Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		g.By("Create a new machineset")
@@ -83,7 +85,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-PstChkUpgrade-Author:huliu-Medium-62265-Ensure controlplanemachineset is generated automatically after upgrade", func() {
+	g.It("NonHyperShiftHOST-PstChkUpgrade-Author:huliu-Medium-62265-[Upgrade] Ensure controlplanemachineset is generated automatically after upgrade", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "nutanix", "openstack")
 		cpmsOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
@@ -92,7 +94,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Critical-22612-Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Critical-22612-[Upgrade] Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "ibmcloud", "alibabacloud", "nutanix", "openstack")
 		g.By("Create a new machineset")
@@ -107,5 +109,23 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Scale down machineset")
 		exutil.ScaleMachineSet(oc, machinesetName, 0)
+	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade [Disruptive][Slow]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
+		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
+		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
+		loadBalancerService := loadBalancerServiceDescription{
+			template:  loadBalancer,
+			name:      "svc-loadbalancer",
+			namespace: "default",
+		}
+		g.By("Create loadBalancerService")
+		defer loadBalancerService.deleteLoadBalancerService(oc)
+		loadBalancerService.createLoadBalancerService(oc)
+
+		g.By("Check External-IP assigned")
+		getLBSvcIP(oc, loadBalancerService)
 	})
 })

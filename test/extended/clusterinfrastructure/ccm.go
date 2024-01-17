@@ -321,4 +321,23 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		err = waitForPodWithLabelReady(oc, "hello-ecr70744", "deployment=hello-ecr")
 		exutil.AssertWaitPollNoErr(err, "the pod failed to be ready state within allowed time!")
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-Critical-70627-[CCM] Service of type LoadBalancer can be created successful [Disruptive]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
+		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
+		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
+		loadBalancerService := loadBalancerServiceDescription{
+			template:  loadBalancer,
+			name:      "svc-loadbalancer",
+			namespace: "default",
+		}
+		g.By("Create loadBalancerService")
+		defer loadBalancerService.deleteLoadBalancerService(oc)
+		loadBalancerService.createLoadBalancerService(oc)
+
+		g.By("Check External-IP assigned")
+		getLBSvcIP(oc, loadBalancerService)
+
+	})
 })
