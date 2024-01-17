@@ -28,20 +28,11 @@ describe('Operator Hub tests', () => {
     operatorHubPage.goTo()
     operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG)
     OperatorHubSelector.SOURCE_MAP.forEach((operatorSource, operatorSourceLabel) => {
-      cy.get('form[data-test-group-name="catalogSourceDisplayName"]', {timeout: 60000})
-      .find(`[data-test="catalogSourceDisplayName-${operatorSourceLabel}"]`)
-      .find('span')
-      .invoke('text')
-      .as('itemCount')
-      .then(itemCount => {
-        if (itemCount !== "(0)") {
-          operatorHubPage.checkSourceCheckBox(operatorSourceLabel)
-          operatorHubPage.getAllTileLabels().each(($el, index, $list) => {
-          cy.wrap($el).should('have.text',operatorSource)
-        })
-          operatorHubPage.uncheckSourceCheckBox(operatorSourceLabel)
-        }
+      operatorHubPage.checkSourceCheckBox(operatorSourceLabel);
+      operatorHubPage.getAllTileLabels().each(($el, index, $list) => {
+        cy.wrap($el).should('have.text',operatorSource)
       })
+      operatorHubPage.uncheckSourceCheckBox(operatorSourceLabel);
     });
   });
 
