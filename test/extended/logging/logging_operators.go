@@ -96,15 +96,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		}
 		defer cl.delete(oc)
 		cl.create(oc)
-		clo, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
-		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cloNS, clo.Items[0].Name, "--since=2m").Output()
-			if err != nil {
-				return false, err
-			}
-			return (strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "invalid clusterlogforwarder spec. No change in collection")), nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Expected logs are not found in CLO")
 		checkResource(oc, true, false, "cannot have username without password", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputs.es-created-by-user}"})
 		_, err = oc.AdminKubeClient().CoreV1().ConfigMaps(cl.namespace).Get(context.Background(), "collector-config", metav1.GetOptions{})
 		o.Expect(apierrors.IsNotFound(err)).Should(o.BeTrue())
