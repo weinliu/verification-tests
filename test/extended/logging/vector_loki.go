@@ -2943,6 +2943,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		)
 
 		exutil.By("deploy loki stack")
+		//delete roledbingings from 5.7 and before
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "logging-all-authenticated-application-logs-reader").Execute()
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
 			name:          "lokistack-67565",

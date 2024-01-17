@@ -219,8 +219,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-High-44983-Logging auto upgrade in minor version[Serial][Slow]", func() {
-		g.Skip("skip for the logging 5.8 is not released")
-		var targetchannel = "stable"
+		var targetchannel = "stable-5.8"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
@@ -514,8 +513,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
-		g.Skip("skip the case as logging 5.8 is not released")
-		var targetchannel = "stable"
+		var targetchannel = "stable-5.8"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
@@ -644,12 +642,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				res, err := lc.searchByNamespace("application", appProj)
 				if err != nil {
-					e2e.Logf("\ngot err when getting application logs: %v\n", err)
-					return false, err
+					e2e.Logf("\ngot err when getting application logs: %v, continue\n", err)
+					return false, nil
 				}
 				if len(res.Data.Result) > 0 {
 					return true, nil
 				}
+				e2e.Logf("\n len(res.Data.Result) not > 0, continue\n")
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "application logs are not found")
@@ -668,6 +667,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
 		// for 5.8, test upgrade from 5.7 to 5.8
+		// remove clusterrolebinding created in 5.7, so the other case can can be exected as in fresh install
+		// note: this step can be removed after 5.8
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "logging-all-authenticated-application-logs-reader").Execute()
+
 		preSource := CatalogSourceObjects{"stable-5.7", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
@@ -769,12 +772,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			res, err := lc.searchByNamespace("application", appProj)
 			if err != nil {
-				e2e.Logf("\ngot err when getting application logs: %v\n", err)
-				return false, err
+				e2e.Logf("\ngot err when getting application logs: %v, continue\n", err)
+				return false, nil
 			}
 			if len(res.Data.Result) > 0 {
 				return true, nil
 			}
+			e2e.Logf("\n len(res.Data.Result) not > 0, continue\n")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "application logs are not found")
+
+		g.By("checking if regular user can view his logs after upgrading")
+		userToken, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lc0 := newLokiClient(route).withToken(userToken).retry(5)
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+			res, err := lc0.searchByNamespace("application", appProj)
+			if err != nil {
+				e2e.Logf("\ngot err when getting application logs: %v, continue\n", err)
+				return false, nil
+			}
+			if len(res.Data.Result) > 0 {
+				return true, nil
+			}
+			e2e.Logf("\n len(res.Data.Result) not > 0, continue\n")
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "application logs are not found")
@@ -890,13 +912,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 
 		g.By("Deploying LokiStack CR")
 		ls := lokiStack{
-			name:          "loki-61435",
+			name:          "loki-64147",
 			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   getStorageType(oc),
-			storageSecret: "storage-61435",
+			storageSecret: "storage-64147",
 			storageClass:  sc,
-			bucketName:    "logging-loki-61435-" + getInfrastructureName(oc),
+			bucketName:    "logging-loki-64147-" + getInfrastructureName(oc),
 			template:      filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml"),
 		}
 		defer ls.removeObjectStorage(oc)
