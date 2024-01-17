@@ -25,6 +25,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 		g.By("Init the client")
 		rosaClient = rosacli.NewClient()
 		kubeletService = rosaClient.KubeletConfig
+		clusterService = rosaClient.Cluster
 
 		g.By("Check cluster is hosted")
 		var err error
@@ -63,6 +64,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 			return
 		}
 		o.Expect(err).ToNot(o.HaveOccurred())
+		defer kubeletService.DeleteKubeletConfig(clusterID, "-y")
 		o.Expect(output.String()).To(o.ContainSubstring("Successfully created custom KubeletConfig for cluster '%s'", clusterID))
 
 		g.By("Describe the kubeletconfig")
@@ -90,6 +92,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 			"--pod-pids-limit", "12345",
 			"-y")
 		o.Expect(err).ToNot(o.HaveOccurred())
+		defer kubeletService.DeleteKubeletConfig(clusterID, "-y")
 
 		g.By("Run the command to edit the kubeletconfig to the cluster to check warning")
 		output, _ = rosaClient.KubeletConfig.EditKubeletConfig(clusterID,
@@ -136,6 +139,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit kubeletconfig"
 			"--pod-pids-limit", "12345",
 			"-y")
 		o.Expect(err).ToNot(o.HaveOccurred())
+		defer kubeletService.DeleteKubeletConfig(clusterID, "-y")
 
 		g.By("Run the command to delete the kubeletconfig from the cluster to check warning")
 		output, _ = rosaClient.KubeletConfig.DeleteKubeletConfig(clusterID)
