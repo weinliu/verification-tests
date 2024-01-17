@@ -2023,7 +2023,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-66662-adding/deleting http headers to a reen route by a router owner", func() {
+	g.It("Author:shudili-High-66662-adding/deleting http headers to a reen route by a router owner", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -2204,7 +2204,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-62528-adding/deleting http headers to an edge route by a router owner", func() {
+	g.It("Author:shudili-High-62528-adding/deleting http headers to an edge route by a router owner", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -2515,7 +2515,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-67009-adding/deleting http headers to an edge route by an ingress-controller as a cluster administrator", func() {
+	g.It("Author:shudili-High-67009-adding/deleting http headers to an edge route by an ingress-controller as a cluster administrator", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -2694,7 +2694,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-67010-adding/deleting http headers to a reen route by an ingress-controller as a cluster administrator", func() {
+	g.It("Author:shudili-High-67010-adding/deleting http headers to a reen route by an ingress-controller as a cluster administrator", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
