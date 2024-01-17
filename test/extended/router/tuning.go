@@ -186,23 +186,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			threadcount = "6"
 		)
 
-		g.By("Create a ingresscontroller with threadCount set")
+		exutil.By("Create a ingresscontroller with threadCount set")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch the new ingresscontroller with tuningOptions/threadCount " + threadcount)
+		exutil.By("Patch the new ingresscontroller with tuningOptions/threadCount " + threadcount)
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
-		podname := getRouterPod(oc, ingctrl.name)
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"threadCount\": "+threadcount+"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
-		g.By("Check the router env to verify the PROXY variable ROUTER_THREADS with " + threadcount + " is applied")
-		newpodname := getRouterPod(oc, ingctrl.name)
+		exutil.By("Check the router env to verify the PROXY variable ROUTER_THREADS with " + threadcount + " is applied")
+		newpodname := getNewRouterPod(oc, ingctrl.name)
 		dssearch := readRouterPodEnv(oc, newpodname, "ROUTER_THREADS")
 		o.Expect(dssearch).To(o.ContainSubstring("ROUTER_THREADS=" + threadcount))
 		g.By("check the haproxy config on the router pod to ensure the nbthread is updated")
@@ -293,18 +290,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl1.create(oc)
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "1")
+		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
 
 		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662one, which should be 20s")
-		podname1 := getRouterPod(oc, ingctrl1.name)
+		podname1 := getNewRouterPod(oc, ingctrl1.name)
 		hciSearch := readRouterPodEnv(oc, podname1, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=20s"))
 
 		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662two, which should be 100m")
-		podname2 := getRouterPod(oc, ingctrl2.name)
+		podname2 := getNewRouterPod(oc, ingctrl2.name)
 		hciSearch = readRouterPodEnv(oc, podname2, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=100m"))
 
@@ -313,20 +308,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
 		healthCheckInterval = "0s"
 		patchResourceAsAdmin(oc, ingctrl2.namespace, ingctrlResource2, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+healthCheckInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname1)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname1))
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname2)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname2))
+		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "2")
+		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "2")
 
 		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662one, which should be 2147483647ms")
-		podname1 = getRouterPod(oc, ingctrl1.name)
+		podname1 = getNewRouterPod(oc, ingctrl1.name)
 		hciSearch = readRouterPodEnv(oc, podname1, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=2147483647ms"))
 
 		exutil.By("Try to find the ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which shouldn't be seen by default")
-		podname2 = getRouterPod(oc, ingctrl2.name)
+		podname2 = getNewRouterPod(oc, ingctrl2.name)
 		cmd := fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_BACKEND_CHECK_INTERVAL")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname2, "--", "bash", "-c", cmd).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname2, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
@@ -343,34 +336,31 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create an custom ingresscontroller for testing ROUTER_BACKEND_CHECK_INTERVAL")
+		exutil.By("Create an custom ingresscontroller for testing ROUTER_BACKEND_CHECK_INTERVAL")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Try to patch tuningOptions/healthCheckInterval 2147483900ms which is larger than the max healthCheckInterval, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/healthCheckInterval 2147483900ms which is larger than the max healthCheckInterval, to the ingress-controller")
 		NegHealthCheckInterval := "2147483900ms"
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
-		podname := getRouterPod(oc, ingctrl.name)
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+NegHealthCheckInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
-		g.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which should be the max: 2147483647ms")
-		podname = getRouterPod(oc, ingctrl.name)
+		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which should be the max: 2147483647ms")
+		podname := getNewRouterPod(oc, ingctrl.name)
 		hciSearch := readRouterPodEnv(oc, podname, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=" + "2147483647ms"))
 
-		g.By("Try to patch tuningOptions/healthCheckInterval -1s which is a minus value, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/healthCheckInterval -1s which is a minus value, to the ingress-controller")
 		NegHealthCheckInterval = "-1s"
 		output, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+NegHealthCheckInterval+"\"}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err1).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"-1s\""))
 
-		g.By("Try to patch tuningOptions/healthCheckInterval abc which is a string, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/healthCheckInterval abc which is a string, to the ingress-controller")
 		NegHealthCheckInterval = "0abc"
 		output, err2 := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+NegHealthCheckInterval+"\"}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err2).To(o.HaveOccurred())
@@ -397,11 +387,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env under a router pod of IC ocp50926, which should be 2000")
-		podname := getRouterPod(oc, ingctrl.name)
+		podname := getNewRouterPod(oc, ingctrl.name)
 		maxConnSearch := readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=2000"))
 
@@ -411,11 +400,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Patch tuningOptions/maxConnections with max 2000000 to IC ocp50926")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": 2000000}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env under a router pod of IC ocp50926,  which should be 2000000")
-		podname = getRouterPod(oc, ingctrl.name)
+		podname = getNewRouterPod(oc, ingctrl.name)
 		maxConnSearch = readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=2000000"))
 
@@ -443,26 +431,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env under a route pod for the configured maxConnections -1,  which should be auto")
-		podname := getRouterPod(oc, ingctrl.name)
+		podname := getNewRouterPod(oc, ingctrl.name)
 		maxConnSearch := readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=auto"))
 
 		exutil.By("Check maxconn in haproxy.config which won't appear after configured tuningOptions/maxConnections with -1")
 		cmd := fmt.Sprintf("%s | grep \"%s\"", "cat haproxy.config", "maxconn")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 
 		exutil.By("Patch tuningOptions/maxConnections 0 to the IC")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": 0}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Try to Check ROUTER_MAX_CONNECTIONS env in a route pod set to the default maxConnections by 0")
-		podname = getRouterPod(oc, ingctrl.name)
+		podname = getNewRouterPod(oc, ingctrl.name)
 		cmd = fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_MAX_CONNECTIONS")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -509,13 +495,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check default value of ROUTER_MAX_CONNECTIONS env in a route pod, which shouldn't appear in it")
-		podname := getRouterPod(oc, ingctrl.name)
+		podname := getNewRouterPod(oc, ingctrl.name)
 		cmd := fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_MAX_CONNECTIONS")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 
 		exutil.By("Check maxconn in haproxy.config which should be 50000")
@@ -541,13 +526,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Patch tuningOptions/maxConnections 50000 to the ingress-controller")
 		maxConnections = "500000"
-		podname = getRouterPod(oc, ingctrl.name)
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": "+maxConnections+"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env in a route pod which should be " + maxConnections)
-		podname = getRouterPod(oc, ingctrl.name)
+		podname = getNewRouterPod(oc, ingctrl.name)
 		maxConnSearch := readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=" + maxConnections))
 
@@ -589,36 +572,32 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl1.create(oc)
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "1")
+		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one, which should be 15s")
-		podname1 := getRouterPod(oc, ingctrl1.name)
+		podname1 := getNewRouterPod(oc, ingctrl1.name)
 		riSearch := readRouterPodEnv(oc, podname1, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=15s"))
 
-		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one, which should be 2m")
-		podname2 := getRouterPod(oc, ingctrl2.name)
+		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605two, which should be 2m")
+		podname2 := getNewRouterPod(oc, ingctrl2.name)
 		riSearch = readRouterPodEnv(oc, podname2, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=2m"))
 
 		exutil.By("Patch tuningOptions/reloadInterval with other valid unit m, for exmpale 1m to IC ocp53605one, while patch it with 0s to IC ocp53605two")
 		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \"1m\"}}}")
 		patchResourceAsAdmin(oc, ingctrl2.namespace, ingctrlResource2, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \"0s\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname1)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname1))
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname2)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname2))
+		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "2")
+		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "2")
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one which should be 1m")
-		podname1 = getRouterPod(oc, ingctrl1.name)
+		podname1 = getNewRouterPod(oc, ingctrl1.name)
 		riSearch = readRouterPodEnv(oc, podname1, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=1m"))
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605two, which is the default 5s")
-		podname2 = getRouterPod(oc, ingctrl2.name)
+		podname2 = getNewRouterPod(oc, ingctrl2.name)
 		riSearch = readRouterPodEnv(oc, podname2, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=5s"))
 	})
@@ -636,53 +615,48 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create an custom ingresscontroller for testing router reload interval")
+		exutil.By("Create an custom ingresscontroller for testing router reload interval")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Try to patch tuningOptions/reloadInterval 121s which is larger than the max 120s, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/reloadInterval 121s which is larger than the max 120s, to the ingress-controller")
 		NegReloadInterval := "121s"
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
-		podname := getRouterPod(oc, ingctrl.name)
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
-		g.By("Check RELOAD_INTERVAL env in a route pod which should be the max 2m")
-		podname = getRouterPod(oc, ingctrl.name)
+		exutil.By("Check RELOAD_INTERVAL env in a route pod which should be the max 2m")
+		podname := getNewRouterPod(oc, ingctrl.name)
 		riSearch := readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=2m"))
 
-		g.By("Try to patch tuningOptions/reloadInterval 0.5s which is less than the min 1s, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/reloadInterval 0.5s which is less than the min 1s, to the ingress-controller")
 		NegReloadInterval = "0.5s"
 		ingctrlResource = "ingresscontrollers/" + ingctrl.name
-		podname = getRouterPod(oc, ingctrl.name)
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
-		g.By("Check RELOAD_INTERVAL env in a route pod which should be the min 1s")
-		podname = getRouterPod(oc, ingctrl.name)
+		exutil.By("Check RELOAD_INTERVAL env in a route pod which should be the min 1s")
+		podname = getNewRouterPod(oc, ingctrl.name)
 		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=1s"))
 
-		g.By("Try to patch tuningOptions/reloadInterval -1s which is a minus value, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/reloadInterval -1s which is a minus value, to the ingress-controller")
 		NegReloadInterval = "-1s"
 		output, errCfg := patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
 		o.Expect(errCfg).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"" + NegReloadInterval + "\""))
 
-		g.By("Try to patch tuningOptions/reloadInterval 1abc which is a string, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/reloadInterval 1abc which is a string, to the ingress-controller")
 		NegReloadInterval = "1abc"
 		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
 		o.Expect(errCfg).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"" + NegReloadInterval + "\""))
 
-		g.By("Try to patch tuningOptions/reloadInterval 012 s which contains a space character, to the ingress-controller")
+		exutil.By("Try to patch tuningOptions/reloadInterval 012 s which contains a space character, to the ingress-controller")
 		NegReloadInterval = "012 s"
 		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
 		o.Expect(errCfg).To(o.HaveOccurred())

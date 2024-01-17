@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			g.Skip("Skip for this AWS platform has NOT DNS zones, which means this case is not supported on this AWS platform")
 		}
 
-		g.By("Create two custom ingresscontrollers, one matches the cluster's base domain, the other doesn't")
+		exutil.By("Create two custom ingresscontrollers, one matches the cluster's base domain, the other doesn't")
 		baseDomain := getBaseDomain(oc)
 		ingctrl1.domain = ingctrl1.name + "." + baseDomain
 		defer ingctrl1.delete(oc)
@@ -244,23 +244,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
 
-		g.By("check the default dnsManagementPolicy value of ingress-controller1 matching the base domain, which should be Managed")
+		exutil.By("check the default dnsManagementPolicy value of ingress-controller1 matching the base domain, which should be Managed")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy}").Output()
 		o.Expect(output).To(o.ContainSubstring("Managed"))
 
-		g.By("check ingress-controller1's status")
+		exutil.By("check ingress-controller1's status")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status}").Output()
 		o.Expect(output).To(o.ContainSubstring("TrueTrue"))
 
-		g.By("check the default dnsManagementPolicy value of dnsrecord ocp54868cus1, which should be Managed, too")
+		exutil.By("check the default dnsManagementPolicy value of dnsrecord ocp54868cus1, which should be Managed, too")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(dnsrecordResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.spec.dnsManagementPolicy}").Output()
 		o.Expect(output).To(o.ContainSubstring("Managed"))
 
-		g.By("check dnsrecord ocp54868cus1's status")
+		exutil.By("check dnsrecord ocp54868cus1's status")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(dnsrecordResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.status.zones[0].conditions[0].status}{.status.zones[0].conditions[0].reason}").Output()
 		o.Expect(output).To(o.ContainSubstring("TrueProviderSuccess"))
 
-		g.By("patch custom ingress-controller1 with dnsManagementPolicy Unmanaged")
+		exutil.By("patch custom ingress-controller1 with dnsManagementPolicy Unmanaged")
 		defer func() {
 			jsonpath := ".status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status"
 			patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"Managed\"}}}}")
@@ -270,19 +270,19 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		}()
 		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"Unmanaged\"}}}}")
 
-		g.By("check the dnsManagementPolicy value of ingress-controller1, which should be Unmanaged")
+		exutil.By("check the dnsManagementPolicy value of ingress-controller1, which should be Unmanaged")
 		jpath := ".spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy"
 		waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jpath, "Unmanaged")
 
-		g.By("check ingress-controller1's status")
+		exutil.By("check ingress-controller1's status")
 		jpath = ".status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status"
 		waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jpath, "FalseUnknown")
 
-		g.By("check the dnsManagementPolicy value of dnsrecord ocp54868cus1, which should be Unmanaged, too")
+		exutil.By("check the dnsManagementPolicy value of dnsrecord ocp54868cus1, which should be Unmanaged, too")
 		jpath = ".spec.dnsManagementPolicy"
 		waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jpath, "Unmanaged")
 
-		g.By("check dnsrecord ocp54868cus1's status")
+		exutil.By("check dnsrecord ocp54868cus1's status")
 		jpath = ".status.zones[0].conditions[0].status}{.status.zones[0].conditions[0].reason"
 		waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jpath, "UnknownUnmanagedDNS")
 
@@ -291,7 +291,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy}").Output()
 		// o.Expect(output).To(o.ContainSubstring("Unmanaged"))
 
-		g.By("check ingress-controller2's status")
+		exutil.By("check ingress-controller2's status")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status}").Output()
 		o.Expect(output).To(o.ContainSubstring("FalseUnknown"))
 
@@ -300,7 +300,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(dnsrecordResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.spec.dnsManagementPolicy}").Output()
 		// o.Expect(output).To(o.ContainSubstring("Unmanaged"))
 
-		g.By("check dnsrecord ocp54868cus2's status")
+		exutil.By("check dnsrecord ocp54868cus2's status")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(dnsrecordResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.status.zones[0].conditions[0].status}{.status.zones[0].conditions[0].reason}").Output()
 		o.Expect(output).To(o.ContainSubstring("UnknownUnmanagedDNS"))
 
@@ -323,25 +323,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// skip if platform is not AWS
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
-		g.By("Create a custom ingresscontrollers")
+		exutil.By("Create a custom ingresscontrollers")
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("try to patch the custom ingress-controller with dnsManagementPolicy unmanaged")
+		exutil.By("try to patch the custom ingress-controller with dnsManagementPolicy unmanaged")
 		patch := "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"unmanaged\"}}}}"
 		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patch, "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("dnsManagementPolicy: Unsupported value: \"unmanaged\": supported values: \"Managed\", \"Unmanaged\""))
 
-		g.By("try to patch the custom ingress-controller with dnsManagementPolicy abc")
+		exutil.By("try to patch the custom ingress-controller with dnsManagementPolicy abc")
 		patch = "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"abc\"}}}}"
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patch, "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("dnsManagementPolicy: Unsupported value: \"abc\": supported values: \"Managed\", \"Unmanaged\""))
 
-		g.By("try to patch the custom ingress-controller with dnsManagementPolicy 123")
+		exutil.By("try to patch the custom ingress-controller with dnsManagementPolicy 123")
 		patch = "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":123}}}}"
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patch, "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -538,7 +537,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontrollers")
+		exutil.By("Create a custom ingresscontrollers")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
@@ -546,16 +545,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
 
-		g.By("Create the custom-restricted SecurityContextConstraints")
+		exutil.By("Create the custom-restricted SecurityContextConstraints")
 		defer operateResourceFromFile(oc, "delete", "openshift-ingress", scc)
 		operateResourceFromFile(oc, "create", "openshift-ingress", scc)
 
-		g.By("check the allowPrivilegeEscalation in the router deployment, which should be true")
+		exutil.By("check the allowPrivilegeEscalation in the router deployment, which should be true")
 		jsonPath := ".spec.template.spec.containers..securityContext.allowPrivilegeEscalation"
 		value := fetchJSONPathValue(oc, "openshift-ingress", "deployment/router-"+ingctrl.name, jsonPath)
 		o.Expect(value).To(o.ContainSubstring("true"))
 
-		g.By("get router pods and then delete one router pod")
+		exutil.By("get router pods and then delete one router pod")
 		podList1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-ingress").Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		routerpod := getRouterPod(oc, ingctrl.name)
@@ -564,7 +563,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("get router pods again, and check if it is different with the previous router pod list")
+		exutil.By("get router pods again, and check if it is different with the previous router pod list")
 		podList2, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-ingress").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(len(podList1)).To(o.Equal(len(podList2)))
@@ -634,22 +633,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			ingctrlResource = "ingresscontroller/" + ingctrl.name
 		)
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Create an unsecure service and its backend pod")
+		exutil.By("Create an unsecure service and its backend pod")
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
 
-		g.By("Create 4 routes for the testing")
+		exutil.By("Create 4 routes for the testing")
 		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-1", "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-2", "-n", project1).Execute()
@@ -663,7 +661,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		waitForOutput(oc, project1, "route/unsrv-3", ".metadata.name", "unsrv-3")
 		waitForOutput(oc, project1, "route/unsrv-4", ".metadata.name", "unsrv-4")
 
-		g.By("Add labels to 3 routes")
+		exutil.By("Add labels to 3 routes")
 		err = oc.WithoutNamespace().Run("label").Args("route", "unsrv-1", "test=aaa", "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("label").Args("route", "unsrv-2", "test=bbb", "-n", project1).Execute()
@@ -671,78 +669,62 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = oc.WithoutNamespace().Run("label").Args("route", "unsrv-3", "test=ccc", "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Patch the custom ingresscontroller with routeSelector specified by In matchExpressions routeSelector")
-		routerpod := getRouterPod(oc, ingctrl.name)
-		g.By("Patch the custom ingress-controllers with In matchExpressions routeSelector")
+		exutil.By("Patch the custom ingress-controllers with In matchExpressions routeSelector")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 		patchRouteSelector := "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"In\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route unsrv-1 and unsrv-2 are admitted by the custom IC with In matchExpressions routeSelector, while route unsrv-3 and unsrv-4 not")
+		exutil.By("Check if route unsrv-1 and unsrv-2 are admitted by the custom IC with In matchExpressions routeSelector, while route unsrv-3 and unsrv-4 not")
 		jsonPath := ".status.ingress[?(@.routerName==\"" + ingctrl.name + "\")].conditions[?(@.type==\"Admitted\")].status"
 		waitForOutput(oc, project1, "route/unsrv-1", jsonPath, "True")
-		value := fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-3", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-4", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
+		waitForOutput(oc, project1, "route/unsrv-2", jsonPath, "True")
+		waitForOutput(oc, project1, "route/unsrv-3", jsonPath, "")
+		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "")
 
-		g.By("Patch the custom ingresscontroller with routeSelector specified by NotIn matchExpressions routeSelector")
+		exutil.By("Patch the custom ingress-controllers with NotIn matchExpressions routeSelector")
 		routerpod = getRouterPod(oc, ingctrl.name)
-		g.By("Patch the custom ingress-controllers with NotIn matchExpressions routeSelector")
 		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"NotIn\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route unsrv-3 and unsrv-4 are admitted by the custom IC with NotIn matchExpressions routeSelector, while route unsrv-1 and unsrv-2 not")
+		exutil.By("Check if route unsrv-3 and unsrv-4 are admitted by the custom IC with NotIn matchExpressions routeSelector, while route unsrv-1 and unsrv-2 not")
 		waitForOutput(oc, project1, "route/unsrv-3", jsonPath, "True")
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-1", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-4", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
+		waitForOutput(oc, project1, "route/unsrv-1", jsonPath, "")
+		waitForOutput(oc, project1, "route/unsrv-2", jsonPath, "")
+		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "True")
 
-		g.By("Patch the custom ingresscontroller with routeSelector specified by Exists matchExpressions routeSelector")
+		exutil.By("Patch the custom ingress-controllers with Exists matchExpressions routeSelector")
 		routerpod = getRouterPod(oc, ingctrl.name)
-		g.By("Patch the custom ingress-controllers with Exists matchExpressions routeSelector")
 		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"Exists\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route unsrv-1, unsrv-2 and unsrv-3 are admitted by the custom IC with Exists matchExpressions routeSelector, while route unsrv-4 not")
+		exutil.By("Check if route unsrv-1, unsrv-2 and unsrv-3 are admitted by the custom IC with Exists matchExpressions routeSelector, while route unsrv-4 not")
 		waitForOutput(oc, project1, "route/unsrv-1", jsonPath, "True")
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-3", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-4", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
+		waitForOutput(oc, project1, "route/unsrv-2", jsonPath, "True")
+		waitForOutput(oc, project1, "route/unsrv-3", jsonPath, "True")
+		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "")
 
-		g.By("Patch the custom ingresscontroller with routeSelector specified by DoesNotExist matchExpressions routeSelector")
+		exutil.By("Patch the custom ingress-controllers with DoesNotExist matchExpressions routeSelector")
 		routerpod = getRouterPod(oc, ingctrl.name)
-		g.By("Patch the custom ingress-controllers with DoesNotExist matchExpressions routeSelector")
 		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"DoesNotExist\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route unsrv-4 is admitted by the custom IC with DoesNotExist matchExpressions routeSelector, while route unsrv-1, unsrv-2 and unsrv-3 not")
+		exutil.By("Check if route unsrv-4 is admitted by the custom IC with DoesNotExist matchExpressions routeSelector, while route unsrv-1, unsrv-2 and unsrv-3 not")
 		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "True")
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-1", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-2", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project1, "route/unsrv-3", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
+		waitForOutput(oc, project1, "route/unsrv-1", jsonPath, "")
+		waitForOutput(oc, project1, "route/unsrv-2", jsonPath, "")
+		waitForOutput(oc, project1, "route/unsrv-3", jsonPath, "")
 	})
 
 	// author: shudili@redhat.com
@@ -762,15 +744,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			ingctrlResource = "ingresscontroller/" + ingctrl.name
 		)
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("create 3 more projects")
+		exutil.By("create 3 more projects")
 		project1 := oc.Namespace()
 		oc.SetupProject()
 		project2 := oc.Namespace()
@@ -779,49 +760,46 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		oc.SetupProject()
 		project4 := oc.Namespace()
 
-		g.By("Create an unsecure service and its backend pod, create the route in each of the 4 projects, then wait for some time until the backend pod and route are available")
+		exutil.By("Create an unsecure service and its backend pod, create the route in each of the 4 projects, then wait for some time until the backend pod and route are available")
 		for index, ns := range []string{project1, project2, project3, project4} {
 			nsSeq := index + 1
 			exutil.SetNamespacePrivileged(oc, ns)
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", testPodSvc, "-n", ns).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", testPodSvc, "-n", ns).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("service", srvName, "--name=shard-ns"+strconv.Itoa(nsSeq), "-n", ns).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		for indexWt, nsWt := range []string{project1, project2, project3, project4} {
 			nsSeqWt := indexWt + 1
-			err = waitForPodWithLabelReady(oc, nsWt, "name="+srvrcInfo)
+			err := waitForPodWithLabelReady(oc, nsWt, "name="+srvrcInfo)
 			exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time in project "+nsWt+"!")
 			waitForOutput(oc, nsWt, "route/shard-ns"+strconv.Itoa(nsSeqWt), ".metadata.name", "shard-ns"+strconv.Itoa(nsSeqWt))
 		}
 
-		g.By("Add labels to 3 projects")
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", project1, "test=aaa").Execute()
+		exutil.By("Add labels to 3 projects")
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", project1, "test=aaa").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", project2, "test=bbb").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", project3, "test=ccc").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Patch the custom ingresscontroller with In matchExpressions namespaceSelector")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		exutil.By("Patch the custom ingresscontroller with In matchExpressions namespaceSelector")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 		patchNamespaceSelector := "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"In\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route shard-ns1 and shard-ns2 are admitted by the custom IC with In matchExpressions namespaceSelector, while route shard-ns3 and shard-ns4 not")
+		exutil.By("Check if route shard-ns1 and shard-ns2 are admitted by the custom IC with In matchExpressions namespaceSelector, while route shard-ns3 and shard-ns4 not")
 		jsonPath := ".status.ingress[?(@.routerName==\"" + ingctrl.name + "\")].conditions[?(@.type==\"Admitted\")].status"
 		waitForOutput(oc, project1, "route/shard-ns1", jsonPath, "True")
-		value := fetchJSONPathValue(oc, project2, "route/shard-ns2", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
-		value = fetchJSONPathValue(oc, project3, "route/shard-ns3", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project4, "route/shard-ns4", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
+		waitForOutput(oc, project2, "route/shard-ns2", jsonPath, "True")
+		waitForOutput(oc, project3, "route/shard-ns3", jsonPath, "")
+		waitForOutput(oc, project4, "route/shard-ns4", jsonPath, "")
 
-		g.By("Patch the custom ingresscontroller with NotIn matchExpressions namespaceSelector")
+		exutil.By("Patch the custom ingresscontroller with NotIn matchExpressions namespaceSelector")
 		routerpod = getRouterPod(oc, ingctrl.name)
 		patchNamespaceSelector = "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"NotIn\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
@@ -829,16 +807,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route shard-ns3 and shard-ns4 are admitted by the custom IC with NotIn matchExpressions namespaceSelector, while route shard-ns1 and shard-ns2 not")
+		exutil.By("Check if route shard-ns3 and shard-ns4 are admitted by the custom IC with NotIn matchExpressions namespaceSelector, while route shard-ns1 and shard-ns2 not")
 		waitForOutput(oc, project3, "route/shard-ns3", jsonPath, "True")
-		value = fetchJSONPathValue(oc, project1, "route/shard-ns1", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project2, "route/shard-ns2", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project4, "route/shard-ns4", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
+		waitForOutput(oc, project1, "route/shard-ns1", jsonPath, "")
+		waitForOutput(oc, project2, "route/shard-ns2", jsonPath, "")
+		waitForOutput(oc, project4, "route/shard-ns4", jsonPath, "True")
 
-		g.By("Patch the custom ingresscontroller with Exists matchExpressions namespaceSelector")
+		exutil.By("Patch the custom ingresscontroller with Exists matchExpressions namespaceSelector")
 		routerpod = getRouterPod(oc, ingctrl.name)
 		patchNamespaceSelector = "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"Exists\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
@@ -846,16 +821,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route shard-ns1, shard-ns2 and shard-ns3 are admitted by the custom IC with Exists matchExpressions namespaceSelector, while route shard-ns4 not")
+		exutil.By("Check if route shard-ns1, shard-ns2 and shard-ns3 are admitted by the custom IC with Exists matchExpressions namespaceSelector, while route shard-ns4 not")
 		waitForOutput(oc, project1, "route/shard-ns1", jsonPath, "True")
-		value = fetchJSONPathValue(oc, project2, "route/shard-ns2", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
-		value = fetchJSONPathValue(oc, project3, "route/shard-ns3", jsonPath)
-		o.Expect(value).To(o.ContainSubstring("True"))
-		value = fetchJSONPathValue(oc, project4, "route/shard-ns4", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
+		waitForOutput(oc, project2, "route/shard-ns2", jsonPath, "True")
+		waitForOutput(oc, project3, "route/shard-ns3", jsonPath, "True")
+		waitForOutput(oc, project4, "route/shard-ns4", jsonPath, "")
 
-		g.By("Patch the custom ingresscontroller with DoesNotExist matchExpressions namespaceSelector")
+		exutil.By("Patch the custom ingresscontroller with DoesNotExist matchExpressions namespaceSelector")
 		routerpod = getRouterPod(oc, ingctrl.name)
 		patchNamespaceSelector = "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"DoesNotExist\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
@@ -863,14 +835,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
-		g.By("Check if route shard-ns4 is admitted by the custom IC with DoesNotExist matchExpressions namespaceSelector, while route shard-ns1, shard-ns2 and shard-ns3 not")
+		exutil.By("Check if route shard-ns4 is admitted by the custom IC with DoesNotExist matchExpressions namespaceSelector, while route shard-ns1, shard-ns2 and shard-ns3 not")
 		waitForOutput(oc, project4, "route/shard-ns4", jsonPath, "True")
-		value = fetchJSONPathValue(oc, project1, "route/shard-ns1", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project2, "route/shard-ns2", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
-		value = fetchJSONPathValue(oc, project3, "route/shard-ns3", jsonPath)
-		o.Expect(value).To(o.BeEmpty())
+		waitForOutput(oc, project1, "route/shard-ns1", jsonPath, "")
+		waitForOutput(oc, project2, "route/shard-ns2", jsonPath, "")
+		waitForOutput(oc, project3, "route/shard-ns3", jsonPath, "")
 	})
 
 	g.It("Author:mjoseph-NonPreRelease-Longduration-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
@@ -1035,47 +1004,45 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Try to create custom key and custom certification by openssl, create a new self-signed CA at first, creating the CA key")
+		exutil.By("Try to create custom key and custom certification by openssl, create a new self-signed CA at first, creating the CA key")
 		// Generation of a new self-signed CA, in case a corporate or another CA is already existing can be used.
 		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 4096`, name)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create the CA certificate")
+		exutil.By("Create the CA certificate")
 		opensslCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.crt -subj %s`, name, validity, name, caSubj)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create a new user certificate, crearing the user CSR with the private user key")
+		exutil.By("Create a new user certificate, crearing the user CSR with the private user key")
 		opensslCmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:2048 -keyout %s.key -subj %s -out %s.csr`, userCert, userSubj, userCert)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Sign the user CSR and generate the certificate")
+		exutil.By("Sign the user CSR and generate the certificate")
 		opensslCmd = fmt.Sprintf(`openssl x509 -extfile <(printf "subjectAltName = DNS:*.ocp62530.example.com") -req -in %s.csr -CA %s-ca.crt -CAkey %s-ca.key -CAcreateserial -out %s.crt -days %d -sha256`, userCert, name, name, userCert, validity)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create a tls secret in openshift-ingress ns")
+		exutil.By("Create a tls secret in openshift-ingress ns")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-ingress", "secret", ingctrlCert).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-ingress", "secret", "tls", ingctrlCert, "--cert="+customCert, "--key="+customKey).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + ".example.com"
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch defaultCertificate with custom secret to the IC")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		exutil.By("Patch defaultCertificate with custom secret to the IC")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"defaultCertificate\":{\"name\": \""+ingctrlCert+"\"}}}")
-		waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 		secret := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, ".spec.defaultCertificate.name")
 		o.Expect(secret).To(o.ContainSubstring(ingctrlCert))
 
-		g.By("Check the router-certs in the openshift-config-managed namespace, the data is 1, which should not be increased")
+		exutil.By("Check the router-certs in the openshift-config-managed namespace, the data is 1, which should not be increased")
 		output, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-config-managed", "secret", "router-certs", "-o=go-template='{{len .data}}'").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(strings.Trim(output, "'")).To(o.Equal("1"))
