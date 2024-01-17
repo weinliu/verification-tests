@@ -2272,8 +2272,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			g.Skip("SNO cluster - skipping test ...")
 		}
 
+		if len(strings.TrimSpace(firstNode)) == 0 {
+			g.Skip("Skipping becauuse there's no cluster with READY state")
+		}
+
 		exutil.By("1) Install the OperatorGroup in a random project")
 		og.createwithCheck(oc, itName, dr)
+
+		exists, _ := clusterPackageExists(oc, sub)
+		if !exists {
+			g.Skip("SKIP:PackageMissing learn does not exist in catalog qe-app-registry")
+		}
 		exutil.By("2) Install the Prometheus with Automatic approval")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
