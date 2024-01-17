@@ -1811,28 +1811,28 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.Skip("This case is not executable when console CO is absent")
 		}
 
-		g.By("apply monitoringPlugin config and wait for all pods ready")
+		g.By("apply monitoringPlugin config and check config applied")
 		createResourceFromYaml(oc, "openshift-monitoring", monitoringPluginConfig)
-		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		//check new config takes effect
+		cmd := "-ojsonpath={.spec.template.spec.containers[].resources}"
+		checkYamlconfig(oc, "openshift-monitoring", "deployment", "monitoring-plugin", cmd, `{"limits":{"cpu":"30m","memory":"120Mi"},"requests":{"cpu":"15m","memory":"60Mi"}}`, true)
 
-		g.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service/deployment are exist")
-		resourceNames := []string{"ConfigMap", "ConsolePlugin", "PodDisruptionBudget", "ServiceAccount", "Service", "deployment"}
+		g.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service are exist")
+		resourceNames := []string{"ConfigMap", "ConsolePlugin", "PodDisruptionBudget", "ServiceAccount", "Service"}
 		for _, resource := range resourceNames {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "monitoring-plugin", "-n", "openshift-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("monitoring-plugin"))
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		// this step is aim to give time to monitoring-plugin pods loading
-		g.By("check monitoring-plugin container usage")
-		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=sum(rate(container_cpu_usage_seconds_total{container="monitoring-plugin",namespace="openshift-monitoring"}[5m]))'`, token, `"value"`, uwmLoadTime)
-
-		g.By("check monitoring-plugin pod config")
+		g.By("get monitoring-plugin pod name")
 		monitoringPluginPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check monitoring-plugin pod config")
+		e2e.Logf("monitoringPluginPodNames: %v", monitoringPluginPodNames)
+		e2e.Logf(oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=monitoring-plugin", "--no-headers").Output())
 		for _, pod := range monitoringPluginPodNames {
-			e2e.Logf("If the pod is not ready or not found, it means the pod:{%s} was restarted during the test, pod name changed", pod)
 			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
 			cmd := "-ojsonpath={.spec.nodeSelector}"
 			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `{"node-role.kubernetes.io/worker":""}`, true)
