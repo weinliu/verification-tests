@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		exutil.SkipNoOLMCore(oc)
 
 		g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
-		SkipMissingRhcosWorkers(oc)
+		SkipClustersWithRhelNodes(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")

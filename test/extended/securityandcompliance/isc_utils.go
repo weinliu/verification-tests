@@ -61,7 +61,7 @@ const (
 )
 
 func getNodeNumberPerLabel(oc *exutil.CLI, label string) int {
-	nodeNameString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", label, "-o=jsonpath={.items[*].metadata.name}").Output()
+	nodeNameString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", label, "-o=jsonpath={.items[*].metadata.name}", "--ignore-not-found").Output()
 	nodeNumber := len(strings.Fields(nodeNameString))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the result of nodeNumber:%v", nodeNumber)
