@@ -1,0 +1,34 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: sriovnetwork-whereabouts-template
+objects:
+- kind: SriovNetwork
+  apiVersion: sriovnetwork.openshift.io/v1
+  metadata:
+    name: ${SRIOVNETNAME}
+    namespace: ${NAMESPACE}
+  spec:
+    ipam: |
+      {
+        "type": "whereabouts",
+        "range":"10.30.0.0/30"
+      }
+    vlan: "${{VLANID}}"
+    spoofChk: ${SPOOFCHK}
+    trust: ${TRUST}
+    resourceName: ${SRIOVNETPOLICY}
+    networkNamespace: ${TARGETNS}
+
+parameters:
+- name: SRIOVNETNAME 
+- name: TARGETNS
+- name: SRIOVNETPOLICY
+- name: NAMESPACE
+- name: VLANID
+- name: SPOOFCHK
+  value: "on"
+- name: TRUST
+  value: "off"
+
+

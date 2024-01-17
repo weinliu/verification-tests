@@ -1,0 +1,208 @@
+package networking
+
+import (
+	"path/filepath"
+	"strings"
+
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
+)
+
+var _ = g.Describe("[sig-networking] SDN makesriovbasic", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc                  = exutil.NewCLI("sriov-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sriov")
+		sriovNeworkTemplate = filepath.Join(buildPruningBaseDir, "sriovnetwork-whereabouts-template.yaml")
+		sriovOpNs           = "openshift-sriov-network-operator"
+	)
+	testData := []struct {
+		Name          string
+		DeviceID      string
+		Vendor        string
+		InterfaceName string
+	}{
+		{"e810xxv", "159b", "8086", "ens2f0"},
+		{"e810c", "1593", "8086", "ens2f2"},
+		{"x710", "1572", "8086", "ens5f0"}, //NO-CARRIER
+		{"bcm57414", "16d7", "14e4", "ens4f1np1"},
+		{"bcm57508", "1750", "14e4", "ens3f0np0"}, //NO-CARRIER
+		{"e810back", "1591", "8086", "ens4f2"},
+	}
+	g.BeforeEach(func() {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
+			g.Skip("This case will only run on rdu1 or rdu2 dual stack cluster. , skip for other envrionment!!!")
+		}
+		exutil.By("check the sriov operator is running")
+		chkSriovOperatorStatus(oc, sriovOpNs)
+	})
+
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-25959-Test container with spoofchk is on [Disruptive]", func() {
+		var caseID = "25959-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					spoolchk:         "on",
+					trust:            "off",
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "spoof checking on")
+
+			}()
+		}
+	})
+
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-70820-Test container with spoofchk is off [Disruptive]", func() {
+		var caseID = "70820-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					spoolchk:         "off",
+					trust:            "on",
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "spoof checking off")
+			}()
+		}
+	})
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-25960-Test container with trust is off [Disruptive]", func() {
+		var caseID = "25960-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					spoolchk:         "off",
+					trust:            "off",
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "trust off")
+
+			}()
+		}
+	})
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-70821-Test container with trust is on [Disruptive]", func() {
+		var caseID = "70821-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					spoolchk:         "on",
+					trust:            "on",
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "trust on")
+
+			}()
+		}
+	})
+
+})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +29,7 @@ type sriovNetworkNodePolicy struct {
 	deviceType   string
 	pfName       string
 	deviceID     string
-	vondor       string
+	vendor       string
 	numVfs       int
 	resourceName string
 	template     string
@@ -41,6 +42,9 @@ type sriovNetwork struct {
 	networkNamespace string
 	template         string
 	namespace        string
+	spoolchk         string
+	trust            string
+	vlanId           int
 }
 
 type sriovTestPod struct {
@@ -244,7 +248,7 @@ func (pod *sriovPod) sendHTTPRequest(oc *exutil.CLI, user, cmd string) {
 }
 func (sriovPolicy *sriovNetworkNodePolicy) createPolicy(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovPolicy.template, "-p", "NAMESPACE="+sriovPolicy.namespace, "DEVICEID="+sriovPolicy.deviceID, "SRIOVNETPOLICY="+sriovPolicy.policyName, "DEVICETYPE="+sriovPolicy.deviceType, "PFNAME="+sriovPolicy.pfName, "VENDOR="+sriovPolicy.vondor, "NUMVFS="+strconv.Itoa(sriovPolicy.numVfs), "RESOURCENAME="+sriovPolicy.resourceName)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovPolicy.template, "-p", "NAMESPACE="+sriovPolicy.namespace, "DEVICEID="+sriovPolicy.deviceID, "SRIOVNETPOLICY="+sriovPolicy.policyName, "DEVICETYPE="+sriovPolicy.deviceType, "PFNAME="+sriovPolicy.pfName, "VENDOR="+sriovPolicy.vendor, "NUMVFS="+strconv.Itoa(sriovPolicy.numVfs), "RESOURCENAME="+sriovPolicy.resourceName)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -256,7 +260,7 @@ func (sriovPolicy *sriovNetworkNodePolicy) createPolicy(oc *exutil.CLI) {
 
 func (sriovNetwork *sriovNetwork) createSriovNetwork(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNetwork.template, "-p", "NAMESPACE="+sriovNetwork.namespace, "SRIOVNETNAME="+sriovNetwork.name, "TARGETNS="+sriovNetwork.networkNamespace, "SRIOVNETPOLICY="+sriovNetwork.resourceName)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNetwork.template, "-p", "NAMESPACE="+sriovNetwork.namespace, "SRIOVNETNAME="+sriovNetwork.name, "TARGETNS="+sriovNetwork.networkNamespace, "SRIOVNETPOLICY="+sriovNetwork.resourceName, "SPOOFCHK="+sriovNetwork.spoolchk, "TRUST="+sriovNetwork.trust, "VLANID="+strconv.Itoa(sriovNetwork.vlanId))
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -280,7 +284,7 @@ func (sriovTestPod *sriovTestPod) createSriovTestPod(oc *exutil.CLI) {
 
 // get the pciAddress pod is used
 func getPciAddress(namespace string, podName string, policyName string) string {
-	pciAddress, err := e2eoutput.RunHostCmd(namespace, podName, "printenv PCIDEVICE_OPENSHIFT_IO_"+strings.ToUpper(policyName))
+	pciAddress, err := e2eoutput.RunHostCmdWithRetries(namespace, podName, "printenv PCIDEVICE_OPENSHIFT_IO_"+strings.ToUpper(policyName), 3*time.Second, 30*time.Second)
 	e2e.Logf("Get the pci address env is: %s", pciAddress)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(pciAddress).NotTo(o.BeEmpty())
@@ -372,4 +376,76 @@ func findSchedulingDisabledNode(oc *exutil.CLI, interval, timeout time.Duration,
 	})
 	exutil.AssertWaitPollNoErr(errNode, fmt.Sprintf("no node become SchedulingDisabled or Notready!"))
 	return scheduleDisableNodeName
+}
+
+func chkVFStatusMatch(oc *exutil.CLI, nodeName, nicName, macAddress, expectVaule string) {
+	cmd := fmt.Sprintf("ip link show %s | grep %s", nicName, macAddress)
+	output, debugNodeErr := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+	e2e.Logf("The ip link show. \n %v", output)
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(output, expectVaule)).To(o.BeTrue())
+}
+
+func initVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string) bool {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
+	sriovNetworkNodePolicyTemplate := filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
+	sriovPolicy := sriovNetworkNodePolicy{
+		policyName:   name,
+		deviceType:   "netdevice",
+		deviceID:     deviceID,
+		pfName:       interfaceName,
+		vendor:       vendor,
+		numVfs:       2,
+		resourceName: name,
+		template:     sriovNetworkNodePolicyTemplate,
+		namespace:    ns,
+	}
+
+	exutil.By("Check the deviceID if exist on the cluster worker")
+	e2e.Logf("Create VF on name: %s, deviceID: %s, interfacename: %s, vendor: %s", name, deviceID, interfaceName, vendor)
+	if !checkDeviceIDExist(oc, ns, sriovPolicy.deviceID) {
+		e2e.Logf("the cluster do not contain the sriov card. skip this testing!")
+		return false
+	}
+	//defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
+	e2e.Logf("note:here sriovnodenetworkpolicy will not be removed after this cases because it need to reboot server and used for all related cases, and this should not affect the whole cluster config and other component testing,  if other test cases failed due to this policy but pass without this policy , please consider it's product bug")
+	sriovPolicy.createPolicy(oc)
+	waitForSriovPolicyReady(oc, ns)
+	return true
+}
+
+func chkVFStatusWithPassTraffic(oc *exutil.CLI, nadName, nicName, ns, expectVaule string) {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
+	sriovTestPodTemplate := filepath.Join(buildPruningBaseDir, "sriov-netdevice-template.yaml")
+	exutil.By("Create test pod on the target namespace")
+	for i := 0; i < 2; i++ {
+		sriovTestPod := sriovTestPod{
+			name:        "testpod" + strconv.Itoa(i),
+			namespace:   ns,
+			networkName: nadName,
+			template:    sriovTestPodTemplate,
+		}
+		sriovTestPod.createSriovTestPod(oc)
+		err := waitForPodWithLabelReady(oc, ns, "name=sriov-netdevice")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-netdevice not ready")
+		nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns, sriovTestPod.name)
+		o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+		podMac, err := e2eoutput.RunHostCmdWithRetries(ns, sriovTestPod.name, "ip link show net1 | awk '/link\\/ether/ {print $2}'", 3*time.Second, 30*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podMac = strings.TrimSpace(podMac)
+		e2e.Logf("nodename %v", nodeName)
+		chkVFStatusMatch(oc, nodeName, nicName, podMac, expectVaule)
+	}
+	exutil.By("Check the interface is connected, if not skip the connect testing")
+	podConnectStatus, err := e2eoutput.RunHostCmdWithRetries(ns, "testpod1", "ip addr show net1", 3*time.Second, 30*time.Second)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The ip connection show. \n %v", podConnectStatus)
+	//if podConnectStatus including NO-CARRIER, then skip the connection testing
+	if !strings.Contains(podConnectStatus, "NO-CARRIER") {
+		exutil.By("Check test pod have second interface with assigned ip")
+		pod2ns1IPv4, err := e2eoutput.RunHostCmdWithRetries(ns, "testpod1", "ip -o -4 addr show dev net1 | awk '$3 == \"inet\" {print $4}' | cut -d'/' -f1", 3*time.Second, 30*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
+		CurlMultusPod2PodPass(oc, ns, "testpod0", pod2ns1IPv4, "net1", "Hello")
+	}
 }
