@@ -25,5 +25,9 @@ export const nodesPage = {
     cy.get('form[name="form"]').should('be.visible');
     cy.contains('button', 'Restore default columns').click();
     cy.get('[data-test="confirm-action"]').click();
+  },
+  checkMachineHealthCheck: (mhcName: string) => {
+    cy.get('button[data-test="Health checks"]').click();
+    cy.contains('a', `${mhcName}`).should('exist');
   }
 }

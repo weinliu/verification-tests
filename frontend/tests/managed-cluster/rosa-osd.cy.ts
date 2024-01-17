@@ -46,10 +46,8 @@ describe("Features on managed cluster such as ROSA/OSD", () => {
     cy.get('a').should('not.contain', 'NetwordPolicies documentation');
     cy.adminCLI(`oc delete networkpolicies testnp -n default`);
 
-    //hide projec access help link
-    Pages.gotoOneProjectAcessTab('openshift-console');
-//    cy.get('a[data-quickstart-id="qs-nav-project"]').click();
-//    cy.get('[data-test-id="horizontal-link-Project access"]').click();
+    //hide project access help link
+    Pages.gotoOneProjectAccessTab('openshift-console');
     cy.get('a').should('not.contain', 'access control documentation');
     cy.switchPerspective('Administrator');
   });

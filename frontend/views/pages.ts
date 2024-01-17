@@ -11,7 +11,7 @@ export const Pages = {
     cy.get('button[data-test="item-create"]').click();
     cy.get('form[name="form"]').should('be.visible');
   },
-  gotoOneProjectAcessTab: (namespace: string) => {
+  gotoOneProjectAccessTab: (namespace: string) => {
     cy.switchPerspective('Developer');
     cy.visit(`/project-details/ns/${namespace}/access`);
     guidedTour.close();
@@ -83,5 +83,9 @@ export const Pages = {
   },
   gotoUsers: () => {
     cy.visit('/k8s/cluster/user.openshift.io~v1~User');
+  },
+  gotoNodeOverviewPage: (nodeName: string) => {
+    cy.visit(`/k8s/cluster/nodes/${nodeName}/`);
+    cy.get('[data-test-id="dashboard"]').should('be.visible');
   }
 }

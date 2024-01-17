@@ -162,5 +162,16 @@ Cypress.Commands.add("isManagedCluster", () => {
       return cy.wrap(false);
     }
   });
+});
 
+Cypress.Commands.add("isIPICluster", () => {
+  cy.exec(`oc get machine -n openshift-machine-api --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
+    if( result.stdout.includes('Running') ){
+      cy.log("Testing on IPI cluster!");
+      return cy.wrap(true);
+    } else {
+      cy.log("Not IPI cluster. Skip!");
+      return cy.wrap(false);
+    }
+  });
 });
