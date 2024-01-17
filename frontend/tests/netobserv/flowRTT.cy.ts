@@ -41,7 +41,7 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
         })
 
         it("(OCP-68246, aramesha) Verify flowRTT column values", { tags: ['e2e', 'admin'] }, function () {
-            // Go to table view
+            // go to table view
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
 
@@ -50,14 +50,11 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
                 cy.get(colSelectors.flowRTT).should('exist')
             })
  
-            // Filter flows with flowRTT value > 0
+            // filter on Protocol TCP, all flows should have flowRTT value != n/a
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
             cy.byTestID('group-2-toggle').click().should('be.visible')
-            cy.byTestID('time_flow_rtt').click()
-            cy.get('#filter-compare-toggle-button').should('exist').click().then(moreOpts => {
-                cy.contains("More than").should('exist').click()
-            })
-            cy.get('#search').type('0' + '{enter}')
+            cy.byTestID('protocol').click()
+            cy.get('#autocomplete-search').type('TCP' + '{enter}')
  
             cy.get('[data-test-td-column-id=TimeFlowRttMs]').each((td) => {
                 expect(td).attr("data-test-td-value").to.match(RegExp("^[0-9]*$"))
