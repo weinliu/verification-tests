@@ -25,6 +25,7 @@ ln -s ./upstream_console/frontend/packages/integration-tests-cypress upstream
 yarn install
 
 set +x
+source "${SHARED_DIR}/runtime_env"
 cp -L ${SHARED_DIR}/kubeconfig /tmp/kubeconfig
 export KUBECONFIG=/tmp/kubeconfig
 console_route=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}')
