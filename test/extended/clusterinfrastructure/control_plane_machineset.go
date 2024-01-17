@@ -625,7 +625,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(cpmsName).To(o.ContainSubstring("the name of the object (invalid) does not match the name on the URL (cluster)"))
 		g.By("Update CPMS replicas")
 		cpmsReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"replicas": 4}}`, "--type=merge", "-n", machineAPINamespace).Output()
-		o.Expect(cpmsReplicas).To(o.ContainSubstring("replicas is immutable"))
+		o.Expect(cpmsReplicas).To(o.ContainSubstring("Unsupported value"))
 		g.By("Update CPMS selector")
 		cpmsSelector, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"selector":{"matchLabels":{"machine.openshift.io/cluster-api-cluster": null}}}}`, "--type=merge", "-n", machineAPINamespace).Output()
 		o.Expect(cpmsSelector).To(o.ContainSubstring("selector is immutable"))
