@@ -1,6 +1,9 @@
 package router
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -693,11 +696,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.It("NonHyperShiftHOST-Author:mjoseph-Critical-51946-Support CoreDNS forwarding DNS requests over TLS using UpstreamResolvers [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			cmFile              = filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
 			coreDNSSrvPod       = filepath.Join(buildPruningBaseDir, "coreDNS-pod.yaml")
 			srvPodName          = "test-coredns"
 			srvPodLabel         = "name=test-coredns"
 			resourceName        = "dns.operator.openshift.io/default"
+			dirname             = "/tmp/OCP-51946-ca/"
+			caKey               = dirname + "ca.key"
+			caCert              = dirname + "ca-bundle.crt"
+			caSubj              = "/CN=NE-Test-Root-CA"
+			ns                  = "openshift-dns"
+			dnsPodLabel         = "dns.operator.openshift.io/daemonset-dns=default"
 		)
 
 		exutil.By("1.Prepare the dns testing node and pod")
@@ -713,20 +721,38 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
 		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
-
-		exutil.By("3.Get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
 
-		exutil.By("4.Create configmap client-ca-xxxxx in namespace openshift-config")
+		exutil.By("3.Generate a new self-signed CA")
+		defer os.RemoveAll(dirname)
+		err = os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Generate the CA private key")
+		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s 4096`, caKey)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Create the CA certificate")
+		opensslCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s -sha256 -days 1 -out %s -subj %s`, caKey, caCert, caSubj)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4.Create configmap ca-xxxxx-bundle in namespace openshift-config")
 		defer deleteConfigMap(oc, "openshift-config", "ca-51946-bundle")
-		createConfigMapFromFile(oc, "openshift-config", "ca-51946-bundle", cmFile)
+		createConfigMapFromFile(oc, "openshift-config", "ca-51946-bundle", caCert)
 
 		exutil.By("5.Patch the dns.operator/default with transport option as TLS for upstreamresolver")
 		dnsUpstreamResolver := "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers\", \"value\":{\"transportConfig\": {\"tls\":{\"caBundle\": {\"name\": \"ca-51946-bundle\"}, \"serverName\": \"dns.ocp51946.ocp\"}, \"transport\": \"TLS\"}, \"upstreams\":[{\"address\":\"" + srvPodIP + "\",  \"port\": 853, \"type\":\"Network\"}]}}]"
 		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
 
 		exutil.By("6.Check and confirm the upstream resolver's IP(srvPodIP) and custom CAbundle name appearing in the dns pod")
-		upstreams := pollReadDnsCorefile(oc, oneDnsPod, srvPodIP, "-b6", "forward")
+		// since new configmap is mounted so dns pod is restarted
+		waitErr := waitForResourceToDisappear(oc, ns, "pod/"+oneDnsPod)
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but pod %s is not terminated", oneDnsPod))
+		waitErr = waitForPodWithLabelReady(oc, ns, dnsPodLabel)
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but no dns pod ready"))
+		newDnsPod := getDNSPodName(oc)
+		upstreams := readDNSCorefile(oc, newDnsPod, srvPodIP, "-A4")
 		o.Expect(upstreams).To(o.ContainSubstring("forward . tls://" + srvPodIP + ":853"))
 		o.Expect(upstreams).To(o.ContainSubstring("tls_servername dns.ocp51946.ocp"))
 		o.Expect(upstreams).To(o.ContainSubstring("tls /etc/pki/dns.ocp51946.ocp-ca-ca-51946-bundle"))
