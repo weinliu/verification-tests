@@ -1912,6 +1912,157 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: jechen@redhat.com
+	g.It("NonHyperShiftHOST-Author:jechen-High-70667-After pods are deleted, SNAT and lr-policy-list for egressIP should be deleted correctly when egressIP uses podSelector with NotIn operator. [Disruptive]", func() {
+
+		// This is for https://issues.redhat.com/browse/OCPBUGS-24055
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+
+		exutil.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList.Items)).ShouldNot(o.Equal(0))
+		egressNode := nodeList.Items[0].Name
+
+		exutil.By("2 Apply EgressLabel Key to one node. \n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+
+		exutil.By("3. Obtain the namespace, create a couple of test pods in it\n")
+		ns1 := oc.Namespace()
+
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		pod2 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		exutil.By("4. Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, egressNode, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+
+		egressip1 := egressIPResource1{
+			name:          "egressip-70667",
+			template:      egressIPTemplate,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "purple",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+
+		exutil.By("6. Patch change egressip object to use matchExpression for podSelector with NotIn operator\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/egressip-70667", "-p", "{\"spec\":{\"podSelector\":{\"matchExpressions\":[{\"key\": \"color\", \"operator\": \"NotIn\", \"values\": [\"pink\",\"blue\",\"yellow\",\"green\",\"orange\"]}],\"matchLabels\":null}}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("7. Label two test pods in the way that ony hello-pod1 meets criteria to use egressip while hello-pod2 does not meet criteria to use egressip\n")
+		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color=red")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer exutil.LabelPod(oc, ns1, pod2.name, "color-")
+		err = exutil.LabelPod(oc, ns1, pod2.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		helloPod1IP, _ := getPodIP(oc, ns1, pod1.name)
+		e2e.Logf("hello-pod1's IP: %v", helloPod1IP)
+		helloPod1Node, err := exutil.GetPodNodeName(oc, ns1, pod1.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("hello-pod1 %s is on node %s", pod1.name, helloPod1Node)
+
+		helloPod2Node, err := exutil.GetPodNodeName(oc, ns1, pod2.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(helloPod2Node).NotTo(o.Equal(""))
+		_, helloPod2NodeIP := getNodeIP(oc, helloPod2Node)
+
+		exutil.By("8. Check SNAT in northdb of egress node, there should be only 1 entry that contains hello-pod1's pod IP. \n")
+		snatIP, natErr := getSNATofEgressIP(oc, egressNode, freeIPs[0])
+		o.Expect(natErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Before hello-pod1 is deleted, snat found: %v\n", snatIP)
+		o.Expect(len(snatIP)).Should(o.Equal(1))
+		o.Expect(snatIP[0]).To(o.ContainSubstring(helloPod1IP))
+
+		exutil.By("9. Check lr-policy-list in 100 table of northdb on the node where hello-pod1 resides on, there should be an entry that contains hello-pod1's pod IP. \n")
+		lrPolicyList, lrpErr := getlrPolicyList(oc, helloPod1Node, "100 ")
+		o.Expect(lrpErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Before hello-pod1 is deleted, lrPolicyList found: %v\n", lrPolicyList)
+		o.Expect(len(lrPolicyList)).Should(o.Equal(1))
+		o.Expect(lrPolicyList[0]).To(o.ContainSubstring(helloPod1IP))
+
+		exutil.By("10 Check the sourceIP of the two test pods, hello-pod1 should use egressip, while hello-pod2 should uses its node IP")
+		var dstHost, primaryInf string
+		var infErr, snifErr error
+		var tcpdumpDS *tcpdumpDaemonSet
+		switch flag {
+		case "ipecho":
+			exutil.By(" Use IP-echo service to verify egressIP for hello-pod1.")
+			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, freeIPs[0])
+
+			exutil.By("Verify hello-pod2 uses its node's IP as source IP")
+			verifyEgressIPWithIPEcho(oc, pod2.namespace, pod2.name, ipEchoURL, true, helloPod2NodeIP)
+		case "tcpdump":
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, helloPod2Node, "tcpdump")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, helloPod2Node, "tcpdump", "true")
+			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
+			o.Expect(infErr).NotTo(o.HaveOccurred())
+			dstHost = nslookDomainName("ifconfig.me")
+			defer deleteTcpdumpDS(oc, "tcpdump-70667", ns1)
+			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-70667", "tcpdump", "true", dstHost, primaryInf, 80)
+			o.Expect(snifErr).NotTo(o.HaveOccurred())
+			exutil.By("Verify from tcpDump that source IP for hello-pod1 is the egressIP")
+			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, freeIPs[0], dstHost, ns1, tcpdumpDS.name, true)
+			o.Expect(egressErr).NotTo(o.HaveOccurred())
+			exutil.By("Verify from tcpDump that source IP for hello-pod2 is its node's IP")
+			egressErr2 := verifyEgressIPinTCPDump(oc, pod2.name, pod2.namespace, helloPod2NodeIP, dstHost, ns1, tcpdumpDS.name, true)
+			o.Expect(egressErr2).NotTo(o.HaveOccurred())
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("11. Delete hello-pod1 that uses the egressip. \n")
+		removeResource(oc, true, true, "pod", pod1.name, "-n", pod1.namespace)
+
+		exutil.By("12. Check SNAT and lr-policy-list again after deleting hello-pod1 that uses the egressip, they should all be deleted. \n")
+		// Because two tcpdump pods are created from step 10 in same namespace, they do not have label color, which make them meet criteria of egresssip podSelector
+		// So there will be SNAT or lr-policy-list entry(or entries) for tcpdump pod(s), but we just need to verify there is no SNAT and lr-policy-list for hello-pod1
+		o.Eventually(func() bool {
+			snatIP, _ := getSNATofEgressIP(oc, egressNode, freeIPs[0])
+			e2e.Logf("\n After hello-pod1 is deleted, snat found: %v\n", snatIP)
+			return !isValueInList(freeIPs[0], snatIP)
+		}, "300s", "10s").Should(o.BeTrue(), "SNAT for the egressip is not deleted!!")
+
+		o.Eventually(func() bool {
+			lrPolicyList, _ = getlrPolicyList(oc, helloPod1Node, "100 ")
+			e2e.Logf("\n After hello-pod1 is deleted, lrPolicyList found: %v\n", lrPolicyList)
+			return !isValueInList(helloPod1IP, lrPolicyList)
+		}, "300s", "10s").Should(o.BeTrue(), "lr-policy-list for the egressip is not deleted!!")
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
@@ -2957,9 +3108,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		exutil.By("6. Check SNATs of stateful pod and completed pod on the egressNode before rebooting it.\n")
 		snatIP, snatErr := getSNATofEgressIP(oc, nodeToBeRebooted, freeIPs[0])
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
-		e2e.Logf("the SNAT IP for the egressIP is:%v", snatIP)
-		o.Expect(snatIP).Should(o.Equal(helloPodIPv4))
-		o.Expect(snatIP).ShouldNot(o.Equal(completedPodIPv4))
+		o.Expect(len(snatIP)).Should(o.Equal(1))
+		e2e.Logf("the SNAT IP for the egressIP is:%v", snatIP[0])
+		o.Expect(snatIP[0]).Should(o.Equal(helloPodIPv4))
+		o.Expect(snatIP[0]).ShouldNot(o.Equal(completedPodIPv4))
 
 		exutil.By("7. Reboot egress node.\n")
 		defer checkNodeStatus(oc, nodeToBeRebooted, "Ready")
@@ -2999,15 +3151,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		exutil.By("10. Check SNAT on the second egressNode\n")
 		snatIP, snatErr = getSNATofEgressIP(oc, newEgressIPHostNode, freeIPs[0])
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
+		o.Expect(len(snatIP)).Should(o.Equal(1))
 
 		e2e.Logf("After egressIP failover, the SNAT IP for the egressIP on second router is:%v", snatIP)
 		exutil.By("10.1 There should be the IP of the newly created statefulState hello pod, not the IP of old hello pod.\n")
-		o.Expect(snatIP).Should(o.Equal(newHelloPodIPv4))
-		o.Expect(snatIP).ShouldNot(o.Equal(helloPodIPv4))
+		o.Expect(snatIP[0]).Should(o.Equal(newHelloPodIPv4))
+		o.Expect(snatIP[0]).ShouldNot(o.Equal(helloPodIPv4))
 
 		exutil.By("10.2 There should be no SNAT for old or new completed pod's IP.\n")
-		o.Expect(snatIP).ShouldNot(o.Equal(newEgressIPHostNode)) //there should be no SNAT for completed pod's old or new IP address
-		o.Expect(snatIP).ShouldNot(o.Equal(completedPodIPv4))    //there should be no SNAT for completed pod's old or new IP address
+		o.Expect(snatIP[0]).ShouldNot(o.Equal(newEgressIPHostNode)) //there should be no SNAT for completed pod's old or new IP address
+		o.Expect(snatIP[0]).ShouldNot(o.Equal(completedPodIPv4))    //there should be no SNAT for completed pod's old or new IP address
 
 		// Make sure the rebooted node is back to Ready state
 		checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")
@@ -3022,9 +3175,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		e2e.Logf("unassigned nodes are:%v", unassignedNodes)
 
 		for i := 0; i < len(unassignedNodes); i++ {
-			snatIP, snatErr = getSNATofEgressIP(oc, unassignedNodes[i], freeIPs[0])
-			o.Expect(snatErr).To(o.HaveOccurred())
-			o.Expect(snatIP).Should(o.Equal(""))
+			snatIP, _ = getSNATofEgressIP(oc, unassignedNodes[i], freeIPs[0])
+			o.Expect(len(snatIP)).Should(o.Equal(0))
 			e2e.Logf("As expected, there is not stale NAT on the unassigned node:%v", unassignedNodes[i])
 		}
 	})

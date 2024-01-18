@@ -2174,32 +2174,32 @@ func getRouterID(oc *exutil.CLI, nodeName string) (string, error) {
 	return routerID, checkOVNDbErr
 }
 
-func getSNATofEgressIP(oc *exutil.CLI, nodeName, egressIP string) (string, error) {
+func getSNATofEgressIP(oc *exutil.CLI, nodeName, egressIP string) ([]string, error) {
 	// get the ovnkube-node pod on the node
 	ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
 	o.Expect(podErr).NotTo(o.HaveOccurred())
 	o.Expect(ovnKubePod).ShouldNot(o.Equal(""))
-	var cmdOutput, snatIP string
+	var cmdOutput string
 	var cmdErr error
+	var snatIP []string
 
 	routerName := "GR_" + nodeName
 	cmd := "ovn-nbctl lr-nat-list " + routerName + " | grep " + egressIP + " |awk '{print $3}'"
 	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
-		cmdOutput, cmdErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubePod, cmd)
+		cmdOutput, cmdErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubePod, "northd", cmd)
 		if cmdErr != nil {
 			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
 			return false, nil
 		}
 
-		// Command output always has first line as: Defaulted container "northd" out of: northd, nbdb, kube-rbac-proxy, sbdb, ovnkube-master, ovn-dbchecker
-		// Take result from the second line
 		if cmdOutput != "" {
 			cmdOutputLines := strings.Split(cmdOutput, "\n")
-			if len(cmdOutputLines) >= 2 {
-				snatIP = cmdOutputLines[1]
-				return true, nil
+			for i := 0; i < len(cmdOutputLines); i++ {
+				snatIP = append(snatIP, cmdOutputLines[i])
 			}
+			return true, nil
 		}
+
 		e2e.Logf("%v,Waiting for expected result to be synced, try again ...")
 		return false, nil
 	})
@@ -3235,4 +3235,39 @@ func checkEgressFWStatus(oc *exutil.CLI, fwName string, ns string, expectedStatu
 		return true, nil
 	})
 	return checkErr
+}
+
+// get lr-policy-list from logical_router_policy table
+func getlrPolicyList(oc *exutil.CLI, nodeName, tableID string) ([]string, error) {
+	// get the ovnkube-node pod on the node
+	ovnKubeNodePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+	o.Expect(podErr).NotTo(o.HaveOccurred())
+	o.Expect(ovnKubeNodePod).ShouldNot(o.Equal(""))
+	var lspOutput string
+	var lspErr error
+	var lrPolicyList []string
+
+	lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep '100 '"
+	checkLspErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		lspOutput, lspErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, "northd", lspCmd)
+		if lspErr != nil {
+			e2e.Logf("%v,Waiting for lr-policy-list to be synced, try next ...,", lspErr)
+			return false, nil
+		}
+
+		if lspOutput != "" {
+			cmdOutputLines := strings.Split(lspOutput, "\n")
+			for i := 0; i < len(cmdOutputLines); i++ {
+				lrPolicyList = append(lrPolicyList, cmdOutputLines[i])
+			}
+			return true, nil
+		}
+
+		e2e.Logf("%v,Waiting for expected result to be synced, try again ...")
+		return false, nil
+	})
+	if checkLspErr != nil {
+		e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", lspOutput)
+	}
+	return lrPolicyList, checkLspErr
 }
