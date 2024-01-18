@@ -8,7 +8,7 @@ export const ClusterSettingPage = {
   clickToClustSettingDetailTab: () => cy.get('[data-test-id="horizontal-link-Details"]').click(),
   checkUpstreamUrlDisabled: () => cy.get('button[data-test-id="cluster-version-upstream-server-url"]').should("have.attr", "aria-disabled").and("eq", "true"),
   checkAlertMsg: (msg) => {
-    cy.get('h4.pf-c-alert__title').should('contain', `${msg}`);
+    cy.get('[class*="alert__title"]').should('contain', `${msg}`);
   },
   checkChannelNotEditable: () => cy.get('button[data-test-id="current-channel-update-link"]').should('not.exist'),
   checkNoAutoscalerField: () => cy.get('dt').should('not.contain', 'Cluster autoscaler'),
@@ -43,7 +43,7 @@ export const ClusterSettingPage = {
       const text = $version.text();
       const versionString = `stable-${text.split('.').slice(0, 2).join('.')}`
       cy.get('[data-test-id="current-channel-update-link"]').click();
-      cy.get('.pf-c-form-control').clear().type(versionString);
+      cy.get('[class*="form-control"]').clear().type(versionString);
     });
     cy.get('[data-test="confirm-action"]').click();
   },

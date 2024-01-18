@@ -15,7 +15,7 @@ export const mcp = {
         });
     },
     checkAlertMsg: (status: string, msg: string,) => {
-      cy.get('h4.pf-c-alert__title').should(status, msg);
+      cy.get('[class*="alert__title"]').should(status, msg);
     }
   }
 }
