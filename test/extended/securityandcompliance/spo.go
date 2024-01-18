@@ -26,6 +26,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		errorLoggerSelEnforcingTemplate           string
 		ogSpoTemplate                             string
 		subSpoTemplate                            string
+		spSleepWithMkdirTemplate                  string
 		secProfileTemplate                        string
 		secProfileStackTemplate                   string
 		podWithProfileTemplate                    string
@@ -39,6 +40,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		workloadDaeTemplate                       string
 		workloadDeployTemplate                    string
 		workloadDeployHelloTemplate               string
+		pathWebhookAllowedSyscalls                string
 		pathWebhookBinding                        string
 		pathWebhookRecording                      string
 		podWithLabelsTemplate                     string
@@ -59,11 +61,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		errorLoggerPodWithSecuritycontextTemplate = filepath.Join(buildPruningBaseDir, "spo/pod-errorlogger-with-securityContext.yaml")
 		ogSpoTemplate = filepath.Join(buildPruningBaseDir, "operator-group-all-namespaces.yaml")
 		subSpoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
+		spSleepWithMkdirTemplate = filepath.Join(buildPruningBaseDir, "/spo/seccomp-profile-sleep-with-mkdir.yaml")
 		secProfileTemplate = filepath.Join(buildPruningBaseDir, "seccompprofile.yaml")
 		secProfileStackTemplate = filepath.Join(buildPruningBaseDir, "seccompprofilestack.yaml")
 		podWithProfileTemplate = filepath.Join(buildPruningBaseDir, "pod-with-seccompprofile.yaml")
 		selinuxProfileNginxTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-nginx.yaml")
 		selinuxProfileCustomTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-with-custom-policy-template.yaml")
+		pathWebhookAllowedSyscalls = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-allowed-syscalls.yaml")
 		pathWebhookBinding = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-binding.yaml")
 		pathWebhookRecording = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-recording.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
@@ -2037,5 +2041,52 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"selinuxprofiles", profileRecordingDep.name + "-nginx", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"selinuxprofiles", profileRecordingDep.name + "-redis", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"selinuxprofiles", profileRecordingDep.name + "-openshift", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
+	})
+
+	g.It("NonPreRelease-Author:xiyuan-Critical-51413-Verify restricting the allowed syscalls in seccomp profiles should work [Serial]", func() {
+		nsAllow := "do-allow-" + getRandomString()
+		nsDontAllow := "dont-allow-" + getRandomString()
+		seccompAllow := seccompProfile{
+			name:      "do-allow",
+			namespace: nsAllow,
+			template:  spSleepWithMkdirTemplate,
+		}
+		seccompDontAllow := seccompProfile{
+			name:      "dont-allow",
+			namespace: nsDontAllow,
+			template:  spSleepWithMkdirTemplate,
+		}
+
+		g.By("Patch the spod !!!\n")
+		defer func() {
+			g.By("Recover the default setting.. !!!\n")
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/allowedSyscalls\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "--type", "json", "--patch", patchRecover, "-n", subD.namespace)
+			checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+			newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.allowedSyscalls[*]}"}).check(oc)
+		}()
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "--patch-file", pathWebhookAllowedSyscalls)
+		syscalls, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.allowedSyscalls[*]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+		o.Expect(strings.Contains(syscalls, "brk")).To(o.BeTrue())
+		o.Expect(strings.Contains(syscalls, "mkdir")).To(o.BeFalse())
+
+		g.By("Create seccompprofiles in different namespaces !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"seccompprofile", seccompAllow.namespace, seccompAllow.name},
+			objectTableRef{"seccompprofile", seccompDontAllow.namespace, seccompDontAllow.name},
+			objectTableRef{"ns", seccompAllow.namespace, seccompAllow.namespace},
+			objectTableRef{"ns", seccompDontAllow.namespace, seccompDontAllow.namespace})
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", seccompAllow.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", seccompDontAllow.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = applyResourceFromTemplateWithoutKeyword(oc, "mkdir", "--ignore-unknown-parameters=true", "-n", seccompAllow.namespace, "-f", seccompAllow.template, "-p", "NAME="+seccompAllow.name, "NAMESPACE="+seccompAllow.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		seccompDontAllow.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", seccompAllow.name, "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
+		commonMessage := `syscall not allowed: mkdir`
+		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", seccompDontAllow.namespace, "--field-selector", "reason=ProfileNotAllowed", "-o=jsonpath={.items[*].message}")
 	})
 })
