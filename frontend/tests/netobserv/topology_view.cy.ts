@@ -62,8 +62,6 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
             // set one display to test with
             cy.byTestID('layout-dropdown').click()
             cy.byTestID('Grid').click()
-
-
         })
         cy.byTestID(topologySelectors.metricsDrop).should('exist').click().get('#sum').click()
         cy.contains('Display options').should('exist').click()
@@ -105,7 +103,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
             fixture: 'netobserv/flow_metrics_namespace.json'
         }).as('matchedUrl')
 
-        // selecting something different first  
+        // selecting something different first
         // to re-trigger API request on namespace selection
         topologyPage.selectScopeGroup("owner", null)
         topologyPage.selectScopeGroup(scope, null)
@@ -116,7 +114,6 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
         // verify number of edges and nodes.
         cy.get('#drawer ' + topologySelectors.edge).should('have.length', 4)
         cy.get('#drawer ' + topologySelectors.node).should('have.length', 5)
-
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify owner scope", function () {
@@ -124,7 +121,16 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
         cy.intercept('GET', getTopologyScopeURL(scope), {
             fixture: 'netobserv/flow_metrics_owner.json'
         }).as('matchedUrl')
-        topologyPage.selectScopeGroup(scope, null)
+
+        // using slider
+        let lastRefresh = Cypress.$("#lastRefresh").text()
+        cy.log(`last refresh is ${lastRefresh}`)
+        cy.get('div.pf-c-slider__thumb').then(slider => {
+            cy.wrap(slider).type('{leftarrow}', { waitForAnimations: true })
+            netflowPage.waitForLokiQuery()
+            cy.wait(3000)
+            cy.get('#lastRefresh').invoke('text').should('not.eq', lastRefresh)
+        })
         cy.wait('@matchedUrl').then(({ response }) => {
             expect(response.statusCode).to.eq(200)
         })
