@@ -209,6 +209,11 @@ func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
 		return nil, fmt.Errorf(".apiVersion does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
 	}
 
+	jKind := jMachineset.Get(`kind`)
+	if !jKind.Exists() {
+		return nil, fmt.Errorf(".kind does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
+	}
+
 	jSpec := jMachineset.Get(`spec`)
 	if !jSpec.Exists() {
 		return nil, fmt.Errorf(".spec does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
@@ -259,7 +264,7 @@ func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
 	}
 
 	newMsAsJSONString := fmt.Sprintf(`{"kind": "%s", "apiVersion": "%s", "metadata": {"name":"%s", "namespace": "%s"}, "spec": %s}`,
-		ms.GetKind(), jAPIVersion.ToString(), newName, ms.GetNamespace(), specAsJSONString)
+		jKind.ToString(), jAPIVersion.ToString(), newName, ms.GetNamespace(), specAsJSONString)
 
 	tmpFile := generateTmpFile(ms.oc, "machineset-"+newName+".yml")
 
