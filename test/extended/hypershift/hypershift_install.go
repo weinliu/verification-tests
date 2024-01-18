@@ -9,15 +9,16 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
-
-	g "github.com/onsi/ginkgo/v2"
-	o "github.com/onsi/gomega"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elb"
-
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
+	operatorv1 "github.com/openshift/api/operator/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -1434,5 +1435,137 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			e2e.Logf("Still waiting for the HostedCluster to disappear")
 			return false
 		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "Timed out waiting for the HostedCluster to disappear")
+	})
+
+	// author: heli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:heli-Critical-64409-[HyperShiftINSTALL] Ensure ingress controllers are removed before load balancers [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 64409 is for AWS - skipping test ...")
+		}
+
+		caseID := "64409"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// files to store delete time result
+		var svcDeleteTimeStampFile = dir + "/svc-deletion-time-stamp-result.txt"
+		var ingressControllerDeleteTimeStampFile = dir + "/ingress-controller-deletion-time-stamp-result.txt"
+
+		exutil.By("Config AWS Bucket And install HyperShift operator")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          dir,
+			iaasPlatform: iaasPlatform,
+			installType:  PublicAndPrivate,
+			region:       region,
+			externalDNS:  true,
+		}
+
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("create HostedClusters config")
+		nodeReplicas := 1
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(nodeReplicas).
+			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withEndpointAccess(PublicAndPrivate).
+			withExternalDnsDomain(HyperShiftExternalDNS).
+			withBaseDomain(HyperShiftExternalDNSBaseDomain)
+
+		exutil.By("add watcher to catch the resource deletion info")
+		svcCtx, svcCancel := context.WithTimeout(context.Background(), ClusterInstallTimeout+LongTimeout)
+		defer svcCancel()
+		operatorCtx, operatorCancel := context.WithTimeout(context.Background(), ClusterInstallTimeout+LongTimeout)
+		defer operatorCancel()
+
+		defer func() {
+			// destroy hosted cluster
+			installHelper.destroyAWSHostedClusters(createCluster)
+			e2e.Logf("check destroy AWS HostedClusters")
+			o.Eventually(pollGetHostedClusters(oc, createCluster.Namespace), ShortTimeout, ShortTimeout/10).ShouldNot(o.ContainSubstring(createCluster.Name), "destroy AWS HostedClusters error")
+			exutil.By("check the ingress controllers are removed before load balancers")
+			// get resource deletion time
+			svcDelTimeStr, err := os.ReadFile(svcDeleteTimeStampFile)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ingressDelTimeStr, err := os.ReadFile(ingressControllerDeleteTimeStampFile)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			ingressDelTime, err := time.Parse(time.RFC3339, string(ingressDelTimeStr))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			routeSVCTime, err := time.Parse(time.RFC3339, string(svcDelTimeStr))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check the ingress controllers are removed before load balancers")
+			e2e.Logf("parsed deletion time ingresscontroller: %s, route svc: %s", ingressDelTime, routeSVCTime)
+			o.Expect(ingressDelTime.After(routeSVCTime)).Should(o.BeFalse())
+		}()
+
+		exutil.By("create a hosted cluster")
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+
+		exutil.By("create HostedClusters node ready")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(nodeReplicas), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+		hostedCluster.oc.SetGuestKubeconf(hostedCluster.hostedClustersKubeconfigFile)
+
+		exutil.By("start a goroutine to watch delete time for the hosted cluster svc router-default")
+		svcName := "router-default"
+		svcNamespace := "openshift-ingress"
+		startWatch(svcCtx, hostedCluster.hostedClustersKubeconfigFile, watchInfo{
+			resourceType: Service,
+			name:         svcName,
+			namespace:    svcNamespace,
+			deleteFunc: func(obj interface{}) {
+				svcObj, ok := obj.(*corev1.Service)
+				if ok != true {
+					return
+				}
+				if svcObj.Name == svcName && svcObj.DeletionTimestamp.IsZero() == false {
+					e2e.Logf("[deleteFunc] catched the deletion time of service %s in %s, deletionTimestamp is %s", svcObj.Name, svcObj.Namespace, svcObj.DeletionTimestamp.String())
+					err = os.WriteFile(svcDeleteTimeStampFile, []byte(fmt.Sprintf("%s", svcObj.DeletionTimestamp.Format(time.RFC3339))), 0644)
+					if err != nil {
+						e2e.Logf("[deleteFunc] fail to write service %s in %s deletion time [%s] into local file %s, error %s", svcObj.Name, svcObj.Namespace, svcObj.DeletionTimestamp.String(), svcDeleteTimeStampFile, err.Error())
+					}
+					svcCancel()
+				}
+			},
+		})
+
+		exutil.By("start a goroutine to watch delete time for the hosted cluster ingresscontroller default")
+		icName := "default"
+		icNamespace := "openshift-ingress-operator"
+		startWatchOperator(operatorCtx, hostedCluster.hostedClustersKubeconfigFile, operatorWatchInfo{
+			group:     "operator.openshift.io",
+			version:   "v1",
+			resources: "ingresscontrollers",
+
+			name:      icName,
+			namespace: icNamespace,
+			deleteFunc: func(obj []byte) {
+				ingressObj := operatorv1.IngressController{}
+				if json.Unmarshal(obj, &ingressObj) != nil {
+					e2e.Logf("[deleteFunc] unmarshal ingresscontrollers %s in %s error %s", icName, icNamespace, err.Error())
+					return
+				}
+
+				if ingressObj.Name == icName && ingressObj.DeletionTimestamp.IsZero() == false {
+					e2e.Logf("[deleteFunc] catched deletion time of ingresscontroller %s in %s, deletionTimestamp is %s", ingressObj.Name, ingressObj.Namespace, ingressObj.DeletionTimestamp.String())
+					err = os.WriteFile(ingressControllerDeleteTimeStampFile, []byte(fmt.Sprintf("%s", ingressObj.DeletionTimestamp.Format(time.RFC3339))), 0644)
+					if err != nil {
+						e2e.Logf("[deleteFunc] fail to write ingresscontroller %s in %s deletion time [%s] into local file %s, error %s", ingressObj.Name, ingressObj.Namespace, ingressObj.DeletionTimestamp.String(), ingressControllerDeleteTimeStampFile, err.Error())
+					}
+					operatorCancel()
+				}
+			},
+		})
 	})
 })

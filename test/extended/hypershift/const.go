@@ -158,3 +158,9 @@ const (
 	nonServingComponentLabel   = nonServingComponentLabelKey + "=true"
 	nonServingComponentTaint   = nonServingComponentTaintKey + "=true:NoSchedule"
 )
+
+type K8SResource string
+
+const (
+	Service K8SResource = "services"
+)
