@@ -75,7 +75,7 @@ describe('Operators Installed nonlatest operator test', () => {
     cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
     cy.get('button#dropdown-selectbox').click();
     cy.contains('span', params.ns).click();
-    cy.get('[aria-label="Info Alert"]')
+    cy.get('[class*="alert__title"]')
       .eq(0)
       .invoke('text')
       .should('match', /^.*Manual update approval.*not installing.*latest version.*selected channel.*$/);
@@ -106,7 +106,7 @@ describe('Operators Installed nonlatest operator test', () => {
       cy.get('[data-test="success-icon"]').should('exist');
       cy.contains(params.operatorName).should('exist').click();
     });
-    cy.get('.pf-c-description-list__text').each(($el, index) => {
+    cy.get('[class*="description-list__text"]').each(($el, index) => {
       if (index <3){
         const keywords = ['Installed Channel', 'stable', 'Installed Version'];
         const text = $el.text();
