@@ -3,9 +3,10 @@ package workloads
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	"os"
 	"os/exec"
@@ -15,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/goexpect"
+	expect "github.com/google/goexpect"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
@@ -195,7 +196,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		g.By("Check the command should be defined")
 		comm, _, err := oc.Run("get").WithoutNamespace().Args("dc/dc44797", "-n", oc.Namespace(), "-o=jsonpath={.spec.template.spec.containers[0].command[0]}").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.ExpectEqual("tail", comm)
+		o.Expect("tail").To(o.Equal(comm))
 
 		g.By("Create the deploy with define command")
 		err = oc.WithoutNamespace().Run("create").Args("deployment", "-n", oc.Namespace(), "deploy44797", "--image="+"quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--", "tail", "-f", "/dev/null").Execute()
@@ -204,7 +205,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		g.By("Check the command should be defined")
 		comm1, err := oc.Run("get").WithoutNamespace().Args("deploy/deploy44797", "-n", oc.Namespace(), "-o=jsonpath={.spec.template.spec.containers[0].command[0]}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.ExpectEqual("tail", comm1)
+		o.Expect("tail").To(o.Equal(comm1))
 
 	})
 

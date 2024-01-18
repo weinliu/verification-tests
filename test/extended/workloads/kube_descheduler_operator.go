@@ -558,7 +558,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		testPodName, err := oc.AsAdmin().Run("get").Args("pods", "-l", testd.labelKey+"="+testd.labelValue, "-n", testd.namespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pod37463nodename := getPodNodeName(oc, testd.namespace, testPodName)
-		e2e.ExpectEqual(nodeList.Items[0].Name, pod37463nodename)
+		o.Expect(nodeList.Items[0].Name).To(o.Equal(pod37463nodename))
 
 		g.By("Remove the label from node1 and label node2 ")
 		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "e2e-az-NorthSouth")
