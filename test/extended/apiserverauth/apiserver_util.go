@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -257,8 +258,7 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 	newStatusToCompare := make(map[string]string)
 	for key := range statusToCompare {
 		args := fmt.Sprintf(`-o=jsonpath={.status.conditions[?(.type == '%s')].status}`, key)
-		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", args, coName).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		status, _ := getResource(oc, asAdmin, withoutNamespace, "co", coName, args)
 		newStatusToCompare[key] = status
 	}
 	return newStatusToCompare
@@ -1410,4 +1410,75 @@ func imageImportModeOnArmAndMutiArch(oc *exutil.CLI, tagName string, image strin
 		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args(tagName, "--from="+image, `--import-mode=PreserveOriginal`, "-n", nameSpace, "--reference-policy=local", "--confirm").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
+}
+
+type CertificateDetails struct {
+	CurlResponse   string
+	Subject        string
+	Issuer         string
+	NotBefore      string
+	NotAfter       string
+	SubjectAltName []string
+	SerialNumber   string
+}
+
+func urlHealthCheck(fqdnName string, certPath string, returnValues []string) (*CertificateDetails, error) {
+	caCert, err := ioutil.ReadFile(certPath)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading CA certificate: %v", err)
+	}
+
+	// Create a CertPool and add the CA certificate
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to append CA certificate")
+	}
+
+	// Create a custom transport with the CA certificate
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs: caCertPool,
+		},
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	url := fmt.Sprintf("https://%s:6443/healthz", fqdnName)
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("Error performing HTTP request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading response body: %v", err)
+	}
+
+	// Create a CertificateDetails struct to store the details
+	certDetails := &CertificateDetails{}
+	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
+		cert := resp.TLS.PeerCertificates[0]
+		for _, value := range returnValues {
+			switch value {
+			case "CurlResponse":
+				certDetails.CurlResponse = string(body)
+			case "Subject":
+				certDetails.Subject = cert.Subject.String()
+			case "Issuer":
+				certDetails.Issuer = cert.Issuer.String()
+			case "NotBefore":
+				certDetails.NotBefore = cert.NotBefore.Format(time.RFC3339)
+			case "NotAfter":
+				certDetails.NotAfter = cert.NotAfter.Format(time.RFC3339)
+			case "SubjectAltName":
+				certDetails.SubjectAltName = cert.DNSNames
+			case "SerialNumber":
+				certDetails.SerialNumber = cert.SerialNumber.String()
+			}
+		}
+	}
+	return certDetails, nil
 }
