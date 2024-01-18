@@ -195,7 +195,7 @@ func uncordonSpecificNode(oc *exutil.CLI, nodeName string) error {
 
 // Waiting specified node available: scheduleable and ready
 func waitNodeAvailable(oc *exutil.CLI, nodeName string) {
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		nodeInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes/"+nodeName, "-o", "json").Output()
 		if err != nil {
 			e2e.Logf("Get node status Err Occurred: \"%v\", try next round", err)
