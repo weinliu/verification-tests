@@ -10254,7 +10254,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	//author:xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-Medium-70050-OLM emits alert events for operators installed from a deprecated channel if catalog in different ns", func() {
+	g.It("ConnectedOnly-Author:xzha-Medium-70050-OLM emits alert events for operators installed from a deprecated channel if catalog in different ns [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -10269,7 +10269,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 			catsrc = catalogSourceDescription{
 				name:        "catsrc-70050",
-				namespace:   namespaceName,
+				namespace:   "openshift-marketplace",
 				displayName: "Test 70050",
 				publisher:   "OLM QE",
 				sourceType:  "grpc",
@@ -10292,7 +10292,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.catalogSourceName = catsrc.name
 		itName := g.CurrentSpecReport().FullText()
 
-		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", namespaceName))
+		exutil.By(fmt.Sprintf("1) create the catsrc in project: %s", catsrc.namespace))
 		defer catsrc.delete(itName, dr)
 		catsrc.createWithCheck(oc, itName, dr)
 
