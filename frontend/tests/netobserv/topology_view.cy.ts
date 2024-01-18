@@ -14,14 +14,14 @@ const metricType = [
 ]
 
 function getTopologyScopeURL(scope: string): string {
-    return `**/flow/metrics**aggregateBy=${scope}`
+    return `**/flow/metrics**aggregateBy=${scope}*`
 }
 
 function getTopologyResourceScopeGroupURL(groups: string): string {
-    return `**/flow/metrics**groups=${groups}`
+    return `**/flow/metrics**groups=${groups}*`
 }
 
-describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOBSERV'] }, function () {
+describe("(OCP-53591 Network_Observability) Netflow Topology view features", { tags: ['Network_Observability'] }, function () {
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
@@ -71,13 +71,13 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         // advance options menu remains visible throughout the test
     })
 
-    it("(OCP-53591, aramesha) should verify show duplicates checkbox is disabled", function () {
+    it("(OCP-53591, aramesha, Network_Observability) should verify show duplicates checkbox is disabled", function () {
         cy.get('#filter-toolbar-search-filters').contains('Query options').click();
         cy.get('#query-options-dropdown').click();
         cy.get('#show-duplicates').should('be.disabled')
     })
 
-    it("(OCP-53591, memodi) should verify topology page features", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify topology page features", { tags: ['e2e', 'admin', '@smoke'] }, function () {
         cy.byTestID('search-topology-element-input').should('exist')
         cy.contains('Display options').should('exist').click()
 
@@ -99,7 +99,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         cy.get('#query-summary').should('exist')
     })
 
-    it("(OCP-53591, memodi) should verify namespace scope", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify namespace scope", function () {
         const scope = "namespace"
         cy.intercept('GET', getTopologyScopeURL(scope), {
             fixture: 'netobserv/flow_metrics_namespace.json'
@@ -119,7 +119,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
 
     })
 
-    it("(OCP-53591, memodi) should verify owner scope", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify owner scope", function () {
         const scope = "owner"
         cy.intercept('GET', getTopologyScopeURL(scope), {
             fixture: 'netobserv/flow_metrics_owner.json'
@@ -147,7 +147,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         cy.get('#drawer ' + topologySelectors.node).should('have.length', 28)
     })
 
-    it("(OCP-53591, memodi) should verify group Nodes", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify group Nodes", function () {
         const groups = 'hosts'
         cy.intercept('GET', getTopologyResourceScopeGroupURL(groups), {
             fixture: 'netobserv/flow_metrics_ghosts.json'
@@ -158,33 +158,33 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         cy.get(topologySelectors.nGroups).should('have.length', 6)
     })
 
-    it("(OCP-53591, memodi) should verify group Nodes+NS", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify group Nodes+NS", function () {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bnamespaces'), { fixture: 'netobserv/flow_metrics_ghostsNS.json' })
         topologyPage.selectScopeGroup("resource", "hosts+namespaces")
         topologyPage.isViewRendered()
         cy.get(topologySelectors.nGroups).should('have.length', 6)
     })
 
-    it("(OCP-53591, memodi) should verify group Nodes+Owners", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify group Nodes+Owners", function () {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bowners'), { fixture: 'netobserv/flow_metrics_ghostsOwners.json' })
         topologyPage.selectScopeGroup("resource", "hosts+owners")
         // verify number of groups
         cy.get(topologySelectors.nGroups).should('have.length', 20)
     })
 
-    it("(OCP-53591, memodi) should verify group NS", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify group NS", function () {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces'), { fixture: 'netobserv/flow_metrics_gNS.json' })
         topologyPage.selectScopeGroup("resource", "namespaces")
         cy.get(topologySelectors.nGroups).should('have.length', 4)
     })
 
-    it("(OCP-53591, memodi) should verify group NS+Owners", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify group NS+Owners", function () {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces%2Bowners'), { fixture: 'netobserv/flow_metrics_gNSOwners.json' })
         topologyPage.selectScopeGroup("resource", "namespaces+owners")
         cy.get(topologySelectors.nGroups).should('have.length', 20)
     })
 
-    it("(OCP-53591, memodi) should verify local storage", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify local storage", function () {
         // modify some options
         cy.contains('Display options').should('exist').click()
         cy.byTestID('truncate-dropdown').click().byTestID("25")
@@ -213,7 +213,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
         })
     })
 
-    it("(OCP-53591, memodi) should verify side panel", function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify side panel", function () {
         cy.get('g[data-kind="node"] > g').eq(1).parent().should('exist').click()
         cy.get('#elementPanel').should('be.visible')
 
@@ -230,12 +230,12 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
             cy.contains('Display options').should('exist').click()
         })
 
-        it("(OCP-53591, memodi) should verify group owners", function () {
+        it("(OCP-53591, memodi, Network_Observability) should verify group owners", function () {
             cy.intercept(getTopologyResourceScopeGroupURL('owners'), { fixture: 'netobserv/flow_metrics_gOwners.json' })
             cy.get(topologySelectors.nGroups).should('have.length', 13)
         })
 
-        it("(OCP-53591, memodi) should verify group expand/collapse", function () {
+        it("(OCP-53591, memodi, Network_Observability) should verify group expand/collapse", function () {
             cy.get(topologySelectors.groupToggle).click()
             cy.get(topologySelectors.groupLayer + ' > ' + topologySelectors.group).each((node, index) => {
                 cy.wrap(node).should('not.have.descendants', 'g.pf-topology__group')
@@ -246,7 +246,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
             })
         })
 
-        it("(OCP-53591, memodi) should verify edges display/hidden", function () {
+        it("(OCP-53591, memodi, Network_Observability) should verify edges display/hidden", function () {
             cy.get(topologySelectors.edgeToggle).uncheck()
 
             // verify labels are also hidden
@@ -261,7 +261,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
             })
         })
 
-        it("(OCP-53591, memodi) should verify edges labels can be displayed/hidden", function () {
+        it("(OCP-53591, memodi, Network_Observability) should verify edges labels can be displayed/hidden", function () {
             cy.byTestID('autocomplete-search').should('exist').type(project + '{enter}')
             topologyPage.selectScopeGroup(null, "none")
             topologyPage.selectScopeGroup("namespace", null)
@@ -283,7 +283,7 @@ describe("(OCP-53591 NETOBSERV) Netflow Topology view features", { tags: ['NETOB
             })
         })
 
-        it("(OCP-53591, memodi) should verify badges display/hidden", function () {
+        it("(OCP-53591, memodi, Network_Observability) should verify badges display/hidden", function () {
             cy.byTestID('autocomplete-search').should('exist').type(project + '{enter}')
             topologyPage.selectScopeGroup(null, "none")
             topologyPage.selectScopeGroup("namespace", null)

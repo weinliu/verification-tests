@@ -7,7 +7,7 @@ const cpuMemory = [
     "memory-usage-chart"
 ]
 
-describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
+describe('Network_Observability dashboards tests', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -32,7 +32,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         Operator.createFlowcollector(project)
     })
 
-    it('(OCP-61893, memodi), should have default health dashboards', function () {
+    it('(OCP-61893, memodi, Network_Observability), should have default health dashboards', { tags: ['e2e', 'admin', '@smoke'] }, function () {
         // navigate to 'NetObserv / Health' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")
@@ -66,7 +66,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         cy.byLegacyTestID('panel-top-flow-rates-per-source-and-destination-nodes').should('not.exist')
     })
 
-    it('(OCP-61893, nweinber), should have health dashboards from additional metrics', function () {
+    it('(OCP-61893, nweinber, Network_Observability), should have health dashboards from additional metrics', function () {
         // recreate flowcollector with additional metrics and go back to the dashboard page
         Operator.deleteFlowCollector()
         Operator.createFlowcollector(project, "AllMetrics")
@@ -84,7 +84,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         cy.byTestID("-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
     })
 
-    it("(OCP-63790, memodi), should have default flow-based dashboards", function () {
+    it("(OCP-63790, memodi, Network_Observability), should have default flow-based dashboards", { tags: ['e2e', 'admin', '@smoke'] }, function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
@@ -106,7 +106,7 @@ describe('NETOBSERV dashboards tests', { tags: ['NETOBSERV'] }, function () {
         })
     })
 
-    it("(OCP-63790, nweinber), should have flow-based dashboards from additional metrics", function () {
+    it("(OCP-63790, nweinber, Network_Observability), should have flow-based dashboards from additional metrics", function () {
         // note flowcollector with additional metrics should already exist here
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")

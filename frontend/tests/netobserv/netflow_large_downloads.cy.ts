@@ -1,8 +1,8 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { netflowPage, querySumSelectors} from "../../views/netflow-page"
+import { netflowPage, querySumSelectors } from "../../views/netflow-page"
 
-describe('(OCP-67782 NETOBSERV) Large volume downloads counters test', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-67782 Network_Observability) Large volume downloads counters test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -38,7 +38,7 @@ describe('(OCP-67782 NETOBSERV) Large volume downloads counters test', { tags: [
             cy.byTestID("table-composable").should('exist')
         })
 
-        it("(OCP-67782, aramesha) should verify large volume download counter", function () {
+        it("(OCP-67782, aramesha, Network_Observability) should verify large volume download counter", function () {
             // Filter on SrcPort 443, DstNamespace test-client and DstName client
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
             cy.byTestID('src_port').click()

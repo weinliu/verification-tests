@@ -1,7 +1,7 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { netflowPage, colSelectors, overviewSelectors, querySumSelectors} from "../../views/netflow-page"
-import { dashboard, graphSelector, appsInfra} from "views/dashboards-page"
+import { netflowPage, colSelectors, overviewSelectors, querySumSelectors } from "../../views/netflow-page"
+import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
 
 const metricType = [
     "Bytes",
@@ -9,7 +9,7 @@ const metricType = [
     "RTT"
 ]
 
-describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -40,7 +40,7 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
             netflowPage.visit()
         })
 
-        it("(OCP-68246, aramesha) Verify flowRTT column values", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT column values", { tags: ['e2e', 'admin'] }, function () {
             // go to table view
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
@@ -49,19 +49,19 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
             cy.byTestID('table-composable').should('exist').within(() => {
                 cy.get(colSelectors.flowRTT).should('exist')
             })
- 
+
             // filter on Protocol TCP, all flows should have flowRTT value != n/a
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
             cy.byTestID('group-2-toggle').click().should('be.visible')
             cy.byTestID('protocol').click()
             cy.get('#autocomplete-search').type('TCP' + '{enter}')
- 
+
             cy.get('[data-test-td-column-id=TimeFlowRttMs]').each((td) => {
                 expect(td).attr("data-test-td-value").to.match(RegExp("^[0-9]*$"))
             })
         })
 
-        it("(OCP-68246, aramesha) Verify flowRTT panels", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT panels", { tags: ['e2e', 'admin'] }, function () {
             // verify default flowRTT panels are visible
             cy.checkPanel(overviewSelectors.defaultFlowRTTPanels)
             cy.checkPanelsNum(5);
@@ -69,7 +69,7 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
             // open panels modal and verify all relevant panels are listed
             cy.openPanelsModal();
             cy.checkPopupItems(overviewSelectors.panelsModal, overviewSelectors.manageFlowRTTPanelsList);
-            
+
             // select all panels and verify they are rendered
             cy.get(overviewSelectors.panelsModal).contains('Select all').click();
             cy.get(overviewSelectors.panelsModal).contains('Save').click();
@@ -91,7 +91,7 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
             })
         })
 
-        it("(OCP-68246, aramesha) Validate flowRTT edge labels and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT edge labels and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
             cy.clearLocalStorage()
             cy.get('#tabs-container li:nth-child(3)').click()
             // check if topology view exists, if not clear filters.
@@ -113,7 +113,7 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
             cy.get('#metricType > ul > li').should('have.length', 3).each((item, index) => {
                 cy.wrap(item).should('contain.text', metricType[index])
             })
-            
+
             cy.get('#flowRtt').click()
             cy.contains('Display options').should('exist').click()
 
@@ -136,8 +136,8 @@ describe('(OCP-68246 NETOBSERV) FlowRTT test', { tags: ['NETOBSERV'] }, function
     })
 })
 
-describe('(OCP-68246 NETOBSERV) FlowRTT dashboards test', { tags: ['NETOBSERV'] }, function () {
-    it("(OCP-68246, aramesha) Validate flowRTT dashboards", { tags: ['e2e', 'admin'] }, function () {
+describe('(OCP-68246 Network_Observability) FlowRTT dashboards test', { tags: ['Network_Observability'] }, function () {
+    it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT dashboards", { tags: ['e2e', 'admin'] }, function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")

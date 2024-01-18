@@ -15,7 +15,7 @@ const bytesHTTP = [
     "average-http-server-response-latency-(ms)-chart"
 ]
 
-describe('NETOBSERV networking dashboards tests', { tags: ['NETOBSERV'] }, function () {
+describe('Network_Observability networking dashboards tests', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -23,7 +23,7 @@ describe('NETOBSERV networking dashboards tests', { tags: ['NETOBSERV'] }, funct
         cy.switchPerspective('Administrator');
     })
 
-    it('(OCP-69946, aramesha), should have ingress operator dashboards', function () {
+    it('(OCP-69946, aramesha, Network_Observability), should have ingress operator dashboards', function () {
         // navigate to 'Networking / Ingress' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-ingress-operator")

@@ -1,7 +1,7 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { netflowPage, overviewSelectors, querySumSelectors} from "../../views/netflow-page"
-import { dashboard, graphSelector, appsInfra} from "views/dashboards-page"
+import { netflowPage, overviewSelectors, querySumSelectors } from "../../views/netflow-page"
+import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
 
 const metricType = [
     "Bytes",
@@ -14,7 +14,7 @@ function getPacketDropURL(drop: string): string {
     return `**/netflow-traffic**packetLoss=${drop}`
 }
 
-describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -45,7 +45,7 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             netflowPage.visit()
         })
 
-        it("(OCP-66141, aramesha) verify packetDrop panels", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-66141, aramesha, Network_Observability) verify packetDrop panels", { tags: ['e2e', 'admin'] }, function () {
             netflowPage.stopAutoRefresh()
 
             // verify default PacketDrop panels are visible
@@ -72,7 +72,7 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             cy.checkPanelsNum(6);
         })
 
-        it("(OCP-66141, aramesha) should validate query summary panel with packetDrop enabled", function () {
+        it("(OCP-66141, aramesha, Network_Observability) should validate query summary panel with packetDrop enabled", function () {
             cy.get('#query-summary-toggle').should('exist').click()
             cy.get('#summaryPanel').should('be.visible')
 
@@ -89,12 +89,12 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             })
         })
 
-        it("(OCP-66141, aramesha) Verify packetDrop Query Options filters", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-66141, aramesha, Network_Observability) Verify packetDrop Query Options filters", { tags: ['e2e', 'admin'] }, function () {
             netflowPage.stopAutoRefresh()
 
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
-            
+
             // toggle between drops filter
             cy.changeQueryOption('Fully dropped');
             netflowPage.waitForLokiQuery()
@@ -107,7 +107,7 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             cy.intercept('GET', getPacketDropURL('hasDrops'), {
                 fixture: 'netobserv/flow_records_without_drops.json'
             }).as('matchedUrl')
-            
+
             cy.changeQueryOption('Containing drops')
             netflowPage.waitForLokiQuery()
             cy.intercept('GET', getPacketDropURL('sent'), {
@@ -115,7 +115,7 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             }).as('matchedUrl')
         })
 
-        it("(OCP-66141, aramesha) Validate packetDrop filters", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop filters", { tags: ['e2e', 'admin'] }, function () {
             netflowPage.stopAutoRefresh()
 
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
@@ -139,7 +139,7 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             cy.byTestID('autocomplete-search').type('NO_SOCKET' + '{enter}')
             cy.get('#filters div.custom-chip > p').should('contain.text', 'NO_SOCKET')
             cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Packet drop latest cause')
-            
+
             // verify dropped cause panel has only NO_SOCKET
             cy.get('#cause_dropped_packet_rates').within(() => {
                 cy.get('#chart-legend-5-ChartLabel-0').should('contain.text', 'SKB_DROP_REASON_NO_SOCKET')
@@ -148,7 +148,7 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
             })
         })
 
-        it("(OCP-66141, aramesha) Validate PacketDrop edge labels and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-66141, aramesha, Network_Observability) Validate PacketDrop edge labels and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
             cy.get('#tabs-container li:nth-child(3)').click()
             // check if topology view exists, if not clear filters.
             // this can be removed when multiple page loads are fixed.
@@ -210,8 +210,8 @@ describe('(OCP-66141 NETOBSERV) PacketDrop test', { tags: ['NETOBSERV'] }, funct
     })
 })
 
-describe('(OCP-66141 NETOBSERV) PacketDrop dashboards test', { tags: ['NETOBSERV'] }, function () {
-    it("(OCP-66141, aramesha) Validate packetDrop dashboards", { tags: ['e2e', 'admin'] }, function () {
+describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags: ['Network_Observability'] }, function () {
+    it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop dashboards", { tags: ['e2e', 'admin'] }, function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")

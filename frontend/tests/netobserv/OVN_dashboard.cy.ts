@@ -29,7 +29,7 @@ const packets = [
 ]
 
 
-describe('NETOBSERV networking dashboards tests', { tags: ['NETOBSERV'] }, function () {
+describe('Network_Observability networking dashboards tests', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -37,7 +37,7 @@ describe('NETOBSERV networking dashboards tests', { tags: ['NETOBSERV'] }, funct
         cy.switchPerspective('Administrator');
     })
 
-    it('(OCP-69944, aramesha), should have OVN (Linux Subsystem Stats) dashboards', function () {
+    it('(OCP-69944, aramesha, Network_Observability), should have OVN (Linux Subsystem Stats) dashboards', function () {
         // navigate to 'Networking / Linux Subsystem Stats' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-network-stats")

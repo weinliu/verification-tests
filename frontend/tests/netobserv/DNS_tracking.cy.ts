@@ -1,7 +1,7 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { netflowPage, overviewSelectors, querySumSelectors, colSelectors} from "../../views/netflow-page"
-import { dashboard, graphSelector, appsInfra} from "views/dashboards-page"
+import { netflowPage, overviewSelectors, querySumSelectors, colSelectors } from "../../views/netflow-page"
+import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
 
 const metricType = [
     "Bytes",
@@ -9,7 +9,7 @@ const metricType = [
     "DNS latencies"
 ]
 
-describe('(OCP-67087 NETOBSERV) DNSTracking test', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -43,7 +43,7 @@ describe('(OCP-67087 NETOBSERV) DNSTracking test', { tags: ['NETOBSERV'] }, func
             netflowPage.visit()
         })
 
-        it("(OCP-67087, aramesha) Verify DNSTracking panels and Query Summary", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-67087, aramesha, Network_Observability) Verify DNSTracking panels and Query Summary", { tags: ['e2e', 'admin'] }, function () {
             // verify default DNSTracking panels are visible
             cy.checkPanel(overviewSelectors.defaultDNSTrackingPanels)
             cy.checkPanelsNum(5);
@@ -102,7 +102,7 @@ describe('(OCP-67087 NETOBSERV) DNSTracking test', { tags: ['NETOBSERV'] }, func
             })
         })
 
-        it("(OCP-67087, aramesha) Validate DNS over TCP", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-67087, aramesha, Network_Observability) Validate DNS over TCP", { tags: ['e2e', 'admin'] }, function () {
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
 
@@ -137,7 +137,7 @@ describe('(OCP-67087 NETOBSERV) DNSTracking test', { tags: ['NETOBSERV'] }, func
             })
         })
 
-        it("(OCP-67087, aramesha) Validate DNS over UDP", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-67087, aramesha, Network_Observability) Validate DNS over UDP", { tags: ['e2e', 'admin'] }, function () {
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
 
@@ -172,7 +172,7 @@ describe('(OCP-67087 NETOBSERV) DNSTracking test', { tags: ['NETOBSERV'] }, func
             })
         })
 
-        it("(OCP-67087, aramesha) Validate DNSLatencies edge label and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-67087, aramesha, Network_Observability) Validate DNSLatencies edge label and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
             cy.get('#tabs-container li:nth-child(3)').click()
             // check if topology view exists, if not clear filters.
             // this can be removed when multiple page loads are fixed.
@@ -216,7 +216,7 @@ describe('(OCP-67087 NETOBSERV) DNSTracking test', { tags: ['NETOBSERV'] }, func
     })
 })
 
-describe('(OCP-67087 NETOBSERV) DNSTracking dashboards test', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-67087 Network_Observability) DNSTracking dashboards test', { tags: ['Network_Observability'] }, function () {
     it("(OCP-67087, aramesha) Validate DNSTracking dashboards", { tags: ['e2e', 'admin'] }, function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()

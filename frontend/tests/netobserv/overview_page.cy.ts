@@ -2,7 +2,7 @@ import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, genSelectors, querySumSelectors, overviewSelectors } from "../../views/netflow-page"
 
-describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -38,13 +38,13 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.checkPanelsNum();
         })
 
-        it("(OCP-54839, aramesha) should verify show duplicates checkbox is disabled", function () {
+        it("(OCP-54839, aramesha, Network_Observability) should verify show duplicates checkbox is disabled", function () {
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
             cy.get('#query-options-dropdown').click();
             cy.get('#show-duplicates').should('be.disabled')
         })
 
-        it("(OCP-54839, aramesha) should validate overview page features", function () {
+        it("(OCP-54839, aramesha, Network_Observability) should validate overview page features", { tags: ['e2e', 'admin', '@smoke'] }, function () {
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist
                 cy.wrap(btn).click().then(drop => {
@@ -106,7 +106,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             })
         })
 
-        it("(OCP-54839, aramesha) should validate query summary panel", function () {
+        it("(OCP-54839, aramesha, Network_Observability) should validate query summary panel", function () {
             cy.get(querySumSelectors.bytesCount).should('exist').then(bytesCnt => {
                 cy.checkQuerySummary(bytesCnt)
             })
@@ -123,7 +123,7 @@ describe('(OCP-54839 NETOBSERV) Netflow Overview page tests', { tags: ['NETOBSER
             cy.contains('Sampling').should('exist')
         })
 
-        it("(OCP-54839, aramesha) should validate panels", function () {
+        it("(OCP-54839, aramesha, Network_Observability) should validate panels", { tags: ['e2e', 'admin', '@smoke'] }, function () {
             // open panels modal
             cy.openPanelsModal();
 

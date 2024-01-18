@@ -16,7 +16,7 @@ var patch = [{
     ]
 }]
 
-describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, function () {
+describe('(OCP-56222 Network_Observability) Quick Filters test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -51,7 +51,7 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
     })
 
 
-    it("(OCP-56222, memodi) should verify quick filters add", function () {
+    it("(OCP-56222, memodi, Network_Observability) should verify quick filters add", function () {
         const addQuickFilterPatch = JSON.stringify(patch).replace('$op', 'add')
         cy.adminCLI(`oc patch flowcollector/cluster --type json -p \'${addQuickFilterPatch}\'`)
         // wait 10 seconds for plugin pod to get restarted
@@ -72,7 +72,7 @@ describe('(OCP-56222 NETOBSERV) Quick Filters test', { tags: ['NETOBSERV'] }, fu
         cy.get('#filters > div').should('not.have.class', 'custom-chip-group')
     })
 
-    it("(OCP-56222, memodi) should verify quick filters remove", function () {
+    it("(OCP-56222, memodi, Network_Observability) should verify quick filters remove", function () {
         const addQuickFilterPatch = JSON.stringify(patch).replace('$op', 'remove')
         cy.adminCLI(`oc patch flowcollector/cluster --type json -p \'${addQuickFilterPatch}\'`)
 
