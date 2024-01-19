@@ -46,8 +46,8 @@ Cypress.Commands.add('uiLogin', (provider: string, username: string, password: s
   cy.get('body').then(($body) => {
     if ($body.text().includes(provider)) {
       cy.contains(provider).should('be.visible').click();
-    }else{
-      //using the last idp
+    }else if ($body.find('li.idp').length > 0) {
+      //using the last idp if doesn't provider idp name
       cy.get('li.idp').last().click();
     }
   });

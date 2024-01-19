@@ -17,7 +17,7 @@ export const ClusterSettingPage = {
     ClusterSettingPage.checkUpstreamUrlDisabled();
     cy.get('[data-test="Labels-details-item__edit-button"]').should('not.exist');
     cy.get('[data-test="edit-annotations"]').should('not.exist');
-    cy.get('[data-test-id="horizontal-link-public~YAML"]').click();
+    cy.get('[data-test-id="horizontal-link-YAML"]').click();
     cy.get('.yaml-editor').should('exist');
     cy.get('[id="save-changes"]').should('not.exist');
   },

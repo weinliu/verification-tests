@@ -7,7 +7,7 @@ export const searchPage = {
   },
   checkNoMachineResources: () => {
     searchPage.navToSearchPage();
-    cy.get('button.pf-c-select__toggle').click();
+    cy.get('button[class*=c-select__toggle]').click();
     cy.get('[placeholder="Select Resource"]').type("machine");
     cy.contains('No results found');
   },

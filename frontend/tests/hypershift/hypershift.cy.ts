@@ -3,7 +3,12 @@ import { sideNav } from '../../views/nav';
 import { crds } from '../../views/crds';
 describe('Check on hypershift provisined cluster', () => {
   before(() => {
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+  });
+
+  after(() => {
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OCP-50740,yanpzhan,UI) Remove manchine related resources for HyperShift Provisioned Clusters', {tags: ['HyperShiftGUEST','admin']}, () => {
