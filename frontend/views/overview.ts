@@ -27,7 +27,7 @@ export const quotaCard = {
   checkQuotaExpanded: (quotaname) => cy.get(`a[data-test-id="${quotaname}"]`).parents('button[aria-expanded="true"]').should('exist'),
   expandQuota: (quotaname) => cy.get(`a[data-test-id="${quotaname}"]`).parents('button[aria-expanded="false"]').children('span').first().click(),
   checkResourceQuotaInfo: (quotaname, resourceinfo, quotainfo?: string) => {
-    cy.get(`a[data-test-id="${quotaname}"]`).parents('.pf-l-stack__item').contains(`${resourceinfo}`).then(($elem) =>    {
+    cy.get(`a[data-test-id="${quotaname}"]`).parents('[class*=l-stack__item]').contains(`${resourceinfo}`).then(($elem) =>    {
       if (quotainfo)
         expect($elem).to.contain.text(`${quotainfo}`);
     })
