@@ -608,6 +608,21 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "up", 2*platformLoadTime)
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-69924-Set scrape.timestamp tolerance for prometheus", func() {
+		args, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", `-ojsonpath={.spec.additionalArgs[?(@.name=="scrape.timestamp-tolerance")]}`, "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("additionalArgs is: %v", args)
+		o.Expect(args).To(o.ContainSubstring(`"value":"15ms"`))
+		//check settings in prometheus pods
+		podNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range podNames {
+			cmd := "-ojsonpath={.spec.containers[?(@.name==\"prometheus\")].args}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `--scrape.timestamp-tolerance=15ms`, true)
+		}
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
