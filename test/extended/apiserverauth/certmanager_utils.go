@@ -126,6 +126,7 @@ func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
 
 // create cert manager
 func createCertManagerOperator(oc *exutil.CLI) {
+	e2e.Logf("Prepare cert manager operator.\n")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
 	operatorNamespace := "cert-manager-operator"
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
@@ -304,6 +305,25 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 
 // Get current CSV described version from PackageManifest before creating Subscription
 func getCurrentCSVDescVersion(oc *exutil.CLI, sourceNamespace string, source string, subscriptionName string, channelName string) string {
+	e2e.Logf("Check PackageManifest before getting currentCSVDesc.\n")
+	waitErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sourceNamespace, "-l", "catalog="+source, "--field-selector", "metadata.name="+subscriptionName).Output()
+		if strings.Contains(output, "No resources found") || err != nil {
+			e2e.Logf("get packagemanifest output:\n%v", output)
+			return false, nil
+		}
+		return true, nil
+	})
+	if waitErr != nil {
+		catalogStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", sourceNamespace, source, "-o=jsonpath={.status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("catalogsource \"%v\"'s status:\n%v", source, catalogStatus)
+		pod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", sourceNamespace, "-l", "olm.catalogSource="+source).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("catalogsource \"%v\"'s pod:\n%v", source, pod)
+		e2e.Failf("The packagemanifest \"%v\" or catalogsource \"%v\" is unhealthy", subscriptionName, source)
+	}
+
 	ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sourceNamespace, "-l", "catalog="+source, "--field-selector", "metadata.name="+subscriptionName, "-o=jsonpath={.items[0].status.channels[?(@.name=='"+channelName+"')].currentCSVDesc.version}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return ver

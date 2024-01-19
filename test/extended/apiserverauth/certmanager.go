@@ -24,11 +24,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
-		}
-		e2e.Logf("Prepare cert manager operator.\n")
+		exutil.SkipMissingQECatalogsource(oc)
 		createCertManagerOperator(oc)
 	})
 
