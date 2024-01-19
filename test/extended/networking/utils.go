@@ -3237,6 +3237,25 @@ func checkEgressFWStatus(oc *exutil.CLI, fwName string, ns string, expectedStatu
 	return checkErr
 }
 
+func checkNodeIdentityWebhook(oc *exutil.CLI) (string, error) {
+	webhooks, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ValidatingWebhookConfiguration", "network-node-identity.openshift.io", "-o=jsonpath={.webhooks[*].name}").Output()
+	return webhooks, err
+}
+
+func disableNodeIdentityWebhook(oc *exutil.CLI, namespace string, cmName string) (string, error) {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", cmName, "-n", namespace, "--from-literal=enabled=false").Output()
+	o.Eventually(func() bool {
+		result := true
+		_, cmErr := oc.AsAdmin().Run("get").Args("configmap/"+cmName, "-n", namespace).Output()
+		if cmErr != nil {
+			e2e.Logf(fmt.Sprintf("Wait for configmap/%s to be created", cmName))
+			result = false
+		}
+		return result
+	}, "60s", "5s").Should(o.BeTrue(), fmt.Sprintf("configmap/%sis not created", cmName))
+	return "", err
+}
+
 // get lr-policy-list from logical_router_policy table
 func getlrPolicyList(oc *exutil.CLI, nodeName, tableID string) ([]string, error) {
 	// get the ovnkube-node pod on the node
