@@ -286,6 +286,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("patch upstream dns resolver with the user's dns server, and then wait the corefile is updated")
 		dnsUpstreamResolver := "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[{\"address\":\"" + srvPodIP + "\",\"port\":53,\"type\":\"Network\"}]}]"
 		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
+		// Converting the IPV6 address to upper case for searching in the coreDNS file
+		if strings.Count(srvPodIP, ":") >= 2 {
+			srvPodIP = fmt.Sprintf("%s", strings.ToUpper(srvPodIP))
+			srvPodIP = "[" + srvPodIP + "]"
+		}
 		pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", srvPodIP)
 
 		exutil.By("create a client pod")
@@ -746,6 +751,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
 
 		exutil.By("6.Check and confirm the upstream resolver's IP(srvPodIP) and custom CAbundle name appearing in the dns pod")
+		// Converting the IPV6 address to upper case for searching in the coreDNS file
+		if strings.Count(srvPodIP, ":") >= 2 {
+			srvPodIP = fmt.Sprintf("%s", strings.ToUpper(srvPodIP))
+			srvPodIP = "[" + srvPodIP + "]"
+		}
 		// since new configmap is mounted so dns pod is restarted
 		waitErr := waitForResourceToDisappear(oc, ns, "pod/"+oneDnsPod)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but pod %s is not terminated", oneDnsPod))
@@ -759,7 +769,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("7.Check no error logs from dns operator pod")
 		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
-		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], srvPodIP+`:853 -A3`)
+		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], srvPodIP+` -A3`)
 		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
 	})
@@ -790,33 +800,41 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("3.Get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
 
-		exutil.By("4.Patch dns.operator/default with transport option as Cleartext for upstreamresolver")
-		dnsUpstreamResolver := "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers\", \"value\":{\"transportConfig\":{\"transport\":\"Cleartext\"}, \"upstreams\":[{\"address\":\"" + srvPodIP + "\", \"type\":\"Network\"}]}}]"
-		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
-
-		exutil.By("5.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
-		upstreams := pollReadDnsCorefile(oc, oneDnsPod, srvPodIP, "-A2", "forward")
-		o.Expect(upstreams).To(o.ContainSubstring("forward . " + srvPodIP + ":53"))
-
-		exutil.By("6.Check no error logs from dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
-		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], srvPodIP+`:53 -A3`)
-		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
-		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
-
-		exutil.By("7.Patch the dns.operator/default with transport option as Cleartext for forwardplugin")
-		dnsForwardPlugin := "[{\"op\":\"replace\", \"path\":\"/spec\", \"value\":{\"servers\":[{\"forwardPlugin\":{\"policy\":\"Sequential\",\"transportConfig\": {\"transport\": \"Cleartext\"}, \"upstreams\":[\"" + srvPodIP + "\"]}, \"name\": \"test\", \"zones\":[\"ocp52077.ocp\"]}]}}]"
+		exutil.By("4.Patch the dns.operator/default with transport option as Cleartext for forwardplugin")
+		dnsForwardPlugin := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Sequential\",\"transportConfig\": {\"transport\": \"Cleartext\"}, \"upstreams\":[\"" + srvPodIP + "\"]}, \"name\": \"test\", \"zones\":[\"ocp52077.ocp\"]}]}]"
 		patchGlobalResourceAsAdmin(oc, resourceName, dnsForwardPlugin)
 
-		exutil.By("8.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
+		exutil.By("5.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
 		forward := pollReadDnsCorefile(oc, oneDnsPod, srvPodIP, "-b6", "ocp52077")
 		o.Expect(forward).To(o.ContainSubstring("ocp52077.ocp:5353"))
 		o.Expect(forward).To(o.ContainSubstring("forward . " + srvPodIP))
 
-		exutil.By("9.Check no error logs from dns operator pod")
+		exutil.By("6.Check no error logs from dns operator pod")
+		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
 		podLogs1, errLogs1 := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], `ocp52077.ocp:5353 -A3`)
 		o.Expect(errLogs1).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs1).To(o.ContainSubstring(`msg="reconciling request: /default"`))
+		// Patching to remove the forwardplugin configurations.
+		dnsDefault := "[{\"op\":\"remove\", \"path\":\"/spec/servers\"}]"
+		patchGlobalResourceAsAdmin(oc, resourceName, dnsDefault)
+
+		exutil.By("7.Patch dns.operator/default with transport option as Cleartext for upstreamresolver")
+		dnsUpstreamResolver := "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers\", \"value\":{\"transportConfig\":{\"transport\":\"Cleartext\"}, \"upstreams\":[{\"address\":\"" + srvPodIP + "\", \"type\":\"Network\"}]}}]"
+		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
+
+		exutil.By("8.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
+		// Converting the IPV6 address to upper case for searching in the coreDNS file
+		if strings.Count(srvPodIP, ":") >= 2 {
+			srvPodIP = fmt.Sprintf("%s", strings.ToUpper(srvPodIP))
+			srvPodIP = "[" + srvPodIP + "]"
+		}
+		upstreams := pollReadDnsCorefile(oc, oneDnsPod, srvPodIP, "-A2", "forward")
+		o.Expect(upstreams).To(o.ContainSubstring("forward . " + srvPodIP + ":53"))
+
+		exutil.By("9.Check no error logs from dns operator pod")
+		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], srvPodIP+`:53 -A3`)
+		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
+		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
 	})
 
 	g.It("NonHyperShiftHOST-Author:mjoseph-High-52497-Support CoreDNS forwarding DNS requests over TLS - using system CA [Disruptive]", func() {
@@ -845,36 +863,44 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("3.Get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
 
-		exutil.By("4.Patch dns.operator/default with transport option as tls for upstreamresolver")
-		dnsUpstreamResolver := "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers\", \"value\":{\"transportConfig\": {\"tls\":{\"serverName\": \"dns.ocp52497.ocp\"}, \"transport\": \"TLS\"}, \"upstreams\":[{\"address\":\"" + srvPodIP + "\",  \"port\": 853, \"type\":\"Network\"}]}}]"
-		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
-
-		exutil.By("5.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
-		upstreams := pollReadDnsCorefile(oc, oneDnsPod, srvPodIP, "-A3", "forward")
-		o.Expect(upstreams).To(o.ContainSubstring("forward . tls://" + srvPodIP + ":853"))
-		o.Expect(upstreams).To(o.ContainSubstring("tls_servername dns.ocp52497.ocp"))
-		o.Expect(upstreams).To(o.ContainSubstring("tls"))
-
-		exutil.By("6.Check no error logs from dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
-		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], srvPodIP+`:853 -A3`)
-		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
-		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
-
-		exutil.By("7.Patch the dns.operator/default with transport option as Cleartext for forwardplugin")
-		dnsForwardPlugin := "[{\"op\":\"replace\", \"path\":\"/spec\", \"value\":{\"servers\":[{\"forwardPlugin\":{\"policy\":\"Sequential\",\"transportConfig\": {\"tls\":{\"serverName\": \"dns.ocp52497.ocp\"}, \"transport\": \"TLS\"}, \"upstreams\":[\"" + srvPodIP + "\"]}, \"name\": \"test\", \"zones\":[\"ocp52497.ocp\"]}]}}]"
+		exutil.By("4.Patch the dns.operator/default with transport option as tls for forwardplugin")
+		dnsForwardPlugin := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Sequential\",\"transportConfig\": {\"tls\":{\"serverName\": \"dns.ocp52497.ocp\"}, \"transport\": \"TLS\"}, \"upstreams\":[\"" + srvPodIP + "\"]}, \"name\": \"test\", \"zones\":[\"ocp52497.ocp\"]}]}]"
 		patchGlobalResourceAsAdmin(oc, resourceName, dnsForwardPlugin)
 
-		exutil.By("8.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
+		exutil.By("5.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
 		forward := pollReadDnsCorefile(oc, oneDnsPod, srvPodIP, "-b6", "ocp52497")
 		o.Expect(forward).To(o.ContainSubstring("ocp52497.ocp:5353"))
 		o.Expect(forward).To(o.ContainSubstring("forward . tls://" + srvPodIP))
 		o.Expect(forward).To(o.ContainSubstring("tls_servername dns.ocp52497.ocp"))
 		o.Expect(forward).To(o.ContainSubstring("tls"))
 
-		exutil.By("9.Check no error logs from dns operator pod")
+		exutil.By("6.Check no error logs from dns operator pod")
+		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
 		podLogs1, errLogs1 := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], `ocp52497.ocp:5353 -A3`)
 		o.Expect(errLogs1).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs1).To(o.ContainSubstring(`msg="reconciling request: /default"`))
+		// Patching to remove the forwardplugin configurations.
+		dnsDefault := "[{\"op\":\"remove\", \"path\":\"/spec/servers\"}]"
+		patchGlobalResourceAsAdmin(oc, resourceName, dnsDefault)
+
+		exutil.By("7.Patch dns.operator/default with transport option as tls for upstreamresolver")
+		dnsUpstreamResolver := "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers\", \"value\":{\"transportConfig\": {\"tls\":{\"serverName\": \"dns.ocp52497.ocp\"}, \"transport\": \"TLS\"}, \"upstreams\":[{\"address\":\"" + srvPodIP + "\",  \"port\": 853, \"type\":\"Network\"}]}}]"
+		patchGlobalResourceAsAdmin(oc, resourceName, dnsUpstreamResolver)
+
+		exutil.By("8.Check and confirm the upstream resolver's IP(srvPodIP) appearing in the dns pod")
+		// Converting the IPV6 address to upper case for searching in the coreDNS file
+		if strings.Count(srvPodIP, ":") >= 2 {
+			srvPodIP = fmt.Sprintf("%s", strings.ToUpper(srvPodIP))
+			srvPodIP = "[" + srvPodIP + "]"
+		}
+		upstreams := pollReadDnsCorefile(oc, oneDnsPod, srvPodIP, "-A3", "forward")
+		o.Expect(upstreams).To(o.ContainSubstring("forward . tls://" + srvPodIP + ":853"))
+		o.Expect(upstreams).To(o.ContainSubstring("tls_servername dns.ocp52497.ocp"))
+		o.Expect(upstreams).To(o.ContainSubstring("tls"))
+
+		exutil.By("9.Check no error logs from dns operator pod")
+		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], srvPodIP+` -A3`)
+		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
+		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
 	})
 })
