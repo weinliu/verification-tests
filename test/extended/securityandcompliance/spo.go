@@ -2089,4 +2089,67 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		commonMessage := `syscall not allowed: mkdir`
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", seccompDontAllow.namespace, "--field-selector", "reason=ProfileNotAllowed", "-o=jsonpath={.items[*].message}")
 	})
+
+	g.It("NonPreRelease-Author:xiyuan-High-49877-Create a SeccompProfile and apply it to the pod", func() {
+		ns := "spo-test-" + getRandomString()
+		spWithoutMkidr := seccompProfile{
+			name:      "sp-not-allowed",
+			namespace: ns,
+			template:  spSleepWithMkdirTemplate,
+		}
+		spWithMkidr := seccompProfile{
+			name:      "sp-allowed",
+			namespace: ns,
+			template:  spSleepWithMkdirTemplate,
+		}
+		testPodWithoutMkdir := podWithProfile{
+			name:             "pod-not-allowed",
+			namespace:        ns,
+			localhostProfile: "",
+			template:         podWithProfileTemplate,
+		}
+		testPodWithMkdir := podWithProfile{
+			name:             "pod-allowed",
+			namespace:        ns,
+			localhostProfile: "",
+			template:         podWithProfileTemplate,
+		}
+
+		g.By("Create seccompprofiles in different namespaces !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", ns, testPodWithoutMkdir.name},
+			objectTableRef{"seccompprofile", ns, spWithoutMkidr.name},
+			objectTableRef{"pod", ns, testPodWithMkdir.name},
+			objectTableRef{"seccompprofile", ns, spWithMkidr.name},
+			objectTableRef{"ns", ns, ns})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		g.By("Created seccompprofiles !!!")
+		err = applyResourceFromTemplateWithoutKeyword(oc, "mkdir", "--ignore-unknown-parameters=true", "-n", spWithoutMkidr.namespace, "-f", spWithoutMkidr.template, "-p", "NAME="+spWithoutMkidr.name, "NAMESPACE="+spWithoutMkidr.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		spWithMkidr.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", spWithoutMkidr.name, "-n", ns, "-o=jsonpath={.status.status}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", spWithMkidr.name, "-n", ns, "-o=jsonpath={.status.status}"})
+
+		g.By("Created pods with the seccompprofiles as securityContext !!!")
+		testPodWithoutMkdir.localhostProfile = "operator/" + ns + "/" + spWithoutMkidr.name + ".json"
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", testPodWithoutMkdir.template, "-p", "NAME="+testPodWithoutMkdir.name, "NAMESPACE="+testPodWithoutMkdir.namespace, "BASEPROFILENAME="+testPodWithoutMkdir.localhostProfile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", testPodWithoutMkdir.name, "-n", testPodWithoutMkdir.namespace, "-o=jsonpath={.status.phase}"})
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", testPodWithMkdir.template, "-p", "NAME="+testPodWithMkdir.name, "NAMESPACE="+testPodWithMkdir.namespace, "BASEPROFILENAME="+testPodWithMkdir.localhostProfile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", testPodWithMkdir.name, "-n", testPodWithMkdir.namespace, "-o=jsonpath={.status.phase}"})
+
+		g.By("Check the result !!!")
+		result, _ := oc.AsAdmin().Run("exec").Args(testPodWithoutMkdir.name, "-n", ns, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result)
+		}
+		result, _ = oc.AsAdmin().Run("exec").Args(testPodWithMkdir.name, "-n", ns, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result, "/tmpo/foo") && !strings.Contains(result, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result)
+		}
+	})
 })

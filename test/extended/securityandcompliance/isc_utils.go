@@ -340,19 +340,20 @@ func applyResourceFromTemplateWithoutKeyword(oc *exutil.CLI, keyword string, par
 }
 
 func removeKeywordFromFile(fileLocation string, keyword string) {
+	var newlines []string
 	input, err := ioutil.ReadFile(fileLocation)
 	if err != nil {
 		e2e.Failf("the result of ReadFile:%v", err)
 	}
 
 	lines := strings.Split(string(input), "\n")
-
 	for i, line := range lines {
 		if strings.Contains(line, keyword) {
-			lines[i] = ""
+			continue
 		}
+		newlines = append(newlines, lines[i])
 	}
-	output := strings.Join(lines, "\n")
+	output := strings.Join(newlines, "\n")
 	err = ioutil.WriteFile(fileLocation, []byte(output), 0644)
 	if err != nil {
 		e2e.Failf("the result of WriteFile:%v", err)
