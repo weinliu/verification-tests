@@ -9,11 +9,11 @@ describe('node logs related features', () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
-    cy.exec(`oc new-project ${testName}`);
+    cy.exec(`oc new-project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   });
 
   after(() => {
-    cy.exec(`oc delete project ${testName}`);
+    cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
@@ -46,7 +46,7 @@ describe('node logs related features', () => {
     logsPage.logLinesNotContain('crio');
   });
   it('(OCP-46636,yanpzhan,UI) Support for search and line number in pod/node log', {tags: ['e2e','admin']}, () => {
-    cy.exec(`oc create -f ./fixtures/pods/pod-with-white-space-logs.yaml -n ${testName}`);
+    cy.exec(`oc create -f ./fixtures/pods/pod-with-white-space-logs.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     //search log on node log page
     cy.visit('/k8s/cluster/nodes');
     listPage.rows.shouldBeLoaded();

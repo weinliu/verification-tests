@@ -1,6 +1,6 @@
 export const logsPage = {
-  logLinesNotContain: (lines: string) => cy.get('.pf-c-log-viewer__text', {timeout: 6000}).should('not.contain.text', lines),
-  logWindowLoaded: () => cy.get('.pf-c-log-viewer__text', {timeout: 90000}).should('exist'),
+  logLinesNotContain: (lines: string) => cy.get('[class*=log-viewer__text]', {timeout: 6000}).should('not.contain.text', lines),
+  logWindowLoaded: () => cy.get('[class*=log-viewer__text]', {timeout: 90000}).should('exist'),
   filterByUnit: (unitname: string) => {
     cy.get('#log-unit').clear();
     cy.get('#log-unit').type(unitname).type('{enter}');
@@ -10,22 +10,22 @@ export const logsPage = {
     if(containername){
       cy.contains('span.co-resource-item__resource-name', `${containername}`).click();
     }else if(containernumber){
-      cy.get('ul.pf-c-dropdown__menu li button').eq(`${containernumber}-1`).click();
+      cy.get('ul.[class*=dropdown__menu] li button').eq(`${containernumber}-1`).click();
     }
   },
   selectLogComponent: (componentname: string) => {
-    cy.get('button.pf-c-select__toggle').click();
-    cy.get('.pf-c-select__menu-item').contains(componentname).click();
+    cy.get('button[class*=select__toggle]').click();
+    cy.get('[class*=select__menu-item').contains(componentname).click();
   },
   selectLogFile: (logname: string) => {
-    cy.get('button.pf-c-select__toggle').last().click();
-    cy.get('.pf-c-select__menu-item').contains(logname).click();
+    cy.get('button[class*=select__toggle]').last().click();
+    cy.get('[class*=select__menu-item]').contains(logname).click();
   },
-  checkLogLineExist: () => cy.get('.pf-c-log-viewer__index').should('exist'),
+  checkLogLineExist: () => cy.get('[class*=log-viewer__index]').should('exist'),
   searchLog: (keyword) => {
-    cy.get('.pf-c-log-viewer__scroll-container', {timeout: 30000}).scrollTo('top', { ensureScrollable: false });
+    cy.get('[class*=log-viewer__scroll-container]', {timeout: 30000}).scrollTo('top', { ensureScrollable: false });
     cy.get('input[placeholder="Search"]').type(`${keyword}`);
-    cy.get('span.pf-c-log-viewer__string', {timeout: 60000}).contains(`${keyword}`, { matchCase: false });
+    cy.get('span[class*=log-viewer__string]', {timeout: 60000}).contains(`${keyword}`, { matchCase: false });
   },
   clearSearch: () => {
     cy.get('[aria-label="Reset"]').click();
