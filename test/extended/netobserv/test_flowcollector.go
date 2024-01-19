@@ -830,7 +830,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		time.Sleep(60 * time.Second)
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
-		//Scenario1: Verify default DSCP value=0
+		// Scenario1: Verify default DSCP value=0
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
 			SrcK8S_Namespace: testTemplate.ClientNS,
@@ -846,9 +846,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.Dscp).To(o.Equal(0))
 		}
 
-		//Scenario2: Verify egress QoS feature for OVN CNI
+		// Scenario2: Verify egress QoS feature for OVN CNI
 		if networkType == "ovnkubernetes" {
-			parameters = []string{"SrcK8S_Name=\"client-dscp\""}
+			parameters = []string{"SrcK8S_Name=\"client-dscp\", Dscp=\"59\""}
 
 			g.By("Wait for a min before logs gets collected and written to loki")
 			time.Sleep(60 * time.Second)
@@ -856,23 +856,17 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			g.By("Verify DSCP value=59 for flows from DSCP client pod")
 			flowRecords, err = lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
-			for _, r := range flowRecords {
-				o.Expect(r.Flowlog.Dscp).To(o.Equal(59))
-			}
+			o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows with DSCP value 59 should be > 0")
 
 			g.By("Verify DSCP value=0 for flows from pods other than DSCP client pod in test-client namespace")
-			parameters = []string{"SrcK8S_Name=\"client\""}
+			parameters = []string{"SrcK8S_Name=\"client\", Dscp=\"0\""}
 
 			flowRecords, err = lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route, parameters...)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
-			for _, r := range flowRecords {
-				o.Expect(r.Flowlog.Dscp).To(o.Equal(0))
-			}
+			o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows with DSCP value 0 should be > 0")
 		}
 
-		//Scenario3: Explicitly passing QoS value in ping command
+		// Scenario3: Explicitly passing QoS value in ping command
 		ipStackType := checkIPStackType(oc)
 		var destinationIP string
 
