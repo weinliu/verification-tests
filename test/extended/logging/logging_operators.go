@@ -163,7 +163,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		defer cl.delete(oc)
 		cl.create(oc, "TOTAL_LIMIT_SIZE=64m", "RETRY_TIMEOUT=30m", "CHUNK_LIMIT_SIZE=16m", "FLUSH_INTERVAL=5s", "FLUSH_THREAD_COUNT=3",
 			"OVERFLOW_ACTION=throw_exception", "RETRY_MAX_INTERVAL=100s", "RETRY_TYPE=periodic", "RETRY_WAIT=2s")
-		g.By("Waiting for logging pods to be ready...")
 
 		g.By("check configurations in fluent.conf")
 		fluentConf, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/collector-config", "-n", cl.namespace, `-ojsonpath={.data.fluent\.conf}`).Output()
@@ -173,6 +172,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		for i := 0; i < len(expectedConfigs); i++ {
 			o.Expect(strings.Contains(fluentConf, expectedConfigs[i])).Should(o.BeTrue(), fmt.Sprintf("can't find config %s in fluent.conf\n", expectedConfigs[i]))
 		}
+
+		// merge case OCP-33894 for logging 5.8 and later
+		g.By("modify the optimizing variables")
+		cl.update(oc, "", `{"spec": {"collection": {"fluentd": {"buffer": {"flushMode":"lazy"}}}}}`, "--type=merge")
+
+		g.By("verify the flunentd are redeployed and the new values are set in fluentd.conf")
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		fluentConf, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/collector-config", "-n", cl.namespace, `-ojsonpath={.data.fluent\.conf}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(fluentConf, "flush_mode lazy")).Should(o.BeTrue(), "can't find config \"flush_mode lazy\" in fluent.conf\n")
 	})
 
 })
