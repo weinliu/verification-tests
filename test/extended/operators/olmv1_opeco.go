@@ -3,8 +3,10 @@ package operators
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -345,4 +347,39 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.0.1"))
 	})
 
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-69202-Catalogd catalog offer the operator content through http server off cluster", func() {
+		var (
+			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
+			catalog         = olmv1util.CatalogDescription{
+				Name:     "catalog-69202",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69202",
+				Template: catalogTemplate,
+			}
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("port-forward the catalogd-catalogserver")
+		cmd1, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/catalogd-catalogserver", "6920:80", "-n", "openshift-catalogd").Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cmd1.Process.Kill()
+
+		exutil.By("get the index content through http service off cluster")
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 100*time.Second, false, func(ctx context.Context) (bool, error) {
+			checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:6920/catalogs/catalog-69202/all.json").Output()
+			if err != nil {
+				e2e.Logf("failed to execute the curl: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("nginx69202", string(checkOutput)); matched {
+				e2e.Logf("Check the content off cluster success\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Cannot get the port-forward result"))
+	})
 })
