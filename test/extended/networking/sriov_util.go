@@ -139,14 +139,23 @@ func chkSriovOperatorStatus(oc *exutil.CLI, ns string) {
 
 // check specified pods are running
 func chkPodsStatus(oc *exutil.CLI, ns, lable string) {
-	podsStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", lable, "-o=jsonpath={.items[*].status.phase}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	podsStatus = strings.TrimSpace(podsStatus)
-	statusList := strings.Split(podsStatus, " ")
-	for _, podStat := range statusList {
-		o.Expect(podStat).Should(o.MatchRegexp("Running"))
-	}
-	e2e.Logf("All pods with lable %s in namespace %s are Running", lable, ns)
+	err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+		podsStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", lable, "-o=jsonpath={.items[*].status.phase}").Output()
+		if err != nil {
+			return false, err
+		}
+		podsStatus = strings.TrimSpace(podsStatus)
+		statusList := strings.Split(podsStatus, " ")
+		for _, podStat := range statusList {
+			if strings.Compare(podStat, "Running") != 0 {
+				return false, nil
+			}
+		}
+		e2e.Logf("All pods with lable %s in namespace %s are Running", lable, ns)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s in namespace %v does not running", lable, ns))
+
 }
 
 // clear specified sriovnetworknodepolicy
@@ -349,6 +358,14 @@ func waitForSriovPolicySyncUpStart(oc *exutil.CLI, ns string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "sriovnetworknodestates sync up is in progress")
+}
+
+func getOperatorVersion(oc *exutil.CLI, subname string, ns string) string {
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subname, "-n", ns, "-o=jsonpath={.status.currentCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+	e2e.Logf("operator version is %s", csvName)
+	return csvName
 }
 
 // find the node name which is in scheduleDisableNode
