@@ -50,6 +50,7 @@ func (osp *Osp) GetOspInstanceState(instanceName string) (string, error) {
 func (osp *Osp) GetStopOspInstance(instanceName string) error {
 	cmd := fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server stop %s", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
 	_, err := exec.Command("bash", "-c", cmd).Output()
+	e2e.Logf("When trying to stop openstack instance, got error:", err)
 	if err != nil {
 		return fmt.Errorf("Not able to stop VM")
 	}
