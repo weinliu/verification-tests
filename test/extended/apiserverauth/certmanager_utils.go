@@ -206,15 +206,16 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(mStatusErr, "operator pods created failed.")
 }
 
-// create issuers
-func createIssuers(oc *exutil.CLI) {
-	e2e.Logf("Create issuer in ns scope created in last step.")
+// create selfsigned issuer
+func createIssuer(oc *exutil.CLI) {
+	e2e.Logf("Create selfsigned issuer in ns scope created in last step.")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
-	issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-	err := oc.Run("create").Args("-f", issuerHTTP01File).Execute()
+	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
+	err := oc.Run("create").Args("-f", issuerFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+
 	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := oc.Run("get").Args("issuer", "letsencrypt-http01").Output()
+		output, err := oc.Run("get").Args("issuer", "default-selfsigned").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, "True") {
 			e2e.Logf("Get issuer output is: %v", output)
@@ -223,35 +224,18 @@ func createIssuers(oc *exutil.CLI) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(statusErr, "get issuer is wrong")
-} //end of create issuers
+}
 
-// create certificate
+// create certificate using selfsigned issuer
 func createCertificate(oc *exutil.CLI) {
-	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
-		g.Skip("Skipping Private clusters that are behind some proxy and can't be directly reachable from externally.")
-	}
-	exutil.SkipIfPlatformType(oc, "openstack")
-	skipIfRouteUnreachable(oc)
-
 	e2e.Logf("As the normal user, create certificate.")
-	ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("ingressDomain=%s", ingressDomain)
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
-	certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
-	f, err := ioutil.ReadFile(certHTTP01File)
+	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned.yaml")
+	err := oc.Run("create").Args("-f", certFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dnsName := "t." + ingressDomain
-	if len(dnsName) > 63 {
-		g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
-	}
-	f1 := strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
-	err = ioutil.WriteFile(certHTTP01File, []byte(f1), 0644)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.Run("create").Args("-f", certHTTP01File).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+
 	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := oc.Run("get").Args("certificate", "cert-test-http01").Output()
+		output, err := oc.Run("get").Args("certificate", "default-selfsigned-cert").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("certificate status is: %v ", output)
 		if strings.Contains(output, "True") {

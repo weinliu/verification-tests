@@ -277,9 +277,9 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
-		e2e.Logf("Login with normal user and create issuers.\n")
+		e2e.Logf("Login with normal user and create issuer.\n")
 		oc.SetupProject()
-		createIssuers(oc)
+		createIssuer(oc)
 		e2e.Logf("Create certificate.\n")
 		createCertificate(oc)
 
