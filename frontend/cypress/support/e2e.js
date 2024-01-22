@@ -1,5 +1,6 @@
 import '../../upstream/support/index'
 import './commands'
+import "../../views/netflow-page"
 
 const registerCypressGrep = require('@cypress/grep')
 registerCypressGrep()
