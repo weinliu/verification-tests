@@ -31,6 +31,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		secProfileStackTemplate                   string
 		podWithProfileTemplate                    string
 		selinuxProfileNginxTemplate               string
+		podBusybox                                string
 		podWithSelinuxProfileTemplate             string
 		errorLoggerPodWithSecuritycontextTemplate string
 		profileRecordingTemplate                  string
@@ -70,6 +71,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		pathWebhookAllowedSyscalls = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-allowed-syscalls.yaml")
 		pathWebhookBinding = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-binding.yaml")
 		pathWebhookRecording = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-recording.yaml")
+		podBusybox = filepath.Join(buildPruningBaseDir, "spo/pod-busybox.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
 		podWithLabelsTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-labels.yaml")
 		podWithOneLabelTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
@@ -941,7 +943,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51405-Check profilebinding could make use of webhookOptions object in webhooks for seccompprofile [Disruptive]", func() {
 		ns1 := "do-binding-" + getRandomString()
 		ns2 := "dont-binding-" + getRandomString()
-		podBusybox := filepath.Join(buildPruningBaseDir, "spo/pod-busybox.yaml")
 		podBusyboxNs1 := "pod-busybox-ns1"
 		podBusyboxNs2 := "pod-busybox-ns2"
 
@@ -2150,6 +2151,93 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		result, _ = oc.AsAdmin().Run("exec").Args(testPodWithMkdir.name, "-n", ns, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
 		if strings.Contains(result, "/tmpo/foo") && !strings.Contains(result, "Operation not permittedd") {
 			e2e.Logf("%s is expected result", result)
+		}
+	})
+
+	g.It("NonPreRelease-Author:xiyuan-Critical-49870-Check profilebinding working as expected for seccompprofile", func() {
+		nsAllow := "do-allow-" + getRandomString()
+		nsDontAllow := "dont-allow-" + getRandomString()
+		podBusyboxAllow := "pod-busybox-allow"
+		podBusyboxDontAllow := "pod-busybox-dont-allow"
+		var (
+			seccompAllow = seccompProfile{
+				name:      "do-allow",
+				namespace: nsAllow,
+				template:  spSleepWithMkdirTemplate,
+			}
+			seccompDontAllow = seccompProfile{
+				name:      "dont-allow",
+				namespace: nsDontAllow,
+				template:  spSleepWithMkdirTemplate,
+			}
+			profileBindingAllow = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   nsAllow,
+				kind:        "SeccompProfile",
+				profilename: seccompAllow.name,
+				image:       "quay.io/openshifttest/busybox:latest",
+				template:    profileBindingTemplate,
+			}
+			profileBindingDontAllow = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   nsDontAllow,
+				kind:        "SeccompProfile",
+				profilename: seccompDontAllow.name,
+				image:       "quay.io/openshifttest/busybox:latest",
+				template:    profileBindingTemplate,
+			}
+		)
+
+		g.By("Create seccompprofiles in different namespaces !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"seccompprofile", seccompAllow.namespace, seccompAllow.name},
+			objectTableRef{"seccompprofile", seccompDontAllow.namespace, seccompDontAllow.name},
+			objectTableRef{"ns", seccompAllow.namespace, seccompAllow.namespace},
+			objectTableRef{"ns", seccompDontAllow.namespace, seccompDontAllow.namespace})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", seccompAllow.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", seccompDontAllow.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, nsAllow)
+		exutil.SetNamespacePrivileged(oc, nsDontAllow)
+		lableNamespace(oc, "namespace", nsAllow, "-n", nsAllow, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", nsAllow, "-n", nsAllow, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		err = applyResourceFromTemplateWithoutKeyword(oc, "mkdir", "--ignore-unknown-parameters=true", "-n", seccompAllow.namespace, "-f", seccompAllow.template, "-p", "NAME="+seccompAllow.name, "NAMESPACE="+seccompAllow.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		seccompDontAllow.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", seccompAllow.name, "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", seccompDontAllow.name, "-n", seccompDontAllow.namespace, "-o=jsonpath={.status.status}"})
+
+		g.By("Create profilebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilebinding", nsAllow, profileBindingAllow.name},
+			objectTableRef{"profilebinding", nsDontAllow, profileBindingDontAllow.name})
+		profileBindingAllow.create(oc)
+		profileBindingDontAllow.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingAllow.name, ok, []string{"profilebinding", "-n", nsAllow,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBindingDontAllow.name, ok, []string{"profilebinding", "-n", nsDontAllow,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Created pods with seccompprofiles and check pods status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"pod", nsAllow, podBusyboxAllow},
+			objectTableRef{"pod", nsDontAllow, podBusyboxDontAllow})
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podBusybox, "-p", "NAME="+podBusyboxAllow, "NAMESPACE="+nsAllow)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err2 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podBusybox, "-p", "NAME="+podBusyboxDontAllow, "NAMESPACE="+nsDontAllow)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", podBusyboxAllow, "-n", nsAllow, "-o=jsonpath={.status.phase}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", podBusyboxDontAllow, "-n", nsDontAllow, "-o=jsonpath={.status.phase}"})
+
+		g.By("Check whether mkdir operator allowed for pods !!!")
+		result1, _ := oc.AsAdmin().Run("exec").Args(podBusyboxAllow, "-n", nsAllow, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result1, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result1)
+		}
+		result2, _ := oc.AsAdmin().Run("exec").Args(podBusyboxDontAllow, "-n", nsDontAllow, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result2, "/tmpo/foo") && !strings.Contains(result2, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result2)
 		}
 	})
 })
