@@ -31,10 +31,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.BeforeEach(func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
-		// CredentialReqeust needs to be provioned by Cloud automatically
-		if exutil.IsSTSCluster(oc) {
-			g.Skip("Skip on STS cluster")
-		}
 	})
 
 	// author: hongli@redhat.com
@@ -50,6 +46,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skip on STS cluster")
+		}
 		baseDomain, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
 		// this case cannot be executed on a shared vpc cluster
 		privateZoneIAMRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.platform.aws}").Output()
@@ -99,6 +98,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skip on STS cluster")
+		}
 		cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.ToLower(cloudName) == "azureusgovernmentcloud" {
@@ -157,6 +159,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "GCP")
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skip on STS cluster")
+		}
 		zoneID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.privateZone.id}").Output()
 		if !strings.Contains(zoneID, "private") {
 			g.Skip("Skip since no valid DNS privateZone is configured in this cluster")
@@ -210,6 +215,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skip on STS cluster")
+		}
 		baseDomain, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
 
 		// privateZoneIAMRole needs to be present for shared vpc cluster
