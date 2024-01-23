@@ -678,7 +678,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-69072-Infinite PODs loop creation with NodeAffinity status [Serial][Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-69072-Infinite PODs loop creation with NodeAffinity status [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		project69072Yaml := filepath.Join(buildPruningBaseDir, "project-69072.yaml")
 		deployment69072Yaml := filepath.Join(buildPruningBaseDir, "deployment-69072.yaml")
