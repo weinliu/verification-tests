@@ -124,6 +124,20 @@ func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
 	return token, err
 }
 
+// Get cluster's DNS Public Zone. Returning "" generally means cluster is private, except azure-stack env
+func getDNSPublicZone(oc *exutil.CLI) string {
+	publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return publicZone
+}
+
+// Get AzureCloud name. Returning "" means non-Azure env, "AzurePublicCloud" means public Azure env; "AzureStackCloud" means AzureStack env
+func getAzureCloudName(oc *exutil.CLI) string {
+	azureCloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return azureCloudName
+}
+
 // create cert manager
 func createCertManagerOperator(oc *exutil.CLI) {
 	e2e.Logf("Prepare cert manager operator.\n")
@@ -249,6 +263,13 @@ func createCertificate(oc *exutil.CLI) {
 
 // Skip case if HTTP and HTTPS route are unreachable.
 func skipIfRouteUnreachable(oc *exutil.CLI) {
+	e2e.Logf("Detect if using a private cluster.")
+	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+		g.Skip("skip private clusters that are behind some proxy")
+	} else if getDNSPublicZone(oc) == "" || getAzureCloudName(oc) == "AzureStackCloud" {
+		g.Skip("skip private clusters that can't be directly accessed from external")
+	}
+
 	var (
 		httpReachable  bool
 		httpsReachable bool
