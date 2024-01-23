@@ -137,7 +137,7 @@ spec:
 		}
 	})
 
-	g.It("NonHyperShiftHOST-Author:mihuang-Medium-33209-[cco-passthrough]IPI on azure with cco passthrough mode", func() {
+	g.It("NonHyperShiftHOST-Author:mihuang-Medium-33204-[cco-passthrough]IPI on azure with cco passthrough mode", func() {
 		exutil.By("Check if it's an azure cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "azure")
 

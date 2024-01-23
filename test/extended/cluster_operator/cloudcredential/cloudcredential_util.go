@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -185,13 +186,17 @@ func checkModeInMetric(oc *exutil.CLI, token string, mode string) error {
 }
 
 func checkSTSStyle(oc *exutil.CLI, mode string) bool {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "installer-cloud-credentials", "-n", "openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "cloud-credentials", "-n", "openshift-ingress-operator", "-o=jsonpath={.data.credentials}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).NotTo(o.BeEmpty())
 	credentials, _ := base64.StdEncoding.DecodeString(output)
 	credConfig := strings.Split(string(credentials), "\n")
+	//Credentials items are in different order for self-managed OCP and ROSA, so sort firstly
+	sort.SliceStable(credConfig, func(i, j int) bool {
+		return strings.Compare(credConfig[i], credConfig[j]) < 0
+	})
 	if mode == "manualpodidentity" {
-		return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "regional") && strings.Contains(credConfig[2], "role_arn") && strings.Contains(credConfig[3], "web_identity_token_file")
+		return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "role_arn") && strings.Contains(credConfig[2], "sts_regional_endpoints") && strings.Contains(credConfig[3], "web_identity_token_file")
 	}
 	return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "aws_access_key_id") && strings.Contains(credConfig[2], "aws_secret_access_key")
 }
