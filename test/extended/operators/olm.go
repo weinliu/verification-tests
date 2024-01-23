@@ -10939,6 +10939,85 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		newCheck("expect", asAdmin, withoutNamespace, contain, "MultiNamespace InstallModeType not supported", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
 	})
 
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-71119-pod does not start for installing operator of multi-ns mode when og is in one of the ns", func() {
+		e2e.Logf("it is for bug https://issues.redhat.com/browse/OCPBUGS-25989")
+		var (
+			itName              = g.CurrentSpecReport().FullText()
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogMultiTemplate     = filepath.Join(buildPruningBaseDir, "og-multins.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			og                  = operatorGroupDescription{
+				name:         "og-71119",
+				namespace:    "test-ns71119-1",
+				multinslabel: "label-71119",
+				template:     ogMultiTemplate,
+			}
+			p1 = projectDescription{
+				name:            "test-ns71119-1",
+				targetNamespace: "test-ns71119-1",
+			}
+			p2 = projectDescription{
+				name:            "test-ns71119-2",
+				targetNamespace: "test-ns71119-1",
+			}
+			subSample = subscriptionDescription{
+				subName:                "amq-broker-rhel8-0c",
+				namespace:              "test-ns71119-1",
+				catalogSourceName:      "redhat-operators",
+				catalogSourceNamespace: "openshift-marketplace",
+				channel:                "7.11.x",
+				ipApproval:             "Automatic",
+				operatorPackage:        "amq-broker-rhel8",
+				template:               subTemplate,
+			}
+		)
+		csvs, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-A").Output()
+		if strings.Contains(csvs, subSample.operatorPackage) {
+			g.Skip("the amq-broker-rhel8 is installed, so skip it")
+		}
+
+		packageName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", subSample.catalogSourceNamespace, "-l", "catalog="+subSample.catalogSourceName,
+			"--field-selector", "metadata.name="+subSample.operatorPackage).Output()
+		if !strings.Contains(packageName, subSample.operatorPackage) {
+			g.Skip("no reqruied package amq-broker-rhel8, so skip it")
+		}
+
+		channelDefault, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", subSample.catalogSourceNamespace, "-l", "catalog="+subSample.catalogSourceName,
+			"--field-selector", "metadata.name="+subSample.operatorPackage, "-o=jsonpath={.items[0].status.defaultChannel}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		o.Expect(channelDefault).NotTo(o.BeEmpty())
+		subSample.channel = channelDefault
+
+		exutil.By("create two ns and og")
+		defer p1.delete(oc)
+		p1.create(oc, itName, dr)
+		p1.label(oc, "label-71119")
+		defer p2.delete(oc)
+		p2.create(oc, itName, dr)
+		p2.label(oc, "label-71119")
+		og.create(oc, itName, dr)
+
+		exutil.By("subscribe to operator with multinamespaces mode")
+		defer subSample.delete(itName, dr)
+		subSample.create(oc, itName, dr)
+		defer subSample.deleteCSV(itName, dr)
+		subSample.findInstalledCSV(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subSample.installedCSV, "-n", subSample.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subSample.namespace,
+			"-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		o.Consistently(func() int {
+			restartCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", subSample.namespace, "-o=jsonpath={.status..restartCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(restartCount).NotTo(o.BeEmpty())
+			count, err := strconv.Atoi(strings.Fields(restartCount)[0])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return count
+		}, 150*time.Second, 10*time.Second).Should(o.Equal(0), "the pod restart")
+	})
+
 	// It will cover part of test case: OCP-29275, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-29275-label to target namespace of operator group with multi namespace", func() {
 		var (
