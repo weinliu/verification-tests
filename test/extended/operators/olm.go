@@ -4184,8 +4184,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
-	// author: scolange@redhat.com
-	g.It("NonHyperShiftHOST-Author:scolange-Medium-25674-restart the marketplace-operator when the cluster is in bad state [Disruptive]", func() {
+	// author: xzha@redhat.com
+	g.It("NonHyperShiftHOST-Author:xzha-Medium-25674-restart the marketplace-operator when the cluster is in bad state [Disruptive]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -4223,13 +4223,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		e2e.Logf("Check 1 first")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.items[*].spec.name}"}).check(oc)
 
-		exutil.By("get pod of marketplace")
-		podName := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=name=marketplace-operator", "-n", "openshift-marketplace", "-o=jsonpath={...metadata.name}")
-		o.Expect(podName).NotTo(o.BeEmpty())
-
 		exutil.By("delete pod of marketplace")
-		_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "pod", podName, "-n", "openshift-marketplace")
+		output, err := doAction(oc, "delete", asAdmin, withoutNamespace, "pod", "--selector=name=marketplace-operator", "-n", "openshift-marketplace")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deleted"))
 
 		exec.Command("bash", "-c", "sleep 10").Output()
 
