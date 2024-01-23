@@ -2,6 +2,7 @@ package hypershift
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -154,11 +155,15 @@ func parseTemplateVarParams(obj interface{}) ([]string, error) {
 
 func applyResourceFromTemplate(oc *exutil.CLI, kubeconfig, parsedTemplate string, parameters ...string) error {
 	var configFile string
-
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+	defer func() {
+		if len(configFile) > 0 {
+			_ = os.Remove(configFile)
+		}
+	}()
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 15*time.Second, true, func(_ context.Context) (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(parsedTemplate)
 		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
+			e2e.Logf("Error processing template: %v, keep polling", err)
 			return false, nil
 		}
 		configFile = output
@@ -166,14 +171,10 @@ func applyResourceFromTemplate(oc *exutil.CLI, kubeconfig, parsedTemplate string
 	})
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	e2e.Logf("the file of resource is %s", configFile)
-
 	var args = []string{"-f", configFile}
 	if kubeconfig != "" {
 		args = append(args, "--kubeconfig="+kubeconfig)
 	}
-
-	e2e.Logf("args --> %+v", args)
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args(args...).Execute()
 }
 

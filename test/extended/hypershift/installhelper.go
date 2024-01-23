@@ -371,7 +371,7 @@ func (receiver *installHelper) createAWSHostedClusters(createCluster *createClus
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	e2e.Logf("check AWS HostedClusters ready")
 	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
-	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "AWS HostedClusters install error")
+	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.BeTrue(), "AWS HostedClusters install error")
 	infraID, err := cluster.getInfraID()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	createCluster.InfraID = infraID

@@ -21,9 +21,11 @@ const (
 	OcpApply    OcpClientVerb = "apply"
 	OcpCreate   OcpClientVerb = "create"
 	OcpLabel    OcpClientVerb = "label"
+	OcpTaint    OcpClientVerb = "taint"
 
 	//NodepoolNameSpace is the namespace where the nodepool CR is always created
-	NodepoolNameSpace = "clusters"
+	NodepoolNameSpace           = "clusters"
+	hypershiftOperatorNamespace = "hypershift"
 
 	ClusterInstallTimeout = 3600 * time.Second
 	DoubleLongTimeout     = 1800 * time.Second
@@ -143,13 +145,13 @@ const (
 	mapiMHC                  = "machinehealthchecks.machine.openshift.io"
 	capiMachineset           = "machinesets.cluster.x-k8s.io"
 	capiMachine              = "machines.cluster.x-k8s.io"
-	defaultTimeout           = 300 * time.Second
 )
 
 // node isolation
 const (
 	servingComponentNodesTaintKey = "hypershift.openshift.io/request-serving-component"
 	servingComponentNodesLabelKey = "hypershift.openshift.io/request-serving-component"
+	servingComponentPodLabelKey   = "hypershift.openshift.io/request-serving-component"
 	nonServingComponentLabelKey   = "hypershift.openshift.io/control-plane"
 	nonServingComponentTaintKey   = nonServingComponentLabelKey
 
@@ -157,6 +159,12 @@ const (
 	servingComponentNodesLabel = servingComponentNodesLabelKey + "=true"
 	nonServingComponentLabel   = nonServingComponentLabelKey + "=true"
 	nonServingComponentTaint   = nonServingComponentTaintKey + "=true:NoSchedule"
+
+	osdfmPairedNodeLabelKey   = "osd-fleet-manager.openshift.io/paired-nodes"
+	hypershiftClusterLabelKey = "hypershift.openshift.io/cluster"
+
+	hcTopologyAnnotationKey            = "hypershift.openshift.io/topology"
+	hcRequestServingTopologyAnnotation = hcTopologyAnnotationKey + "=dedicated-request-serving-components"
 )
 
 type K8SResource string

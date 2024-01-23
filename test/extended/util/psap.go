@@ -549,10 +549,10 @@ func GetMachineSetInstanceType(oc *CLI) string {
 func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 
 	var machineName string
-	machinesetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset}").Output()
+	machinesetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(machinesetLabels).NotTo(o.BeEmpty())
-	machineNameStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetLabels, "-n", "openshift-machine-api", "-oname").Output()
+	machineNameStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetLabels, "-n", "openshift-machine-api", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(machineNameStr).NotTo(o.BeEmpty())
 	machineNames := strings.Split(machineNameStr, "\n")

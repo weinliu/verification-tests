@@ -8,6 +8,7 @@ import (
 
 	o "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -408,4 +409,16 @@ func IsDefaultNodeSelectorEnabled(oc *CLI) bool {
 func IsWorkerNode(oc *CLI, nodeName string) bool {
 	isWorker, _ := StringsSliceContains(GetNodeListByLabel(oc, `node-role.kubernetes.io/worker`), nodeName)
 	return isWorker
+}
+
+func WaitForNodeToDisappear(oc *CLI, nodeName string, timeout, interval time.Duration) {
+	o.Eventually(func() bool {
+		_, err := oc.AdminKubeClient().CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			return true
+		}
+		o.Expect(err).ShouldNot(o.HaveOccurred(), fmt.Sprintf("Unexpected error: %s", errors.ReasonForError(err)))
+		e2e.Logf("Still waiting for node %s to disappear", nodeName)
+		return false
+	}).WithTimeout(timeout).WithPolling(interval).Should(o.BeTrue())
 }

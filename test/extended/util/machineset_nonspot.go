@@ -3,14 +3,16 @@ package util
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-
 	"github.com/tidwall/sjson"
+
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -62,9 +64,53 @@ func (ms *MachineSetNonSpotDescription) CreateMachineSet(oc *CLI) {
 
 }
 
+// CreateMachineSetBasedOnExisting creates a non-spot MachineSet based on an existing one
+func (ms *MachineSetNonSpotDescription) CreateMachineSetBasedOnExisting(oc *CLI, existingMset string, waitForMachinesRunning bool) {
+	e2e.Logf("Creating MachineSet/%s based on MachineSet/%s", ms.Name, existingMset)
+	existingMsetJson, err := oc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("get").
+		Args(MapiMachineset, existingMset, "-n", machineAPINamespace, "-o=json").
+		OutputToFile("machineset.json")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer func() {
+		_ = os.Remove(existingMsetJson)
+	}()
+
+	existingMsetJsonBytes, err := os.ReadFile(existingMsetJson)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	existingMsetJsonStr, err := sjson.Set(string(existingMsetJsonBytes), "metadata.name", ms.Name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	existingMsetJsonStr, err = sjson.Set(existingMsetJsonStr, "spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	existingMsetJsonStr, err = sjson.Set(existingMsetJsonStr, "spec.template.metadata.labels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	existingMsetJsonStr, err = sjson.Set(existingMsetJsonStr, "spec.replicas", ms.Replicas)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// Disable spot options for Azure
+	existingMsetJsonStr = strings.ReplaceAll(existingMsetJsonStr, "\"spotVMOptions\": {},", "")
+	// Disable spot options for AWS
+	existingMsetJsonStr = strings.ReplaceAll(existingMsetJsonStr, "\"spotMarketOptions\": {},", "")
+	// Disable spot options for GCP
+	existingMsetJsonStr = strings.ReplaceAll(existingMsetJsonStr, "\"preemptible: true\",", "")
+	err = os.WriteFile(existingMsetJson, []byte(existingMsetJsonStr), 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", existingMsetJson).Execute()
+	if err != nil {
+		errDeleteMset := ms.DeleteMachineSet(oc)
+		e2e.Failf("Error creating/deleting machineset: %v", errors.NewAggregate([]error{err, errDeleteMset}))
+	}
+	if waitForMachinesRunning {
+		WaitForMachinesRunning(oc, ms.Replicas, ms.Name)
+	}
+	return
+}
+
 // DeleteMachineSet delete a machineset
 func (ms *MachineSetNonSpotDescription) DeleteMachineSet(oc *CLI) error {
-	g.By("Deleting a MachineSet ...")
+	By("Deleting a MachineSet ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", machineAPINamespace).Execute()
 }
 
