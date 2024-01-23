@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 		testDataDir := exutil.FixturePath("testdata", "ota/cvo")
 		cfgFile := filepath.Join(testDataDir, "ocp-66751.yaml")
 
-		g.By("Get expected release image for the test")
+		exutil.By("Get expected release image for the test")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		latest4NightlyMultiImage, err := exutil.GetLatest4PreviewImage("multi")

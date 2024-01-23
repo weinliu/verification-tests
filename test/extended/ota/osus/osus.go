@@ -52,13 +52,13 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 			template:        subTemp,
 		}
 
-		g.By("Create OperatorGroup...")
+		exutil.By("Create OperatorGroup...")
 		og.create(oc)
 
-		g.By("Create Subscription...")
+		exutil.By("Create Subscription...")
 		sub.create(oc)
 
-		g.By("Check updateservice operator installed successully!")
+		exutil.By("Check updateservice operator installed successully!")
 		e2e.Logf("Waiting for osus operator pod creating...")
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=name=updateservice-operator", "-n", oc.Namespace()).Output()
@@ -81,19 +81,19 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "pod with name=updateservice-operator is not Running")
 
-		g.By("Delete OperatorGroup...")
+		exutil.By("Delete OperatorGroup...")
 		og.delete(oc)
 
-		g.By("Delete Subscription...")
+		exutil.By("Delete Subscription...")
 		sub.delete(oc)
 
-		g.By("Delete CSV...")
+		exutil.By("Delete CSV...")
 		installedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "-o=jsonpath={.items[?(@.spec.displayName==\"OpenShift Update Service\")].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(installedCSV).NotTo(o.BeEmpty())
 		removeResource(oc, "-n", sub.namespace, "csv", installedCSV)
 
-		g.By("Check updateservice operator uninstalled successully!")
+		exutil.By("Check updateservice operator uninstalled successully!")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("all", "-n", oc.Namespace()).Output()
 			if err != nil || !strings.Contains(output, "No resources found") {
@@ -117,7 +117,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		oc.SetupProject()
 
-		g.By("Install osus operator with srcver")
+		exutil.By("Install osus operator with srcver")
 		installOSUSOperator(oc, updatePath["srcver"], "Manual")
 		preOPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=name=updateservice-operator", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -125,7 +125,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(csvInPrePod).To(o.ContainSubstring(updatePath["srcver"]), "Unexpected operator version installed: %s.", csvInPrePod)
 
-		g.By("Install OSUS instance")
+		exutil.By("Install OSUS instance")
 		e2e.Logf("Mirror OCP release and graph data image by oc-mirror...")
 		registry, err := exutil.GetMirrorRegistry(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -154,7 +154,7 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		preAPPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=app=update-service-oc-mirror", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("z-version upgrade against operator and operand")
+		exutil.By("z-version upgrade against operator and operand")
 		ips, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(strings.Fields(ips))).To(o.Equal(2), "Unexpected installplan found: %s", ips)
@@ -197,7 +197,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("NonPreRelease-Longduration-DisconnectedOnly-Author:yanyang-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive]", func() {
-		g.By("Mirror OCP release and graph data image by oc-mirror")
+		exutil.By("Mirror OCP release and graph data image by oc-mirror")
 		registry, err := exutil.GetMirrorRegistry(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Registry is %s", registry)
@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		e2e.Logf("oc mirror output dir is %s", outdir)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
 		certFile := dirname + "/cert"
 		err = exutil.GetUserCAToFile(oc, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -224,19 +224,19 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = trustCert(oc, registry, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Install OSUS instance")
+		exutil.By("Install OSUS instance")
 		defer uninstallOSUSApp(oc)
 		err = installOSUSAppOCMirror(oc, outdir)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Verify OSUS instance works")
+		exutil.By("Verify OSUS instance works")
 		err = verifyOSUS(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	//author: yanyang@redhat.com
 	g.It("DisconnectedOnly-VMonly-Author:yanyang-High-35944-install/uninstall updateservice instance and build graph image as non root [Disruptive]", func() {
-		g.By("Check if it's a AWS/GCP/Azure cluster")
+		exutil.By("Check if it's a AWS/GCP/Azure cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp, aws, azure")
 
 		dirname := "/tmp/case35944"
@@ -248,16 +248,16 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = exutil.GetPullSec(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Build and push graph data image by podman as non root user")
+		exutil.By("Build and push graph data image by podman as non root user")
 		graphdataTag := registry + "/ota-35944/graph-data:latest"
 		err = buildPushGraphImage(oc, graphdataTag, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Mirror OCP images using oc adm release mirror")
+		exutil.By("Mirror OCP images using oc adm release mirror")
 		err = mirror(oc, registry, "quay.io/openshift-release-dev/ocp-release:4.13.0-x86_64", dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
 		certFile := dirname + "/cert"
 		err = exutil.GetUserCAToFile(oc, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -267,7 +267,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = trustCert(oc, registry, certFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Install OSUS instance")
+		exutil.By("Install OSUS instance")
 		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
 		us := updateService{
 			name:      "update-service-35944",
@@ -281,7 +281,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = installOSUSAppOC(oc, us)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Verify OSUS instance works")
+		exutil.By("Verify OSUS instance works")
 		err = verifyOSUS(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -294,7 +294,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Install OSUS instance")
+		exutil.By("Install OSUS instance")
 		//We need to build and push the latest graph-data if there is new feature to the container
 		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
 		us := updateService{
@@ -309,7 +309,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		err = installOSUSAppOC(oc, us)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Verify OSUS instance works")
+		exutil.By("Verify OSUS instance works")
 		err = verifyOSUS(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -317,7 +317,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jiajliu-High-48621-Updateservice pod should be re-deployed when update graphDataImage of updateservice", func() {
-		g.By("Install OSUS instance with graph-data:1.0")
+		exutil.By("Install OSUS instance with graph-data:1.0")
 		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
 		us := updateService{
 			name:      "us48621",
@@ -348,7 +348,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(graphDataImagePre).To(o.ContainSubstring("1.0"))
 
-		g.By("Update OSUS instance with graph-data:1.1")
+		exutil.By("Update OSUS instance with graph-data:1.1")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", us.namespace, "updateservice/"+us.name, "-p", `{"spec":{"graphDataImage":"quay.io/openshift-qe-optional-operators/graph-data:1.1"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -393,7 +393,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			releases:  "quay.io/openshift-release-dev/ocp-release",
 			replicas:  1,
 		}
-		g.By("Tag image graph-data:1.0 with latest and push the image")
+		exutil.By("Tag image graph-data:1.0 with latest and push the image")
 		output, err := podmanCLI.Run("pull").Args(graphdataOld, "--tls-verify=false", "--authfile", authFile).Output()
 		defer podmanCLI.RemoveImage(graphdataOld)
 		o.Expect(err).NotTo(o.HaveOccurred(), "fail to pull image: %s", output)
@@ -405,7 +405,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		output, err = podmanCLI.Run("push").Args(us.graphdata, "--tls-verify=false", "--authfile", authFile).Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "fail to push image: %s", output)
 
-		g.By("Install OSUS instance with graph-data:latest")
+		exutil.By("Install OSUS instance with graph-data:latest")
 		defer uninstallOSUSApp(oc)
 		err = installOSUSAppOC(oc, us)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -433,7 +433,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		graphDataImageIDPre, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", runningPodNamePre, "-n", us.namespace, "-o=jsonpath={.status.initContainerStatuses[].imageID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Cordon worker nodes without osus instance pod scheduled")
+		exutil.By("Cordon worker nodes without osus instance pod scheduled")
 		nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -463,7 +463,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred(), "fail to cordon node %s: %v", node, err)
 		}
 
-		g.By("Tag image graph-data:1.1 with latest and push the image")
+		exutil.By("Tag image graph-data:1.1 with latest and push the image")
 		output, err = podmanCLI.Run("pull").Args(graphdataNew, "--tls-verify=false", "--authfile", authFile).Output()
 		defer podmanCLI.RemoveImage(graphdataNew)
 		o.Expect(err).NotTo(o.HaveOccurred(), "fail to pull image: %s", output)
