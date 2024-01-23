@@ -417,19 +417,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("create one ServiceMonitor, set scrapeTimeout bigger than scrapeInterval, and no targetLabel setting")
 		createResourceFromYaml(oc, "openshift-monitoring", invalidServiceMonitor)
 
-		g.By("get prometheus-operator pod name with label")
-		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		PodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/name=prometheus-operator", "-n", "openshift-monitoring").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
 		g.By("able to see error in prometheus-operator logs")
-		for _, pod := range strings.Fields(PodNames) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-c", "prometheus-operator", pod, "-n", "openshift-monitoring").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if !strings.Contains(output, `error="scrapeTimeout \"120s\" greater than scrapeInterval \"30s\""`) {
-				e2e.Failf("ServiceMonitor in not contain scrapeTimeout=120s, or not take effect yet")
-			}
-		}
+		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-operator", "prometheus-operator", `error="scrapeTimeout \"120s\" greater than scrapeInterval \"30s\""`, true)
 
 		g.By("check the configuration is not loaded to prometheus")
 		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", `serviceMonitor/openshift-monitoring/console-test-monitoring/0`, false)
@@ -437,19 +426,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("edit ServiceMonitor, and set value for scrapeTimeout less than scrapeInterval")
 		//oc patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "replace", "path": "/spec/endpoints/0/scrapeTimeout", "value":"20s"}]' -n openshift-monitoring
 		patchConfig := `[{"op": "replace", "path": "/spec/endpoints/0/scrapeTimeout", "value":"20s"}]`
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
 		g.By("able to see error for missing targetLabel in prometheus-operator logs")
-		for _, pod := range strings.Fields(PodNames) {
-			checkLogsInContainer(oc, "openshift-monitoring", pod, "prometheus-operator", `relabel configuration for replace action needs targetLabel value`)
-		}
+		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-operator", "prometheus-operator", `relabel configuration for replace action needs targetLabel value`, true)
 
 		g.By("add targetLabel to ServiceMonitor")
 		//oc -n openshift-monitoring patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "add", "path": "/spec/endpoints/0/relabelings/0/targetLabel", "value": "namespace"}]'
 		patchConfig = `[{"op": "add", "path": "/spec/endpoints/0/relabelings/0/targetLabel", "value": "namespace"}]`
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
 		g.By("check the configuration loaded to prometheus")
 		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "serviceMonitor/openshift-monitoring/console-test-monitoring/0", true)
