@@ -74,6 +74,7 @@ class SummaryClient:
         self.sheet_name = args.sheet
         self.author_map_file = args.author
         self.skip_no_failure_cases = args.skip_no_failure_cases
+        self.pass_rate_threshold = args.pass_rate_threshold
         
         self.base_url = "https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com"
         self.launch_url = self.base_url +"/api/v1/prow/launch"
@@ -511,7 +512,7 @@ class SummaryClient:
                 self.logger.info("subtask has been created %s for %s", values_list[10], values_list[0])
                 continue
             pass_ratio = float(values_list[6].replace("%",""))
-            if pass_ratio < 85:
+            if pass_ratio < self.pass_rate_threshold:
                 self.logger.info("pass ratio is %f", pass_ratio)
                 comments = self.version+": pass ratio is "+str(pass_ratio)+"%"+os.linesep+values_list[7]
                 jira_link = self.jiraManager.create_sub_task(self.author_map_file, self.parent_jira_issue, subtasks, caseid, case_title, author, comments)
@@ -595,18 +596,19 @@ Hi, @{author}
 ########################################################################################################################################
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="python3 collect_result.py", usage='''%(prog)s''')
-    parser.add_argument("-t","--token", default="")
+    parser.add_argument("-t","--token", default="", required=False, help="the token of the RP")
     parser.add_argument("-k","--key", default="", required=False, help="the key file path")
     parser.add_argument("-f","--file", default="", required=False, help="the target google sheet file")
     parser.add_argument("-s", "--subteam", default="OLM", required=False, help="the sub team name")
     parser.add_argument("-log","--log", default="", required=False, help="the log file")
-    parser.add_argument("-v", "--version", default='4.14', help="the ocp version")
-    parser.add_argument("-d", "--days", default=7, type=int, help="the days number")
+    parser.add_argument("-v", "--version", default='4.14', required=False, help="the ocp version")
+    parser.add_argument("-d", "--days", default=7, type=int, required=False, help="the days number")
     parser.add_argument("-p", "--parent_jira", default="", required=False, help="the parent jira issue link")
     parser.add_argument("-jt", "--jira_token", default="", required=False, help="the jira token")
+    parser.add_argument("--pass_rate_threshold", default=85, type=int, required=False, help="the pass rate threshold")
     parser.add_argument("--sheet", default="", required=False, help="the sheet link")
     parser.add_argument("--author", required=False, help="the map of the author, key is author in case, value is the jira id")
-    parser.add_argument("--skip_no_failure_cases", dest='skip_no_failure_cases', default=False, action='store_true', help="skip cases whose pass ratio is 100%")
+    parser.add_argument("--skip_no_failure_cases", dest='skip_no_failure_cases', default=False, required=False, action='store_true', help="skip cases whose pass ratio is 100%%")
     
     args=parser.parse_args()
 
