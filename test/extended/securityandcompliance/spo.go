@@ -24,6 +24,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		oc                                        = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
 		buildPruningBaseDir                       string
 		errorLoggerSelEnforcingTemplate           string
+		machineConfigPoolYAML                     string
+		mcSeccompNostatTemplate                   string
 		ogSpoTemplate                             string
 		subSpoTemplate                            string
 		spSleepWithMkdirTemplate                  string
@@ -44,6 +46,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		pathWebhookAllowedSyscalls                string
 		pathWebhookBinding                        string
 		pathWebhookRecording                      string
+		podLegacySeccompTemplate                  string
 		podWithLabelsTemplate                     string
 		podWithOneLabelTemplate                   string
 		workloadRepTemplate                       string
@@ -60,6 +63,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		errorLoggerSelEnforcingTemplate = filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger-enforcing.yaml")
 		errorLoggerPodWithSecuritycontextTemplate = filepath.Join(buildPruningBaseDir, "spo/pod-errorlogger-with-securityContext.yaml")
+		machineConfigPoolYAML = filepath.Join(buildPruningBaseDir, "machineConfigPool.yaml")
+		mcSeccompNostatTemplate = filepath.Join(buildPruningBaseDir, "spo/machineconfig-nostat.yaml")
 		ogSpoTemplate = filepath.Join(buildPruningBaseDir, "operator-group-all-namespaces.yaml")
 		subSpoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
 		spSleepWithMkdirTemplate = filepath.Join(buildPruningBaseDir, "/spo/seccomp-profile-sleep-with-mkdir.yaml")
@@ -72,6 +77,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		pathWebhookBinding = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-binding.yaml")
 		pathWebhookRecording = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-recording.yaml")
 		podBusybox = filepath.Join(buildPruningBaseDir, "spo/pod-busybox.yaml")
+		podLegacySeccompTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-legacy-seccomp.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
 		podWithLabelsTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-labels.yaml")
 		podWithOneLabelTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
@@ -2239,5 +2245,67 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		if strings.Contains(result2, "/tmpo/foo") && !strings.Contains(result2, "Operation not permittedd") {
 			e2e.Logf("%s is expected result", result2)
 		}
+	})
+
+	g.It("NonPreRelease-Author:xiyuan-Critical-56443-Security Profiles Operator should not crash with non-operator seccomp profiles [Slow][Disruptive]", func() {
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
+
+		mcSeccomp := "customer-seccomp-" + getRandomString()
+		podSeccomp := "pod-seccomp" + getRandomString()
+		mcCustomRole := "wrscan"
+
+		g.By("Label one rhcos worker node as wrscan.. !!!\n")
+		workerNodeName := getOneRhcosWorkerNodeName(oc)
+		setLabelToOneWorkerNode(oc, workerNodeName)
+
+		defer func() {
+			g.By("Remove custom mcp.. !!!\n")
+			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, mcCustomRole})
+			checkMachineConfigPoolStatus(oc, "worker")
+			checkNodeStatus(oc)
+		}()
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", mcCustomRole, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+
+		g.By("Create wrscan machineconfigpool.. !!!\n")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, mcCustomRole)
+		g.By("Create a legacy seccompprofile by machineconfig !!!")
+		defer func() {
+			g.By("Remove machineconfig.. !!!\n")
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", mcSeccomp, "-n", subD.namespace, "--ignore-not-found").Execute()
+			newCheck("expect", asAdmin, withoutNamespace, compare, "1", ok, []string{"machineconfigpool", mcCustomRole, "-n", subD.namespace, "-o=jsonpath={.status.readyMachineCount}"}).check(oc)
+			checkMachineConfigPoolStatus(oc, "worker")
+		}()
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", mcSeccompNostatTemplate, "-n", subD.namespace, "NAME="+mcSeccomp, "MCROLE="+mcCustomRole)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", mcCustomRole, "-n", subD.namespace, "-o=jsonpath={.status.readyMachineCount}"}).check(oc)
+		checkMachineConfigPoolStatus(oc, mcCustomRole)
+
+		g.By("Get the legacy seccompprofile name and create pod with it !!!")
+		defer func() {
+			g.By("Remove pod.. !!!\n")
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podSeccomp, "-n", subD.namespace, "--ignore-not-found").Execute()
+		}()
+		path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", mcSeccomp, "-n", subD.namespace, "-o=jsonpath={.spec.config.storage.files[0].path}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		arr := strings.Split(path, "/")
+		seccomppath := "localhost/" + arr[len(arr)-1]
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podLegacySeccompTemplate, "NAME="+podSeccomp, "NAMESPACE="+subD.namespace, "SECCOMPPATH="+seccomppath,
+			"NODEName="+workerNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", podSeccomp, "-n", subD.namespace, "-o=jsonpath={.status.phase}"})
+
+		g.By("Check all pods should not crash !!!")
+		checkReadyPodCountOfDeployment(oc, "security-profiles-operator-webhook", subD.namespace, 3)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+		checkReadyPodCountOfDeployment(oc, "security-profiles-operator", subD.namespace, 3)
 	})
 })
