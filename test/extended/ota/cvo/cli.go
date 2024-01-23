@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 	g.It("ConnectedOnly-Author:jiajliu-High-66746-Extract CredentialsRequest from a single-arch release image with --included --install-config", func() {
 		testDataDir := exutil.FixturePath("testdata", "ota/cvo/cfg-ocp-66746")
 
-		g.By("Get expected release image for the test")
+		exutil.By("Get expected release image for the test")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		latest4StableImage, err := exutil.GetLatest4StableImage()
@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 			g.Skip("There is not expected release image for the test")
 		}
 
-		g.By("Check the help info on the two vars --included and --install-config")
+		exutil.By("Check the help info on the two vars --included and --install-config")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, `--included=false:
@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 		o.Expect(strings.Contains(out, `--install-config='':
         Path to an install-config file, as consumed by the openshift-install command.  Works only in combination with --included.`))
 
-		g.By("Extract all CR manifests from the specified release payload and check correct caps and featureset credential request extracted")
+		exutil.By("Extract all CR manifests from the specified release payload and check correct caps and featureset credential request extracted")
 		files, err := ioutil.ReadDir(testDataDir)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		caps := getDefaultCapsInCR(clusterVersion)
@@ -102,12 +102,12 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 			g.Skip("There is not expected release image for the test")
 		}
 
-		g.By("Extract all manifests from the specified release payload")
+		exutil.By("Extract all manifests from the specified release payload")
 		extractedManifest, err := extractIncludedManifestWithInstallcfg(oc, false, cfgFile, latest4NightlyMultiImage, "")
 		defer func() { o.Expect(os.RemoveAll(extractedManifest)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Check correct caps and featureset manifests extracted")
+		exutil.By("Check correct caps and featureset manifests extracted")
 		caps := []string{"Console", "MachineAPI"}
 		cmd := fmt.Sprintf("grep -rh 'release.openshift.io/feature-set\\|capability.openshift.io/name' %s|awk -F\":\" '{print $NF}'|sort -u", extractedManifest)
 		out, _ := exec.Command("bash", "-c", cmd).CombinedOutput()
@@ -129,7 +129,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 		badFile := filepath.Join(testDataDir, "bad.yaml")
 		fakeReleasePayload := "quay.io/openshift-release-dev/ocp-release@sha256:fd96300600f9585e5847f5855ca14e2b3cafbce12aefe3b3f52c5da10c466666"
 
-		g.By("Get expected release image for the test")
+		exutil.By("Get expected release image for the test")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		latest4PreviewImage, err := exutil.GetLatest4PreviewImage("amd64")
@@ -139,18 +139,18 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 			g.Skip("There is not expected release image for the test")
 		}
 
-		g.By("Check the error msg is about the wrong cloud type")
+		exutil.By("Check the error msg is about the wrong cloud type")
 		_, err = extractIncludedManifestWithInstallcfg(oc, true, cfgFile, latest4PreviewImage, "aws")
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).To(o.ContainSubstring("error: --cloud \"aws\" set"))
 		o.Expect(err.Error()).To(o.ContainSubstring("has \"gcp\""))
 
-		g.By("Check the error msg is about wrong format of baselineCapabilitySet")
+		exutil.By("Check the error msg is about wrong format of baselineCapabilitySet")
 		_, err = extractIncludedManifestWithInstallcfg(oc, true, badFile, latest4PreviewImage, "")
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).To(o.ContainSubstring("error: unrecognized baselineCapabilitySet \"none\""))
 
-		g.By("Check the error msg is about image not found")
+		exutil.By("Check the error msg is about image not found")
 		_, err = extractIncludedManifestWithInstallcfg(oc, true, cfgFile, fakeReleasePayload, "")
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).To(o.ContainSubstring("not found: manifest unknown: manifest unknown"))
