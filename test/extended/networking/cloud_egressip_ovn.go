@@ -1234,7 +1234,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		case "vsphere":
-			e2e.Logf("\n vSphere is detected, stop the instance %v on OSP now \n", nodeToBeShutdown)
+			e2e.Logf("\n vSphere is detected, stop the instance %v on vSphere now \n", nodeToBeShutdown)
 			vspObj, vspClient = VsphereCloudClient(oc)
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 			defer vspObj.StartVsphereInstance(vspClient, nodeToBeShutdown)
@@ -1364,8 +1364,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+			exutil.AssertWaitPollNoErr(egressipErr, "The source Ip is not same as the egressIP expected!")
 		case "tcpdump":
+			e2e.Logf("\n Re-labelling the rebooted node %v to have tcpdump label\n", nodeToBeShutdown)
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeToBeShutdown, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeToBeShutdown, "tcpdump", "true")
 			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {

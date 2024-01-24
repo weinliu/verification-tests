@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1033,13 +1034,14 @@ func VsphereCloudClient(oc *exutil.CLI) (*exutil.Vmware, *govmomi.Client) {
 	o.Expect(err3).NotTo(o.HaveOccurred())
 	cmd := fmt.Sprintf(`grep -i server "%v" | awk -F '"' '{print $2}'`, cloudConfig)
 	serverURL, err4 := exec.Command("bash", "-c", cmd).Output()
-	e2e.Logf("\n serverURL: %v \n", serverURL)
+	e2e.Logf("\n serverURL: %s \n", string(serverURL))
 	o.Expect(err4).NotTo(o.HaveOccurred())
 	envUsername := string(accessKeyID)
 	envPassword := string(secureKey)
 	envURL := string(serverURL)
 	envURL = strings.TrimSuffix(envURL, "\n")
-	govmomiURL := "https://" + envUsername + ":" + envPassword + "@" + envURL + "/sdk"
+	encodedPassword := url.QueryEscape(envPassword)
+	govmomiURL := fmt.Sprintf("https://%s:%s@%s/sdk", envUsername, encodedPassword, envURL)
 	vmware := exutil.Vmware{GovmomiURL: govmomiURL}
 	return vmware.Login()
 }
