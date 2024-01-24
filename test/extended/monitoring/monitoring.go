@@ -1827,6 +1827,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
+		// this step is aim to give time to monitoring-plugin pods loading
+		g.By("check monitoring-plugin container usage")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=sum(rate(container_cpu_usage_seconds_total{container="monitoring-plugin",namespace="openshift-monitoring"}[5m]))'`, token, `"value"`, uwmLoadTime)
+
 		g.By("get monitoring-plugin pod name")
 		monitoringPluginPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
 		o.Expect(err).NotTo(o.HaveOccurred())
