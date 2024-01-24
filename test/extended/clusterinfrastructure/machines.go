@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -610,28 +611,41 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Low-36489-Machineset creation when publicIP:true in disconnected(stratergy private or public) Azure enviroment [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-Low-36489-Machineset creation when publicIP:true in disconnected or normal (stratergy private or public) Azure,Aws,Gcp enviroment [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "aws", "gcp")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-36489"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
+		iaasPlatform := exutil.CheckPlatform(oc)
 
 		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
 		if err != nil {
 			g.Fail("Issue with dns setup")
 		}
 		g.By("Update machineset with publicIP: true")
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"publicIP": true}}}}}}`, "--type=merge").Output()
-		if publicZone == "" {
-			o.Expect(msg).To(o.ContainSubstring("publicIP is not allowed in Azure disconnected installation with publish strategy as internal"))
-		} else {
+		switch iaasPlatform {
+		case "aws", "Azure":
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"publicIP": true}}}}}}`, "--type=merge").Output()
+			if publicZone == "" && iaasPlatform == "Azure" {
+				o.Expect(msg).To(o.ContainSubstring("publicIP is not allowed in Azure disconnected installation with publish strategy as internal"))
+			} else {
+				o.Expect(err).NotTo(o.HaveOccurred())
+				//to scale up machineset with publicIP: true
+				err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas": 1}}`, "--type=merge").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+			}
+		case "gcp":
+			network, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].network}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			//to scale up machineset with publicIP: true
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas": 1}}`, "--type=merge").Execute()
+			subnetwork, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].subnetwork}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patchString := fmt.Sprintf(`{"spec":{"template":{"spec":{"providerSpec":{"value":{"networkInterfaces":[{"network":"%s","subnetwork":"%s","publicIP": true}]}}}},"replicas":1}}`, network, subnetwork)
+			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", patchString, "--type=merge").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 		}
