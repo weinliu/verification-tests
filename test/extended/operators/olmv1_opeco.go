@@ -167,6 +167,34 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-High-69124-check the catalog source type before created", func() {
+		var (
+			baseDir             = exutil.FixturePath("testdata", "olm", "v1")
+			catalogPollTemplate = filepath.Join(baseDir, "catalog-secret.yaml")
+			catalog             = olmv1util.CatalogDescription{
+				Name:         "catalog-69124",
+				Imageref:     "quay.io/olmqe/olmtest-operator-index:nginxolm69124",
+				PollInterval: "1m",
+				Template:     catalogPollTemplate,
+			}
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("Check image pollInterval time")
+		errMsg, err := oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"pollInterval":"1mm"}}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(errMsg, "Invalid value: \"1mm\": spec.source.image.pollInterval in body")).To(o.BeTrue())
+
+		exutil.By("Check type value")
+		errMsg, err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"type":"redhat"}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(errMsg, "Unsupported value: \"redhat\": supported values: \"image\"")).To(o.BeTrue())
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from catalog CR", func() {
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
