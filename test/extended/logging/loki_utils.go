@@ -993,9 +993,18 @@ func compareClusterResources(oc *exutil.CLI, cpu, memory string) bool {
 func validateInfraAndResourcesForLoki(oc *exutil.CLI, reqMemory, reqCPU string, supportedPlatforms ...string) bool {
 	currentPlatform := exutil.CheckPlatform(oc)
 	if currentPlatform == "aws" {
-		// skip the case on aws sts clusters
+		// skip the case on sts clusters. Todo use sts secret once LOG-4540 is done
 		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
+			e2e.Logf("Can not find aws-creds, the case will be skipped. That may be a sts enabled cluster.")
+			return false
+		}
+	}
+	if currentPlatform == "azure" {
+		// skip the case on sts clusters. Todo use sts secret once LOG-4540 is done
+		_, _, err := exutil.GetAzureStorageAccountFromCluster(oc)
+		if err != nil {
+			e2e.Logf("Can not find azure creds, the case will be skipped. That may be a sts enabled cluster.")
 			return false
 		}
 	}
