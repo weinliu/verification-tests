@@ -1496,3 +1496,54 @@ spec:
 	})
 
 })
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc             = exutil.NewCLI("logging-dast", exutil.KubeConfigPath())
+		loggingBaseDir string
+	)
+	g.BeforeEach(func() {
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+	})
+	// author anli@redhat.com
+	g.It("CPaasrunOnly-Author:anli-High-67423-Cluster Logging Operator should pass DAST test", func() {
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		EO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     eoNS,
+			PackageName:   "elasticsearch-operator",
+			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		CLO.SubscribeOperator(oc)
+		EO.SubscribeOperator(oc)
+		proj := oc.Namespace()
+		configFile := filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_logging_v1.yaml")
+		policyFile := filepath.Join(loggingBaseDir, "rapidast/customscan.policy")
+		_, err := rapidastScan(oc, proj, configFile, policyFile, "logging.openshift.io_v1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+	// author anli@redhat.com
+	g.It("CPaasrunOnly-Author:anli-High-67424-Loki Operator should pass DAST test", func() {
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO.SubscribeOperator(oc)
+		proj := oc.Namespace()
+		configFile := filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_loki_v1.yaml")
+		policyFile := filepath.Join(loggingBaseDir, "rapidast/customscan.policy")
+		_, err := rapidastScan(oc, proj, configFile, policyFile, "loki.grafana.com_v1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+})
