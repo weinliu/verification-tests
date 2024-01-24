@@ -11,7 +11,12 @@ import (
 func testsForSuite() ([]*testCase, error) {
 	var tests []*testCase
 	var errs []error
-	ginkgo.GetSuite().BuildTree()
+
+	// Avoid building the tree multiple times
+	if !ginkgo.GetSuite().InPhaseBuildTree() {
+		_ = ginkgo.GetSuite().BuildTree()
+	}
+
 	ginkgo.GetSuite().WalkTests(func(name string, spec types.TestSpec) {
 		// if append, ok := generated.Annotations[name]; ok {
 		// spec.AppendText(name)
