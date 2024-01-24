@@ -335,20 +335,20 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	// author: xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-High-70817-catalogd support setting a pull secret", func() {
 		var (
-			baseDir          = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate  = filepath.Join(baseDir, "catalog-secret.yaml")
-			operatorTemplate = filepath.Join(baseDir, "operatorWithoutChannelVersion.yaml")
-			catalog          = olmv1util.CatalogDescription{
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog-secret.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
+			catalog                  = olmv1util.CatalogDescription{
 				Name:         "catalog-70817-quay",
 				Imageref:     "quay.io/olmqe/olmtest-operator-index-private:nginxolm70817",
 				PullSecret:   "fake-secret-70817",
 				PollInterval: "1m",
 				Template:     catalogTemplate,
 			}
-			operator = olmv1util.OperatorDescription{
-				Name:        "operator-70817",
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:        "clusterextension-70817",
 				PackageName: "nginx70817",
-				Template:    operatorTemplate,
+				Template:    clusterextensionTemplate,
 			}
 		)
 
@@ -369,10 +369,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		patchResource(oc, asAdmin, withoutNamespace, "catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"pullSecret":"secret-70817-quay"}}}}`, "--type=merge")
 		catalog.WaitCatalogStatus(oc, "Unpacked", 0)
 
-		exutil.By("4) install operator")
-		defer operator.Delete(oc)
-		operator.Create(oc)
-		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.0.1"))
+		exutil.By("4) install clusterextension")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.0.1"))
 	})
 
 	// author: jfan@redhat.com

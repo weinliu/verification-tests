@@ -223,120 +223,120 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-68821-OLMv1 Supports Version Ranges during Installation", func() {
 		var (
-			baseDir                               = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate                       = filepath.Join(baseDir, "catalog.yaml")
-			operatorTemplate                      = filepath.Join(baseDir, "operator.yaml")
-			operatorWithoutChannelTemplate        = filepath.Join(baseDir, "operatorWithoutChannel.yaml")
-			operatorWithoutChannelVersionTemplate = filepath.Join(baseDir, "operatorWithoutChannelVersion.yaml")
-			catalog                               = olmv1util.CatalogDescription{
+			baseDir                                       = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate                               = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate                      = filepath.Join(baseDir, "clusterextension.yaml")
+			clusterextensionWithoutChannelTemplate        = filepath.Join(baseDir, "clusterextensionWithoutChannel.yaml")
+			clusterextensionWithoutChannelVersionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
+			catalog                                       = olmv1util.CatalogDescription{
 				Name:     "catalog-68821",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
 				Template: catalogTemplate,
 			}
-			operator = olmv1util.OperatorDescription{
-				Name:        "operator-68821",
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:        "clusterextension-68821",
 				PackageName: "nginx68821",
 				Channel:     "candidate-v0.0",
 				Version:     ">=0.0.1",
-				Template:    operatorTemplate,
+				Template:    clusterextensionTemplate,
 			}
 		)
 		exutil.By("Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
 
-		exutil.By("Create operator with channel candidate-v0.0, version >=0.0.1")
-		defer operator.Delete(oc)
-		operator.Create(oc)
-		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v0.0.3"))
-		operator.Delete(oc)
+		exutil.By("Create clusterextension with channel candidate-v0.0, version >=0.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v0.0.3"))
+		clusterextension.Delete(oc)
 
-		exutil.By("Create operator with channel candidate-v1.0, version 1.0.x")
-		operator.Channel = "candidate-v1.0"
-		operator.Version = "1.0.x"
-		operator.Create(oc)
-		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
-		operator.Delete(oc)
+		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.x")
+		clusterextension.Channel = "candidate-v1.0"
+		clusterextension.Version = "1.0.x"
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		clusterextension.Delete(oc)
 
-		exutil.By("Create operator with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
-		operator.Channel = ""
-		operator.Version = ">=0.0.1 !=1.1.0 <1.1.2"
-		operator.Template = operatorWithoutChannelTemplate
-		operator.Create(oc)
-		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
-		operator.Delete(oc)
+		exutil.By("Create clusterextension with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
+		clusterextension.Channel = ""
+		clusterextension.Version = ">=0.0.1 !=1.1.0 <1.1.2"
+		clusterextension.Template = clusterextensionWithoutChannelTemplate
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		clusterextension.Delete(oc)
 
-		exutil.By("Create operator with channel empty, version empty")
-		operator.Channel = ""
-		operator.Version = ""
-		operator.Template = operatorWithoutChannelVersionTemplate
-		operator.Create(oc)
-		o.Expect(operator.ResolvedBundleResource).To(o.ContainSubstring("v1.1.0"))
-		operator.Delete(oc)
+		exutil.By("Create clusterextension with channel empty, version empty")
+		clusterextension.Channel = ""
+		clusterextension.Version = ""
+		clusterextension.Template = clusterextensionWithoutChannelVersionTemplate
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.1.0"))
+		clusterextension.Delete(oc)
 
-		exutil.By("Create operator with invalid version")
-		operator.Version = "!1.0.1"
-		operator.Template = operatorTemplate
-		err := operator.CreateWithoutCheck(oc)
+		exutil.By("Create clusterextension with invalid version")
+		clusterextension.Version = "!1.0.1"
+		clusterextension.Template = clusterextensionTemplate
+		err := clusterextension.CreateWithoutCheck(oc)
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-Medium-69196-OLMv1 Supports Version Ranges during operator upgrade", func() {
+	g.It("ConnectedOnly-Author:xzha-Medium-69196-OLMv1 Supports Version Ranges during clusterextension upgrade", func() {
 		var (
-			baseDir          = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate  = filepath.Join(baseDir, "catalog.yaml")
-			operatorTemplate = filepath.Join(baseDir, "operator.yaml")
-			catalog          = olmv1util.CatalogDescription{
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			catalog                  = olmv1util.CatalogDescription{
 				Name:     "catalog-69196",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69196",
 				Template: catalogTemplate,
 			}
-			operator = olmv1util.OperatorDescription{
-				Name:        "operator-69196",
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:        "clusterextension-69196",
 				PackageName: "nginx69196",
 				Channel:     "candidate-v1.0",
 				Version:     "1.0.1",
-				Template:    operatorTemplate,
+				Template:    clusterextensionTemplate,
 			}
 		)
 		exutil.By("Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
 
-		exutil.By("Create operator with channel candidate-v1.0, version 1.0.1")
-		defer operator.Delete(oc)
-		operator.Create(oc)
-		o.Expect(operator.InstalledBundleResource).To(o.ContainSubstring("v1.0.1"))
+		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundleResource).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("update version to be >=1.0.1")
-		operator.Patch(oc, `{"spec":{"version":">=1.0.1"}}`)
+		clusterextension.Patch(oc, `{"spec":{"version":">=1.0.1"}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
+			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
 			if !strings.Contains(resolvedBundleResource, "v1.0.2") {
-				e2e.Logf("operator.resolvedBundleResource is %s, not v1.0.2, and try next", resolvedBundleResource)
+				e2e.Logf("clusterextension.resolvedBundleResource is %s, not v1.0.2, and try next", resolvedBundleResource)
 				return false, nil
 			}
 			return true, nil
 		})
 		if errWait != nil {
-			olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o=jsonpath-as-json={.status}")
-			exutil.AssertWaitPollNoErr(errWait, "operator resolvedBundleResource is not v1.0.2")
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundleResource is not v1.0.2")
 		}
 
 		exutil.By("update channel to be candidate-v1.1")
-		operator.Patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
+			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
 			if !strings.Contains(resolvedBundleResource, "v1.1.0") {
-				e2e.Logf("operator.resolvedBundleResource is %s, not v1.1.0, and try next", resolvedBundleResource)
+				e2e.Logf("clusterextension.resolvedBundleResource is %s, not v1.1.0, and try next", resolvedBundleResource)
 				return false, nil
 			}
 			return true, nil
 		})
 		if errWait != nil {
-			olmv1util.GetNoEmpty(oc, "operator.operators.operatorframework.io", operator.Name, "-o=jsonpath-as-json={.status}")
-			exutil.AssertWaitPollNoErr(errWait, "operator resolvedBundleResource is not v1.1.0")
+			olmv1util.GetNoEmpty(oc, "clusterextensiono", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundleResource is not v1.1.0")
 		}
 	})
 

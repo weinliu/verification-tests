@@ -1,0 +1,21 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: operator-template
+objects:
+- apiVersion: olm.operatorframework.io/v1alpha1
+  kind: ClusterExtension
+  metadata:
+    name: "${NAME}"
+  spec:
+    packageName: "${PACKAGE}"
+    channel: "${CHANNEL}"
+    version: "${VERSION}"
+    upgradeConstraintPolicy: "${POLICY}"
+parameters:
+- name: NAME
+- name: PACKAGE
+- name: CHANNEL
+- name: VERSION
+- name: POLICY
+  value: "Enforce"
