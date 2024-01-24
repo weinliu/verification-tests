@@ -307,9 +307,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Restore the credential of vSphere CSI driver and make sure the CSO recover healthy by defer
 		defer func() {
 			restoreVsphereCSIcredential(oc, pwdKey, originPwd)
-			// TODO: Remove the hardRestart steps after https://issues.redhat.com/browse/OCPBUGS-24421 fixed
-			vSphereDetectorOperator.hardRestart(oc.AsAdmin())
-			vSphereCSIDriverOperator.hardRestart(oc.AsAdmin())
 			waitCSOhealthy(oc)
 		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
