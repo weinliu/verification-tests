@@ -19,7 +19,7 @@ describe('Workload Secrets test', () => {
     cy.adminCLI(`oc delete project ${testName}`);
   });
 
-  it('(OCP-47010,xiyuzhao,UI) Check Secrets is editable on console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-47010,xiyuzhao,UserInterface) Check Secrets is editable on console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     Secrets.gotoSecretsPage(testName);
     listPage.filter.byName('tlssecret');
     listPage.rows.countShouldBe(1);
@@ -33,7 +33,7 @@ describe('Workload Secrets test', () => {
     Secrets.validKeyValueExist("keyfortest", "valuefortest");
   });
 
-  it('(OCP-54014,xiyuzhao,UI) Check Base64 data value for jave keystore secret would not change without changing anything', {tags: ['e2e','admin']}, () => {
+  it('(OCP-54014,xiyuzhao,UserInterface) Check Base64 data value for jave keystore secret would not change without changing anything', {tags: ['e2e','admin']}, () => {
     cy.visit(`/k8s/ns/${testName}/secrets/test1/edit`)
     cy.byTestID('save-changes').click()
     cy.exec(`oc get secret -n ${testName} test1 -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} > /tmp/secret2.yaml`)
@@ -42,7 +42,7 @@ describe('Workload Secrets test', () => {
       .should('eq', '')
   });
 
-  it('(OCP-54213,yanpzhan,UI) Trim whitespace to form inputs when create image pull secret', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-54213,yanpzhan,UserInterface) Trim whitespace to form inputs when create image pull secret', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     guidedTour.close();
     Secrets.gotoSecretsPage(testName);
     Secrets.createImagePullSecret('secrettest','  quay.io  ','  testuser  ','  testpassword  ','  test@redhat.com  ');

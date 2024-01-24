@@ -29,7 +29,7 @@ describe('pod log page', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${admin_user}`);
   })
 
-  it('(OCP-68476,xiyuzhao,UI)Excessive permissions in web-console impersonating a user', {tags:['e2e','admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-68476,xiyuzhao,UserInterface)Excessive permissions in web-console impersonating a user', {tags:['e2e','admin','@rosa','@osd-ccs']}, () => {
     const checkErrorAlertExistInLogsTab = () => {
       cy.contains('h4',/error|Danger|alert/gi)
         .should('exist')

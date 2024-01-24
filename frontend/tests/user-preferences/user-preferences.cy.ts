@@ -21,7 +21,7 @@ describe('user preferences related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-49134,yanpzhan,UI) Support dark theme for admin console', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+  it('(OCP-49134,yanpzhan,UserInterface) Support dark theme for admin console', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
     cy.visit('/user-preferences');
     consoleTheme.setLightTheme();
     cy.get('.pf-theme-dark').should('not.exist');
@@ -30,7 +30,7 @@ describe('user preferences related features', () => {
     consoleTheme.setSystemDefaultTheme();
   });
 
-  it('(OCP-64002,yapei,UI) Implement strict search in console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-64002,yapei,UserInterface) Implement strict search in console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     const checkAllItemsExactMatch = (word: string) => {
       cy.get('a.co-resource-item__resource-name').each(($el) => {
         const text = $el.text();

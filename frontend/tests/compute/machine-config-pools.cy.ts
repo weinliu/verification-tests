@@ -11,7 +11,7 @@ describe("Improve MachineConfigPool list table for update status", () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it("(OCP-51395,xiyuzhao,UI) improve MachineConfigPool list table for update status", {tags: ['e2e','admin'] }, () => {
+  it("(OCP-51395,xiyuzhao,UserInterface) improve MachineConfigPool list table for update status", {tags: ['e2e','admin'] }, () => {
     const alertmsg = "Node updates are paused"
     ClusterSettingPage.goToClusterSettingDetails();
     ClusterSettingPage.editUpstreamConfig();

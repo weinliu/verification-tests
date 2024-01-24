@@ -31,7 +31,7 @@ describe('project list tests', () => {
     cy.adminCLI('oc delete project testusertwo-project');
   });
 
-  it('(OCP-43131,yapei,UI) normal and admin user able to filter projects with Requester', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-43131,yapei,UserInterface) normal and admin user able to filter projects with Requester', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.log('normal user able to filter with Requester');
     cy.visit('/k8s/cluster/projects');
     listPage.rows.shouldBeLoaded();

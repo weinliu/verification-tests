@@ -44,7 +44,7 @@ describe('Operators Installed page test', () => {
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
   });
 
-  it('(OCP-54975,xiyuzhao,UI) Check OCP console works when copied CSVs are disabled',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-54975,xiyuzhao,UserInterface) Check OCP console works when copied CSVs are disabled',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.visit(`/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
     operatorHubPage.checkOperatorStatus('Sonarqube Operator', 'Succeed');
     operatorHubPage.checkOperatorStatus('Infinispan Operator', 'Succeed');
@@ -79,7 +79,7 @@ describe('Operators Installed page test', () => {
     cy.get('[data-test="label-key"]').should("contain.text","olm.copiedFrom");
     });
 
-  it('(OCP-65876,xiyuzhao,UI) Non cluster-admin user should able to update the operator in Console	',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-65876,xiyuzhao,UserInterface) Non cluster-admin user should able to update the operator in Console	',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${params.specialNs}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
     cy.uiLogout();

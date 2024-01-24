@@ -17,7 +17,7 @@ describe("Features on managed cluster such as ROSA/OSD", () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it("(OCP-68381,yanpzhan,UI) Hide page-specific doc links for ROSA and OSD", {tags: ['e2e','@osd-ccs','@rosa','admin']}, function() {
+  it("(OCP-68381,yanpzhan,UserInterface) Hide page-specific doc links for ROSA and OSD", {tags: ['e2e','@osd-ccs','@rosa','admin']}, function() {
     cy.isManagedCluster().then(value => {
       if(value == false){
         this.skip();
@@ -52,7 +52,7 @@ describe("Features on managed cluster such as ROSA/OSD", () => {
     cy.switchPerspective('Administrator');
   });
 
-  it("(OCP-68228,yanpzhan,UI) Update button is disabled on ROSA/OSD cluster", {tags: ['e2e','@osd-ccs','@rosa','admin']}, function() {
+  it("(OCP-68228,yanpzhan,UserInterface) Update button is disabled on ROSA/OSD cluster", {tags: ['e2e','@osd-ccs','@rosa','admin']}, function() {
     cy.isManagedCluster().then(value => {
       if(value == false){
         this.skip();

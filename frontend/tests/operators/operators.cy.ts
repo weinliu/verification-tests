@@ -19,7 +19,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc delete project test-ocp40457`);
   });
 
-  it('(OCP-40457,yanpzhan,UI) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
+  it('(OCP-40457,yanpzhan,UserInterface) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
     operatorHubPage.installOperator('etcd', 'community-operators', 'test-ocp40457');
     cy.wait(20000);
     operatorHubPage.installOperator('argocd-operator', 'custom-catalogsource', 'test-ocp40457');
@@ -32,7 +32,7 @@ describe('Operators related features', () => {
     operatorHubPage.checkOperatorStatus('CockroachDB Helm Operator', 'Succeed');
   });
 
-  it('(OCP-56081,xiyuzhao,UI) Check opt out when console deletes operands', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-56081,xiyuzhao,UserInterface) Check opt out when console deletes operands', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     const testParams = {
       ns1: "test1-ocp56081",
       ns2: "test2-ocp56081",
