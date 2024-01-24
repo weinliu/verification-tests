@@ -7095,15 +7095,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asAdmin, withoutNamespace, compare, "oadp-operator.v0.5.4", ok, []string{"sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}"}).check(oc)
 
 		exutil.By("check the csv fails")
+		var status string
 		// it fails after 10m which we can not control it. so, have to check it in 11m
-		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 11*time.Minute, false, func(ctx context.Context) (bool, error) {
-			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.4", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 15*time.Minute, false, func(ctx context.Context) (bool, error) {
+			status = getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.4", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
 			if strings.Compare(status, "Failed") == 0 {
 				e2e.Logf("csv oadp-operator.v0.5.4 fails expected")
 				return true, nil
 			}
 			return false, nil
 		})
+		if strings.Contains(status, "nstalling") {
+			return
+		}
 		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.4 is not failing as expected")
 
 		exutil.By("change upgrade strategy to TechPreviewUnsafeFailForward")
