@@ -2308,4 +2308,137 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
 		checkReadyPodCountOfDeployment(oc, "security-profiles-operator", subD.namespace, 3)
 	})
+
+	// author: xiyuan@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-56012-Verify the mergeStrategy wroks for log enricher based seccompprofiles recording for deployment [Slow][Disruptive]", func() {
+		ns := "merge-strategy-" + getRandomString()
+		var (
+			profileRecordingDep = profileRecordingDescription{
+				name:          "spo-recording",
+				namespace:     ns,
+				kind:          "SeccompProfile",
+				mergestrategy: "containers",
+				labelKey:      "app",
+				labelValue:    "hello-openshift",
+				template:      profileRecordingTemplate,
+			}
+			saRoleRoleBindingDep = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa",
+				namespace:       ns,
+				roleName:        "spo-record" + getRandomString(),
+				roleBindingName: "spo-record" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			deployHello = workloadDescription{
+				name:         "hello-deployment",
+				namespace:    ns,
+				workloadKind: "Deployment",
+				saName:       saRoleRoleBindingDep.saName,
+				labelKey:     profileRecordingDep.labelKey,
+				labelValue:   profileRecordingDep.labelValue,
+				template:     workloadDeployTemplate,
+			}
+			deployHelloOpenshift = workloadDescription{
+				name:         "hello-openshift",
+				namespace:    ns,
+				workloadKind: "Deployment",
+				saName:       saRoleRoleBindingDep.saName,
+				labelKey:     profileRecordingDep.labelKey,
+				labelValue:   profileRecordingDep.labelValue,
+				template:     workloadDeployHelloTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns, ns})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns, "-n", ns, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns, "-n", ns, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilerecording", ns, profileRecordingDep.name})
+		profileRecordingDep.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingDep.name, "-n", ns}).check(oc)
+
+		g.By("Create sa, role, rolebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"sa", ns, saRoleRoleBindingDep.saName},
+			objectTableRef{"role", ns, saRoleRoleBindingDep.roleName},
+			objectTableRef{"rolebinding", ns, saRoleRoleBindingDep.roleBindingName})
+		saRoleRoleBindingDep.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingDep.saName, "-n", ns}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingDep.roleName, "-n", ns}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingDep.roleBindingName, "-n", ns}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", ns, profileRecordingDep.name},
+			objectTableRef{"deploy", ns, deployHello.name},
+			objectTableRef{"sp", ns, "--all"})
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"deploy", ns, deployHello.name})
+		deployHello.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"deploy", deployHello.name, "-n", ns, "-o=jsonpath={.status.availableReplicas}"}).check(oc)
+		assertParameterValueForBulkPods(oc, "Running", "pod", "-l", profileRecordingDep.labelKey+"="+profileRecordingDep.labelValue, "-n", ns, "-o=jsonpath={.items[*].status.phase}")
+
+		g.By("Check seccompprofile generated !!!")
+		pod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", profileRecordingDep.labelKey+"="+profileRecordingDep.labelValue, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for i := 0; i < 3; i++ {
+			cmd := fmt.Sprintf("mknod /tmp/foo%d p", i)
+			_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("pods/"+pod, "-c", "nginx", "-n", ns, "--", "bash", "-c", cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		// sleep 5s before deleting the workload
+		time.Sleep(5 * time.Second)
+		cleanupObjectsIgnoreNotFound(oc, objectTableRef{"deploy", ns, deployHello.name})
+		checkPrfolieNumbers(oc, "seccompprofile", ns, 6)
+		checkPrfolieStatus(oc, "seccompprofile", ns, "Partial")
+		split_pod := strings.Split(pod, "-")
+		suffix := split_pod[len(split_pod)-1]
+		spLists, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sp", "-n", ns, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		spName := profileRecordingDep.name + "-nginx-" + suffix
+		o.Expect(strings.Contains(spLists, spName)).To(o.BeTrue())
+		for _, sp := range strings.Fields(spLists) {
+			syscalls, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sp", sp, "-n", ns, "-o=jsonpath={.spec.syscalls[?(@.action==\"SCMP_ACT_ALLOW\")].names}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Compare(sp, spName) == 0 {
+				o.Expect(strings.Contains(syscalls, "mknod")).To(o.BeTrue())
+			} else {
+				o.Expect(strings.Contains(syscalls, "mknod")).To(o.BeFalse())
+			}
+		}
+
+		g.By("Create a second deployement !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", ns, profileRecordingDep.name},
+			objectTableRef{"deploy", ns, deployHelloOpenshift.name},
+			objectTableRef{"sp", ns, "--all"})
+		deployHelloOpenshift.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"deploy", deployHelloOpenshift.name, "-n", ns, "-o=jsonpath={.status.availableReplicas}"}).check(oc)
+		assertParameterValueForBulkPods(oc, "Running", "pod", "-l", profileRecordingDep.labelKey+"="+profileRecordingDep.labelValue, "-n", ns, "-o=jsonpath={.items[*].status.phase}")
+
+		g.By("Check seccompprofile generated !!!")
+		cleanupObjectsIgnoreNotFound(oc, objectTableRef{"deploy", ns, deployHelloOpenshift.name})
+		assertParameterValueForBulkPods(oc, "Partial", "sp", "-n", ns, "-o=jsonpath={.items[*].status.status}")
+		checkPrfolieNumbers(oc, "seccompprofile", ns, 9)
+		cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilerecording", ns, profileRecordingDep.name})
+		checkPrfolieStatus(oc, "seccompprofile", ns, "Installed")
+		checkPrfolieNumbers(oc, "seccompprofile", ns, 3)
+		spLists, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sp", "-n", ns, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(spLists, profileRecordingDep.name+"-nginx")).To(o.BeTrue())
+		o.Expect(strings.Contains(spLists, profileRecordingDep.name+"-redis")).To(o.BeTrue())
+		o.Expect(strings.Contains(spLists, profileRecordingDep.name+"-openshift")).To(o.BeTrue())
+		syscalls, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sp", profileRecordingDep.name+"-nginx", "-n", ns, "-o=jsonpath={.spec.syscalls[?(@.action==\"SCMP_ACT_ALLOW\")].names}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(syscalls, "mknod")).To(o.BeTrue())
+	})
 })
