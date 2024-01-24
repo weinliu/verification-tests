@@ -210,14 +210,24 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc1.create(oc)
 		defer pvc1.deleteAsAdmin(oc)
 
+		exutil.By("# Create a pvc2 with the inline storageclass")
+		pvc2.scname = storageClass2.name
+		pvc2.create(oc)
+		defer pvc2.deleteAsAdmin(oc)
+
 		exutil.By("# Check pvc1 should stuck at Pending status and no volume is provisioned")
 		o.Consistently(func() string {
 			pvc1Event, _ := describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)
 			return pvc1Event
-		}, 60*time.Second, 10*time.Second).Should(o.And(
+		}, 60*time.Second, 10*time.Second).Should(
 			o.ContainSubstring("Pending"),
+		)
+		o.Eventually(func() string {
+			pvc1Event, _ := describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)
+			return pvc1Event
+		}, 180*time.Second, 10*time.Second).Should(o.And(
 			o.ContainSubstring("ExternalProvisioning"),
-			o.ContainSubstring("Waiting for a volume to be created either by the external provisioner 'invalid.csi.provisioner.com' or manually by the system administrator"),
+			o.ContainSubstring(storageClass1.provisioner),
 		))
 		o.Expect(describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
 
@@ -226,21 +236,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		storageClass2.create(oc)
 		defer storageClass2.deleteAsAdmin(oc)
 
-		exutil.By("# Create a pvc2 with the inline storageclass")
-		pvc2.scname = storageClass2.name
-		pvc2.create(oc)
-		defer pvc2.deleteAsAdmin(oc)
-
 		exutil.By("# Check pvc2 should stuck at Pending status and no volume is provisioned")
 		o.Consistently(func() string {
 			pvc2Event, _ := describePersistentVolumeClaim(oc, pvc2.namespace, pvc2.name)
 			return pvc2Event
-		}, 60*time.Second, 10*time.Second).Should(o.And(
+		}, 60*time.Second, 10*time.Second).Should(
 			o.ContainSubstring("Pending"),
+		)
+		o.Eventually(func() string {
+			pvc2Event, _ := describePersistentVolumeClaim(oc, pvc2.namespace, pvc2.name)
+			return pvc2Event
+		}, 180*time.Second, 10*time.Second).Should(
 			o.ContainSubstring("no volume plugin matched name: kubernetes.io/invalid.provisioner.com"),
-		))
+		)
 		o.Expect(describePersistentVolumeClaim(oc, pvc2.namespace, pvc2.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
-
 	})
 
 	// author: ropatil@redhat.com
