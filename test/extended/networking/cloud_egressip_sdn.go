@@ -528,7 +528,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		timer := estimateTimeoutForEgressIP(oc)
 
-		g.By("1. Identify two worker nodes with same subnet as egressIP nodes, pick a third node as non-egressIP node")
+		exutil.By("1. Identify two worker nodes with same subnet as egressIP nodes, pick a third node as non-egressIP node")
 		var egressNode1, egressNode2, nonEgressNode string
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -552,7 +552,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\nEgressNode2: %v\n", egressNode2)
 		e2e.Logf("\nnonEgressNode: %v\n", nonEgressNode)
 
-		g.By("2.Check SDN pod log of the non-egress node first time to get baseline")
+		exutil.By("2.Check SDN pod log of the non-egress node first time to get baseline")
 		sdnPodName, getPodErr := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nonEgressNode)
 		o.Expect(getPodErr).NotTo(o.HaveOccurred())
 		o.Expect(sdnPodName).NotTo(o.BeEmpty())
@@ -560,7 +560,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(logErr).NotTo(o.HaveOccurred())
 		countBaseline := strings.Count(podlogs, `may be offline`)
 
-		g.By("3. Get subnet from egressIP node, add egressCIDRs to both egressIP nodes")
+		exutil.By("3. Get subnet from egressIP node, add egressCIDRs to both egressIP nodes")
 		sub := getEgressCIDRsForNode(oc, egressNode1)
 
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
@@ -568,10 +568,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
 
-		g.By("4. Find 2 unused IPs from one egress node")
+		exutil.By("4. Find 2 unused IPs from one egress node")
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode1, sub, 2)
 
-		g.By("5. Create a namespaces, apply the both egressIPs to the namespace, but create a test pod on the third non-egressIP node")
+		exutil.By("5. Create a namespaces, apply the both egressIPs to the namespace, but create a test pod on the third non-egressIP node")
 		ns := oc.Namespace()
 		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\", \""+freeIPs[1]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
@@ -585,19 +585,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podns.createPingPodNode(oc)
 		waitPodReady(oc, podns.namespace, podns.name)
 
-		g.By("6.Check SDN pod log of the non-egress node again, there should be no new 'may be offline' error log ")
+		exutil.By("6.Check SDN pod log of the non-egress node again, there should be no new 'may be offline' error log ")
 		o.Consistently(func() int {
 			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPodName, "-n", "openshift-sdn", "-c", "sdn").Output()
-			return strings.Count(podlogs, `may be offline`)
-		}, 60*time.Second, 10*time.Second).Should(o.Equal(countBaseline))
+			countCurrent := strings.Count(podlogs, `may be offline`)
+			e2e.Logf("\n Current count of `may be offline` in log: %d, while baseline count is: %d\n", countCurrent, countBaseline)
+			return countCurrent
+		}, 120*time.Second, 10*time.Second).Should(o.Equal(countBaseline))
 
-		g.By("7.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
+		exutil.By("7.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
 		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
-			g.By(" Use IP-echo service to verify egressIP.")
+			exutil.By(" Use IP-echo service to verify egressIP.")
 			sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf(sourceIP)
@@ -605,7 +607,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				o.ContainSubstring(freeIPs[0]),
 				o.ContainSubstring(freeIPs[1])))
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
 			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
 			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump")
@@ -618,7 +620,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-46555", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
 
-			g.By("Verify all egressIP is randomly used as sourceIP.")
+			exutil.By("Verify all egressIP is randomly used as sourceIP.")
 			egressipErr := wait.Poll(10*time.Second, timer, func() (bool, error) {
 				randomStr, url := getRequestURL(dstHost)
 				_, cmdErr := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
