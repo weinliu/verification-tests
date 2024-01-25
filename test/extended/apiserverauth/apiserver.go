@@ -5311,11 +5311,13 @@ spec:
 	g.It("MicroShiftOnly-Author:rgangwar-Medium-62959-[Apiserver] Remove search logic for configuration file [Disruptive]", func() {
 		var (
 			e2eTestNamespace = "microshift-ocp62959"
-			chkConfigCmd     = `su - redhat -c "sudo /usr/bin/microshift show-config --mode effective|grep -i memoryLimitMB"`
+			chkConfigCmd     = `sudo /usr/bin/microshift show-config --mode effective|grep -i memoryLimitMB`
 			valCfg           = "180"
 			etcConfigYaml    = "/etc/microshift/config.yaml"
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
+			user             = "redhat"
 		)
+
 		exutil.By("1. Create new namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
@@ -5326,7 +5328,7 @@ spec:
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
 		defer func() {
-			etcdConfigCMD := fmt.Sprintf(`
+			etcdConfigCMD := fmt.Sprintf(`'
 configfile=%v
 configfilebak=%v
 if [ -f $configfilebak ]; then
@@ -5334,38 +5336,38 @@ if [ -f $configfilebak ]; then
 	rm -f $configfilebak 
 else 
 	rm -f $configfile 
-fi`, etcConfigYaml, etcConfigYamlbak)
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+fi'`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcdConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 			restartMicroshift(oc, masterNodes[0])
 		}()
 
 		defer func() {
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", `su - redhat -c "rm -f ~/.microshift/config.yaml"`)
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo rm -f ~/.microshift/config.yaml")
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 		}()
 
 		exutil.By("3. Check default config values for etcd")
-		mchkConfigdefault, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		mchkConfigdefault, mchkConfigErr := runSSHCommand(masterNodes[0], user, chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Configure the memoryLimitMB field in user config path")
 		configDir := "~/.microshift"
 		configFile := "config.yaml"
-		etcdConfigCMD := fmt.Sprintf(`su - redhat -c "mkdir -p %v && touch %v/%v && cat > %v/%v << EOF
+		etcdConfigCMD := fmt.Sprintf(`"mkdir -p %v && touch %v/%v && cat > %v/%v << EOF
 etcd:
   memoryLimitMB: %v
 EOF"`, configDir, configDir, configFile, configDir, configFile, valCfg)
-		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+		_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcdConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Check config values for etcd should not change from default values")
-		mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		mchkConfig, mchkConfigErr := runSSHCommand(masterNodes[0], user, chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		o.Expect(mchkConfig).Should(o.ContainSubstring(mchkConfigdefault))
 
 		exutil.By("6. Configure the memoryLimitMB field in default config path")
-		etcdConfigCMD = fmt.Sprintf(`
+		etcdConfigCMD = fmt.Sprintf(`'
 configfile=%v
 configfilebak=%v
 if [ -f $configfile ]; then
@@ -5374,12 +5376,12 @@ fi
 cat > $configfile << EOF
 etcd:
   memoryLimitMB: %v
-EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
-		_, mchgConfigErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcdConfigCMD)
+EOF'`, etcConfigYaml, etcConfigYamlbak, valCfg)
+		_, mchgConfigErr = runSSHCommand(masterNodes[0], user, "sudo bash -c", etcdConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		exutil.By("7. Check config values for etcd should change from default values")
-		mchkConfig, mchkConfigErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		mchkConfig, mchkConfigErr = runSSHCommand(masterNodes[0], user, chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		o.Expect(mchkConfig).Should(o.ContainSubstring(`memoryLimitMB: ` + valCfg))
 	})
@@ -5389,12 +5391,13 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		var (
 			e2eTestNamespace           = "microshift-ocp62987"
 			userDataDir                = `/root/.microshift/data/`
-			chkContentUserDatadirCmd   = `ls ` + userDataDir
+			chkContentUserDatadirCmd   = `sudo ls ` + userDataDir
 			globalDataDir              = `/var/lib/microshift/`
-			chkContentGlobalDatadirCmd = `ls ` + globalDataDir + `resources/`
-			userDataDirCmd             = `mkdir -p ` + userDataDir
-			globalDataDirDelCmd        = `rm -rf ` + globalDataDir + `resources/*`
-			userDataDirDelCmd          = `rm -rf ` + userDataDir + `*`
+			chkContentGlobalDatadirCmd = `sudo ls ` + globalDataDir + `resources/`
+			userDataDirCmd             = `sudo mkdir -p ` + userDataDir
+			globalDataDirDelCmd        = `sudo find ` + globalDataDir + `resources/ -mindepth 1 -delete`
+			userDataDirDelCmd          = `sudo rm -rf ` + userDataDir + `*`
+			user                       = "redhat"
 		)
 
 		exutil.By("1. Create new namespace for the scenario")
@@ -5408,27 +5411,27 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 
 		exutil.By("3. Check user data dir")
 		// Check if the directory exists
-		chkUserDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, userDataDir)
-		checkDirOutput, checkDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserDatadirCmd)
+		chkUserDatadirCmd := fmt.Sprintf(`"if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi"`, userDataDir)
+		checkDirOutput, checkDirErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", chkUserDatadirCmd)
 		o.Expect(checkDirErr).NotTo(o.HaveOccurred())
 
 		if strings.Contains(checkDirOutput, "Directory exists") {
 			// Directory exists, so delete the contents
-			_, deldirerr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirDelCmd)
+			_, deldirerr := runSSHCommand(masterNodes[0], user, userDataDirDelCmd)
 			o.Expect(deldirerr).NotTo(o.HaveOccurred())
-			chkContentOutput, chkContentErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
+			chkContentOutput, chkContentErr := runSSHCommand(masterNodes[0], user, chkContentUserDatadirCmd)
 			o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 			o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 		} else {
 			// Directory does not exist, so create it
-			_, mkdirerr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", userDataDirCmd)
+			_, mkdirerr := runSSHCommand(masterNodes[0], user, userDataDirCmd)
 			o.Expect(mkdirerr).NotTo(o.HaveOccurred())
 		}
 
 		exutil.By("4. Check global data dir")
 		// Check if the directory exists
-		chkUserGlobalDatadirCmd := fmt.Sprintf(`if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi`, globalDataDir)
-		checkGlobalDirOutput, checkGlobalDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkUserGlobalDatadirCmd)
+		chkUserGlobalDatadirCmd := fmt.Sprintf(`"if [ -d %v ]; then echo 'Directory exists'; else echo 'Directory does not exist'; fi"`, globalDataDir)
+		checkGlobalDirOutput, checkGlobalDirErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", chkUserGlobalDatadirCmd)
 		o.Expect(checkGlobalDirErr).NotTo(o.HaveOccurred())
 
 		if !strings.Contains(checkGlobalDirOutput, "Directory exists") {
@@ -5436,9 +5439,9 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		}
 
 		// Directory exists, so delete the contents it can restore automatically after restart
-		_, deldirerr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", globalDataDirDelCmd)
+		_, deldirerr := runSSHCommand(masterNodes[0], user, globalDataDirDelCmd)
 		o.Expect(deldirerr).NotTo(o.HaveOccurred())
-		chkContentOutput, chkContentErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
+		chkContentOutput, chkContentErr := runSSHCommand(masterNodes[0], user, chkContentGlobalDatadirCmd)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 
@@ -5446,11 +5449,11 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		restartMicroshift(oc, masterNodes[0])
 
 		exutil.By("6. Ensure that userdatadir is empty and globaldatadir is restored after Microshift is restarted")
-		chkContentOutput, chkContentErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentUserDatadirCmd)
+		chkContentOutput, chkContentErr = runSSHCommand(masterNodes[0], user, chkContentUserDatadirCmd)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 		e2e.Logf("Userdatadir %v be empty.", userDataDir)
-		chkContentOutput, chkContentErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkContentGlobalDatadirCmd)
+		chkContentOutput, chkContentErr = runSSHCommand(masterNodes[0], user, chkContentGlobalDatadirCmd)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).NotTo(o.BeEmpty())
 		e2e.Logf("Globaldatadir %v not empty, it is restored :: %v", globalDataDir, chkContentOutput)
@@ -5462,6 +5465,7 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 			e2eTestNamespace = "microshift-ocp63099"
 			etcConfigYaml    = "/etc/microshift/config.yaml"
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
+			user             = "redhat"
 		)
 
 		exutil.By("1. Create new namespace for the scenario")
@@ -5474,39 +5478,35 @@ EOF`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
 		defer func() {
-			etcConfigCMD := fmt.Sprintf(`configfile=%v;
+			etcConfigCMD := fmt.Sprintf(`'configfile=%v;
 			configfilebak=%v;
 			if [ -f $configfilebak ]; then
 				cp $configfilebak $configfile; 
 				rm -f $configfilebak;
 			else
 				rm -f $configfile;
-			fi`, etcConfigYaml, etcConfigYamlbak)
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			fi'`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 			restartMicroshift(oc, masterNodes[0])
 		}()
 
 		exutil.By("3. Take backup of config file")
-		etcConfigCMD := fmt.Sprintf(`configfile=%v;
-		configfilebak=%v;
-		if [ -f $configfile ]; then 
-			cp $configfile $configfilebak;
-		fi`, etcConfigYaml, etcConfigYamlbak)
-		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+		etcConfigCMD := fmt.Sprintf(`'configfile=%v; configfilebak=%v; if [ -f $configfile ]; then cp $configfile $configfilebak; fi'`, etcConfigYaml, etcConfigYamlbak)
+		_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		logLevels := []string{"Normal", "normal", "NORMAL", "debug", "DEBUG", "Trace", "trace", "TRACE", "TraceAll", "traceall", "TRACEALL"}
 		for stepn, level := range logLevels {
 			exutil.By(fmt.Sprintf("%v.1 Configure the logLevel %v in default config path", stepn+4, level))
-			etcConfigCMD = fmt.Sprintf(`
+			etcConfigCMD = fmt.Sprintf(`'
 configfile=%v
 cat > $configfile << EOF
 debugging:
   logLevel: %v
-EOF`, etcConfigYaml, level)
+EOF'`, etcConfigYaml, level)
 
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 			unixTimestamp := time.Now().Unix()
@@ -5514,9 +5514,9 @@ EOF`, etcConfigYaml, level)
 			restartMicroshift(oc, masterNodes[0])
 
 			exutil.By(fmt.Sprintf("%v.3 Check logLevel should change to %v", stepn+4, level))
-			chkConfigCmd := fmt.Sprintf(`journalctl -u microshift -b -S @%vs | grep "logLevel: %v"|grep -iv journalctl|tail -1`, unixTimestamp, level)
+			chkConfigCmd := fmt.Sprintf(`sudo journalctl -u microshift -b -S @%vs | grep "logLevel: %v"|grep -iv journalctl|tail -1`, unixTimestamp, level)
 			getlogErr := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
-				mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+				mchkConfig, mchkConfigErr := runSSHCommand(masterNodes[0], user, chkConfigCmd)
 				if mchkConfigErr == nil && strings.Contains(mchkConfig, "logLevel: "+level) {
 					e2e.Logf("LogLevel changed to %v :: %v", level, mchkConfig)
 					return true, nil
@@ -5605,6 +5605,7 @@ EOF`, etcConfigYaml, level)
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
 			tmpManifestPath  = "/var/lib/microshift/manifests/manifestocp63217/"
 			chkConfigCmd     = `sudo /usr/bin/microshift show-config --mode effective`
+			user             = "redhat"
 		)
 
 		exutil.By("1. Create new namespace for the scenario")
@@ -5631,36 +5632,36 @@ EOF`, etcConfigYaml, level)
 		}()
 
 		defer func() {
-			etcConfigCMD := fmt.Sprintf(`configfile=%v;
+			etcConfigCMD := fmt.Sprintf(`'configfile=%v;
 			configfilebak=%v;
 			if [ -f $configfilebak ]; then
 				cp $configfilebak $configfile; 
 				rm -f $configfilebak;
 			else
 				rm -f $configfile;
-			fi`, etcConfigYaml, etcConfigYamlbak)
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			fi'`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 			restartMicroshift(oc, masterNodes[0])
 		}()
 
 		defer func() {
-			dirCmd := "rm -rf /etc/microshift/manifests/kustomization.yaml /etc/microshift/manifests/busybox.yaml " + tmpManifestPath
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", dirCmd)
+			dirCmd := "sudo rm -rf /etc/microshift/manifests/kustomization.yaml /etc/microshift/manifests/busybox.yaml " + tmpManifestPath
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, dirCmd)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 		}()
 
 		exutil.By("3. Take backup of config file")
-		etcConfigCMD := fmt.Sprintf(`configfile=%v;
+		etcConfigCMD := fmt.Sprintf(`'configfile=%v;
 		configfilebak=%v;
 		if [ -f $configfile ]; then 
 			cp $configfile $configfilebak;
-		fi`, etcConfigYaml, etcConfigYamlbak)
-		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+		fi'`, etcConfigYaml, etcConfigYamlbak)
+		_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcConfigCMD)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Create tmp manifest path on node")
-		_, dirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo mkdir -p "+tmpManifestPath)
+		_, dirErr := runSSHCommand(masterNodes[0], user, "sudo mkdir -p "+tmpManifestPath)
 		o.Expect(dirErr).NotTo(o.HaveOccurred())
 
 		// set the manifest option value to an empty list should disable loading
@@ -5775,7 +5776,7 @@ manifests:
 
 		// If the option includes a manifest path that exists but does not contain a kustomization.yaml file, it should be ignored.
 		exutil.By("8.1 Scenario-4 :: Set option includes a manifest path that exists but does not contain a kustomization.yaml file")
-		_, delFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo rm "+tmpManifestPath+"kustomization.yaml")
+		_, delFileErr := runSSHCommand(masterNodes[0], user, "sudo rm "+tmpManifestPath+"kustomization.yaml")
 		o.Expect(delFileErr).NotTo(o.HaveOccurred())
 		delNsErr := oc.WithoutNamespace().Run("delete").Args("ns", "hello-openshift-scenario3-ocp63217", "--ignore-not-found").Execute()
 		o.Expect(delNsErr).NotTo(o.HaveOccurred())
@@ -5789,7 +5790,7 @@ manifests:
 
 		//  If the option includes a manifest path that does not exist, it should be ignored.
 		exutil.By("9.1 Scenario-5 :: Set option includes a manifest path that does not exists")
-		_, delDirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo rm -rf "+tmpManifestPath)
+		_, delDirErr := runSSHCommand(masterNodes[0], user, "sudo rm -rf "+tmpManifestPath)
 		o.Expect(delDirErr).NotTo(o.HaveOccurred())
 		restartMicroshift(oc, masterNodes[0])
 
@@ -5812,7 +5813,7 @@ manifests:
 		exutil.By("10.2 :: Scenario-6 :: Check manifest config")
 		pattern := `kustomizePaths:\s*\n\s+-\s+/usr/lib/microshift/manifests\s*\n\s+-\s+/usr/lib/microshift/manifests\.d/\*\s*\n\s+-\s+/etc/microshift/manifests\s*\n\s+-\s+/etc/microshift/manifests\.d/\*`
 		re := regexp.MustCompile(pattern)
-		mchkConfig, mchkConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", chkConfigCmd)
+		mchkConfig, mchkConfigErr := runSSHCommand(masterNodes[0], user, chkConfigCmd)
 		o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
 		match := re.MatchString(mchkConfig)
 		if !match {

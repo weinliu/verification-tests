@@ -36,6 +36,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 			etcConfigYaml    = "/etc/microshift/config.yaml"
 			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
 			tmpManifestPath  = "/etc/microshift/manifests.d/my-app/base /etc/microshift/manifests.d/my-app/dev /etc/microshift/manifests.d/my-app/dev/patches/"
+			user             = "redhat"
 		)
 
 		exutil.By("1. Create new namespace for the scenario")
@@ -53,35 +54,35 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 		}()
 
 		defer func() {
-			etcConfigCMD := fmt.Sprintf(`configfile=%v;
+			etcConfigCMD := fmt.Sprintf(`'configfile=%v;
 			configfilebak=%v;
 			if [ -f $configfilebak ]; then
 				cp $configfilebak $configfile; 
 				rm -f $configfilebak;
 			else
 				rm -f $configfile;
-			fi`, etcConfigYaml, etcConfigYamlbak)
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfigCMD)
+			fi'`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 			restartMicroshift(oc, masterNodes[0])
 		}()
 
 		defer func() {
-			_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo rm -rf "+tmpManifestPath)
+			_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo rm -rf "+tmpManifestPath)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 		}()
 
 		exutil.By("3. Take backup of config file")
-		etcConfig := fmt.Sprintf(`configfile=%v;
+		etcConfig := fmt.Sprintf(`'configfile=%v;
 		configfilebak=%v;
 		if [ -f $configfile ]; then 
 			cp $configfile $configfilebak;
-		fi`, etcConfigYaml, etcConfigYamlbak)
-		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", etcConfig)
+		fi'`, etcConfigYaml, etcConfigYamlbak)
+		_, mchgConfigErr := runSSHCommand(masterNodes[0], user, "sudo bash -c", etcConfig)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Create tmp manifest path on node")
-		_, dirErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNodes[0], []string{"--quiet=true", "--to-namespace=" + e2eTestNamespace}, "bash", "-c", "sudo mkdir -p "+tmpManifestPath)
+		_, dirErr := runSSHCommand(masterNodes[0], user, "sudo mkdir -p "+tmpManifestPath)
 		o.Expect(dirErr).NotTo(o.HaveOccurred())
 
 		//  Setting glob path values to multiple values should load manifests from all of them.

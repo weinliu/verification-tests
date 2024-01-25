@@ -1093,10 +1093,10 @@ func isConnectedInternet(oc *exutil.CLI) bool {
 }
 
 func restartMicroshift(oc *exutil.CLI, nodename string) {
-	_, restartErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl restart microshift &")
+	_, restartErr := runSSHCommand(nodename, "redhat", "sudo systemctl restart microshift")
 	o.Expect(restartErr).NotTo(o.HaveOccurred())
 	mstatusErr := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodename, []string{"-q"}, "bash", "-c", "systemctl is-active microshift")
+		output, err := runSSHCommand(nodename, "redhat", "sudo systemctl is-active microshift")
 		if err == nil && strings.TrimSpace(output) == "active" {
 			e2e.Logf("microshift status is: %v ", output)
 			return true, nil
@@ -1126,12 +1126,12 @@ func getPodsList(oc *exutil.CLI, namespace string) []string {
 }
 
 func changeMicroshiftConfig(oc *exutil.CLI, configStr string, nodeName string, namespace string, configPath string) {
-	etcConfigCMD := fmt.Sprintf(`
+	etcConfigCMD := fmt.Sprintf(`'
 configfile=%v
 cat > $configfile << EOF
 %v
-EOF`, configPath, configStr)
-	_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", etcConfigCMD)
+EOF'`, configPath, configStr)
+	_, mchgConfigErr := runSSHCommand(nodeName, "redhat", "sudo bash -c", etcConfigCMD)
 	o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 }
 
@@ -1142,8 +1142,10 @@ func addKustomizationToMicroshift(oc *exutil.CLI, nodeName string, namespace str
 		fileOutput, err := exec.Command("bash", "-c", fmt.Sprintf(`cat %s`, tmpFileName)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		destFile := file[1] + strings.Split(key, ".")[0] + ".yaml"
-		fileCmd := fmt.Sprintf(`echo '%s' | tee %s `, string(fileOutput), destFile)
-		_, mchgConfigErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", fileCmd)
+		fileCmd := fmt.Sprintf(`'cat > %s << EOF
+%s
+EOF'`, destFile, string(fileOutput))
+		_, mchgConfigErr := runSSHCommand(nodeName, "redhat", "sudo bash -c", fileCmd)
 		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 	}
 }
@@ -1481,4 +1483,14 @@ func urlHealthCheck(fqdnName string, certPath string, returnValues []string) (*C
 		}
 	}
 	return certDetails, nil
+}
+
+func runSSHCommand(server, user string, commands ...string) (string, error) {
+	// Combine commands into a single string
+	fullCommand := strings.Join(commands, " ")
+	sshkey, err := exutil.GetPrivateKey()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	sshClient := exutil.SshClient{User: user, Host: server, Port: 22, PrivateKey: sshkey}
+	return sshClient.RunOutput(fullCommand)
 }
