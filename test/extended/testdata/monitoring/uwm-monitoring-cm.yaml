@@ -20,6 +20,9 @@ data:
         apiVersion: v1
         staticConfigs:
         - alertmanager-operated.openshift-user-workload-monitoring.svc:9093
+      remoteWrite:
+      - url: "https://test.remotewrite.com/api/write"
+        sendExemplars: true
     thanosRuler:
       retention: 15d
       additionalAlertmanagerConfigs:

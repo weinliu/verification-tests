@@ -804,6 +804,24 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusNotIngestingSamples"}'`, token, `"result":[]`, uwmLoadTime)
 		})
 
+		// author: juzhao@redhat.com
+		g.It("Author:juzhao-Medium-70998-PrometheusRestrictedConfig supports enabling sendExemplars", func() {
+			g.By("check exemplar-storage is enabled")
+			cmd := "-ojsonpath={.spec.enableFeatures[*]}"
+			checkYamlconfig(oc, "openshift-user-workload-monitoring", "prometheus", "user-workload", cmd, "exemplar-storage", true)
+
+			//check settings in UWM prometheus pods
+			podNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=prometheus")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range podNames {
+				cmd = "-ojsonpath={.spec.containers[?(@.name==\"prometheus\")].args}"
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, `--enable-feature=exemplar-storage`, true)
+			}
+			g.By("check sendExemplars is true in UWM prometheus CRD")
+			cmd = "-ojsonpath={.spec.remoteWrite}"
+			checkYamlconfig(oc, "openshift-user-workload-monitoring", "prometheus", "user-workload", cmd, `"sendExemplars":true`, true)
+		})
+
 		// author: tagao@redhat.com
 		g.It("Author:tagao-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
 			g.By("make sure all pods in openshift-monitoring/openshift-user-workload-monitoring are ready")
