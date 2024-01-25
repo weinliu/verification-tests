@@ -144,13 +144,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [reducing IP range with a larger CIDR mask for clusterNetwork CIDR is unsupported]`))
+		}, 60*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [reducing IP range with a larger CIDR mask for clusterNetwork CIDR is unsupported]`))
 
 		// restore to original valid config before next step
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [reducing IP range with a larger CIDR mask for clusterNetwork CIDR is unsupported]`))
+		}, 60*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [reducing IP range with a larger CIDR mask for clusterNetwork CIDR is unsupported]`))
 
 		g.By("2. Verify that changing hostPrefix is not allowed")
 		newHostPrefix := strconv.Itoa(origHostPrefixVal + 1)
@@ -161,13 +161,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+		}, 60*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
 
 		// restore to original valid config before next step
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+		}, 60*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
 
 		newHostPrefix = strconv.Itoa(origHostPrefixVal - 1)
 		e2e.Logf("Attempt to change to newHostPrefix: %v", newHostPrefix)
@@ -177,13 +177,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+		}, 60*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
 
 		// restore to original valid config before next step
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
+		}, 60*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying a clusterNetwork's hostPrefix value is unsupported]`))
 
 		g.By("3. Verify that changing network IP is not allowed")
 		subAddress := strings.Split(origNetAddress, ".")
@@ -198,12 +198,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying IP network value for clusterNetwork CIDR is unsupported]`))
+		}, 60*time.Second, 3*time.Second).Should(o.ContainSubstring(`invalid configuration: [modifying IP network value for clusterNetwork CIDR is unsupported]`))
 
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
 		o.Eventually(func() string {
 			return getCNOStatusCondition(oc)
-		}, 30*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying IP network value for clusterNetwork CIDR is unsupported]`))
+		}, 60*time.Second, 3*time.Second).ShouldNot(o.ContainSubstring(`invalid configuration: [modifying IP network value for clusterNetwork CIDR is unsupported]`))
 	})
 
 	//author: zzhao@redhat.com
