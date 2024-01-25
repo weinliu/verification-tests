@@ -39,13 +39,14 @@ func capturePacktes(oc *exutil.CLI, ns string, pod string, intf string, srcip st
 	var err error
 	if strings.Contains(srcip, ":") {
 		// if ipv6 address
+		e2e.Logf("start to capture packetes on pod %s using command 'tcpdump tcp -c 10 -vvv -i %s and src net %s/128`", pod, intf, srcip)
 		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "bash", "-c",
 			`timeout --preserve-status 10 tcpdump tcp -c 10 -vvv -i `+fmt.Sprintf("%s", intf)+` and src net `+fmt.Sprintf("%s", srcip)+`/128`).Output()
-		e2e.Logf("start to capture packetes on pod %s using command 'tcpdump tcp -c 10 -vvv -i %s and src net %s/128`", pod, intf, srcip)
+
 	} else {
+		e2e.Logf("start to capture packetes on pod %s using command tcpdump tcp -c 10 -vvv -i %s and src net %s/32", pod, intf, srcip)
 		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, pod, "bash", "-c",
 			`timeout --preserve-status 10 tcpdump tcp -c 10 -vvv -i `+fmt.Sprintf("%s", intf)+` and src net `+fmt.Sprintf("%s", srcip)+`/32`).Output()
-		e2e.Logf("start to capture packetes on pod %s using command 'tcpdump tcp -c 10 -vvv -i %s and src net %s/32`", pod, intf, srcip)
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).NotTo(o.BeEmpty())
@@ -72,21 +73,20 @@ func chkCapturePacketsOnIntf(oc *exutil.CLI, ns string, pod string, intf string,
 func getPodVFPresentor(oc *exutil.CLI, ns string, pod string) string {
 	nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-o=jsonpath={.spec.nodeName}", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	containerID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-o=jsonpath={.status.containerStatuses[0].containerID}", "-n", ns).Output()
+	// example:
+	// #ovs-vsctl --columns=name find interface external_ids:iface-id=z1_hello-rc-1-w56tg
+	//  name                : eth1
+	command := fmt.Sprintf("ovs-vsctl --columns=name find interface external_ids:iface-id=%s_%s", ns, pod)
+	output, err := exutil.DebugNodeWithChroot(oc, nodename, "/bin/bash", "-c", command)
+	e2e.Logf("ovs-vsctl --columns=name find interface external_ids:iface-id=%s_%s", ns, pod)
+	e2e.Logf("The output is %v", output)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The containerID is %v", containerID)
-	initContainerID := string(containerID)[8:]
-	e2e.Logf("The initContainerID is %s", initContainerID)
-	sandBoxStr, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "crictl", "inspect", initContainerID).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	//e2e.Logf("The sandBoxStr is %v", sandBoxStr)
-	re := regexp.MustCompile(`sandboxID":\s+"(\w+)"`)
-	match := re.FindStringSubmatch(sandBoxStr)
-	e2e.Logf("The match result is %v", match)
-	sandBoxID := match[1]
-	vfPreName := string(sandBoxID)[:15]
-	e2e.Logf("The VF Presentor is %s", vfPreName)
-	return vfPreName
+	o.Expect(output).Should(o.ContainSubstring("name"))
+	// find the match string with "name     : eth1"
+	matchvalue := regexp.MustCompile(`name\s*:\s*(\S+)`).FindStringSubmatch(output)
+	e2e.Logf("The VF Presentor is %s just test", matchvalue[1])
+	o.Expect(matchvalue[1]).ShouldNot(o.BeNil())
+	return matchvalue[1]
 }
 
 func startIperfTraffic(oc *exutil.CLI, ns string, pod string, svrip string, duration string) string {
