@@ -2441,4 +2441,36 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(syscalls, "mknod")).To(o.BeTrue())
 	})
+
+	// author: bgudi@redhat.com
+	g.It("Author:bgudi-Low-49887-Set log verbosity for security profiles operator [Serial]", func() {
+		defer func() {
+			g.By("Cleanup.. !!!\n")
+			patch := fmt.Sprintf("{\"spec\":{\"verbosity\":0}}")
+			patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "0", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.verbosity}"}).check(oc)
+			checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("ds/spod", "security-profiles-operator", "-n", subD.namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(msg, `Set logging verbosity to 0`)).To(o.BeTrue())
+		}()
+
+		g.By("Check ds logs and verify log verbosity is 0 before patch")
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("ds/spod", "security-profiles-operator", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(msg, `Set logging verbosity to 0`)).To(o.BeTrue())
+
+		g.By("set log verbosity for securityprofilesoperator daemon\n")
+		patch := fmt.Sprintf("{\"spec\":{\"verbosity\":1}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "1", ok, []string{"spod", "spod", "-n", subD.namespace, "-o=jsonpath={.spec.verbosity}"}).check(oc)
+
+		g.By("Check all spo pods are reinited")
+		checkPodsStautsOfDaemonset(oc, "spod", subD.namespace)
+
+		g.By("Check ds logs and verify log verbosity is set to 1")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("ds/spod", "security-profiles-operator", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(msg, `Set logging verbosity to 1`)).To(o.BeTrue())
+	})
 })
