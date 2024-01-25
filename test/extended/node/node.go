@@ -810,6 +810,10 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			g.Skip("ctrcfg.overlay can't be supported by rhel nodes")
 		}
 
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
+
 		g.By("1) oc debug one worker and edit /etc/crio/crio.conf")
 		// we update log_level = "debug" in /etc/crio/crio.conf
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -839,6 +843,10 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(rhelWorkers) > 0 {
 			g.Skip("ctrcfg.overlay can't be supported by rhel nodes")
+		}
+
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
 		}
 
 		g.By("1) check overlaySize don't change after upgrade")
