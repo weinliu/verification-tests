@@ -5724,6 +5724,110 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("ocp-53920-Check the scanner's and api-resource-collector's limits configurable ..!!!\n")
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-45414-Verify the nodeSelector and tolerations are configurable for result server pod [Slow][Disruptive]", func() {
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
+
+		var (
+			nodeName               = getOneWorkerNodeName(oc)
+			ssbDefaultNodeselector = scanSettingBindingDescription{
+				name:            "default-nodeselector-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis-node",
+				scansettingname: "default",
+				template:        scansettingbindingSingleTemplate,
+			}
+			ssbCustomNodeselector = scanSettingBindingDescription{
+				name:            "custom-nodeselector-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-high-node",
+				scansettingname: "default",
+				template:        scansettingbindingSingleTemplate,
+			}
+		)
+
+		g.By("Create the first scansetting and scansettingbinding!!!\n")
+		defer cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbDefaultNodeselector.name})
+		ssbDefaultNodeselector.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbDefaultNodeselector.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check the nodeselector for resultserver pods.. !!!\n")
+		label := "workload=resultserver"
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"pod", "-l", label, "-n", subD.namespace}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Running Running", ok, []string{"pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		assertParameterValueForBulkPods(oc, `{"node-role.kubernetes.io/master":""}`, "pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].spec.nodeSelector}")
+
+		g.By("Check the scan result pods for the first round scan.. !!!\n")
+		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbDefaultNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		subD.complianceSuiteResult(oc, ssbDefaultNodeselector.name, "NON-COMPLIANT INCONSISTENT")
+
+		g.By("Create the sedond scansetting and scansettingbinding !!!\n")
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbCustomNodeselector.name})
+			patch := `[{"op": "replace", "path": "/rawResultStorage/nodeSelector", "value":{"node-role.kubernetes.io/master":""}}]`
+			patchResource(oc, asAdmin, withoutNamespace, "ss", "default", "-n", subD.namespace, "--type", "json", "-p", patch)
+		}()
+		cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbDefaultNodeselector.name})
+		patch := `[{"op":"replace","path":"/rawResultStorage/nodeSelector","value":{"node-role.kubernetes.io/worker":""}}]`
+		patchResource(oc, asAdmin, withoutNamespace, "ss", "default", "-n", subD.namespace, "--type", "json", "-p", patch)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "{\"node-role.kubernetes.io/worker\":\"\"}", ok, []string{"ss", "default",
+			"-n", subD.namespace, "-o=jsonpath={.rawResultStorage.nodeSelector}"}).check(oc)
+		ssbCustomNodeselector.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbCustomNodeselector.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check the nodeselector for resultserver pods for the second round scan.. !!!\n")
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"pod", "-l", label, "-n", subD.namespace}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Running Running", ok, []string{"pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		assertParameterValueForBulkPods(oc, `{"node-role.kubernetes.io/worker":""}`, "pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].spec.nodeSelector}")
+
+		g.By("Check the scan result pods.. !!!\n")
+		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		subD.complianceSuiteResult(oc, ssbCustomNodeselector.name, "NON-COMPLIANT INCONSISTENT")
+
+		g.By("Patch the ss to apply toleration !!!\n")
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbCustomNodeselector.name})
+			patch := `{"rawResultStorage":{"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"},{"effect":"NoExecute","key":"node.kubernetes.io/not-ready","operator":"Exists","tolerationSeconds":300},{"effect":"NoExecute","key":"node.kubernetes.io/unreachable","operator":"Exists","tolerationSeconds":300},{"effect":"NoSchedule","key":"node.kubernetes.io/memory-pressure","operator":"Exists"}]}}`
+			patchResource(oc, asAdmin, withoutNamespace, "ss", "default", "-n", subD.namespace, "--type", "merge", "-p", patch)
+			newCheck("expect", asAdmin, withoutNamespace, contain, `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"},{"effect":"NoExecute","key":"node.kubernetes.io/not-ready","operator":"Exists","tolerationSeconds":300},{"effect":"NoExecute","key":"node.kubernetes.io/unreachable","operator":"Exists","tolerationSeconds":300},{"effect":"NoSchedule","key":"node.kubernetes.io/memory-pressure","operator":"Exists"}]`,
+				ok, []string{"ss", "default", "-n", subD.namespace, "-o=jsonpath={.rawResultStorage.tolerations}"}).check(oc)
+		}()
+		patch = `{"rawResultStorage":{"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"},{"effect":"NoExecute","key":"node.kubernetes.io/not-ready","operator":"Exists","tolerationSeconds":300},{"effect":"NoExecute","key":"node.kubernetes.io/unreachable","operator":"Exists","tolerationSeconds":300},{"effect":"NoSchedule","key":"node.kubernetes.io/memory-pressure","operator":"Exists"},{"effect":"NoExecute","key":"key1","value":"value1","operator":"Equal"}]}}`
+		patchResource(oc, asAdmin, withoutNamespace, "ss", "default", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		newCheck("expect", asAdmin, withoutNamespace, contain, `{"effect":"NoExecute","key":"key1","operator":"Equal","value":"value1"}`, ok, []string{"ss", "default",
+			"-n", subD.namespace, "-o=jsonpath={.rawResultStorage.tolerations}"}).check(oc)
+
+		g.By("Label and set taint value to one worker node.. !!!\n")
+		taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule")
+		labelTaintNode(oc, "node", nodeName, "taint=true")
+		defer func() {
+			taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule-")
+			labelTaintNode(oc, "node", nodeName, "taint-")
+		}()
+
+		g.By("Create a third ssb.. !!!\n")
+		cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssbCustomNodeselector.name})
+		ssbCustomNodeselector.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbCustomNodeselector.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbCustomNodeselector.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Check the nodeselector for resultserver pods.. !!!\n")
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"pod", "-l", label, "-n", subD.namespace}).check(oc)
+		assertParameterValueForBulkPods(oc, `{"node-role.kubernetes.io/worker":""}`, "pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].spec.nodeSelector}")
+
+		g.By("Check the scan result pods.. !!!\n")
+		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		subD.complianceSuiteResult(oc, ssbCustomNodeselector.name, "NON-COMPLIANT INCONSISTENT")
+	})
 })
 
 var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on hypershift hosted cluster", func() {
