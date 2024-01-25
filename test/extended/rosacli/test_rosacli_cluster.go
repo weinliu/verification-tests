@@ -48,13 +48,15 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 		}
 		isSTS, err := clusterService.IsSTSCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
+		isHostedCP, err := clusterService.IsHostedCPCluster(clusterID)
+		o.Expect(err).To(o.BeNil())
 		g.By("Edit cluster to private to true")
 		out, err := clusterService.EditCluster(
 			clusterID,
 			"--private",
 			"-y",
 		)
-		if !isSTS {
+		if !isSTS || isHostedCP {
 			o.Expect(err).To(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(out).Parse().Tip()
 			o.Expect(textData).Should(o.ContainSubstring("You are choosing to make your cluster API private. You will not be able to access your cluster"))
@@ -87,7 +89,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 		o.Expect(err).To(o.BeNil())
 		CD, err := clusterService.ReflectClusterDescription(output)
 		o.Expect(err).To(o.BeNil())
-		if !isSTS {
+		if !isSTS || isHostedCP {
 			o.Expect(CD.Private).To(o.Equal("Yes"))
 		} else {
 			o.Expect(CD.Private).To(o.Equal("No"))

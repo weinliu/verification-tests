@@ -231,9 +231,10 @@ func (tab *tableData) Parse() *tableData {
 	lines := ReadLines(input)
 	reg1 := regexp.MustCompile(`.*[IEW].*:\x20\S.*\s+\S+`)
 	reg2 := regexp.MustCompile("^```\\s*")
+	reg3 := regexp.MustCompile(`time=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) level=(\w+) msg=(.*)`)
 	for _, line := range lines {
 		strline := string(line)
-		if reg2.FindString(strline) != "" {
+		if reg2.FindString(strline) != "" || reg3.FindString(strline) != "" {
 			continue
 		}
 		result := reg1.FindString(strline)

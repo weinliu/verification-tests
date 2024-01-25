@@ -462,9 +462,6 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		o.Expect(err).To(o.BeNil())
 
 		g.By("Check if cluster is using reusable oidc config")
-		UsingReusableOIDCConfig, err := clusterService.IsUsingReusableOIDCConfig(clusterID)
-		o.Expect(err).To(o.BeNil())
-
 		notExistedClusterID := "notexistedclusterid111"
 
 		switch StsCluster {
@@ -476,11 +473,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 				"-y")
 			o.Expect(err).To(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			if UsingReusableOIDCConfig {
-				o.Expect(strings.Contains(textData, "is using reusable OIDC Config and operator roles already exist")).Should(o.BeTrue())
-			} else {
-				o.Expect(strings.Contains(textData, "is ready and does not need additional configuration")).Should(o.BeTrue())
-			}
+			o.Expect(strings.Contains(textData, "Operator Roles already exists")).Should(o.BeTrue())
 		case false:
 			g.By("Create operator-roles on classic non-sts cluster")
 			output, err := ocmResourceService.CreateOIDCProvider(
