@@ -610,6 +610,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-70051-Adjust NodeClock alerting rules to be inactive when the PTP operator is installed", func() {
+		g.By("check NodeClockSkewDetected alert expr")
+		cmd := "-ojsonpath={.spec.groups[*].rules[?(@.alert==\"NodeClockSkewDetected\")].expr}"
+		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "node-exporter-rules", cmd, `absent(up{job="ptp-monitor-service"})`, true)
+
+		g.By("check NodeClockNotSynchronising alert expr")
+		cmd = "-ojsonpath={.spec.groups[*].rules[?(@.alert==\"NodeClockNotSynchronising\")].expr}"
+		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "node-exporter-rules", cmd, `absent(up{job="ptp-monitor-service"})`, true)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
