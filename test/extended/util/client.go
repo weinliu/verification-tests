@@ -257,6 +257,11 @@ func (c *CLI) SetGuestKubeconf(guestKubeconf string) *CLI {
 	return c
 }
 
+// GetGuestKubeconf gets the guest cluster kubeconf file
+func (c *CLI) GetGuestKubeconf() string {
+	return c.guestConfigPath
+}
+
 // SetAdminKubeconf instructs the admin cluster kubeconf file is set
 func (c *CLI) SetAdminKubeconf(adminKubeconf string) *CLI {
 	c.adminConfigPath = adminKubeconf

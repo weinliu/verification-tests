@@ -2058,4 +2058,124 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 		o.Expect(newNodeCount).To(o.Equal(2))
 	})
+
+	// author: heli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:heli-High-64847-[HyperShiftINSTALL] Ensure service type of loadBalancer associated with ingress controller is deleted by ingress-controller role [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 64847 is for AWS - skipping test ...")
+		}
+
+		caseID := "64847"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		var (
+			namePrefix  = fmt.Sprintf("64847-%s", strings.ToLower(exutil.RandStrDefault()))
+			hcName      = "hc-" + strings.ToLower(namePrefix)
+			bucketName  = "hc-" + strings.ToLower(namePrefix)
+			svcTempFile = dir + "/svc.yaml"
+			svcName     = "test-lb-svc-64847"
+			testSVC     = fmt.Sprintf(`
+apiVersion: v1
+kind: Service
+metadata:
+  name: %s
+  namespace: default
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    name: test-pod
+  type: LoadBalancer
+`, svcName)
+		)
+
+		exutil.By("install hypershift operator")
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          dir,
+			iaasPlatform: iaasPlatform,
+			installType:  Public,
+			region:       region,
+		}
+
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("create a hosted cluster")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(hcName).
+			withNodePoolReplicas(1).
+			withReleaseImage(release)
+		hcpNS := createCluster.Namespace + "-" + hcName
+
+		defer func() {
+			exutil.By("destroy hosted cluster in one goroutine")
+			go func() {
+				g.GinkgoRecover()
+				installHelper.destroyAWSHostedClusters(createCluster)
+			}()
+
+			if oc.GetGuestKubeconf() != "" {
+				exutil.By("check LB test SVC is deleted")
+				o.Eventually(func() bool {
+					testSVC, err := oc.AsGuestKubeconf().Run(OcpGet).Args("svc", svcName, "--ignore-not-found", `-o=jsonpath={.metadata.name}`).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					if testSVC == "" {
+						return true
+					}
+					e2e.Logf("check if the test svc is deleted by hcco")
+					return false
+				}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "Timed out waiting for the the ingress-operator pods scaling down to zero")
+
+				exutil.By("check HCCO logs that deletion is stuck by LB SVC resources")
+				routerDefaultSVC, err := oc.AsGuestKubeconf().Run(OcpGet).Args("-n", "openshift-ingress", "svc", "router-default", "--ignore-not-found", `-o=jsonpath={.metadata.name}`).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(routerDefaultSVC).Should(o.Equal("router-default"))
+				hccoPodName := doOcpReq(oc, OcpGet, true, "pod", "-n", hcpNS, "-lapp=hosted-cluster-config-operator", "--ignore-not-found", `-o=jsonpath={.items[].metadata.name}`)
+				_, err = exutil.WaitAndGetSpecificPodLogs(oc, hcpNS, "", hccoPodName, "'Ensuring load balancers are removed'")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				exutil.By("remove ingress-operator debug annotation and scale up ingress-operator")
+				doOcpReq(oc, OcpAnnotate, true, "hostedcluster", hcName, "-n", createCluster.Namespace, "hypershift.openshift.io/debug-deployments-")
+				doOcpReq(oc, OcpScale, true, "deployment", "ingress-operator", "-n", hcpNS, "--replicas=1")
+			}
+
+			exutil.By("wait until the hosted cluster is deleted successfully")
+			o.Eventually(pollGetHostedClusters(oc, createCluster.Namespace), LongTimeout, LongTimeout/10).ShouldNot(o.ContainSubstring(hcName), "destroy AWS HostedClusters error")
+		}()
+
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		oc.SetGuestKubeconf(hostedCluster.getHostedClusterKubeconfigFile())
+
+		exutil.By("annotate the hosted cluster to debug ingress operator")
+		doOcpReq(oc, OcpAnnotate, true, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, "hypershift.openshift.io/debug-deployments=ingress-operator")
+		o.Eventually(func() bool {
+			names := doOcpReq(oc, OcpGet, false, "pod", "-n", hcpNS, "--ignore-not-found", "-lapp=ingress-operator", "-o=jsonpath={.items[*].metadata.name}")
+			if names == "" {
+				return true
+			}
+			e2e.Logf("Still waiting for the ingress-operator pods scaling down to zero")
+			return false
+		}, DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "Timed out waiting for the the ingress-operator pods scaling down to zero")
+		o.Expect(doOcpReq(oc, OcpGet, true, "deploy", "ingress-operator", "-n", hcpNS, "--ignore-not-found", "-o=jsonpath={.spec.replicas}")).Should(o.Equal("0"))
+
+		exutil.By("create LB SVC on the hosted cluster")
+		err = os.WriteFile(svcTempFile, []byte(testSVC), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsGuestKubeconf().WithoutNamespace().Run(OcpCreate).Args("-f", svcTempFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
 })
