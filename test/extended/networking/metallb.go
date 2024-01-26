@@ -463,7 +463,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-High-60097-High-60098-High-60099-Verify ip address is assigned from the ip address pool that has higher priority (lower value), matches namespace or service name [Serial]", func() {
+	g.It("Author:asood-High-60097-High-60098-High-60099-High-60159-Verify ip address is assigned from the ip address pool that has higher priority (lower value), matches namespace, service name or the annotated IP pool in service [Serial]", func() {
 		var (
 			ns                   string
 			namespaces           []string
@@ -600,10 +600,10 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
-		e2e.Logf("The service %s 's External IP for first test case is %q", svc.name, svcIP)
+		e2e.Logf("The service %s 's External IP for OCP-60097 test case is %q", svc.name, svcIP)
 		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())
 
-		exutil.By("OCP-60098")
+		exutil.By("OCP-60098 Verify ip address from pool is assigned only to the service in project matching namespace or namespaceSelector in ip address pool.")
 		exutil.By("9.0 Update first ipaddress pool's the match label and match expression for the namespace property")
 		patchResourceAsAdmin(oc, "ipaddresspools/"+ipaddrpools[0], "{\"spec\":{\"serviceAllocation\": {\"namespaceSelectors\": [{\"matchExpressions\": [{\"key\": \"region\", \"operator\": \"In\", \"values\": [\"SA\"]}]}, {\"matchLabels\": {\"environ\": \"Dev\"}}]}}}", "metallb-system")
 
@@ -621,15 +621,15 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 		exutil.By("11. Delete the service in namespace and recreate it to see the address assigned from the pool that matches namespace selector")
 		removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
-
 		svc.name = "hello-world-60098"
 		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)).To(o.BeTrue())
 		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
-		e2e.Logf("The service %s 's External IP for second test case is %q", svc.name, svcIP)
+		e2e.Logf("The service %s 's External IP for OCP-60098 test case is %q", svc.name, svcIP)
 		o.Expect(strings.Contains(svcIP, expectedAddress2)).To(o.BeTrue())
-		exutil.By("OCP-60099")
+
+		exutil.By("OCP-60099 Verify ip address from pool is assigned only to the service matching serviceSelector in ip address pool")
 		exutil.By("12.0 Update second ipaddress pool's the match label and match expression for the namespace property")
 		patchResourceAsAdmin(oc, "ipaddresspools/"+ipaddrpools[1], "{\"spec\":{\"serviceAllocation\": {\"namespaceSelectors\": [{\"matchExpressions\": [{\"key\": \"region\", \"operator\": \"In\", \"values\": [\"SA\"]}]}, {\"matchLabels\": {\"environ\": \"Dev\"}}]}}}", "metallb-system")
 
@@ -647,7 +647,40 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
-		e2e.Logf("The service %s 's External IP for second test case is %q", svc.name, svcIP)
+		e2e.Logf("The service %s 's External IP for OCP-60099 test case is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())
+
+		exutil.By("OCP-60159 Verify the ip address annotation in service metallb.universe.tf/address-pool in namepace overrides the priority and service selectors in ip address pool.")
+		exutil.By("14. Delete the service  created in namespace to ensure eligible IP address is released")
+		removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+
+		exutil.By("15. Update the priority on second address to be eligible for address assignment")
+		patchResourceAsAdmin(oc, "ipaddresspools/"+ipaddrpools[1], "{\"spec\":{\"serviceAllocation\": {\"priority\": 10}}}", "metallb-system")
+
+		exutil.By("16. Label the namespace to ensure the both addresspools are eligible for address assignment")
+		_, errNs = oc.AsAdmin().Run("label").Args("namespace", ns, "environ=Dev", "--overwrite").Output()
+		o.Expect(errNs).NotTo(o.HaveOccurred())
+		_, errNs = oc.AsAdmin().Run("label").Args("namespace", ns, "region=SA", "--overwrite").Output()
+		o.Expect(errNs).NotTo(o.HaveOccurred())
+
+		exutil.By("17. Create a service with annotation to obtain IP from first addresspool")
+		loadBalancerServiceAnnotatedTemplate := filepath.Join(testDataDir, "loadbalancer-svc-annotated-template.yaml")
+		svc = loadBalancerServiceResource{
+			name:                          "hello-world-60159",
+			namespace:                     namespaces[0],
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      "environ",
+			labelValue:                    "Prod",
+			annotationKey:                 "metallb.universe.tf/address-pool",
+			annotationValue:               ipaddrpools[0],
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceAnnotatedTemplate,
+		}
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s 's External IP for OCP-60159 test case is %q", svc.name, svcIP)
 		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())
 
 	})

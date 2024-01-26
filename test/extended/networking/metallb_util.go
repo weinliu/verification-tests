@@ -54,6 +54,8 @@ type addressPoolResource struct {
 type loadBalancerServiceResource struct {
 	name                          string
 	namespace                     string
+	annotationKey                 string
+	annotationValue               string
 	labelKey                      string
 	labelValue                    string
 	externaltrafficpolicy         string
@@ -289,16 +291,26 @@ func createAddressPoolCR(oc *exutil.CLI, addresspool addressPoolResource, addres
 }
 
 func createLoadBalancerService(oc *exutil.CLI, loadBalancerSvc loadBalancerServiceResource, loadBalancerServiceTemplate string) (status bool) {
-	var msg string
-	svcFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", loadBalancerSvc.template, "-p", "NAME="+loadBalancerSvc.name, "NAMESPACE="+loadBalancerSvc.namespace, "LABELKEY1="+loadBalancerSvc.labelKey, "LABELVALUE1="+loadBalancerSvc.labelValue,
-		"EXTERNALTRAFFICPOLICY="+loadBalancerSvc.externaltrafficpolicy, "NODEPORTALLOCATION="+strconv.FormatBool(loadBalancerSvc.allocateLoadBalancerNodePorts)).OutputToFile(getRandomString() + "svc.json")
+	var msg, svcFile string
+	var err error
+	if strings.Contains(loadBalancerServiceTemplate, "annotated") {
+		e2e.Logf("Template %s", loadBalancerServiceTemplate)
+		svcFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", loadBalancerSvc.template, "-p", "NAME="+loadBalancerSvc.name, "NAMESPACE="+loadBalancerSvc.namespace,
+			"LABELKEY1="+loadBalancerSvc.labelKey, "LABELVALUE1="+loadBalancerSvc.labelValue,
+			"ANNOTATIONKEY="+loadBalancerSvc.annotationKey, "ANNOTATIONVALUE="+loadBalancerSvc.annotationValue,
+			"EXTERNALTRAFFICPOLICY="+loadBalancerSvc.externaltrafficpolicy, "NODEPORTALLOCATION="+strconv.FormatBool(loadBalancerSvc.allocateLoadBalancerNodePorts)).OutputToFile(getRandomString() + "svc.json")
+	} else {
+		svcFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", loadBalancerSvc.template, "-p", "NAME="+loadBalancerSvc.name, "NAMESPACE="+loadBalancerSvc.namespace,
+			"LABELKEY1="+loadBalancerSvc.labelKey, "LABELVALUE1="+loadBalancerSvc.labelValue,
+			"EXTERNALTRAFFICPOLICY="+loadBalancerSvc.externaltrafficpolicy, "NODEPORTALLOCATION="+strconv.FormatBool(loadBalancerSvc.allocateLoadBalancerNodePorts)).OutputToFile(getRandomString() + "svc.json")
+	}
 	g.By("Creating service file")
 	if err != nil {
 		e2e.Logf("Error creating LoadBalancerService %v with %v", err, svcFile)
 		return false
 	}
 
-	g.By("Applying deployment file " + svcFile)
+	g.By("Applying service file " + svcFile)
 	msg, err = oc.AsAdmin().Run("apply").Args("-f", svcFile, "-n", loadBalancerSvc.namespace).Output()
 	if err != nil {
 		e2e.Logf("Could not apply svcFile %v %v", msg, err)
