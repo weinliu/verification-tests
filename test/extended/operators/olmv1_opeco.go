@@ -252,9 +252,16 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		if !strings.Contains(statusOutput, "Unpacked") {
 			e2e.Failf("status is %v, not Unpacked", statusOutput)
 		}
-		img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(img, "quay.io/olmqe/olmtest-operator-index:nginxolm69069v1")).To(o.BeTrue())
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if img != "quay.io/olmqe/olmtest-operator-index:nginxolm69069v1" {
+				e2e.Logf("image: %v", img)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "Error image wrong or resolvedRef are same")
 		v1resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if initresolvedRef != v1resolvedRef {
@@ -265,7 +272,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v2"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		errWait := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
 			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			v2resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
