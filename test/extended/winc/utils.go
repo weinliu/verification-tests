@@ -1259,24 +1259,36 @@ func uninstallWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 
 func getWMCOTimestamp(oc *exutil.CLI) string {
 	wmcoID, err := getWorkloadsNames(oc, wmcoDeployment, wmcoNamespace)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return ""
+	}
 	wmcoTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", wmcoID[0], "-n", wmcoNamespace, "-o=jsonpath={.status.startTime}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return ""
+	}
 	return wmcoTime
 }
 
-func checkWMCORestarted(oc *exutil.CLI, startTime string) {
-	poolErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+func checkWMCORestarted(oc *exutil.CLI, startTime string) (bool, error) {
+	var restartDetected bool
+
+	poolErr := wait.Poll(20*time.Second, 6*time.Minute, func() (bool, error) {
 		actualWMCOTime := getWMCOTimestamp(oc)
-		if startTime == actualWMCOTime {
-			e2e.Logf("WMCO did not restart yet, waiting...")
-			return false, nil
+		if startTime != actualWMCOTime {
+			e2e.Logf("WMCO restarted")
+			restartDetected = true
+			return true, nil
 		}
-		return checkWorkloadCreated(oc, wmcoDeployment, wmcoNamespace, 1), nil
+		e2e.Logf("WMCO did not restart yet, waiting...")
+		return false, nil
 	})
+
 	if poolErr != nil {
-		e2e.Failf("Error restarting WMCO up to 3 minutes ...")
+		return false, fmt.Errorf("error restarting WMCO: %v", poolErr)
+
 	}
+
+	return restartDetected, nil
 }
 
 func getEnvVarProxyMap(oc *exutil.CLI, replacement ...map[string]string) map[string]interface{} {

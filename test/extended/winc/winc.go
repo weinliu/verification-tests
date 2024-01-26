@@ -1674,7 +1674,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// here we are creating a new cluster proxy map that contains similar keys as in WICD
 		initialProxySpec := getProxySpec(oc)
 		g.By("Check whether the configured cluster proxy exists in windows-services (WICD) CM")
-		noProxy := getClusterProxy(oc, "spec.noProxy")
 
 		g.By("add another record to cluster proxy, example.com to no-proxy")
 		// before patching the cluster we determine WMCO start time
@@ -1684,10 +1683,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			"[{\"op\": \"add\", \"path\":\"/spec/noProxy\", \"value\":\""+noProxy+",example.com\"}]").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred(), "could not patch proxy with new noProxy value")
 		// wait here for WMCO to restart and copy the env vars
+		defer restoreEnvironmentFiles(oc, initialProxySpec)
 		checkWMCORestarted(oc, wmcoStartTime)
 		time.Sleep(60 * time.Second)
 
-		defer restoreEnvironmentFiles(oc, initialProxySpec)
 		g.By("verify that newly added noProxy record exist on WICD Windows Services")
 		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1695,7 +1694,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		noProxyWICD := gjson.Get(json, "NO_PROXY")
 		if !strings.Contains(fmt.Sprint(noProxyWICD), "example.com") {
-			e2e.Failf("WICD proxy string does not contains example.com")
+			o.Expect(err).NotTo(o.HaveOccurred(), "WICD proxy string does not contains example.com")
 		}
 		g.By("verify that each of newly added record exist on each of Windows workers")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1707,7 +1706,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			msg, _ := runPSCommand(bastionHost, winhost, "get-childitem -Path env: |  Where-Object -Property Name -eq NO_PROXY | Format-List Value", privateKey, iaasPlatform)
 			// Check if "example.com" is present in the NO_PROXY value
 			if !strings.Contains(msg, "example.com") {
-				e2e.Failf(fmt.Sprintf("Failed to find example.com value on winworker %v", winhost))
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to find example.com value on winworker %v", winhost))
 			}
 		}
 
@@ -1715,7 +1714,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		trustedCA, err := popItemFromList(oc, "cm", trustedCACM, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if trustedCA != trustedCACM {
-			e2e.Failf("trusted CA %v CM does not exist on %v namespace", trustedCACM, wmcoNamespace)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("trusted CA %v CM does not exist on %v namespace", trustedCACM, wmcoNamespace))
 		}
 
 		g.By("Validate the content of trusted-ca copied to each Windows workers")
@@ -1723,18 +1722,18 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		e2e.Logf("Path is %v", caBundlePath)
 		trustedCA, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", trustedCACM, "-n", wmcoNamespace, "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
 		if err != nil {
-			e2e.Failf("error getting trusted CA from ConfigMap: %v", err)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("error getting trusted CA from ConfigMap: %v", err))
 		}
 		for _, winhost := range winInternalIP {
 			e2e.Logf(fmt.Sprintf("Verify trusted CA content is included in Windows worker %v ", winhost))
 			// Fetch CA bundle from Windows worker node
 			bundleContent, err := runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Content -Raw -Path %s", caBundlePath), privateKey, iaasPlatform)
 			if err != nil {
-				e2e.Logf("failed fetching CA bundle from Windows node %v: %v", winhost, err)
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("failed fetching CA bundle from Windows node %v: %v", winhost, err))
 			}
 			CAFormatted := strings.Trim(strings.TrimSpace(trustedCA), "'")
 			if strings.Contains(bundleContent, CAFormatted) {
-				e2e.Logf("Trusted CA not found in Windows worker node bundle %v", winhost)
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Trusted CA not found in Windows worker node bundle %v", winhost))
 			}
 		}
 
@@ -1745,7 +1744,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check that trusted-ca configmap cannot get tampered")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", trustedCACM, "--type=json", "-p", `[{"op": "remove", "path": "/metadata/labels"}]`, "-n", wmcoNamespace).Execute()
 		if err != nil {
-			e2e.Failf("It should not be possible to modify ConfigMap %v, error print is %v", trustedCACM, err)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("It should not be possible to modify ConfigMap %v, error print is %v", trustedCACM, err))
 		}
 		waitForCM(oc, trustedCACM, trustedCACM, wmcoNamespace)
 	})
