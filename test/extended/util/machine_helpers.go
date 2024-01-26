@@ -615,3 +615,14 @@ func GetGcpCredentialFromCluster(oc *CLI) {
 	os.Setenv("GOOGLE_CREDENTIALS", string(serviceAccount))
 
 }
+
+// Check if the cluster uses spot instances
+func UseSpotInstanceWorkersCheck(oc *CLI) bool {
+	machines, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/interruptible-instance=").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if machines != "" {
+		e2e.Logf("\nSpot instance workers are used\n")
+		return true
+	}
+	return false
+}

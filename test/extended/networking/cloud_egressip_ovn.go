@@ -1046,8 +1046,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		// This test case is not supposed to run on some special AWS/GCP cluster with STS, use specialPlatformCheck function to identify such a cluster
 		// For Azure cluster, if it has special credential type, this test case should be skipped as well
 		isSpecialSTSorCredCluster := specialPlatformCheck(oc)
-		if isSpecialSTSorCredCluster {
-			g.Skip("Skipped: This test case is not suitable for special AWS/GCP STS cluster or Azure with special credential type!!")
+		if isSpecialSTSorCredCluster || exutil.UseSpotInstanceWorkersCheck(oc) {
+			g.Skip("Skipped: This test case is not suitable for special AWS/GCP STS cluster or Azure with special credential type or cluster uses spot instances!!")
 		}
 
 		exutil.By("1. create new namespace\n")
@@ -1281,7 +1281,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+			exutil.AssertWaitPollNoErr(egressipErr, "The source Ip is not same as the egressIP expected!")
 		case "tcpdump":
 			exutil.By("Verify other available egressIP is randomly used as sourceIP.")
 			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {
@@ -1303,7 +1303,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				e2e.Logf("After the egress node is shut down, found all other 2 egressIP in tcpdump log!as expected")
 				return true, nil
 			})
-			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get all expected EgressIPs in tcpdump log"))
+			exutil.AssertWaitPollNoErr(egressipErr, "Failed to get all expected EgressIPs in tcpdump log")
 		default:
 			g.Skip("Skip for not support scenarios!")
 		}
