@@ -23,6 +23,8 @@ type MachinePoolService interface {
 	ListAndReflectNodePools(clusterID string) (*NodePoolList, error)
 	ReflectNodePoolDescription(result bytes.Buffer) (npd *NodePoolDescription, err error)
 	DescribeAndReflectNodePool(clusterID string, name string) (*NodePoolDescription, error)
+
+	RetrieveHelpForCreate() (bytes.Buffer, error)
 }
 
 type machinepoolService struct {
@@ -245,6 +247,11 @@ func (m *machinepoolService) ReflectNodePoolList(result bytes.Buffer) (npl *Node
 		npl.NodePools = append(npl.NodePools, *np)
 	}
 	return npl, err
+}
+
+// Create MachinePool
+func (m *machinepoolService) RetrieveHelpForCreate() (output bytes.Buffer, err error) {
+	return m.client.Runner.Cmd("create", "machinepool").CmdFlags("-h").Run()
 }
 
 // Pasrse the result of 'rosa describe cluster' to the RosaClusterDescription struct

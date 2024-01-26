@@ -13,6 +13,7 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.11
 	github.com/IBM/go-sdk-core/v5 v5.13.4
 	github.com/IBM/vpc-go-sdk v0.37.0
+	github.com/Masterminds/semver v1.5.0
 	github.com/RangelReale/osincli v0.0.0-20160924135400-fababb0555f2
 	github.com/aws/aws-sdk-go v1.44.116
 	github.com/aws/aws-sdk-go-v2 v1.21.0

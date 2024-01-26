@@ -2,21 +2,21 @@ package rosacli
 
 import (
 	"bytes"
-	"fmt"
+	"sort"
 
-	semver "github.com/hashicorp/go-version"
+	"github.com/Masterminds/semver"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
+
+const VersionChannelGroupStable = "stable"
+const VersionChannelGroupNightly = "nightly"
 
 type VersionService interface {
 	ResourcesCleaner
 
-	ReflectVersions(result bytes.Buffer, hostedCP bool) (versionList *OpenShiftVersionList, err error)
-	ReflecttClassicVersions(output bytes.Buffer) (*OpenShiftVersionList, error)
-	ReflectHostedCPVersions(output bytes.Buffer) (*OpenShiftVersionList, error)
-	ListVersions(hostedCP bool, flags ...string) (versionList *OpenShiftVersionList, output bytes.Buffer, err error)
-	ListClassicVersions(flags ...string) (*OpenShiftVersionList, bytes.Buffer, error)
-	ListHostedCPVersions(flags ...string) (*OpenShiftVersionList, bytes.Buffer, error)
+	ReflectVersions(result bytes.Buffer) (*OpenShiftVersionList, error)
+	ListVersions(channelGroup string, hostedCP bool, flags ...string) (bytes.Buffer, error)
+	ListAndReflectVersions(channelGroup string, hostedCP bool, flags ...string) (*OpenShiftVersionList, error)
 }
 
 type versionService struct {
@@ -36,77 +36,28 @@ type OpenShiftVersion struct {
 	Default           string `json:"DEFAULT,omitempty"`
 	AvailableUpgrades string `json:"AVAILABLE UPGRADES,omitempty"`
 }
-type ClassicVersion OpenShiftVersion
 
-type HostedCPVersion struct {
-	Version string `json:"VERSION,omitempty"`
-	Default string `json:"DEFAULT,omitempty"`
-}
-
-// Struct for the unified version output
 type OpenShiftVersionList struct {
-	OpenShiftVersion []OpenShiftVersion `json:"OpenShiftVersion,omitempty"`
-}
-
-// Struct for the 'rosa list version' output
-type ClassicVersionList struct {
-	ClassicVersions []ClassicVersion `json:"ClassicVersions,omitempty"`
-}
-
-// Struct for the 'rosa list version --hosted-cp' output
-type HostedCPVersionList struct {
-	HostedCPVersions []HostedCPVersion `json:"HostedCPVersions,omitempty"`
+	OpenShiftVersions []*OpenShiftVersion `json:"OpenShiftVersions,omitempty"`
 }
 
 // Reflect versions
-func (v *versionService) ReflectVersions(result bytes.Buffer, hostedCP bool) (versionList *OpenShiftVersionList, err error) {
+func (v *versionService) ReflectVersions(result bytes.Buffer) (versionList *OpenShiftVersionList, err error) {
 	versionList = &OpenShiftVersionList{}
-	if hostedCP {
-		theMap := v.client.Parser.TableData.Input(result).Parse().Output()
-		for _, hvItem := range theMap {
-			hVersion := &HostedCPVersion{}
-			version := OpenShiftVersion{}
-			err = MapStructure(hvItem, hVersion)
-			if err != nil {
-				return versionList, err
-			}
-			version.Version = hVersion.Version
-			version.Default = hVersion.Default
-			versionList.OpenShiftVersion = append(versionList.OpenShiftVersion, version)
+	theMap := v.client.Parser.TableData.Input(result).Parse().Output()
+	for _, item := range theMap {
+		version := &OpenShiftVersion{}
+		err = MapStructure(item, version)
+		if err != nil {
+			return versionList, err
 		}
-
-	} else {
-		theMap := v.client.Parser.TableData.Input(result).Parse().Output()
-		for _, cvItem := range theMap {
-			cVersion := &ClassicVersion{}
-			version := OpenShiftVersion{}
-			err = MapStructure(cvItem, cVersion)
-			if err != nil {
-				return versionList, err
-			}
-			version.Version = cVersion.Version
-			version.Default = cVersion.Default
-			version.AvailableUpgrades = cVersion.AvailableUpgrades
-			versionList.OpenShiftVersion = append(versionList.OpenShiftVersion, version)
-		}
+		versionList.OpenShiftVersions = append(versionList.OpenShiftVersions, version)
 	}
 	return versionList, err
 }
 
-// Pasrse the result of 'rosa list version' to the ClassicVersionList struct
-func (v *versionService) ReflecttClassicVersions(output bytes.Buffer) (*OpenShiftVersionList, error) {
-	versionList, err := v.ReflectVersions(output, false)
-	return versionList, err
-}
-
-// Pasrse the result of 'rosa list version --hosted-cp' to the ClassicVersionList struct
-func (v *versionService) ReflectHostedCPVersions(output bytes.Buffer) (*OpenShiftVersionList, error) {
-	versionList, err := v.ReflectVersions(output, true)
-	return versionList, err
-}
-
 // list version `rosa list version` or `rosa list version --hosted-cp`
-func (v *versionService) ListVersions(hostedCP bool, flags ...string) (versionList *OpenShiftVersionList, output bytes.Buffer, err error) {
+func (v *versionService) ListVersions(channelGroup string, hostedCP bool, flags ...string) (bytes.Buffer, error) {
 	listVersion := v.client.Runner.
 		Cmd("list", "versions").
 		CmdFlags(flags...)
@@ -115,37 +66,22 @@ func (v *versionService) ListVersions(hostedCP bool, flags ...string) (versionLi
 		listVersion.AddCmdFlags("--hosted-cp")
 	}
 
-	output, err = listVersion.Run()
-	if err != nil {
-		return versionList, output, err
+	if channelGroup != "" {
+		listVersion.AddCmdFlags("--channel-group", channelGroup)
 	}
 
-	if hostedCP {
-		versionList, err = v.ReflectHostedCPVersions(output)
-
-	} else {
-		versionList, err = v.ReflecttClassicVersions(output)
-
-	}
-	return versionList, output, err
+	return listVersion.Run()
 }
 
-// list classic version `rosa list version`
-func (v *versionService) ListClassicVersions(flags ...string) (*OpenShiftVersionList, bytes.Buffer, error) {
-	versionList, output, err := v.ListVersions(false, flags...)
+func (v *versionService) ListAndReflectVersions(channelGroup string, hostedCP bool, flags ...string) (versionList *OpenShiftVersionList, err error) {
+	var output bytes.Buffer
+	output, err = v.ListVersions(channelGroup, hostedCP, flags...)
 	if err != nil {
-		return &OpenShiftVersionList{}, output, err
+		return versionList, err
 	}
-	return versionList, output, err
-}
 
-// list classic version `rosa list version --hosted-cp`
-func (v *versionService) ListHostedCPVersions(flags ...string) (*OpenShiftVersionList, bytes.Buffer, error) {
-	versionList, output, err := v.ListVersions(true, flags...)
-	if err != nil {
-		return &OpenShiftVersionList{}, output, err
-	}
-	return versionList, output, err
+	versionList, err = v.ReflectVersions(output)
+	return versionList, err
 }
 
 func (v *versionService) CleanResources(clusterID string) (errors []error) {
@@ -153,76 +89,100 @@ func (v *versionService) CleanResources(clusterID string) (errors []error) {
 	return
 }
 
-func ParseVersion(version string) (string, error) {
-	parsedVersion, err := semver.NewVersion(version)
+// This function will find the nearest lower OCP version which version is under `Major.{minor-sub}`.
+// `strict` will find only the `Major.{minor-sub}` ones
+func (vl *OpenShiftVersionList) FindNearestBackwardMinorVersion(version string, minorSub int64, strict bool) (vs *OpenShiftVersion, err error) {
+	var baseVersionSemVer *semver.Version
+	baseVersionSemVer, err = semver.NewVersion(version)
 	if err != nil {
-		return "", err
+		return
 	}
-	versionSplit := parsedVersion.Segments64()
-	return fmt.Sprintf("%d.%d", versionSplit[0], versionSplit[1]), nil
+	nvl, err := vl.FilterVersionsSameMajorAndEqualOrLowerThanMinor(baseVersionSemVer.Major(), baseVersionSemVer.Minor()-minorSub, strict)
+	if err != nil {
+		return
+	}
+	if nvl, err = nvl.Sort(true); err == nil && nvl.Len() > 0 {
+		vs = nvl.OpenShiftVersions[0]
+	}
+	return
+
 }
 
-func ParseVersionXYStream(version string) (xStream int, yStream int, err error) {
-	parsedVersion, err := semver.NewVersion(version)
-	if err != nil {
-		return 0, 0, err
+// Sort sort the version list from lower to higher (or reverse)
+func (vl *OpenShiftVersionList) Sort(reverse bool) (nvl *OpenShiftVersionList, err error) {
+	versionListIndexMap := make(map[string]*OpenShiftVersion)
+	var semVerList []*semver.Version
+	var vSemVer *semver.Version
+	for _, version := range vl.OpenShiftVersions {
+		versionListIndexMap[version.Version] = version
+		if vSemVer, err = semver.NewVersion(version.Version); err != nil {
+			return
+		} else {
+			semVerList = append(semVerList, vSemVer)
+		}
 	}
-	versionSplit := parsedVersion.Segments64()
-	return int(versionSplit[0]), int(versionSplit[1]), nil
+
+	if reverse {
+		sort.Sort(sort.Reverse(semver.Collection(semVerList)))
+	} else {
+		sort.Sort(semver.Collection(semVerList))
+	}
+
+	var sortedImageVersionList []*OpenShiftVersion
+	for _, semverVersion := range semVerList {
+		sortedImageVersionList = append(sortedImageVersionList, versionListIndexMap[semverVersion.Original()])
+	}
+
+	nvl = &OpenShiftVersionList{
+		OpenShiftVersions: sortedImageVersionList,
+	}
+
+	return
 }
 
-// This function will find the Y-1 OCP version based on the passed version
-func (vl OpenShiftVersionList) FindNearestBackwardYVersion(version string) (string, error) {
-	parsedVersion, err := semver.NewVersion(version)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse version %q: %w", version, err)
+// FilterVersionsByMajorMinor filter the version list for all major/minor corresponding and returns a new `OpenShiftVersionList` struct
+// `strict` will find only the `Major.minor` ones
+func (vl *OpenShiftVersionList) FilterVersionsSameMajorAndEqualOrLowerThanMinor(major int64, minor int64, strict bool) (nvl *OpenShiftVersionList, err error) {
+	var filteredVersions []*OpenShiftVersion
+	var semverVersion *semver.Version
+	for _, version := range vl.OpenShiftVersions {
+		if semverVersion, err = semver.NewVersion(version.Version); err != nil {
+			return
+		} else if semverVersion.Major() == major &&
+			((strict && semverVersion.Minor() == minor) || (!strict && semverVersion.Minor() <= minor)) {
+			filteredVersions = append(filteredVersions, version)
+		}
 	}
-	versionSplit := parsedVersion.Segments64()
 
-	for _, v := range vl.OpenShiftVersion {
-		parsedVersion, err := semver.NewVersion(v.Version)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse version %q: %w", v.Version, err)
-		}
-		vSplit := parsedVersion.Segments64()
-		if vSplit[0] == versionSplit[0] && vSplit[1] == versionSplit[1]-1 {
-			return v.Version, nil
-		}
+	nvl = &OpenShiftVersionList{
+		OpenShiftVersions: filteredVersions,
 	}
-	return "", fmt.Errorf("no backward version found for %s", version)
+
+	return
 }
 
-// Find the latest(biggest) version based on the passed Y-stream
-func (vl OpenShiftVersionList) FindLatestVersionWithinYStream(version string) (string, error) {
-	parsedBaseVersion, err := semver.NewVersion(version)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse version %q: %w", version, err)
-	}
-	baseVersionSplit := parsedBaseVersion.Segments64()
+// FilterVersionsByMajorMinor filter the version list for all lower versions than the given one
+func (vl *OpenShiftVersionList) FilterVersionsLowerThan(version string) (nvl *OpenShiftVersionList, err error) {
+	var givenSemVer *semver.Version
+	givenSemVer, err = semver.NewVersion(version)
 
-	var latestVersion string
-	for _, v := range vl.OpenShiftVersion {
-		parsedVersion, err := semver.NewVersion(v.Version)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse version %q: %w", v.Version, err)
-		}
-		vSplit := parsedVersion.Segments64()
-		if vSplit[0] == baseVersionSplit[0] && vSplit[1] == baseVersionSplit[1] {
-			if latestVersion == "" {
-				latestVersion = v.Version
-			} else {
-				parsedLatestVersion, err := semver.NewVersion(latestVersion)
-				if err != nil {
-					return "", fmt.Errorf("failed to parse version %q: %w", v.Version, err)
-				}
-				if parsedLatestVersion.LessThan(parsedVersion) {
-					latestVersion = v.Version
-				}
-			}
+	var filteredVersions []*OpenShiftVersion
+	var semverVersion *semver.Version
+	for _, version := range vl.OpenShiftVersions {
+		if semverVersion, err = semver.NewVersion(version.Version); err != nil {
+			return
+		} else if semverVersion.LessThan(givenSemVer) {
+			filteredVersions = append(filteredVersions, version)
 		}
 	}
-	if latestVersion == "" {
-		return "", fmt.Errorf("no latest version found for %s", version)
+
+	nvl = &OpenShiftVersionList{
+		OpenShiftVersions: filteredVersions,
 	}
-	return latestVersion, nil
+
+	return
+}
+
+func (vl *OpenShiftVersionList) Len() int {
+	return len(vl.OpenShiftVersions)
 }

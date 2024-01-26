@@ -240,7 +240,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			classicSTSOperatorRolesPrefix   = "sopp60971"
 			managedOIDCConfigID             string
 			hostedCPInstallerRoleArn        string
-			ClassicInstallerRoleArn         string
+			classicInstallerRoleArn         string
 			accountRolePrefix               string
 			permissionsBoundaryPolicyName   = "permissionB60971"
 		)
@@ -293,7 +293,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		g.By("Get the installer role arn")
 		accountRoleList, _, err := ocmResourceService.ListAccountRole()
 		o.Expect(err).To(o.BeNil())
-		ClassicInstallerRoleArn = accountRoleList.InstallerRole(accountRolePrefix, false).RoleArn
+		classicInstallerRoleArn = accountRoleList.InstallerRole(accountRolePrefix, false).RoleArn
 		hostedCPInstallerRoleArn = accountRoleList.InstallerRole(accountRolePrefix, true).RoleArn
 
 		g.By("Create managed oidc-config in auto mode")
@@ -319,7 +319,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		g.By("Create hosted-cp and classic sts Operator-roles pror to cluster spec")
 		output, err = ocmResourceService.CreateOperatorRoles(
 			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
-			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--installer-role-arn", classicInstallerRoleArn,
 			"--mode", "auto",
 			"--prefix", classicSTSOperatorRolesPrefix,
 			"-y",
@@ -410,7 +410,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		g.By("Create operator roles with not-existed oidc id")
 		output, err = ocmResourceService.CreateOperatorRoles(
 			"--oidc-config-id", notExistedOIDCConfigID,
-			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--installer-role-arn", classicInstallerRoleArn,
 			"--mode", "auto",
 			"--prefix", classicSTSOperatorRolesPrefix,
 			"-y",
@@ -421,7 +421,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		g.By("Create operator-role without setting oidc-config-id")
 		output, err = ocmResourceService.CreateOperatorRoles(
-			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--installer-role-arn", classicInstallerRoleArn,
 			"--mode", "auto",
 			"--prefix", hostedCPOperatorRolesPrefix,
 			"--hosted-cp",
@@ -446,7 +446,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		g.By("Create operator-role without setting id neither prefix")
 		output, err = ocmResourceService.CreateOperatorRoles(
 			"--oidc-config-id", oidcPrivodeIDFromOutputMessage,
-			"--installer-role-arn", ClassicInstallerRoleArn,
+			"--installer-role-arn", classicInstallerRoleArn,
 			"--mode", "auto",
 			"--hosted-cp",
 			"-y",

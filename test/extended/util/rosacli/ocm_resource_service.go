@@ -122,7 +122,7 @@ type AccountRole struct {
 	AWSManaged       string `json:"AWS Managed,omitempty"`
 }
 type AccountRoleList struct {
-	AccountRoleList []AccountRole `json:"AccountRoleList,omitempty"`
+	AccountRoleList []*AccountRole `json:"AccountRoleList,omitempty"`
 }
 
 type OIDCConfig struct {
@@ -264,7 +264,7 @@ func (ors *ocmResourceService) ReflectAccountRoleList(result bytes.Buffer) (arl 
 		if err != nil {
 			return
 		}
-		arl.AccountRoleList = append(arl.AccountRoleList, *ar)
+		arl.AccountRoleList = append(arl.AccountRoleList, ar)
 	}
 	return
 }
@@ -291,7 +291,7 @@ func (ors *ocmResourceService) ListAccountRole() (AccountRoleList, bytes.Buffer,
 }
 
 // Get specified account roles by prefix
-func (arl AccountRoleList) AccountRoles(prefix string) (accountRoles []AccountRole) {
+func (arl AccountRoleList) AccountRoles(prefix string) (accountRoles []*AccountRole) {
 	for _, roleItme := range arl.AccountRoleList {
 		if strings.Contains(roleItme.RoleName, prefix) {
 			accountRoles = append(accountRoles, roleItme)
@@ -301,10 +301,10 @@ func (arl AccountRoleList) AccountRoles(prefix string) (accountRoles []AccountRo
 }
 
 // Get specified account role by the arn
-func (arl AccountRoleList) AccountRole(arn string) (accountRole AccountRole) {
-	for _, roleItme := range arl.AccountRoleList {
-		if roleItme.RoleArn == arn {
-			return roleItme
+func (arl AccountRoleList) AccountRole(arn string) (accountRole *AccountRole) {
+	for _, roleItem := range arl.AccountRoleList {
+		if roleItem.RoleArn == arn {
+			return roleItem
 		}
 	}
 	return
@@ -317,23 +317,23 @@ func (ors *ocmResourceService) UpgradeAccountRole(flags ...string) (bytes.Buffer
 	return upgradeAccountRole.Run()
 }
 
-func (arl AccountRoleList) InstallerRole(prefix string, hostedcp bool) (accountRole AccountRole) {
+func (arl AccountRoleList) InstallerRole(prefix string, hostedcp bool) (accountRole *AccountRole) {
 	roleType := RoleTypeSuffixMap["Installer"]
 	if hostedcp {
 		roleType = "HCP-ROSA-" + roleType
 	}
-	for _, roleItme := range arl.AccountRoleList {
+	for _, roleItem := range arl.AccountRoleList {
 		// if hostedcp && strings.Contains(lines[i], "-HCP-ROSA-Installer-Role") {
 		// 	return lines[i], nil
 		// }
 		// if !hostedcp && !strings.Contains(lines[i], "-ROSA-Installer-Role") && strings.Contains(lines[i], "-Installer-Role") {
 		// 	return lines[i], nil
 		// }
-		if hostedcp && strings.Contains(roleItme.RoleName, prefix) && strings.Contains(roleItme.RoleName, roleType) {
-			return roleItme
+		if hostedcp && strings.Contains(roleItem.RoleName, prefix) && strings.Contains(roleItem.RoleName, roleType) {
+			return roleItem
 		}
-		if !hostedcp && strings.Contains(roleItme.RoleName, prefix) && strings.Contains(roleItme.RoleName, roleType) && !strings.Contains(roleItme.RoleName, "HCP-ROSA-") {
-			return roleItme
+		if !hostedcp && strings.Contains(roleItem.RoleName, prefix) && strings.Contains(roleItem.RoleName, roleType) && !strings.Contains(roleItem.RoleName, "HCP-ROSA-") {
+			return roleItem
 		}
 	}
 	return

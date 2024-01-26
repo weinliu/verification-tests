@@ -182,21 +182,26 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 
 		installerRole := rosalCommand.GetFlagValue("--role-arn", true)
 		ar := accountRoleList.AccountRole(installerRole)
-		o.Expect(ar).ToNot(o.Equal(rosacli.AccountRole{}))
+		o.Expect(ar).ToNot(o.BeNil())
 
 		cg := rosalCommand.GetFlagValue("--channel-group", true)
 		if cg == "" {
-			cg = "stable"
+			cg = rosacli.VersionChannelGroupStable
 		}
 
-		versionList, _, err := versionService.ListClassicVersions("--channel-group", cg)
+		versionList, err := versionService.ListAndReflectVersions(cg, false)
 		o.Expect(err).To(o.BeNil())
 		o.Expect(versionList).ToNot(o.BeNil())
-		foundVersion, err := (*versionList).FindNearestBackwardYVersion(ar.OpenshiftVersion)
+		foundVersion, err := versionList.FindNearestBackwardMinorVersion(ar.OpenshiftVersion, 1, false)
 		o.Expect(err).To(o.BeNil())
+		var clusterVersion string
+		if foundVersion == nil {
+			g.Skip("No cluster version < y-1 found for compatibility testing")
+		}
+		clusterVersion = foundVersion.Version
 
 		replacingFlags := map[string]string{
-			"--version":               foundVersion,
+			"--version":               clusterVersion,
 			"--cluster-name":          clusterName,
 			"--operator-roles-prefix": operatorPrefix,
 		}

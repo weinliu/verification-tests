@@ -22,6 +22,7 @@ type ClusterService interface {
 	IsSTSCluster(clusterID string) (bool, error)
 	IsPrivateCluster(clusterID string) (bool, error)
 	IsUsingReusableOIDCConfig(clusterID string) (bool, error)
+	GetClusterVersion(clusterID string) (Version, error)
 }
 
 type clusterService struct {
@@ -183,6 +184,31 @@ func (c *clusterService) IsUsingReusableOIDCConfig(clusterID string) (bool, erro
 		return false, err
 	}
 	return jsonData.DigBool("aws", "sts", "oidc_config", "reusable"), nil
+}
+
+// Get cluster version
+func (c *clusterService) GetClusterVersion(clusterID string) (clusterVersion Version, err error) {
+	var clusterConfig *ClusterConfig
+	clusterConfig, err = ParseClusterProfile()
+	if err != nil {
+		return
+	}
+
+	if clusterConfig.Version.RawID != "" {
+		clusterVersion = clusterConfig.Version
+	} else {
+		// Else retrieve from cluster description
+		var jsonData *jsonData
+		jsonData, err = c.getJSONClusterDescription(clusterID)
+		if err != nil {
+			return
+		}
+		clusterVersion = Version{
+			RawID:        jsonData.DigString("version", "raw_id"),
+			ChannelGroup: jsonData.DigString("version", "channel_group"),
+		}
+	}
+	return
 }
 
 func (c *clusterService) getJSONClusterDescription(clusterID string) (*jsonData, error) {
