@@ -10949,6 +10949,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-71119-pod does not start for installing operator of multi-ns mode when og is in one of the ns", func() {
+		exutil.SkipForSNOCluster(oc)
+		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipNoCapabilities(oc, "marketplace")
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") ||
+			strings.Contains(platform, "ibmcloud") || strings.Contains(platform, "nutanix") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		e2e.Logf("it is for bug https://issues.redhat.com/browse/OCPBUGS-25989")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -11019,6 +11035,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		o.Consistently(func() int {
 			restartCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", subSample.namespace, "-o=jsonpath={.status..restartCount}").Output()
+			if strings.Contains(restartCount, "NotFound") {
+				return 0
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(restartCount).NotTo(o.BeEmpty())
 			count, err := strconv.Atoi(strings.Fields(restartCount)[0])
