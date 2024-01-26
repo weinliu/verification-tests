@@ -39,10 +39,8 @@ objects:
               memory: 800Mi
           kafkaBatchSize: 10485760
       processor:
-        port: 2055
         imagePullPolicy: IfNotPresent
         logLevel: trace
-        profilePort: 6060
         multiClusterDeployment: "${{MultiClusterDeployment}}"
         metrics:
           server:
@@ -50,7 +48,6 @@ objects:
             tls:
               type: "${MetricServerTLSType}"
           disablealerts: []
-        dropUnusedFields: true
         resources:
           requests:
             memory: 100Mi
@@ -62,9 +59,13 @@ objects:
         kafkaConsumerQueueCapacity: 1000
         kafkaConsumerBatchSize: 10485760
         logTypes: "${LogType}"
-        conversationTerminatingTimeout: 5s
-        conversationHeartbeatInterval: 5s
-        conversationEndTimeout: 20s
+        advanced:
+          port: 2055
+          profilePort: 6060
+          dropUnusedFields: true
+          conversationTerminatingTimeout: 5s
+          conversationHeartbeatInterval: 5s
+          conversationEndTimeout: 20s
       kafka:
         address: "${KafkaAddress}"
         topic: "${KafkaTopic}"
@@ -111,16 +112,15 @@ objects:
               name: "${LokiStatusTLSUserCertName}"
               type: secret
               namespace: "${LokiNamespace}"
-        batchWait: 1s
-        batchSize: 10485760
-        minBackoff: 1s
-        maxBackoff: 5s
-        maxRetries: 2
+        writeBatchWait: 1s
+        writeBatchSize: 10485760
+        advanced:
+          writeMinBackoff: 1s
+          writeMaxBackoff: 5s
+          writeMaxRetries: 2
       consolePlugin:
         enable: "${{PluginEnable}}"
-        register: true
         imagePullPolicy: IfNotPresent
-        port: 9001
         logLevel: info
         portNaming:
           enable: true
@@ -144,6 +144,9 @@ objects:
         - name: Services network
           filter:
             dst_kind: 'Service'
+        advanced:
+          port: 9001
+          register: true
       exporters: []
 parameters:
   - name: Namespace
