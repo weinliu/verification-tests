@@ -2,7 +2,9 @@ package apiserverauth
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -23,7 +25,6 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 type subscription struct {
@@ -88,16 +89,6 @@ func getCredentialFromCluster(oc *exutil.CLI, cloudProvider string) (string, str
 		e2e.Logf("unknown cloud provider")
 	}
 	return accessKeyID, secureKey
-}
-
-func getBearerTokenURLViaPod(ns, execPodName, url, bearer string) (string, error) {
-	g.By("Get token via pod")
-	cmd := fmt.Sprintf("curl --retry 15 --max-time 4 --retry-delay 1 -s -k -H 'Authorization: Bearer %s' %s", bearer, url)
-	output, err := e2eoutput.RunHostCmd(ns, execPodName, cmd)
-	if err != nil {
-		return "", fmt.Errorf("host command failed: %v\n%s", err, output)
-	}
-	return output, nil
 }
 
 func getRandomString() string {
@@ -259,6 +250,30 @@ func createCertificate(oc *exutil.CLI) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
+}
+
+// Check and verify issued certificate's subject CN (Common Name) content.
+func verifyCertificate(oc *exutil.CLI, certName string, namespace string) {
+	e2e.Logf("Check if certificate secret is non-null.")
+	secretName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("certificate", certName, "-n", namespace, "-o=jsonpath={.spec.secretName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	tlsCrtData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", namespace, "-o=jsonpath={.data.tls\\.crt}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(tlsCrtData).NotTo(o.BeEmpty(), fmt.Sprintf("secret \"%v\"'s \"tls.crt\" field is empty.", secretName))
+
+	commonName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("certificate", certName, "-n", namespace, "-o=jsonpath={.spec.commonName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(commonName) != 0 {
+		e2e.Logf("Verify if certificate's subject CN is correct.")
+		tlsCrtBytes, _ := base64.StdEncoding.DecodeString(tlsCrtData)
+		block, _ := pem.Decode(tlsCrtBytes)
+		parsedCert, _ := x509.ParseCertificate(block.Bytes)
+		if parsedCert.Subject.CommonName != commonName {
+			e2e.Failf("Incorrect subject CN: %v found in issued certificate", parsedCert.Subject.CommonName)
+		}
+	} else {
+		e2e.Logf("Skip content verification because subject CN isn't specificed.")
+	}
 }
 
 // Skip case if HTTP and HTTPS route are unreachable.

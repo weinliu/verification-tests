@@ -129,24 +129,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("certificate is wrong: %v", statusErr))
 
-		g.By("Check the certificate content.")
-		defer func() {
-			e2e.Logf("Remove the secret_certificate directory")
-			_, errCert := exec.Command("bash", "-c", "rm -rf oc_extract_secret_certificate-from-dns01").Output()
-			o.Expect(errCert).NotTo(o.HaveOccurred())
-		}()
-		dirname := "oc_extract_secret_certificate-from-dns01"
-		_, err = exec.Command("bash", "-c", "mkdir "+dirname).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The dir: %s created successfully...!!\n", dirname)
-		_, err = oc.Run("extract").Args("secret/certificate-from-dns01", "--to="+dirname).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		opensslCmd := fmt.Sprintf(`openssl x509 -noout -text -in %s/tls.crt`, dirname)
-		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
-		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), dnsName) || err != nil {
-			e2e.Failf("The certificate was failed issued by Let's Encrypt with SAN(Subject Alternative Name).")
-		}
+		e2e.Logf("Check and verify issued certificate content")
+		verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
 	})
 
 	// author: geliu@redhat.com
@@ -237,28 +221,9 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
-		g.By("Check certificate secret.")
-		output, err = oc.Run("get").Args("secret", "cert-test-http01").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Get secret/cert-test-http01 output: %v", output)
-		g.By("Verify the certificate content.")
-		defer func() {
-			e2e.Logf("Remove certificate dir/files.")
-			_, errCert := exec.Command("bash", "-c", "rm -rf oc_extract_secret_certificate-62063").Output()
-			o.Expect(errCert).NotTo(o.HaveOccurred())
-		}()
-		dirname := "oc_extract_secret_certificate-62063"
-		_, err = exec.Command("bash", "-c", "mkdir "+dirname).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The dir: %s created successfully...!!\n", dirname)
-		_, err = oc.Run("extract").Args("secret/cert-test-http01", "--to="+dirname).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		opensslCmd := fmt.Sprintf(`openssl x509 -noout -text -in %s/tls.crt`, dirname)
-		ssloutput, sslerr := exec.Command("bash", "-c", opensslCmd).Output()
-		o.Expect(sslerr).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(ssloutput), dnsName) || err != nil {
-			e2e.Failf("The certificate was failed issued by Let's Encrypt with SAN(Subject Alternative Name).")
-		}
+
+		e2e.Logf("Check and verify issued certificate content")
+		verifyCertificate(oc, "cert-test-http01", oc.Namespace())
 
 		// Low-63486-When a Certificate CR is deleted its certificate secret should not be deleted
 		e2e.Logf("Delete certification for ocp-63486.\n")
@@ -277,6 +242,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		createIssuer(oc)
 		e2e.Logf("Create certificate.\n")
 		createCertificate(oc)
+		e2e.Logf("Check issued certificate.\n")
+		verifyCertificate(oc, "default-selfsigned-cert", oc.Namespace())
 
 		e2e.Logf("Delete subscription and csv")
 		csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "-o=jsonpath={.status.installedCSV}").Output()
@@ -494,6 +461,9 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate status is wrong.")
+
+		e2e.Logf("Check and verify issued certificate content")
+		verifyCertificate(oc, "certificate-hosted-zone-overlapped", oc.Namespace())
 	})
 	g.It("ROSA-Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
 		g.By("Check proxy env.")
@@ -634,6 +604,9 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
+
+		e2e.Logf("Check and verify issued certificate content")
+		verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
 	})
 
 	// author: geliu@redhat.com
