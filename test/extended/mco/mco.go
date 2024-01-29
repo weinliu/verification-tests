@@ -476,31 +476,35 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-High-43405-High-50508-node drain is not needed for mirror config change in container registry. Nodes not tainted. [Disruptive]", func() {
+		logger.Infof("Removing all MCO pods to clean the logs.")
+		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
 		exutil.By("Create image content source policy for mirror changes")
 		icspName := "repository-mirror"
 		icspTemplate := generateTemplateAbsolutePath(icspName + ".yaml")
 		icsp := ImageContentSourcePolicy{name: icspName, template: icspTemplate}
 		defer icsp.delete(oc)
 		icsp.create(oc)
+		logger.Infof("OK!\n")
 
 		exutil.By("Check registry changes in the worker node")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		registryOut, err := workerNode.DebugNodeWithChroot("cat", "/etc/containers/registries.conf")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(registryOut).Should(
+		o.Expect(workerNode.DebugNodeWithChroot("cat", "/etc/containers/registries.conf")).Should(
 			o.And(
 				o.ContainSubstring(`pull-from-mirror = "digest-only"`),
 				o.ContainSubstring("example.com/example/ubi-minimal"),
 				o.ContainSubstring("example.io/example/ubi-minimal")))
+		logger.Infof("OK!\n")
 
 		exutil.By("Check MCD logs to make sure drain is skipped")
-		podLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, workerNode.GetMachineConfigDaemon(), "drain")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		logger.Infof("Pod logs to skip node drain :\n %v", podLogs)
-		o.Expect(podLogs).Should(
+		o.Expect(exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, workerNode.GetMachineConfigDaemon(), "")).Should(
 			o.And(
 				o.ContainSubstring("/etc/containers/registries.conf: changes made are safe to skip drain"),
-				o.ContainSubstring("Changes do not require drain, skipping")))
+				o.ContainSubstring("Changes do not require drain, skipping"),
+				o.ContainSubstring("crio config reloaded successfully!"),
+				o.ContainSubstring("skipping reboot")))
+		logger.Infof("OK!\n")
 
 		exutil.By("Check that worker nodes are not cordoned after applying the MC")
 		workerMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
@@ -511,6 +515,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			o.Expect(node.IsCordoned()).To(o.BeFalse(), "% is tainted and cordoned. There should be no cordoned worker node after applying the configuration.",
 				node.GetName())
 		}
+		logger.Infof("OK!\n")
 
 		exutil.By("Check that master nodes have only the NoSchedule taint after applying the the MC")
 		masterMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
@@ -523,7 +528,25 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			o.Expect(taint).Should(o.MatchJSON(expectedTaint), "%s is tainted. The only taint allowed in master nodes is NoSchedule.",
 				node.GetName())
 		}
+		logger.Infof("OK!\n")
 
+		exutil.By("Delete the ImageContentSourcePoolicy resource")
+		icsp.delete(oc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the changes in the registry config were removed")
+		o.Expect(workerNode.DebugNodeWithChroot("cat", "/etc/containers/registries.conf")).ShouldNot(
+			o.Or(
+				o.ContainSubstring("example.com/example/ubi-minimal"),
+				o.ContainSubstring("example.io/example/ubi-minimal")))
+		logger.Infof("OK!\n")
+
+		exutil.By("Check MCD logs to make sure drain is executed, crio restarted and reboot skipped")
+		o.Expect(exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, workerNode.GetMachineConfigDaemon(), "")).Should(
+			o.And(
+				o.ContainSubstring("requesting cordon and drain via annotation to controller"),
+				o.MatchRegexp("(?s)drain complete.*crio config reloaded successfully.*skipping reboot")))
+		logger.Infof("OK!\n")
 	})
 
 	g.It("Author:rioliu-NonPreRelease-Longduration-High-42390-Critical-45318-add machine config without ignition version. Block the MCO upgrade rollout if any of the pools are Degraded [Serial]", func() {
