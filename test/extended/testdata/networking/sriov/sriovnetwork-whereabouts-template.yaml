@@ -15,10 +15,14 @@ objects:
         "range":"10.30.0.0/30"
       }
     vlan: "${{VLANID}}"
+    vlanQoS: "${{VLANQOS}}"
     spoofChk: ${SPOOFCHK}
     trust: ${TRUST}
     resourceName: ${SRIOVNETPOLICY}
     networkNamespace: ${TARGETNS}
+    linkState: ${LINKSTATE}
+    minTxRate: "${{MINTXRATE}}"
+    maxTxRate: "${{MAXTXRATE}}"
 
 parameters:
 - name: SRIOVNETNAME 
@@ -26,9 +30,14 @@ parameters:
 - name: SRIOVNETPOLICY
 - name: NAMESPACE
 - name: VLANID
+- name: VLANQOS
 - name: SPOOFCHK
   value: "on"
 - name: TRUST
   value: "off"
+- name: LINKSTATE
+- name: MINTXRATE
+- name: MAXTXRATE
+
 
 

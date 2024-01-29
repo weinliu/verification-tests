@@ -10,7 +10,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-networking] SDN makesriovbasic", func() {
+var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc                  = exutil.NewCLI("sriov-"+getRandomString(), exutil.KubeConfigPath())
@@ -34,10 +34,19 @@ var _ = g.Describe("[sig-networking] SDN makesriovbasic", func() {
 	g.BeforeEach(func() {
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 		if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
-			g.Skip("This case will only run on rdu1 or rdu2 dual stack cluster. , skip for other envrionment!!!")
+			g.Skip("This case will only run on rdu1/rdu2 cluster. , skip for other envrionment!!!")
 		}
 		exutil.By("check the sriov operator is running")
 		chkSriovOperatorStatus(oc, sriovOpNs)
+	})
+	g.AfterEach(func() {
+		//after each case finished testing.  remove sriovnodenetworkpolicy CR
+		var policys []string
+		for _, items := range testData {
+			policys = append(policys, items.Name)
+
+		}
+		rmSriovNetworkPolicy(oc, strings.Join(policys, " "), sriovOpNs)
 	})
 
 	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-25959-Test container with spoofchk is on [Disruptive]", func() {
@@ -200,6 +209,136 @@ var _ = g.Describe("[sig-networking] SDN makesriovbasic", func() {
 				sriovnetwork.createSriovNetwork(oc)
 
 				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "trust on")
+
+			}()
+		}
+	})
+
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-25963-Test container with VF and set vlan minTxRate maxTxRate [Disruptive]", func() {
+		var caseID = "25963-"
+
+		for _, data := range testData {
+			data := data
+
+			//x710 do not support minTxRate for now
+			if data.Name == "x710" || data.Name == "bcm57414" || data.Name == "bcm57508" {
+				continue
+			}
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					vlanId:           100,
+					vlanQoS:          2,
+					minTxRate:        40,
+					maxTxRate:        100,
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "vlan 100, qos 2, tx rate 100 (Mbps), max_tx_rate 100Mbps, min_tx_rate 40Mbps")
+
+			}()
+		}
+	})
+
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-25961-Test container with VF and set linkState is auto [Disruptive]", func() {
+		var caseID = "25961-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					linkState:        "auto",
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "link-state auto")
+
+			}()
+		}
+	})
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-71006-Test container with VF and set linkState is enable [Disruptive]", func() {
+		var caseID = "71006-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					linkState:        "enable",
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "link-state enable")
 
 			}()
 		}

@@ -899,7 +899,7 @@ func createResourceFromFile(oc *exutil.CLI, ns, file string) {
 }
 
 func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
-	return wait.Poll(15*time.Second, 10*time.Minute, func() (bool, error) {
+	return wait.Poll(5*time.Second, 5*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
 		e2e.Logf("the Ready status of pod is %v", status)
 		if err != nil || status == "" {
@@ -915,7 +915,7 @@ func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
 }
 
 func waitForPodWithLabelGone(oc *exutil.CLI, ns, label string) error {
-	errWait := wait.Poll(15*time.Second, 10*time.Minute, func() (bool, error) {
+	errWait := wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
 		podsOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
 		if strings.Contains(podsOutput, "NotFound") || strings.Contains(podsOutput, "No resources found") {
 			e2e.Logf("the resource is deleted already")

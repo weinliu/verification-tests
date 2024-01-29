@@ -45,6 +45,10 @@ type sriovNetwork struct {
 	spoolchk         string
 	trust            string
 	vlanId           int
+	linkState        string
+	minTxRate        int
+	maxTxRate        int
+	vlanQoS          int
 }
 
 type sriovTestPod struct {
@@ -204,7 +208,7 @@ func (pod *sriovPod) waitForPodReady(oc *exutil.CLI) {
 
 // Wait for sriov network policy ready
 func waitForSriovPolicyReady(oc *exutil.CLI, ns string) {
-	err := wait.Poll(30*time.Second, 30*time.Minute, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 30*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworknodestates", "-n", ns, "-o=jsonpath={.items[*].status.syncStatus}").Output()
 		e2e.Logf("the status of sriov policy is %v", status)
 		if err != nil {
@@ -268,8 +272,17 @@ func (sriovPolicy *sriovNetworkNodePolicy) createPolicy(oc *exutil.CLI) {
 }
 
 func (sriovNetwork *sriovNetwork) createSriovNetwork(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNetwork.template, "-p", "NAMESPACE="+sriovNetwork.namespace, "SRIOVNETNAME="+sriovNetwork.name, "TARGETNS="+sriovNetwork.networkNamespace, "SRIOVNETPOLICY="+sriovNetwork.resourceName, "SPOOFCHK="+sriovNetwork.spoolchk, "TRUST="+sriovNetwork.trust, "VLANID="+strconv.Itoa(sriovNetwork.vlanId))
+	err := wait.Poll(2*time.Second, 20*time.Second, func() (bool, error) {
+		if sriovNetwork.spoolchk == "" {
+			sriovNetwork.spoolchk = "off"
+		}
+		if sriovNetwork.trust == "" {
+			sriovNetwork.trust = "on"
+		}
+		if sriovNetwork.linkState == "" {
+			sriovNetwork.linkState = "disable"
+		}
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNetwork.template, "-p", "NAMESPACE="+sriovNetwork.namespace, "SRIOVNETNAME="+sriovNetwork.name, "TARGETNS="+sriovNetwork.networkNamespace, "SRIOVNETPOLICY="+sriovNetwork.resourceName, "SPOOFCHK="+sriovNetwork.spoolchk, "TRUST="+sriovNetwork.trust, "LINKSTATE="+sriovNetwork.linkState, "MINTXRATE="+strconv.Itoa(sriovNetwork.minTxRate), "MAXTXRATE="+strconv.Itoa(sriovNetwork.maxTxRate), "VLANID="+strconv.Itoa(sriovNetwork.vlanId), "VLANQOS="+strconv.Itoa(sriovNetwork.vlanQoS))
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -280,7 +293,7 @@ func (sriovNetwork *sriovNetwork) createSriovNetwork(oc *exutil.CLI) {
 }
 
 func (sriovTestPod *sriovTestPod) createSriovTestPod(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+	err := wait.Poll(2*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovTestPod.template, "-p", "PODNAME="+sriovTestPod.name, "SRIOVNETNAME="+sriovTestPod.networkName, "NAMESPACE="+sriovTestPod.namespace)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -425,7 +438,6 @@ func initVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string) bo
 		return false
 	}
 	//defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
-	e2e.Logf("note:here sriovnodenetworkpolicy will not be removed after this cases because it need to reboot server and used for all related cases, and this should not affect the whole cluster config and other component testing,  if other test cases failed due to this policy but pass without this policy , please consider it's product bug")
 	sriovPolicy.createPolicy(oc)
 	waitForSriovPolicyReady(oc, ns)
 	return true
