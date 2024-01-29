@@ -116,6 +116,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial]", func() {
 		// TODO: remove this skip when the builds v1 API will support producing manifest list images
 		architecture.SkipArchitectures(oc, architecture.MULTI)
+		if !checkImagePruners(oc) {
+			g.Skip("This cluster does't contain imagepruners, skip the test.")
+		}
 		g.By("Setup imagepruner")
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":3,"keepYoungerThanDuration":null,"schedule":""}}`, "--type=merge").Execute()
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":0,"keepYoungerThanDuration":"0s","schedule": "* * * * *"}}`, "--type=merge").Execute()

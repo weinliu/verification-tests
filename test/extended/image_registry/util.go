@@ -1351,3 +1351,13 @@ func GetMirrorRegistry(oc *exutil.CLI) (registry string) {
 	}
 	return registry
 }
+
+func checkImagePruners(oc *exutil.CLI) bool {
+	impr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagepruners").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(impr, "No resources found") {
+		e2e.Logf("there is no imagepruners in this cluster")
+		return false
+	}
+	return true
+}
