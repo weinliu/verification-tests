@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1252,6 +1253,8 @@ func clientCurl(tokenValue string, url string) string {
 	timeoutDuration := 3 * time.Second
 	var bodyString string
 
+	proxyURL := getProxyURL()
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		e2e.Failf("error creating request: %v", err)
@@ -1259,6 +1262,7 @@ func clientCurl(tokenValue string, url string) string {
 
 	req.Header.Set("Authorization", "Bearer "+tokenValue)
 	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
@@ -1493,4 +1497,20 @@ func runSSHCommand(server, user string, commands ...string) (string, error) {
 
 	sshClient := exutil.SshClient{User: user, Host: server, Port: 22, PrivateKey: sshkey}
 	return sshClient.RunOutput(fullCommand)
+}
+
+func getProxyURL() *url.URL {
+	// Prefer https_proxy, fallback to http_proxy
+	proxyURLString := os.Getenv("https_proxy")
+	if proxyURLString == "" {
+		proxyURLString = os.Getenv("http_proxy")
+	}
+	if proxyURLString == "" {
+		return nil
+	}
+	proxyURL, err := url.Parse(proxyURLString)
+	if err != nil {
+		e2e.Failf("error parsing proxy URL: %v", err)
+	}
+	return proxyURL
 }
