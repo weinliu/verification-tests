@@ -1565,7 +1565,8 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 
 	defer g.GinkgoRecover()
 	var (
-		oc = exutil.NewCLI("vpa-operator", exutil.KubeConfigPath())
+		oc                  = exutil.NewCLI("vpa-operator", exutil.KubeConfigPath())
+		buildPruningBaseDir = exutil.FixturePath("testdata", "node")
 	)
 	g.BeforeEach(func() {
 		exutil.SkipMissingQECatalogsource(oc)
@@ -1574,6 +1575,26 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 	// author: weinliu@redhat.com
 	g.It("DEPRECATED-StagerunBoth-Author:weinliu-High-60991-VPA Install", func() {
 		g.By("VPA operator is installed successfully")
+	})
+	// author: weinliu@redhat.com
+	g.It("Author:weinliu-High-70961-Allow cluster admins to specify VPA API client rates and memory-saver [Serial]", func() {
+		g.By("VPA operator is installed successfully")
+		exutil.By("Create a new VerticalPodAutoscalerController ")
+		vpaNs := "openshift-vertical-pod-autoscaler"
+		vpacontroller := filepath.Join(buildPruningBaseDir, "vpacontroller-70961.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+vpacontroller, "-n", vpaNs).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+vpacontroller, "-n", vpaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Check VPA operator's args")
+		recommenderArgs, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("VerticalPodAutoscalerController", "vpa-70961", "-n", "openshift-vertical-pod-autoscaler", "-o=jsonpath={.spec.deploymentOverrides.recommender.container.args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect("[\"--kube-api-qps=20.0\",\"--kube-api-burst=60.0\",\"--memory-saver=true\"]").Should(o.Equal(recommenderArgs))
+		admissioinArgs, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("VerticalPodAutoscalerController", "vpa-70961", "-n", "openshift-vertical-pod-autoscaler", "-o=jsonpath={.spec.deploymentOverrides.admission.container.args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect("[\"--kube-api-qps=30.0\",\"--kube-api-burst=40.0\"]").Should(o.Equal(admissioinArgs))
+		updaterArgs, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("VerticalPodAutoscalerController", "vpa-70961", "-n", "openshift-vertical-pod-autoscaler", "-o=jsonpath={.spec.deploymentOverrides.updater.container.args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect("[\"--kube-api-qps=20.0\",\"--kube-api-burst=80.0\"]").Should(o.Equal(updaterArgs))
 	})
 })
 
