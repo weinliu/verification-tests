@@ -1207,9 +1207,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	})
 
 	//author: evakhoni@redhat.com
-	g.It("Longduration-NonPreRelease-Author:evakhoni-Medium-48247-Prometheus is able to scrape metrics from the CVO after rotation of the signer ca in openshift-service-ca [Disruptive][Flaky]", func() {
-		// currently OCPBUGS-15827 is causing cluster operators degradation following signing-key deletion.
-		//setting Flaky temporary until OCPBUGS-15827 is resolved or a workaround implemented
+	g.It("Longduration-NonPreRelease-Author:evakhoni-Medium-48247-Prometheus is able to scrape metrics from the CVO after rotation of the signer ca in openshift-service-ca [Disruptive]", func() {
 		exutil.By("Check for alerts Before signer ca rotation.")
 		alertCVODown := getAlert(oc, ".labels.alertname == \"ClusterVersionOperatorDown\"")
 		alertTargetDown := getAlert(oc, ".labels.alertname == \"TargetDown\" and .labels.service == \"cluster-version-operator\"")
