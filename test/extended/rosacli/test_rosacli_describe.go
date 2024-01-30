@@ -73,9 +73,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Decribe resources",
 			if jsonData.DigBool("multi_az") {
 				o.Expect(CD.MultiAZ).To(o.Equal(strconv.FormatBool(jsonData.DigBool("multi_az"))))
 			} else {
-				o.Expect(CD.Nodes[0]["Control plane"]).To(o.Equal(strconv.FormatFloat(jsonData.DigFloat("nodes", "master"), 'f', -1, 64)))
-				o.Expect(CD.Nodes[1]["Infra"]).To(o.Equal(strconv.FormatFloat(jsonData.DigFloat("nodes", "infra"), 'f', -1, 64)))
-				o.Expect(CD.Nodes[2]["Compute"]).To(o.Equal(strconv.FormatFloat(jsonData.DigFloat("nodes", "compute"), 'f', -1, 64)))
+				o.Expect(CD.Nodes[0]["Control plane"]).To(o.Equal(int(jsonData.DigFloat("nodes", "master"))))
+				o.Expect(CD.Nodes[1]["Infra"]).To(o.Equal(int(jsonData.DigFloat("nodes", "infra"))))
+				o.Expect(CD.Nodes[2]["Compute"]).To(o.Equal(int(jsonData.DigFloat("nodes", "compute"))))
 			}
 		}
 
