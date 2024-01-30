@@ -59,7 +59,7 @@ class SummaryClient:
                 "Network_Observability":"@no-qe-team ",
                 "DR_Testing":"@geliu",
                 "CFE":"@cfe-qe-team",
-                "User_Interface_Cypress": "@ui-qe-team",
+                "User_Interface_Cypress": "@ui-ocp-qe-team",
                 "Insights": "@jfula",
                 "Sample":"@Jitendar Singh"
             }
