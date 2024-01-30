@@ -1668,6 +1668,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-33660-Verify the differences in nodes from the same role could be handled [Serial]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: Skip test for SNO/Compact clusters")
+		}
 
 		var (
 			csuiteD = complianceSuiteDescription{
