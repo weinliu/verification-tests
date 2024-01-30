@@ -1511,24 +1511,20 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Low-30088-User can not deploy ThanosRuler CRs in user namespaces [Serial]", func() {
-		var (
-			ns                string
-			output            string
-			deployThanosRuler = filepath.Join(monitoringBaseDir, "deployThanosRuler.yaml")
-		)
 		g.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("deploy ThanosRuler under namespace as a common user (non-admin)")
+		g.By("create namespace as a common user (non-admin)")
 		oc.SetupProject()
-		ns = oc.Namespace()
-		oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Execute()
+		ns := oc.Namespace()
 
-		g.By("check ThanosRuler is not created")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ThanosRuler", "user-workload", "-n", ns).Output()
-		o.Expect(output).To(o.ContainSubstring("thanosrulers.monitoring.coreos.com \"user-workload\" not found"))
-
+		g.By("check ThanosRuler can not be created")
+		output, _ := oc.WithoutNamespace().Run("auth").Args("can-i", "create", "thanosrulers", "-n", ns).Output()
+		e2e.Logf("check current user:")
+		e2e.Logf(oc.Run("whoami").Args("").Output())
+		e2e.Logf("Permission query results: %v", output)
+		o.Expect(output).To(o.ContainSubstring("no"))
 	})
 
 	//author: tagao@redhat.com
