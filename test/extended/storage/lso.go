@@ -1100,6 +1100,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:chaoyang-Medium-69955-[LSO] localvolume disk is force wipe when forceWipeDevicesAndDestroyAllData is true", func() {
 
+		// The feature needs the LSO csv version above 4.15 while current some CI configurations
+		// not enabled the qe-catalogsource still used the 4.14 packages not support the feature
+		// TODO: After 4.15 released we could consider remove this condition
+		if myLso.source != qeCatalogSource && myLso.channel != "preview" {
+			g.Skip("Skipped: the test cluster doesn't have the latest LSO packages")
+		}
+
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
