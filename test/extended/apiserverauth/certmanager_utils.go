@@ -132,7 +132,7 @@ func getAzureCloudName(oc *exutil.CLI) string {
 // create cert manager
 func createCertManagerOperator(oc *exutil.CLI) {
 	e2e.Logf("Prepare cert manager operator.\n")
-	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	operatorNamespace := "cert-manager-operator"
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
@@ -214,7 +214,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 // create selfsigned issuer
 func createIssuer(oc *exutil.CLI) {
 	e2e.Logf("Create selfsigned issuer in ns scope created in last step.")
-	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
 	err := oc.Run("create").Args("-f", issuerFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -234,7 +234,7 @@ func createIssuer(oc *exutil.CLI) {
 // create certificate using selfsigned issuer
 func createCertificate(oc *exutil.CLI) {
 	e2e.Logf("As the normal user, create certificate.")
-	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned.yaml")
 	err := oc.Run("create").Args("-f", certFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())

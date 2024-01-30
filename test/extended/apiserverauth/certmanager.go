@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "cluster-issuer-acme-dns01-route53.yaml")
 		sedCmd := fmt.Sprintf(`sed -i 's/AWS_ACCESS_KEY_ID/%s/g' %s`, accessKeyID, clusterIssuerFile)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Login with normal user and create new ns.")
 		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
 		err = oc.Run("create").Args("-f", issuerHTTP01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -361,7 +361,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		o.Expect(errSec).NotTo(o.HaveOccurred())
 
 		g.By("Prepare a clusterissuer which uses AWS hosted zone qe.devcluster.openshift.com as target hosted zone.")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-overlapped-zone.yaml")
 		f, err := ioutil.ReadFile(clusterIssuerFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -494,7 +494,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		g.By("Login with normal user and create issuers.\n")
 		oc.SetupProject()
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "cluster-issuer-acme-dns01-route53.yaml")
 		f, err := ioutil.ReadFile(clusterIssuerFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -523,7 +523,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		// Hard code dns zone to be "qe1.devcluster.openshift.com" temporarily.
 		// TODO: when having time in future, change to be: get apps.clustername.yyy...com, trim "apps.clustername.", let dnsZone = yyy...com, implement AWS API for `aws route53 list-hosted-zones | jq -r '.HostedZones[] | select(.Name=="yyyy...com.") | .Id'` to get the hosted zone ID, replace clusterissuer YAML file's hostedZoneID. So even in AWS env not using QE's AWS account, this case can still pass.
 		dnsZone := "qe1.devcluster.openshift.com"
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certDNS01File := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
 		f, err = ioutil.ReadFile(certDNS01File)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -612,7 +612,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	// author: geliu@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:geliu-Low-63500-Multiple solvers mixed with http01 and dns01 in ACME issuer should work well", func() {
 		g.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01.")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-multiple-solvers.yaml")
 		defer func() {
 			e2e.Logf("Delete clusterissuers.")
@@ -637,7 +637,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		g.By("As normal user, create below 3 certificates in later steps with above clusterissuer.")
 		e2e.Logf("Create cert, cert-match-test-1.")
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certFile1 := filepath.Join(buildPruningBaseDir, "cert-match-test-1.yaml")
 		err = oc.Run("create").Args("-f", certFile1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -659,7 +659,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Create cert, cert-match-test-2.")
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certFile2 := filepath.Join(buildPruningBaseDir, "cert-match-test-2.yaml")
 		err = oc.Run("create").Args("-f", certFile2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -681,7 +681,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Create cert, cert-match-test-3.")
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth")
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certFile3 := filepath.Join(buildPruningBaseDir, "cert-match-test-3.yaml")
 		err = oc.Run("create").Args("-f", certFile3).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
