@@ -157,8 +157,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: rdeore@redhat.com
-	// OCP-14353 [NFS] volume mounts should be cleaned up in previous node after Pod is reschedule
-	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-14353-[NFS] volume mounts should be cleaned up in previous node after Pod is reschedule [Disruptive]", func() {
+	// OCP-14353 [NFS] volume mounts should be cleaned up in previous node after Pod is rescheduled
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-14353-[NFS] volume mounts should be cleaned up in previous node after Pod is rescheduled", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			scName = "nfs-sc-" + getRandomString()
@@ -169,13 +169,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				setPersistentVolumeStorageClassName(scName), setPersistentVolumeReclaimPolicy("Delete"), setPersistentVolumeCapacity("2Gi"))
 		)
 
-		nfsPodName := svcNfsServer.deploy.getPodList(oc)[0]
-		nfsNodeName := getNodeNameByPod(oc, svcNfsServer.deploy.namespace, nfsPodName)
-		nfsNodeList := []string{nfsNodeName}
 		schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
-		if len(schedulableLinuxWorkers) < 3 {
-			g.Skip("Skip: This test needs at least 3 worker nodes, test cluster has less than 3 schedulable workers!")
+		if len(schedulableLinuxWorkers) < 2 {
+			g.Skip("Skip: This test needs at least 2 worker nodes, test cluster has less than 2 schedulable workers!")
 		}
+		tempNode := []string{schedulableLinuxWorkers[0].name}
 
 		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject()
@@ -189,34 +187,31 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		exutil.By("#. Create deployment consume the created pvc with nodeAffinity Not In nfs-server node and wait for the deployment ready")
-		dep.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", nfsNodeList)
+		exutil.By("#. Create deployment consume the created pvc with nodeAffinity and wait for the deployment ready")
+		dep.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", tempNode)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
 		exutil.By("#. Check the pods can read/write data inside volume")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
-		exutil.By("# Run drain cmd to drain the node on which the deployment's pod is located")
+		exutil.By("# Run patch cmd to update the nodeAffinity value on deployment's pod to get rescheduled to other node")
 		volName := pvc.getVolumeName(oc)
 		originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
-		drainSpecificNode(oc, originNodeName)
-		defer uncordonSpecificNode(oc, originNodeName)
+		patchPath := "{\"spec\":{\"template\":{\"spec\":{\"affinity\":{\"nodeAffinity\":{\"requiredDuringSchedulingIgnoredDuringExecution\":{\"nodeSelectorTerms\":[{\"matchExpressions\":[{\"key\":\"kubernetes.io/hostname\",\"operator\":\"NotIn\",\"values\":[\"" + originNodeName + "\"]}]}]}}}}}}}"
+		patchResourceAsAdmin(oc, dep.namespace, "deployment/"+dep.name, patchPath, "merge")
 
 		exutil.By("# Wait for the deployment become ready again")
 		dep.waitReady(oc)
 
-		exutil.By("# Check testdata still in the volume")
+		exutil.By("# Check test data still exists in the volume")
 		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("storage test"))
 
-		exutil.By("# Check the deployment's pod schedule to another ready node")
+		exutil.By("# Check the deployment's pod scheduled to another ready node")
 		newNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		o.Expect(originNodeName).NotTo(o.Equal(newNodeName))
-
-		exutil.By("# Bring back the drained node")
-		uncordonSpecificNode(oc, originNodeName)
 
 		exutil.By("#. Check the volume umount from the origin node")
 		checkVolumeNotMountOnNode(oc, volName, originNodeName)
