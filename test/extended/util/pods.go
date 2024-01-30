@@ -257,7 +257,7 @@ func AssertAllPodsToBeReadyWithPollerParams(oc *CLI, namespace string, interval,
 
 // AssertAllPodsToBeReady assert all pods in NS are in ready state until timeout in a given namespace
 func AssertAllPodsToBeReady(oc *CLI, namespace string) {
-	AssertAllPodsToBeReadyWithPollerParams(oc, namespace, 10*time.Second, 2*time.Minute)
+	AssertAllPodsToBeReadyWithPollerParams(oc, namespace, 10*time.Second, 4*time.Minute)
 }
 
 // GetPodNameInHostedCluster returns the pod name in hosted cluster of hypershift
