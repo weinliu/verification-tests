@@ -322,4 +322,166 @@ var _ = g.Describe("[sig-networking] SDN OVN hypershift", func() {
 
 	})
 
+	g.It("HyperShiftMGMT-NonPreRelease-Longduration-ConnectedOnly-Author:jechen-High-70261-Network Connectivity is not broken even if BM Kubevirt VM migration fails. [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		migrationTemplate := filepath.Join(buildPruningBaseDir, "kubevirt-live-migration-job-template.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		ns1 := "70261-test-ns1-on-hostedcluster" //namespace for hosted cluster has to be all lowercased, that is why hostedcluster is used here, instead of hostedCluster
+		ns2 := "70261-test-ns2-on-hostedcluster"
+
+		hyperShiftMgmtNS := hostedclusterNS + "-" + hostedClusterName
+		e2e.Logf("hyperShiftMgmtNS: %v\n", hyperShiftMgmtNS)
+
+		mgmtClusterPlatform := exutil.CheckPlatform(oc)
+		e2e.Logf("mgmt cluster platform: %v\n", mgmtClusterPlatform)
+
+		nestedClusterPlatform := exutil.CheckPlatform(oc.AsAdmin().AsGuestKubeconf())
+		e2e.Logf("hosted cluster platform: %v\n", nestedClusterPlatform)
+
+		if !strings.Contains(mgmtClusterPlatform, "baremetal") || !strings.Contains(nestedClusterPlatform, "kubevirt") {
+			g.Skip("Live migration can only be performed on Baremetal Kubevirt Hypershift, skip all other platforms")
+		}
+
+		exutil.By("1. Get node list on hosted cluster\n")
+		allNodeListOnHostedCluster, err := exutil.GetSchedulableLinuxWorkerNodes(oc.AsAdmin().AsGuestKubeconf())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		origScheduleableWorkerNodeCount := len(allNodeListOnHostedCluster)
+
+		nodePoolName := exutil.GetNodePoolNamesbyHostedClusterName(oc, hostedClusterName, hostedclusterNS)
+		o.Expect(len(nodePoolName)).ShouldNot(o.Equal(0))
+		nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeNames)).ShouldNot(o.Equal(0))
+		e2e.Logf("The nodes in nodepool %v is:\n%v", nodePoolName[0], nodeNames)
+
+		exutil.By("2. Get the first VMI on mgmt cluster for live migration, check it is live migratable \n")
+		vmi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("vmi", "-n", hyperShiftMgmtNS, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("vmi", vmi, "-n", hyperShiftMgmtNS, "-o=jsonpath={.status.conditions[*].type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("status: %v\n", status)
+		o.Expect(strings.Contains(status, "Ready")).To(o.BeTrue())
+		o.Expect(strings.Contains(status, "LiveMigratable")).To(o.BeTrue())
+
+		exutil.By("3. Before perform live migration, create test project and test pod on the node that will involve live migration\n")
+		defer oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("delete").Args("project", ns1, "--ignore-not-found=true").Execute()
+		oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns1).Execute()
+		exutil.SetNamespacePrivileged(oc.AsGuestKubeconf(), ns1)
+
+		testPod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  vmi,
+			template:  pingPodNodeTemplate,
+		}
+
+		defer oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("delete").Args("pod", testPod1.name, "-n", testPod1.namespace, "--ignore-not-found=true").Execute()
+		testPod1.createPingPodNode(oc.AsGuestKubeconf())
+		waitPodReady(oc.AsGuestKubeconf(), testPod1.namespace, testPod1.name)
+
+		exutil.By("4. Delibrately set kubevirt.io/func-test-virt-launcher-fail-fast=true on the VMI that will be performed live migration so its migration will fail\n")
+		defer oc.AsAdmin().WithoutNamespace().Run("annotate").Args("vmi", vmi, "-n", hyperShiftMgmtNS, "kubevirt.io/func-test-virt-launcher-fail-fast=false", "--overwrite").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("vmi", vmi, "-n", hyperShiftMgmtNS, "kubevirt.io/func-test-virt-launcher-fail-fast=true").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. Perform live migration on the VMI \n")
+		migrationjob := migrationDetails{
+			name:                   "migration-job-70261",
+			template:               migrationTemplate,
+			namespace:              hyperShiftMgmtNS,
+			virtualmachinesintance: vmi,
+		}
+
+		defer migrationjob.deleteMigrationJob(oc)
+		migrationjob.createMigrationJob(oc)
+
+		exutil.By("6. Check live migration status, live migration is expected to fail due to annoation from step 4 \n")
+		o.Eventually(func() bool {
+			migrationStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("vmim", migrationjob.name, "-n", hyperShiftMgmtNS, "-o=jsonpath={.status.phase}").Output()
+			return err == nil && migrationStatus == "Failed"
+		}, "300s", "10s").Should(o.BeTrue(), "Live migration did not fail as expected!!")
+
+		exutil.By("7. All hosted cluster nodes should remain in Ready state 2 minutes after attempted migration, same number of hosted cluster nodes remain in Ready state \n")
+		o.Consistently(func() int {
+			nodeList, err := exutil.GetSchedulableLinuxWorkerNodes(oc.AsAdmin().AsGuestKubeconf())
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return (len(nodeList))
+		}, 120*time.Second, 10*time.Second).Should(o.Equal(origScheduleableWorkerNodeCount))
+
+		exutil.By("8. Check operators state on management cluster and hosted cluster, they should all be in healthy state \n")
+		checkAllClusterOperatorsState(oc, 10, 1)
+		checkAllClusterOperatorsState(oc.AsGuestKubeconf(), 10, 1)
+
+		exutil.By("9. Check health of OVNK on management cluster \n")
+		checkOVNKState(oc)
+
+		exutil.By("10. Create a second test project and test pod on a different node of the hosted cluster after attempted live migration\n")
+
+		// remove the node the involves attempted live migration from node list, get the other nodes from the hosted cluster
+		var nodeLeft []string
+		for i, v := range nodeNames {
+			if v == vmi {
+				nodeLeft = append(nodeNames[:i], nodeNames[i+1:]...)
+				break
+			}
+		}
+		e2e.Logf("\n Get other nodes from node list of the hosted cluster: %v\n", nodeLeft)
+
+		defer oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("delete").Args("project", ns2, "--ignore-not-found=true").Execute()
+		oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns2).Execute()
+		exutil.SetNamespacePrivileged(oc.AsGuestKubeconf(), ns2)
+
+		var testPod2Node string
+		if len(nodeLeft) < 1 {
+			e2e.Logf("There is no other node on the hosted cluster, create testPod2 on same VMI node")
+			testPod2Node = vmi
+		} else {
+			e2e.Logf("There is some other node on the hosted cluster, create testPod2 on some other node")
+			testPod2Node = nodeLeft[0]
+		}
+		testPod2 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns2,
+			nodename:  testPod2Node,
+			template:  pingPodNodeTemplate,
+		}
+		defer oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("delete").Args("pod", testPod2.name, "-n", testPod2.namespace, "--ignore-not-found=true").Execute()
+		testPod2.createPingPodNode(oc.AsGuestKubeconf())
+		waitPodReady(oc.AsGuestKubeconf(), testPod2.namespace, testPod2.name)
+
+		exutil.By("11. Pod created before attempted live migration should be able to communicate with pod created after attempted live migration\n")
+		testPod1IP1, testPod1IP2 := getPodIP(oc.AsGuestKubeconf(), testPod1.namespace, testPod1.name)
+		e2e.Logf("\n Got ip address for testPod1 is: %v, %v\n", testPod1IP1, testPod1IP2)
+		testPod2IP1, testPod2IP2 := getPodIP(oc.AsGuestKubeconf(), testPod2.namespace, testPod2.name)
+		e2e.Logf("\n Got ip address for testPod2 is: %v, %v\n", testPod2IP1, testPod2IP2)
+
+		// Curl testPod 1 from testPod2
+		cmd1 := "curl --connect-timeout 5 -s " + testPod1IP1 + ":8080"
+		cmd2 := "curl --connect-timeout 5 -s " + testPod1IP2 + ":8080"
+		if testPod1IP2 != "" {
+			_, err := execCommandInSpecificPod(oc.AsGuestKubeconf(), testPod2.namespace, testPod2.name, cmd1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = execCommandInSpecificPod(oc.AsGuestKubeconf(), testPod2.namespace, testPod2.name, cmd2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			_, err := execCommandInSpecificPod(oc.AsGuestKubeconf(), testPod2.namespace, testPod2.name, cmd1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		// Curl from testPod2 from testPod1
+		cmd1 = "curl --connect-timeout 5 -s " + testPod2IP1 + ":8080"
+		cmd2 = "curl --connect-timeout 5 -s " + testPod2IP2 + ":8080"
+		if testPod2IP2 != "" {
+			_, err := execCommandInSpecificPod(oc.AsGuestKubeconf(), testPod1.namespace, testPod1.name, cmd1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = execCommandInSpecificPod(oc.AsGuestKubeconf(), testPod1.namespace, testPod1.name, cmd2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			_, err := execCommandInSpecificPod(oc.AsGuestKubeconf(), testPod1.namespace, testPod1.name, cmd1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	})
+
 })

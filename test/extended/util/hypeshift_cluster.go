@@ -223,3 +223,15 @@ func GetHostedClusterPlatformType(oc *CLI, clusterName, clusterNamespace string)
 	}
 	return oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", clusterName, "-n", clusterNamespace, `-ojsonpath={.spec.platform.type}`).Output()
 }
+
+// GetNodePoolNamesbyHostedClusterName gets the nodepools names of the hosted cluster
+func GetNodePoolNamesbyHostedClusterName(oc *CLI, hostedClusterName, hostedClusterNS string) []string {
+	var nodePoolName []string
+	nodePoolNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", "-n", hostedClusterNS, "-ojsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(nodePoolNameList).NotTo(o.BeEmpty())
+
+	nodePoolName = strings.Fields(nodePoolNameList)
+	e2e.Logf("\n\nGot nodepool(s) for the hosted cluster %s: %v\n", hostedClusterName, nodePoolName)
+	return nodePoolName
+}
