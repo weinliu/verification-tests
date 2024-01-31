@@ -12,3 +12,4 @@ kubeadmin-password
 /.idea
 .DS_Store
 vendor/*
+temp/*

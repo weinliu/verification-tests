@@ -230,8 +230,7 @@ func (ors *ocmResourceService) CreateUserRole(flags ...string) (bytes.Buffer, er
 // run `rosa whoami` command
 func (ors *ocmResourceService) Whoami() (bytes.Buffer, error) {
 	ors.client.Runner.cmdArgs = []string{}
-	whoami := ors.client.Runner.
-		Cmd("whoami").OutputFormat()
+	whoami := ors.client.Runner.Cmd("whoami")
 	return whoami.Run()
 }
 

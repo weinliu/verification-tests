@@ -31,8 +31,9 @@ func NewIngressService(client *Client) IngressService {
 }
 
 func (i *ingressService) CleanResources(clusterID string) (errors []error) {
-	logger.Infof("Remove remaining ingress")
-	for _, igID := range i.ingress[clusterID] {
+	var igsToDel []string
+	igsToDel = append(igsToDel, i.ingress[clusterID]...)
+	for _, igID := range igsToDel {
 		logger.Infof("Remove remaining ingress '%s'", igID)
 		_, err := i.DeleteIngress(clusterID, igID)
 		if err != nil {
@@ -102,17 +103,12 @@ func (i *ingressService) ReflectIngressList(result bytes.Buffer) (res *IngressLi
 
 // Delete the ingress
 func (i *ingressService) DeleteIngress(clusterID string, ingressID string) (output bytes.Buffer, err error) {
-	output, err = i.delete(clusterID, ingressID)
+	output, err = i.client.Runner.
+		Cmd("delete", "ingress", ingressID).
+		CmdFlags("-c", clusterID, "-y").
+		Run()
 	if err == nil {
 		i.ingress[clusterID] = RemoveFromStringSlice(i.ingress[clusterID], ingressID)
 	}
 	return
-}
-
-func (i *ingressService) delete(clusterID string, id string) (bytes.Buffer, error) {
-	deleteIngress := i.client.Runner.
-		Cmd("delete", "ingress", id).
-		CmdFlags("-c", clusterID, "-y")
-
-	return deleteIngress.Run()
 }

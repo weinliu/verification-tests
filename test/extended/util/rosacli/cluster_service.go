@@ -84,11 +84,7 @@ type ClusterDescription struct {
 func (c *clusterService) DescribeCluster(clusterID string) (bytes.Buffer, error) {
 	describe := c.client.Runner.
 		Cmd("describe", "cluster").
-		CmdFlags("-c", clusterID).
-		OutputFormat()
-	// if jsonOutput {
-	// 	describe = describe.JsonFormat(jsonOutput)
-	// }
+		CmdFlags("-c", clusterID)
 
 	return describe.Run()
 }
@@ -212,12 +208,12 @@ func (c *clusterService) GetClusterVersion(clusterID string) (clusterVersion Ver
 }
 
 func (c *clusterService) getJSONClusterDescription(clusterID string) (*jsonData, error) {
-	c.client.Runner.Format("json")
+	c.client.Runner.JsonFormat()
 	output, err := c.DescribeCluster(clusterID)
 	if err != nil {
 		logger.Errorf("it met error when describeCluster in IsUsingReusableOIDCConfig is %v", err)
 		return nil, err
 	}
-	c.client.Runner.CloseFormat()
+	c.client.Runner.UnsetFormat()
 	return c.client.Parser.JsonData.Input(output).Parse(), nil
 }

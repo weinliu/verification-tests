@@ -50,7 +50,10 @@ type GroupUserList struct {
 
 // Grant user
 func (us *userService) GrantUser(clusterID string, role string, user string, flags ...string) (output bytes.Buffer, err error) {
-	output, err = us.grantUser(clusterID, role, user, flags...)
+	output, err = us.client.Runner.
+		Cmd("grant", "user", role).
+		CmdFlags(append(flags, "-c", clusterID, "--user", user)...).
+		Run()
 	if err == nil {
 		createdUserRole := &userRole{
 			user: user,
@@ -61,17 +64,12 @@ func (us *userService) GrantUser(clusterID string, role string, user string, fla
 	return
 }
 
-func (us *userService) grantUser(clusterID string, role string, user string, flags ...string) (bytes.Buffer, error) {
-	grantUser := us.client.Runner.
-		Cmd("grant", "user", role).
-		CmdFlags(append(flags, "-c", clusterID, "--user", user)...)
-
-	return grantUser.Run()
-}
-
 // Revoke user
 func (us *userService) RevokeUser(clusterID string, role string, user string, flags ...string) (output bytes.Buffer, err error) {
-	output, err = us.revokeUser(clusterID, role, user, flags...)
+	output, err = us.client.Runner.
+		Cmd("revoke", "user", role).
+		CmdFlags(append(flags, "-y", "-c", clusterID, "--user", user)...).
+		Run()
 	if err == nil {
 		var newRoles []*userRole
 		for _, createdUserRole := range us.usersGranted[clusterID] {
@@ -82,14 +80,6 @@ func (us *userService) RevokeUser(clusterID string, role string, user string, fl
 		us.usersGranted[clusterID] = newRoles
 	}
 	return
-}
-
-func (us *userService) revokeUser(clusterID string, role string, user string, flags ...string) (bytes.Buffer, error) {
-	revokeUser := us.client.Runner.
-		Cmd("revoke", "user", role).
-		CmdFlags(append(flags, "-y", "-c", clusterID, "--user", user)...)
-
-	return revokeUser.Run()
 }
 
 // List users
@@ -176,7 +166,9 @@ func (us *userService) CleanResources(clusterID string) (errors []error) {
 		}
 	}
 
-	for _, grantedUserRole := range us.usersGranted[clusterID] {
+	var ugsToDel []*userRole
+	ugsToDel = append(ugsToDel, us.usersGranted[clusterID]...)
+	for _, grantedUserRole := range ugsToDel {
 		logger.Infof("Remove remaining granted user '%s' with role '%s'", grantedUserRole.user, grantedUserRole.role)
 		_, err := us.RevokeUser(clusterID, grantedUserRole.role, grantedUserRole.user)
 		if err != nil {

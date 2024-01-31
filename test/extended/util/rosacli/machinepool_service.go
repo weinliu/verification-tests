@@ -110,23 +110,19 @@ type NodePoolDescription struct {
 	AutoRepair       string `yaml:"Autorepair,omitempty"`
 	TuningConfigs    string `yaml:"Tuning configs,omitempty"`
 	Message          string `yaml:"Message,omitempty"`
+	ScheduledUpgrade string `yaml:"Scheduled upgrade,omitempty"`
 }
 
 // Create MachinePool
 func (m *machinepoolService) CreateMachinePool(clusterID string, name string, flags ...string) (output bytes.Buffer, err error) {
-	output, err = m.create(clusterID, name, flags...)
+	output, err = m.client.Runner.
+		Cmd("create", "machinepool").
+		CmdFlags(append(flags, "-c", clusterID, "--name", name)...).
+		Run()
 	if err == nil {
 		m.machinePools[clusterID] = append(m.machinePools[clusterID], name)
 	}
 	return
-}
-
-func (m *machinepoolService) create(clusterID string, name string, flags ...string) (bytes.Buffer, error) {
-	createMachinePool := m.client.Runner.
-		Cmd("create", "machinepool").
-		CmdFlags(append(flags, "-c", clusterID, "--name", name)...)
-
-	return createMachinePool.Run()
 }
 
 // List MachinePool
@@ -147,19 +143,14 @@ func (m *machinepoolService) DescribeMachinePool(clusterID string, mpID string) 
 
 // Delete MachinePool
 func (m *machinepoolService) DeleteMachinePool(clusterID string, machinePoolName string) (output bytes.Buffer, err error) {
-	output, err = m.delete(clusterID, machinePoolName)
+	output, err = m.client.Runner.
+		Cmd("delete", "machinepool").
+		CmdFlags("-c", clusterID, machinePoolName, "-y").
+		Run()
 	if err == nil {
 		m.machinePools[clusterID] = RemoveFromStringSlice(m.machinePools[clusterID], machinePoolName)
 	}
 	return
-}
-
-func (m *machinepoolService) delete(clusterID string, machinePoolName string) (bytes.Buffer, error) {
-	deleteMachinePool := m.client.Runner.
-		Cmd("delete", "machinepool").
-		CmdFlags("-c", clusterID, machinePoolName, "-y")
-
-	return deleteMachinePool.Run()
 }
 
 // Edit MachinePool
@@ -197,9 +188,11 @@ func (m *machinepoolService) ReflectMachinePoolDescription(result bytes.Buffer) 
 }
 
 func (m *machinepoolService) CleanResources(clusterID string) (errors []error) {
-	for _, mpName := range m.machinePools[clusterID] {
-		logger.Infof("Remove remaining machinepool '%s'", mpName)
-		_, err := m.delete(clusterID, mpName)
+	var mpsToDel []string
+	mpsToDel = append(mpsToDel, m.machinePools[clusterID]...)
+	for _, mpID := range mpsToDel {
+		logger.Infof("Remove remaining machinepool '%s'", mpID)
+		_, err := m.DeleteMachinePool(clusterID, mpID)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -227,7 +220,7 @@ func (m *machinepoolService) ListAndReflectNodePools(clusterID string) (npl *Nod
 	return m.ReflectNodePoolList(output)
 }
 
-func (m *machinepoolService) DescribeAndReflectNodePool(clusterID string, mpID string) (npd *NodePoolDescription, err error) {
+func (m *machinepoolService) DescribeAndReflectNodePool(clusterID string, mpID string) (*NodePoolDescription, error) {
 	output, err := m.DescribeMachinePool(clusterID, mpID)
 	if err != nil {
 		return nil, err

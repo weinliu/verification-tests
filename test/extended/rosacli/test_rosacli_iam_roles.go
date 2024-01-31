@@ -35,7 +35,6 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		rosaClient = rosacli.NewClient()
 		clusterService = rosaClient.Cluster
 		ocmResourceService = rosaClient.OCMResource
-		rosaClient.Runner.CloseFormat()
 	})
 
 	g.AfterEach(func() {
@@ -82,7 +81,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
                   }`
 
 		g.By("Create boundry policy")
-		rosaClient.Runner.Format("json")
+		rosaClient.Runner.JsonFormat()
 		iamClient := exutil.NewIAMClient()
 		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
 		o.Expect(err).To(o.BeNil())
@@ -100,7 +99,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		whoamiOutput, err := ocmResourceService.Whoami()
 		o.Expect(err).To(o.BeNil())
-		rosaClient.Runner.CloseFormat()
+		rosaClient.Runner.UnsetFormat()
 		whoamiData := ocmResourceService.ReflectAccountsInfo(whoamiOutput)
 		AWSAccountID := whoamiData.AWSAccountID
 
@@ -642,10 +641,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service user/ocm roles test
 			userRoleArnInWrongFormat                      string
 			foundUserRole                                 rosacli.UserRole
 		)
-		rosaClient.Runner.Format("json")
+		rosaClient.Runner.JsonFormat()
 		whoamiOutput, err := ocmResourceService.Whoami()
 		o.Expect(err).To(o.BeNil())
-		rosaClient.Runner.CloseFormat()
+		rosaClient.Runner.UnsetFormat()
 		whoamiData := ocmResourceService.ReflectAccountsInfo(whoamiOutput)
 		ocmAccountUsername = whoamiData.OCMAccountUsername
 		rand.Seed(time.Now().UnixNano())
@@ -751,10 +750,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service user/ocm roles test
 			ocmRoleList                                   rosacli.OCMRoleList
 			ocmRoleNeedRecoved                            rosacli.OCMRole
 		)
-		rosaClient.Runner.Format("json")
+		rosaClient.Runner.JsonFormat()
 		whoamiOutput, err := ocmResourceService.Whoami()
 		o.Expect(err).To(o.BeNil())
-		rosaClient.Runner.CloseFormat()
+		rosaClient.Runner.UnsetFormat()
 		whoamiData := ocmResourceService.ReflectAccountsInfo(whoamiOutput)
 		ocmOrganizationExternalID = whoamiData.OCMOrganizationExternalID
 		rand.Seed(time.Now().UnixNano())
@@ -891,17 +890,17 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service user/ocm roles test
                         ]
                   }`
 
-		rosaClient.Runner.Format("json")
+		rosaClient.Runner.JsonFormat()
 		whoamiOutput, err := ocmResourceService.Whoami()
 		o.Expect(err).To(o.BeNil())
-		rosaClient.Runner.CloseFormat()
+		rosaClient.Runner.UnsetFormat()
 		whoamiData := ocmResourceService.ReflectAccountsInfo(whoamiOutput)
 		ocmAccountUsername = whoamiData.OCMAccountUsername
 		rand.Seed(time.Now().UnixNano())
 		userrolePrefix = fmt.Sprintf("QEAuto-userr-%s-52419", time.Now().UTC().Format("20060102"))
 
 		g.By("Create boundry policy")
-		rosaClient.Runner.Format("json")
+		rosaClient.Runner.JsonFormat()
 		iamClient := exutil.NewIAMClient()
 		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
 		o.Expect(err).To(o.BeNil())

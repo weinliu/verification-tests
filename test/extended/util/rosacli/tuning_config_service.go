@@ -56,23 +56,19 @@ type TuningConfigDescription struct {
 }
 
 func (tcs *tuningConfigService) CreateTuningConfig(clusterID string, tcName string, specContent string, flags ...string) (output bytes.Buffer, err error) {
-	output, err = tcs.create(clusterID, tcName, specContent, flags...)
-	if err == nil {
-		tcs.tuningConfigs[clusterID] = append(tcs.tuningConfigs[clusterID], tcName)
-	}
-	return
-}
-
-func (tcs *tuningConfigService) create(clusterID string, tcName string, specContent string, flags ...string) (bytes.Buffer, error) {
 	specPath, err := CreateTempFileWithContent(specContent)
 	defer os.Remove(specPath)
 	if err != nil {
 		return *bytes.NewBufferString(""), err
 	}
-	return tcs.client.Runner.
-		Cmd("create", "tuning-configs").
+	output, err = tcs.client.Runner.
+		Cmd("create", "tuning-config").
 		CmdFlags(append(flags, "-c", clusterID, "--name", tcName, "--spec-path", specPath)...).
 		Run()
+	if err == nil {
+		tcs.tuningConfigs[clusterID] = append(tcs.tuningConfigs[clusterID], tcName)
+	}
+	return
 }
 
 func (tcs *tuningConfigService) EditTuningConfig(clusterID string, tcID string, flags ...string) (bytes.Buffer, error) {
@@ -84,18 +80,14 @@ func (tcs *tuningConfigService) EditTuningConfig(clusterID string, tcID string, 
 }
 
 func (tcs *tuningConfigService) DeleteTuningConfig(clusterID string, tcName string) (output bytes.Buffer, err error) {
-	output, err = tcs.delete(clusterID, tcName)
+	output, err = tcs.client.Runner.
+		Cmd("delete", "tuning-configs", tcName).
+		CmdFlags("-c", clusterID, "-y").
+		Run()
 	if err == nil {
 		tcs.tuningConfigs[clusterID] = RemoveFromStringSlice(tcs.tuningConfigs[clusterID], tcName)
 	}
 	return
-}
-
-func (tcs *tuningConfigService) delete(clusterID string, tcName string) (bytes.Buffer, error) {
-	return tcs.client.Runner.
-		Cmd("delete", "tuning-configs", tcName).
-		CmdFlags("-c", clusterID, "-y").
-		Run()
 }
 
 func (tcs *tuningConfigService) ListTuningConfigs(clusterID string) (bytes.Buffer, error) {
@@ -157,9 +149,11 @@ func (tcs *tuningConfigService) ReflectTuningConfigDescription(result bytes.Buff
 }
 
 func (tcs *tuningConfigService) CleanResources(clusterID string) (errors []error) {
-	for _, tcName := range tcs.tuningConfigs[clusterID] {
+	var tcsToDel []string
+	tcsToDel = append(tcsToDel, tcs.tuningConfigs[clusterID]...)
+	for _, tcName := range tcsToDel {
 		logger.Infof("Remove remaining tuningconfig '%s'", tcName)
-		_, err := tcs.delete(clusterID, tcName)
+		_, err := tcs.DeleteTuningConfig(clusterID, tcName)
 		if err != nil {
 			errors = append(errors, err)
 		}

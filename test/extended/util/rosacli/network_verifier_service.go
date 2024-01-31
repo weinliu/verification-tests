@@ -38,7 +38,6 @@ func (nv *networkVerifierService) CreateNetworkVerifierWithCluster(clusterID str
 }
 
 func (nv *networkVerifierService) CreateNetworkVerifierWithSubnets(flags ...string) (bytes.Buffer, error) {
-
 	createNetworkVerifier := nv.client.Runner.
 		Cmd("verify", "network").
 		CmdFlags(flags...)

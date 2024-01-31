@@ -41,11 +41,7 @@ type KubeletConfigDescription struct {
 func (k *kubeletConfigService) DescribeKubeletConfig(clusterID string) (bytes.Buffer, error) {
 	describe := k.client.Runner.
 		Cmd("describe", "kubeletconfig").
-		CmdFlags("-c", clusterID).
-		OutputFormat()
-	// if jsonOutput {
-	// 	describe = describe.JsonFormat(jsonOutput)
-	// }
+		CmdFlags("-c", clusterID)
 
 	return describe.Run()
 }

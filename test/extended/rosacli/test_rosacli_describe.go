@@ -41,10 +41,10 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Decribe resources",
 		o.Expect(err).To(o.BeNil())
 
 		g.By("Describe cluster in json format")
-		rosaClient.Runner.Format("json")
+		rosaClient.Runner.JsonFormat()
 		jsonOutput, err := clusterService.DescribeCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
-		rosaClient.Runner.CloseFormat()
+		rosaClient.Runner.UnsetFormat()
 		jsonData := rosaClient.Parser.JsonData.Input(jsonOutput).Parse()
 
 		g.By("Compare the text result with the json result")

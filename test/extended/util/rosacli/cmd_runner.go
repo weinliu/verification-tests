@@ -10,65 +10,81 @@ import (
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
+const (
+	defaultRunnerFormat = "text"
+	jsonRunnerFormat    = "json"
+	yamlRunnerFormat    = "yaml"
+)
+
 type runner struct {
 	cmds      []string
 	cmdArgs   []string
-	format    string
-	color     string
-	debug     bool
+	runnerCfg *runnerConfig
 	sensitive bool
+}
+
+type runnerConfig struct {
+	format string
+	color  string
+	debug  bool
 }
 
 func NewRunner() *runner {
 	runner := &runner{
-		format: "text",
-		debug:  false,
-		color:  "auto",
+		runnerCfg: &runnerConfig{
+			format: "text",
+			debug:  false,
+			color:  "auto",
+		},
 	}
 	return runner
 }
+
+func (r *runner) Copy() *runner {
+	return &runner{
+		runnerCfg: r.runnerCfg.Copy(),
+		sensitive: r.sensitive,
+	}
+}
+
+func (rc *runnerConfig) Copy() *runnerConfig {
+	return &runnerConfig{
+		format: rc.format,
+		color:  rc.color,
+		debug:  rc.debug,
+	}
+}
+
 func (r *runner) Sensitive(sensitive bool) *runner {
 	r.sensitive = sensitive
 	return r
 }
-func (r *runner) Format(format string) *runner {
-	r.format = format
+
+func (r *runner) format(format string) *runner {
+	r.runnerCfg.format = format
 	return r
 }
 
 func (r *runner) Debug(debug bool) *runner {
-	r.debug = debug
+	r.runnerCfg.debug = debug
 	return r
 }
 
 func (r *runner) Color(color string) *runner {
-	r.color = color
+	r.runnerCfg.color = color
 	return r
 }
 
-func (r *runner) OutputFormat() *runner {
-	cmdArgs := r.cmdArgs
-	if r.format == "json" || r.format == "yaml" {
-		cmdArgs = append(cmdArgs, "--output", r.format)
-	}
-
-	r.cmdArgs = cmdArgs
-	return r
+func (r *runner) JsonFormat() *runner {
+	return r.format(jsonRunnerFormat)
 }
 
-func (r *runner) CloseFormat() *runner {
-	r.format = "text"
-	return r
+func (r *runner) YamlFormat() *runner {
+	return r.format(yamlRunnerFormat)
 }
 
-func (r *runner) JsonFormat(jsonOutput bool) *runner {
-	cmdArgs := r.cmdArgs
-	if jsonOutput {
-		cmdArgs = append(cmdArgs, "--output", "json")
-	}
-
-	r.cmdArgs = cmdArgs
-	return r
+func (r *runner) UnsetFormat() *runner {
+	return r.format(defaultRunnerFormat)
 }
 
 func (r *runner) Cmd(commands ...string) *runner {
@@ -79,13 +95,6 @@ func (r *runner) Cmd(commands ...string) *runner {
 func (r *runner) CmdFlags(cmdFlags ...string) *runner {
 	var cmdArgs []string
 	cmdArgs = append(cmdArgs, cmdFlags...)
-	if r.debug {
-		cmdArgs = append(cmdArgs, "--debug")
-	}
-	if r.color != "auto" {
-		cmdArgs = append(cmdArgs, "--color", r.color)
-	}
-
 	r.cmdArgs = cmdArgs
 	return r
 }
@@ -138,12 +147,26 @@ func (r *runner) ReplaceFlag(flag string, value string) *runner {
 	return r
 }
 
+func (rc *runnerConfig) GenerateCmdFlags() (flags []string) {
+	if rc.format == jsonRunnerFormat || rc.format == yamlRunnerFormat {
+		flags = append(flags, "--output", rc.format)
+	}
+	if rc.debug {
+		flags = append(flags, "--debug")
+	}
+	if rc.color != "auto" {
+		flags = append(flags, "--color", rc.color)
+	}
+	return
+}
+
 func (r *runner) Run() (bytes.Buffer, error) {
 	rosacmd := "rosa"
 	cmdElements := r.cmds
 	if len(r.cmdArgs) > 0 {
 		cmdElements = append(cmdElements, r.cmdArgs...)
 	}
+	cmdElements = append(cmdElements, r.runnerCfg.GenerateCmdFlags()...)
 
 	var output bytes.Buffer
 	var err error
