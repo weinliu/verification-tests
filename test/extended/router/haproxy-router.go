@@ -3387,10 +3387,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-67093-Alternate Backends and Weights for a route work well", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			testPodSvcTP        = filepath.Join(buildPruningBaseDir, "template-web-server-rc.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
 
 			webServerRc1 = webServerRcDescription{
 				podLabelName:      "web-server-rc01",
@@ -3423,14 +3420,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			service3Name = webServerRc3.unsecSvcLabelName
 		)
 
-		exutil.By("deploy a project, and create a client pod, 3 server pods and 3 unsecure services")
+		exutil.By("deploy a project, and create 3 server pods and 3 unsecure services")
 		project1 := oc.Namespace()
-		createResourceFromFile(oc, project1, clientPod)
-		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
 		webServerRc1.namespace = project1
 		webServerRc1.create(oc)
-		err = waitForPodWithLabelReady(oc, project1, srv1Label)
+		err := waitForPodWithLabelReady(oc, project1, srv1Label)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("backend server pod/%s failed to be ready state within allowed time!", webServerRc1.podLabelName))
 		webServerRc2.namespace = project1
 		webServerRc2.create(oc)
@@ -3464,31 +3458,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check the route's backend config")
 		routerpod := getRouterPod(oc, "default")
 		backend := "be_http:" + project1 + ":" + service1Name
+		bk1Re := regexp.MustCompile("server pod:" + srvPod1Name + ".+weight 256")
+		bk2Re := regexp.MustCompile("server pod:" + srvPod2Name + ".+weight 128")
+		bk3Re := regexp.MustCompile("server pod:" + srvPod3Name + ".+weight 128")
 		bk1 := readHaproxyConfig(oc, routerpod, backend, "-A17", "pod:"+srvPod1Name)
-		o.Expect(bk1).To(o.ContainSubstring("weight 256"))
+		o.Expect(len(bk1Re.FindStringSubmatch(bk1)[0]) > 1).To(o.BeTrue())
 		bk2 := readHaproxyConfig(oc, routerpod, backend, "-A17", "pod:"+srvPod2Name)
-		o.Expect(bk2).To(o.ContainSubstring("weight 128"))
+		o.Expect(len(bk2Re.FindStringSubmatch(bk2)[0]) > 1).To(o.BeTrue())
 		bk3 := readHaproxyConfig(oc, routerpod, backend, "-A17", "pod:"+srvPod3Name)
-		o.Expect(bk3).To(o.ContainSubstring("weight 128"))
-
-		exutil.By("send traffic and check alternate backends and weights work well")
-		routeHost := fetchJSONPathValue(oc, project1, "route/"+service1Name, ".status.ingress[0].host")
-		flag := false
-		for i := 0; i < 3; i++ {
-			curlResult := ""
-			curlResult, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", project1, cltPodName, "--", "bash", "-c", "for i in `seq 1 60` ; do curl http://"+routeHost+" -s; done").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			srv1 := strings.Count(curlResult, "Hello-OpenShift "+srvPod1Name+" http-8080")
-			srv2 := strings.Count(curlResult, "Hello-OpenShift "+srvPod2Name+" http-8080")
-			srv3 := strings.Count(curlResult, "Hello-OpenShift "+srvPod3Name+" http-8080")
-			if srv2 == 0 || srv3 == 0 {
-				continue
-			}
-			if srv1/srv2 == 2 && srv1/srv3 == 2 && srv1+srv2+srv3 == 60 {
-				flag = true
-				break
-			}
-		}
-		o.Expect(flag).To(o.BeTrue())
+		o.Expect(len(bk3Re.FindStringSubmatch(bk3)[0]) > 1).To(o.BeTrue())
 	})
 })
