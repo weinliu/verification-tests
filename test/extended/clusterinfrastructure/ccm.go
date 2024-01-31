@@ -296,7 +296,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if region != "us-east-2" {
+		if region != "us-east-2" && region != "us-east-1" {
 			g.Skip("Not support region " + region + " for the case for now.")
 		}
 		g.By("Add the AmazonEC2ContainerRegistryReadOnly policy to the worker nodes")
