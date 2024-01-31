@@ -448,3 +448,9 @@ func getVersionWithMajorAndMinor(version string) (string, error) {
 		return strings.Join(v[:2], "."), nil
 	}
 }
+
+// isRequestServingComponent determines if a deployment, replicaset or pod belongs to a serving component
+func isRequestServingComponent(name string) bool {
+	servingComponentRegex := regexp.MustCompile("^(kube-apiserver|ignition-server-proxy|oauth-openshift|router).*")
+	return servingComponentRegex.MatchString(name)
+}

@@ -1735,8 +1735,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 						e2e.Logf("Worker node %v not ready, keep polling", node.Name)
 						return false, nil
 					}
-					if !e2enode.IsNodeSchedulable(&node) {
-						e2e.Logf("Worker node %v not schedulable, keep polling", node.Name)
+					if len(node.Spec.Taints) > 0 {
+						e2e.Logf("Worker node tainted, keep polling", node.Name)
 						return false, nil
 					}
 				}
@@ -2178,4 +2178,322 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	/*
+		In the test case below there is no need to verify:
+		- the correct scheduling of a hosted cluster's serving components.
+		- that relevant labels and taints are added to the request serving nodes by controller.
+		- that relevant annotations are added to the HostedCluster by controller.
+		- that relevant labels, node affinity and tolerations are added to the request serving components by controller.
+		- that request serving nodes are removed by controller once a HC is gone.
+		as these are covered by OCP-68221.
+
+		Timeout: 1h15min (test run took ~50min)
+	*/
+	g.It("NonPreRelease-Longduration-Author:fxie-Critical-69771-[HyperShiftINSTALL] When initial non-serving nodes fill up new pods prefer to go to untainted default nodes instead of scaling non-serving ones [Disruptive]", func() {
+		// Variables
+		var (
+			testCaseId         = "69771"
+			resourceNamePrefix = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
+			tempDir            = path.Join("/tmp", "hypershift", resourceNamePrefix)
+			mhcTemplate        = filepath.Join(fixturePath, "mhc.yaml")
+			bucketName         = fmt.Sprintf("%s-bucket", resourceNamePrefix)
+			hc1Name            = fmt.Sprintf("%s-hc-1", resourceNamePrefix)
+			hc2Name            = fmt.Sprintf("%s-hc-2", resourceNamePrefix)
+			mhcNamePrefix      = fmt.Sprintf("%s-mhc", resourceNamePrefix)
+			adminKubeClient    = oc.AdminKubeClient()
+			numWorkersExpected = 3
+			numMasters         = 3
+			numMsetsExpected   = 3
+			errList            []error
+			clusterAutoscaler  = `apiVersion: "autoscaling.openshift.io/v1"
+kind: "ClusterAutoscaler"
+metadata:
+  name: "default"
+spec:
+  scaleDown:
+    enabled: true
+    delayAfterAdd: 10s
+    delayAfterDelete: 10s
+    delayAfterFailure: 10s
+    unneededTime: 10s`
+			clusterAutoscalerFileName = fmt.Sprintf("%s-clusterautoscaler.yaml", resourceNamePrefix)
+			machineAutoscalerTemplate = `apiVersion: "autoscaling.openshift.io/v1beta1"
+kind: "MachineAutoscaler"
+metadata:
+  name: %[1]s
+  namespace: "openshift-machine-api"
+spec:
+  minReplicas: 1
+  maxReplicas: 3
+  scaleTargetRef:
+    apiVersion: machine.openshift.io/v1beta1
+    kind: MachineSet
+    name: %[1]s`
+			machineAutoscalerFileName = fmt.Sprintf("%s-machineautoscaler.yaml", resourceNamePrefix)
+		)
+
+		// Aggregated error handling
+		defer func() {
+			o.Expect(errors2.NewAggregate(errList)).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("Inspecting platform")
+		exutil.SkipNoCapabilities(oc, "MachineAPI")
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
+		msetNames := exutil.ListWorkerMachineSetNames(oc)
+		// In theory the number of MachineSets does not have to be exactly 3 but should be at least 3.
+		// The following enforcement is for alignment with the test case only.
+		if numMset := len(msetNames); numMset != numMsetsExpected {
+			g.Skip("Expect %v worker machinesets but found %v, skipping", numMsetsExpected, numMset)
+		}
+		e2e.Logf("Found worker machinesets %v on the management cluster", msetNames)
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.Background(), adminKubeClient)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// In theory the number of ready schedulable Nodes does not have to be exactly 3 but should be at least 3.
+		// The following is enforced for alignment with the test case only.
+		numReadySchedulableNodes := len(nodeList.Items)
+		if numReadySchedulableNodes != numWorkersExpected {
+			g.Skip("Expect %v ready schedulable nodes but found %v, skipping", numWorkersExpected, numReadySchedulableNodes)
+		}
+		numNode := numReadySchedulableNodes + numMasters
+		e2e.Logf("Found %v nodes on the management cluster", numNode)
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		e2e.Logf("Found management cluster region = %s", region)
+		defer func() {
+			e2e.Logf("Making sure we ends up with the correct number of nodes and all of them are ready and schedulable")
+			err = wait.PollUntilContextTimeout(context.Background(), DefaultTimeout/10, LongTimeout, true, func(_ context.Context) (bool, error) {
+				nodeList, err := adminKubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
+					LabelSelector: labels.Set(map[string]string{"node-role.kubernetes.io/worker": ""}).String(),
+				})
+				if err != nil {
+					return false, err
+				}
+				if numWorker := len(nodeList.Items); numWorker != numWorkersExpected {
+					e2e.Logf("Expect %v worker nodes but found %v, keep polling", numWorkersExpected, numWorker)
+					return false, nil
+				}
+				for _, node := range nodeList.Items {
+					if !e2enode.IsNodeReady(&node) {
+						e2e.Logf("Worker node %v not ready, keep polling", node.Name)
+						return false, nil
+					}
+					if len(node.Spec.Taints) > 0 {
+						e2e.Logf("Worker node tainted, keep polling", node.Name)
+						return false, nil
+					}
+					if _, ok := node.Labels[hypershiftClusterLabelKey]; ok {
+						e2e.Logf("Worker node still has the %v label, keep polling", hypershiftClusterLabelKey)
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+			errList = append(errList, err)
+		}()
+
+		exutil.By("Creating autoscalers")
+		e2e.Logf("Creating ClusterAutoscaler")
+		err = os.WriteFile(clusterAutoscalerFileName, []byte(clusterAutoscaler), os.ModePerm)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", clusterAutoscalerFileName).Execute()
+			errList = append(errList, err)
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterAutoscalerFileName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Creating MachineAutoscaler")
+		err = os.WriteFile(machineAutoscalerFileName, []byte(fmt.Sprintf(machineAutoscalerTemplate, msetNames[2])), os.ModePerm)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", machineAutoscalerFileName).Execute()
+			errList = append(errList, err)
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineAutoscalerFileName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Creating extra worker nodes")
+		var extraMsetNames []string
+		for _, msetName := range msetNames {
+			extraMsetName := fmt.Sprintf("%s-%s-1", msetName, testCaseId)
+			extraMset := exutil.MachineSetNonSpotDescription{
+				Name:     extraMsetName,
+				Replicas: 1,
+			}
+			defer func() {
+				errList = append(errList, extraMset.DeleteMachineSet(oc))
+			}()
+			extraMset.CreateMachineSetBasedOnExisting(oc, msetName, false)
+			extraMsetNames = append(extraMsetNames, extraMsetName)
+		}
+		e2e.Logf("Waiting until all nodes are ready")
+		_, err = e2enode.CheckReady(context.Background(), adminKubeClient, numNode+len(extraMsetNames), LongTimeout)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		/*
+			Worker nodes at this point:
+			Worker 1 <-> machineset 1 <-> AZ1
+			Worker 2 <-> machineset 2 <-> AZ2
+			Worker 3 <-> machineset 3 <-> AZ3 <-> non-serving node <-> autoscaling enabled
+			Extra worker 1 <-> extra machineset 1 (based on machineset 1) <-> AZ1
+			Extra worker 2 <-> extra machineset 2 (based on machineset 2) <-> AZ2
+			Extra worker 3 <-> extra machineset 3 (based on machineset 3) <-> AZ3 <-> default worker node
+
+			Serving node pairs to define:
+			Serving pair 1 <-> dedicated for serving components of HostedCluster 1 <-> worker 1 + worker 2
+			Serving pair 2 <-> dedicated for serving components of HostedCluster 2 <-> extra worker 1 + extra worker 2
+		*/
+		exutil.By("Defining serving pairs")
+		e2e.Logf("Getting node name for each machineset")
+		var workerNodeNames []string
+		msetNames = append(msetNames, extraMsetNames...)
+		for _, msetName := range msetNames {
+			workerNodeNames = append(workerNodeNames, exutil.GetNodeNameByMachineset(oc, msetName))
+		}
+		e2e.Logf("Found worker nodes %s on the management cluster", workerNodeNames)
+		servingPair1Indices := []int{0, 1}
+		var servingPair1NodesNames, servingPair1MsetNames []string
+		for _, idx := range servingPair1Indices {
+			servingPair1NodesNames = append(servingPair1NodesNames, workerNodeNames[idx])
+			servingPair1MsetNames = append(servingPair1MsetNames, msetNames[idx])
+		}
+		e2e.Logf("Serving pair 1 nodes = %v, machinesets = %v", servingPair1NodesNames, servingPair1MsetNames)
+		nonServingIndex := 2
+		nonServingMsetName := msetNames[nonServingIndex]
+		nonServingNodeName := workerNodeNames[nonServingIndex]
+		e2e.Logf("Non serving node = %v, machineset = %v", nonServingNodeName, nonServingMsetName)
+		servingPair2Indices := []int{3, 4}
+		var servingPair2NodeNames, servingPair2MsetNames []string
+		for _, idx := range servingPair2Indices {
+			servingPair2NodeNames = append(servingPair2NodeNames, workerNodeNames[idx])
+			servingPair2MsetNames = append(servingPair2MsetNames, msetNames[idx])
+		}
+		e2e.Logf("Serving pair 2 nodes = %v, machinesets = %v", servingPair2NodeNames, servingPair2MsetNames)
+		defaultWorkerIndex := 5
+		defaultWorkerNodeName := workerNodeNames[defaultWorkerIndex]
+		defaultWorkerMsetName := msetNames[defaultWorkerIndex]
+		e2e.Logf("Default worker node = %v, machineset = %v", defaultWorkerNodeName, defaultWorkerMsetName)
+
+		exutil.By("Creating a MachineHealthCheck for each serving machineset")
+		infraId := doOcpReq(oc, OcpGet, true, "infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}")
+		e2e.Logf("Found infra ID = %s", infraId)
+		for _, msetName := range append(servingPair1MsetNames, servingPair2MsetNames...) {
+			mhcName := fmt.Sprintf("%s-%s", mhcNamePrefix, msetName)
+			parsedTemplate := fmt.Sprintf("%s.template", mhcName)
+			mhc := mhcDescription{
+				Clusterid:      infraId,
+				Maxunhealthy:   "100%",
+				MachinesetName: msetName,
+				Name:           mhcName,
+				Namespace:      machineAPINamespace,
+				template:       mhcTemplate,
+			}
+			defer mhc.deleteMhc(oc, parsedTemplate)
+			mhc.createMhc(oc, parsedTemplate)
+		}
+
+		exutil.By("Adding labels and taints to serving pair 1 nodes and the non serving node")
+		// The osd-fleet-manager.openshift.io/paired-nodes label is not a must for request serving nodes
+		e2e.Logf("Adding labels and taints to serving pair 1 nodes")
+		defer func() {
+			for _, node := range servingPair1NodesNames {
+				_ = oc.AsAdmin().WithoutNamespace().Run("adm", "taint").Args("node", node, servingComponentNodesTaintKey+"-").Execute()
+				_ = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, servingComponentNodesLabelKey+"-").Execute()
+			}
+		}()
+		for _, node := range servingPair1NodesNames {
+			doOcpReq(oc, OcpAdm, true, OcpTaint, "node", node, servingComponentNodesTaint)
+			doOcpReq(oc, OcpLabel, true, "node", node, servingComponentNodesLabel)
+		}
+		e2e.Logf("Adding labels and taints to the non serving node")
+		defer func() {
+			_ = oc.AsAdmin().WithoutNamespace().Run("adm", "taint").Args("node", nonServingNodeName, nonServingComponentTaintKey+"-").Execute()
+			_ = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", nonServingNodeName, nonServingComponentLabelKey+"-").Execute()
+		}()
+		doOcpReq(oc, OcpAdm, true, OcpTaint, "node", nonServingNodeName, nonServingComponentTaint)
+		doOcpReq(oc, OcpLabel, true, "node", nonServingNodeName, nonServingComponentLabel)
+
+		exutil.By("Installing the Hypershift Operator")
+		defer func() {
+			errList = append(errList, os.RemoveAll(tempDir))
+		}()
+		err = os.MkdirAll(tempDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          tempDir,
+			iaasPlatform: iaasPlatform,
+			region:       region,
+		}
+		defer installHelper.deleteAWSS3Bucket()
+		defer func() {
+			// This is required otherwise the tainted serving nodes will not be removed
+			exutil.By("Waiting for the serving nodes to be removed before uninstalling the Hypershift Operator")
+			for _, node := range append(servingPair1NodesNames, servingPair2NodeNames...) {
+				exutil.WaitForNodeToDisappear(oc, node, LongTimeout, DefaultTimeout/10)
+			}
+			installHelper.hyperShiftUninstall()
+		}()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("Creating hosted cluster 1 with request serving annotation")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		createCluster1 := installHelper.createClusterAWSCommonBuilder().
+			withName(hc1Name).
+			withNodePoolReplicas(1).
+			withAnnotations(hcRequestServingTopologyAnnotation).
+			withReleaseImage(release)
+		defer installHelper.destroyAWSHostedClusters(createCluster1)
+		_ = installHelper.createAWSHostedClusters(createCluster1)
+
+		exutil.By("Adding labels and taints to serving pair 2 nodes")
+		// The osd-fleet-manager.openshift.io/paired-nodes label is not a must for request serving nodes
+		defer func() {
+			for _, node := range servingPair2NodeNames {
+				_ = oc.AsAdmin().WithoutNamespace().Run("adm", "taint").Args("node", node, servingComponentNodesTaintKey+"-").Execute()
+				_ = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, servingComponentNodesLabelKey+"-").Execute()
+			}
+		}()
+		for _, node := range servingPair2NodeNames {
+			doOcpReq(oc, OcpAdm, true, OcpTaint, "node", node, servingComponentNodesTaint)
+			doOcpReq(oc, OcpLabel, true, "node", node, servingComponentNodesLabel)
+		}
+
+		exutil.By("Creating hosted cluster 2 with request serving annotation")
+		createCluster2 := installHelper.createClusterAWSCommonBuilder().
+			withName(hc2Name).
+			withNodePoolReplicas(1).
+			withAnnotations(hcRequestServingTopologyAnnotation).
+			withReleaseImage(release)
+		defer installHelper.destroyAWSHostedClusters(createCluster2)
+		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
+		hostedCluster2Identifier := fmt.Sprintf("%s-%s", hostedCluster2.namespace, hostedCluster2.name)
+		e2e.Logf("Hosted cluster 2 created with identifier = %s", hostedCluster2Identifier)
+
+		exutil.By("Making sure that non-serving components are scheduled on a default worker node after filling up the non serving node")
+		podList, err := adminKubeClient.CoreV1().Pods(hostedCluster2Identifier).List(context.Background(), metav1.ListOptions{})
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		var podScheduledOnDefaultWorkerNode bool
+		for _, pod := range podList.Items {
+			podName := pod.Name
+			if isRequestServingComponent(podName) {
+				e2e.Logf("Pod %v belongs to a request serving component, skipping", podName)
+				continue
+			}
+
+			e2e.Logf("Pod %v belongs to a non-serving component", podName)
+			switch nodeName := pod.Spec.NodeName; nodeName {
+			case nonServingNodeName:
+				e2e.Logf("Pod scheduled on the non-serving node, expected")
+			case defaultWorkerNodeName:
+				e2e.Logf("Pod scheduled on the default worker node, expected")
+				podScheduledOnDefaultWorkerNode = true
+			default:
+				e2e.Failf("Pod scheduled on an unexpected node %v", nodeName)
+			}
+		}
+		o.Expect(podScheduledOnDefaultWorkerNode).To(o.BeTrue(), "Nothing scheduled on the default worker node")
+	})
 })
