@@ -3290,3 +3290,56 @@ func getlrPolicyList(oc *exutil.CLI, nodeName, tableID string) ([]string, error)
 	}
 	return lrPolicyList, checkLspErr
 }
+
+// Create a kubeconfig that impersonates ovnkube-node
+func generateKubeConfigFileForContext(oc *exutil.CLI, nodeName string, ovnKubeNodePod string, kubeConfigFilePath string, userContext string) bool {
+	var (
+		pemFile     = "/etc/ovn/ovnkube-node-certs/ovnkube-client-current.pem"
+		certFile    = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		clusterName = "default-cluster"
+		userName    = "default-user"
+	)
+
+	baseDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns/cluster", "-o=jsonpath={.spec.baseDomain}").Output()
+	if err != nil || baseDomain == "" {
+		e2e.Logf("Base Domain could not retrieved")
+		return false
+	}
+	e2e.Logf("Base Domain %v", baseDomain)
+	apiServerFQDN := fmt.Sprintf("api.%s", baseDomain)
+
+	setUpClusterCmd := fmt.Sprintf("export KUBECONFIG=%s; kubectl config set-cluster %s --server=https://%s:6443 --certificate-authority %s --embed-certs", kubeConfigFilePath, clusterName, apiServerFQDN, certFile)
+	setUserCredentialsCmd := fmt.Sprintf("export KUBECONFIG=%s; kubectl config set-credentials %s --client-key %s --client-certificate %s --embed-certs", kubeConfigFilePath, userName, pemFile, pemFile)
+	setContextCmd := fmt.Sprintf("export KUBECONFIG=%s; kubectl config set-context %s --cluster %s --user %s", kubeConfigFilePath, userContext, clusterName, userName)
+	testContextCmd := fmt.Sprintf("export KUBECONFIG=%s; kubectl config use-context %s; oc get nodes", kubeConfigFilePath, userContext)
+
+	cmdOutput, cmdErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, "ovnkube-controller", setUpClusterCmd)
+	if cmdErr != nil || !strings.Contains(cmdOutput, "Cluster "+"\""+clusterName+"\""+" set.") {
+		e2e.Logf("Setting cluster for impersonation failed %v.", cmdErr)
+		return false
+	}
+	e2e.Logf("Cluster set - %v", cmdOutput)
+
+	cmdOutput, cmdErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, "ovnkube-controller", setUserCredentialsCmd)
+	if cmdErr != nil || !strings.Contains(cmdOutput, "User "+"\""+userName+"\""+" set.") {
+		e2e.Logf("Setting user credentials for impersonation failed %v.", cmdErr)
+		return false
+	}
+	e2e.Logf("User credentials set - %v", cmdOutput)
+
+	cmdOutput, cmdErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, "ovnkube-controller", setContextCmd)
+	if cmdErr != nil || !strings.Contains(cmdOutput, "Context "+"\""+userContext+"\""+" created.") {
+		e2e.Logf("Context creation for impersonation failed %v.", cmdErr)
+		return false
+	}
+	e2e.Logf("Context created - %v", cmdOutput)
+
+	cmdOutput, cmdErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, "ovnkube-controller", testContextCmd)
+	if cmdErr != nil || !strings.Contains(cmdOutput, "Switched to context "+"\""+userContext+"\"") || !strings.Contains(cmdOutput, nodeName) {
+		e2e.Logf("Test command for impersonation failed %v.", cmdErr)
+		return false
+	}
+	e2e.Logf("Successfully created and tested kubeconfig for impersonation")
+	return true
+
+}
