@@ -3567,7 +3567,9 @@ nulla pariatur.`
 
 	g.It("Author:sregidor-NonHyperShiftHOST-Low-66046-Check image registry certificates", func() {
 
-		skipTestIfBaselineCapabilitySetIsNone(oc)
+		if !IsCapabilityEnabled(oc, "ImageRegistry") {
+			g.Skip("ImageRegistry is not installed, skip this test")
+		}
 
 		var (
 			mcp  = GetCompactCompatiblePool(oc.AsAdmin())
