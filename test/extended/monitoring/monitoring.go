@@ -1520,9 +1520,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		ns := oc.Namespace()
 
 		g.By("check ThanosRuler can not be created")
+		currentUser, _ := oc.Run("whoami").Args("").Output()
 		output, _ := oc.WithoutNamespace().Run("auth").Args("can-i", "create", "thanosrulers", "-n", ns).Output()
-		e2e.Logf("check current user:")
-		e2e.Logf(oc.Run("whoami").Args("").Output())
+		e2e.Logf("current user is: %v", currentUser)
 		e2e.Logf("Permission query results: %v", output)
 		o.Expect(output).To(o.ContainSubstring("no"))
 	})
