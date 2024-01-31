@@ -3077,6 +3077,8 @@ nulla pariatur.`
 			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageDigestMirrorSet resource")
 		logger.Infof("OK!\n")
 
+		checkMirrorRemovalDefaultEvents(node)
+
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-61558-ImageTagMirrorSet test [Disruptive]", func() {
@@ -3167,6 +3169,8 @@ nulla pariatur.`
 		o.Expect(rf.GetTextContent()).NotTo(o.ContainSubstring(`example.io/digest-example/ubi-minimal`),
 			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageDigestMirrorSet resource")
 		logger.Infof("OK!\n")
+
+		checkMirrorRemovalDefaultEvents(node)
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-62084-Certificate rotation in paused pools[Disruptive]", func() {
@@ -4453,4 +4457,22 @@ func checkUpdatedLists(l, r []Node, step int) bool {
 	}
 	return true
 
+}
+
+// checkMirrorRemovalDefaultEvents checks that after a mirror configuaration is removed the node is drained, reboot is skipped and crio service is restarted
+func checkMirrorRemovalDefaultEvents(node Node) {
+	exutil.By("Check that a drain event was triggered but no Reboot event happened")
+	o.Expect(node.GetEvents()).To(
+		o.And(
+			HaveEventsSequence("Drain"),
+			o.Not(HaveEventsSequence("Reboot"))),
+		"The triggered events are not the expected ones")
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that a drain was executed, reboot was skipped and crio was restarted")
+	o.Expect(exutil.GetSpecificPodLogs(node.oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), "")).Should(
+		o.And(
+			o.ContainSubstring("requesting cordon and drain via annotation to controller"),
+			o.MatchRegexp("(?s)drain complete.*crio config reloaded successfully.*skipping reboot")))
+	logger.Infof("OK!\n")
 }
