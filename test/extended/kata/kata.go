@@ -33,13 +33,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		ogFile                   = filepath.Join(testDataDir, "operatorgroup.yaml")
 		icspName                 = "kata-brew-registry"
 		icspFile                 = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
-		testrunInitial           TestrunConfigmap
-		testrun                  TestrunConfigmap
 		clusterVersion           string
 		ocpMajorVer              string
 		ocpMinorVer              string
+		opNamespace              = "openshift-sandboxed-containers-operator"
 		workload                 = "have securityContext"
-		testrunExists            = false
 		ppParam                  PeerpodParam
 		ppRuntimeClass           = "kata-remote"
 		ppSecretName             = "peer-pods-secret"
@@ -49,6 +47,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		ppAWSConfigMapTemplate   = filepath.Join(testDataDir, "peer-pod-aws-cm-template.yaml")
 		ppAzureConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
 		podAnnotatedTemplate     = filepath.Join(testDataDir, "pod-annotations-template.yaml")
+		testrunConfigmapNs       = "default"
+		testrunConfigmapName     = "osc-config"
 	)
 
 	subscription := SubscriptionDescription{
@@ -70,16 +70,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		runtimeClassName: "kata",
 		enablePeerPods:   false,
 	}
-	testrunInitial.exists = false // no overrides yet
 
-	// if you change this, modify both getTestRunConfigmap() and getTestRunEnvVars()
-	testrunDefault := TestrunConfigmap{
-		exists:             false,
+	testrun := TestRunDescription{
+		checked:            false,
 		operatorVer:        defaultOpVer,
 		catalogSourceName:  subscription.catalogSourceName,
 		channel:            subscription.channel,
 		icspNeeded:         false,
-		mustgatherImage:    mustGatherImage,
+		mustgatherImage:    "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3",
 		eligibility:        kataconfig.eligibility,
 		labelSingleNode:    false,
 		eligibleSingleNode: false,
@@ -114,32 +112,19 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 		g.By(fmt.Sprintf("The current platform is %v. OCP %v.%v: %v\n Workloads %v", cloudPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
 
-		// check if there is a CM override
-		testrunInitial, _ = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
-		if testrunInitial.exists { // then override, testrunInitial got the defaults anyway
-			testrunExists = true
-		}
-
-		// check if there are environment variable overrides
-		testrun, _ = getTestRunEnvVars("OSCS", testrunInitial)
-		// change subscription to match testrun.  env options override default and CM values
-		if testrun.exists {
-			testrunExists = true
-			testrunInitial = testrun
-			e2e.Logf("environment OSCS found: %v", testrunInitial)
-		}
-		//override defaults if there were:
-		subscription.catalogSourceName = testrunInitial.catalogSourceName
-		subscription.channel = testrunInitial.channel
-		kataconfig.eligibility = testrunInitial.eligibility
-		kataconfig.runtimeClassName = testrunInitial.runtimeClassName
-		kataconfig.enablePeerPods = testrunInitial.enablePeerPods
-
 		ensureNamespaceIsInstalled(oc, subscription, nsFile)
 
 		ensureOperatorGroupIsInstalled(oc, subscription, ogFile)
 
-		// We need the testrun values from the CM or env further down even if OSC is already installed
+		// testrun.checked, testrun.icspNeeded and testrun.mustgatherImage are not in subscription or kataconfig
+		if !testrun.checked {
+			_, err = getTestRunParameters(oc, &subscription, &kataconfig, &testrun, testrunConfigmapNs, testrunConfigmapName)
+			if err != nil {
+				// if there is an error, fail every test
+				e2e.Failf("ERROR: testrun configmap %v errors: %v\n%v", testrunConfigmapName, testrun, err)
+			}
+		}
+
 		if checkKataInstalled(oc, subscription, kataconfig.name) {
 			msgSuccess := fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, kataconfig.name)
 			e2e.Logf(msgSuccess)
@@ -147,8 +132,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			return
 		}
 
-		if testrunInitial.icspNeeded {
-			e2e.Logf("An ICSP is being applied to allow %v to work", testrunInitial.mustgatherImage)
+		if testrun.icspNeeded {
+			e2e.Logf("An ICSP is being applied to allow %v to work", testrun.mustgatherImage)
 			msg, err = applyImageContentSourcePolicy(oc, icspFile, icspName)
 			if err != nil || msg == "" {
 				logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP %v", icspName), msg, err)
@@ -159,10 +144,10 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
 		if kataconfig.eligibility {
-			labelEligibleNodes(oc, testrunInitial)
+			labelEligibleNodes(oc, testrun)
 		}
 
-		checkAndLabelCustomNodes(oc, testrunInitial)
+		checkAndLabelCustomNodes(oc, testrun)
 
 		//create peer pods secret and peer pods cm
 		if kataconfig.enablePeerPods {
@@ -209,7 +194,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		/* kataconfig status changed so this does not work.
 		These check should be moved to a function
 
-		nodeKataList := getAllKataNodes(oc, testrunInitial.eligibility, subscription.namespace, featureLabel, customLabel)
+		nodeKataList := getAllKataNodes(oc, kataconfig.eligibility, subscription.namespace, featureLabel, customLabel)
 		o.Expect(len(nodeKataList) > 0).To(o.BeTrue())
 		nodeKataCount := fmt.Sprintf("%d", len(nodeKataList))
 
@@ -240,7 +225,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	g.It("Author:tbuskey-High-66108-Version in operator CSV should match expected version", func() {
-		if !testrunExists {
+		if !testrun.checked {
 			g.Skip("osc-config cm or OSCSOPERATORVER are not set so there is no expected version to compare")
 		}
 
@@ -262,9 +247,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(csvVersion).NotTo(o.BeEmpty())
-		cleanVer := strings.Split(testrunInitial.operatorVer, "-")
+		cleanVer := strings.Split(testrun.operatorVer, "-")
 		if csvVersion != cleanVer[0] {
-			e2e.Logf("Error: expecting %v but CSV has %v", testrunInitial.operatorVer, csvVersion)
+			e2e.Logf("Error: expecting %v but CSV has %v", testrun.operatorVer, csvVersion)
 		}
 		o.Expect(csvVersion).To(o.Equal(cleanVer[0]))
 
@@ -850,7 +835,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
 
 		defer os.RemoveAll(mustgatherDir)
-		logFile, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", subscription.namespace, "must-gather", "--image="+testrunInitial.mustgatherImage, "--dest-dir="+mustgatherDir).OutputToFile(mustgatherLog)
+		logFile, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", subscription.namespace, "must-gather", "--image="+testrun.mustgatherImage, "--dest-dir="+mustgatherDir).OutputToFile(mustgatherLog)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: mustgather %v has an error %v %v", mustgatherLog, logFile, err))
 
 		files, err := os.ReadDir(mustgatherDir)
@@ -977,110 +962,81 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	// author: tbuskey@redhat.com
-	g.It("Longduration-Author:tbuskey-High-53583-upgrade osc operator [Disruptive][Serial]", func() {
+	g.It("Longduration-Author:tbuskey-High-53583-upgrade osc operator by changing subscription [Disruptive][Serial]", func() {
+
 		var (
-			testrunUpgrade TestrunConfigmap
-			testrun        TestrunConfigmap
-			cmNs           = "default"
-			cmName         = "osc-config-upgrade"
-			subUpgrade     = subscription
-			label          string
-			msg            string
-			err            error
+			subscriptionUpgrade            = subscription
+			kataconfigUpgrade              = kataconfig
+			testrunUpgradeWithSubscription = testrun
+			testrunConfigmapName           = "osc-config-upgrade-subscription"
+			msg                            string
+			msgIfErr                       string
 		)
 
-		if kataconfig.enablePeerPods {
-			g.Skip("skipping. upgrade (channel changing) does not apply to Peer Pods")
+		testrunUpgradeWithSubscription.checked = false
+
+		upgradeConfigMapExists, err := getTestRunParameters(oc, &subscriptionUpgrade, &kataconfigUpgrade, &testrunUpgradeWithSubscription, testrunConfigmapNs, testrunConfigmapName)
+		if err != nil {
+			e2e.Failf("ERROR: testrunUpgradeWithSubscription configmap %v errors: %v\n%v", testrunUpgradeWithSubscription, err)
 		}
 
-		// maybe osc-config/env exist but that doesn't make osc-config-upgrade exist
-		testrunUpgrade.exists = false
-		testrun.exists = false
-
-		// start with testrunInitial, not testrunDefault
-		g.By("Checking for configmap " + cmName)
-		testrunUpgrade, err = getTestRunConfigmap(oc, testrunInitial, cmNs, cmName)
-
-		g.By("Checking for OSCU environment vars") // env options override default and CM values
-		testrun, msg = getTestRunEnvVars("OSCU", testrunInitial)
-		if testrun.exists {
-			testrunUpgrade = testrun
-			e2e.Logf("environment OSCU found. subscription: %v", subscription)
+		if !upgradeConfigMapExists {
+			e2e.Failf("ERROR: %v configmap does not exist. Cannot upgrade by changing subscription", testrunConfigmapName)
 		}
 
-		if testrunUpgrade.exists {
-			msg = fmt.Sprintf("Upgrade with testrun will be performed with %v", testrunUpgrade)
-			g.By(msg)
-
-			if testrunUpgrade.icspNeeded {
-				msg = fmt.Sprintf("Installing ImageContentSourcePolicy to allow %v to work", testrunUpgrade.mustgatherImage)
-				g.By(msg)
-				// apply icsp.  Do not delete or pods can get ImagePullBackoff
-				msg, err = applyImageContentSourcePolicy(oc, icspFile, icspName)
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, "Error: applying ICSP", msg, err)
-				}
-			}
-
-			if testrunUpgrade.catalogSourceName != subUpgrade.catalogSourceName {
-				// catalog should already exist, but verify to ensure it is ready
-				g.By("Check for existence of catalog " + testrunUpgrade.catalogSourceName)
-				errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-					msg, err = oc.AsAdmin().Run("get").Args("catsrc", testrunUpgrade.catalogSourceName, "-n", subUpgrade.catalogSourceNamespace, "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
-					if msg == "READY" {
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("catalog %v is not found.  Will not upgrade: %v %v", testrunUpgrade.catalogSourceName, msg, err))
-
-				g.By("Check catalog for " + subUpgrade.subName)
-				label = fmt.Sprintf("catalog=%v", testrunUpgrade.catalogSourceName)
-				errCheck = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
-					msg, err = oc.AsAdmin().Run("get").Args("packagemanifest", "-l", label, "-n", subUpgrade.catalogSourceNamespace).Output()
-					if strings.Contains(msg, subUpgrade.subName) {
-						return true, nil
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v is not in the %v catalog. Cannot change subscription: %v %v", subUpgrade.subName, testrunUpgrade.catalogSourceName, msg, err))
-
-				g.By("Changing catalogsource in subscription")
-				msg, err = changeSubscriptionCatalog(oc, subUpgrade, testrunUpgrade)
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: patching the subscription catalog %v", subUpgrade), msg, err)
-				}
-
-				// wait for subscription to finish
-				msg, err = subscriptionIsFinished(oc, subUpgrade)
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: subscription wait failed %v", subUpgrade), msg, err)
-				}
-			}
-
-			if testrunUpgrade.channel != subUpgrade.channel {
-				g.By("Changing the subscription channel")
-				msg, err = changeSubscriptionChannel(oc, subUpgrade, testrunUpgrade)
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: patching the subscription channel %v", subUpgrade), msg, err)
-				}
-
-				e2e.Logf("STEP patched subscription channel %v %v", msg, err)
-
-				// all pods restart & subscription gets recreated
-				msg, err = subscriptionIsFinished(oc, subUpgrade)
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: subscription wait failed for %v", subUpgrade), msg, err)
-				}
-				// check that controller manager pod is running?
-			}
-
-		} else {
-			msg = fmt.Sprintf("\nSTEP skipping Upgrade will not be done: %v\n%v %v", testrunUpgrade, msg, err)
-			g.Skip(msg)
+		if testrunUpgradeWithSubscription.icspNeeded {
+			msg, err = applyImageContentSourcePolicy(oc, icspFile, icspName)
+			msgIfErr = fmt.Sprintf("ERROR: Appliying ICSP for upgrade failed: %v %v", msg, err)
+			o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+			o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
 		}
 
-		g.By("SUCCESS")
+		if testrunUpgradeWithSubscription.catalogSourceName != subscription.catalogSourceName {
+			// catalog should already exist, but verify to ensure it is ready
+			errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+				msg, err = oc.AsAdmin().Run("get").Args("catsrc", testrunUpgradeWithSubscription.catalogSourceName, "-n", subscriptionUpgrade.catalogSourceNamespace, "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
+				if msg == "READY" && err == nil {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("catalog %v is not found.  Will not upgrade: %v %v", testrunUpgradeWithSubscription.catalogSourceName, msg, err))
+
+			g.By("Check catalog for " + subscriptionUpgrade.subName)
+			label := fmt.Sprintf("catalog=%v", testrunUpgradeWithSubscription.catalogSourceName)
+			errCheck = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+				msg, err = oc.AsAdmin().Run("get").Args("packagemanifest", "-l", label, "-n", subscriptionUpgrade.catalogSourceNamespace).Output()
+				if strings.Contains(msg, subscriptionUpgrade.subName) {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v is not in the %v catalog. Cannot change subscription: %v %v", subscriptionUpgrade.subName, testrunUpgradeWithSubscription.catalogSourceName, msg, err))
+
+			msg, err = changeSubscriptionCatalog(oc, subscriptionUpgrade, testrunUpgradeWithSubscription)
+			msgIfErr = fmt.Sprintf("ERROR: patching the subscription catalog %v failed %v %v", subscriptionUpgrade, msg, err)
+			o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+			o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
+
+			msg, err = subscriptionIsFinished(oc, subscriptionUpgrade)
+			msgIfErr = fmt.Sprintf("ERROR: subscription wait for catalog patch %v failed %v %v", subscriptionUpgrade, msg, err)
+			o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+			o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
+		}
+
+		if testrunUpgradeWithSubscription.channel != subscription.channel {
+			g.By("Changing the subscription channel")
+			msg, err = changeSubscriptionChannel(oc, subscriptionUpgrade, testrunUpgradeWithSubscription)
+			msgIfErr = fmt.Sprintf("ERROR: patching the subscription channel %v: %v %v", subscriptionUpgrade, msg, err)
+			o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+			o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
+
+			// all pods restart & subscription gets recreated
+			msg, err = subscriptionIsFinished(oc, subscriptionUpgrade)
+			msgIfErr = fmt.Sprintf("ERROR: subscription wait after channel changed %v: %v %v", subscriptionUpgrade, msg, err)
+			o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+			o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
+		}
 	})
 
 	g.It("Author:vvoronko-High-60231-Scale-up deployment [Serial]", func() {

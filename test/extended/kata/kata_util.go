@@ -43,16 +43,8 @@ type KataconfigDescription struct {
 	template         string
 }
 
-// if you change TestrunConfigmap, modify:
-// getTestRunConfigmap()
-// getTestRunEnvVars()
-// testrun-cm-template.yaml
-// kata.go:
-//
-//	testrunDefault
-//	53583
-type TestrunConfigmap struct {
-	exists             bool
+type TestRunDescription struct {
+	checked            bool
 	catalogSourceName  string
 	channel            string
 	icspNeeded         bool
@@ -85,17 +77,15 @@ type PeerpodParam struct {
 }
 
 var (
-	snooze          time.Duration = 2400
-	kataSnooze      time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	podSnooze       time.Duration = 600  // Peer Pods take longer than 2 minutes
-	defaultOpVer                  = "1.5.0"
-	opNamespace                   = "openshift-sandboxed-containers-operator"
-	mustGatherImage               = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel9:1.5.0"
-	podRunState                   = "Running"
-	featureLabel                  = "feature.node.kubernetes.io/runtime.kata=true"
-	workerLabel                   = "node-role.kubernetes.io/worker"
-	kataocLabel                   = "node-role.kubernetes.io/kata-oc"
-	customLabel                   = "custom-label=test"
+	snooze       time.Duration = 2400
+	kataSnooze   time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+	podSnooze    time.Duration = 600  // Peer Pods take longer than 2 minutes
+	defaultOpVer               = "1.5.0"
+	podRunState                = "Running"
+	featureLabel               = "feature.node.kubernetes.io/runtime.kata=true"
+	workerLabel                = "node-role.kubernetes.io/worker"
+	kataocLabel                = "node-role.kubernetes.io/kata-oc"
+	customLabel                = "custom-label=test"
 )
 
 func ensureNamespaceIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, nsFile string) {
@@ -278,9 +268,6 @@ func deleteKataResource(oc *exutil.CLI, res, resNs, resName string) bool {
 	}
 	return true
 }
-
-// author: abhbaner@redhat.com
-// checkKataPodStatus() replaced checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -481,68 +468,6 @@ func deleteDeployment(oc *exutil.CLI, deployNs, deployName string) bool {
 	return deleteKataResource(oc, "deploy", deployNs, deployName)
 }
 
-func getTestRunConfigmap(oc *exutil.CLI, testrunDefault TestrunConfigmap, cmNs, cmName string) (testrun TestrunConfigmap, err error) {
-	// set defaults
-	testrun = testrunDefault
-	testrun.exists = false
-
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
-	if err != nil {
-		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
-	} else {
-		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName, "-o", "jsonpath={.data}").Output()
-		if err != nil {
-			e2e.Failf("Configmap %v has error, no .data: %v %v", cmName, configmapData, err)
-			return testrun, err
-		}
-		testrun.exists = true
-		e2e.Logf("configmap file %v found. Data is:\n%v", cmName, configmapData)
-		if gjson.Get(configmapData, "catalogsourcename").Exists() {
-			testrun.catalogSourceName = gjson.Get(configmapData, "catalogsourcename").String()
-		}
-
-		if gjson.Get(configmapData, "channel").Exists() {
-			testrun.channel = gjson.Get(configmapData, "channel").String()
-		}
-
-		if gjson.Get(configmapData, "icspneeded").Exists() {
-			testrun.icspNeeded = gjson.Get(configmapData, "icspneeded").Bool()
-		}
-
-		if gjson.Get(configmapData, "mustgatherimage").Exists() {
-			testrun.mustgatherImage = gjson.Get(configmapData, "mustgatherimage").String()
-			if strings.Contains(testrun.mustgatherImage, "brew.registry.redhat.io") {
-				testrun.icspNeeded = true
-			}
-		}
-
-		if gjson.Get(configmapData, "eligibility").Exists() {
-			testrun.eligibility = gjson.Get(configmapData, "eligibility").Bool()
-		}
-
-		if gjson.Get(configmapData, "eligibleSingleNode").Exists() {
-			testrun.eligibleSingleNode = gjson.Get(configmapData, "eligibleSingleNode").Bool()
-		}
-
-		if gjson.Get(configmapData, "labelsinglenode").Exists() {
-			testrun.labelSingleNode = gjson.Get(configmapData, "labelsinglenode").Bool()
-		}
-
-		if gjson.Get(configmapData, "operatorVer").Exists() {
-			testrun.operatorVer = gjson.Get(configmapData, "operatorVer").String()
-		}
-
-		if gjson.Get(configmapData, "runtimeClassName").Exists() {
-			testrun.runtimeClassName = gjson.Get(configmapData, "runtimeClassName").String()
-		}
-
-		if gjson.Get(configmapData, "enablePeerPods").Exists() {
-			testrun.enablePeerPods = gjson.Get(configmapData, "enablePeerPods").Bool()
-		}
-	}
-	return testrun, err
-}
-
 func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer string) {
 	jsonVersion, err := oc.AsAdmin().WithoutNamespace().Run("version").Args("-o", "json").Output()
 	if err != nil || jsonVersion == "" || !gjson.Get(jsonVersion, "openshiftVersion").Exists() {
@@ -582,14 +507,14 @@ func waitForKataconfig(oc *exutil.CLI, kcName, opNamespace string) (msg string, 
 	return msg, err
 }
 
-func changeSubscriptionCatalog(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestrunConfigmap) (msg string, err error) {
+func changeSubscriptionCatalog(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestRunDescription) (msg string, err error) {
 	// check for catsrc existence before calling
 	patch := fmt.Sprintf("{\"spec\":{\"source\":\"%v\"}}", testrun.catalogSourceName)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", subscription.subName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
 	return msg, err
 }
 
-func changeSubscriptionChannel(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestrunConfigmap) (msg string, err error) {
+func changeSubscriptionChannel(oc *exutil.CLI, subscription SubscriptionDescription, testrun TestRunDescription) (msg string, err error) {
 	patch := fmt.Sprintf("{\"spec\":{\"channel\":\"%v\"}}", testrun.channel)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", subscription.subName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
 	return msg, err
@@ -601,107 +526,7 @@ func logErrorAndFail(oc *exutil.CLI, logMsg, msg string, err error) {
 	o.Expect(msg).NotTo(o.BeEmpty())
 }
 
-func getTestRunEnvVars(envPrefix string, testrunDefault TestrunConfigmap) (testrunEnv TestrunConfigmap, msg string) {
-
-	var (
-		err error
-		val string
-	)
-	testrunEnv = testrunDefault
-	testrunEnv.exists = false
-
-	switch envPrefix {
-	case "OSCS":
-		msg = fmt.Sprintf("Looking for %v prefixed environment variables for starting OSC version", envPrefix)
-	case "OSCU":
-		msg = fmt.Sprintf("Looking for %v prefixed environment variables for upgrading OSC version", envPrefix)
-	default:
-		msg = fmt.Sprintf("Cannot look for %v prefixed environment variables \nValid prefixes are OSCS or OSCU", envPrefix)
-		return testrunEnv, msg
-	}
-
-	val = os.Getenv(envPrefix + "OSCCHANNEL")
-	if val != "" {
-		testrunEnv.channel = val
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "ICSPNEEDED")
-	if val != "" {
-		testrunEnv.icspNeeded, err = strconv.ParseBool(val)
-		if err != nil {
-			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ICSPNEEDED")
-		}
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "CATSOURCENAME")
-	if val != "" {
-		testrunEnv.catalogSourceName = val
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "MUSTGATHERIMAGE")
-	if val != "" {
-		testrunEnv.mustgatherImage = val
-		testrunEnv.exists = true
-		if strings.Contains(val, "brew.registry.redhat.io") {
-			testrunEnv.icspNeeded = true
-		}
-	}
-
-	val = os.Getenv(envPrefix + "OPERATORVER")
-	if val != "" {
-		testrunEnv.operatorVer = val
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "RUNTIMECLASSNAME")
-	if val != "" {
-		testrunEnv.runtimeClassName = val
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "ENABLEPEERPODS")
-	if val != "" {
-		testrunEnv.enablePeerPods, err = strconv.ParseBool(val)
-		if err != nil {
-			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ENABLEPEERPODS")
-		}
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "ELIGIBILITY")
-	if val != "" {
-		testrunEnv.eligibility, err = strconv.ParseBool(val)
-		if err != nil {
-			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ELIGIBILITY")
-		}
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "ELIGIBLESINGLENODE")
-	if val != "" {
-		testrunEnv.eligibleSingleNode, err = strconv.ParseBool(val)
-		if err != nil {
-			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ELIGIBLESINGLENODE")
-		}
-		testrunEnv.exists = true
-	}
-
-	val = os.Getenv(envPrefix + "LABELSINGLENODE")
-	if val != "" {
-		testrunEnv.labelSingleNode, err = strconv.ParseBool(val)
-		if err != nil {
-			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"LABELSINGLENODE")
-		}
-		testrunEnv.exists = true
-	}
-
-	return testrunEnv, msg
-}
-
-func checkAndLabelCustomNodes(oc *exutil.CLI, testrun TestrunConfigmap) {
+func checkAndLabelCustomNodes(oc *exutil.CLI, testrun TestRunDescription) {
 	e2e.Logf("check and label nodes (or single node for custom label)")
 	nodeCustomList := exutil.GetNodeListByLabel(oc, customLabel)
 	if len(nodeCustomList) > 0 {
@@ -718,7 +543,7 @@ func checkAndLabelCustomNodes(oc *exutil.CLI, testrun TestrunConfigmap) {
 
 }
 
-func labelEligibleNodes(oc *exutil.CLI, testrun TestrunConfigmap) {
+func labelEligibleNodes(oc *exutil.CLI, testrun TestRunDescription) {
 	e2e.Logf("Label worker nodes for eligibility feature")
 	if testrun.eligibleSingleNode {
 		node, err := exutil.GetFirstWorkerNode(oc)
@@ -1714,4 +1539,126 @@ func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace st
 		return fmt.Sprintf("CM created has an empty value for Image ID : %s", imageIDParam), nil, ""
 	}
 	return "CM does have the Image ID", nil, imageID
+}
+
+func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunConfigmapNs, testrunConfigmapName string) (configmapExists bool, err error) {
+	configmapExists = true
+	if testrun.checked { // its been checked
+		return configmapExists, nil
+	}
+
+	errorMessage := ""
+	// testrun.checked should == false
+
+	configmapJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", testrunConfigmapNs, testrunConfigmapName, "-o", "json").Output()
+	if err != nil {
+		e2e.Logf("Configmap is not found: %v %v", configmapJson, err)
+		testrun.checked = true // we checked, it doesn't exist
+		return false, nil
+	}
+
+	// testrun.checked should still == false
+	configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", testrunConfigmapNs, testrunConfigmapName, "-o", "jsonpath={.data}").Output()
+	if err != nil {
+		e2e.Logf("Configmap %v has error %v, no .data: %v %v", testrunConfigmapName, configmapJson, configmapData, err)
+		return configmapExists, err
+	}
+	e2e.Logf("configmap file %v found. Data is:\n%v", testrunConfigmapName, configmapData)
+
+	if gjson.Get(configmapData, "catalogsourcename").Exists() {
+		testrun.catalogSourceName = gjson.Get(configmapData, "catalogsourcename").String()
+	} else {
+		errorMessage = fmt.Sprintf("catalogsourcename is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "channel").Exists() {
+		testrun.channel = gjson.Get(configmapData, "channel").String()
+	} else {
+		errorMessage = fmt.Sprintf("channel is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "icspneeded").Exists() {
+		testrun.icspNeeded = gjson.Get(configmapData, "icspneeded").Bool()
+	} else {
+		errorMessage = fmt.Sprintf("icspneeded is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "mustgatherimage").Exists() {
+		testrun.mustgatherImage = gjson.Get(configmapData, "mustgatherimage").String()
+		if strings.Contains(testrun.mustgatherImage, "brew.registry.redhat.io") {
+			testrun.icspNeeded = true
+		}
+	} else {
+		errorMessage = fmt.Sprintf("mustgatherimage is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "eligibility").Exists() {
+		testrun.eligibility = gjson.Get(configmapData, "eligibility").Bool()
+	} else {
+		errorMessage = fmt.Sprintf("eligibility is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "eligibleSingleNode").Exists() {
+		testrun.eligibleSingleNode = gjson.Get(configmapData, "eligibleSingleNode").Bool()
+	} else {
+		errorMessage = fmt.Sprintf("eligibleSingleNode is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "labelSingleNode").Exists() {
+		testrun.labelSingleNode = gjson.Get(configmapData, "labelsinglenode").Bool()
+	} else {
+		errorMessage = fmt.Sprintf("labelSingleNode is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "operatorVer").Exists() {
+		testrun.operatorVer = gjson.Get(configmapData, "operatorVer").String()
+	} else {
+		errorMessage = fmt.Sprintf("operatorVer is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "runtimeClassName").Exists() {
+		testrun.runtimeClassName = gjson.Get(configmapData, "runtimeClassName").String()
+	} else {
+		errorMessage = fmt.Sprintf("runtimeClassName is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "enablePeerPods").Exists() {
+		testrun.enablePeerPods = gjson.Get(configmapData, "enablePeerPods").Bool()
+	} else {
+		errorMessage = fmt.Sprintf("enablePeerPods is missing from data\n%v", errorMessage)
+	}
+
+	if errorMessage != "" {
+		err = fmt.Errorf("%v", errorMessage)
+		// testrun.checked still == false. Setup is wrong & all tests will fail
+	} else {
+		testrun.checked = true // No errors, we checked
+	}
+
+	return configmapExists, err
+}
+
+func getTestRunParameters(oc *exutil.CLI, subscription *SubscriptionDescription, kataconfig *KataconfigDescription, testrun *TestRunDescription, testrunConfigmapNs, testrunConfigmapName string) (configmapExists bool, err error) {
+
+	configmapExists = true
+
+	if testrun.checked { // already have everything & final values == Input values
+		return configmapExists, nil
+	}
+
+	configmapExists, err = getTestRunConfigmap(oc, testrun, testrunConfigmapNs, testrunConfigmapName)
+	if err != nil {
+		// testrun.checked should be false
+		return configmapExists, err
+	}
+
+	// no errors testrun.checked should be true
+	if configmapExists { // Then testrun changed & subscription & kataconfig should too
+		subscription.catalogSourceName = testrun.catalogSourceName
+		subscription.channel = testrun.channel
+		kataconfig.eligibility = testrun.eligibility
+		kataconfig.runtimeClassName = testrun.runtimeClassName
+		kataconfig.enablePeerPods = testrun.enablePeerPods
+	}
+	return configmapExists, nil
 }
