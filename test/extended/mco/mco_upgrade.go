@@ -107,6 +107,9 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 			g.Skip("Worker pool has 0 nodes configured.")
 		}
 
+		// For debugging purposes
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeletconfig,containerruntimeconfig").Execute()
+
 		exutil.By("create kubelet config to add max 100 pods per core")
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 		kc.create("-p", "KUBELETCONFIG="+kubeletConfig)
@@ -127,15 +130,15 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 			kcTemplate = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
 			crName     = "mco-tc-62154-crconfig"
 			crTemplate = generateTemplateAbsolutePath("generic-container-runtime-config.yaml")
-
-			mcKubeletConfigName                = "99-worker-generated-kubelet"
-			mcContainerRuntimeConfigConfigName = "99-worker-generated-containerruntime"
 		)
 
 		// Skip if worker pool has no nodes
 		if len(wMcp.GetNodesOrFail()) == 0 {
 			g.Skip("Worker pool has 0 nodes configured.")
 		}
+
+		// For debugging purposes
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeletconfig,containerruntimeconfig").Execute()
 
 		// Skip if the precheck part of the test was not executed
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
@@ -172,13 +175,13 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		rmcCV := rmc.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/generated-by-controller-version}`)
 		logger.Infof("rendered MC controller version %s", rmcCV)
 
-		kblmc := NewMachineConfig(oc.AsAdmin(), mcKubeletConfigName, MachineConfigPoolWorker)
-		logger.Infof("Get controller version in KubeletConfig generated MC %s", rmc.GetName())
+		kblmc := NewMachineConfig(oc.AsAdmin(), kc.GetGeneratedMCNameOrFail(), MachineConfigPoolWorker)
+		logger.Infof("Get controller version in KubeletConfig generated MC %s", kblmc.GetName())
 		kblmcCV := kblmc.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/generated-by-controller-version}`)
 		logger.Infof("KubeletConfig generated MC controller version %s", kblmcCV)
 
-		crcmc := NewMachineConfig(oc.AsAdmin(), mcContainerRuntimeConfigConfigName, MachineConfigPoolWorker)
-		logger.Infof("Get controller version in ContainerRuntimeConfig generated MC %s", rmc.GetName())
+		crcmc := NewMachineConfig(oc.AsAdmin(), cr.GetGeneratedMCNameOrFail(), MachineConfigPoolWorker)
+		logger.Infof("Get controller version in ContainerRuntimeConfig generated MC %s", crcmc.GetName())
 		crcmcCV := crcmc.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/generated-by-controller-version}`)
 		logger.Infof("ContainerRuntimeConfig generated MC controller version %s", crcmcCV)
 
