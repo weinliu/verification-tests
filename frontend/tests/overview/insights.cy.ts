@@ -26,7 +26,7 @@ describe('Insights check', () => {
     });
   });
 
-  it('(OCP-47571,yapei,UserInterface) Show Cluster Support Level', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-47571,yapei,UserInterface) Show Cluster Support Level', {tags: ['e2e','admin']}, () => {
     let sla_text, cluster_id;
     // get clusterID
     let include_unknown = true;
