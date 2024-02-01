@@ -79,6 +79,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipForAwsOutpostCluster(oc)
 
 		ms := exutil.MachineSetDescription{"machineset-45430", 0}
 		defer exutil.WaitForMachinesDisapper(oc, "machineset-45430")

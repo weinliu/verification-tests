@@ -181,9 +181,12 @@ func GetNodeNameFromMachine(oc *CLI, machineName string) string {
 	return nodeName
 }
 
-// GetRandomMachineSetName get a random RHCOS MachineSet name
+// GetRandomMachineSetName get a random RHCOS MachineSet name, if it's aws outpost cluster, return a outpost machineset
 func GetRandomMachineSetName(oc *CLI) string {
 	e2e.Logf("Getting a random MachineSet ...")
+	if IsAwsOutpostCluster(oc) {
+		return GetOneOutpostMachineSet(oc)
+	}
 	allMachineSetNames := ListWorkerMachineSetNames(oc)
 	var filteredMachineSetNames []string
 
@@ -625,4 +628,33 @@ func UseSpotInstanceWorkersCheck(oc *CLI) bool {
 		return true
 	}
 	return false
+}
+
+// IsAwsOutpostCluster judges whether the aws test cluster has outpost workers
+func IsAwsOutpostCluster(oc *CLI) bool {
+	if CheckPlatform(oc) != "aws" {
+		return false
+	}
+	workersLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "--show-labels").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Contains(workersLabel, `topology.ebs.csi.aws.com/outpost-id`)
+}
+
+// SkipForAwsOutpostCluster skip for Aws Outpost cluster
+func SkipForAwsOutpostCluster(oc *CLI) {
+	if IsAwsOutpostCluster(oc) {
+		g.Skip("Skip for Aws Outpost cluster.")
+	}
+}
+
+// GetOneOutpostMachineSet return one outpost machineset name
+func GetOneOutpostMachineSet(oc *CLI) string {
+	outpostMachines, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-l", "topology.ebs.csi.aws.com/outpost-id", "-o=jsonpath={.items[*].metadata.annotations.machine\\.openshift\\.io\\/machine}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	oneOutpostMachine := strings.Split(outpostMachines, " ")[0]
+	start := strings.Index(oneOutpostMachine, "openshift-machine-api/")
+	suffix := strings.LastIndex(oneOutpostMachine, "-")
+	oneOutpostMachineSet := oneOutpostMachine[start+22 : suffix]
+	e2e.Logf("oneOutpostMachineSet: %s", oneOutpostMachineSet)
+	return oneOutpostMachineSet
 }

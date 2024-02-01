@@ -323,6 +323,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		exutil.SkipForAwsOutpostCluster(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48012"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -383,6 +384,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-2" && region != "us-east-1" {
@@ -502,6 +504,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-37915-Creating machines using KMS keys from AWS [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		exutil.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-1" && region != "us-east-2" {
@@ -780,6 +783,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-48464-Dedicated tenancy should be exposed on aws providerspec [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		exutil.SkipForAwsOutpostCluster(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48464"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -881,6 +885,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipForAwsOutpostCluster(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-37497"
 		ms := exutil.MachineSetDescription{machinesetName, 0}

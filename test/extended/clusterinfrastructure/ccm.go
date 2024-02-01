@@ -294,6 +294,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-High-70744-[CCM] Pull images from ECR repository [Disruptive]", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		exutil.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-2" && region != "us-east-1" {
