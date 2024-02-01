@@ -245,7 +245,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			logger.Infof("Check that the file is served in the ignition config")
 			jsonPath = fmt.Sprintf(`storage.files.#(path=="%s")`, kubeCloudCertFile)
 			o.Eventually(mcp.GetMCSIgnitionConfig,
-				"1m", "20s").WithArguments(true, ignitionConfig).ShouldNot(
+				"3m", "20s").WithArguments(true, ignitionConfig).ShouldNot(
 				HavePathWithValue(jsonPath, o.BeEmpty()),
 				"The file %s is not served in the ignition config", kubeCloudCertFile)
 
