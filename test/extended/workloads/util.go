@@ -1433,6 +1433,7 @@ func createCSAndISCP(oc *exutil.CLI, podLabel string, namespace string, expected
 	for _, yamlFileName := range yamlFiles {
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", yamlFileName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exec.Command("bash", "-c", "cat "+yamlFileName).Output()
 	}
 
 	e2e.Logf("Check the version and item from catalogsource")
@@ -1760,7 +1761,6 @@ func assertPullSecret(oc *exutil.CLI) bool {
 	} else {
 		return true
 	}
-
 }
 
 func getTotalAllocatableMemory(oc *exutil.CLI, allocatableMemory string, totalRequests string) int {
@@ -1824,4 +1824,76 @@ func checkStatefulsetRollout(oc *exutil.CLI, namespace string, statefulSetName s
 		return true, nil
 	}
 	return false, nil
+}
+
+func getRouteCAToFile(oc *exutil.CLI, dirname string) (err error) {
+	if err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/router-ca", "-n", "openshift-ingress-operator",
+		"--to="+dirname, "--confirm").Execute(); err != nil {
+		return fmt.Errorf("failed to acquire default route ca bundle: %v", err)
+	}
+	return
+}
+
+// Configure the Registry Certificate as trusted for cincinnati
+func trustCert(oc *exutil.CLI, registry string, cert string, configmapName string) (err error) {
+	var output string
+	certRegistry := registry
+	before, after, found := strings.Cut(registry, ":")
+	if found {
+		certRegistry = before + ".." + after
+	}
+
+	if err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-config", "configmap", configmapName, "--from-file="+certRegistry+"="+cert, "--from-file=updateservice-registry="+cert).Execute(); err != nil {
+		err = fmt.Errorf("create trust-ca configmap failed: %v", err)
+		return
+	}
+	if err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "-p", fmt.Sprintf("{\"spec\": {\"additionalTrustedCA\": {\"name\": \"%s\"}}}", configmapName), "--type=merge").Execute(); err != nil {
+		err = fmt.Errorf("patch image.config.openshift.io/cluster failed: %v", err)
+		return
+	}
+	waitErr := wait.Poll(60*time.Second, 10*time.Minute, func() (bool, error) {
+		registryHealth := checkCOHealth(oc, "image-registry")
+		if registryHealth {
+			return true, nil
+		}
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+		e2e.Logf("Waiting for image-registry coming ready...")
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", output))
+	return nil
+}
+
+func restoreAddCA(oc *exutil.CLI, addCA string, configmapName string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", configmapName).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var message string
+	if addCA == "" {
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=json", "-p", "[{\"op\":\"remove\", \"path\":\"/spec/additionalTrustedCA\"}]").Execute()
+	} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"additionalTrustedCA\":%s}}", addCA)).Execute()
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitErr := wait.Poll(60*time.Second, 10*time.Minute, func() (bool, error) {
+		registryHealth := checkCOHealth(oc, "image-registry")
+		if registryHealth {
+			return true, nil
+		}
+		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+		e2e.Logf("Wait for image-registry coming ready")
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
+}
+
+// Check if image-registry is healthy
+func checkCOHealth(oc *exutil.CLI, co string) bool {
+	e2e.Logf("Checking CO %s is healthy...", co)
+	status := "TrueFalseFalse"
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", co, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+	if err != nil {
+		e2e.Logf("Get co status failed: %v", err.Error())
+		return false
+	}
+	return strings.Contains(output, status)
 }

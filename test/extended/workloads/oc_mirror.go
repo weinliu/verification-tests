@@ -658,14 +658,26 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		err = getRouteCAToFile(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", registry)
-		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
-			g.Skip("There is no public registry, skip.")
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
 		}
 
-		publicRegistry, _, _ := strings.Cut(registry, "/")
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-60601")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-60601")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the registry as OCI FBC")
 		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
@@ -681,13 +693,13 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		ociFilterConfig := filepath.Join(ocmirrorBaseDir, "config-oci-filter.yaml")
-		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, publicRegistry, ociFilterConfig)
+		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, ociFilterConfig)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer os.RemoveAll("oc-mirror-workspace")
 		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+publicRegistry, "--dest-skip-tls", "--ignore-history").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--ignore-history").Execute()
 			if err != nil {
 				e2e.Logf("mirror failed, retrying...")
 				return false, nil
@@ -702,6 +714,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Hign-65149-mirror2disk and disk2mirror workflow for local oci catalog [Serial]", func() {
+		_ = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("version").Execute()
 		g.By("Set registry config")
 		dirname := "/tmp/case65149"
 		err := os.MkdirAll(dirname, 0755)
@@ -710,14 +723,26 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		err = getRouteCAToFile(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", registry)
-		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
-			g.Skip("There is no public registry, skip.")
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
 		}
 
-		publicRegistry, _, _ := strings.Cut(registry, "/")
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-65149")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-65149")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the catalog as OCI FBC")
 		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-index")
@@ -747,7 +772,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		g.By("Starting disk2mirror  ....")
 		mirrorErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("disk to registry failed, retrying...")
 				return false, nil
@@ -761,6 +786,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Critical-65150-mirror2disk and disk2mirror workflow for local multi oci catalog [Serial]", func() {
+		_ = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("version").Execute()
 		g.By("Set registry config")
 		dirname := "/tmp/case65150"
 		err := os.MkdirAll(dirname, 0755)
@@ -769,14 +795,26 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		err = getRouteCAToFile(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", registry)
-		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
-			g.Skip("There is no public registry, skip.")
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
 		}
 
-		publicRegistry, _, _ := strings.Cut(registry, "/")
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-65150")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-65150")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the multi-arch catalog as OCI FBC")
 		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-multi-index")
@@ -793,7 +831,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		ociFilterConfig := filepath.Join(ocmirrorBaseDir, "config-oci-65150.yaml")
 		g.By("update the operator mirror config file")
-		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, publicRegistry, ociFilterConfig)
+		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, ociFilterConfig)
 		e2e.Logf("Check sed cmd %s description:", sedCmd)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -812,7 +850,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		g.By("Starting disk2mirror  ....")
 		mirrorErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("disk to registry failed, retrying...")
 				return false, nil
@@ -834,14 +872,26 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		err = getRouteCAToFile(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", registry)
-		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
-			g.Skip("There is no public registry, skip.")
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
 		}
 
-		publicRegistry, _, _ := strings.Cut(registry, "/")
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-65151")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-65151")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer os.RemoveAll("/tmp/redhat-operator-index")
 		g.By("Copy the catalog as OCI FBC")
@@ -859,7 +909,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		ociFirstConfig := filepath.Join(ocmirrorBaseDir, "config-oci-65151-1.yaml")
 		ociSecondConfig := filepath.Join(ocmirrorBaseDir, "config-oci-65151-2.yaml")
 		for _, filename := range []string{ociFirstConfig, ociSecondConfig} {
-			sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, publicRegistry, filename)
+			sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, filename)
 			_, err = exec.Command("bash", "-c", sedCmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
@@ -878,7 +928,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
 		g.By("Start disk2mirror for the first time")
 		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("The first disk2mirror  failed, retrying...")
 				return false, nil
@@ -899,7 +949,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
 		g.By("Start disk2mirror for the second time")
 		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq2_000000.tar", "docker://"+publicRegistry, "--dest-skip-tls").Output()
+			output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq2_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if err != nil {
 				e2e.Logf("The second disk2mirror  failed, retrying...")
@@ -1203,14 +1253,26 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		err = getRouteCAToFile(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", registry)
-		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
-			g.Skip("There is no public registry, skip.")
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
 		}
 
-		publicRegistry, _, _ := strings.Cut(registry, "/")
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-65152")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-65152")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the multi-arch catalog as OCI FBC")
 		command := fmt.Sprintf("skopeo copy --all --format oci docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-multi-index")
@@ -1230,7 +1292,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer os.RemoveAll("olm_artifacts")
 		g.By("Starting mirror2mirror ....")
 		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("mirror2mirror failed, retrying...")
 				return false, nil
@@ -1255,21 +1317,33 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		err = getRouteCAToFile(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", registry)
-		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
-			g.Skip("There is no public registry, skip.")
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
 		}
 
-		publicRegistry, _, _ := strings.Cut(registry, "/")
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-66869")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-66869")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		imageSetConfig := filepath.Join(ocmirrorBaseDir, "config-66869.yaml")
 
 		defer os.RemoveAll("oc-mirror-workspace")
 		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("mirror2mirror failed, retrying...")
 				return false, nil
@@ -1296,21 +1370,33 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		registry, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "-o=jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}", "--ignore-not-found").Output()
+		err = getRouteCAToFile(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Registry is %s", registry)
-		if registry == "" || strings.Contains(registry, "brew.registry.redhat.io") {
-			g.Skip("There is no public registry, skip.")
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
 		}
 
-		publicRegistry, _, _ := strings.Cut(registry, "/")
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-66870")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-66870")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		imageSetConfig := filepath.Join(ocmirrorBaseDir, "config-66870.yaml")
 
 		defer os.RemoveAll("oc-mirror-workspace")
 		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("mirror2mirror failed, retrying...")
 				return false, nil
