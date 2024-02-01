@@ -1203,4 +1203,65 @@ spec:
 		}
 	})
 
+	// Timeout: 60min
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-68294-GCP Shared VPC support for MachinePool[Serial]", func() {
+		testCaseID := "68294"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		//oc.SetupProject()
+
+		exutil.By("Config GCP Install-Config Secret...")
+		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(projectID).NotTo(o.BeEmpty())
+		installConfigSecret := gcpInstallConfig{
+			name1:              cdName + "-install-config",
+			namespace:          oc.Namespace(),
+			baseDomain:         GCPBaseDomain,
+			name2:              cdName,
+			region:             GCPRegion,
+			projectid:          projectID,
+			computeSubnet:      "installer-shared-vpc-subnet-2",
+			controlPlaneSubnet: "installer-shared-vpc-subnet-1",
+			network:            "installer-shared-vpc",
+			networkProjectId:   "openshift-qe-shared-vpc",
+			template:           filepath.Join(testDataDir, "gcp-install-config-sharedvpc.yaml"),
+		}
+		exutil.By("Config GCP ClusterDeployment...")
+		cluster := gcpClusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           GCPBaseDomain,
+			clusterName:          cdName,
+			platformType:         "gcp",
+			credRef:              GCPCreds,
+			region:               GCPRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		exutil.By("Create the infra MachinePool with the shared vpc...")
+		inframachinepoolGCPTemp := filepath.Join(testDataDir, "machinepool-infra-gcp-sharedvpc.yaml")
+		inframp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    inframachinepoolGCPTemp,
+		}
+		defer cleanupObjects(oc,
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"},
+		)
+		inframp.create(oc)
+
+		exutil.By("Check GCP ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		exutil.By("Check the infra MachinePool .status.replicas = 1")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+
+	})
+
 })

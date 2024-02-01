@@ -172,12 +172,13 @@ type clusterDeploymentPrivateLink struct {
 }
 
 type machinepool struct {
-	clusterName    string
-	namespace      string
-	iops           int
-	template       string
-	authentication string
-	gcpSecureBoot  string
+	clusterName      string
+	namespace        string
+	iops             int
+	template         string
+	authentication   string
+	gcpSecureBoot    string
+	networkProjectID string
 }
 
 type syncSetResource struct {
@@ -272,14 +273,18 @@ type azureClusterPool struct {
 
 // GCP
 type gcpInstallConfig struct {
-	name1      string
-	namespace  string
-	baseDomain string
-	name2      string
-	region     string
-	projectid  string
-	template   string
-	secureBoot string
+	name1              string
+	namespace          string
+	baseDomain         string
+	name2              string
+	region             string
+	projectid          string
+	template           string
+	secureBoot         string
+	computeSubnet      string
+	controlPlaneSubnet string
+	network            string
+	networkProjectId   string
 }
 
 type gcpClusterDeployment struct {
@@ -684,7 +689,11 @@ func (machine *machinepool) create(oc *exutil.CLI) {
 	if machine.gcpSecureBoot == "" {
 		machine.gcpSecureBoot = "Disabled"
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace, "IOPS="+strconv.Itoa(machine.iops), "AUTHENTICATION="+machine.authentication, "SECUREBOOT="+machine.gcpSecureBoot)
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME=" + machine.clusterName, "NAMESPACE=" + machine.namespace, "IOPS=" + strconv.Itoa(machine.iops), "AUTHENTICATION=" + machine.authentication, "SECUREBOOT=" + machine.gcpSecureBoot}
+	if len(machine.networkProjectID) > 0 {
+		parameters = append(parameters, "NETWORKPROJECTID="+machine.networkProjectID)
+	}
+	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -725,7 +734,20 @@ func (config *gcpInstallConfig) create(oc *exutil.CLI) {
 	if config.secureBoot == "" {
 		config.secureBoot = "Disabled"
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PROJECTID="+config.projectid, "SECUREBOOT="+config.secureBoot)
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1=" + config.name1, "NAMESPACE=" + config.namespace, "BASEDOMAIN=" + config.baseDomain, "NAME2=" + config.name2, "REGION=" + config.region, "PROJECTID=" + config.projectid, "SECUREBOOT=" + config.secureBoot}
+	if len(config.computeSubnet) > 0 {
+		parameters = append(parameters, "COMPUTESUBNET="+config.computeSubnet)
+	}
+	if len(config.controlPlaneSubnet) > 0 {
+		parameters = append(parameters, "CONTROLPLANESUBNET="+config.controlPlaneSubnet)
+	}
+	if len(config.network) > 0 {
+		parameters = append(parameters, "NETWORK="+config.network)
+	}
+	if len(config.networkProjectId) > 0 {
+		parameters = append(parameters, "NETWORKPROJECTID="+config.networkProjectId)
+	}
+	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
