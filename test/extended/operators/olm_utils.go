@@ -295,24 +295,37 @@ func (sub *subscriptionDescription) approveSpecificIP(oc *exutil.CLI, itName str
 		return false, nil
 	})
 	if strings.Compare(state, "UpgradePending") == 0 {
-		e2e.Logf(" and the expected CSV")
-		ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
-		if strings.Contains(ipCsv, csvName) {
-			installPlan := strings.Fields(ipCsv)[0]
-			o.Expect(installPlan).NotTo(o.BeEmpty())
-			e2e.Logf("---> Get the pending InstallPlan %s", installPlan)
-			patchResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "--type", "merge", "-p", "{\"spec\": {\"approved\": true}}")
-			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 70*time.Second, false, func(ctx context.Context) (bool, error) {
-				err := newCheck("expect", asAdmin, withoutNamespace, compare, phase, ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
+		e2e.Logf("--> The expected CSV: %s", csvName)
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
+			ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
+			if strings.Contains(ipCsv, csvName) {
+				installPlan := strings.Fields(ipCsv)[0]
+				if len(installPlan) == 0 {
+					return false, fmt.Errorf("installPlan is empty")
+				}
+				e2e.Logf("---> Get the pending InstallPlan %s", installPlan)
+				patchResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "--type", "merge", "-p", "{\"spec\": {\"approved\": true}}")
+				err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 70*time.Second, false, func(ctx context.Context) (bool, error) {
+					err := newCheck("expect", asAdmin, withoutNamespace, compare, phase, ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
+					if err != nil {
+						return false, nil
+					}
+					return true, nil
+				})
+				// break the wait loop and return an error
 				if err != nil {
-					return false, nil
+					return true, fmt.Errorf("installPlan %s is not %s", installPlan, phase)
 				}
 				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("installPlan %s is not %s", installPlan, phase))
-		} else {
-			e2e.Logf("--> Not found the specific InstallPlan, the current IP:%s", ipCsv)
+			} else {
+				e2e.Logf("--> Not found the expected CSV(%s), the current IP:%s", csvName, ipCsv)
+				return false, nil
+			}
+		})
+		if err != nil && strings.Contains(err.Error(), "installPlan") {
+			e2e.Failf(err.Error())
 		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("--> Not found the expected CSV: %s", csvName))
 	} else {
 		CSVs := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}{\" \"}{.status.currentCSV}")
 		e2e.Logf("---> No need any apporval operation, the InstalledCSV and currentCSV are the same: %s", CSVs)
