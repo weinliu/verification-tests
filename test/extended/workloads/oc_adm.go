@@ -25,6 +25,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		if checkOpenshiftSamples(oc) {
 			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
 		}
+		// Skip the case if cluster is C2S/SC2S disconnected as external network cannot be accessed
+		if strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+			g.Skip("Skipped: AWS C2S/SC2S disconnected clusters are not satisfied for this test case")
+		}
 
 		// Skip the test if baselinecaps is set to v4.13 or v4.14
 		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
