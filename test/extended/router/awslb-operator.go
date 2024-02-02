@@ -81,6 +81,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// otherwise the lb resources cannot be cleared
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ingress/ingress-test", "-n", oc.Namespace()).Output()
 		createResourceFromFile(oc, oc.Namespace(), ingress)
+		// if outpost cluster we need to add annotation to ingress
+		if exutil.IsAwsOutpostCluster(oc) {
+			annotation := "alb.ingress.kubernetes.io/subnets=" + getOutpostSubnetId(oc)
+			_, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ingress", "ingress-test", annotation, "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		output, err := oc.Run("get").Args("ingress").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingress-test"))

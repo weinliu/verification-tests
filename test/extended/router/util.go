@@ -1226,6 +1226,15 @@ func patchAlbControllerWithRoleArn(oc *exutil.CLI, ns string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// get AWS outposts subnet so we can add annonation to ingress
+func getOutpostSubnetId(oc *exutil.CLI) string {
+	machineSet := exutil.GetOneOutpostMachineSet(oc)
+	subnetId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machineSet, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.subnet.id}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the outpost subnet is %v", subnetId)
+	return subnetId
+}
+
 // this function check if the load balancer provisioned
 func waitForLoadBalancerProvision(oc *exutil.CLI, ns string, ingressName string) {
 	waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
