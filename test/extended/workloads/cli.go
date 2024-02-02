@@ -2208,6 +2208,64 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		err = oc.AsAdmin().Run("whoami").Args("").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-10136-Project should only watch its owned cache events", func() {
+		exutil.By("Create the first namespace")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+		exutil.By("Create deployment in the first namespace")
+		deployCreationErr := oc.WithoutNamespace().Run("create").Args("deployment", "deploy10136-1", "-n", ns1, "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83").Execute()
+		o.Expect(deployCreationErr).NotTo(o.HaveOccurred())
+		if ok := waitForAvailableRsRunning(oc, "deployment", "deploy10136-1", ns1, "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("deploy10136-1 pods are not running as expected")
+		}
+
+		exutil.By("Create the second namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		exutil.By("Get deployment under the second project with watch")
+		cmd2, backgroundBufNs2, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", ns2, "-o", "name", "-w").Background()
+		defer cmd2.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Create deployment in the second namespace")
+		deployCreationErr2 := oc.WithoutNamespace().Run("create").Args("deployment", "deploy10136-2", "-n", ns2, "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83").Execute()
+		o.Expect(deployCreationErr2).NotTo(o.HaveOccurred())
+		if ok := waitForAvailableRsRunning(oc, "deployment", "deploy10136-2", ns2, "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("deploy10136-2 pods are not running as expected")
+		}
+
+		exutil.By("Get deployment in the first namespace with watch")
+		cmd1, backgroundBuf, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", ns1, "-o", "name", "-w").Background()
+		defer cmd1.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Delete the deployment in the second namespace")
+		deleteDeploymentErr := oc.WithoutNamespace().Run("delete").Args("deployment", "deploy10136-2", "-n", ns2).Execute()
+		o.Expect(deleteDeploymentErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Get deployment in the first namespace again")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", ns1, "-o", "name").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Make sure the watch events matched")
+		deploymentWatchOut := strings.Replace(backgroundBuf.String(), "\n", "", -1)
+		if matched, _ := regexp.MatchString(deploymentWatchOut, out); matched {
+			e2e.Logf("All deployment events matched\n")
+		} else {
+			e2e.Failf("Deployment events not matched")
+		}
+
+		exutil.By("Make sure no trace under the second project for the resource under the first project")
+		if matched, _ := regexp.MatchString(backgroundBufNs2.String(), "deploy10136-1"); matched {
+			e2e.Failf("Should not see any trace for the resource under the first project in the second project\n")
+		}
+
+	})
 })
 
 // ClientVersion ...
