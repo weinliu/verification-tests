@@ -18,7 +18,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	var (
 		oc                  = exutil.NewCLI("fio-"+getRandomString(), exutil.KubeConfigPath())
-		dr                  = make(describerResrouce)
 		buildPruningBaseDir string
 		ogSingleTemplate    string
 		subTemplate         string
@@ -54,12 +53,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 		og = operatorGroupDescription{
 			name:      "openshift-file-integrity-qbcd",
-			namespace: "",
+			namespace: "openshift-file-integrity",
 			template:  ogSingleTemplate,
 		}
 		sub = subscriptionDescription{
 			subName:                "file-integrity-operator",
-			namespace:              "",
+			namespace:              "openshift-file-integrity",
 			channel:                "stable",
 			ipApproval:             "Automatic",
 			operatorPackage:        "file-integrity-operator",
@@ -73,7 +72,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		}
 		fi1 = fileintegrity{
 			name:              "example-fileintegrity",
-			namespace:         "",
+			namespace:         "openshift-file-integrity",
 			configname:        "",
 			configkey:         "",
 			graceperiod:       15,
@@ -84,46 +83,26 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		}
 		podModifyD = podModify{
 			name:      "",
-			namespace: "",
+			namespace: "openshift-file-integrity",
 			nodeName:  "",
 			args:      "",
 			template:  podModifyTemplate,
 		}
 
 		sub.skipMissingCatalogsources(oc)
-		itName := g.CurrentSpecReport().FullText()
-		dr.addIr(itName)
-	})
-
-	g.AfterEach(func() {
-		itName := g.CurrentSpecReport().FullText()
-		dr.getIr(itName).cleanup()
-		dr.rmIr(itName)
+		g.By("Install File Integrity Operator and check it is sucessfully installed !!! ")
+		createFileIntegrityOperator(oc, sub, og)
 	})
 
 	// It will cover test case: OCP-34388 & OCP-27760 , author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity")
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 			"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		fi1.checkFileintegrityStatus(oc, "running")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test" + getRandomString()
@@ -132,7 +111,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatuses", fileintegrityNodeStatusName, "-n", fi1.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatuses", fileintegrityNodeStatusName, "-n", sub.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fileintegrityNodeStatusName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
@@ -142,24 +121,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31979-the enabling debug flag of the logcollector should work [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
-		fi1.debug = false
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity with debug=false")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		fi1.debug = false
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "debug=false")
 		var podName = fi1.getOneFioPodName(oc)
@@ -167,7 +132,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 		g.By("Configure fileintegrity with debug=true")
 		fi1.debug = true
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "debug=true")
 		podName = fi1.getOneFioPodName(oc)
@@ -177,24 +142,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31933-the disabling debug flag of the logcollector should work [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = true
 
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity with debug=true")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "debug=true")
 		var podName = fi1.getOneFioPodName(oc)
@@ -202,7 +154,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 		g.By("Configure fileintegrity with debug=false")
 		fi1.debug = false
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "debug=false")
 		podName = fi1.getOneFioPodName(oc)
@@ -212,24 +164,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("StagerunBoth-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity without gracePeriod")
-		fi1.createFIOWithoutKeyword(oc, itName, dr, "gracePeriod")
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutKeyword(oc, "gracePeriod")
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "interval=900")
 
@@ -237,48 +176,36 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
 		fi1.graceperiod = 0
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
+		defer cleanupObjects(oc, objectTableRef{"configmap", sub.namespace, fi1.configname})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "interval=10")
 
 		fi1.graceperiod = 11
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "interval=11")
 
 		fi1.graceperiod = 120
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "interval=120")
 
 		fi1.graceperiod = -10
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkArgsInPod(oc, "interval=10")
 	})
 
 	//author: xiyuan@redhat.com
 	g.It("DEPRECATED-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 
 		nodeName := getOneRhcosWorkerNodeName(oc)
@@ -290,9 +217,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("Check fileintegritynodestatus becomes Errored")
 		fi1.configname = "errfile"
 		fi1.configkey = "aideerrconf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configErrFile, "created")
+		defer cleanupObjects(oc, objectTableRef{"configmap", sub.namespace, fi1.configname})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configErrFile, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Error", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "AIDE error: 17 Invalid configureline error", ok, []string{"events", "-n", sub.namespace, "--field-selector",
@@ -303,24 +231,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity without aide config")
-		fi1.createFIOWithoutKeyword(oc, itName, dr, "gracePeriod")
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutKeyword(oc, "gracePeriod")
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.checkOnlyOneDaemonset(oc)
@@ -328,9 +243,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("Create fileintegrity with aide config")
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
+		defer cleanupObjects(oc, objectTableRef{"configmap", sub.namespace, fi1.configname})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.checkOnlyOneDaemonset(oc)
@@ -338,24 +254,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("DEPRECATED-NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity without aide config")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
@@ -373,10 +276,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			pod2.namespace = oc.Namespace()
 			pod2.nodeName = nodeName
 			pod2.args = "rm -rf " + filePath
-			pod2.doActionsOnNode(oc, "Succeeded", dr)
+			pod2.doActionsOnNode(oc, "Succeeded")
 			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 		}()
-		pod1.doActionsOnNode(oc, "Succeeded", dr)
+		pod1.doActionsOnNode(oc, "Succeeded")
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fi1.name+"-"+nodeName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
@@ -385,7 +288,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 		g.By("delete and recreate the fileintegrity")
 		fi1.removeFileintegrity(oc, "deleted")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		fi1.getDataFromConfigmap(oc, cmName, filePath)
@@ -413,28 +316,17 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("DEPRECATED-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
 
 		g.By("Create fileintegrity with aide config")
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
+		defer cleanupObjects(oc,
+			objectTableRef{"configmap", sub.namespace, fi1.configname},
+			objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
@@ -456,23 +348,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		}
 		SkipClustersWithRhelNodes(oc)
 
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 		fi1.nodeselectorkey = "node-role.kubernetes.io/worker"
 		fi1.nodeselectorvalue = ""
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
 
 		g.By("Create taint")
 		nodeName := getOneRhcosWorkerNodeName(oc)
@@ -487,9 +365,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("Create fileintegrity with aide config and compare Aide-scan pod number and Node number")
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
+		defer cleanupObjects(oc,
+			objectTableRef{"configmap", sub.namespace, fi1.configname},
+			objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
@@ -507,7 +388,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 		g.By("Create fileintegrity with aide config and compare Aide-scan pod number and Node number")
 		fi1.removeFileintegrity(oc, "deleted")
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
@@ -527,23 +408,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		}
 		SkipClustersWithRhelNodes(oc)
 
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 		fi1.nodeselectorkey = "node-role.kubernetes.io/worker"
 		fi1.nodeselectorvalue = ""
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
 
 		g.By("Create taint")
 		nodeName := getOneRhcosWorkerNodeName(oc)
@@ -553,9 +420,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("Create fileintegrity with aide config and compare Aide-scan pod number and Node number")
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
+		defer cleanupObjects(oc,
+			objectTableRef{"configmap", sub.namespace, fi1.configname},
+			objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
 
@@ -570,26 +440,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator [Serial]", func() {
 		SkipClustersWithRhelNodes(oc)
 
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
 
 		g.By("Create fileintegrity with aide config and compare Aide-scan pod number and Node number")
 		fi1.nodeselectorkey = "node.openshift.io/os_id"
 		fi1.nodeselectorvalue = "rhcos"
-		fi1.createFIOWithConfig(oc, itName, dr)
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,node.openshift.io/os_id=rhcos")
@@ -618,28 +475,17 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("DEPRECATED-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
 
 		g.By("Create fileintegrity with aide config and compare Aide-scan pod number and Node number")
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
+		defer cleanupObjects(oc,
+			objectTableRef{"configmap", sub.namespace, fi1.configname},
+			objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
@@ -650,7 +496,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 
 		g.By("trigger reinit by changing aide config to empty")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
@@ -658,24 +504,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: xiyuan@redhat.com
 	g.It("DEPRECATED-NonHyperShiftHOST-ConnectedOnly-ARO-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Slow][Serial]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
-
 		g.By("Create fileintegrity without aide config")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
@@ -692,9 +525,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("trigger reinit by applying aide config")
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
+		defer cleanupObjects(oc, objectTableRef{"configmap", sub.namespace, fi1.configname})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		newCheck("expect", asAdmin, withoutNamespace, contain, fi1.configname, ok, []string{"configmap", "-n", fi1.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
@@ -715,9 +549,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("trigger reinit by applying aide config")
 		fi1.configname = "myconf1"
 		fi1.configkey = "aide-conf1"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile1, "created")
+		defer cleanupObjects(oc, objectTableRef{"configmap", sub.namespace, fi1.configname})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile1, "created")
 		fi1.checkConfigmapCreated(oc)
-		fi1.createFIOWithConfig(oc, itName, dr)
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		checkDBFilesUpdated(oc, fi1, dbBackupListAfterInit1, nodeName, dbReinit, isNewFIO)
@@ -725,27 +560,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial][Slow]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
-
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
 
 		g.By("Create fileintegrity with md5 aide config")
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
-		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, md5configFile, "created")
-		fi1.createFIOWithConfig(oc, itName, dr)
+		defer cleanupObjects(oc,
+			objectTableRef{"configmap", sub.namespace, fi1.configname},
+			objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, md5configFile, "created")
+		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		nodeName := getOneRhcosWorkerNodeName(oc)
 
@@ -772,10 +596,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 				pod2.namespace = oc.Namespace()
 				pod2.nodeName = nodeName
 				pod2.args = "sed -i '/testAAAAAAAAA/d' " + filePath
-				pod2.doActionsOnNode(oc, "Succeeded", dr)
+				pod2.doActionsOnNode(oc, "Succeeded")
 				cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 			}()
-			pod1.doActionsOnNode(oc, "Succeeded", dr)
+			pod1.doActionsOnNode(oc, "Succeeded")
 			fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 			cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fi1.name+"-"+nodeName, "-n", sub.namespace,
 				`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
@@ -786,28 +610,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 	//author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
-		var itName = g.CurrentSpecReport().FullText()
-		oc.SetupProject()
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
 		g.By("Label the namespace  !!!\n")
 		labelNameSpace(oc, sub.namespace, "openshift.io/cluster-monitoring=true")
-		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create og")
-		og.create(oc, itName, dr)
-		og.checkOperatorgroup(oc, og.name)
-		g.By("Create subscription")
-		sub.create(oc, itName, dr)
-		g.By("check csv")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		sub.checkPodFioStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "openshift.io/cluster-monitoring", ok, []string{"namespace", sub.namespace, "-o=jsonpath={.metadata.labels}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "metrics", ok, []string{"service", "-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Create fileintegrity object with default aide config..\n")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		// trigger reinit before checking fileintegritynodestatus, otherwise it could be Failed status
@@ -830,10 +642,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			pod2.namespace = oc.Namespace()
 			pod2.nodeName = nodeName
 			pod2.args = "rm -rf " + filePath
-			pod2.doActionsOnNode(oc, "Succeeded", dr)
+			pod2.doActionsOnNode(oc, "Succeeded")
 			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 		}()
-		pod1.doActionsOnNode(oc, "Succeeded", dr)
+		pod1.doActionsOnNode(oc, "Succeeded")
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 
 		metricsErr := []string{"file_integrity_operator_daemonset_update_total{operation=\"update\"} 1", "file_integrity_operator_node_failed{node=\"" + nodeName + "\"} 1",

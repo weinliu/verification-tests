@@ -167,7 +167,7 @@ func (fi1 *fileintegrity) checkFileintegrityStatus(oc *exutil.CLI, expected stri
 
 func (fi1 *fileintegrity) getDataFromConfigmap(oc *exutil.CLI, cmName string, expected string) {
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-		_, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", oc.Namespace(), "configmap/"+cmName, "--to=/tmp", "--confirm").Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", fi1.namespace, "configmap/"+cmName, "--to=/tmp", "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		aideResult, err := os.ReadFile("/tmp/integritylog")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -240,7 +240,7 @@ func (fi1 *fileintegrity) checkArgsInPod(oc *exutil.CLI, expected string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("args of does not include %s", expected))
 }
 
-func (pod *podModify) doActionsOnNode(oc *exutil.CLI, expected string, dr describerResrouce) {
+func (pod *podModify) doActionsOnNode(oc *exutil.CLI, expected string) {
 	err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", pod.namespace, "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
 		"NODENAME="+pod.nodeName, "PARAC="+pod.args)
 	o.Expect(err1).NotTo(o.HaveOccurred())
@@ -248,26 +248,23 @@ func (pod *podModify) doActionsOnNode(oc *exutil.CLI, expected string, dr descri
 		"-o=jsonpath={.status.phase}"}).check(oc)
 }
 
-func (fi1 *fileintegrity) createFIOWithoutConfig(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (fi1 *fileintegrity) createFIOWithoutConfig(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fi1.namespace, "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 		"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "fileintegrity", fi1.name, requireNS, fi1.namespace))
 }
 
-func (fi1 *fileintegrity) createFIOWithoutKeyword(oc *exutil.CLI, itName string, dr describerResrouce, keyword string) {
+func (fi1 *fileintegrity) createFIOWithoutKeyword(oc *exutil.CLI, keyword string) {
 	err := applyResourceFromTemplateWithoutKeyword(oc, keyword, "--ignore-unknown-parameters=true", "-n", fi1.namespace, "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 		"CONFNAME="+fi1.configname, "CONFKEY="+fi1.configkey, "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "fileintegrity", fi1.name, requireNS, fi1.namespace))
 }
 
-func (fi1 *fileintegrity) createFIOWithConfig(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (fi1 *fileintegrity) createFIOWithConfig(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fi1.namespace, "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 		"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "CONFNAME="+fi1.configname, "CONFKEY="+fi1.configkey,
 		"NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "fileintegrity", fi1.name, requireNS, fi1.namespace))
 }
 
 func (sub *subscriptionDescription) checkPodFioStatus(oc *exutil.CLI, expected string) {
@@ -282,9 +279,8 @@ func (sub *subscriptionDescription) checkPodFioStatus(oc *exutil.CLI, expected s
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("state of pod with name=file-integrity-operator is not expected %s", expected))
 }
 
-func (fi1 *fileintegrity) createConfigmapFromFile(oc *exutil.CLI, itName string, dr describerResrouce, cmName string, aideKey string, aideFile string, expected string) (bool, error) {
+func (fi1 *fileintegrity) createConfigmapFromFile(oc *exutil.CLI, cmName string, aideKey string, aideFile string, expected string) (bool, error) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", cmName, "-n", fi1.namespace, "--from-file="+aideKey+"="+aideFile).Output()
-	dr.getIr(itName).add(newResource(oc, "configmap", cmName, requireNS, fi1.namespace))
 	if strings.Contains(strings.ToLower(output), expected) {
 		return true, nil
 	}

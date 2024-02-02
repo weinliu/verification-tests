@@ -555,6 +555,8 @@ func createFileIntegrityOperator(oc *exutil.CLI, subD subscriptionDescription, o
 
 	g.By("Check file integrity operator pod are in running state !!!")
 	subD.checkPodFioStatus(oc, "running")
+
+	g.By("Check file integrity operator sucessfully installed !!! ")
 }
 
 func createComplianceOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
