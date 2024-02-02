@@ -1596,6 +1596,26 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect("[\"--kube-api-qps=20.0\",\"--kube-api-burst=80.0\"]").Should(o.Equal(updaterArgs))
 	})
+	// author: weinliu@redhat.com
+	g.It("Author:weinliu-High-70962-Allow cluster admins to specify CPU & Memory requests and limits of VPA controllers [Serial]", func() {
+		exutil.By("VPA operator is installed successfully")
+		exutil.By("Create a new VerticalPodAutoscalerController ")
+		vpaNs := "openshift-vertical-pod-autoscaler"
+		vpacontroller := filepath.Join(buildPruningBaseDir, "vpacontroller-70962.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+vpacontroller, "-n", vpaNs).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+vpacontroller, "-n", vpaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Check VPA operator's args")
+		recommenderArgs, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("VerticalPodAutoscalerController", "vpa-70962", "-n", "openshift-vertical-pod-autoscaler", "-o=jsonpath={.spec.deploymentOverrides.recommender.container.resources.requests}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect("{\"cpu\":\"60m\",\"memory\":\"60Mi\"}").Should(o.Equal(recommenderArgs))
+		admissioinArgs, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("VerticalPodAutoscalerController", "vpa-70962", "-n", "openshift-vertical-pod-autoscaler", "-o=jsonpath={.spec.deploymentOverrides.admission.container.resources.requests}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect("{\"cpu\":\"40m\",\"memory\":\"40Mi\"}").Should(o.Equal(admissioinArgs))
+		updaterArgs, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("VerticalPodAutoscalerController", "vpa-70962", "-n", "openshift-vertical-pod-autoscaler", "-o=jsonpath={.spec.deploymentOverrides.updater.container.resources.requests}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect("{\"cpu\":\"80m\",\"memory\":\"80Mi\"}").Should(o.Equal(updaterArgs))
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE Install and verify Cluster Resource Override Admission Webhook", func() {
