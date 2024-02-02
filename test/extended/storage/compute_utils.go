@@ -67,8 +67,8 @@ func checkVolumeNotMountOnNode(oc *exutil.CLI, volumeName string, nodeName strin
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		count, err := execCommandInSpecificNode(oc, nodeName, command)
 		if err != nil {
-			e2e.Logf("Err Occurred: %v", err)
-			return false, err
+			e2e.Logf("Err Occurred: %v, trying again ...", err)
+			return false, nil
 		}
 		if count == "0" {
 			e2e.Logf("Volume: \"%s\" umount from node \"%s\" successfully", volumeName, nodeName)
@@ -85,8 +85,8 @@ func checkVolumeDetachedFromNode(oc *exutil.CLI, volumeName string, nodeName str
 	err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 		count, err := execCommandInSpecificNode(oc, nodeName, command)
 		if err != nil {
-			e2e.Logf("Err Occurred: %v", err)
-			return false, err
+			e2e.Logf("Err Occurred: %v, trying again ...", err)
+			return false, nil
 		}
 		if count == "0" {
 			e2e.Logf("Volume: \"%s\" detached from node \"%s\" successfully", volumeName, nodeName)
@@ -103,6 +103,7 @@ func checkVolumeMountCmdContain(oc *exutil.CLI, volumeName string, nodeName stri
 	err := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		msg, err := execCommandInSpecificNode(oc, nodeName, command)
 		if err != nil {
+			e2e.Logf("Err Occurred: %v, trying again ...", err)
 			return false, nil
 		}
 		return strings.Contains(msg, content), nil

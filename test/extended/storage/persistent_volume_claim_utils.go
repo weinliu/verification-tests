@@ -396,6 +396,9 @@ func waitPVCVolSizeToGetResized(oc *exutil.CLI, namespace string, pvcName string
 		}
 		return false, nil
 	})
+	if err != nil {
+		describePersistentVolumeClaim(oc, namespace, pvcName)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Wait for the PVC :%s expand successfully timeout.", pvcName))
 }
 

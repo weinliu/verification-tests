@@ -733,6 +733,12 @@ func waitCSOhealthy(oc *exutil.CLI) {
 		}
 		return false, nil
 	})
+	if pollErr != nil {
+		getOcDescribeInfo(oc.AsAdmin(), "", "co", "storage")
+		ClusterStorageOperatorLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-cluster-storage-operator", "-l", "name=cluster-storage-operator", "--tail=100").Output()
+		e2e.Logf("***$ oc logs -n openshift-cluster-storage-operator -l name=cluster-storage-operator --tail=100***\n%s", ClusterStorageOperatorLogs)
+		e2e.Logf("**************************************************************************")
+	}
 	exutil.AssertWaitPollNoErr(pollErr, "Waiting for CSO become healthy timeout")
 }
 
@@ -1032,7 +1038,6 @@ func isCRDSpecificFieldExist(oc *exutil.CLI, crdFieldPath string) bool {
 	)
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		crdFieldInfo, getInfoErr = oc.AsAdmin().WithoutNamespace().Run("explain").Args(crdFieldPath).Output()
-		e2e.Logf("******crdFieldInfo: %s . Err:\n%v******", crdFieldInfo, getInfoErr)
 		if getInfoErr != nil && strings.Contains(crdFieldInfo, "the server doesn't have a resource type") {
 			if strings.Contains(crdFieldInfo, "the server doesn't have a resource type") {
 				e2e.Logf("The test cluster specified crd field: %s is not exist.", crdFieldPath)
