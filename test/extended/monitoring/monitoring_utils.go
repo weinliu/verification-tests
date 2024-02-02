@@ -414,3 +414,24 @@ func checkLogWithLabel(oc *exutil.CLI, namespace string, label string, container
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to find \"%s\" in the pod logs", checkValue))
 }
+
+// assertPodToBeReady poll pod status to determine it is ready, skip check when pods do not exist.
+func assertPodToBeReady(oc *exutil.CLI, podName string, namespace string) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 3*time.Minute, false, func(context.Context) (bool, error) {
+		stdout, err := oc.AsAdmin().Run("get").Args("pod", podName, "-n", namespace, "--ignore-not-found", "-o", "jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'").Output()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		if strings.Contains(stdout, "True") {
+			e2e.Logf("Pod %s is ready!", podName)
+			return true, nil
+		}
+		if stdout == "" {
+			e2e.Logf("ignore check, Pod %s is not found", podName)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pod %s status is not ready!", podName))
+}

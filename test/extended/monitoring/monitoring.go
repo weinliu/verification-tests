@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -619,6 +620,71 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("check NodeClockNotSynchronising alert expr")
 		cmd = "-ojsonpath={.spec.groups[*].rules[?(@.alert==\"NodeClockNotSynchronising\")].expr}"
 		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "node-exporter-rules", cmd, `absent(up{job="ptp-monitor-service"})`, true)
+	})
+
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-69927-Allow to query alerts of application namespaces as an application user from command line", func() {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", oc.Username()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", oc.Username()).Execute()
+
+		podNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=prometheus", "--ignore-not-found", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// double check prometheus pods are Running
+		for _, pod := range strings.Fields(podNames) {
+			assertPodToBeReady(oc, pod, "openshift-monitoring")
+		}
+
+		podNames, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=thanos-query", "--ignore-not-found", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// double check thanos-querier pods are Running
+		for _, pod := range strings.Fields(podNames) {
+			assertPodToBeReady(oc, pod, "openshift-monitoring")
+		}
+
+		g.By("get user API token")
+		token, _ := oc.Run("whoami").Args("-t").Output()
+
+		g.By("Run port-forward command")
+		cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("-n", "openshift-monitoring", "service/thanos-querier", "9093:9093").Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cmd.Process.Kill()
+		output, err := exec.Command("bash", "-c", "ps -ef | grep 9093").Output()
+		e2e.Logf("output is: %s", output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("curl without namespace parameter should return Bad Request")
+		curlcmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + "https://127.0.0.1:9093/api/v1/alerts"
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(context.Context) (bool, error) {
+			output, err := exec.Command("bash", "-c", curlcmd).Output()
+			e2e.Logf("output is: %s", output)
+			if err != nil {
+				e2e.Logf("failed to execute the curl: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("Bad Request", string(output)); matched {
+				e2e.Logf("Bad Request. The request or configuration is malformed\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to curl without namespace parameter"))
+
+		g.By("curl with namespace parameter should return alerts")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(context.Context) (bool, error) {
+			output, err := exec.Command("bash", "-c", curlcmd+"?namespace=openshift-monitoring").Output()
+			e2e.Logf("output is: %s", output)
+			if err != nil {
+				e2e.Logf("failed to execute the curl: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(`"alertname":"Watchdog"`, string(output)); matched {
+				e2e.Logf("curl with namespace parameter returns Watchdog alert\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get result with namespace parameter"))
 	})
 
 	g.Context("user workload monitoring", func() {
