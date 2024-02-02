@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-cco] Cluster_Operator CCO is enabled", func() {
 		exutil.SkipNoCapabilities(oc, ccoCap)
 	})
 
-	g.It("NonHyperShiftHOST-PstChkUpgrade-Author:mihuang-High-23352-Cloud credential operator resets progressing transition timestamp when it upgrades", func() {
+	g.It("NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-Author:mihuang-High-23352-Cloud credential operator resets progressing transition timestamp when it upgrades", func() {
 		exutil.By("Check if ns-23352 namespace exists")
 		ns := "ns-23352"
 		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
