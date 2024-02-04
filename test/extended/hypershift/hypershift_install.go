@@ -48,6 +48,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	var (
 		oc           = exutil.NewCLI("hypershift-install", exutil.KubeConfigPath())
+		bashClient   *CLI
 		iaasPlatform string
 		fixturePath  string
 	)
@@ -57,8 +58,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		if len(operator) > 0 {
 			g.Skip("hypershift operator found, skip install test run")
 		}
+		bashClient = NewCmdClient()
 		iaasPlatform = exutil.CheckPlatform(oc)
 		fixturePath = exutil.FixturePath("testdata", "hypershift")
+		version, _ := bashClient.WithShowInfo(true).Run("hypershift version").Output()
+		e2e.Logf("Found hypershift CLI version:\n%s", version)
 	})
 
 	// author: liangli@redhat.com
