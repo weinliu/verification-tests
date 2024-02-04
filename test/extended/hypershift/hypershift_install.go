@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -2499,5 +2501,181 @@ spec:
 			}
 		}
 		o.Expect(podScheduledOnDefaultWorkerNode).To(o.BeTrue(), "Nothing scheduled on the default worker node")
+	})
+
+	/*
+		Marked as disruptive as we'll create an ICSP on the management cluster.
+		Test run duration: 33min
+	*/
+	g.It("NonPreRelease-Longduration-Author:fxie-Critical-67783-[HyperShiftINSTALL] The environment variable OPENSHIFT_IMG_OVERRIDES in CPO deployment should retain mirroring order under a source compared to the original mirror/source listing in the ICSP/IDMSs in the management cluster [Disruptive]", func() {
+		type nodesSchedulabilityStatus bool
+
+		// Variables
+		var (
+			testCaseId         = "67783"
+			resourceNamePrefix = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
+			tempDir            = path.Join("/tmp", "hypershift", resourceNamePrefix)
+			bucketName         = fmt.Sprintf("%s-bucket", resourceNamePrefix)
+			hcName             = fmt.Sprintf("%s-hc", resourceNamePrefix)
+			icspName           = fmt.Sprintf("%s-icsp", resourceNamePrefix)
+			icspSource         = "quay.io/openshift-release-dev/ocp-release"
+			icspMirrors        = []string{
+				"quay.io/openshift-release-dev/ocp-release",
+				"pull.q1w2.quay.rhcloud.com/openshift-release-dev/ocp-release",
+			}
+			icspTemplate = template.Must(template.New("icspTemplate").Parse(`apiVersion: operator.openshift.io/v1alpha1
+kind: ImageContentSourcePolicy
+metadata:
+  name: {{ .Name }}
+spec:
+  repositoryDigestMirrors:
+  - mirrors:
+{{- range .Mirrors }}
+    - {{ . }}
+{{- end }}
+    source: {{ .Source }}`))
+			adminKubeClient             = oc.AdminKubeClient()
+			errList                     []error
+			allNodesSchedulable         nodesSchedulabilityStatus = true
+			atLeastOneNodeUnschedulable nodesSchedulabilityStatus = false
+		)
+
+		// Utilities
+		var (
+			checkNodesSchedulability = func(expectedNodeSchedulability nodesSchedulabilityStatus) func(_ context.Context) (bool, error) {
+				return func(_ context.Context) (bool, error) {
+					nodeList, err := adminKubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+					if err != nil {
+						return false, err
+					}
+					for _, node := range nodeList.Items {
+						if !e2enode.IsNodeSchedulable(&node) {
+							e2e.Logf("Node %s unschedulable", node.Name)
+							return bool(!expectedNodeSchedulability), nil
+						}
+					}
+					// All nodes are schedulable if we reach here
+					return bool(expectedNodeSchedulability), nil
+				}
+			}
+		)
+
+		// Aggregated error handling
+		defer func() {
+			o.Expect(errors2.NewAggregate(errList)).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("Checking if there's a need to skip the test case")
+		// ICSPs are not taken into account if IDMSs are found on the management cluster.
+		// It's ok to proceed even if the IDMS type is not registered to the API server, so no need to handle the error here.
+		idmsList, _ := oc.AdminConfigClient().ConfigV1().ImageDigestMirrorSets().List(context.Background(), metav1.ListOptions{})
+		if len(idmsList.Items) > 0 {
+			g.Skip("Found IDMSs, skipping")
+		}
+		// Also make sure the source (for which we'll declare mirrors) is only used by our the ICSP we create.
+		// The ICSP type is still under v1alpha1 so avoid using strongly-typed client here for future-proof-ness.
+		existingICSPSources, _, err := oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("ImageContentSourcePolicy", "-o=jsonpath={.items[*].spec.repositoryDigestMirrors[*].source}").Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(existingICSPSources, icspSource) {
+			g.Skip("An existing ICSP declares the source we'll be using, skipping")
+		}
+
+		exutil.By("Creating an ICSP on the management cluster")
+		e2e.Logf("Creating temporary directory")
+		defer func() {
+			errList = append(errList, os.RemoveAll(tempDir))
+		}()
+		err = os.MkdirAll(tempDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var icspFile *os.File
+		defer func() {
+			errList = append(errList, icspFile.Close())
+		}()
+		icspFile, err = os.CreateTemp(tempDir, resourceNamePrefix)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Parsed template: ")
+		err = icspTemplate.Execute(io.MultiWriter(g.GinkgoWriter, icspFile), &struct {
+			Name    string
+			Source  string
+			Mirrors []string
+		}{Name: icspName, Source: icspSource, Mirrors: icspMirrors})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error executing ICSP template")
+
+		e2e.Logf("Creating the parsed template")
+		defer func() {
+			// After the deletion of an ICSP, the MCO updates CRI-O configurations, cordoning the nodes in turn.
+			exutil.By("Restoring the management cluster")
+			e2e.Logf("Deleting the ICSP")
+			err = oc.AsAdmin().WithoutNamespace().Run(OcpDelete).Args("-f", icspFile.Name()).Execute()
+			errList = append(errList, err)
+
+			e2e.Logf("Waiting for the first node to be cordoned")
+			err = wait.PollUntilContextTimeout(context.Background(), DefaultTimeout/10, DefaultTimeout, true, checkNodesSchedulability(atLeastOneNodeUnschedulable))
+			errList = append(errList, err)
+
+			e2e.Logf("Waiting for all nodes to be un-cordoned")
+			err = wait.PollUntilContextTimeout(context.Background(), DefaultTimeout/10, LongTimeout, true, checkNodesSchedulability(allNodesSchedulable))
+			errList = append(errList, err)
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run(OcpCreate).Args("-f", icspFile.Name()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// After the creation of an ICSP, the MCO updates CRI-O configurations in a way
+		// that should not make the nodes un-schedulable. Make sure it is the case here.
+		e2e.Logf("Making sure that management cluster is stable")
+		// Simulate o.Consistently
+		err = wait.PollUntilContextTimeout(context.Background(), ShortTimeout/10, ShortTimeout, true, checkNodesSchedulability(atLeastOneNodeUnschedulable))
+		o.Expect(err).To(o.BeAssignableToTypeOf(context.DeadlineExceeded))
+
+		exutil.By("Installing the Hypershift Operator")
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		e2e.Logf("Found management cluster region = %s", region)
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          tempDir,
+			iaasPlatform: iaasPlatform,
+			region:       region,
+		}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("Creating a hosted cluster")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(hcName).
+			withNodePoolReplicas(1).
+			withReleaseImage(release)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hc := installHelper.createAWSHostedClusters(createCluster)
+
+		exutil.By("Making sure that OPENSHIFT_IMG_OVERRIDES retains mirroring order from ICSP")
+		// The ICSP created has one and only one source.
+		// We expect parts like source=mirrorX to be adjacent to each other within OPENSHIFT_IMG_OVERRIDES
+		var parts []string
+		for _, mirror := range icspMirrors {
+			parts = append(parts, fmt.Sprintf("%s=%s", icspSource, mirror))
+		}
+		expectedSubstr := strings.Join(parts, ",")
+		e2e.Logf("Expect to find substring %s within OPENSHIFT_IMG_OVERRIDES", expectedSubstr)
+		cpoDeploy, err := adminKubeClient.AppsV1().Deployments(hc.getHostedComponentNamespace()).Get(context.Background(), "control-plane-operator", metav1.GetOptions{})
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		for _, container := range cpoDeploy.Spec.Template.Spec.Containers {
+			if container.Name != "control-plane-operator" {
+				continue
+			}
+
+			for _, env := range container.Env {
+				if env.Name != "OPENSHIFT_IMG_OVERRIDES" {
+					continue
+				}
+				e2e.Logf("Found OPENSHIFT_IMG_OVERRIDES=%s", env.Value)
+				o.Expect(env.Value).To(o.ContainSubstring(expectedSubstr))
+			}
+		}
 	})
 })

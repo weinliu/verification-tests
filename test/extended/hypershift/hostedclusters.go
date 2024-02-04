@@ -90,6 +90,10 @@ func (h *hostedCluster) getClustersDeletionTimestamp() (string, error) {
 	return value, nil
 }
 
+func (h *hostedCluster) getHostedComponentNamespace() string {
+	return fmt.Sprintf("%s-%s", h.namespace, h.name)
+}
+
 func (h *hostedCluster) hostedClustersReady() (bool, error) {
 	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", h.namespace, "--ignore-not-found", h.name, `-ojsonpath='{.status.conditions[?(@.type=="Available")].status}'`).Output()
 	if er != nil {
