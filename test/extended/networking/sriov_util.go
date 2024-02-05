@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -416,7 +417,7 @@ func chkVFStatusMatch(oc *exutil.CLI, nodeName, nicName, macAddress, expectVaule
 	o.Expect(strings.Contains(output, expectVaule)).To(o.BeTrue())
 }
 
-func initVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string) bool {
+func initVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string, vfNum int) bool {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
 	sriovNetworkNodePolicyTemplate := filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
 	sriovPolicy := sriovNetworkNodePolicy{
@@ -425,7 +426,7 @@ func initVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string) bo
 		deviceID:     deviceID,
 		pfName:       interfaceName,
 		vendor:       vendor,
-		numVfs:       2,
+		numVfs:       vfNum,
 		resourceName: name,
 		template:     sriovNetworkNodePolicyTemplate,
 		namespace:    ns,
@@ -457,13 +458,19 @@ func chkVFStatusWithPassTraffic(oc *exutil.CLI, nadName, nicName, ns, expectVaul
 		sriovTestPod.createSriovTestPod(oc)
 		err := waitForPodWithLabelReady(oc, ns, "name=sriov-netdevice")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-netdevice not ready")
-		nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns, sriovTestPod.name)
-		o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
-		podMac, err := e2eoutput.RunHostCmdWithRetries(ns, sriovTestPod.name, "ip link show net1 | awk '/link\\/ether/ {print $2}'", 3*time.Second, 30*time.Second)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		podMac = strings.TrimSpace(podMac)
-		e2e.Logf("nodename %v", nodeName)
-		chkVFStatusMatch(oc, nodeName, nicName, podMac, expectVaule)
+		if strings.Contains(expectVaule, "mtu") {
+			mtucheck, err := e2eoutput.RunHostCmdWithRetries(ns, sriovTestPod.name, "ip addr show net1", 3*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(mtucheck, expectVaule)).To(o.BeTrue())
+		} else {
+			nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns, sriovTestPod.name)
+			o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+			podMac, err := e2eoutput.RunHostCmdWithRetries(ns, sriovTestPod.name, "ip link show net1 | awk '/link\\/ether/ {print $2}'", 3*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			podMac = strings.TrimSpace(podMac)
+			e2e.Logf("nodename %v", nodeName)
+			chkVFStatusMatch(oc, nodeName, nicName, podMac, expectVaule)
+		}
 	}
 	exutil.By("Check the interface is connected, if not skip the connect testing")
 	podConnectStatus, err := e2eoutput.RunHostCmdWithRetries(ns, "testpod1", "ip addr show net1", 3*time.Second, 30*time.Second)
@@ -477,4 +484,64 @@ func chkVFStatusWithPassTraffic(oc *exutil.CLI, nadName, nicName, ns, expectVaul
 		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
 		CurlMultusPod2PodPass(oc, ns, "testpod0", pod2ns1IPv4, "net1", "Hello")
 	}
+}
+
+func (sriovTestPod *sriovTestPod) deleteSriovTestPod(oc *exutil.CLI) {
+	e2e.Logf("delete pod %s in namespace %s", sriovTestPod.name, sriovTestPod.namespace)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", sriovTestPod.name, "-n", sriovTestPod.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+}
+
+func createNumPods(oc *exutil.CLI, nadName, ns, podPrex string, numPods int) {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
+	sriovTestPodTemplate := filepath.Join(buildPruningBaseDir, "sriov-netdevice-template.yaml")
+	exutil.By("Create test pod on the target namespace")
+	for i := 0; i < numPods; i++ {
+		sriovTestPod := sriovTestPod{
+			name:        podPrex + strconv.Itoa(i),
+			namespace:   ns,
+			networkName: nadName,
+			template:    sriovTestPodTemplate,
+		}
+		sriovTestPod.createSriovTestPod(oc)
+	}
+	err := waitForPodWithLabelReady(oc, ns, "name=sriov-netdevice")
+	exutil.AssertWaitPollNoErr(err, "pods with label name=sriov-netdevice not ready")
+
+	e2e.Logf("Have successfully created %v pods", numPods)
+}
+
+// get worker nodes which have sriov enabled.
+func getSriovWokerNodes(oc *exutil.CLI) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "feature.node.kubernetes.io/sriov-capable=true",
+		"-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	nodeNameList := strings.Fields(output)
+	return nodeNameList
+}
+
+// get worker node which has required PF
+func getWorkerNodesWithNic(oc *exutil.CLI, deviceid string, pfname string) []string {
+	workerWithNicList := []string{}
+	nodeNameList := getSriovWokerNodes(oc)
+	e2e.Logf("print all worker nodes %v", nodeNameList)
+	for _, workerNode := range nodeNameList {
+		output, checkNicErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworknodestates.sriovnetwork.openshift.io", workerNode,
+			"-n", "openshift-sriov-network-operator", "-o=jsonpath={.status.interfaces}").Output()
+		o.Expect(checkNicErr).NotTo(o.HaveOccurred())
+		nicList := strings.Split(output, "}")
+		for _, nicInfo := range nicList {
+			// at least one worker node should have required PF.
+			re1 := regexp.MustCompile(`\"` + pfname + `\"`)
+			re2 := regexp.MustCompile(`\"deviceID\":\"` + deviceid + `\"`)
+			if re1.MatchString(nicInfo) && re2.MatchString(nicInfo) {
+				e2e.Logf("on worker node %v, find PF %v!!", workerNode, pfname)
+				workerWithNicList = append(workerWithNicList, workerNode)
+			}
+		}
+		e2e.Logf("The worker list which has device id %v, pfname %v is %v", deviceid, pfname, workerWithNicList)
+	}
+	return workerWithNicList
 }

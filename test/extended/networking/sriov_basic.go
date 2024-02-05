@@ -2,6 +2,7 @@ package networking
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -17,6 +18,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sriov")
 		sriovNeworkTemplate = filepath.Join(buildPruningBaseDir, "sriovnetwork-whereabouts-template.yaml")
 		sriovOpNs           = "openshift-sriov-network-operator"
+		vfNum               = 2
 	)
 	testData := []struct {
 		Name          string
@@ -55,7 +57,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 		for _, data := range testData {
 			data := data
 			// Create VF on with given device
-			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
 			// if the deviceid is not exist on the worker, skip this
 			if !result {
 				continue
@@ -97,7 +99,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 		for _, data := range testData {
 			data := data
 			// Create VF on with given device
-			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
 			// if the deviceid is not exist on the worker, skip this
 			if !result {
 				continue
@@ -137,7 +139,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 		for _, data := range testData {
 			data := data
 			// Create VF on with given device
-			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
 			// if the deviceid is not exist on the worker, skip this
 			if !result {
 				continue
@@ -178,7 +180,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 		for _, data := range testData {
 			data := data
 			// Create VF on with given device
-			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
 			// if the deviceid is not exist on the worker, skip this
 			if !result {
 				continue
@@ -225,7 +227,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 				continue
 			}
 			// Create VF on with given device
-			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
 			// if the deviceid is not exist on the worker, skip this
 			if !result {
 				continue
@@ -269,7 +271,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 		for _, data := range testData {
 			data := data
 			// Create VF on with given device
-			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
 			// if the deviceid is not exist on the worker, skip this
 			if !result {
 				continue
@@ -309,7 +311,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 		for _, data := range testData {
 			data := data
 			// Create VF on with given device
-			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs)
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
 			// if the deviceid is not exist on the worker, skip this
 			if !result {
 				continue
@@ -339,6 +341,61 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 				sriovnetwork.createSriovNetwork(oc)
 
 				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "link-state enable")
+
+			}()
+		}
+
+	})
+
+	g.It("Author:yingwang-Medium-NonPreRelease-Longduration-69646-mtu testing for sriov policy [Disruptive]", func() {
+		var caseID = "69646-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			result := initVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			//configure mtu in sriovnetworknodepolicy
+			mtuValue := 1800
+			patchYamlToRestore := `[{"op":"add","path":"/spec/mtu","value":1800}]`
+			output, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("sriovnetworknodepolicies.sriovnetwork.openshift.io", data.Name, "-n", sriovOpNs,
+				"--type=json", "-p", patchYamlToRestore).Output()
+			e2e.Logf("patch result is %v", output)
+
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			matchStr := data.Name + " patched"
+			o.Expect(output).Should(o.ContainSubstring(matchStr))
+			waitForSriovPolicyReady(oc, sriovOpNs)
+
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             data.Name,
+					resourceName:     data.Name,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+					spoolchk:         "on",
+					trust:            "on",
+				}
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+
+				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "mtu "+strconv.Itoa(mtuValue))
 
 			}()
 		}

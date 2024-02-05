@@ -10,6 +10,7 @@ objects:
     namespace: "${NAMESPACE}"
     labels:
       name: sriov-netdevice
+      app: ${PODNAME}
     annotations:
       k8s.v1.cni.cncf.io/networks: ${SRIOVNETNAME}
   spec:
