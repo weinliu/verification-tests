@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -974,4 +975,30 @@ func getTargetPayload(oc *exutil.CLI, imageType string) (releasePayload string, 
 	default:
 		return "", fmt.Errorf("unrecognized imageType")
 	}
+}
+
+// included==true, means check expected string should be included in events
+// included==false, means check expected string should not be included in events
+func checkCVOEvents(oc *exutil.CLI, included bool, expected []string) (err error) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", "openshift-cluster-version").Output()
+	if err != nil {
+		return err
+	}
+	e2e.Logf("the cvo event: %s", output)
+	if included {
+		for _, exp := range expected {
+			matched, _ := regexp.MatchString(exp, output)
+			if !matched {
+				return fmt.Errorf("msg: %s is not found in events", exp)
+			}
+		}
+	} else {
+		for _, exp := range expected {
+			matched, _ := regexp.MatchString(exp, output)
+			if matched {
+				return fmt.Errorf("msg: %s is found in events", exp)
+			}
+		}
+	}
+	return nil
 }

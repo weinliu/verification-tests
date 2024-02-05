@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1700,6 +1701,97 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"ReleaseAccepted=False", targetSignedPayload,
 			"Reason: RetrievePayload", "The update cannot be verified",
 		)).To(o.BeTrue())
+	})
+
+	//author: jiajliu@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jiajliu-Medium-69951-[connected]signature verification while local configmap and custom signaturestore set but no target signature in configmap [Serial]", func() {
+		//the check should be removed after the feature ga from tp to non tp.
+		exutil.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("This case is only suitable for techpreview cluster")
+		}
+
+		exutil.By("Create a signature configmap")
+		testDataDir := exutil.FixturePath("testdata", "ota/cvo")
+		signFile := filepath.Join(testDataDir, "signature-cm.json")
+		fileReader, err := ioutil.ReadFile(signFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		signDigest := gjson.GetBytes(fileReader, "metadata.name").String()
+
+		defer func() {
+			cm, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", signDigest, "-n", "openshift-config-managed").Output()
+			if cm != "" {
+				o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("cm", signDigest, "-n", "openshift-config-managed").Execute()).NotTo(o.HaveOccurred())
+			}
+		}()
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", signFile).Execute()).NotTo(o.HaveOccurred())
+		o.Consistently(func() string {
+			cms, _ := oc.AsAdmin().WithoutNamespace().
+				Run("get").Args("cm", "-n", "openshift-config-managed").Output()
+			return cms
+		}, 30*time.Second, 10*time.Second).Should(o.ContainSubstring(signDigest), "Fail to create signature configmap.")
+
+		exutil.By("Add custom signaturestore without target release's signature and trigger upgrade to the target")
+		signStoreURL := "https://mirror.openshift.com/pub/openshift-v4/signatures/openshift/release"
+
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+			{"replace", "/spec/signatureStores", []map[string]string{{"url": signStoreURL}}},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			signStore, _ := getCVObyJP(oc, ".spec.signatureStores")
+			if signStore != "null" {
+				_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/signatureStores", nil}})
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		store, err := getCVObyJP(oc, ".spec.signatureStores")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(store).To(o.ContainSubstring(signStoreURL))
+		targetUnSignedPayload, err := getTargetPayload(oc, "nightly")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--to-image", targetUnSignedPayload).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() { o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred()) }()
+		o.Expect(checkUpdates(oc, false, 30, 2*60,
+			"ReleaseAccepted=False", targetUnSignedPayload,
+			"Reason: RetrievePayload", "The update cannot be verified",
+		)).To(o.BeTrue())
+
+		exutil.By("Check events log expected")
+		targetUnsignedDigest := strings.Replace(strings.Split(targetUnSignedPayload, "@")[1], ":", "-", -1)
+		expectedLog := []string{fmt.Sprintf("prefix %s in config map %s: no more signatures to check", targetUnsignedDigest, signDigest), fmt.Sprintf("parallel signature store wrapping containers/image signature store under %s: no more signatures to check", signStoreURL)}
+		err = checkCVOEvents(oc, true, expectedLog)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = checkCVOEvents(oc, false, []string{"falling back to default stores"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred())
+
+		exutil.By("Set empty custom signaturestore and trigger upgrade to a signed release")
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+			{"replace", "/spec/signatureStores", []map[string]string{}},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		store, err = getCVObyJP(oc, ".spec.signatureStores")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(store).To(o.Equal("[]"))
+		targetSignedPayload, err := getTargetPayload(oc, "stable")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--to-image", targetSignedPayload).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(checkUpdates(oc, false, 30, 2*60,
+			"ReleaseAccepted=False", targetSignedPayload,
+			"Reason: RetrievePayload", "The update cannot be verified",
+		)).To(o.BeTrue())
+		exutil.By("Check events log expected")
+		targetSignedDigest := strings.Replace(strings.Split(targetSignedPayload, "@")[1], ":", "-", -1)
+		expectedLog = []string{fmt.Sprintf("prefix %s in config map %s: no more signatures to check", targetSignedDigest, signDigest), "ClusterVersion spec.signatureStores is an empty array."}
+		err = checkCVOEvents(oc, true, expectedLog)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = checkCVOEvents(oc, false, []string{"falling back to default stores"})
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	//author: jiajliu@redhat.com
