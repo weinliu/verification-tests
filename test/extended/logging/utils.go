@@ -3154,6 +3154,8 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	if err != nil {
 		return false, err
 	}
+	defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ns)).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ns)).Execute()
 	token := getSAToken(oc, "default", ns)
 	originConfig := string(content)
 	targetConfig := strings.Replace(originConfig, "Bearer sha256~xxxxxxxx", "Bearer "+token, -1)
