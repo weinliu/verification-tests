@@ -458,7 +458,7 @@ data:
 		o.Expect(strings.Contains(doOcpReq(oc, "get", true, "secrets", "-n", "openshift-image-registry", "installer-cloud-credentials", "-o=jsonpath={.data}"), "azure_federated_token_file")).Should(o.BeTrue())
 	})
 
-	g.It("NonHyperShiftHOST-Author:fxie-Critical-64885-CCO-based flow for olm managed operators and AWS STS", func() {
+	g.It("Author:fxie-Critical-64885-CCO-based flow for olm managed operators and AWS STS", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "aws")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("This test case is AWS STS only, skipping")
