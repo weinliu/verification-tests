@@ -14,7 +14,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-operators] OLM v1 oprun should DEPRECATED", func() {
+var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("olmv1-oprun-"+getRandomString(), exutil.KubeConfigPath())
@@ -33,34 +33,30 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should DEPRECATED", func() {
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
 			unhealthyPod              = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-pod-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-podunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-pod-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-podunhealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			unhealthyPodChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyApiservice = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-apis-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-apisunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-apis-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-apisunhealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			unhealthyApiserviceChild = []olmv1util.ChildResource{
 				{Kind: "APIService", Ns: ""},
 			}
 			unhealthyCRD = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-crd-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-crdunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-crd-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-crdunhealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			unhealthyDS = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-ds-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-dsunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-ds-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-dsunhealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			unhealthyDSChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
@@ -101,10 +97,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should DEPRECATED", func() {
 			basicBdPlainImageTemplate    = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
 			basicBdRegistryImageTemplate = filepath.Join(baseDir, "basic-bd-registry-image.yaml")
 			healthBd                     = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-healthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-healthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-healthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-healthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			healthChild = []olmv1util.ChildResource{
 				{Kind: "CustomResourceDefinition", Ns: ""},
@@ -113,29 +108,26 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should DEPRECATED", func() {
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyDp = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-deployment-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:registry-68903-deployunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdRegistryImageTemplate,
+				BdName:   "68903-deployment-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:registry-68903-deployunhealthy",
+				Template: basicBdRegistryImageTemplate,
 			}
 			unhealthyDpChild = []olmv1util.ChildResource{
 				{Kind: "CustomResourceDefinition", Ns: ""},
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyRC = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-rc-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-rcunhealth",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-rc-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-rcunhealth",
+				Template: basicBdPlainImageTemplate,
 			}
 			unhealthyRCChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyInstall = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-install-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-installunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-install-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-installunhealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 		)
 
@@ -171,29 +163,26 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should DEPRECATED", func() {
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
 			unhealthySS               = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-ss-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-ssunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-ss-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-ssunhealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			unhealthySSChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyRS = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-rs-unhealthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-rsunhealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-rs-unhealthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-rsunhealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			unhealthyRSChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 
 			healthUnspport = olmv1util.BundleDeploymentDescription{
-				BdName:       "68903-unspport-healthy",
-				Address:      "quay.io/olmqe/olmv1bundle:plain-68903-unsupporthealthy",
-				ActiveBundle: "",
-				Template:     basicBdPlainImageTemplate,
+				BdName:   "68903-unspport-healthy",
+				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-unsupporthealthy",
+				Template: basicBdPlainImageTemplate,
 			}
 			healthUnspportChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},

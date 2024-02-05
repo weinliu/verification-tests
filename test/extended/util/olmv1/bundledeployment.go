@@ -15,10 +15,9 @@ import (
 )
 
 type BundleDeploymentDescription struct {
-	BdName       string
-	Address      string
-	ActiveBundle string
-	Template     string
+	BdName   string
+	Address  string
+	Template string
 }
 
 type ChildResource struct {
@@ -28,21 +27,17 @@ type ChildResource struct {
 }
 
 // the method is to create bundledeployment and check its status
-// it also gets the active bundle to save it to bd
 func (bd *BundleDeploymentDescription) Create(oc *exutil.CLI) {
 	e2e.Logf("=========Create bd %v=========", bd.BdName)
 
 	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, "--ignore-unknown-parameters=true", "-f", bd.Template, "-p", "NAME="+bd.BdName, "ADDRESS="+bd.Address)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	bd.AssertHasValidBundle(oc, "true")
 	bd.AssertInstalled(oc, "true")
 	bd.AssertHealthy(oc, "true")
-	bd.FindActiveBundle(oc)
 
 }
 
 // the method is to create bundledeployment only and do not check its status
-// it does not get the active bundle to save it to bd
 func (bd *BundleDeploymentDescription) CreateWithoutCheck(oc *exutil.CLI) {
 	e2e.Logf("=========CreateWithoutCheck bd %v=========", bd.BdName)
 
@@ -66,25 +61,6 @@ func (bd *BundleDeploymentDescription) DeleteWithoutCheck(oc *exutil.CLI) {
 	e2e.Logf("=========DeleteWithoutCheck bd %v=========", bd.BdName)
 
 	Cleanup(oc, "bundledeployment", bd.BdName)
-
-}
-
-// the method is to get active bundle and save it to bd
-func (bd *BundleDeploymentDescription) FindActiveBundle(oc *exutil.CLI) {
-	e2e.Logf("=========FindActiveBundle bd %v=========", bd.BdName)
-
-	activeBundle, err := GetNoEmpty(oc, "bundledeployment", bd.BdName, "-o=jsonpath={.status.activeBundle}")
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the ActiveBundle of bd %s is not got", bd.BdName))
-	bd.ActiveBundle = activeBundle
-
-}
-
-// the method is to assert HasValidBundle's status with expected.
-// after it gets status, it does not check it consistently.
-func (bd *BundleDeploymentDescription) AssertHasValidBundle(oc *exutil.CLI, expected string) {
-	e2e.Logf("=========AssertHasValidBundle bd %v=========", bd.BdName)
-
-	bd.AssertCondition(oc, "type", "HasValidBundle", "status", expected, false)
 
 }
 
