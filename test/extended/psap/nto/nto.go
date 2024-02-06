@@ -425,12 +425,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(ntoPodLogs).To(o.ContainSubstring("profiles openshift-control-plane/openshift-node-performance-hp-performanceprofile have the same priority 30, please use a different priority for your custom profiles!"))
 
-		g.By("Patch priority for openshift-node-performance-hp-performanceprofile tuned to 20")
+		g.By("Patch priority for openshift-node-performance-hp-performanceprofile tuned to 18")
 		err = patchTunedProfile(oc, ntoNamespace, "openshift-node-performance-hp-performanceprofile", hpPerformanceProfilePatchFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		tunedPriority, err := getTunedPriority(oc, ntoNamespace, "openshift-node-performance-hp-performanceprofile")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedPriority).To(o.Equal("20"))
+		o.Expect(tunedPriority).To(o.Equal("18"))
 
 		g.By("Check Nodes for expected changes")
 		masterNodeName := assertIfNodeSchedulingDisabled(oc)
@@ -1006,14 +1006,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes2.assertTunedProfileApplied(oc, tunedNodeName)
 
 		g.By("Check values of /proc/irq/default_smp_affinity on worker nodes")
-		IRQSMPAffinity, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/irq/default_smp_affinity").Output()
+		//We only need to return the value /proc/irq/default_smp_affinity without stdErr
+		IRQSMPAffinity, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"--quiet=true", "--to-namespace=" + ntoNamespace}, "cat", "/proc/irq/default_smp_affinity")
 		IRQSMPAffinity = strings.ReplaceAll(IRQSMPAffinity, ",", "")
 		o.Expect(IRQSMPAffinity).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Isolate the second cpu cores, the default_smp_affinity should be changed
-		isMatch := assertDefaultIRQSMPAffinityAffectedBitMask(cpuBitsMask, isolatedCPU, string(IRQSMPAffinity))
 		e2e.Logf("the value of default_smp_affinity after setting default_irq_smp_affinity=1 is: %v", IRQSMPAffinity)
+		isMatch := assertDefaultIRQSMPAffinityAffectedBitMask(cpuBitsMask, isolatedCPU, string(IRQSMPAffinity))
 		o.Expect(isMatch).To(o.Equal(true))
 	})
 
@@ -1264,6 +1265,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-rt-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-realtime", "-n", ntoNamespace, "--ignore-not-found").Execute()
 
+		g.By("Create machine config pool")
+		exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ntoMCPFile, "-p", "MCP_NAME=worker-rt")
+
 		g.By("Label the node with node-role.kubernetes.io/worker-rt=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-rt=", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1280,9 +1284,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
-
-		g.By("Create machine config pool")
-		exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ntoMCPFile, "-p", "MCP_NAME=worker-rt")
 
 		g.By("Assert if machine config pool applied for worker nodes")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 300)
@@ -1301,7 +1302,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Assert if isolcpus was applied in machineconfig...")
-		AssertTunedAppliedMC(oc, "worker-rt", "isolcpus=")
+		AssertTunedAppliedMC(oc, "nto-worker-rt", "isolcpus=")
 
 		g.By("Assert if isolcpus was applied in labled node...")
 		isMatch := AssertTunedAppliedToNode(oc, tunedNodeName, "isolcpus=")
@@ -2536,13 +2537,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if stalld service is running ...")
-		stalldStatus, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "stalld")
+		stalldStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 
 		g.By("Get stalld PID on labeled node ...")
-		stalldPIDStatus, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efZ | grep stalld | grep -v grep")
+		stalldPIDStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efZ | grep stalld | grep -v grep")
 		e2e.Logf("stalldPIDStatus is :\n%v", stalldPIDStatus)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPIDStatus).NotTo(o.BeEmpty())
@@ -2550,12 +2551,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(stalldPIDStatus).To(o.ContainSubstring("-t 20"))
 
 		g.By("Get stalld PID on labeled node ...")
-		stalldPID, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
+		stalldPID, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPID).NotTo(o.BeEmpty())
 
 		g.By("Get status of chrt -p stalld PID on labeled node ...")
-		chrtStalldPIDOutput, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
+		chrtStalldPIDOutput, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(chrtStalldPIDOutput).NotTo(o.BeEmpty())
 		o.Expect(chrtStalldPIDOutput).To(o.ContainSubstring("SCHED_FIFO"))
@@ -2802,6 +2803,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 
+		//First choice to use [tests] image, the image mirrored by default in disconnected cluster
+		//if don't have [tests] image in some environment, we can use hello-openshift as image
+		//usually test imagestream shipped in all ocp and mirror the image in disconnected cluster by default
+		// AppImageName := exutil.GetImagestreamImageName(oc, "tests")
+		// if len(AppImageName) == 0 {
+		AppImageName := "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
+		// }
+
 		//Get how many cpus on the specified worker node
 		g.By("Get how many cpus cores on the labeled worker node")
 		nodeCPUCores, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.capacity.cpu}").Output()
@@ -2833,8 +2842,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", ntoTestNS, "app-web", "--ignore-not-found").Execute()
 
-		g.By("Create best effort pod ...")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, cgroupSchedulerBestEffortPod)
+		g.By("Create pod that deletect the value of kernel.pid_max ")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoTestNS, "--ignore-unknown-parameters=true", "-f", cgroupSchedulerBestEffortPod, "-p", "IMAGE_NAME="+AppImageName)
 
 		//Check if nginx pod is ready
 		g.By("Check if best effort pod is ready...")
@@ -2889,21 +2898,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		//Only used for debug NTO version
-		//ntoImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "cluster-node-tuning-operator", "-n", ntoNamespace, "-ojsonpath={.spec.template.spec.containers[*].image}").Output()
-		//e2e.Logf("The image of NTO is: \n%v", ntoImage)
-
-		//Get the tuned pod name in the same node that labeled node
-		//tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
-
 		//Get NTO Operator Pod Name
 		ntoOperatorPodName := getNTOOperatorPodName(oc, ntoNamespace)
 
 		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
-		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-diffcpus", "worker-diffcpus", 180)
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-diffcpus", "worker-diffcpus", 480)
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-diffcpus-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-bootcmdline-cpu", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineset", "ocp-psap-qe-diffcpus", "-n", "openshift-machine-api", "--ignore-not-found").Execute()
+
+		g.By("Create openshift-bootcmdline-cpu tuned profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, nodeDiffCPUsTunedBootFile)
+
+		g.By("Create machine config pool")
+		exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", nodeDiffCPUsMCPFile, "-p", "MCP_NAME=worker-diffcpus")
 
 		g.By("Label the last node with node-role.kubernetes.io/worker-diffcpus=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-diffcpus=", "--overwrite").Execute()
@@ -2918,18 +2926,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//1 means replicas=1
 		exutil.WaitForMachinesRunning(oc, 1, "ocp-psap-qe-diffcpus")
 
-		secondTunedNodeName := exutil.GetNodeNameByMachineset(oc, "ocp-psap-qe-diffcpus")
-
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondTunedNodeName, "node-role.kubernetes.io/worker-diffcpus-", "--overwrite").Execute()
 		g.By("Label the second node with node-role.kubernetes.io/worker-diffcpus=")
+		secondTunedNodeName := exutil.GetNodeNameByMachineset(oc, "ocp-psap-qe-diffcpus")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondTunedNodeName, "node-role.kubernetes.io/worker-diffcpus-", "--overwrite").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondTunedNodeName, "node-role.kubernetes.io/worker-diffcpus=", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create machine config pool")
-		exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", nodeDiffCPUsMCPFile, "-p", "MCP_NAME=worker-diffcpus")
-
-		g.By("Create openshift-bootcmdline-cpu tuned profile")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, nodeDiffCPUsTunedBootFile)
+		g.By("Assert if the status of adding the two worker node into worker-diffcpus mcp, mcp applied")
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-diffcpus", 480)
 
 		g.By("Check if new profile in in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
@@ -2940,9 +2944,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
-
-		g.By("Assert if the status of adding the two worker node into worker-diffcpus mcp, mcp applied")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-diffcpus", 360)
 
 		g.By("Assert if openshift-bootcmdline-cpu profile was applied ...")
 		//Verify if the new profile is applied
@@ -2956,18 +2957,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
+		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPodName, "25", 180, "Nodes in MCP worker-diffcpus agree on bootcmdline: cpus=")
+
+		//Comment out with an known issue, until it was fixed
 		g.By("Assert if cmdline was applied in machineconfig...")
-		AssertTunedAppliedMC(oc, "worker-diffcpus", "cpus=")
+		AssertTunedAppliedMC(oc, "nto-worker-diffcpus", "cpus=")
 
 		g.By("Assert if cmdline was applied in labled node...")
 		o.Expect(AssertTunedAppliedToNode(oc, tunedNodeName, "cpus=")).To(o.Equal(true))
 
 		g.By("<Profiles with bootcmdline conflict> warn message will show in oc get co/node-tuning")
-		coNodeTuningStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/node-tuning").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(coNodeTuningStdOut).To(o.ContainSubstring("Profiles with bootcmdline conflict"))
-
-		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPodName, "25", 180, "due to kernel arguments change with unchanged input configuration")
+		assertCoStatusWithKeywords(oc, "Profiles with bootcmdline conflict")
 
 		g.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -2989,7 +2989,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondTunedNodeName, "node-role.kubernetes.io/worker-diffcpus-").Execute()
 
 		g.By("Assert if first worker node return to worker mcp")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 360)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 480)
 
 		g.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()

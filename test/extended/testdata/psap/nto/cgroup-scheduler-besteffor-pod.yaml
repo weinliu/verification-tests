@@ -1,21 +1,28 @@
-apiVersion: v1
-kind: Pod
+apiVersion: template.openshift.io/v1
+kind: Template
 metadata:
-  name: app-web
-spec:
-  nodeSelector:
-    tuned-scheduler-node: ""
-  containers:
-  - name: app-web
-    image: quay.io/openshift-psap-qe/nginx-alpine:multiarch
-    imagePullPolicy: IfNotPresent
-    securityContext:
-      runAsNonRoot: true
-      runAsUser: 1000
-      runAsGroup: 1000
-      seccompProfile:
-        type: RuntimeDefault
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-        - ALL
+  name: ocp-istream-template
+objects:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: app-web
+    spec:
+      nodeSelector:
+        tuned-scheduler-node: ""
+      containers:
+      - name: app-web
+        image: ${IMAGE_NAME}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+parameters:
+- name: IMAGE_NAME

@@ -422,3 +422,23 @@ func WaitForNodeToDisappear(oc *CLI, nodeName string, timeout, interval time.Dur
 		return false
 	}).WithTimeout(timeout).WithPolling(interval).Should(o.BeTrue())
 }
+
+// DebugNodeRetryWithOptionsAndChroot launches debug container using chroot and with options
+// And waitPoll to avoid "error: unable to create the debug pod" and do retry
+// Separate the Warning from Output: metadata.name: this is used in the Pod's hostname, which can result in surprising behavior; a DNS label is recommended:
+// [must be no more than 63 characters]\ndevice name 'Warning: metadata.name: this is used in the Pod's hostname, which can result in surprising behavior;
+// a DNS label is recommended: [must be no more than 63 characters]' longer than 127 characters\nerror: non-zero exit code from debug container
+func DebugNodeRetryWithOptionsAndChrootWithStdErr(oc *CLI, nodeName string, options []string, cmd ...string) (string, string, error) {
+	var stdErr string
+	var stdOut string
+	var err error
+	errWait := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		stdOut, stdErr, err = debugNode(oc, nodeName, options, true, true, cmd...)
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	AssertWaitPollNoErr(errWait, fmt.Sprintf("Failed to debug node : %v", errWait))
+	return stdOut, stdErr, err
+}

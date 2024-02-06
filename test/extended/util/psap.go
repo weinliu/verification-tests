@@ -914,10 +914,10 @@ func SpecifyMachinesetWithDifferentInstanceType(oc *CLI) string {
 
 	switch iaasPlatform {
 	case "aws":
-		//we use m6i.xlarge as default instance type, if current machineset instanceType is "m6i.xlarge", we use "m6i.2xlarge"
-		expectedInstanceType = "m6i.xlarge"
-		if currentInstanceType == expectedInstanceType {
-			expectedInstanceType = "m6i.2xlarge"
+		//we use m6i.xlarge as default instance type, if current machineset instanceType is "m6i.2xlarge", we use "m6i.xlarge"
+		expectedInstanceType = "m6i.2xlarge"
+		if strings.Contains(currentInstanceType, "2xlarge") {
+			expectedInstanceType = "m6i.xlarge"
 		}
 	case "azure":
 		//we use Standard_DS2_v2 as default instance type, if current machineset instanceType is "Standard_DS2_v2", we use "Standard_DS3_v2"

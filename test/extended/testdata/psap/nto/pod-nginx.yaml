@@ -28,4 +28,3 @@ objects:
         imagePullPolicy: Always
 parameters:
 - name: IMAGENAME
-

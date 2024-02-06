@@ -146,15 +146,13 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 		// Expected derived by running this program 5 times against 4.8.0-0.nightly-2021-10-20-155651 and taking median
 		// Threshold is set to lower than the expected value
 		e2e.Logf("createDuration is: %v Expected time is less than 350s.", createDuration)
-		o.Expect(createDuration).To(o.BeNumerically("<=", 350))
-
 		e2e.Logf("getDuration is: %v Expected time is less than 90s.", getDuration)
-		o.Expect(getDuration).To(o.BeNumerically("<=", 90))
-
 		e2e.Logf("scaleDuration is: %v Expected time is less than 75s.", scaleDuration)
-		o.Expect(scaleDuration).To(o.BeNumerically("<=", 75))
-
 		e2e.Logf("deleteDuration is: %v Expected time is less than 570s.", deleteDuration)
+
+		o.Expect(createDuration).To(o.BeNumerically("<=", 350))
+		o.Expect(getDuration).To(o.BeNumerically("<=", 90))
+		o.Expect(scaleDuration).To(o.BeNumerically("<=", 75))
 		o.Expect(deleteDuration).To(o.BeNumerically("<=", 570))
 	})
 })

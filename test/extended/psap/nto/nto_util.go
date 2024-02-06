@@ -576,13 +576,15 @@ func assertDefaultIRQSMPAffinityAffectedBitMask(cpuBitsMask []byte, isolatedCPU 
 }
 
 // AssertTunedAppliedMC Check if customed tuned applied via MCP
-func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
+func AssertTunedAppliedMC(oc *exutil.CLI, mcNamePrefix string, filter string) {
 
 	mcNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", "--no-headers", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The name of mcName is: %v", mcNameList)
 
-	mcNameReg, _ := regexp.Compile(".*" + mcpName + ".*")
+	mcNameReg, _ := regexp.Compile(".*" + mcNamePrefix)
 	mcName := mcNameReg.FindAllString(mcNameList, -1)
+	e2e.Logf("The expected names of mcName is: %v", mcName)
 
 	mcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mcName[0], "-oyaml").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -731,7 +733,9 @@ func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace s
 func assertIFChannelQueuesStatus(oc *exutil.CLI, namespace string, tunedNodeName string) bool {
 
 	var isMatch bool
-	ifNameList, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-a", "-not", "-name", "enP*", "-printf", `%f"\n"`).Output()
+	findStr := fmt.Sprintf(`find /sys/class/net -type l -not -lname *virtual* -a -not -name enP* -printf %%f"\n"`)
+	ifNameList, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", findStr)
+	//ifNameList, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-a", "-not", "-name", "enP*", "-printf", `%f"\n"`).Output()
 	e2e.Logf("Physical network list is: %v", ifNameList)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(ifNameList).NotTo(o.BeEmpty())
@@ -746,7 +750,8 @@ func assertIFChannelQueuesStatus(oc *exutil.CLI, namespace string, tunedNodeName
 
 	for i := 0; i < len(ifNames); {
 		if len(ifNames[i]) > 0 {
-			ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifNames[i]).Output()
+			ethToolsOutput, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"--quiet=true", "--to-namespace=" + namespace}, "ethtool", "-l", ifNames[i])
+			//ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifNames[i]).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(ethToolsOutput).NotTo(o.BeEmpty())
 			e2e.Logf("ethtool -l %v:, \n%v", ifNames[i], ethToolsOutput)
@@ -1066,4 +1071,15 @@ func getDefaultProfileNameOnMaster(oc *exutil.CLI, masterNodeName string) string
 
 	e2e.Logf("defaultProfileName is %v on %v ", defaultProfileName, masterNodeName)
 	return defaultProfileName
+}
+
+func assertCoStatusWithKeywords(oc *exutil.CLI, keywords string) {
+
+	o.Eventually(func() bool {
+		coStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Output()
+		if err1 != nil || !strings.Contains(coStatus, keywords) {
+			e2e.Logf("failed to find the keywords, the status of co is %s , check again", coStatus)
+		}
+		return strings.Contains(coStatus, keywords)
+	}, 60*time.Second, time.Second).Should(o.BeTrue())
 }

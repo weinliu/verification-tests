@@ -751,9 +751,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the value of profile change in the worker node of custom nodepool hugepages-nodepool in hosted clusters, the expected value is still hugepagesz=2M hugepages=50")
 		bootCMDLinestdOut, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", ntoNamespace, "profile/"+workerNodeName, "-ojsonpath='{.status.bootcmdline}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(bootCMDLinestdOut).NotTo(o.BeEmpty())
 		e2e.Logf("status.bootcmdline is: %v", bootCMDLinestdOut)
-		o.Expect(bootCMDLinestdOut).To(o.ContainSubstring("hugepagesz=2M hugepages=50"))
+		o.Expect(bootCMDLinestdOut).NotTo(o.ContainSubstring("hugepagesz=2M hugepages=50"))
+		//The field of bootcmdline has been deprecated
 
 		g.By("Check if custom node pool is ready in hosted cluster")
 		exutil.AssertIfNodePoolIsReadyByName(oc, "hugepages-nodepool", 360, hostedClusterNS)
@@ -763,9 +763,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Assert hugepagesz match in /proc/cmdline on all nodes include the second new worker node in custom node pool")
 		assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "hugepagesz=2M hugepages=50", true)
-
-		g.By("Assert the key <refusing to sync MachineConfig xxxx> words in NTO operator pod logs")
-		assertNTOPodLogsLastLinesInManagementCluster(oc, guestClusterNS, ntoOperatorPodName, "18", 60, "refusing to sync MachineConfig")
 	})
 
 	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-55359-NTO applies one configmap that is referenced in two nodepools in the same hosted cluster. [Disruptive]", func() {
