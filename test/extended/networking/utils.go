@@ -1219,10 +1219,13 @@ func getOVNMetrics(oc *exutil.CLI, url string) string {
 }
 
 func checkIPsec(oc *exutil.CLI) string {
-	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig.mode}").Output()
+	if err != nil {
+		// if have {} in 4.15+, that means it upgraded from previous version and with ipsec enabled.
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 	e2e.Logf("The ipsec state is === %v ===", output)
-	e2e.Logf("{} means ipsec is enabled, empty means ipsec is disabled")
 	return output
 }
 

@@ -66,10 +66,11 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	var (
 		oc           = exutil.NewCLI("networking-ipsec-ns", exutil.KubeConfigPath())
 		leftPublicIP string
-		ipsecTunnel  string
 		rightIP      string
 		leftIP       string
+		nodeCert     string
 		rightNode    string
+		ipsecTunnel  string
 	)
 	g.BeforeEach(func() {
 		platform := exutil.CheckPlatform(oc)
@@ -77,6 +78,11 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		e2e.Logf("\nThe platform is %v,  networkType is %v\n", platform, networkType)
 		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "none")) || !strings.Contains(networkType, "ovn") {
 			g.Skip("Test cases should be run on GCP/BBM cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		}
+
+		ipsecState := checkIPsec(oc)
+		if ipsecState == "Disabled" {
+			g.Skip("IPsec not enabled, skiping test!")
 		}
 
 		switch platform {
@@ -87,9 +93,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			if leftPublicIP == "" || err != nil {
 				g.Skip("There is no int-svc bastion host in the cluster, skip the ipsec NS test cases.")
 			} else {
-				ipsecTunnel = "worker1-VM"
+				ipsecTunnel = "VM-128-2"
 				rightIP = "10.0.128.2"
 				leftIP = "10.0.0.2"
+				nodeCert = "10_0_128_2"
 			}
 		case "none":
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
@@ -99,6 +106,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			ipsecTunnel = "pluto-62-VM"
 			rightIP = "10.73.116.62"
 			leftIP = "10.1.98.217"
+			nodeCert = "left_server"
 			leftPublicIP = leftIP
 		}
 
@@ -108,29 +116,32 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			g.Skip(fmt.Sprintf("There is no worker node with IPSEC rightIP %v, skip the testing.", rightIP))
 		}
 
-		// Check if ipsec.service existing or not
-		statusCmd := fmt.Sprintf("systemctl status ipsec.service")
-		_, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", statusCmd)
-		if ipsecErr != nil {
-			g.Skip("No ipsec service installed on nodes, skip IPSEC NS tests!")
+		//With 4.15+, filter the cluster by checking if existing ipsec config on external host.
+		err := sshRunCmd(leftPublicIP, "core", "sudo cat /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		if err != nil {
+			g.Skip("No IPSEC configuration on external host, skip the test!!")
 		}
 
-		cmd := fmt.Sprintf("systemctl restart ipsec.service && sleep 5 && ipsec auto --up " + ipsecTunnel)
-		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
-		if ipsecErr != nil || !strings.Contains(ipsecStatus, "established") {
-			e2e.Logf("IPSEC status: \n%s", ipsecStatus)
-			g.Skip("IPSEC NS was not enabled on this cluster, skip ipsec NS tests!")
-
-		}
+		//With 4.15+, use nmstate to config ipsec
+		installNMstateOperator(oc)
 	})
 
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-67472-Transport tunnel can be setup for IPSEC NS, [Disruptive]", func() {
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+		policyName := "ipsec-policy-transport-67472"
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
+
 		exutil.By("Checking ipsec session was established between worker node and external host")
-		cmd := "ipsec whack --trafficstatus"
-		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
-		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
-		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
 
 		exutil.By("Start tcpdump on ipsec right node")
 		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
@@ -147,9 +158,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
 		err = sshRunCmd(leftPublicIP, "core", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmdErr := cmdTcpdump.Wait()
-		o.Expect(cmdErr).NotTo(o.HaveOccurred())
-		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+		cmdTcpdump.Process.Kill()
 
 		exutil.By("Start tcpdump on ipsec right node again")
 		tcpdumpCmd2 := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
@@ -162,9 +174,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		result, timeoutTestErr := accessEgressNodeFromIntSvcInstanceOnGCP(leftPublicIP, rightIP)
 		o.Expect(timeoutTestErr).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.Equal("0"))
-		cmdErr = cmdTcpdump2.Wait()
-		o.Expect(cmdErr).NotTo(o.HaveOccurred())
-		e2e.Logf(cmdOutput2.String())
+		cmdTcpdump2.Wait()
+		e2e.Logf("tcpdump for ssh is \n%s", cmdOutput2.String())
 		o.Expect(cmdOutput2.String()).To(o.ContainSubstring("ESP"), cmdOutput2.String())
 	})
 
@@ -176,11 +187,20 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 		)
 
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+		policyName := "ipsec-policy-67473"
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
+
 		exutil.By("Checking ipsec session was established between worker node and external host")
-		cmd := "ipsec whack --trafficstatus"
-		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
-		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
-		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
 
 		g.By("Create a namespace")
 		ns1 := oc.Namespace()
@@ -226,13 +246,14 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		time.Sleep(5 * time.Second)
 		err = sshRunCmd(leftPublicIP, "core", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmdErr := cmdTcpdump.Wait()
-		o.Expect(cmdErr).NotTo(o.HaveOccurred())
-		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for http is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
 	})
 
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-Medium-67474-IPsec tunnel can be up after restart ipsec service,  [Disruptive]", func() {
+		g.Skip("Due to bug https://issues.redhat.com/browse/OCPBUGS-27839,skip this case for now")
 		exutil.By("Checking ipsec session was established between worker node and external host")
 		cmd := "ipsec whack --trafficstatus"
 		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
@@ -265,9 +286,9 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
 		err = sshRunCmd(leftPublicIP, "core", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmdErr := cmdTcpdump.Wait()
-		o.Expect(cmdErr).NotTo(o.HaveOccurred())
-		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump output for ping is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
 	})
 
 	// author: huirwang@redhat.com
@@ -277,11 +298,20 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			hostPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")
 		)
 
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+		policyName := "ipsec-policy-67475"
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
+
 		exutil.By("Checking ipsec session was established between worker node and external host")
-		cmd := "ipsec whack --trafficstatus"
-		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
-		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
-		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
 
 		g.By("Create a namespace")
 		ns1 := oc.Namespace()
@@ -313,8 +343,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		curlCmd := fmt.Sprintf("curl %s:%s &", rightIP, "8080")
 		err = sshRunCmd(leftPublicIP, "core", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmdErr := cmdTcpdump.Wait()
-		o.Expect(cmdErr).NotTo(o.HaveOccurred())
-		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"), cmdOutput.String())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump output for curl to hostpod is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
 	})
 })

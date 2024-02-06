@@ -2,6 +2,7 @@
 package networking
 
 import (
+	"fmt"
 	"net"
 	"path/filepath"
 	"strconv"
@@ -92,6 +93,19 @@ type routePolicyResource struct {
 	destaddr    string
 	nexthopaddr string
 	tableid     int
+	template    string
+}
+
+type ipsecHost2hostPolicyResource struct {
+	name        string
+	nodelabel   string
+	labelvalue  string
+	tunnelname  string
+	left        string
+	leftcert    string
+	right       string
+	mode        string
+	rightsubnet string
 	template    string
 }
 
@@ -277,4 +291,117 @@ func preCheckforRegistry(oc *exutil.CLI) {
 	if !strings.Contains(catalogsource, "qe-app-registry") {
 		g.Skip("Skip testing as qe-app-registry not found")
 	}
+}
+
+func createIPSECPolicy(oc *exutil.CLI, ipsecPolicy ipsecHost2hostPolicyResource) (bool, error) {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipsecPolicy.template, "-p", "NAME="+ipsecPolicy.name, "NODELABEL="+ipsecPolicy.nodelabel, "LABELVALUE="+ipsecPolicy.labelvalue, "TUNELNAME="+ipsecPolicy.tunnelname, "LEFT="+ipsecPolicy.left, "LEFTCERT="+ipsecPolicy.leftcert, "RIGHT="+ipsecPolicy.right, "RIGHTSUBNET="+ipsecPolicy.rightsubnet, "MODE="+ipsecPolicy.mode)
+	if err != nil {
+		e2e.Failf("Error configure ipsec policy %v", err)
+		return false, err
+	}
+	return true, nil
+}
+
+func installNMstateOperator(oc *exutil.CLI) {
+
+	var (
+		opNamespace = "openshift-nmstate"
+		opName      = "kubernetes-nmstate-operator"
+	)
+
+	e2e.Logf("Check catalogsource and install nmstate operator.")
+	preCheckforRegistry(oc)
+
+	namespaceTemplate := generateTemplateAbsolutePath("namespace-template.yaml")
+	operatorGroupTemplate := generateTemplateAbsolutePath("operatorgroup-template.yaml")
+	subscriptionTemplate := generateTemplateAbsolutePath("subscription-template.yaml")
+	sub := subscriptionResource{
+		name:             "nmstate-operator-sub",
+		namespace:        opNamespace,
+		operatorName:     opName,
+		channel:          "stable",
+		catalog:          "qe-app-registry",
+		catalogNamespace: "openshift-marketplace",
+		template:         subscriptionTemplate,
+	}
+	ns := namespaceResource{
+		name:     opNamespace,
+		template: namespaceTemplate,
+	}
+	og := operatorGroupResource{
+		name:             opName,
+		namespace:        opNamespace,
+		targetNamespaces: opNamespace,
+		template:         operatorGroupTemplate,
+	}
+
+	operatorInstall(oc, sub, ns, og)
+	e2e.Logf("SUCCESS - NMState operator installed")
+
+}
+
+func createNMstateCR(oc *exutil.CLI, nmstateCR nmstateCRResource) {
+	e2e.Logf("Create NMState CR")
+	var (
+		opNamespace = "openshift-nmstate"
+	)
+	result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+	exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+	o.Expect(result).To(o.BeTrue())
+	e2e.Logf("SUCCESS - NMState CR Created")
+}
+
+func configIPSecNMSatePolicy(oc *exutil.CLI, policyName, leftIP, nodeName, tunnelname, rightIP, leftcert, mode string) {
+	e2e.Logf("Configure NNCP for IPSEC")
+	ipsecPolicyTemplate := generateTemplateAbsolutePath("ipsec-host2host-policy-template.yaml")
+	ipsecPolicy := ipsecHost2hostPolicyResource{
+		name:        policyName,
+		nodelabel:   "kubernetes.io/hostname",
+		labelvalue:  nodeName,
+		tunnelname:  tunnelname,
+		left:        leftIP,
+		leftcert:    leftcert,
+		right:       rightIP,
+		mode:        mode,
+		rightsubnet: rightIP + "/32",
+		template:    ipsecPolicyTemplate,
+	}
+	result, configErr1 := createIPSECPolicy(oc, ipsecPolicy)
+	o.Expect(configErr1).NotTo(o.HaveOccurred())
+	o.Expect(result).To(o.BeTrue())
+
+	e2e.Logf("Wait ipsec policy applied.")
+	nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+	exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+	e2e.Logf("SUCCESS - ipsec policy is applied")
+}
+
+func removeIPSecConfig(oc *exutil.CLI, policyName, ifname, nodeName string) {
+	policyTemplate := generateTemplateAbsolutePath("iface-policy-template.yaml")
+	ipsecPolicy := ifacePolicyResource{
+		name:       policyName,
+		nodelabel:  "kubernetes.io/hostname",
+		labelvalue: nodeName,
+		ifacename:  ifname,
+		descr:      "disable ipsec tunnel",
+		ifacetype:  "ipsec",
+		state:      "absent",
+		template:   policyTemplate,
+	}
+	result, configErr := configIface(oc, ipsecPolicy)
+	o.Expect(configErr).NotTo(o.HaveOccurred())
+	o.Expect(result).To(o.BeTrue())
+
+	nncpErr := checkNNCPStatus(oc, policyName, "Available")
+	exutil.AssertWaitPollNoErr(nncpErr, "policy applied failed")
+	e2e.Logf("SUCCESS - policy is applied")
+
+	deleteNNCP(oc, policyName)
+}
+
+func verifyIPSecTunnelUp(oc *exutil.CLI, nodeName, src, dst, mode string) {
+	cmd := fmt.Sprintf("ip xfrm policy get src %s/32 dst %s/32 dir out ; ip xfrm policy get src %s/32 dst %s/32 dir in  ", src, dst, dst, src)
+	ipXfrmPolicy, ipsecErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmd)
+	o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+	o.Expect(ipXfrmPolicy).Should(o.ContainSubstring(mode))
 }
