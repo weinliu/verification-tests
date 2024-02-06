@@ -9,9 +9,6 @@ describe('(OCP-67782 Network_Observability) Large volume downloads counters test
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // create test server and client pods
-        cy.adminCLI('oc create -f ./fixtures/netobserv/test-client-large-download.yaml')
-
         // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
         let catalogImg
@@ -40,6 +37,9 @@ describe('(OCP-67782 Network_Observability) Large volume downloads counters test
 
         it("(OCP-67782, aramesha, Network_Observability) should verify large volume download counter", function () {
             // Filter on SrcPort 443, DstNamespace test-client and DstName client
+            // create test server and client pods
+            cy.adminCLI('oc create -f ./fixtures/netobserv/test-client-large-download.yaml')
+
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
             cy.byTestID('src_port').click()
             cy.byTestID('autocomplete-search').type('443' + '{enter}')

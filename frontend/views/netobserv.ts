@@ -2,6 +2,10 @@ import { operatorHubPage } from "../views/operator-hub-page"
 
 export const project = "netobserv"
 
+export namespace flowcollectorFormSelectors {
+    export const ebpfPrivilegedToggle = '#root_spec_agent_ebpf_privileged_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
+}
+
 export const Operator = {
     name: () => {
         if (Cypress.env('noo_catalog_src') == "upstream") {
@@ -45,7 +49,7 @@ export const Operator = {
             "workload_egress_bytes_total",
             "workload_ingress_packets_total",
             "workload_egress_packets_total",
-          ]);
+        ]);
     },
     visitFlowcollector: () => {
         // this assumes Loki is already deployed in netobserv NS
@@ -78,7 +82,9 @@ export const Operator = {
                 cy.adminCLI(`oc create -f ./fixtures/netobserv/loki.yaml -n ${namespace}`)
                 cy.byTestID('item-create').should('exist').click()
                 cy.get('#form').click() // bug in console where yaml view is default
-                Operator.configureEbpfAgent()
+                cy.get('#root_spec_agent_accordion-toggle').click()
+                cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
+
                 if (parameters == "PacketDrop") {
                     Operator.enablePacketDrop()
                 }
@@ -96,6 +102,7 @@ export const Operator = {
                 if (parameters == "AllMetrics") {
                     Operator.enableAllFLPMetrics()
                 }
+                cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
                 cy.byTestID('create-dynamic-form').click()
                 cy.wait(5000)
                 cy.byTestID('status-text').should('exist').should('contain.text', 'Ready')
@@ -111,24 +118,17 @@ export const Operator = {
             }
         })
     },
-    configureEbpfAgent: () => {
-        cy.get('#root_spec_agent_accordion-toggle').click()
-        cy.get('#root_spec_agent_type').click().then(agent => {
-            cy.contains("eBPF").should('exist')
-            cy.contains("IPFIX").should('exist')
-            cy.get('#eBPF-link').click()
-        })
-        cy.get('#root_spec_agent_ebpf_accordion-toggle').click()
-        cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
-    },
-    enablePacketDrop: () => {
-        cy.get('#root_spec_agent_ebpf_privileged').click()
+    enableEBPFFeature: (name: string) => {
         cy.get('#root_spec_agent_ebpf_features_accordion-toggle').click()
         cy.get('#root_spec_agent_ebpf_features_add-btn').click()
         cy.get('#root_spec_agent_ebpf_features_0').click().then(features => {
-            cy.contains("PacketDrop").should('exist')
-            cy.get('#PacketDrop-link').click()
+            cy.contains(name).should('exist')
+            cy.get(`#${name}-link`).click()
         })
+    },
+    enablePacketDrop: () => {
+        cy.get(flowcollectorFormSelectors.ebpfPrivilegedToggle).click()
+        Operator.enableEBPFFeature("PacketDrop")
         // Deploy PacketDrop metrics to includeList
         cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_metrics_accordion-toggle').click()
@@ -143,12 +143,7 @@ export const Operator = {
         ]);
     },
     enableDNSTracking: () => {
-        cy.get('#root_spec_agent_ebpf_features_accordion-toggle').click()
-        cy.get('#root_spec_agent_ebpf_features_add-btn').click()
-        cy.get('#root_spec_agent_ebpf_features_0').click().then(features => {
-            cy.contains("DNSTracking").should('exist')
-            cy.get('#DNSTracking-link').click()
-        })
+        Operator.enableEBPFFeature("DNSTracking")
         // Deploy DNS metrics to includeList
         cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_metrics_accordion-toggle').click()
@@ -160,12 +155,8 @@ export const Operator = {
         ]);
     },
     enableFlowRTT: () => {
-        cy.get('#root_spec_agent_ebpf_features_accordion-toggle').click()
-        cy.get('#root_spec_agent_ebpf_features_add-btn').click()
-        cy.get('#root_spec_agent_ebpf_features_0').click().then(features => {
-            cy.contains("FlowRTT").should('exist')
-            cy.get('#FlowRTT-link').click()
-        })
+        cy.get(flowcollectorFormSelectors.ebpfPrivilegedToggle).should('be.visible').click()
+        Operator.enableEBPFFeature("FlowRTT")
         // Deploy FlowRTT metrics to includeList
         cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_metrics_accordion-toggle').click()

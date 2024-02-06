@@ -118,7 +118,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
             cy.contains('Display options').should('exist').click()
 
             // validate edge labels shows flowRTT info
-            cy.get('#zoom-in').click().click().click();
+            cy.get('#zoom-in').click({ force: true }).click({ force: true }).click({ force: true });
 
             cy.get('[data-test-id=edge-handler]').each((g) => {
                 expect(g.text()).to.match(/\d* ms/gm);

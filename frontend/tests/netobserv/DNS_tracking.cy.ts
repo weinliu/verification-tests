@@ -198,7 +198,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
             cy.contains('Display options').should('exist').click()
 
             // validate ege labels shows DNS latency info
-            cy.get('#zoom-in').click().click().click();
+            cy.get('#zoom-in').click({ force: true }).click({ force: true }).click({ force: true });
 
             cy.get('[data-test-id=edge-handler]').each((g) => {
                 expect(g.text()).to.match(/\d* ms/gm);

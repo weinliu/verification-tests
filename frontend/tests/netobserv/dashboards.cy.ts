@@ -68,7 +68,6 @@ describe('Network_Observability dashboards tests', { tags: ['Network_Observabili
 
     it('(OCP-61893, nweinber, Network_Observability), should have health dashboards from additional metrics', function () {
         // recreate flowcollector with additional metrics and go back to the dashboard page
-        Operator.deleteFlowCollector()
         Operator.createFlowcollector(project, "AllMetrics")
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")

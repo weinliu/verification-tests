@@ -392,6 +392,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
                 let newRefresh = Cypress.$("#lastRefresh").text()
                 cy.wrap(lastRefresh).should("not.eq", newRefresh)
                 lastRefresh = newRefresh
+                cy.wrap(zoomin).trigger('mouseleave')
             })
 
             // time shift single right arrow
