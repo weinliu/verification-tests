@@ -1262,7 +1262,7 @@ spec:
 		}
 
 		exutil.By("7) To add applications to created project, check if Quota usage of the project is changed.")
-		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("openshift/hello-openshift").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("openshift/hello-openshift", "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
 		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
@@ -3060,6 +3060,7 @@ spec:
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -3068,12 +3069,12 @@ spec:
 
 		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
+		namespace := oc.Namespace()
 
 		exutil.By("2) Build hello-world from external source")
-		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp11138-test-%s", strings.ToLower(exutil.RandStr(5)))
-		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
+		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName, "-n", namespace, "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3) Wait for hello-world build to success")
@@ -4057,7 +4058,7 @@ EOF`, dcpolicyrepo)
 			exutil.By("2.) Create new app")
 			var apperr error
 			errApp := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-				apperr := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", tmpnamespace).Execute()
+				apperr := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", tmpnamespace, "--import-mode=PreserveOriginal").Execute()
 				if apperr != nil {
 					return false, nil
 				}
@@ -5190,8 +5191,7 @@ spec:
 		}
 
 		exutil.By("4. Create a source build using source code and check the build info")
-		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
-		imgErr := oc.AsAdmin().WithoutNamespace().Run("new-build").Args(`quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex.git`, "-n", namespace).Execute()
+		imgErr := oc.AsAdmin().WithoutNamespace().Run("new-build").Args(`quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex.git`, "-n", namespace, "--import-mode=PreserveOriginal").Execute()
 		if imgErr != nil {
 			if !isConnectedInternet(oc) {
 				e2e.Failf("Failed to access to the internet, something wrong with the connectivity of the cluster! Please check!")
@@ -5547,14 +5547,12 @@ EOF'`, etcConfigYaml, level)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("2) Create new app")
-		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
-		imageImportModeOnArmAndMutiArch(oc, "hello-openshift:mystream1", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", oc.Namespace())
-		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-openshift", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-openshift", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName, "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3) Build hello-world from external source")
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
-		imageError := oc.Run("new-build").Args(helloWorldSource, "--name=ocp-11887-test-"+strings.ToLower(exutil.RandStr(5)), "-n", projectName).Execute()
+		imageError := oc.Run("new-build").Args(helloWorldSource, "--name=ocp-11887-test-"+strings.ToLower(exutil.RandStr(5)), "-n", projectName, "--import-mode=PreserveOriginal").Execute()
 		if imageError != nil {
 			if !isConnectedInternet(oc) {
 				e2e.Failf("Failed to access to the internet, something wrong with the connectivity of the cluster! Please check!")
@@ -5910,14 +5908,15 @@ manifests:
 			g.Skip("Skip for proxy platform")
 		}
 
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
+		namespace := oc.Namespace()
 
 		exutil.By("2) Build hello-world from external source")
-		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp12036-test-%s", strings.ToLower(exutil.RandStr(5)))
-		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
+		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName, "-n", namespace, "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3) Wait for hello-world build to success")
@@ -5979,6 +5978,7 @@ manifests:
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
+		architecture.SkipArchitectures(oc, architecture.MULTI)
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -5987,12 +5987,12 @@ manifests:
 
 		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
+		namespace := oc.Namespace()
 
 		exutil.By("2) Build hello-world from external source")
-		imageImportModeOnArmAndMutiArch(oc, "ruby-27:1.2.0", "quay.io/openshifttest/ruby-27:1.2.0", oc.Namespace())
 		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
 		buildName := fmt.Sprintf("ocp11905-test-%s", strings.ToLower(exutil.RandStr(5)))
-		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
+		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName, "-n", namespace, "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3) Wait for hello-world build to success")
@@ -6108,8 +6108,6 @@ manifests:
 
 		for i, u := range urls {
 			exutil.By(fmt.Sprintf("%d.1) Build "+u.Target+" from external source", i+5))
-			imageImportModeOnArmAndMutiArch(oc, u.Target+":mystream1", u.URL, oc.Namespace())
-			//Fix for mix-arch IPSEC profiles
 			appErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args(u.URL, "-n", projectNs, "--import-mode=PreserveOriginal").Execute()
 			o.Expect(appErr).NotTo(o.HaveOccurred())
 

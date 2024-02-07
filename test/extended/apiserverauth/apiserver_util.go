@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -1407,15 +1406,6 @@ func checkURLEndpointAccess(oc *exutil.CLI, hostIP, nodePort, podName, portComma
 
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Unable to access %s", url))
 	o.Expect(curlOutput).To(o.ContainSubstring(status))
-}
-
-func imageImportModeOnArmAndMutiArch(oc *exutil.CLI, tagName string, image string, nameSpace string) {
-	arch := architecture.ClusterArchitecture(oc)
-	if arch.String() == "arm64" || arch.String() == "multi" {
-		e2e.Logf("Set import policy to PreserveOriginal")
-		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args(tagName, "--from="+image, `--import-mode=PreserveOriginal`, "-n", nameSpace, "--reference-policy=local", "--confirm").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
 }
 
 type CertificateDetails struct {
