@@ -382,6 +382,26 @@ func (n *Node) IsSchedulableOrFail() bool {
 	return schedulable
 }
 
+// IsEdge Returns true if th node is an edge node
+func (n *Node) IsEdge() (bool, error) {
+	_, err := n.GetLabel(`node-role.kubernetes.io/edge`)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
+// IsEdgeOrFail Returns true if th node is an edge node and fails the test if any error happens
+func (n *Node) IsEdgeOrFail() bool {
+	isEdge, err := n.IsEdge()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error finding out if node %s is an edge node", n)
+	return isEdge
+}
+
 // IsUpdating returns if the node is currently updating the machine configuration
 func (n *Node) IsUpdating() bool {
 	return n.GetMachineConfigState() == "Working"

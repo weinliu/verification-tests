@@ -1694,11 +1694,17 @@ nulla pariatur.`
 
 		exutil.By("Check MCD logs to make sure that the node is cordoned before being drained")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		workerNode := mcp.GetSortedNodesOrFail()[0]
 
 		o.Eventually(workerNode.IsCordoned, fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
 
-		searchRegexp := fmt.Sprintf("(?s)%s: initiating cordon.*node %s: Evicted pod", workerNode.GetName(), workerNode.GetName())
+		searchRegexp := fmt.Sprintf("(?s)%s: initiating cordon", workerNode.GetName())
+		if !workerNode.IsEdgeOrFail() {
+			// In edge nodes there is no node evicted because they are unschedulable so no pod is running
+			searchRegexp += fmt.Sprintf(".*node %s: Evicted pod", workerNode.GetName())
+		}
+		searchRegexp += fmt.Sprintf(".*node %s: operation successful; applying completion annotation", workerNode.GetName())
+
 		o.Eventually(func() string {
 			podAllLogs, _ := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, ctrlerContainer, ctrlerPod, "")
 			// Remove the part of the log captured at the beginning of the test.

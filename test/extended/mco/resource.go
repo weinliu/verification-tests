@@ -44,6 +44,7 @@ type ResourceInterface interface {
 	GetAnnotationOrFail(annotation string) string
 	GetConditionByType(ctype string) string
 	AddLabel(label, value string) error
+	GetLabel(label string) (string, error)
 	Describe() (string, error)
 	ExportToFile(fileName string) error
 	PrettyString() string
@@ -203,6 +204,30 @@ func (r *Resource) GetConditionByType(ctype string) string {
 
 func (r *Resource) GetConditionStatusByType(ctype string) string {
 	return r.GetOrFail(`{.status.conditions[?(@.type=="` + ctype + `")].status}`)
+}
+
+// GetLabel returns the label's value if the value exists. It returns an error if the label does not exist
+func (r *Resource) GetLabel(label string) (string, error) {
+	labels := map[string]string{}
+	labelsJSON, err := r.Get(`{.metadata.labels}`)
+	if err != nil {
+		return "", err
+	}
+	if labelsJSON == "" {
+		return "", fmt.Errorf("Labels not defined. Could not get .metadata.labels attribute")
+	}
+
+	if err := json.Unmarshal([]byte(labelsJSON), &labels); err != nil {
+		return "", err
+	}
+
+	value, ok := labels[label]
+	if !ok {
+		return "", fmt.Errorf("%s. Label not found in -n %s %s",
+			label, r.GetNamespace(), r.GetName())
+	}
+
+	return value, nil
 }
 
 // AddLabel adds a label to the resource
