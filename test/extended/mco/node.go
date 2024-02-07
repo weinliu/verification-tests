@@ -771,7 +771,7 @@ func (n *Node) GetRHELVersion() (string, error) {
 		return "", err
 	}
 
-	r := regexp.MustCompile(`RHEL_VERSION="(?P<rhel_version>.*)"`)
+	r := regexp.MustCompile(`RHEL_VERSION="?(?P<rhel_version>.*)"?`)
 	match := r.FindStringSubmatch(vContent)
 	if len(match) == 0 {
 		msg := fmt.Sprintf("No RHEL_VERSION available in /etc/os-release file: %s", vContent)
