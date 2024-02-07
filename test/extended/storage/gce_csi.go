@@ -46,8 +46,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// [GKE-PD-CSI] [Dynamic Regional PV] regional pv should store data and sync in different available zones
 	g.It("NonHyperShiftHOST-OSD_CCS-Author:chaoyang-Critical-37490-[GKE-PD-CSI] regional pv should store data and sync in different available zones", func() {
 
-		if exutil.IsSNOCluster(oc) {
-			g.Skip("SNO test clusters do not satisfy the scenario")
+		// The regional pv provision needs to pick 2 different zones from the nodes, if all nodes in the same zone will be failed to provision(E.g. gcp-ocm-osd-ccs clusters):
+		// rpc error: code = InvalidArgument desc = CreateVolume failed to pick zones for disk: failed to pick zones from topology: need 2 zones from topology, only got 1 unique zones
+		// The Single zone clusters check condition also contains the SNO clusters
+		if len(getZonesFromWorker(oc)) < 2 {
+			g.Skip("Single zone clusters do not satisfy the scenario")
 		}
 
 		var (
