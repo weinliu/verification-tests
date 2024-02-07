@@ -2936,7 +2936,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		LO.SubscribeOperator(oc)
 	})
 
-	g.It("CPaasrunOnly-Author:kbharti-Critical-67565-Verify that non-admin/regular user can access logs as per rolebindings assigned to the user[Serial][Slow]", func() {
+	g.It("CPaasrunOnly-Author:kbharti-Critical-67565-High-55388-Verify that non-admin/regular user can access logs and query rules as per rolebindings assigned to the user[Serial][Slow]", func() {
 
 		var (
 			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -2993,21 +2993,42 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		appProj := oc.Namespace()
 		token, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Validate that user cannot access logs of owned namespace without RBAC")
+		g.By("Create Loki Alerting rule")
+		appAlertingTemplate := filepath.Join(loggingBaseDir, "loki-log-alerts", "loki-app-alerting-rule-template.yaml")
+		params := []string{"-f", appAlertingTemplate, "-p", "NAMESPACE=" + appProj}
+		err = oc.Run("create").Args("-f", exutil.ProcessTemplate(oc, params...), "-n", appProj).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Validate that user cannot access logs and rules of owned namespace without RBAC - 403 Auth exception")
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(token).retry(5)
 		_, err = lc.searchByNamespace("application", appProj)
 		o.Expect(err).To(o.HaveOccurred())
+		_, err = lc.queryRules("application", appProj)
+		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("Create Role-binding to access logs of owned project")
+		g.By("Create Role-binding to access logs and rules of owned project")
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "cluster-logging-application-view", userName, "-n", appProj).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Validate user can access logs of owned namaspace after RBAC is created")
+		g.By("Validate user can access logs and rules of owned namespace after RBAC is created - Success flow")
 		lc.waitForLogsAppearByProject("application", appProj)
+		appRules, err := lc.queryRules("application", appProj)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		matchDataInResponse := []string{"name: MyAppLogVolumeAlert", "alert: MyAppLogVolumeIsHigh", "tenantId: application"}
+		for _, matchedData := range matchDataInResponse {
+			if !strings.Contains(string(appRules), matchedData) {
+				e2e.Failf("Response is missing " + matchedData)
+			}
+		}
+		e2e.Logf("Rules API response validated succesfully")
+
 	})
 
 	g.It("CPaasrunOnly-Author:kbharti-Critical-67643-Verify logs access for LokiStack adminGroups[Serial][Slow]", func() {
