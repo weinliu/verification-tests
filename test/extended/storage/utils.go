@@ -966,12 +966,21 @@ func getValidVolumeSize() (validVolSize string) {
 	return validVolSize
 }
 
-// isAwsOutpostCluster judges whether the aws test cluster has outpost workers
-func isAwsOutpostCluster(oc *exutil.CLI) bool {
+// isAwsOutpostsCluster judges whether the aws test cluster has outposts workers
+func isAwsOutpostsCluster(oc *exutil.CLI) bool {
 	if cloudProvider != "aws" {
 		return false
 	}
 	return strings.Contains(getWorkersInfo(oc), `topology.ebs.csi.aws.com/outpost-id`)
+}
+
+// isAwsOutpostsMixedWorkersCluster judges whether the aws test cluster has both outposts workers and common workers
+func isAwsOutpostsMixedWorkersCluster(oc *exutil.CLI) bool {
+	if cloudProvider != "aws" {
+		return false
+	}
+	outpostsWorkerCount := strings.Count(getWorkersInfo(oc), `topology.ebs.csi.aws.com/outpost-id`)
+	return outpostsWorkerCount > 0 && outpostsWorkerCount < len(getWorkersList(oc))
 }
 
 // isAwsLocalZoneCluster judges whether the aws test cluster has edge(local zone) workers
@@ -984,7 +993,18 @@ func isAwsLocalZoneCluster(oc *exutil.CLI) bool {
 
 // isGP2volumeSupportOnly judges whether the aws test cluster only support gp2 type volumes
 func isGP2volumeSupportOnly(oc *exutil.CLI) bool {
-	return isAwsLocalZoneCluster(oc) || isAwsOutpostCluster(oc)
+	return isAwsLocalZoneCluster(oc) || isAwsOutpostsCluster(oc)
+}
+
+// getAwsOutpostsID gets the outpostsID of the AWS Outposts cluster
+func getAwsOutpostsID(oc *exutil.CLI) string {
+	outpostsIDLabel := "topology.ebs.csi.aws.com/outpost-id"
+	outpostsNodes := exutil.GetNodeListByLabel(oc, outpostsIDLabel)
+	o.Expect(len(outpostsNodes) > 0).Should(o.BeTrue(), "The test cluster doesn't have outposts workers")
+	outpostsID, getoutpostsIDErr := exutil.GetResourceSpecificLabelValue(oc, "node/"+outpostsNodes[0], "", "topology\\.ebs\\.csi\\.aws\\.com/outpost-id")
+	o.Expect(getoutpostsIDErr).ShouldNot(o.HaveOccurred(), fmt.Sprintf("Failed to get outpostsID form node %q, %v", outpostsNodes[0], getoutpostsIDErr))
+	debugLogf("The AWS Outposts cluster outpostsID is %q", outpostsID)
+	return outpostsID
 }
 
 // Definition of int64Slice type

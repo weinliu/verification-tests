@@ -135,8 +135,13 @@ func (po *pod) create(oc *exutil.CLI) {
 	if po.namespace == "" {
 		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// For AWS Outposts mixed workers cluster if cases don't set nodeAffinity we will set it to use outposts worker
+	if isAwsOutpostsMixedWorkersCluster(oc) {
+		po.createWithNodeAffinity(oc, "topology.ebs.csi.aws.com/outpost-id", "In", []string{getAwsOutpostsID(oc)})
+	} else {
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 // create new pod with multiple persistentVolumeClaim
@@ -196,13 +201,13 @@ func (po *pod) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
 		po.namespace = oc.Namespace()
 	}
 	var (
-		extraParameters map[string]interface{}
-		jsonPath        = `items.0.spec.volumes.0.`
+		extraParameters         map[string]interface{}
+		extraParametersJSONPath = `items.0.spec.volumes.0.`
 	)
 	switch inVol.Kind {
 	case "genericEphemeralVolume", "csiEphemeralVolume":
 		extraParameters = map[string]interface{}{
-			"jsonPath":  jsonPath,
+			"jsonPath":  extraParametersJSONPath,
 			"ephemeral": inVol.VolumeDefinition,
 		}
 	case "emptyDir":
@@ -218,8 +223,28 @@ func (po *pod) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
 			inVol.Kind: map[string]string{},
 		}
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).ShouldNot(o.HaveOccurred())
+	var (
+		outpostsNodeAffinityJSONPath string
+		outpostsNodeAffinity         map[string]interface{}
+		jsonPathsAndActions          []map[string]string
+		multiExtraParameters         []map[string]interface{}
+	)
+
+	// For AWS Outposts mixed workers cluster if cases don't set nodeAffinity we will set it to use outposts worker
+	if isAwsOutpostsMixedWorkersCluster(oc) {
+		outpostsNodeAffinityJSONPath = "items.0.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0."
+		outpostsNodeAffinity = map[string]interface{}{
+			"key":      "topology.ebs.csi.aws.com/outpost-id",
+			"operator": "In",
+			"values":   []string{getAwsOutpostsID(oc)},
+		}
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{extraParametersJSONPath: "set"}, map[string]string{outpostsNodeAffinityJSONPath: "set"})
+		multiExtraParameters = append(multiExtraParameters, extraParameters, outpostsNodeAffinity)
+	} else {
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{extraParametersJSONPath: "set"})
+		multiExtraParameters = append(multiExtraParameters, extraParameters)
+	}
+	o.Expect(po.createWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters)).ShouldNot(o.HaveOccurred())
 }
 
 // Create new pod with extra parameters
@@ -227,8 +252,33 @@ func (po *pod) createWithExtraParameters(oc *exutil.CLI, extraParameters map[str
 	if po.namespace == "" {
 		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// For AWS Outposts mixed workers cluster if cases don't set nodeAffinity we will set it to use outposts worker
+	if isAwsOutpostsMixedWorkersCluster(oc) && !strings.Contains(fmt.Sprint(extraParameters), "nodeSelector") && !strings.Contains(fmt.Sprint(extraParameters), "nodeAffinity") {
+		var (
+			extraParametersJSONPath, outpostsNodeAffinityJSONPath string
+			outpostsNodeAffinity                                  map[string]interface{}
+			jsonPathsAndActions                                   []map[string]string
+			multiExtraParameters                                  []map[string]interface{}
+		)
+		if _, ok := extraParameters["jsonPath"]; !ok {
+			extraParametersJSONPath = `items.0.`
+		} else {
+			extraParametersJSONPath = fmt.Sprint(extraParameters["jsonPath"])
+			delete(extraParameters, "jsonPath")
+		}
+		outpostsNodeAffinityJSONPath = "items.0.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0."
+		outpostsNodeAffinity = map[string]interface{}{
+			"key":      "topology.ebs.csi.aws.com/outpost-id",
+			"operator": "In",
+			"values":   []string{getAwsOutpostsID(oc)},
+		}
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{extraParametersJSONPath: "set"}, map[string]string{outpostsNodeAffinityJSONPath: "set"})
+		multiExtraParameters = append(multiExtraParameters, extraParameters, outpostsNodeAffinity)
+		o.Expect(po.createWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters)).Should(o.ContainSubstring("created"))
+	} else {
+		err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 // Create new pod with multi extra parameters
@@ -254,8 +304,7 @@ func (po *pod) createWithReadOnlyVolume(oc *exutil.CLI) {
 		"jsonPath": `items.0.spec.containers.0.volumeMounts.0.`,
 		"readOnly": true,
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	po.createWithExtraParameters(oc, extraParameters)
 }
 
 // Create new pod with subpath
@@ -267,8 +316,7 @@ func (po *pod) createWithSubpathVolume(oc *exutil.CLI, subPath string) {
 		"jsonPath": `items.0.spec.containers.0.volumeMounts.0.`,
 		"subPath":  subPath,
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	po.createWithExtraParameters(oc, extraParameters)
 }
 
 // Create new pod for security check
@@ -285,8 +333,7 @@ func (po *pod) createWithSecurity(oc *exutil.CLI) {
 	if po.namespace == "" {
 		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	po.createWithExtraParameters(oc.AsAdmin(), extraParameters)
 }
 
 // Create new pod with extra parameters for nodeSelector
@@ -298,23 +345,21 @@ func (po *pod) createWithNodeSelector(oc *exutil.CLI, labelName string, labelVal
 	if po.namespace == "" {
 		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	po.createWithExtraParameters(oc, extraParameters)
 }
 
 // Create new pod with extra parameters for nodeAffinity, key, operator and values should be provided in matchExpressions
 func (po *pod) createWithNodeAffinity(oc *exutil.CLI, key string, operator string, values []string) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
+	}
 	extraParameters := map[string]interface{}{
 		"jsonPath": `items.0.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0.`,
 		"key":      key,
 		"operator": operator,
 		"values":   values,
 	}
-	if po.namespace == "" {
-		po.namespace = oc.Namespace()
-	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	po.createWithExtraParameters(oc, extraParameters)
 }
 
 // Delete the pod
@@ -806,8 +851,13 @@ func (dep *deployment) create(oc *exutil.CLI) {
 	if dep.namespace == "" {
 		dep.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// For AWS Outposts mixed workers cluster if cases don't set nodeAffinity we will set it to use outposts worker
+	if isAwsOutpostsMixedWorkersCluster(oc) && !strings.HasPrefix(dep.name, "iscsi-target-") {
+		dep.createWithNodeAffinity(oc, "topology.ebs.csi.aws.com/outpost-id", "In", []string{getAwsOutpostsID(oc)})
+	} else {
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 // Create new Deployment with extra parameters
@@ -815,8 +865,33 @@ func (dep *deployment) createWithExtraParameters(oc *exutil.CLI, extraParameters
 	if dep.namespace == "" {
 		dep.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// For AWS Outposts mixed workers cluster if cases don't set nodeAffinity we will set it to use outposts worker
+	if isAwsOutpostsMixedWorkersCluster(oc) && !strings.Contains(fmt.Sprint(extraParameters), "nodeSelector") && !strings.Contains(fmt.Sprint(extraParameters), "nodeAffinity") {
+		var (
+			extraParametersJSONPath, outpostsNodeAffinityJSONPath string
+			outpostsNodeAffinity                                  map[string]interface{}
+			jsonPathsAndActions                                   []map[string]string
+			multiExtraParameters                                  []map[string]interface{}
+		)
+		if _, ok := extraParameters["jsonPath"]; !ok {
+			extraParametersJSONPath = `items.0.`
+		} else {
+			extraParametersJSONPath = fmt.Sprint(extraParameters["jsonPath"])
+			delete(extraParameters, "jsonPath")
+		}
+		outpostsNodeAffinityJSONPath = "items.0.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0."
+		outpostsNodeAffinity = map[string]interface{}{
+			"key":      "topology.ebs.csi.aws.com/outpost-id",
+			"operator": "In",
+			"values":   []string{getAwsOutpostsID(oc)},
+		}
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{extraParametersJSONPath: "set"}, map[string]string{outpostsNodeAffinityJSONPath: "set"})
+		multiExtraParameters = append(multiExtraParameters, extraParameters, outpostsNodeAffinity)
+		dep.createWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters)
+	} else {
+		err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 // Create new Deployment with multi extra parameters
@@ -839,8 +914,8 @@ func (dep *deployment) createWithInlineVolumeWithOutAssert(oc *exutil.CLI, inVol
 		dep.namespace = oc.Namespace()
 	}
 	var (
-		extraParameters map[string]interface{}
-		jsonPath        = `items.0.spec.template.spec.volumes.0.`
+		extraParameters         map[string]interface{}
+		extraParametersJSONPath = `items.0.spec.template.spec.volumes.0.`
 	)
 	switch inVol.Kind {
 	case "genericEphemeralVolume", "csiEphemeralVolume":
@@ -860,7 +935,29 @@ func (dep *deployment) createWithInlineVolumeWithOutAssert(oc *exutil.CLI, inVol
 			inVol.Kind: map[string]string{},
 		}
 	}
-	return applyResourceFromTemplateWithMultiExtraParameters(oc, []map[string]string{{jsonPath: "set"}}, []map[string]interface{}{extraParameters}, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+
+	var (
+		outpostsNodeAffinityJSONPath string
+		outpostsNodeAffinity         map[string]interface{}
+		jsonPathsAndActions          []map[string]string
+		multiExtraParameters         []map[string]interface{}
+	)
+
+	// For AWS Outposts mixed workers cluster if cases don't set nodeAffinity we will set it to use outposts worker
+	if isAwsOutpostsMixedWorkersCluster(oc) {
+		outpostsNodeAffinityJSONPath = "items.0.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0."
+		outpostsNodeAffinity = map[string]interface{}{
+			"key":      "topology.ebs.csi.aws.com/outpost-id",
+			"operator": "In",
+			"values":   []string{getAwsOutpostsID(oc)},
+		}
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{extraParametersJSONPath: "set"}, map[string]string{outpostsNodeAffinityJSONPath: "set"})
+		multiExtraParameters = append(multiExtraParameters, extraParameters, outpostsNodeAffinity)
+	} else {
+		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{extraParametersJSONPath: "set"})
+		multiExtraParameters = append(multiExtraParameters, extraParameters)
+	}
+	return applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
 }
 
 // Create new deployment with extra parameters for topologySpreadConstraints
@@ -893,8 +990,7 @@ func (dep *deployment) createWithNodeSelector(oc *exutil.CLI, labelName string, 
 		"jsonPath": `items.0.spec.template.spec.nodeSelector.`,
 		labelName:  labelValue,
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	dep.createWithExtraParameters(oc, extraParameters)
 }
 
 // Create new deployment with extra parameters for nodeAffinity, key, operator and values should be provided in matchExpressions
@@ -908,8 +1004,7 @@ func (dep *deployment) createWithNodeAffinity(oc *exutil.CLI, key string, operat
 		"operator": operator,
 		"values":   values,
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	dep.createWithExtraParameters(oc, extraParameters)
 }
 
 // Delete Deployment from the namespace
