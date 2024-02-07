@@ -434,7 +434,7 @@ func initVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string, vf
 
 	exutil.By("Check the deviceID if exist on the cluster worker")
 	e2e.Logf("Create VF on name: %s, deviceID: %s, interfacename: %s, vendor: %s", name, deviceID, interfaceName, vendor)
-	if !checkDeviceIDExist(oc, ns, sriovPolicy.deviceID) {
+	if !chkPfExist(oc, deviceID, interfaceName) {
 		e2e.Logf("the cluster do not contain the sriov card. skip this testing!")
 		return false
 	}
@@ -544,4 +544,35 @@ func getWorkerNodesWithNic(oc *exutil.CLI, deviceid string, pfname string) []str
 		e2e.Logf("The worker list which has device id %v, pfname %v is %v", deviceid, pfname, workerWithNicList)
 	}
 	return workerWithNicList
+}
+
+// check if required pf exist on workers
+func chkPfExist(oc *exutil.CLI, deviceid string, pfname string) bool {
+	res := true
+	workerList := getWorkerNodesWithNic(oc, deviceid, pfname)
+	if len(workerList) == 0 {
+		e2e.Logf("The worker nodes don't have the required PF %v with DeviceID %v", pfname, deviceid)
+		res = false
+	}
+	return res
+}
+
+func chkNAD(oc *exutil.CLI, ns string, name string) error {
+	return wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("net-attach-def", "-n", ns, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the NAD list in ns %v is %v", ns, output)
+		if !strings.Contains(output, name) {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func rmNAD(oc *exutil.CLI, ns string, name string) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", "-n", ns, name).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).NotTo(o.BeEmpty())
+	e2e.Logf("the NAD %v is removed", name)
 }
