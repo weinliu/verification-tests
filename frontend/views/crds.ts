@@ -3,6 +3,9 @@ export const crds = {
   checkNoMachineResources: () => {
     crds.navToCRDsPage();
     cy.get('input[data-test="name-filter-input"]').type("machine");
-    cy.get('td').should('not.contain', 'Machine');
+    const machineResources = ['Machine','MachineAutoscaler','MachineConfig','MachineConfigPool','MachineHealthCheck','MachineSet'];
+    machineResources.forEach((machineResource) => {
+      cy.get(`data-test=${machineResource}`).should('not.exist');
+    });
   }
 }
