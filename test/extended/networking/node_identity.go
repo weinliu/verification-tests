@@ -173,3 +173,36 @@ var _ = g.Describe("[sig-networking] SDN network.node-identity", func() {
 	})
 
 })
+
+var _ = g.Describe("[sig-networking] SDN node", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc = exutil.NewCLI("node", exutil.KubeConfigPath())
+	)
+
+	g.It("Longduration-NonPreRelease-Author:asood-Critical-68690-When adding nodes, the overlapped node-subnet should not be allocated. [Disruptive]", func() {
+
+		exutil.By("1. Create a new machineset, get the new node created\n")
+		exutil.SkipConditionally(oc)
+		machinesetName := "machineset-68690"
+		machineSet := exutil.MachineSetDescription{machinesetName, 2}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer machineSet.DeleteMachineSet(oc)
+		machineSet.CreateMachineSet(oc)
+
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
+		for i := 0; i < 2; i++ {
+			nodeName := exutil.GetNodeNameFromMachine(oc, machineName[i])
+			e2e.Logf("Node with name %v added to cluster", nodeName)
+		}
+
+		exutil.By("2. Check host subnet is not over lapping for the nodes\n")
+		nodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		similarSubnetNodesFound, _ := findNodesWithSameSubnet(oc, nodeList)
+		o.Expect(similarSubnetNodesFound).To(o.BeFalse())
+
+	})
+
+})

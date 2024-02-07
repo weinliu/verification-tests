@@ -3344,5 +3344,20 @@ func generateKubeConfigFileForContext(oc *exutil.CLI, nodeName string, ovnKubeNo
 	}
 	e2e.Logf("Successfully created and tested kubeconfig for impersonation")
 	return true
+}
 
+func findNodesWithSameSubnet(oc *exutil.CLI, nodeList []string) (bool, []string) {
+	sameSubNode := make(map[string][]string)
+	for _, node := range nodeList {
+		subNet := getNodeSubnet(oc, node)
+		if _, ok := sameSubNode[subNet]; ok {
+			sameSubNode[subNet] = append(sameSubNode[subNet], node)
+			if len(sameSubNode[subNet]) >= 2 {
+				return true, sameSubNode[subNet]
+			}
+		} else {
+			sameSubNode[subNet] = []string{node}
+		}
+	}
+	return false, nil
 }
