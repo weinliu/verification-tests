@@ -3712,6 +3712,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: zxiao@redhat.com
+	// maintainer: kewang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-22565-[origin_platformexp_214][REST] Check if the given user or group have the privilege via SubjectAccessReview", func() {
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
@@ -3752,16 +3753,9 @@ EOF`, dcpolicyrepo)
 		// setup role for user and post to API
 		testUserAccess := func(role string, step string, expectStatus string) {
 			exutil.By(fmt.Sprintf("%s>>) Remove default role [admin] from the current user [%s]", step, username))
-			pattern := `admin\s*ClusterRole/admin`
-			r, err := regexp.Compile(pattern)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			errAdmRole := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-				rolebindingOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebinding", "-n", namespace, "--no-headers").Output()
-				output, errUser := oc.AsAdmin().WithoutNamespace().Run("get").Args("user", username).Output()
-				if errUser != nil {
-					e2e.Logf("#### Debug: %s", output)
-				}
-				if r.MatchString(rolebindingOutput) {
+				rolebindingOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebinding/admin", "-n", namespace, "--no-headers", "-oname").Output()
+				if rolebindingOutput == "rolebinding.rbac.authorization.k8s.io/admin" {
 					policyerr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "admin", username, "-n", namespace).Execute()
 					if policyerr != nil {
 						return false, nil
