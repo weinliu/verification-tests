@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service machinepool", func(
 		}
 		g.By("Create a spot machinepool on the cluster")
 		machinePoolName := "spotmp"
-		output, err := machinePoolService.CreateMachinePool(clusterID, "--name", machinePoolName, "--spot-max-price", "10.2", "--use-spot-instances",
+		output, err := machinePoolService.CreateMachinePool(clusterID, machinePoolName, "--spot-max-price", "10.2", "--use-spot-instances",
 			"--replicas", "0")
 		o.Expect(err).ToNot(o.HaveOccurred())
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
@@ -117,14 +117,14 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service machinepool", func(
 
 		g.By("Create another machinepool without spot instances")
 		machinePoolName = "nospotmp"
-		output, err = machinePoolService.CreateMachinePool(clusterID, "--name", machinePoolName, "--replicas", "0")
+		output, err = machinePoolService.CreateMachinePool(clusterID, machinePoolName, "--replicas", "0")
 		o.Expect(err).ToNot(o.HaveOccurred())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Machine pool '%s' created successfully on cluster '%s'", machinePoolName, clusterID))
 
 		g.By("Create another machinepool with use-spot-instances but no spot-max-price set")
 		machinePoolName = "nopricemp"
-		output, err = machinePoolService.CreateMachinePool(clusterID, "--name", machinePoolName, "--use-spot-instances", "--replicas", "0")
+		output, err = machinePoolService.CreateMachinePool(clusterID, machinePoolName, "--use-spot-instances", "--replicas", "0")
 		o.Expect(err).ToNot(o.HaveOccurred())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 		o.Expect(textData).Should(o.ContainSubstring("Machine pool '%s' created successfully on cluster '%s'", machinePoolName, clusterID))
