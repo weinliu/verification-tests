@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 
 	})
 	g.It("Author:yuwan-High-45161-Allow sts cluster installation with compatible policies [Serial]", func() {
-		g.By("Check the cluster is STS cluater or skip")
+		g.By("Check the cluster is STS cluster or skip")
 		isSTSCluster, err := clusterService.IsSTSCluster(clusterID)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		if !isSTSCluster {
@@ -171,6 +171,8 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 
 		clusterName := "cluster-45161"
 		operatorPrefix := "cluster-45161-asdf"
+		isHostedCP, err := clusterService.IsHostedCPCluster(clusterID)
+		o.Expect(err).To(o.BeNil())
 
 		g.By("Create cluster with one Y-1 version")
 		ocmResourceService := rosaClient.OCMResource
@@ -189,7 +191,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 			cg = rosacli.VersionChannelGroupStable
 		}
 
-		versionList, err := versionService.ListAndReflectVersions(cg, false)
+		versionList, err := versionService.ListAndReflectVersions(cg, isHostedCP)
 		o.Expect(err).To(o.BeNil())
 		o.Expect(versionList).ToNot(o.BeNil())
 		foundVersion, err := versionList.FindNearestBackwardMinorVersion(ar.OpenshiftVersion, 1, false)

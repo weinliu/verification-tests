@@ -27,7 +27,7 @@ func RetrieveClusterCreationCommand() (Command, error) {
 		return nil, err
 	}
 	cmd := &command{
-		cmd: string(fileContents),
+		cmd: strings.Trim(string(fileContents), "\n"),
 	}
 	return cmd, nil
 }

@@ -79,7 +79,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 		)
 		g.By("Create account-roles for testing")
 		rand.Seed(time.Now().UnixNano())
-		accountRolePrefix = fmt.Sprintf("QEAuto-accr60971-%s", time.Now().UTC().Format("20060102"))
+		accountRolePrefix = fmt.Sprintf("QEAuto-accr57570-%s", time.Now().UTC().Format("20060102"))
 		_, err := ocmResourceService.CreateAccountRole("--mode", "auto",
 			"--prefix", accountRolePrefix,
 			"-y")

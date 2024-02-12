@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
                         ]
                   }`
 
-		g.By("Create boundry policy")
+		g.By("Create boundary policy")
 		rosaClient.Runner.JsonFormat()
 		iamClient := exutil.NewIAMClient()
 		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
                         ]
                   }`
 
-		g.By("Create boundry policy")
+		g.By("Create boundary policy")
 		iamClient := exutil.NewIAMClient()
 		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
 		o.Expect(err).To(o.BeNil())
@@ -440,7 +440,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		)
 		o.Expect(err).To(o.HaveOccurred())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(textData).Should(o.ContainSubstring("installer-role-arn is mandatory for prefix param flow"))
+		o.Expect(textData).Should(o.ContainSubstring("role-arn is mandatory for prefix param flow"))
 
 		g.By("Create operator-role without setting id neither prefix")
 		output, err = ocmResourceService.CreateOperatorRoles(
@@ -899,11 +899,12 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service user/ocm roles test
 		rand.Seed(time.Now().UnixNano())
 		userrolePrefix = fmt.Sprintf("QEAuto-userr-%s-52419", time.Now().UTC().Format("20060102"))
 
-		g.By("Create boundry policy")
+		g.By("Create boundary policy")
 		rosaClient.Runner.JsonFormat()
 		iamClient := exutil.NewIAMClient()
 		permissionsBoundaryArn, err := iamClient.CreatePolicy(policyDocument, permissionsBoundaryPolicyName, "", map[string]string{}, "")
 		o.Expect(err).To(o.BeNil())
+		rosaClient.Runner.UnsetFormat()
 		defer func() {
 			err := wait.Poll(20*time.Second, 320*time.Second, func() (bool, error) {
 				err := iamClient.DeletePolicy(permissionsBoundaryArn)

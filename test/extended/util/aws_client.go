@@ -747,8 +747,10 @@ func (iamClient *IAMClient) CreatePolicy(policyDocument string, policyName strin
 		createPolicyInput.Tags = getTags(tagList)
 	}
 	createdPolicy, err := iamClient.svc.CreatePolicy(createPolicyInput)
-
-	return aws.StringValue(createdPolicy.Policy.Arn), err
+	if err != nil {
+		return "", err
+	}
+	return aws.StringValue(createdPolicy.Policy.Arn), nil
 }
 
 // Delete policy
