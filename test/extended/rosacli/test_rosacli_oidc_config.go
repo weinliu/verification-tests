@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 			"-y")
 		o.Expect(err).To(o.BeNil())
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Created OIDC provider with ARN")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Created OIDC provider with ARN"))
 
 		oidcPrivodeARNFromOutputMessage := rosacli.ExtractOIDCProviderARN(output.String())
 		oidcPrivodeIDFromOutputMessage := rosacli.ExtractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
 
-		o.Expect(strings.Contains(textData, "Invalid mode. Allowed values are [auto manual]")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Invalid mode. Allowed values are [auto manual]"))
 
 		g.By("Validate the prefix length")
 		output, err = ocmResourceService.CreateOIDCConfig(
@@ -163,7 +163,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 			"-y")
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "length of prefix is limited to 15 characters")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("length of prefix is limited to 15 characters"))
 
 		g.By("Validate the prefix and managed at the same time")
 		output, err = ocmResourceService.CreateOIDCConfig(
@@ -172,7 +172,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 			"-y")
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "prefix param is not supported for managed OIDC config")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("prefix param is not supported for managed OIDC config"))
 
 		g.By("Validation the installer-role-arn and managed at the same time")
 		output, err = ocmResourceService.CreateOIDCConfig(
@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 			"-y")
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "installer-role-arn param is not supported for managed OIDC config")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("role-arn param is not supported for managed OIDC config"))
 
 		g.By("Validation the raw-files and managed at the same time")
 		output, err = ocmResourceService.CreateOIDCConfig(
@@ -190,7 +190,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 			"-y")
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "--raw-files param is not supported alongside --mode param")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("--raw-files param is not supported alongside --mode param"))
 
 		g.By("Validate the oidc-config deletion with no-existed oidc config id in auto mode")
 		output, err = ocmResourceService.DeleteOIDCConfig(
@@ -199,6 +199,6 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 			"-y")
 		o.Expect(err).NotTo(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "not found")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("not found"))
 	})
 })
