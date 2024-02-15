@@ -35,11 +35,23 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 
 	//OCP-64917 - [OCM-152] Verify network via the rosa cli
 	g.It("Author:yingzhan-High-64917-rosacli Verify network via the rosa cli [Serial]", func() {
-		g.By("Describe cluster to check Private is true")
+		g.By("Get cluster description")
 		output, err := clusterService.DescribeCluster(clusterID)
 		o.Expect(err).To(o.BeNil())
 		clusterDetail, err := clusterService.ReflectClusterDescription(output)
 		o.Expect(err).To(o.BeNil())
+
+		g.By("Check if non BYO VPC cluster")
+		var subnetsNetworkInfo string
+		for _, networkLine := range clusterDetail.Network {
+			if value, containsKey := networkLine["Subnets"]; containsKey {
+				subnetsNetworkInfo = value
+				break
+			}
+		}
+		if subnetsNetworkInfo == "" {
+			g.Skip("It does't support the verification for non byo vpc cluster - cannot run this test")
+		}
 
 		g.By("Run network verifier vith clusterID")
 		output, err = networkService.CreateNetworkVerifierWithCluster(clusterID)
@@ -53,7 +65,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 		}
 
 		g.By("Get the cluster subnets")
-		subnets := strings.Replace(clusterDetail.Network[5]["Subnets"], " ", "", -1)
+		subnets := strings.Replace(subnetsNetworkInfo, " ", "", -1)
 		region := clusterDetail.Region
 		installerRoleArn := clusterDetail.STSRoleArn
 
