@@ -3,7 +3,6 @@ package rosacli
 import (
 	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -58,7 +57,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 					)
 					o.Expect(err).To(o.BeNil())
 					textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-					o.Expect(strings.Contains(textData, "Successfully deleted the OIDC provider")).Should(o.BeTrue())
+					o.Expect(textData).To(o.ContainSubstring("Successfully deleted the OIDC provider"))
 
 					g.By("Check the managed oidc config is deleted")
 					oidcConfigList, _, err := ocmResourceService.ListOIDCConfig()
@@ -96,7 +95,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 		g.By("Get the installer role arn")
 		accountRoleList, _, err := ocmResourceService.ListAccountRole()
 		o.Expect(err).To(o.BeNil())
-		installerRoleArn = accountRoleList.InstallerRole(accountRolePrefix, hostedCP).RoleArn
+		installerRole := accountRoleList.InstallerRole(accountRolePrefix, hostedCP)
+		o.Expect(installerRole).ToNot(o.BeNil())
+		installerRoleArn = installerRole.RoleArn
 
 		g.By("Create managed=false oidc config in auto mode")
 		output, err := ocmResourceService.CreateOIDCConfig("--mode", "auto",
@@ -129,7 +130,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 		output, err = ocmResourceService.CreateOIDCConfig("--mode", "auto", "-y")
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Created OIDC provider with ARN")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Created OIDC provider with ARN"))
 		oidcPrivodeARNFromOutputMessage = rosacli.ExtractOIDCProviderARN(output.String())
 		oidcPrivodeIDFromOutputMessage = rosacli.ExtractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
 
@@ -144,7 +145,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc config test", 
 		foundOIDCConfig = oidcConfigList.OIDCConfig(managedOIDCConfigID)
 		o.Expect(foundOIDCConfig).NotTo(o.BeNil())
 		o.Expect(foundOIDCConfig.Managed).To(o.Equal("true"))
-		o.Expect(strings.Contains(foundOIDCConfig.IssuerUrl, foundOIDCConfig.ID)).Should(o.BeTrue())
+		o.Expect(foundOIDCConfig.IssuerUrl).To(o.ContainSubstring(foundOIDCConfig.ID))
 		o.Expect(foundOIDCConfig.SecretArn).To(o.Equal(""))
 		o.Expect(foundOIDCConfig.ID).To(o.Equal(managedOIDCConfigID))
 

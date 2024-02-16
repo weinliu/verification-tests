@@ -3,7 +3,6 @@ package rosacli
 import (
 	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -113,9 +112,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, userRolePrefixB)
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Creating classic account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Creating classic account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Creating hosted CP account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Created role"))
 
 		g.By("Create advance account-roles of only hosted-cp")
 		output, err = ocmResourceService.CreateAccountRole("--mode", "auto",
@@ -129,9 +128,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, userRolePrefixH)
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Creating classic account roles")).ShouldNot(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+		o.Expect(textData).ToNot(o.ContainSubstring("Creating classic account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Creating hosted CP account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Created role"))
 
 		g.By("Create advance account-roles of only classic")
 		output, err = ocmResourceService.CreateAccountRole("--mode", "auto",
@@ -145,9 +144,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, userRolePrefixC)
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Creating classic account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).ShouldNot(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Creating classic account roles"))
+		o.Expect(textData).ToNot(o.ContainSubstring("Creating hosted CP account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Created role"))
 
 		g.By("List account-roles and check the result are expected")
 		accountRoleList, _, err := ocmResourceService.ListAccountRole()
@@ -178,8 +177,8 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Successfully deleted the classic account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Successfully deleted the classic account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Successfully deleted the hosted CP account roles"))
 
 		output, err = ocmResourceService.DeleteAccountRole("--mode", "auto",
 			"--prefix", userRolePrefixH,
@@ -189,7 +188,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Successfully deleted the hosted CP account roles"))
 
 		output, err = ocmResourceService.DeleteAccountRole("--mode", "auto",
 			"--prefix", userRolePrefixC,
@@ -199,7 +198,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Successfully deleted the classic account roles")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Successfully deleted the classic account roles"))
 
 		g.By("List account-roles to check they are deleted")
 		accountRoleList, _, err = ocmResourceService.ListAccountRole()
@@ -299,7 +298,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		output, err := ocmResourceService.CreateOIDCConfig("--mode", "auto", "-y")
 		o.Expect(err).To(o.BeNil())
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Created OIDC provider with ARN")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Created OIDC provider with ARN"))
 		oidcPrivodeARNFromOutputMessage = rosacli.ExtractOIDCProviderARN(output.String())
 		oidcPrivodeIDFromOutputMessage = rosacli.ExtractOIDCProviderIDFromARN(oidcPrivodeARNFromOutputMessage)
 
@@ -313,7 +312,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			)
 			o.Expect(err).To(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(strings.Contains(textData, "Successfully deleted the OIDC provider")).Should(o.BeTrue())
+			o.Expect(textData).To(o.ContainSubstring("Successfully deleted the OIDC provider"))
 		}()
 		g.By("Create hosted-cp and classic sts Operator-roles pror to cluster spec")
 		output, err = ocmResourceService.CreateOperatorRoles(
@@ -335,7 +334,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			)
 			o.Expect(err).To(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(strings.Contains(textData, "Successfully deleted the operator roles")).Should(o.BeTrue())
+			o.Expect(textData).To(o.ContainSubstring("Successfully deleted the operator roles"))
 
 			roles, err := iamClient.ListOperatsorRolesByPrefix(classicSTSOperatorRolesPrefix, "")
 			o.Expect(err).To(o.BeNil())
@@ -373,7 +372,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			)
 			o.Expect(err).To(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(strings.Contains(textData, "Successfully deleted the operator roles")).Should(o.BeTrue())
+			o.Expect(textData).To(o.ContainSubstring("Successfully deleted the operator roles"))
 
 			roles, err := iamClient.ListOperatsorRolesByPrefix(hostedCPOperatorRolesPrefix, "")
 			o.Expect(err).To(o.BeNil())
@@ -472,7 +471,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 				"-y")
 			o.Expect(err).To(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(strings.Contains(textData, "Operator Roles already exists")).Should(o.BeTrue())
+			o.Expect(textData).To(o.ContainSubstring("Operator Roles already exists"))
 		case false:
 			g.By("Create operator-roles on classic non-sts cluster")
 			output, err := ocmResourceService.CreateOIDCProvider(
@@ -481,7 +480,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 				"-y")
 			o.Expect(err).NotTo(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(strings.Contains(textData, "is not an STS cluster")).Should(o.BeTrue())
+			o.Expect(textData).To(o.ContainSubstring("is not an STS cluster"))
 		}
 		g.By("Create operator-roles on not-existed cluster")
 		output, err := ocmResourceService.CreateOIDCProvider(
@@ -490,8 +489,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			"-y")
 		o.Expect(err).NotTo(o.BeNil())
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "There is no cluster with identifier or name")).Should(o.BeTrue())
-
+		o.Expect(textData).To(o.ContainSubstring("There is no cluster with identifier or name"))
 	})
 
 	g.It("Author:yuwan-High-57441-Upgrade account-roles with the managed policies should be forbidden [Serial]", func() {
@@ -521,8 +519,8 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		o.Expect(err).To(o.BeNil())
 		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, accrolePrefix)
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Creating hosted CP account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Created role"))
 
 		g.By("Upgrade managed account-roles")
 		for _, mode := range modes {
@@ -533,7 +531,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 				"-y",
 			)
 			o.Expect(err).To(o.BeNil())
-			o.Expect(strings.Contains(output.String(), "have attached managed policies. An upgrade isn't needed")).Should(o.BeTrue())
+			o.Expect(output.String()).To(o.ContainSubstring("have attached managed policies. An upgrade isn't needed"))
 		}
 
 		g.By("Delete account-roles")
@@ -544,7 +542,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Successfully deleted the hosted CP account roles"))
 
 		g.By("List account-roles to check they are deleted")
 		accountRoleList, _, err := ocmResourceService.ListAccountRole()
@@ -576,9 +574,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 
 		accountRolePrefixesNeedCleanup = append(accountRolePrefixesNeedCleanup, accrolePrefix)
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Creating classic account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Creating hosted CP account roles")).Should(o.BeTrue())
-		o.Expect(strings.Contains(textData, "Created role")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Creating classic account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Creating hosted CP account roles"))
+		o.Expect(textData).To(o.ContainSubstring("Created role"))
 
 		g.By("Delete account-roles with --classic flag")
 		output, err = ocmResourceService.DeleteAccountRole("--mode", "auto",
@@ -587,7 +585,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 			"-y")
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Successfully deleted the classic account roles")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Successfully deleted the classic account roles"))
 
 		g.By("Delete account-roles with --hosted-cp flag")
 		output, err = ocmResourceService.DeleteAccountRole("--mode", "auto",
@@ -597,7 +595,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service iam roles testing",
 		)
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "Successfully deleted the hosted CP account roles")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("Successfully deleted the hosted CP account roles"))
 
 		g.By("List account-roles to check they are deleted")
 		accountRoleList, _, err := ocmResourceService.ListAccountRole()

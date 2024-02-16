@@ -43,8 +43,8 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service verify test", func(
 			o.Expect(err).ToNot(o.HaveOccurred())
 			result := strings.Trim(stdout.String(), "\n")
 			ca := strings.Split(result, "-----END CERTIFICATE-----")
-			o.Expect(strings.Contains(sdkContent, ca[0])).Should(o.BeTrue())
-			o.Expect(strings.Contains(sdkContent, ca[1])).Should(o.BeTrue())
+			o.Expect(sdkContent).To(o.ContainSubstring(ca[0]))
+			o.Expect(sdkContent).To(o.ContainSubstring(ca[1]))
 		}
 
 	})

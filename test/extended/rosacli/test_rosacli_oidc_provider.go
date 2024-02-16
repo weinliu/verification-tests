@@ -1,8 +1,6 @@
 package rosacli
 
 import (
-	"strings"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
@@ -56,9 +54,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc provider test"
 			o.Expect(err).To(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
 			if UsingReusableOIDCConfig {
-				o.Expect(strings.Contains(textData, "OIDC provider already exists")).Should(o.BeTrue())
+				o.Expect(textData).To(o.ContainSubstring("OIDC provider already exists"))
 			} else {
-				o.Expect(strings.Contains(textData, "is ready and does not need additional configuration")).Should(o.BeTrue())
+				o.Expect(textData).To(o.ContainSubstring("is ready and does not need additional configuration"))
 			}
 		case false:
 			g.By("Create oidc-provider on classic non-sts cluster")
@@ -68,7 +66,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc provider test"
 				"-y")
 			o.Expect(err).NotTo(o.BeNil())
 			textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-			o.Expect(strings.Contains(textData, "is not an STS cluster")).Should(o.BeTrue())
+			o.Expect(textData).To(o.ContainSubstring("is not an STS cluster"))
 		}
 		g.By("Create oidc-provider on not-existed cluster")
 		output, err := ocmResourceService.CreateOIDCProvider(
@@ -77,6 +75,6 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service oidc provider test"
 			"-y")
 		o.Expect(err).NotTo(o.BeNil())
 		textData := rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(strings.Contains(textData, "There is no cluster with identifier or name")).Should(o.BeTrue())
+		o.Expect(textData).To(o.ContainSubstring("There is no cluster with identifier or name"))
 	})
 })

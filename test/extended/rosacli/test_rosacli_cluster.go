@@ -221,6 +221,6 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Edit cluster", func
 		rosalCommand.AddFlags("--dry-run")
 		stdout, err := rosaClient.Runner.RunCMD(strings.Split(rosalCommand.GetFullCommand(), " "))
 		o.Expect(err).To(o.BeNil())
-		o.Expect(strings.Contains(stdout.String(), fmt.Sprintf("Creating cluster '%s' should succeed", clusterName))).Should(o.BeTrue())
+		o.Expect(stdout.String()).To(o.ContainSubstring(fmt.Sprintf("Creating cluster '%s' should succeed", clusterName)))
 	})
 })
