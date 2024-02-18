@@ -223,6 +223,12 @@ func (po *pod) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
 			inVol.Kind: map[string]string{},
 		}
 	}
+	if isMicroshiftCluster(oc) {
+		extraParametersJSONPath = `spec.volumes.0.`
+		if inVol.Kind == "genericEphemeralVolume" {
+			delete(extraParameters, "jsonPath")
+		}
+	}
 	var (
 		outpostsNodeAffinityJSONPath string
 		outpostsNodeAffinity         map[string]interface{}
@@ -244,7 +250,7 @@ func (po *pod) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
 		jsonPathsAndActions = append(jsonPathsAndActions, map[string]string{extraParametersJSONPath: "set"})
 		multiExtraParameters = append(multiExtraParameters, extraParameters)
 	}
-	o.Expect(po.createWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters)).ShouldNot(o.HaveOccurred())
+	o.Expect(po.createWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters)).Should(o.ContainSubstring("created"))
 }
 
 // Create new pod with extra parameters
