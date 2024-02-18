@@ -907,6 +907,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-with-paths-template.yaml")
 			volumeGroup        = "vg1"
+			scName             = "lvms-" + volumeGroup
 		)
 
 		if exutil.IsSNOCluster(oc) {
@@ -958,10 +959,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("#. Check LVMS CSI storage capacity equals backend devices/disks total size")
 		optionalPathsDiskTotalSize := getTotalDiskSizeOnAllWorkers(oc, "/dev/"+optionalDisk)
-		ratio, sizePercent := getOverProvisionRatioAndSizePercentByVolumeGroup(oc, "vg1")
+		ratio, sizePercent := getOverProvisionRatioAndSizePercentByVolumeGroup(oc, volumeGroup)
 		expectedStorageCapacity := sizePercent * optionalPathsDiskTotalSize / 100
 		e2e.Logf("EXPECTED USABLE STORAGE CAPACITY: %d", expectedStorageCapacity)
-		currentLvmStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByStorageClass(oc, "lvms-vg1")
+		o.Eventually(func() int { // Wait for CSIstorageCapacity objects to be available
+			storageCapacity, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csistoragecapacity", "-n", "openshift-storage", "-ojsonpath={.items[?(@.storageClassName==\""+scName+"\")].capacity}").Output()
+			return len(strings.Fields(storageCapacity))
+		}, 180*time.Second, 10*time.Second).Should(o.Equal(workerNodeCount))
+		currentLvmStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByStorageClass(oc, scName)
 		actualStorageCapacity := (currentLvmStorageCapacity / ratio) / 1024 // Get size in Gi
 		e2e.Logf("ACTUAL USABLE STORAGE CAPACITY: %d", actualStorageCapacity)
 		storageDiff := float64(expectedStorageCapacity - actualStorageCapacity)
@@ -976,7 +981,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
 		exutil.By("#. Create a pvc with the pre-set lvms csi storageclass")
-		pvc.scname = "lvms-" + volumeGroup
+		pvc.scname = scName
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
