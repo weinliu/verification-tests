@@ -4025,8 +4025,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "VolumeContentSource must be provided when AccessMode is set to read only")
 				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "specified multi writer with mount access type")
 			case provisioner == "disk.csi.azure.com":
-				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "Volume capability not supported")
-				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "Volume capability not supported")
+				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "mountVolume is not supported for access mode: MULTI_NODE_READER_ONLY")
+				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "mountVolume is not supported for access mode: MULTI_NODE_MULTI_WRITER")
 			default:
 				waitResourceSpecifiedEventsOccurred(oc, pvcROM.namespace, pvcROM.name, "ProvisioningFailed", "Volume capabilities not supported")
 				waitResourceSpecifiedEventsOccurred(oc, pvcRWM.namespace, pvcRWM.name, "ProvisioningFailed", "Volume capabilities not supported")
