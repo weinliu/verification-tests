@@ -147,7 +147,7 @@ func getLBSvcIP(oc *exutil.CLI, loadBalancerService loadBalancerServiceDescripti
 	e2e.Logf("Getting the Load Balancer service IP ...")
 	iaasPlatform := exutil.CheckPlatform(oc)
 	var jsonString string
-	if iaasPlatform == "aws" {
+	if iaasPlatform == "aws" || iaasPlatform == "ibmcloud" {
 		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}"
 	} else {
 		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].ip}"
