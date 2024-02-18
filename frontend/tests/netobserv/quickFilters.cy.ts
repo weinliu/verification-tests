@@ -92,6 +92,5 @@ describe('(OCP-56222 Network_Observability) Quick Filters test', { tags: ['Netwo
     after("all tests", function () {
         cy.adminCLI('oc delete -f ./fixtures/netobserv/test-server-client.yaml')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })

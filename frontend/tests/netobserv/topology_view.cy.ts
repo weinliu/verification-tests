@@ -319,6 +319,5 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
 
     after("after all tests are done", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })

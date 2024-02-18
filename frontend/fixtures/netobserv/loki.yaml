@@ -6,7 +6,7 @@ metadata:
 spec:
   resources:
     requests:
-      storage: 5G
+      storage: 10G
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
@@ -24,6 +24,7 @@ data:
       http_server_read_timeout: 1m
       http_server_write_timeout: 1m
       log_level: error
+      grpc_server_max_recv_msg_size: 10485760
     target: all
     common:
       path_prefix: /loki-store
@@ -75,8 +76,8 @@ data:
         cache_ttl: 24h
     limits_config:    
       ingestion_rate_strategy: global 
-      ingestion_rate_mb: 4
-      ingestion_burst_size_mb: 6
+      ingestion_rate_mb: 10
+      ingestion_burst_size_mb: 10
       max_label_name_length: 1024
       max_label_value_length: 2048
       max_label_names_per_series: 30
@@ -134,7 +135,7 @@ spec:
         capabilities:
           drop: ["ALL"]
           privileged: false
-      image: grafana/loki:2.8.0
+      image: grafana/loki:2.9.0
       volumeMounts:
         - mountPath: "/loki-store"
           name: loki-store

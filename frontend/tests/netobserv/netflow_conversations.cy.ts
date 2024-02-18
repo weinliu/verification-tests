@@ -77,6 +77,5 @@ describe('(OCP-60701 Network_Observability) Connection tracking test', { tags: [
     after("delete flowcollector and NetObs Operator", function () {
         Operator.deleteFlowCollector()
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })

@@ -50,6 +50,5 @@ describe('Network_Observability networking dashboards tests', { tags: ['Network_
 
     after("all tests", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })

@@ -85,6 +85,5 @@ describe('(OCP-67782 Network_Observability) Large volume downloads counters test
     after("all tests", function () {
         cy.adminCLI('oc delete -f ./fixtures/netobserv/test-client-large-download.yaml')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })

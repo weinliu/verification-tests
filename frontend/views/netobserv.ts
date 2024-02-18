@@ -77,9 +77,11 @@ export const Operator = {
         // don't create flowcollector if already exists
         cy.get('div.loading-box:nth-child(1)').should('be.visible').then(() => {
             if (Cypress.$('td[role="gridcell"]').length == 0) {
-                cy.adminCLI(`oc new-project ${namespace}`)
+                let cmd = `oc new-project ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} || oc project ${namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`
+                cy.log(`Running command: ${cmd}`)
+                cy.exec(cmd, { failOnNonZeroExit: false })
                 // deploy loki
-                cy.adminCLI(`oc create -f ./fixtures/netobserv/loki.yaml -n ${namespace}`)
+                cy.adminCLI(`oc apply -f ./fixtures/netobserv/loki.yaml -n ${namespace}`)
                 cy.byTestID('item-create').should('exist').click()
                 cy.get('#form').click() // bug in console where yaml view is default
                 cy.get('#root_spec_agent_accordion-toggle').click()
@@ -103,6 +105,8 @@ export const Operator = {
                     Operator.enableAllFLPMetrics()
                 }
                 cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
+                cy.get("#root_spec_agent_ebpf_accordion-content div.pf-v5-c-expandable-section > button").should('exist').click()
+                cy.get("#root_spec_agent_ebpf_cacheActiveTimeout").should('exist').clear().type("15s")
                 cy.byTestID('create-dynamic-form').click()
                 cy.wait(5000)
                 cy.byTestID('status-text').should('exist').should('contain.text', 'Ready')

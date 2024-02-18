@@ -252,6 +252,5 @@ describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags:
     after("Delete flowcollector", function () {
         Operator.deleteFlowCollector()
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })

@@ -1,4 +1,4 @@
-import { netflowPage, loadTimes, memoryUsage } from "../../views/netflow-page"
+import { netflowPage, loadTimes, memoryUsage, overviewSelectors } from "../../views/netflow-page"
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 
@@ -31,12 +31,14 @@ describe("(OCP-67725, memodi) Network_Observability Client Performances", { brow
     })
 
     beforeEach("test", function () {
-        cy.clearLocalStorage()
-        cy.clearCookies()
+        cy.intercept('**/backend/api/loki/flow/metrics*').as('call1')
+        cy.visit('/netflow-traffic')
+        // wait for all calls to complete before checking due to bug
+        cy.wait('@call1', { timeout: 60000 }).wait('@call1')
+
     })
 
     it("(OCP-67725, memodi, Network_Observability) should measure overview page load times", function () {
-        cy.visit("/netflow-traffic")
         netflowPage.clearAllFilters()
         const start = performance.now()
         cy.intercept('GET', getTopologyScopeURL("namespace"), {
@@ -46,39 +48,43 @@ describe("(OCP-67725, memodi) Network_Observability Client Performances", { brow
             fixture: 'netobserv/overview_perf_app.json'
         })
 
-        cy.get("#top_avg_donut").should('be.visible').then(() => {
+        cy.get('#overview-flex').contains(overviewSelectors.defaultPanels[0]).should('be.visible').then(() => {
             cy.wrap(performance.now()).then(end => {
                 let pageload = Math.round(end - start)
-                let memoryUsage = Math.round(window.performance.memory.usedJSHeapSize / 1048576)
+                let curMemoryUsage = Math.round(window.performance.memory.usedJSHeapSize / 1048576)
                 cy.log(`Overview page load took ${pageload} ms.`)
-                cy.log(`Overview page memory consumption ${memoryUsage} MB`)
-                cy.checkPerformance("overview", pageload, memoryUsage)
+                cy.log(`Overview page memory consumption ${curMemoryUsage} MB`)
+                let thresPageload = loadTimes.overview + loadTimes.overview * 0.5
+                let memThreshold = memoryUsage.overview + memoryUsage.overview * 0.5
+                expect(pageload).to.be.lessThan(thresPageload)
+                expect(curMemoryUsage).to.be.lessThan(memThreshold)
             })
         })
     })
 
     it("(OCP-67725, memodi, Network_Observability) should measure table page load times", function () {
-        cy.visit("/netflow-traffic")
         cy.get('#tabs-container li:nth-child(2)').click()
         netflowPage.clearAllFilters()
         const start = performance.now()
-        const url = '**/loki/flow/records?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=count'
+        const url = '**/backend/api/loki/flow/metrics*'
         cy.intercept('GET', url, {
             fixture: 'netobserv/netflow_table_perf.json'
         })
         cy.byTestID("table-composable").should('be.visible').then(() => {
             cy.wrap(performance.now()).then(end => {
                 let pageload = Math.round(end - start)
-                let memoryUsage = Math.round(window.performance.memory.usedJSHeapSize / 1048576)
+                let curMemoryUsage = Math.round(window.performance.memory.usedJSHeapSize / 1048576)
                 cy.log(`Table view page load took ${pageload} ms.`)
-                cy.log(`Table view memory consumption ${memoryUsage} MB`)
-                cy.checkPerformance("table", pageload, memoryUsage)
+                cy.log(`Table view memory consumption ${curMemoryUsage} MB`)
+                let thresPageload = loadTimes.table + loadTimes.table * 0.5
+                let memThreshold = memoryUsage.table + memoryUsage.table * 0.5
+                expect(pageload).to.be.lessThan(thresPageload)
+                expect(curMemoryUsage).to.be.lessThan(memThreshold)
             })
         })
     })
 
     it("(OCP-67725, memodi, Network_Observability) should measure topology page load times", function () {
-        cy.visit("/netflow-traffic")
         cy.get('#tabs-container li:nth-child(3)').click()
         netflowPage.clearAllFilters()
         const start = performance.now()
@@ -88,10 +94,13 @@ describe("(OCP-67725, memodi) Network_Observability Client Performances", { brow
         cy.get('[data-surface="true"]').should('be.visible').then(() => {
             cy.wrap(performance.now()).then(end => {
                 let pageload = Math.round(end - start)
-                let memoryUsage = Math.round(window.performance.memory.usedJSHeapSize / 1048576)
+                let curMemoryUsage = Math.round(window.performance.memory.usedJSHeapSize / 1048576)
                 cy.log(`Topology view page load took ${pageload} ms.`)
-                cy.log(`Topology view memory consumption ${memoryUsage} MB`)
-                cy.checkPerformance("topology", pageload, memoryUsage)
+                cy.log(`Topology view memory consumption ${curMemoryUsage} MB`)
+                let thresPageload = loadTimes.topology + loadTimes.topology * 0.5
+                let memThreshold = memoryUsage.topology + memoryUsage.topology * 0.5
+                expect(pageload).to.be.lessThan(thresPageload)
+                expect(curMemoryUsage).to.be.lessThan(memThreshold)
             })
         })
     })

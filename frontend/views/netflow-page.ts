@@ -33,12 +33,13 @@ export const netflowPage = {
         })
     },
     resetClearFilters: () => {
-        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
-            cy.contains("Reset defaults").should('exist').click()
+        cy.byTestID('chips-more-options-button').should('exist').then(moreOpts => {
+            cy.wrap(moreOpts).click({ force: true })
+            cy.byTestID("reset-filters-button").should('exist').click({ force: true })
         })
     },
     clearAllFilters: () => {
-        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+        cy.get('#chips-more-options-button').should('exist').click().then(moreOpts => {
             cy.contains("Clear all").should('exist').click()
         })
     },
@@ -249,27 +250,6 @@ Cypress.Commands.add('checkQuerySummary', (metric) => {
         num = Number(metric.text().split(' ')[0])
     }
     expect(num).to.be.greaterThan(0)
-});
-
-
-Cypress.Commands.add("checkPerformance", (page, loadTime, memUsage) => {
-    let thresPageload, memThreshold
-    switch (page) {
-        case "overview":
-            thresPageload = loadTimes.overview + loadTimes.overview * 0.5
-            memThreshold = memoryUsage.overview + memoryUsage.overview * 0.5
-            break;
-        case "table":
-            thresPageload = loadTimes.table + loadTimes.table * 0.5
-            memThreshold = memoryUsage.table + memoryUsage.table * 0.5
-            break;
-        case "topology":
-            thresPageload = loadTimes.topology + loadTimes.topology * 0.5
-            memThreshold = memoryUsage.topology + memoryUsage.topology * 0.5
-            break;
-    }
-    expect(loadTime).to.be.lessThan(thresPageload)
-    expect(memUsage).to.be.lessThan(memThreshold)
 });
 
 Cypress.Commands.add('changeQueryOption', (name) => {

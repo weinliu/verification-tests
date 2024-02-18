@@ -256,6 +256,5 @@ describe('(OCP-67087 Network_Observability) DNSTracking dashboards test', { tags
         Operator.deleteFlowCollector()
         cy.adminCLI('oc delete -f ./fixtures/netobserv/DNS-pods.yaml')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })
