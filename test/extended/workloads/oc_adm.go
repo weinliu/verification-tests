@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-11112-Prune old deploymentconfig by admin command", func() {
-		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") || isBaselineCapsSet(oc, "v4.11") || isBaselineCapsSet(oc, "v4.14") || isBaselineCapsSet(oc, "v4.15") && !isEnabledCapability(oc, "DeploymentConfig") {
 			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
 
