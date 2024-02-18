@@ -3,8 +3,11 @@ package workloads
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	o "github.com/onsi/gomega"
+	"io"
 	"io/ioutil"
 	"regexp"
 
@@ -1896,4 +1899,47 @@ func checkCOHealth(oc *exutil.CLI, co string) bool {
 		return false
 	}
 	return strings.Contains(output, status)
+}
+
+func getSpecificFileName(fileDir string, pattern string) []string {
+	files, err := ioutil.ReadDir(fileDir)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var matchingFiles []string
+	e2e.Logf("the origin files %v", files)
+	for _, file := range files {
+		match, err := regexp.MatchString(pattern, string(file.Name()))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if match {
+			matchingFiles = append(matchingFiles, string(file.Name()))
+		}
+	}
+	e2e.Logf("the result files %v", matchingFiles)
+	o.Expect(len(matchingFiles) > 0).To(o.BeTrue())
+	return matchingFiles
+}
+
+func sha256File(fileName string) (string, error) {
+	file, err := os.Open(fileName)
+	defer file.Close()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	hash := sha256.New()
+	_, err = io.Copy(hash, file)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func getSha256SumFromFile(fileName string) string {
+	var fileSum string
+	content, err := ioutil.ReadFile(fileName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	lines := strings.Split(string(content), "\n")
+	for _, v := range lines {
+		trimline := strings.TrimSpace(v)
+		if strings.Contains(trimline, "openshift-install") {
+			fileSum = strings.Fields(trimline)[0]
+			o.Expect(fileSum).NotTo(o.BeEmpty())
+		}
+	}
+	return fileSum
 }

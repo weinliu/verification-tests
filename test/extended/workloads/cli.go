@@ -2264,7 +2264,39 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		if matched, _ := regexp.MatchString(backgroundBufNs2.String(), "deploy10136-1"); matched {
 			e2e.Failf("Should not see any trace for the resource under the first project in the second project\n")
 		}
+	})
 
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-71178-Make sure no mismatch for sha256sum of openshift install for mac version", func() {
+		extractTmpDirName := "/tmp/d71178"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		secretFile, secretErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/pull-secret", "-n", "openshift-config", `--template={{index .data ".dockerconfigjson" | base64decode}}`).OutputToFile("auth.dockerconfigjson")
+		o.Expect(secretErr).NotTo(o.HaveOccurred())
+		exutil.By("Get the payload")
+		payloadPullSpec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(payloadPullSpec).NotTo(o.BeEmpty())
+		e2e.Logf("pullspec is %v", payloadPullSpec)
+
+		exutil.By("Extract the darwin tools")
+		os.RemoveAll("/tmp/d71178")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", payloadPullSpec, "--registry-config="+secretFile, "--command-os=darwin/arm64", "--tools", "--to=/tmp/d71178").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Make sure no mismatch for sha256sum")
+		files := getSpecificFileName("/tmp/d71178", "openshift-install")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("%v", files)
+		fileSum, err := sha256File("/tmp/d71178/" + files[0])
+		e2e.Logf("%v", fileSum)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		fileSumFromResult := getSha256SumFromFile("/tmp/d71178/sha256sum.txt")
+		e2e.Logf("%v", fileSumFromResult)
+		if match, _ := regexp.MatchString(fileSum, fileSumFromResult); !match {
+			e2e.Failf("File sum not matched")
+		}
 	})
 })
 
