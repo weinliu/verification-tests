@@ -2,6 +2,7 @@ package rosacli
 
 import (
 	"bytes"
+	"strings"
 
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"gopkg.in/yaml.v3"
@@ -79,6 +80,7 @@ type ClusterDescription struct {
 	ProvisioningErrorCode    string              `yaml:"Provisioning Error Code,omitempty"`
 	LimitedSupport           []map[string]string `yaml:"Limited Support,omitempty"`
 	AuditLogRoleARN          string              `yaml:"Audit Log Role ARN,omitempty"`
+	FailedInflightChecks     string              `yaml:"Failed Inflight Checks,omitempty"`
 }
 
 func (c *clusterService) DescribeCluster(clusterID string) (bytes.Buffer, error) {
@@ -101,7 +103,17 @@ func (c *clusterService) DescribeClusterAndReflect(clusterID string) (res *Clust
 func (c *clusterService) ReflectClusterDescription(result bytes.Buffer) (res *ClusterDescription, err error) {
 	var data []byte
 	res = new(ClusterDescription)
-	theMap, err := c.client.Parser.TextData.Input(result).Parse().YamlToMap()
+	theMap, err := c.client.
+		Parser.
+		TextData.
+		Input(result).
+		Parse().
+		TransformOutput(func(str string) string {
+			// Apply transformation to avoid issue with the list of Inflight checks below
+			// It will consider
+			return strings.Replace(str, "Failed Inflight Checks:", "Failed Inflight Checks: |", 1)
+		}).
+		YamlToMap()
 	if err != nil {
 		return
 	}

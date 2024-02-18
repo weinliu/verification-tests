@@ -114,6 +114,12 @@ func (td *textData) Parse() *textData {
 	return td
 }
 
+// TransformOutput allows to transform the string before it would be parsed
+func (td *textData) TransformOutput(transformFunc func(str string) string) *textData {
+	td.output = transformFunc(td.output)
+	return td
+}
+
 func (td *textData) YamlToMap() (res map[string]interface{}, err error) {
 	res = make(map[string]interface{})
 
