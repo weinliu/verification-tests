@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 
 		e2e.Logf("Waiting for pod running")
 		err = wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
-			phase, err := oc.AsAdmin().Run("get").Args("pods", "priorityl198951", "--template", "{{.status.phase}}").Output()
+			phase, err := oc.AsAdmin().Run("get").Args("pods", "priorityl198951", "-n", oc.Namespace(), "--template", "{{.status.phase}}").Output()
 			if err != nil {
 				return false, nil
 			}
@@ -237,10 +237,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		exutil.By("Delete all the remaining pods & verify pod no longer exists")
 		podNames := []string{"priorityl19895", "priorityl198951", "prioritym19895"}
 		for _, podName := range podNames {
-			podDelStatus, podDelErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "--grace-period=0", "--force", "-n", oc.Namespace()).Output()
-			o.Expect(podDelErr).NotTo(o.HaveOccurred())
-			podDeletionString := fmt.Sprintf("pod \"%s\" force deleted", podName)
-			o.Expect(podDelStatus).Should(o.ContainSubstring(podDeletionString))
+			o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "--grace-period=0", "--force", "-n", oc.Namespace(), "--ignore-not-found").Execute()).NotTo(o.HaveOccurred())
 			podGetStatus, podGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", oc.Namespace()).Output()
 			o.Expect(podGetErr).To(o.HaveOccurred())
 			podInfoString := fmt.Sprintf("pods \"%s\" not found", podName)
@@ -428,5 +425,147 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		podInfoStatus, podInfoerr = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36108", "-n", oc.Namespace()).Output()
 		o.Expect(podInfoerr).To(o.HaveOccurred())
 		o.Expect(podInfoStatus).Should(o.ContainSubstring("pods \"priorityh36108\" not found"))
+	})
+
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-36110-validate higher priority pods will preempt pods with lowerprirority when preemtionPolicy is set to Never on them [Disruptive]", func() {
+		isSNO := exutil.IsSNOCluster(oc)
+		if isSNO {
+			g.Skip("Skip Testing on SNO ...")
+		}
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		deploynpcT := filepath.Join(buildPruningBaseDir, "non_preempting_priority.yaml")
+		deploypcT := filepath.Join(buildPruningBaseDir, "priorityclassm.yaml")
+		deploypodlT := filepath.Join(buildPruningBaseDir, "priorityl.yaml")
+
+		// Create nonpreempting priorityclasses
+		priorityclassnp := priorityClassDefinition{
+			name:          "prioritym",
+			priorityValue: 99,
+			template:      deploynpcT,
+		}
+
+		// Create priorityclassh
+		priorityclassh := priorityClassDefinition{
+			name:          "priorityh",
+			priorityValue: 100,
+			template:      deploypcT,
+		}
+
+		exutil.By("Create nonpreemptingpriority class")
+		defer priorityclassnp.deletePriorityClass(oc)
+		priorityclassnp.createPriorityClass(oc)
+
+		exutil.By("Create priorityh class")
+		defer priorityclassh.deletePriorityClass(oc)
+		priorityclassh.createPriorityClass(oc)
+
+		// Cordon all worker nodes
+		exutil.By("Cordon all nodes in the cluster")
+		nodeNames, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Names are %v", nodeNames)
+
+		defer func() {
+			for _, v := range nodeNames {
+				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
+			}
+			for _, v := range nodeNames {
+				err = checkNodeUncordoned(oc, v)
+				exutil.AssertWaitPollNoErr(err, "node is not ready")
+			}
+		}()
+
+		for _, v := range nodeNames {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", fmt.Sprintf("%s", v)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Uncordon node1")
+		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeNames[0]).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Get allocatable memory on the uncordoned worker node
+		allocatableMemory, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeNames[0], "-ojsonpath={.status.allocatable.memory}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Allocatable Memory is %s", allocatableMemory)
+
+		requestedMemCmd := fmt.Sprintf(`oc describe node %s | grep "memory" | awk '{lastLine = $0} END {print $2}'`, nodeNames[0])
+		requestedMemory, err := exec.Command("bash", "-c", requestedMemCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("requestedMemory is %s", requestedMemory)
+
+		totalMemoryInBytes := getTotalAllocatableMemory(oc, allocatableMemory, string(requestedMemory))
+
+		if totalMemoryInBytes <= 0 {
+			g.Skip("Skipping the test as totalMemoryInBytes is less than or equal to zero")
+		}
+
+		exutil.By("Set namespace privileged")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+
+		// Create non preempting priority pod
+		nonPreemptingPriorityPodm := priorityPodDefinition{
+			name:              "prioritym36110",
+			label:             "pm36110",
+			memory:            totalMemoryInBytes,
+			priorityClassName: "prioritym",
+			namespace:         oc.Namespace(),
+			template:          deploypodlT,
+		}
+
+		exutil.By("Create non preempting priority pod")
+		nonPreemptingPriorityPodm.createPriorityPod(oc)
+
+		labelpm36110 := labels.SelectorFromSet(labels.Set(map[string]string{"env": "pm36110"}))
+		_, podmReadyErr := e2epod.WaitForPodsWithLabelRunningReady(context.Background(), oc.KubeClient(), oc.Namespace(), labelpm36110, 1, poddefaultTimeout)
+		exutil.AssertWaitPollNoErr(podmReadyErr, "this pod with label env=pm36110 not ready")
+
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "prioritym36110", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("NodeName is %s", nodeName)
+		if nodeName != nodeNames[0] {
+			e2e.Failf("Podm is not running on node1, which is not expected")
+		}
+
+		// Create priorityh pod
+		priorityPodh := priorityPodDefinition{
+			name:              "priorityh36110",
+			label:             "ph36110",
+			memory:            totalMemoryInBytes,
+			priorityClassName: "priorityh",
+			namespace:         oc.Namespace(),
+			template:          deploypodlT,
+		}
+
+		exutil.By("Create priorityh pod")
+		priorityPodh.createPriorityPod(oc)
+		assertSpecifiedPodStatus(oc, "priorityh36110", oc.Namespace(), "Pending")
+
+		g.By("Verify priorityh pod nominated node is node1")
+		nominatedNodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36110", "-n", oc.Namespace(), "-o=jsonpath={.status.nominatedNodeName}").Output()
+		e2e.Logf("NominatedNodeName is %s", nominatedNodeName)
+		if nominatedNodeName != nodeNames[0] {
+			e2e.Failf("Nominated node name is not equal to node1")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify podm is terminating and podh is running on node1")
+		labelph36110 := labels.SelectorFromSet(labels.Set(map[string]string{"env": "ph36110"}))
+		_, podhReadyErr := e2epod.WaitForPodsWithLabelRunningReady(context.Background(), oc.KubeClient(), oc.Namespace(), labelph36110, 1, poddefaultTimeout)
+		exutil.AssertWaitPollNoErr(podhReadyErr, "this pod with label env=ph36110 not ready")
+		nodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36110", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}").Output()
+		e2e.Logf("NodeName is %s", nodeName)
+		if nodeName != nodeNames[0] {
+			e2e.Failf("Podh is not running on node1, which is not expected")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Delete priorityh pod & verify pod no longer exists")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "priorityh36110", "--grace-period=0", "--force", "-n", oc.Namespace(), "--ignore-not-found").Execute()).NotTo(o.HaveOccurred())
+		podInfoStatus, podInfoerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36110", "-n", oc.Namespace()).Output()
+		o.Expect(podInfoerr).To(o.HaveOccurred())
+		o.Expect(podInfoStatus).Should(o.ContainSubstring("pods \"priorityh36110\" not found"))
+
 	})
 })
