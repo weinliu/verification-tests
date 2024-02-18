@@ -289,29 +289,29 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("# Get the credential pwd key name and key value")
-		var pwdKey string
+		exutil.By("# Get the credential user key name and key value")
+		var userKey string
 		dataList := strings.Split(gjson.Get(originCredential, `data`).String(), `"`)
 		for _, subStr := range dataList {
-			if strings.Contains(subStr, "password") {
-				pwdKey = subStr
+			if strings.HasSuffix(subStr, ".username") {
+				userKey = subStr
 				break
 			}
 		}
-		debugLogf("The credential pwd key name is: \"%s\"", pwdKey)
-		originPwd := gjson.Get(originCredential, `data.*password`).String()
+		debugLogf("The credential user key name is: \"%s\"", userKey)
+		originUser := gjson.Get(originCredential, `data.*username`).String()
 
 		exutil.By("# Replace the origin credential of vSphere CSI driver to wrong")
-		invalidPwd := base64.StdEncoding.EncodeToString([]byte(getRandomString()))
-		output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+invalidPwd+`"}}`).Output()
+		invalidUser := base64.StdEncoding.EncodeToString([]byte(getRandomString()))
 		// Restore the credential of vSphere CSI driver and make sure the CSO recover healthy by defer
 		defer func() {
-			restoreVsphereCSIcredential(oc, pwdKey, originPwd)
+			restoreVsphereCSIcredential(oc, userKey, originUser)
 			waitCSOhealthy(oc)
 		}()
+		output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+userKey+`":"`+invalidUser+`"}}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("patched"))
-		debugLogf("Replace the credential of vSphere CSI driver pwd to invalidPwd: \"%s\" succeed", invalidPwd)
+		debugLogf("Replace the credential of vSphere CSI driver user to invalid user: \"%s\" succeed", invalidUser)
 
 		exutil.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_csi_driver_error", `data.result.0.metric.failure_reason`, "vsphere_connection_failed")
