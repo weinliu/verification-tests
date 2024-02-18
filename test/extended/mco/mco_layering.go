@@ -238,6 +238,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			rpmName         = "wget"
 			yumRepoTemplate = generateTemplateAbsolutePath("centos.repo")
 			yumRepoFile     = "/etc/yum.repos.d/tc-54159-centos.repo"
+			proxy           = NewResource(oc.AsAdmin(), "proxy", "cluster")
 		)
 
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
@@ -252,7 +253,12 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("Copy yum repo to node")
 		o.Expect(workerNode.CopyFromLocal(yumRepoTemplate, yumRepoFile)).
 			NotTo(o.HaveOccurred(),
-				"Error copying  %s to %s in node %s", yumRepoFile, yumRepoFile, workerNode.GetName())
+				"Error copying  %s to %s in node %s", yumRepoTemplate, yumRepoFile, workerNode.GetName())
+
+		// rpm-ostree only uses the proxy from the yum.repos.d configuration, it ignores the env vars.
+		logger.Infof("Configure proxy in yum")
+		_, err := workerNode.DebugNodeWithChroot("sed", "-i", "s#proxy=#proxy="+proxy.GetOrFail(`{.status.httpProxy}`)+"#g", yumRepoFile)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error configuring the proxy in the centos yum repo config")
 
 		defer func() {
 			logger.Infof("Start defer logic to uninstall the %s rpm", rpmName)
@@ -463,7 +469,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			rpmName            = "zsh"
 			extensionRpmName   = "usbguard"
 			dockerFileCommands = fmt.Sprintf(`
-RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n' > /etc/yum.repos.d/centos.repo && \
     rpm-ostree install %s && \
     rpm-ostree cleanup -m && \
     ostree container commit
@@ -725,7 +731,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		var (
 			rpmName            = "zsh"
 			dockerFileCommands = fmt.Sprintf(`
-RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n' > /etc/yum.repos.d/centos.repo && \
     rpm-ostree install %s && \
     rpm-ostree cleanup -m && \
     ostree container commit
@@ -1161,7 +1167,7 @@ RUN touch %s
 			mcTemplate64k      = "set-64k-pages-kernel.yaml"
 			rpmName            = "zsh"
 			dockerFileCommands = fmt.Sprintf(`
-RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n' > /etc/yum.repos.d/centos.repo && \
     rpm-ostree install %s && \
     rpm-ostree cleanup -m && \
     ostree container commit

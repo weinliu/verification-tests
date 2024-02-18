@@ -21,6 +21,9 @@ type OsImageBuilderInNode struct {
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
 	dockerConfig,
+	httpProxy,
+	httpsProxy,
+	noProxy,
 	tmpDir,
 	remoteTmpDir,
 	remoteKubeconfig,
@@ -95,6 +98,14 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 
 	if b.tmpDir == "" {
 		b.tmpDir = e2e.TestContext.OutputDir
+	}
+
+	logger.Infof("Gathering proxy information")
+	proxy := NewResource(b.node.oc, "proxy", "cluster")
+	if proxy.Exists() {
+		b.httpProxy = proxy.GetOrFail(`{.status.httpProxy}`)
+		b.httpsProxy = proxy.GetOrFail(`{.status.httpsProxy}`)
+		b.noProxy = proxy.GetOrFail(`{.status.noProxy}`)
 	}
 
 	logger.Infof("OK!\n")
@@ -193,7 +204,10 @@ func (b *OsImageBuilderInNode) buildImage() error {
 	podmanCLI.ExecCommandPath = buildPath
 	switch b.architecture {
 	case architecture.AMD64, architecture.ARM64, architecture.PPC64LE, architecture.S390X:
-		output, err := b.node.DebugNodeWithChroot("podman", "build", buildPath, "--arch", b.architecture.String(), "--tag", b.osImage, "--authfile", b.remoteDockerConfig)
+		buildCommand := "NO_PROXY=" + b.noProxy + " HTTPS_PROXY=" + b.httpsProxy + " HTTP_PROXY=" + b.httpProxy + " podman build " + buildPath + " --arch " + b.architecture.String() + " --tag " + b.osImage + " --authfile " + b.remoteDockerConfig
+		logger.Infof("Executing build command: %s", buildCommand)
+
+		output, err := b.node.DebugNodeWithChroot("bash", "-c", buildCommand)
 		if err != nil {
 			msg := fmt.Sprintf("Podman failed building image %s with architecture %s:\n%s\n%s", b.osImage, b.architecture, output, err)
 			logger.Errorf(msg)
@@ -213,7 +227,10 @@ func (b *OsImageBuilderInNode) buildImage() error {
 
 func (b *OsImageBuilderInNode) pushImage() error {
 	exutil.By("Push osImage")
-	output, err := b.node.DebugNodeWithChroot("podman", "push", b.osImage, "--authfile", b.remoteDockerConfig)
+	pushCommand := "NO_PROXY=" + b.noProxy + " HTTPS_PROXY=" + b.httpsProxy + " HTTP_PROXY=" + b.httpProxy + " podman push " + b.osImage + " --authfile " + b.remoteDockerConfig
+	logger.Infof("Executing push command: %s", pushCommand)
+
+	output, err := b.node.DebugNodeWithChroot("bash", "-c", pushCommand)
 	if err != nil {
 		msg := fmt.Sprintf("Podman failed pushing image %s:\n%s\n%s", b.osImage, output, err)
 		logger.Errorf(msg)
@@ -249,7 +266,10 @@ func (b *OsImageBuilderInNode) removeImage() error {
 
 func (b *OsImageBuilderInNode) digestImage() (string, error) {
 	exutil.By("Digest osImage")
-	inspectInfo, _, err := b.node.DebugNodeWithChrootStd("skopeo", "inspect", "docker://"+b.osImage, "--authfile", b.remoteDockerConfig)
+	skopeoCommand := "NO_PROXY=" + b.noProxy + " HTTPS_PROXY=" + b.httpsProxy + " HTTP_PROXY=" + b.httpProxy + " skopeo inspect docker://" + b.osImage + " --authfile " + b.remoteDockerConfig
+	logger.Infof("Executing skopeo command: %s", skopeoCommand)
+
+	inspectInfo, _, err := b.node.DebugNodeWithChrootStd("bash", "-c", skopeoCommand)
 	if err != nil {
 		msg := fmt.Sprintf("Skopeo failed inspecting image %s:\n%s\n%s", b.osImage, inspectInfo, err)
 		logger.Errorf(msg)
