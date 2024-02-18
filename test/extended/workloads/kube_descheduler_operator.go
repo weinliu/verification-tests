@@ -782,7 +782,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("HyperShiftMGMT-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
+	// Removing Hypershiftmgmt due to bug https://issues.redhat.com/browse/OCPBUGS-29064
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
 		// Check if cluster is hypershift cluster
 		guestClusterName, guestClusterKubeconfig, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
 		if guestClusterKubeconfig != "" {
@@ -1059,20 +1060,20 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 			defer func() {
 				e2e.Logf("Restoring the scheduler cluster's logLevel")
-				err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlToRestore).Execute()
+				err := oc.AsAdmin().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlToRestore).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 
 				g.By("Check all the kube-scheduler pods in the hosted cluster namespace should be up and running")
-				waitForDeploymentPodsToBeReady(getOCPerKubeConf(oc, guestClusterKubeconfig), hostedClusterNS, "kube-scheduler")
+				waitForDeploymentPodsToBeReady(oc, hostedClusterNS, "kube-scheduler")
 			}()
 
 			g.By("Set profile to HighNodeUtilization")
 			patchYamlHighNodeUtilization := `[{"op": "add", "path": "/spec/configuration", "value":{"scheduler":{"profile":"HighNodeUtilization"}}}]`
-			err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlHighNodeUtilization).Execute()
+			err := oc.AsAdmin().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterName, "--type=json", "-p", patchYamlHighNodeUtilization).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Wait for kube-scheduler pods to restart and run fine")
-			waitForDeploymentPodsToBeReady(getOCPerKubeConf(oc, guestClusterKubeconfig), hostedClusterNS, "kube-scheduler")
+			waitForDeploymentPodsToBeReady(oc, hostedClusterNS, "kube-scheduler")
 
 		}
 
