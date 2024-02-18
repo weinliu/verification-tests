@@ -598,14 +598,21 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Remove the taint from the node")
 		oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", pod374631nodename, "dedicated:NoSchedule-").Execute()
 		waitErr = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-			msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", pod374631nodename).Output()
+			nodeTaints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", pod374631nodename, "-o=jsonpath={.spec.taints}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(msg, "dedicated") {
+			// Add debug log to check if taints are present on the node
+			e2e.Logf("Taints on the node are %s", nodeTaints)
+			if strings.Contains(nodeTaints, "dedicated") {
 				return false, nil
 			}
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "Taint has not been removed even after waiting for 120 seconds")
+
+		// Add debug log to see if taint is present on the node after 120 seconds
+		nodeTaints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", pod374631nodename, "-o=jsonpath={.spec.taints}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Taints on the node after 120 seconds %s", nodeTaints)
 
 		// Test for RemovePodsViolatingInterPodAntiAffinity
 
