@@ -101,6 +101,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		// Caluclate the memory with which the pod needs to be created
 		memForPod := totalMemoryInBytes / 2
 
+		// Check if node is a localzone node and adjust the pod yaml
+		checkLocalZoneNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
+		}
+
 		// Create priority pods
 		priorityPodl := priorityPodDefinition{
 			name:              "priorityl19895",
@@ -171,6 +178,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 
 		if totalMemoryInBytes <= 0 {
 			g.Skip("Skipping the test as totalMemoryInBytes is less than or equal to zero")
+		}
+
+		// Check if node is a localzone node and adjust the pod yaml
+		checkLocalZoneNode, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node[1], "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
 		}
 
 		exutil.By("Create another priority podl")
@@ -328,6 +342,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 
 		if totalMemoryInBytes <= 0 {
 			g.Skip("Skipping the test as totalMemoryInBytes is less than or equal to zero")
+		}
+
+		// Check if node is a localzone node and adjust the pod yaml
+		checkLocalZoneNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeNames[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
 		}
 
 		g.By("Set namespace privileged")
