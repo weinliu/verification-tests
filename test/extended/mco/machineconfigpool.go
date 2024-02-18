@@ -306,9 +306,16 @@ func (mcp *MachineConfigPool) GetMCSIgnitionConfig(secure bool, ignitionVersion 
 	}
 	master := masters[0]
 
-	logger.Infof("Remove the iptables rules that block the ignition config")
+	logger.Infof("Remove the IPV4 iptables rules that block the ignition config")
 	removedRules, err := master.RemoveIPTablesRulesByRegexp(fmt.Sprintf("%d", port))
 	defer master.ExecIPTables(removedRules)
+	if err != nil {
+		return "", err
+	}
+
+	logger.Infof("Remove the IPV6 ip6tables rules that block the ignition config")
+	removed6Rules, err := master.RemoveIP6TablesRulesByRegexp(fmt.Sprintf("%d", port))
+	defer master.ExecIP6Tables(removed6Rules)
 	if err != nil {
 		return "", err
 	}

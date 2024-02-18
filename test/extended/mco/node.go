@@ -878,13 +878,27 @@ func (n *Node) IsListedByPool(mcp *MachineConfigPool) (bool, error) {
 	return false, nil
 }
 
-// RemoveIPTablesRulesByRegexp removes all the iptables rules printed by `iptables -S` that match the given regexp
+// RemoveIPTablesRulesByRegexp removes all the iptables rules printed by  `iptables -S`  that match the given regexp
 func (n *Node) RemoveIPTablesRulesByRegexp(regx string) ([]string, error) {
-	removedRules := []string{}
+	return n.removeIPTablesRulesByRegexp(false, regx)
+}
 
-	allRulesString, stderr, err := n.DebugNodeWithChrootStd("iptables", "-S")
+// RemoveIP6TablesRulesByRegexp removes all the iptables rules printed by  `ip6tables -S`  that match the given regexp
+func (n *Node) RemoveIP6TablesRulesByRegexp(regx string) ([]string, error) {
+	return n.removeIPTablesRulesByRegexp(true, regx)
+}
+
+// removeIPTablesRulesByRegexp removes all the iptables rules printed by `iptables -S` or `ip6tables -S` that match the given regexp
+func (n *Node) removeIPTablesRulesByRegexp(ipv6 bool, regx string) ([]string, error) {
+	removedRules := []string{}
+	command := "iptables"
+	if ipv6 == true {
+		command = "ip6tables"
+	}
+
+	allRulesString, stderr, err := n.DebugNodeWithChrootStd(command, "-S")
 	if err != nil {
-		logger.Errorf("Error running `iptables -S`. Stderr: %s", stderr)
+		logger.Errorf("Error running `%s -S`. Stderr: %s", command, stderr)
 		return nil, err
 	}
 
@@ -893,9 +907,9 @@ func (n *Node) RemoveIPTablesRulesByRegexp(regx string) ([]string, error) {
 		if !regexp.MustCompile(regx).MatchString(rule) {
 			continue
 		}
-		logger.Infof("%s. Removing iptables rule: %s", n.GetName(), rule)
+		logger.Infof("%s. Removing %s rule: %s", n.GetName(), command, rule)
 		removeCommand := strings.Replace(rule, "-A", "-D", 1)
-		output, err := n.DebugNodeWithChroot(append([]string{"iptables"}, splitCommandString(removeCommand)...)...)
+		output, err := n.DebugNodeWithChroot(append([]string{command}, splitCommandString(removeCommand)...)...)
 		if err != nil {
 			logger.Errorf("Output: %s", output)
 			return removedRules, err
@@ -912,10 +926,15 @@ func (n *Node) RemoveIPTablesRulesByRegexp(regx string) ([]string, error) {
 //	       "-A OPENSHIFT-BLOCK-OUTPUT -p tcp -m tcp --dport 22624 --tcp-flags FIN,SYN,RST,ACK SYN -j REJECT --reject-with icmp-port-unreachable" ]
 //
 // This function can be used to restore the rules removed by "RemoveIPTablesRulesByRegexp"
-func (n *Node) ExecIPTables(rules []string) error {
+func (n *Node) execIPTables(ipv6 bool, rules []string) error {
+	command := "iptables"
+	if ipv6 == true {
+		command = "ip6tables"
+	}
+
 	for _, rule := range rules {
-		logger.Infof("%s. Adding iptables rule: %s", n.GetName(), rule)
-		output, err := n.DebugNodeWithChroot(append([]string{"iptables"}, splitCommandString(rule)...)...)
+		logger.Infof("%s. Adding %s rule: %s", n.GetName(), command, rule)
+		output, err := n.DebugNodeWithChroot(append([]string{command}, splitCommandString(rule)...)...)
 		if err != nil {
 			logger.Errorf("Output: %s", output)
 			return err
@@ -923,6 +942,16 @@ func (n *Node) ExecIPTables(rules []string) error {
 
 	}
 	return nil
+}
+
+// ExecIPTables execute the iptables command in the node
+func (n *Node) ExecIPTables(rules []string) error {
+	return n.execIPTables(false, rules)
+}
+
+// ExecIPTables execute the ip6tables command in the node
+func (n *Node) ExecIP6Tables(rules []string) error {
+	return n.execIPTables(true, rules)
 }
 
 // GetArchitectureOrFail get the architecture used in the node and fail the test if any error happens while doing it
