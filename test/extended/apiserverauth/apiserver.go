@@ -3020,7 +3020,8 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-9853-patch operation should use patched object to check admission control", func() {
+	// maintainer: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Author:zxiao-Medium-9853-patch operation should use patched object to check admission control", func() {
 		exutil.By("This case is for bug 1297910")
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
@@ -6342,13 +6343,25 @@ spec:
 
 		exutil.By(`3.1) Try copying multiple layers image to the default internal registry of the cluster`)
 		publicImageUrl := "docker://" + "quay.io/openshifttest/mysql:1.2.0"
-		output, err := copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+		var output string
+		errPoll := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
+			if err != nil {
+				if strings.Contains(output, "denied") {
+					o.Expect(strings.Contains(output, "denied")).Should(o.BeTrue(), "Should deny copying"+publicImageUrl)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		if errPoll != nil {
+			e2e.Logf("Failed to retrieve %v", output)
+			exutil.AssertWaitPollNoErr(errPoll, "Failed to retrieve")
+		}
 
 		exutil.By(`3.2) Try copying  single layer image to the default internal registry of the cluster`)
 		publicImageUrl = "docker://" + "quay.io/openshifttest/singlelayer:latest"
-		errPoll := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		errPoll = wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
 			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
 			if err != nil {
 				if strings.Contains(output, "denied") {
