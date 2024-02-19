@@ -5418,6 +5418,55 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		}
 	})
+
+	// author: ropatil@redhat.com
+	// OCP-71560-[CSI-Driver] [nfs] support noresvport as the default mount option if not specified
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Medium-71560-[CSI-Driver] [nfs] support noresvport as the default mount option if not specified", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"efs.csi.aws.com", "file.csi.azure.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate  = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+			exutil.By("# Create a pvc with the preset csi storageclass")
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("# Create deployment with the created pvc and wait for the pod ready")
+			dep.create(oc)
+			defer dep.delete(oc)
+			dep.waitReady(oc)
+
+			exutil.By("# Check the mount option on the node should contain the noresvport")
+			pvName := pvc.getVolumeName(oc)
+			nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+			output, err := execCommandInSpecificNode(oc, nodeName, "mount | grep "+pvName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("noresvport"))
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 })
 
 // Performing test steps for Online Volume Resizing
