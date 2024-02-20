@@ -968,8 +968,10 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(goVersion).Should(o.BeNumerically(">", 1.15))
 
 		exutil.By("verify TLS protocol version is 1.3")
+		intAPIServerURI, err := GetAPIServerInternalURI(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred())
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
-		sslOutput, sslErr := masterNode.DebugNodeWithChroot("bash", "-c", "openssl s_client -connect localhost:6443 2>&1|grep -A3 SSL-Session")
+		sslOutput, sslErr := masterNode.DebugNodeWithChroot("bash", "-c", "echo 'Q'|openssl s_client -connect "+intAPIServerURI+":6443")
 		logger.Infof("ssl protocol version is:\n %s", sslOutput)
 		o.Expect(sslErr).NotTo(o.HaveOccurred())
 		o.Expect(sslOutput).Should(o.ContainSubstring("TLSv1.3"))
