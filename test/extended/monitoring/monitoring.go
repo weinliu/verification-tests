@@ -1905,10 +1905,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkYamlconfig(oc, "openshift-monitoring", "deployment", "monitoring-plugin", cmd, `{"limits":{"cpu":"30m","memory":"120Mi"},"requests":{"cpu":"15m","memory":"60Mi"}}`, true)
 
 		g.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service are exist")
-		resourceNames := []string{"ConfigMap", "ConsolePlugin", "PodDisruptionBudget", "ServiceAccount", "Service"}
+		resourceNames := []string{"ConfigMap", "ConsolePlugin", "ServiceAccount", "Service"}
 		for _, resource := range resourceNames {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "monitoring-plugin", "-n", "openshift-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("monitoring-plugin"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		//SNO cluster do not have PDB under openshift-monitoring
+		if !exutil.IsSNOCluster(oc) {
+			g.By("check PodDisruptionBudget")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", "monitoring-plugin", "-n", "openshift-monitoring").Output()
+			o.Expect(output).NotTo(o.ContainSubstring("not found"))
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
