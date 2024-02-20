@@ -55,14 +55,8 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 
 		g.By("Run network verifier vith clusterID")
 		output, err = networkService.CreateNetworkVerifierWithCluster(clusterID)
-		if len(clusterDetail.Proxy) > 0 {
-			o.Expect(err).To(o.HaveOccurred())
-			o.Expect(output.String()).To(o.ContainSubstring("ERR: Error verifying subnets by cluster: Checking cluster-wide proxy through the network verifieris currently not available for cluster '%s'", clusterID))
-			g.Skip("This case is not available for proxy cluster currently")
-		} else {
-			o.Expect(err).ToNot(o.HaveOccurred())
-			o.Expect(output.String()).To(o.ContainSubstring("Run the following command to wait for verification to all subnets to complete:\n" + "rosa verify network --watch --status-only"))
-		}
+		o.Expect(err).ToNot(o.HaveOccurred())
+		o.Expect(output.String()).To(o.ContainSubstring("Run the following command to wait for verification to all subnets to complete:\n" + "rosa verify network --watch --status-only"))
 
 		g.By("Get the cluster subnets")
 		subnets := strings.Replace(subnetsNetworkInfo, " ", "", -1)

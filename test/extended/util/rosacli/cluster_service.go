@@ -108,10 +108,12 @@ func (c *clusterService) ReflectClusterDescription(result bytes.Buffer) (res *Cl
 		TextData.
 		Input(result).
 		Parse().
-		TransformOutput(func(str string) string {
+		TransformOutput(func(str string) (newStr string) {
 			// Apply transformation to avoid issue with the list of Inflight checks below
 			// It will consider
-			return strings.Replace(str, "Failed Inflight Checks:", "Failed Inflight Checks: |", 1)
+			newStr = strings.Replace(str, "Failed Inflight Checks:", "Failed Inflight Checks: |", 1)
+			newStr = strings.ReplaceAll(newStr, "\t", "  ")
+			return
 		}).
 		YamlToMap()
 	if err != nil {
