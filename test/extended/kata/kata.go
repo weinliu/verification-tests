@@ -981,7 +981,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		if !upgradeConfigMapExists {
-			e2e.Failf("ERROR: %v configmap does not exist. Cannot upgrade by changing subscription", testrunConfigmapName)
+			msg = fmt.Sprintf("SKIP: %v configmap does not exist. Cannot upgrade by changing subscription", testrunConfigmapName)
+			g.Skip(msg)
 		}
 
 		if testrunUpgradeWithSubscription.icspNeeded {
@@ -992,19 +993,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		if testrunUpgradeWithSubscription.catalogSourceName != subscription.catalogSourceName {
-			// catalog should already exist, but verify to ensure it is ready
-			errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				msg, err = oc.AsAdmin().Run("get").Args("catsrc", testrunUpgradeWithSubscription.catalogSourceName, "-n", subscriptionUpgrade.catalogSourceNamespace, "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
-				if msg == "READY" && err == nil {
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("catalog %v is not found.  Will not upgrade: %v %v", testrunUpgradeWithSubscription.catalogSourceName, msg, err))
+			waitForCatalogReadyOrFail(oc, testrunUpgradeWithSubscription.catalogSourceName)
 
 			g.By("Check catalog for " + subscriptionUpgrade.subName)
 			label := fmt.Sprintf("catalog=%v", testrunUpgradeWithSubscription.catalogSourceName)
-			errCheck = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+			errCheck := wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
 				msg, err = oc.AsAdmin().Run("get").Args("packagemanifest", "-l", label, "-n", subscriptionUpgrade.catalogSourceNamespace).Output()
 				if strings.Contains(msg, subscriptionUpgrade.subName) {
 					return true, nil
@@ -1596,6 +1589,45 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		e2e.Logf("The Image ID present in the peer-pods-cm is: %v , msg: %v", imageID, msg)
 		g.By("SUCCESS - IMAGE ID check complete")
+	})
+
+	g.It("Author:tbuskey-Medium-70824-Catalog upgrade osc operator [Disruptive]", func() {
+
+		upgradeCatalog := UpgradeCatalogDescription{
+			name:        "osc-config-upgrade-catalog",
+			namespace:   "default",
+			exists:      false,
+			imageAfter:  "",
+			imageBefore: "",
+			catalogName: subscription.catalogSourceName,
+		}
+
+		err := getUpgradeCatalogConfigMap(oc, &upgradeCatalog)
+		if !upgradeCatalog.exists {
+			skipMessage := fmt.Sprintf("%v configmap for Catalog upgrade does not exist", upgradeCatalog.name)
+			g.Skip(skipMessage)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not get %v configmap in ns %v %v", upgradeCatalog.name, upgradeCatalog.namespace, err))
+
+		// what is the current CSV name?
+		csvNameBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscription.subName, "-n", subscription.namespace, "-o=jsonpath={.status.currentCSV}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not get the CSV name of sub %v %v %v", subscription.subName, csvNameBefore, err))
+		o.Expect(csvNameBefore).NotTo(o.BeEmpty(), fmt.Sprintf("ERROR: the csv name is empty for sub %v", subscription.subName))
+
+		// what is the controller-manager pod name?
+		listOfPodsBefore, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subscription.namespace, "-l", "control-plane=controller-manager", "-o=jsonpath={.items..metadata.name}").Output()
+
+		err = changeCatalogImage(oc, upgradeCatalog.catalogName, upgradeCatalog.imageAfter)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not change catalog %v image to %v Error %v", upgradeCatalog.catalogName, upgradeCatalog.imageAfter, err))
+
+		e2e.Logf("Waiting for pods (%v) to get replaced", listOfPodsBefore)
+		waitForPodsToTerminate(oc, subscription.namespace, listOfPodsBefore)
+
+		// subscription .status.installedCsv is "AtLatestKnown" & will not changed so it doesn't show subscription is done
+		// wait until the currentCSV in the sub changes & get the new CSV name
+		csvNameAfter, _ := checkResourceJsonPathChanged(oc, "sub", subscription.subName, subscription.namespace, "-o=jsonpath={.status.currentCSV}", csvNameBefore, 300*time.Second, 10*time.Second)
+		e2e.Logf("Watch CSV %v to show Succeed", csvNameAfter)
+		_, _ = checkResourceJsonpath(oc, "csv", csvNameAfter, subscription.namespace, "-o=jsonpath={.status.phase}", "Succeeded", 300*time.Second, 10*time.Second)
 	})
 
 })

@@ -76,6 +76,15 @@ type PeerpodParam struct {
 	AZURE_SUBNET_ID      string
 }
 
+type UpgradeCatalogDescription struct {
+	name        string
+	namespace   string
+	exists      bool
+	imageAfter  string
+	imageBefore string
+	catalogName string
+}
+
 var (
 	snooze       time.Duration = 2400
 	kataSnooze   time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
@@ -1661,4 +1670,100 @@ func getTestRunParameters(oc *exutil.CLI, subscription *SubscriptionDescription,
 		kataconfig.enablePeerPods = testrun.enablePeerPods
 	}
 	return configmapExists, nil
+}
+
+func getUpgradeCatalogConfigMap(oc *exutil.CLI, upgradeCatalog *UpgradeCatalogDescription) (err error) {
+
+	upgradeCatalog.exists = false
+
+	// need a checkResourceExists that doesn't fail when not found.
+	configMaps, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", upgradeCatalog.namespace, "-o=jsonpath={.items..metadata.name}").Output()
+	if err != nil {
+		err = fmt.Errorf("cannot get configmaps in ns %v: Configmaps=[%v] Error:%w", upgradeCatalog.namespace, configMaps, err)
+		upgradeCatalog.exists = true // override skip if there is an error
+		return err
+	}
+
+	if strings.Contains(configMaps, upgradeCatalog.name) {
+		upgradeCatalog.exists = true
+	}
+
+	if !upgradeCatalog.exists { // no cm is not error
+		return nil
+	}
+
+	upgradeCatalog.imageAfter, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", upgradeCatalog.namespace, upgradeCatalog.name, "-o=jsonpath={.data.imageAfter}").Output()
+	if err != nil || upgradeCatalog.imageAfter == "" {
+		err = fmt.Errorf("The %v configmap is missing the imageAfter: %v %v", upgradeCatalog.name, upgradeCatalog.imageAfter, err)
+		return err
+	}
+
+	upgradeCatalog.imageBefore, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", "openshift-marketplace", upgradeCatalog.catalogName, "-o=jsonpath={.spec.image}").Output()
+	if err != nil {
+		err = fmt.Errorf("Could not get the current image from the %v catsrc %v %v", upgradeCatalog.catalogName, upgradeCatalog.imageBefore, err)
+		return err
+	}
+
+	return nil
+}
+
+func changeCatalogImage(oc *exutil.CLI, catalogName, catalogImage string) (err error) {
+
+	patch := fmt.Sprintf("{\"spec\":{\"image\":\"%v\"}}", catalogImage)
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catalogName, "--type", "merge", "-p", patch, "-n", "openshift-marketplace").Output()
+	if err != nil {
+		err = fmt.Errorf("Could not patch %v %v %v", catalogName, msg, err)
+		return err
+	}
+
+	msg, err = oc.AsAdmin().Run("get").Args("catsrc", catalogName, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image}").Output()
+	if err != nil || msg != catalogImage {
+		err = fmt.Errorf("Catalog patch did not change image to %v %v %v", catalogImage, msg, err)
+		return err
+	}
+
+	waitForCatalogReadyOrFail(oc, catalogName)
+
+	return nil
+}
+
+func waitForCatalogReadyOrFail(oc *exutil.CLI, catalogName string) {
+	_, _ = checkResourceJsonpath(oc, "catsrc", catalogName, "openshift-marketplace", "-o=jsonpath={.status.connectionState.lastObservedState}", "READY", 300*time.Second, 10*time.Second)
+}
+
+func checkResourceJsonPathChanged(oc *exutil.CLI, resType, resName, resNs, jsonpath, currentValue string, duration, interval time.Duration) (newValue string, err error) {
+	// watch a resource that has a known value until it changes.  Return the new value
+	errCheck := wait.PollImmediate(interval, duration, func() (bool, error) {
+		newValue, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resType, resName, "-n", resNs, jsonpath).Output()
+		if newValue != currentValue && err == nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v %v in ns %v is not in %v state after %v sec: %v %v", resType, resName, resNs, currentValue, duration, newValue, err))
+	return newValue, nil
+}
+
+func waitForPodsToTerminate(oc *exutil.CLI, namespace, listOfPods string) {
+	var (
+		podStillRunning bool
+		currentPods     string
+	)
+
+	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
+		podStillRunning = false
+		currentPods, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-o=jsonpath={.items..metadata.name}").Output()
+		for _, pod := range strings.Fields(listOfPods) {
+			if strings.Contains(currentPods, pod) {
+				podStillRunning = true
+				break
+			}
+		}
+		if podStillRunning {
+			return false, nil
+		}
+		return true, nil
+	})
+	currentPods, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-o=jsonpath={.items..metadata.name}").Output()
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timeout waiting for a (%v) pods to terminate.  Current pods %v running", listOfPods, currentPods))
 }
