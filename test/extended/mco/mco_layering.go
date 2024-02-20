@@ -313,7 +313,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			"Error getting the booted ostree deployment")
 
 		o.Expect(initialDeployment).
-			To(o.ContainSubstring("LayeredPackages: %s", rpmName),
+			To(o.MatchRegexp("LayeredPackages: .*%s", rpmName),
 				"rpm-ostree is not reporting the installed '%s' package in the rpm-ostree status command", rpmName)
 
 		logger.Infof("Initial status without date:\n %s", removeDateFromRpmOstreeStatus(initialDeployment))
@@ -351,7 +351,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			To(o.ContainSubstring("* ostree-unverified-registry:"+digestedImage),
 				"container reference in the status is not reporting the right booted image")
 		o.Expect(bootedDeployment).
-			To(o.ContainSubstring("LayeredPackages: %s", rpmName),
+			To(o.MatchRegexp("LayeredPackages: .*%s", rpmName),
 				"rpm-ostree is not reporting the installed 'wget' package in the rpm-ostree status command")
 
 		logger.Infof("OK!\n")
