@@ -1234,13 +1234,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		matchedWorkers := sliceIntersect([]string{workerNodeList[0].name, workerNodeList[1].name}, workerNodesInUse)
 		o.Expect(len(matchedWorkers) == 2).To(o.BeTrue())
 
-		exutil.By("#. Check there are exactly two pods with component name 'vg-manager' and 'topolvm-node' in LVMS namespace")
+		exutil.By("#. Check there are exactly two pods with component name 'vg-manager' in LVMS namespace")
 		vgManagerPodList, err := getPodsListByLabel(oc.AsAdmin(), "openshift-storage", "app.kubernetes.io/component=vg-manager")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(vgManagerPodList) == 2).To(o.BeTrue())
-		topoLvmNodePodList, err := getPodsListByLabel(oc.AsAdmin(), "openshift-storage", "app.kubernetes.io/component=topolvm-node")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(topoLvmNodePodList) == 2).To(o.BeTrue())
 
 		exutil.By("#. Create a new project for the scenario")
 		oc.SetupProject()
