@@ -2588,11 +2588,11 @@ spec:
 		err = os.MkdirAll(tempDir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var icspFile *os.File
+		icspFile, err = os.CreateTemp(tempDir, resourceNamePrefix)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			errList = append(errList, icspFile.Close())
 		}()
-		icspFile, err = os.CreateTemp(tempDir, resourceNamePrefix)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Parsed template: ")
 		err = icspTemplate.Execute(io.MultiWriter(g.GinkgoWriter, icspFile), &struct {
