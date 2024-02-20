@@ -117,4 +117,32 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(result).To(o.Equal(`{"effect": "PreferredDuringScheduling"}`))
 		}
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71695-[CAPI] Core CAPI CRDs not deployed on unsupported platforms even when explicitly needed by other operators", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere", "gcp", "aws", "alicloud", "ibmcloud", "nutanix")
+		skipForCAPINotExist(oc)
+
+		expectedCRDs := `clusterclasses.cluster.x-k8s.io
+clusterresourcesetbindings.addons.cluster.x-k8s.io
+clusterresourcesets.addons.cluster.x-k8s.io
+clusters.cluster.x-k8s.io
+extensionconfigs.runtime.cluster.x-k8s.io
+ipaddressclaims.ipam.cluster.x-k8s.io
+ipaddresses.ipam.cluster.x-k8s.io
+machinedeployments.cluster.x-k8s.io
+machinehealthchecks.cluster.x-k8s.io
+machinepools.cluster.x-k8s.io
+machines.cluster.x-k8s.io
+machinesets.cluster.x-k8s.io`
+
+		expectedCRD := strings.Split(expectedCRDs, "\n")
+
+		g.By("Get capi crds in techpreview cluster")
+		for _, crd := range expectedCRD {
+			// Execute `oc get crds <CRD name>` for each CRD
+			crds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crds", crd, `-o=jsonpath={.metadata.annotations}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(crds).To(o.ContainSubstring("CustomNoUpgrade"))
+		}
+	})
 })
