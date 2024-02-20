@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"os/exec"
 	"strings"
 	"time"
 
@@ -19,6 +20,14 @@ type ingressControllerDescription struct {
 type loadBalancerServiceDescription struct {
 	template  string
 	name      string
+	subnet    string
+	label     string
+	namespace string
+}
+
+type podDescription struct {
+	template  string
+	name      string
 	namespace string
 }
 
@@ -34,13 +43,29 @@ func (ingressController *ingressControllerDescription) deleteIngressController(o
 
 func (loadBalancerService *loadBalancerServiceDescription) createLoadBalancerService(oc *exutil.CLI) {
 	e2e.Logf("Creating loadBalancerService ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerService.template, "-p", "NAME="+loadBalancerService.name, "NAMESPACE="+loadBalancerService.namespace)
+	var err error
+	if strings.Contains(loadBalancerService.template, "annotations") {
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerService.template, "-p", "NAME="+loadBalancerService.name, "NAMESPACE="+loadBalancerService.namespace, "SUBNET="+loadBalancerService.subnet, "LABEL="+loadBalancerService.label)
+	} else {
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerService.template, "-p", "NAME="+loadBalancerService.name, "NAMESPACE="+loadBalancerService.namespace)
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (loadBalancerService *loadBalancerServiceDescription) deleteLoadBalancerService(oc *exutil.CLI) error {
 	e2e.Logf("Deleting loadBalancerService ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", loadBalancerService.name, "-n", loadBalancerService.namespace).Execute()
+}
+
+func (pod *podDescription) createPod(oc *exutil.CLI) {
+	e2e.Logf("Creating pod ...")
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (pod *podDescription) deletePod(oc *exutil.CLI) error {
+	e2e.Logf("Deleting pod ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
 }
 
 // waitForClusterHealthy check if new machineconfig is applied successfully
@@ -165,4 +190,23 @@ func getLBSvcIP(oc *exutil.CLI, loadBalancerService loadBalancerServiceDescripti
 	svcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "-n", loadBalancerService.namespace, loadBalancerService.name, jsonString).Output()
 	e2e.Logf("The %s lb service ip/hostname is %q", loadBalancerService.name, svcStatus)
 	return svcStatus
+}
+
+func waitForLoadBalancerReady(oc *exutil.CLI, externalIP string) {
+	e2e.Logf("Getting the Load Balancer service IP ...")
+	errWait := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		msg, err := exec.Command("bash", "-c", "curl "+externalIP).Output()
+		if err != nil {
+			e2e.Logf("failed to execute the curl: %s. Trying again", err)
+			return false, nil
+		}
+		e2e.Logf("msg -->: %s", msg)
+		if !strings.Contains(string(msg), "Hello-OpenShift") {
+			e2e.Logf("Load balancer is not ready yet and waiting up to 5 minutes ...")
+			return false, nil
+		}
+		e2e.Logf("Load balancer is ready")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errWait, "Load balancer is not ready after waiting up to 5 minutes ...")
 }

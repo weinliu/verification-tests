@@ -325,6 +325,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Critical-70627-[CCM] Service of type LoadBalancer can be created successful [Disruptive]", func() {
+		exutil.SkipForAwsOutpostCluster(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
 		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
@@ -339,6 +340,88 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check External-IP assigned")
 		getLBSvcIP(oc, loadBalancerService)
+	})
 
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-High-71492-[CCM] Create CLB service on aws outposts cluster [Disruptive]", func() {
+		exutil.SkipForNotAwsOutpostMixedCluster(oc)
+		exutil.By("1.1Get regular worker public subnetID")
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		exutil.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSessionWithRegion(region)
+		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		subnetId, err := awsClient.GetAwsPublicSubnetID(clusterID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Subnet -->: %s", subnetId)
+
+		exutil.By("1.2Create loadBalancerService and pod")
+		lbNamespace := "ns-71492"
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(lbNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(lbNamespace)
+		exutil.SetNamespacePrivileged(oc, lbNamespace)
+
+		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
+		svc := filepath.Join(ccmBaseDir, "svc-loadbalancer-with-annotations.yaml")
+		pod := filepath.Join(ccmBaseDir, "pod.yaml")
+		svcForSubnet := loadBalancerServiceDescription{
+			template:  svc,
+			name:      "test-subnet-annotation",
+			subnet:    subnetId,
+			namespace: lbNamespace,
+		}
+		defer svcForSubnet.deleteLoadBalancerService(oc)
+		svcForSubnet.createLoadBalancerService(oc)
+
+		podForSubnet := podDescription{
+			template:  pod,
+			name:      "test-subnet-annotation",
+			namespace: lbNamespace,
+		}
+		defer podForSubnet.deletePod(oc)
+		podForSubnet.createPod(oc)
+		waitForPodWithLabelReady(oc, lbNamespace, "name=test-subnet-annotation")
+
+		exutil.By("1.3Check External-IP assigned")
+		externalIPForSubnet := getLBSvcIP(oc, svcForSubnet)
+		e2e.Logf("externalIPForSubnet -->: %s", externalIPForSubnet)
+
+		exutil.By("1.4Check result,the svc can be accessed")
+		waitForLoadBalancerReady(oc, externalIPForSubnet)
+
+		exutil.By("2.1Add label for one regular node")
+		regularNodes := exutil.ListNonOutpostWorkerNodes(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", regularNodes[0], "key1-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", regularNodes[0], "key1=value1", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("regularnode -->: %s", regularNodes[0])
+
+		exutil.By("2.2Create loadBalancerService and pod")
+		svcForLabel := loadBalancerServiceDescription{
+			template:  svc,
+			name:      "test-label-annotation",
+			subnet:    subnetId,
+			label:     "key1=value1",
+			namespace: lbNamespace,
+		}
+		defer svcForLabel.deleteLoadBalancerService(oc)
+		svcForLabel.createLoadBalancerService(oc)
+
+		podForLabel := podDescription{
+			template:  pod,
+			name:      "test-label-annotation",
+			namespace: lbNamespace,
+		}
+		defer podForLabel.deletePod(oc)
+		podForLabel.createPod(oc)
+		waitForPodWithLabelReady(oc, lbNamespace, "name=test-label-annotation")
+
+		exutil.By("2.3Check External-IP assigned")
+		externalIPForLabel := getLBSvcIP(oc, svcForLabel)
+		e2e.Logf("externalIPForLabel -->: %s", externalIPForLabel)
+
+		exutil.By("2.4Check result,the svc can be accessed")
+		waitForLoadBalancerReady(oc, externalIPForLabel)
 	})
 })

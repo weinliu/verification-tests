@@ -77,6 +77,38 @@ func (a *AwsClient) GetAwsInstanceID(instanceName string) (string, error) {
 	return *instanceID, err
 }
 
+// GetAwsPublicSubnetID get one regular public subnet ID in aws outpost mixed worker cluster
+func (a *AwsClient) GetAwsPublicSubnetID(clusterID string) (string, error) {
+	filters := []*ec2.Filter{
+		{
+			Name: aws.String("tag:kubernetes.io/cluster/" + clusterID),
+			Values: []*string{
+				aws.String("shared"),
+			},
+		},
+		{
+			Name: aws.String("tag:aws:cloudformation:logical-id"),
+			Values: []*string{
+				aws.String("PublicSubnet"),
+			},
+		},
+	}
+	input := ec2.DescribeSubnetsInput{Filters: filters}
+	subnetInfo, err := a.svc.DescribeSubnets(&input)
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(subnetInfo.Subnets) < 1 {
+		return "", fmt.Errorf("No subnet found in current cluster with name %s", clusterID)
+	}
+
+	subnetID := subnetInfo.Subnets[0].SubnetId
+	e2e.Logf("The subnet id is %s .", *subnetID)
+	return *subnetID, err
+}
+
 // GetAwsIntIPs get aws int ip
 func (a *AwsClient) GetAwsIntIPs(instanceID string) (map[string]string, error) {
 	filters := []*ec2.Filter{

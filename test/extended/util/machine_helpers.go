@@ -166,6 +166,27 @@ func ListMasterMachineNames(oc *CLI) []string {
 	return strings.Split(machineNames, " ")
 }
 
+// ListNonOutpostWorkerNodes lists all public nodes in the aws outposts mixed cluster
+func ListNonOutpostWorkerNodes(oc *CLI) []string {
+	e2e.Logf("Listing all regular nodes ...")
+	var nodeNames []string
+	var regularNodes []string
+	nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if nodes == "" {
+		g.Skip("Skip this test scenario because there are no worker nodes in this cluster")
+	}
+	nodeNames = strings.Split(nodes, " ")
+	for _, node := range nodeNames {
+		nodeLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(nodeLabels, "topology.ebs.csi.aws.com/outpost-id") {
+			regularNodes = append(regularNodes, node)
+		}
+	}
+	return regularNodes
+}
+
 // GetMachineNamesFromMachineSet get all Machines in a Machineset
 func GetMachineNamesFromMachineSet(oc *CLI, machineSetName string) []string {
 	e2e.Logf("Getting all Machines in a Machineset ...")
@@ -644,6 +665,18 @@ func IsAwsOutpostCluster(oc *CLI) bool {
 func SkipForAwsOutpostCluster(oc *CLI) {
 	if IsAwsOutpostCluster(oc) {
 		g.Skip("Skip for Aws Outpost cluster.")
+	}
+}
+
+// IsAwsOutpostMixedCluster check whether the cluster is aws outpost mixed workers cluster
+func IsAwsOutpostMixedCluster(oc *CLI) bool {
+	return IsAwsOutpostCluster(oc) && len(ListNonOutpostWorkerNodes(oc)) > 0
+}
+
+// SkipForNotAwsOutpostMixedCluster skip for not Aws Outpost Mixed cluster
+func SkipForNotAwsOutpostMixedCluster(oc *CLI) {
+	if !IsAwsOutpostMixedCluster(oc) {
+		g.Skip("Skip for not Aws Outpost Mixed cluster.")
 	}
 }
 
