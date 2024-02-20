@@ -1069,7 +1069,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-44909 [CSI-Driver] Volume should mount again after `oc adm drain`
 	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44909-[CSI-Driver] Volume should mount again after `oc adm drain` [Disruptive]", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "filestore.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir                   = exutil.FixturePath("testdata", "storage")
@@ -1086,7 +1086,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: The test cluster is 3 nodes compact cluster not satisfy the test requirement!!")
 		}
 
-		var nonZonedProvisioners = []string{"file.csi.azure.com", "efs.csi.aws.com"}
+		var nonZonedProvisioners = []string{"file.csi.azure.com", "efs.csi.aws.com", "filestore.csi.storage.gke.io"}
 		if len(schedulableWorkersWithSameAz) == 0 {
 			e2e.Logf("The test cluster has less than two schedulable workers in each available zone, check whether there is non-zoned provisioner")
 			if len(sliceIntersect(nonZonedProvisioners, supportProvisioners)) != 0 {
