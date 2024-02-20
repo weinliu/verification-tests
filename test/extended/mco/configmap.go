@@ -3,10 +3,11 @@ package mco
 import (
 	"fmt"
 
+	"encoding/json"
+
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
-	"github.com/tidwall/gjson"
 )
 
 // ConfigMap struct encapsulates the functionalities regarding ocp configmaps
@@ -62,11 +63,9 @@ func (cm *ConfigMap) GetDataMap() (map[string]string, error) {
 		return nil, err
 	}
 
-	parsedData := gjson.Parse(dataJSON)
-	parsedData.ForEach(func(key, value gjson.Result) bool {
-		data[key.String()] = value.String()
-		return true // keep iterating
-	})
+	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
+		return nil, err
+	}
 
 	return data, nil
 }

@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 const (
@@ -284,7 +287,60 @@ func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
 	return NewMachineSet(ms.oc, ms.GetNamespace(), newName), nil
 }
 
-// GetAll returns a []node list with all existing nodes
+// SetCoreOsBootImage sets the value of the configured coreos boot image
+func (ms MachineSet) SetCoreOsBootImage(coreosBootImage string) error {
+	// the coreOs boot image is stored differently in the machineset spec depending on the platform
+	// currently we only support testing the coresOs boot image in GCP platform.
+	patchCoreOsBootImagePath := ""
+	switch p := exutil.CheckPlatform(ms.oc); p {
+	case "gcp":
+		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/disks/0/image"
+	default:
+		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP infrastructure")
+	}
+
+	return ms.Patch("json", fmt.Sprintf(`[{"op": "add", "path": "%s", "value": "%s"}]`,
+		patchCoreOsBootImagePath, coreosBootImage))
+}
+
+// GetArchitecture returns the architecture configured for this Machineset
+func (ms MachineSet) GetArchitecture() (*architecture.Architecture, error) {
+	labeledArch, err := ms.Get(`{.metadata.annotations.capacity\.cluster-autoscaler\.kubernetes\.io/labels}`)
+	if err != nil {
+		return nil, err
+	}
+
+	expectedFormat := "kubernetes.io/arch="
+	if !strings.Contains(labeledArch, "kubernetes.io/arch=") {
+		return nil, fmt.Errorf("The annotated architecture is not in the expected format. Annotation: %s. Expected format: %s${ARCH}",
+			labeledArch, expectedFormat)
+	}
+
+	return PtrTo(architecture.FromString(strings.Split(labeledArch, "kubernetes.io/arch=")[1])), nil
+}
+
+func (ms MachineSet) GetArchitectureOrFail() *architecture.Architecture {
+	arch, err := ms.GetArchitecture()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting the annotated architecture in %s", ms)
+	return arch
+}
+
+// GetCoreOsBootImage returns
+func (ms MachineSet) GetCoreOsBootImage() (string, error) {
+	// the coreOs boot image is stored differently in the machineset spec depending on the platform
+	// currently we only support testing the coresOs boot image in GCP platform.
+	coreOsBootImagePath := ""
+	switch p := exutil.CheckPlatform(ms.oc); p {
+	case "gcp":
+		coreOsBootImagePath = `{.spec.template.spec.providerSpec.value.disks[0].image}`
+	default:
+		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP infrastructure")
+	}
+
+	return ms.Get(coreOsBootImagePath)
+}
+
+// GetAll returns a []MachineSet list with all existing machinesets
 func (msl *MachineSetList) GetAll() ([]MachineSet, error) {
 	allMSResources, err := msl.ResourceList.GetAll()
 	if err != nil {
@@ -297,6 +353,14 @@ func (msl *MachineSetList) GetAll() ([]MachineSet, error) {
 	}
 
 	return allMS, nil
+}
+
+// GetAllOrFail returns a []Machineset list with all existing machinesets and fail the test if it is not possible
+func (msl *MachineSetList) GetAllOrFail() []MachineSet {
+	allMs, err := msl.GetAll()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting the list of existing MachineSets")
+
+	return allMs
 }
 
 // msDuplicatedSecretChanges struct with all values that will be changed in a duplicated machinset secret

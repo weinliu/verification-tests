@@ -3,10 +3,13 @@ package mco
 import (
 	"fmt"
 
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	"github.com/tidwall/gjson"
 )
 
 const (
@@ -378,6 +381,43 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-71611-ManagedBootImages on GCP. Restore MachineSet image[Disruptive]", func() {
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
+		skipIfNoTechPreview(oc)
+
+		var (
+			fakeImageName      = "fake-coreos-bootimage-name"
+			coreosBootimagesCM = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "coreos-bootimages")
+			machineSet         = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
+		)
+
+		exutil.By("Check that the MachineSet is using the coreos boot image configured in coreos-bootimage configmap")
+		currentCoreOsBootImage, err := getCoreOsBootImageFromConfigMap(exutil.CheckPlatform(oc), *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
+		logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the currently configured coreos boot image")
+		o.Expect(currentCoreOsBootImage).NotTo(o.BeEmpty(),
+			"Could not get the current coreos boot image configured in the coreos-bootimage configmap")
+
+		initialMSCoreOsBootImage, err := machineSet.GetCoreOsBootImage()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the coreos boot image configured in %s", machineSet)
+		o.Expect(initialMSCoreOsBootImage).To(o.ContainSubstring(currentCoreOsBootImage),
+			"The machineset should use the coreos boot image configured in the coreos-bootimage configmap. %s", machineSet.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Patch coreos boot image in MachineSet")
+		defer machineSet.SetCoreOsBootImage(initialMSCoreOsBootImage)
+		o.Expect(machineSet.SetCoreOsBootImage(fakeImageName)).To(o.Succeed(),
+			"Error patching the value of the coreos boot image in %s", machineSet)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the MCO controller detected the misconfiguration and fixes it")
+		o.Eventually(machineSet.GetCoreOsBootImage, "3m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
+			"The machineset should be fixed by MCC and use the coreos boot image configured in the coreos-bootimage configmap. %s", machineSet.PrettyString())
+		logger.Infof("OK!\n")
+	})
 })
 
 func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2 bool) *MachineSet {
@@ -453,4 +493,30 @@ func removeClonedMachineSet(ms *MachineSet, wMcp *MachineConfigPool, expectedNum
 		o.Expect(clonedSecret.Delete()).To(o.Succeed(),
 			"Error deleting  %s", ms.GetName())
 	}
+}
+
+// getCoreOsBootImageFromConfigMap look for the configured coreOs boot image in given configmap
+func getCoreOsBootImageFromConfigMap(platform string, arch architecture.Architecture, coreosBootimagesCM *ConfigMap) (string, error) {
+	stringArch := ""
+	switch arch {
+	case architecture.AMD64:
+		stringArch = "x86_64"
+	case architecture.ARM64:
+		stringArch = "aarch64"
+	}
+
+	logger.Infof("Looking for coreos boot image for architecture %s in %s", stringArch, coreosBootimagesCM)
+
+	streamJSON, err := coreosBootimagesCM.GetDataValue("stream")
+	if err != nil {
+		return "", err
+	}
+	parsedStream := gjson.Parse(streamJSON)
+	currentCoreOsBootImage := parsedStream.Get(fmt.Sprintf(`architectures.%s.images.%s.name`, stringArch, platform)).String()
+
+	if currentCoreOsBootImage == "" {
+		logger.Warnf("The coreos boot image for architecture %s in %s IS EMPTY", stringArch, coreosBootimagesCM)
+	}
+
+	return currentCoreOsBootImage, nil
 }

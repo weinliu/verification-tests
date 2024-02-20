@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -776,6 +775,11 @@ func PtrStr(a string) *string {
 	return &a
 }
 
+// PtrTo returns the pointer to the element passed as parameter
+func PtrTo[T any](v T) *T {
+	return &v
+}
+
 // RemoveAllMCOPods removes all MCO pods in openshift-machine-config-operator namespace
 func RemoveAllMCOPods(oc *exutil.CLI) error {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", MachineConfigNamespace, "--all").Execute()
@@ -924,11 +928,9 @@ func GetDataFromConfigMap(oc *exutil.CLI, namespace, name string) (map[string]st
 		return nil, err
 	}
 
-	parsedData := gjson.Parse(dataJSON)
-	parsedData.ForEach(func(key, value gjson.Result) bool {
-		data[key.String()] = value.String()
-		return true // keep iterating
-	})
+	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
+		return nil, err
+	}
 
 	return data, nil
 }
@@ -1165,4 +1167,10 @@ func CloneResource(res *Resource, newName, newNamespace string) (*Resource, erro
 	}
 
 	return NewNamespacedResource(res.oc, res.GetKind(), newNamespace, newName), nil
+}
+
+func skipIfNoTechPreview(oc *exutil.CLI) {
+	if !exutil.IsTechPreviewNoUpgrade(oc) {
+		g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
+	}
 }
