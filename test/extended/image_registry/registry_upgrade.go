@@ -2,13 +2,16 @@ package imageregistry
 
 import (
 	"context"
+	"os"
 	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -231,5 +234,147 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		err := waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: wewang@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-VMonly-PreChkUpgrade-Author:wewang-High-71533-Upgrade cluster with pull Internal Registry custom images successfully prepare[Disruptive]", func() {
+		var (
+			podmanCLI       = container.NewPodmanCLI()
+			ns              = "71533-upgrade-ns"
+			expectedStatus1 = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		)
+		containerCLI := podmanCLI
+		oriImage := "quay.io/openshifttest/ociimage:multiarch"
+
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("set default route of registry")
+		defroute, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(defroute, "No resources found") {
+			defer func() {
+				restoreRouteExposeRegistry(oc)
+				err := waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+
+			createRouteExposeRegistry(oc)
+			err = waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		regRoute := getRegistryDefaultRoute(oc)
+		waitRouteReady(regRoute)
+
+		g.By("get authfile")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(authFile)
+
+		g.By("podman tag an image")
+		output, err := containerCLI.Run("pull").Args(oriImage, "--tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf(output)
+		}
+		out := regRoute + "/" + ns + "/myimage:latest"
+		output, err = containerCLI.Run("tag").Args(oriImage, out).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf(output)
+		}
+
+		g.By(" Push the image to internal registry")
+		output, err = containerCLI.Run("push").Args(out, "--authfile="+authFile, "--tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf(output)
+		}
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
+		containerCLI.RemoveImage(out)
+
+		g.By("Pull the image from internal registry")
+		output, err = containerCLI.Run("pull").Args(out, "--authfile="+authFile, "--tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf(output)
+		}
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
+
+		g.By("Check the image is in local")
+		defer containerCLI.RemoveImage(out)
+		output, err = containerCLI.Run("images").Args("-n").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(strings.Replace(out, ":latest", "", -1)))
+	})
+
+	// author: wewang@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-VMonly-PstChkUpgrade-Author:wewang-Critical-71533-Upgrade cluster with pull Internal Registry custom images successfully after upgrade[Disruptive]", func() {
+		var (
+			podmanCLI       = container.NewPodmanCLI()
+			ns              = "71533-upgrade-ns"
+			expectedStatus1 = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		)
+		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), "71533-upgrade-ns", metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				g.Skip("The project 71533-upgrade-ns is not found, skip test")
+			} else {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns, "--ignore-not-found").Execute()
+		containerCLI := podmanCLI
+
+		g.By("set default route of registry")
+		defroute, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(defroute, "No resources found") {
+			defer func() {
+				restoreRouteExposeRegistry(oc)
+				err := waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+
+			createRouteExposeRegistry(oc)
+			err = waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		regRoute := getRegistryDefaultRoute(oc)
+		waitRouteReady(regRoute)
+
+		g.By("get authfile")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(authFile)
+
+		g.By(" Pull existed images from internal registry")
+		out := regRoute + "/" + ns + "/myimage:latest"
+		output, err := containerCLI.Run("pull").Args(out, "--authfile="+authFile, "--tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf(output)
+		}
+		g.By("Check the image is in local")
+		defer containerCLI.RemoveImage(out)
+		output, err = containerCLI.Run("images").Args("-n").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(strings.Replace(out, ":latest", "", -1)))
 	})
 })
