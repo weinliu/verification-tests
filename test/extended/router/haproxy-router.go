@@ -1104,13 +1104,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 				name:      "ocp50405two",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
-				httpport:  10090,
-				httpsport: 11433,
-				statsport: 12936,
+				httpport:  11080,
+				httpsport: 11443,
+				statsport: 11936,
 				template:  customTemp,
 			}
 			ingctrlResource1 = "ingresscontrollers/" + ingctrlhp1.name
 			ingctrlResource2 = "ingresscontrollers/" + ingctrlhp2.name
+			ns               = "openshift-ingress"
 		)
 
 		exutil.By("Pre-flight check for the platform type and number of worker nodes in the environment")
@@ -1128,13 +1129,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		}
 		workerNodeCount, _ := exactNodeDetails(oc)
 		if workerNodeCount < 1 {
-			g.Skip("Skipping as we atleast need  one worker node")
+			g.Skip("Skipping as we at least need one worker node")
 		}
 
-		exutil.By("Collect  nodename of one of the default haproxy pods")
-		defNodeName := getRouterNodeName(oc, "default")
-		nodeHostName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", defNodeName, "-n", ingctrlhp1.namespace, "-o=jsonpath={.metadata.labels.kubernetes\\.io/hostname}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Collect nodename of one of the default haproxy pods")
+		defRouterPod := getRouterPod(oc, "default")
+		defNodeName := getNodeNameByPod(oc, ns, defRouterPod)
 
 		exutil.By("Create two custom ingresscontrollers")
 		baseDomain := getBaseDomain(oc)
@@ -1150,8 +1150,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ensureRouterDeployGenerationIs(oc, ingctrlhp2.name, "1")
 
 		exutil.By("Patch the two custom ingress-controllers with nodePlacement")
-		patchSelectNode := "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"kubernetes.io/hostname\": \"" + nodeHostName + "\"}}}}}"
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource1, "-p", patchSelectNode, "--type=merge", "-n", ingctrlhp1.namespace).Execute()
+		patchSelectNode := "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"kubernetes.io/hostname\": \"" + defNodeName + "\"}}}}}"
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource1, "-p", patchSelectNode, "--type=merge", "-n", ingctrlhp1.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource2, "-p", patchSelectNode, "--type=merge", "-n", ingctrlhp2.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1159,15 +1159,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ensureRouterDeployGenerationIs(oc, ingctrlhp2.name, "2")
 
 		exutil.By("Check the node names on which the route pods of the custom ingress-controllers reside on")
-		routerNodeName1 := getRouterNodeName(oc, ingctrlhp1.name)
-		routerNodeName2 := getRouterNodeName(oc, ingctrlhp2.name)
+		routerPod1 := getNewRouterPod(oc, ingctrlhp1.name)
+		routerPod2 := getNewRouterPod(oc, ingctrlhp2.name)
+		routerNodeName1 := getNodeNameByPod(oc, ns, routerPod1)
+		routerNodeName2 := getNodeNameByPod(oc, ns, routerPod2)
 		o.Expect(defNodeName).Should(o.And(
 			o.ContainSubstring(routerNodeName1),
 			o.ContainSubstring(routerNodeName2)))
 
 		exutil.By("Verify the http/https/statsport of the custom proxy pod")
-		customRouterPod := getRouterPod(oc, ingctrlhp1.name)
-		checkPodEnv := describePodResource(oc, customRouterPod, "openshift-ingress")
+		checkPodEnv := describePodResource(oc, routerPod1, "openshift-ingress")
 		o.Expect(checkPodEnv).Should(o.And(
 			o.ContainSubstring("ROUTER_SERVICE_HTTPS_PORT:                 10443"),
 			o.ContainSubstring("ROUTER_SERVICE_HTTP_PORT:                  10080"),

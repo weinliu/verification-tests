@@ -367,13 +367,11 @@ func fetchJSONPathValue(oc *exutil.CLI, ns, resource, searchline string) string 
 	return searchLine
 }
 
-// For collecting nodename on which the haproxy pod resides:
-func getRouterNodeName(oc *exutil.CLI, icname string) string {
-	podName := getNewRouterPod(oc, icname)
-	e2e.Logf("The podname   is :%v", podName)
-	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", podName, "-o=jsonpath={.spec.nodeName}", "-n", "openshift-ingress").Output()
-	e2e.Logf("The router residing  node  is :%s", nodeName)
+// getNodeNameByPod gets the pod located node's name
+func getNodeNameByPod(oc *exutil.CLI, namespace string, podName string) string {
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.spec.nodeName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The nodename for pod %s in namespace %s is %s", podName, namespace, nodeName)
 	return nodeName
 }
 
