@@ -3,6 +3,7 @@ package hypershift
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -10,6 +11,8 @@ import (
 
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
+
+	clientv3 "go.etcd.io/etcd/client/v3"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -1082,4 +1085,53 @@ func (h *hostedCluster) pollCheckIDPConfigReady(idpType IdentityProviderType, id
 	return func() bool {
 		return h.checkIDPConfigReady(idpType, idpName, secretName)
 	}
+}
+
+type etcdEndpointStatusResult []struct {
+	Endpoint string                   `json:"Endpoint"`
+	Status   *clientv3.StatusResponse `json:"Status"`
+}
+
+// getEtcdEndpointStatus gets status of the passed-in endpoints of the hosted cluster's ETCD.
+// Omit the endpoints parameter to get status of all endpoints.
+func (h *hostedCluster) getEtcdEndpointStatus(endpoints ...string) (etcdEndpointStatusResult, error) {
+	var etcdEndpointStatusCmd string
+	if len(endpoints) == 0 {
+		etcdEndpointStatusCmd = etcdCmdPrefixForHostedCluster + " --endpoints " + etcdLocalClientReqEndpoint + " endpoint status --cluster -w json"
+	} else {
+		etcdEndpointStatusCmd = etcdCmdPrefixForHostedCluster + " --endpoints " + strings.Join(endpoints, ",") + " endpoint status -w json"
+	}
+	endpointStatus := doOcpReq(h.oc, OcpExec, true, "-n", h.getHostedComponentNamespace(), "etcd-0", "-c", "etcd", "--", "bash", "-c", etcdEndpointStatusCmd)
+	e2e.Logf("Etcd endpoint status response = %s", endpointStatus)
+
+	var res etcdEndpointStatusResult
+	if err := json.Unmarshal([]byte(endpointStatus), &res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// getEtcdEndpointDbStatsByIdx gets DB status of an ETCD endpoint
+func (h *hostedCluster) getEtcdEndpointDbStatsByIdx(idx int) (dbSize, dbSizeInUse int64, dbFragRatio float64, err error) {
+	var localEtcdEndpointStatus etcdEndpointStatusResult
+	etcdEndpoint := h.getEtcdDiscoveryEndpointForClientReqByIdx(idx)
+	if localEtcdEndpointStatus, err = h.getEtcdEndpointStatus(etcdEndpoint); err != nil {
+		return -1, -1, 0, fmt.Errorf("error querying local ETCD endpoint status: %w", err)
+	}
+
+	dbSize, dbSizeInUse = localEtcdEndpointStatus[0].Status.DbSize, localEtcdEndpointStatus[0].Status.DbSizeInUse
+	if dbSize == 0 {
+		return -1, -1, 0, errors.New("zero dbSize obtained from ETCD server's response")
+	}
+	if dbSizeInUse == 0 {
+		return -1, -1, 0, errors.New("zero dbSizeInUse obtained from ETCD server's response")
+	}
+	fragRatio := float64(dbSize-dbSizeInUse) / float64(dbSize)
+	e2e.Logf("Found ETCD endpoint %s: dbSize = %d, dbSizeInUse = %d, fragmentation ratio = %.2f", etcdEndpoint, dbSize, dbSizeInUse, fragRatio)
+	return dbSize, dbSizeInUse, fragRatio, nil
+}
+
+func (h *hostedCluster) getEtcdDiscoveryEndpointForClientReqByIdx(idx int) string {
+	hcpNs := h.getHostedComponentNamespace()
+	return fmt.Sprintf("etcd-%d.%s.%s.svc:%s", idx, etcdDiscoverySvcNameForHostedCluster, hcpNs, etcdClientReqPort)
 }

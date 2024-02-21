@@ -182,6 +182,14 @@ const (
 	hcRequestServingTopologyAnnotation = hcTopologyAnnotationKey + "=dedicated-request-serving-components"
 )
 
+// etcd
+const (
+	etcdCmdPrefixForHostedCluster        = "ETCDCTL_API=3 etcdctl --cacert /etc/etcd/tls/etcd-ca/ca.crt --cert /etc/etcd/tls/client/etcd-client.crt --key /etc/etcd/tls/client/etcd-client.key"
+	etcdDiscoverySvcNameForHostedCluster = "etcd-discovery"
+	etcdClientReqPort                    = "2379"
+	etcdLocalClientReqEndpoint           = "localhost:" + etcdClientReqPort
+)
+
 type K8SResource string
 
 const (

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -1674,5 +1675,138 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		})
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(len(nodeList.Items)).To(o.Equal(npNumReplicas))
+	})
+
+	/*
+		The DB size across all ETCD members is assumed to be (eventually) close to each other.
+		We will only consider one ETCD member for simplicity.
+
+		The creation of a large number of resources on the hosted cluster makes this test case:
+		- disruptive
+		- **suitable for running on a server** (as opposed to running locally)
+
+		Test run duration: ~30min
+	*/
+	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:fxie-Critical-70974-Test Hosted Cluster etcd automatic defragmentation [Disruptive]", func() {
+		if !hostedcluster.isCPHighlyAvailable() {
+			g.Skip("This test case runs against a hosted cluster with highly available control plane, skipping")
+		}
+
+		var (
+			testCaseId            = "70974"
+			resourceNamePrefix    = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
+			tmpDir                = path.Join("/tmp", "hypershift", resourceNamePrefix)
+			hcpNs                 = hostedcluster.getHostedComponentNamespace()
+			cmNamePrefix          = fmt.Sprintf("%s-cm", resourceNamePrefix)
+			cmIdx                 = 0
+			cmBatchSize           = 500
+			cmData                = strings.Repeat("a", 100_000)
+			cmNs                  = "default"
+			etcdDefragThreshold   = 0.45
+			etcdDefragMargin      = 0.05
+			etcdDbSwellingRate    = 4
+			etcdDbContractionRate = 2
+			testEtcdEndpointIdx   = 0
+		)
+
+		var (
+			getCM = func() string {
+				cmIdx++
+				return fmt.Sprintf(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: %s-%03d
+  namespace: %s
+  labels:
+    foo: bar
+data:
+  foo: %s
+---
+`, cmNamePrefix, cmIdx, cmNs, cmData)
+			}
+		)
+
+		exutil.By("Creating temporary directory")
+		err := os.MkdirAll(tmpDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			err = os.RemoveAll(tmpDir)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("Making sure the (hosted) control plane is highly available by checking the number of etcd Pods")
+		etcdPodCountStr := doOcpReq(oc, OcpGet, true, "sts", "etcd", "-n", hcpNs, "-o=jsonpath={.spec.replicas}")
+		o.Expect(strconv.Atoi(etcdPodCountStr)).To(o.BeNumerically(">", 1), "Expect >1 etcd Pods")
+
+		exutil.By("Getting DB size of an ETCD member")
+		_, dbSizeInUse, _, err := hostedcluster.getEtcdEndpointDbStatsByIdx(testEtcdEndpointIdx)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		targetDbSize := dbSizeInUse * int64(etcdDbSwellingRate)
+		e2e.Logf("Found initial ETCD member DB size in use = %d, target ETCD member DB size = %d", dbSizeInUse, targetDbSize)
+
+		exutil.By("Creating ConfigMaps on the guest cluster until the ETCD member DB size is large enough")
+		var dbSizeBeforeDefrag int64
+		defer func() {
+			_, err = oc.AsGuestKubeconf().Run("delete").Args("cm", "-n=default", "-l=foo=bar", "--ignore-not-found").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		o.Eventually(func() (done bool) {
+			// Check ETCD endpoint for DB size
+			dbSizeBeforeDefrag, _, _, err = hostedcluster.getEtcdEndpointDbStatsByIdx(testEtcdEndpointIdx)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if dbSizeBeforeDefrag >= targetDbSize {
+				return true
+			}
+
+			// Create temporary file
+			f, err := os.CreateTemp(tmpDir, "ConfigMaps")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer func() {
+				if err = f.Close(); err != nil {
+					e2e.Logf("Error closing file %s: %v", f.Name(), err)
+				}
+				if err = os.Remove(f.Name()); err != nil {
+					e2e.Logf("Error removing file %s: %v", f.Name(), err)
+				}
+			}()
+
+			// Write resources to file.
+			// For a batch size of 500, the resources will occupy a bit more than 50 MB of space.
+			for i := 0; i < cmBatchSize; i++ {
+				_, err = f.WriteString(getCM())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			err = f.Sync()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			fs, err := f.Stat()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("File size = %d", fs.Size())
+
+			// Create all the resources on the guest cluster
+			// Omit countless lines of "XXX created" output
+			_, err = oc.AsGuestKubeconf().Run("create").Args("-f", f.Name()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return false
+		}).WithTimeout(LongTimeout).WithPolling(LongTimeout / 10).Should(o.BeTrue())
+
+		exutil.By("Deleting all ConfigMaps")
+		_, err = oc.AsGuestKubeconf().Run("delete").Args("cm", "-n=default", "-l=foo=bar").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Waiting until the fragmentation ratio is above threshold+margin")
+		o.Eventually(func() (done bool) {
+			_, _, dbFragRatio, err := hostedcluster.getEtcdEndpointDbStatsByIdx(testEtcdEndpointIdx)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return dbFragRatio > etcdDefragThreshold+etcdDefragMargin
+		}).WithTimeout(LongTimeout).WithPolling(LongTimeout / 10).Should(o.BeTrue())
+
+		exutil.By("Waiting until defragmentation is done which causes DB size to decrease")
+		o.Eventually(func() (done bool) {
+			dbSize, _, _, err := hostedcluster.getEtcdEndpointDbStatsByIdx(testEtcdEndpointIdx)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return dbSize < dbSizeBeforeDefrag/int64(etcdDbContractionRate)
+		}).WithTimeout(DoubleLongTimeout).WithPolling(LongTimeout / 10).Should(o.BeTrue())
+		_, err = exutil.WaitAndGetSpecificPodLogs(oc, hcpNs, "etcd", "etcd-0", "defrag")
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })
