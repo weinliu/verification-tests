@@ -1256,7 +1256,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-Critical-65901-Duplicate transactions should not be executed for network policy for every pod update.", func() {
+	g.It("NonHyperShiftHOST-Author:asood-Critical-65901-Duplicate transactions should not be executed for network policy for every pod update.", func() {
 		// Customer https://issues.redhat.com/browse/OCPBUGS-4659
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1600,7 +1600,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-67785-No retry delete failed message in OVNK master log when trying to delete pending bad pod using peerPodSelector.", func() {
+	g.It("NonHyperShiftHOST-Author:jechen-High-67785-No retry delete failed message in OVNK master log when trying to delete pending bad pod using peerPodSelector.", func() {
 
 		// This test case is created for OCPBUGS-19449
 
