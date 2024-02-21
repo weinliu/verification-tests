@@ -38,12 +38,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
+			eoSource := CatalogSourceObjects{
+				Channel: "stable",
+			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     eoNS,
 				PackageName:   "elasticsearch-operator",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+				CatalogSource: eoSource,
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -428,6 +432,86 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Critical-47060-All node logs have been sent to Elasticsearch[Serial]", func() {
+			g.By("Create ClusterLogging instance with Vector as collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				waitForReady:  true,
+				esNodeCount:   1,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "infra")
+			collectorPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			var nodeNames []string
+			for _, pod := range collectorPods.Items {
+				nodeNames = append(nodeNames, pod.Spec.NodeName)
+			}
+
+			g.By("check container logs")
+			queryContainerLog := "_search?size=0 -d'{\"aggs\": {\"logging_aggregations\": {\"filter\": {\"exists\": {\"field\":\"kubernetes\"}},\"aggs\": {\"inner_aggregations\": {\"terms\": {\"field\" : \"hostname\"}}}}}}'"
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+				aggRes, err := queryInES(cl.namespace, esPods.Items[0].Name, queryContainerLog)
+				if err != nil {
+					return false, err
+				}
+				containerBuckets := aggRes.Aggregations.LoggingAggregations.InnerAggregations.Buckets
+				if aggRes.Hits.Total <= 0 || len(containerBuckets) != len(collectorPods.Items) {
+					return false, nil
+				}
+				for _, node := range nodeNames {
+					if !containSubstring(containerBuckets, node) {
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Not all nodes' container logs have been sent to ES")
+
+			g.By("check journal logs")
+			queryJournalLog := "_search?size=0 -d'{\"aggs\": {\"logging_aggregations\": {\"filter\": {\"exists\": {\"field\":\"systemd\"}},\"aggs\": {\"inner_aggregations\": {\"terms\": {\"field\" : \"hostname\"}}}}}}'"
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+				journalLog, err := queryInES(cl.namespace, esPods.Items[0].Name, queryJournalLog)
+				if err != nil {
+					return false, err
+				}
+				if journalLog.Hits.Total <= 0 {
+					return false, nil
+				}
+				journalBuckets := journalLog.Aggregations.LoggingAggregations.InnerAggregations.Buckets
+				if len(journalBuckets) == 0 {
+					return false, nil
+				}
+				// In AWS, the hostname in journal logs is not the same as the node name
+				if exutil.CheckPlatform(oc) == "aws" {
+					for _, bu := range journalBuckets {
+						if !containSubstring(nodeNames, bu.Key) {
+							return false, nil
+						}
+					}
+				} else {
+					for _, node := range nodeNames {
+						if !containSubstring(journalBuckets, node) {
+							return false, nil
+						}
+					}
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Not all nodes' journal logs have been sent to ES")
+		})
+
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-47061-Vector: Container logs collection and metadata check.[Serial]", func() {
 			app := oc.Namespace()
@@ -542,12 +626,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
+			eoSource := CatalogSourceObjects{
+				Channel: "stable",
+			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     eoNS,
 				PackageName:   "elasticsearch-operator",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+				CatalogSource: eoSource,
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -1519,17 +1607,435 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
+			eoSource := CatalogSourceObjects{
+				Channel: "stable",
+			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     eoNS,
 				PackageName:   "elasticsearch-operator",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+				CatalogSource: eoSource,
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
 			oc.SetupProject()
 		})
+
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-52128-Vector Send JSON logs from containers in the same pod to separate indices -- outputDefaults[Serial][Slow]", func() {
+			app := oc.Namespace()
+			containerName := "log-52128-" + getRandomString()
+			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("create clusterlogforwarder/instance")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true")
+
+			// create clusterlogging instance
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-0")
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-1")
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "app-"+app)
+
+			queryContainerLog := func(container string) string {
+				return "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \"" + container + "\"}}}"
+			}
+
+			// in index $containerName-0, only logs in container $containerName-0 are stored in it, and json logs are parsed
+			log0 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-0", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log0.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log0.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log01 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-0", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log01.Hits.DataHits) == 0).To(o.BeTrue())
+			log02 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-0", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log02.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index $containerName-1, only logs in container $containerName-1 are stored in it, and json logs are parsed
+			log1 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-1", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log1.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log10 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-1", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log10.Hits.DataHits) == 0).To(o.BeTrue())
+			log12 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName+"-1", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log12.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index app-$app-project, only logs in container $containerName-2 are stored in it, and json logs are parsed
+			log2 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+app, queryContainerLog(containerName+"-2"))
+			o.Expect(len(log2.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log20 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+app, queryContainerLog(containerName+"-0"))
+			o.Expect(len(log20.Hits.DataHits) == 0).To(o.BeTrue())
+			log21 := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+app, queryContainerLog(containerName+"-1"))
+			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
+
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-52129-Vector Send JSON logs from containers in the same pod to separate indices[Serial]", func() {
+			app := oc.Namespace()
+			containerName := "log-52129-" + getRandomString()
+			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			oc.SetupProject()
+			esProj := oc.Namespace()
+			ees := externalES{
+				namespace:  esProj,
+				version:    "7",
+				serverName: "external-es",
+				httpSSL:    true,
+				secretName: "json-log-52129",
+				loggingNS:  esProj,
+			}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
+
+			g.By("create clusterlogforwarder")
+			clf := clusterlogforwarder{
+				name:                   "clf-52129",
+				namespace:              esProj,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-logs.yaml"),
+				secretName:             ees.secretName,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true", "URL="+eesURL, "ES_VERSION="+ees.version)
+
+			g.By("check indices in externale ES")
+			ees.waitForIndexAppear(oc, containerName+"-0")
+			ees.waitForIndexAppear(oc, containerName+"-1")
+			ees.waitForIndexAppear(oc, "app-"+app)
+
+			queryContainerLog := func(container string) string {
+				return "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \"" + container + "\"}}}"
+			}
+
+			// in index app-$containerName-0, only logs in container $containerName-0 are stored in it, and json logs are parsed
+			log0 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log0.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log0.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log01 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log01.Hits.DataHits) == 0).To(o.BeTrue())
+			log02 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log02.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index app-$containerName-1, only logs in container $containerName-1 are stored in it, and json logs are parsed
+			log1 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log1.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log10 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log10.Hits.DataHits) == 0).To(o.BeTrue())
+			log12 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log12.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index app-$app-project, only logs in container $containerName-2 are stored in it, and json logs are parsed
+			log2 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-2"))
+			o.Expect(len(log2.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log20 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-0"))
+			o.Expect(len(log20.Hits.DataHits) == 0).To(o.BeTrue())
+			log21 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-1"))
+			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-52130-Vector JSON logs from containers in the same pod are not sent to separate indices when enableStructuredContainerLogs is false[Serial]", func() {
+			app := oc.Namespace()
+			containerName := "log-52130-" + getRandomString()
+			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("create clusterlogforwarder/instance")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=false")
+
+			// create clusterlogging instance
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "app-"+app)
+
+			indices, err := getESIndices(cl.namespace, esPods.Items[0].Name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, index := range indices {
+				o.Expect(index.Index).NotTo(o.ContainSubstring(containerName))
+			}
+
+			// logs in container-0, container-1 and contianer-2 are stored in index app-$app-project, and json logs are parsed
+			for _, container := range []string{containerName + "-0", containerName + "-1", containerName + "-2"} {
+				log := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app-"+app, "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \""+container+"\"}}}")
+				o.Expect(len(log.Hits.DataHits) > 0).To(o.BeTrue())
+				o.Expect(log.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			}
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation[Serial]", func() {
+			containerName := "log-52131-" + getRandomString()
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			app1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			oc.SetupProject()
+			app2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app2, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("create clusterlogforwarder/instance")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true")
+
+			// create clusterlogging instance
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "app-"+containerName)
+
+			g.By("check data in ES")
+			for _, proj := range []string{app1, app2} {
+				count, err := getDocCountByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName, "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj+"\"}}}")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(count > 0).To(o.BeTrue())
+			}
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-50517-High-51846-Vector Structured index by kubernetes.labels and send unmatched JSON logs to fallback index outputDefaults[Serial][Slow]", func() {
+
+			g.By("Create project1 for app logs and deploy the log generator app with test=centos-logtest-qa and run=centos-logtest-stage labels")
+			oc.SetupProject()
+			appProj1 := oc.Namespace()
+			jsonLogFileUnAnnoted := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template_unannoted.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"test\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-stage\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-stage", "-p", "CONFIGMAP=logtest-config-stage", "-p", "CONTAINER=logging-centos-stage", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create project2 for app logs and deploy the log generator app with test=centos-logtest-dev label")
+			oc.SetupProject()
+			appProj2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-p", "LABELS={\"test\": \"centos-logtest-dev\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-dev", "-p", "CONFIGMAP=logtest-config-dev", "-p", "CONTAINER=logging-centos-dev", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=true", "TYPE_KEY=kubernetes.labels.test", "TYPE_NAME=qa-fallback-index")
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			g.By("Check the indices in ES for structured logs")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "app-centos-logtest-qa-00")
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "app-centos-logtest-dev-00")
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "app-qa-fallback-index-00")
+
+			g.By("Check for logs with label test=centos-logtest-qa")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"test=centos-logtest-qa\"}}}"
+			logs := searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with test=centos-logtest-qa in logs not found in default ES index app-centos-logtest-qa-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-qa in logs are in app-centos-logtest-dev-00* index")
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-qa in logs are in app-qa-fallback-index-00* index")
+
+			g.By("Check for logs with label test=centos-logtest-dev")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"test=centos-logtest-dev\"}}}"
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with test=centos-logtest-dev in logs not found in default ES index app-centos-logtest-dev-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-dev in logs are in app-centos-logtest-qa-00* index")
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-dev in logs are in app-qa-fallback-index-00* index")
+
+			g.By("Unmatch logs with label run=centos-logtest-stage should be sent to app-qa-fallback index")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-stage\"}}}"
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with run=centos-logtest-stage in logs not found in default ES app-qa-fallback-index-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-qa-00* index")
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-dev-99* index")
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-50510-Vector Structured index by kubernetes.container_name outputDefaults[Serial][Slow]", func() {
+
+			g.By("Create project-qa for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			jsonLogFileUnAnnoted := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template_unannoted.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-p", "LABELS={\"test\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "STRUCTURED_CONTAINER=false", "TYPE_KEY=kubernetes.container_name", "TYPE_NAME=qa-index-name")
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			g.By("Check the indices in ES for structured logs")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "app-logging-centos-qa-00")
+
+			g.By("Check for logs with kubernetes.container_name=logging-centos-qa")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.container_name\": \"logging-centos-qa\"}}}"
+			logs := searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-logging-centos-qa-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Logs with container name logging-centos-qa not found in ES index app-logging-centos-qa-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-qa-index-name-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Logs with container name logging-centos-qa found in ES app-qa-index-name-00*")
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Logs with container name logging-centos-qa found in ES app-00")
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-51844-High-50511-Vector Structured index by kubernetes.namespace_name and default index outputDefaults[Serial][Slow]", func() {
+
+			g.By("Create project-qa for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			jsonLogFileUnAnnoted := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template_unannoted.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-p", "LABELS={\"test\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default-all-logs.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "PROJECT_NAME="+appProj, "STRUCTURED_CONTAINER=false", "TYPE_KEY=kubernetes.namespace_name", "TYPE_NAME=qa-index-name")
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "elasticsearch",
+				esNodeCount:   1,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			g.By("Check the indices in ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "app-"+appProj+"-00")
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "app-00")
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "infra-00")
+			waitForIndexAppear(cl.namespace, podList.Items[0].Name, "audit-00")
+
+			g.By("Check for logs with kubernetes.namespace_name " + appProj + "")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj + "\"}}}"
+			logs := searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-"+appProj+"-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Logs with namespace name "+appProj+" not found in ES index app-"+appProj+"-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-qa-index-name-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Logs with namespace name "+appProj+" found in ES app-qa-index-name-00*")
+			logs = searchDocByQuery(cl.namespace, podList.Items[0].Name, "app-00", checkLog)
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Logs with namespace name "+appProj+" not found in ES index app-00*")
+		})
+
 	})
 
 })

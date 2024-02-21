@@ -39,12 +39,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
+			eoSource := CatalogSourceObjects{
+				Channel: "stable",
+			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     eoNS,
 				PackageName:   "elasticsearch-operator",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+				CatalogSource: eoSource,
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -211,12 +215,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
+			eoSource := CatalogSourceObjects{
+				Channel: "stable",
+			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     eoNS,
 				PackageName:   "elasticsearch-operator",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+				CatalogSource: eoSource,
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
@@ -869,7 +877,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
-			g.By("deploy CLO and EO")
+			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     loggingNS,

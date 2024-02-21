@@ -15,7 +15,6 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
@@ -41,92 +40,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			}
+			eoSource := CatalogSourceObjects{
+				Channel: "stable",
+			}
 			EO := SubscriptionObjects{
 				OperatorName:  "elasticsearch-operator",
 				Namespace:     eoNS,
 				PackageName:   "elasticsearch-operator",
 				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+				CatalogSource: eoSource,
 			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
-		})
-
-		// author ikanse@redhat.com
-		g.It("CPaasrunOnly-Author:ikanse-Medium-43065-Drop log messages after explicit time[Serial][Slow]", func() {
-
-			g.By(" Create a Cluster Logging instance with Fluentd buffer retryTimeout set to 1 minute.")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			cl := clusterlogging{
-				name:             "instance",
-				namespace:        loggingNS,
-				collectorType:    "fluentd",
-				logStoreType:     "elasticsearch",
-				esNodeCount:      1,
-				storageClassName: sc,
-				waitForReady:     true,
-				templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-fluentd-buffer.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc, "REDUNDANCY_POLICY=ZeroRedundancy", "RETRY_TIMEOUT=1m")
-
-			g.By("Make sure the Elasticsearch cluster is healthy")
-			assertResourceStatus(oc, "clusterlogging", cl.name, cl.namespace, "{.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
-			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(cl.namespace, prePodList.Items[0].Name, "infra-00")
-
-			g.By("Set the Elasticsearch operator instance managementState to Unmanaged.")
-			cl.update(oc, "", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge")
-
-			g.By("Scale down the Elasticsearch deployment to 0.")
-			deployList := getDeploymentsNameByLabel(oc, cl.namespace, "component=elasticsearch")
-			for _, name := range deployList {
-				err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", name, "--replicas=0", "-n", cl.namespace).Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			WaitUntilPodsAreGone(oc, cl.namespace, "component=elasticsearch")
-
-			g.By("Create an instance of the logtest app")
-			oc.SetupProject()
-			appProj := oc.Namespace()
-			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-			cerr := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(cerr).NotTo(o.HaveOccurred())
-			waitForPodReadyWithLabel(oc, appProj, "run=centos-logtest")
-
-			g.By("Make sure the logtest app has generated logs")
-			appPodList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			pl := resource{"pods", appPodList.Items[0].Name, appProj}
-			assertResourceStatus(oc, "pod", appPodList.Items[0].Name, appProj, "{.status.phase}", "Running")
-			pl.checkLogsFromRs(oc, "foobar", "logging-centos-logtest")
-
-			g.By("Delete the logtest app namespace")
-			deleteNamespace(oc, appProj)
-
-			g.By("Wait for 3 minutes for logtest app logs to be discarded")
-			time.Sleep(180 * time.Second)
-
-			g.By("Scale back the elasticsearch deployment to 1 replica")
-			for _, name := range deployList {
-				err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", name, "--replicas=1", "-n", cl.namespace).Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				WaitForDeploymentPodsToBeReady(oc, cl.namespace, name)
-			}
-			WaitForECKPodsToBeReady(oc, cl.namespace)
-
-			g.By("Get the log count for logtest app namespace")
-			postPodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(cl.namespace, postPodList.Items[0].Name, "infra-00")
-			LogCount, err := getDocCountByQuery(cl.namespace, postPodList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProj+"\"}}}")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("Logcount for the logtest app in %s project is %d", appProj, LogCount)
-
-			g.By("Check if the logtest application logs are discarded")
-			o.Expect(LogCount == 0).To(o.BeTrue(), "The log count for the %s namespace should be 0", appProj)
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-40168-oc adm must-gather can collect logging data [Slow][Disruptive]", func() {
@@ -349,7 +275,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 	})
 })
-
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should", func() {
 	defer g.GinkgoRecover()
 
@@ -371,12 +296,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 		}
+		eoSource := CatalogSourceObjects{
+			Channel: "stable",
+		}
 		EO := SubscriptionObjects{
 			OperatorName:  "elasticsearch-operator",
 			Namespace:     eoNS,
 			PackageName:   "elasticsearch-operator",
 			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+			CatalogSource: eoSource,
 		}
 		CLO.SubscribeOperator(oc)
 		EO.SubscribeOperator(oc)
