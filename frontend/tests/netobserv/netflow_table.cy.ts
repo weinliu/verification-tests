@@ -436,7 +436,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
             })
         })
 
-        it("(OCP-60701, aramesha, Network_Observability)should verify connection tracking is disabled by default", function () {
+        it("(OCP-71787, aramesha, Network_Observability)should verify conversation tracking is disabled by default", function () {
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
             cy.get('#query-options-dropdown').click();
             cy.get('#recordType-allConnections').should('be.disabled')

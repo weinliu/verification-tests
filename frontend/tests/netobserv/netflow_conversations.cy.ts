@@ -2,7 +2,7 @@ import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, colSelectors, querySumSelectors } from "../../views/netflow-page"
 
-describe('(OCP-60701 Network_Observability) Connection tracking test', { tags: ['Network_Observability'] }, function () {
+describe('(OCP-71787 Network_Observability) Conversation tracking test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -28,21 +28,21 @@ describe('(OCP-60701 Network_Observability) Connection tracking test', { tags: [
         Operator.createFlowcollector(project, "Conversations")
     })
 
-    describe("Connection tracking netflow table page features", function () {
-        beforeEach('any connection tracking test', function () {
+    describe("Conversation tracking netflow table page features", function () {
+        beforeEach('any conversation tracking test', function () {
             netflowPage.visit()
             cy.get('#tabs-container li:nth-child(2)').click()
             cy.byTestID("table-composable").should('exist')
         })
 
-        it("(OCP-60701, aramesha, Network_Observability) should validate default conversation tracking columns", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-71787, aramesha, Network_Observability) should validate default conversation tracking columns", { tags: ['e2e', 'admin'] }, function () {
             cy.byTestID('table-composable').should('exist').within(() => {
                 cy.get(colSelectors.RecordType).should('exist')
                 cy.get(colSelectors.conversationID).should('exist')
             })
         })
 
-        it("(OCP-60701, aramesha, Network_Observability) should verify Query Summary panel", { tags: ['e2e', 'admin'] }, function () {
+        it("(OCP-71787, aramesha, Network_Observability) should verify Query Summary panel", { tags: ['e2e', 'admin'] }, function () {
             cy.get('#filter-toolbar-search-filters').contains('Query options').click();
             cy.get('#query-options-dropdown').click();
             cy.get('#recordType-allConnections').click()
