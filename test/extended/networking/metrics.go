@@ -231,10 +231,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
 			e2e.Logf("The output of the ovnkube_controller_ipsec_enabled metrics is : %v", metricValue)
-			if metricValue == "1" && ipsecState == "{}" {
+			if metricValue == "1" && (ipsecState == "{}" || ipsecState == "Full") {
 				e2e.Logf("The IPsec is enabled in the cluster")
 				return true, nil
-			} else if metricValue == "0" && ipsecState == "" {
+			} else if metricValue == "0" && (ipsecState == "Disabled" || ipsecState == "External") {
 				e2e.Logf("The IPsec is disabled in the cluster")
 				return true, nil
 			} else {
@@ -894,13 +894,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip testing on non-ovn cluster!!!")
 		}
 		ipsecState := checkIPsec(oc)
-		if ipsecState == "{}" {
-			g.Skip("Skip testing, ipsec enabled when cluster installed, cannot configure ipsec at runtime!!!")
+		if ipsecState == "{}" || ipsecState == "Full" || ipsecState == "External" {
+			g.Skip("Skip the testing in the ipsec enabled clusters!!!")
 		}
 
 		e2e.Logf("1. Enable IPsec at runtime")
 		defer configIPSecAtRuntime(oc, "disabled")
-		enableErr := configIPSecAtRuntime(oc, "enabled")
+		enableErr := configIPSecAtRuntime(oc, "full")
 		o.Expect(enableErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("2. Check metrics for IPsec enabled/disabled after enabling at runtime")

@@ -1220,7 +1220,8 @@ func getOVNMetrics(oc *exutil.CLI, url string) string {
 
 func checkIPsec(oc *exutil.CLI) string {
 	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig.mode}").Output()
-	if err != nil {
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if output == "" {
 		// if have {} in 4.15+, that means it upgraded from previous version and with ipsec enabled.
 		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2827,23 +2828,25 @@ func createSCTPserverOnNode(oc *exutil.CLI, pod_pmtrs map[string]string) (err er
 	return err
 }
 
-// configure IPSec at runtime
+// configure IPSec at runtime, targetStatus can be full/disabled/external
 func configIPSecAtRuntime(oc *exutil.CLI, targetStatus string) (err error) {
 	var targetConfig, currentStatus string
 	ipsecState := checkIPsec(oc)
-	if ipsecState == "{}" {
-		currentStatus = "enabled"
-	} else if ipsecState == "" {
+	if ipsecState == "{}" || ipsecState == "Full" {
+		currentStatus = "full"
+	} else if ipsecState == "Disabled" {
 		currentStatus = "disabled"
+	} else if ipsecState == "External" {
+		currentStatus = "external"
 	}
 	if currentStatus == targetStatus {
 		e2e.Logf("The IPSec is already in %v state", targetStatus)
 		return
-	} else if targetStatus == "enabled" {
+	} else if targetStatus == "full" {
 		//In 4.15+, enabling/disabling ipsec would require nodes restart
 		targetConfig = "true"
 		e2e.Logf("Start to enable ipsec.")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("networks.operator.openshift.io", "cluster", "-p", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipsecConfig\":{ }}}}}", "--type=merge").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("networks.operator.openshift.io", "cluster", "-p", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipsecConfig\":{\"mode\":\"Full\"}}}}}", "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Wait the MC applying getting started")
 		o.Eventually(func() error {
@@ -2864,12 +2867,14 @@ func configIPSecAtRuntime(oc *exutil.CLI, targetStatus string) (err error) {
 			}
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
+		ovnLeaderpod := getOVNKMasterOVNkubeNode(oc)
+		removeResource(oc, true, true, "pod", ovnLeaderpod, "-n", "openshift-ovn-kubernetes")
 		e2e.Logf("Wait ovnkube-node pods running in openshift-ovn-kubernetes")
 		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else if targetStatus == "disabled" {
 		targetConfig = "false"
-		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("networks.operator.openshift.io", "cluster", "-p", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipsecConfig\":null}}}}", "--type=merge").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("networks.operator.openshift.io", "cluster", "-p", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipsecConfig\":{\"mode\":\"Disabled\"}}}}}", "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Wait ovn-ipsec pods disappeared")
 		err = waitForPodWithLabelGone(oc, "openshift-ovn-kubernetes", "app=ovn-ipsec")
