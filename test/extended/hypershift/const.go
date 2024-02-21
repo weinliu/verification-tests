@@ -37,6 +37,8 @@ const (
 const (
 	HyperShiftResourceTagKeyPrefix = "kubernetes.io/cluster/"
 	HyperShiftResourceTagKeyValue  = "owned"
+	hypershiftNodePoolLabelKey     = "hypershift.openshift.io/nodePool"
+
 	SupportedPreviousMinorVersions = 2
 )
 
@@ -136,16 +138,29 @@ const (
 	HyperShiftExternalDNS           = "hypershift-ext.qe.devcluster.openshift.com"
 )
 
+// cluster infrastructure
 const (
 	machineAPINamespace      = "openshift-machine-api"
-	clusterAPINamespace      = "openshift-cluster-api"
-	machineApproverNamespace = "openshift-cluster-machine-approver"
 	mapiMachineset           = "machinesets.machine.openshift.io"
 	mapiMachine              = "machines.machine.openshift.io"
 	mapiMHC                  = "machinehealthchecks.machine.openshift.io"
-	capiMachineset           = "machinesets.cluster.x-k8s.io"
-	capiMachine              = "machines.cluster.x-k8s.io"
+	machineApproverNamespace = "openshift-cluster-machine-approver"
+
+	clusterAPINamespace        = "openshift-cluster-api"
+	capiMachineset             = "machinesets.cluster.x-k8s.io"
+	capiMachine                = "machines.cluster.x-k8s.io"
+	capiInfraGroup             = "infrastructure.cluster.x-k8s.io"
+	capiAwsMachineTemplateKind = "AWSMachineTemplate"
+
+	npInfraMachineTemplateAnnotationKey = "hypershift.openshift.io/nodePoolPlatformMachineTemplate"
+
+	nodeInstanceTypeLabelKey = "node.kubernetes.io/instance-type"
 )
+
+// Expected to be read-only
+var platform2InfraMachineTemplateKind = map[string]string{
+	AWSPlatform: capiAwsMachineTemplateKind,
+}
 
 // node isolation
 const (

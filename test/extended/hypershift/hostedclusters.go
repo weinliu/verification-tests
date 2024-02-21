@@ -1,13 +1,19 @@
 package hypershift
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/names"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
@@ -92,6 +98,11 @@ func (h *hostedCluster) getClustersDeletionTimestamp() (string, error) {
 
 func (h *hostedCluster) getHostedComponentNamespace() string {
 	return fmt.Sprintf("%s-%s", h.namespace, h.name)
+}
+
+// Warning: the returned default SG ID could be empty
+func (h *hostedCluster) getDefaultSgId() string {
+	return doOcpReq(h.oc, OcpGet, false, "hc", h.name, "-n", h.namespace, "-o=jsonpath={.status.platform.aws.defaultWorkerSecurityGroupID}")
 }
 
 func (h *hostedCluster) hostedClustersReady() (bool, error) {
@@ -291,7 +302,7 @@ func (h *hostedCluster) checkNodePoolReady(name string) bool {
 	autoscaleEnabled, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("np", "-n", h.namespace, name, autoScalCond).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 
-	//if not autoscaleEnabled, check repicas is as expected
+	//if not autoscaleEnabled, check replicas is as expected
 	if autoscaleEnabled != "True" {
 		desiredNodes, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("np", "-n", h.namespace, name, "-o=jsonpath={.spec.replicas}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -740,7 +751,7 @@ func (h *hostedCluster) checkNodepoolRollingUpgradeIntermediateStatus(name strin
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	o.Expect(machinesets).ShouldNot(o.BeEmpty())
 
-	// a new machineset should be created, so number of machinsets should be 2
+	// a new machineset should be created, so number of machinesets should be 2
 	if len(strings.Split(machinesets, " ")) <= 1 {
 		return false
 	}
@@ -936,6 +947,69 @@ func (h *hostedCluster) getNodeNameByNodepool(npName string) []string {
 	labelFilter := "hypershift.openshift.io/nodePool=" + npName
 	nodes := h.getHostedClusterNodeNameByLabelFilter(labelFilter)
 	return strings.Split(strings.TrimSpace(nodes), " ")
+}
+
+func (h *hostedCluster) getUnstructuredNodePoolByName(ctx context.Context, npName string) (*unstructured.Unstructured, error) {
+	// Dynamically obtain the gvr to avoid version change in the future
+	npRESTMapping, err := h.oc.RESTMapper().RESTMapping(schema.GroupKind{
+		Group: "hypershift.openshift.io",
+		Kind:  "NodePool",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error getting RESTMapping for hypershift.openshift.io/NodePool: %w", err)
+	}
+	npUnstructured, err := h.oc.AdminDynamicClient().Resource(npRESTMapping.Resource).Namespace(h.namespace).Get(ctx, npName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error getting NodePool/%s: %w", npName, err)
+	}
+	hcName, found, err := unstructured.NestedString(npUnstructured.Object, "spec", "clusterName")
+	if err != nil || !found {
+		return nil, fmt.Errorf("error extracting NodePool.spec.clusterName: %w", err)
+	}
+	if hcName != h.name {
+		return nil, fmt.Errorf("expect NodePool.spec.clusterName to be %s but found to be %s", h.name, hcName)
+	}
+	return npUnstructured, nil
+}
+
+func (h *hostedCluster) getCurrentInfraMachineTemplatesByNodepool(ctx context.Context, npName string) (*unstructured.Unstructured, error) {
+	npUnstructured, err := h.getUnstructuredNodePoolByName(ctx, npName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting unstructured NodePool %s: %w", npName, err)
+	}
+	platform, found, err := unstructured.NestedString(npUnstructured.Object, "spec", "platform", "type")
+	if err != nil || !found {
+		return nil, fmt.Errorf("error extracting NodePool.spec.platform.type: %w", err)
+	}
+	e2e.Logf("Found NodePool/%s platform = %s", npName, platform)
+	infraMachineTemplateKind, ok := platform2InfraMachineTemplateKind[platform]
+	if !ok {
+		return nil, fmt.Errorf("no infra machine template kind for platform %s. Available options: %v", platform, platform2InfraMachineTemplateKind)
+	}
+	e2e.Logf("Found infra machine template kind = %s", infraMachineTemplateKind)
+	infraMachineTemplateRESTMapping, err := h.oc.RESTMapper().RESTMapping(schema.GroupKind{
+		Group: capiInfraGroup,
+		Kind:  infraMachineTemplateKind,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error getting RESTMapping for kind %s in group %s: %w", infraMachineTemplateKind, capiInfraGroup, err)
+	}
+	hcpNs := h.getHostedComponentNamespace()
+	if len(hcpNs) == 0 {
+		return nil, errors.New("empty hosted component namespace obtained from the hostedCluster object")
+	}
+	infraMachineTempName, ok := npUnstructured.GetAnnotations()[npInfraMachineTemplateAnnotationKey]
+	if !ok {
+		return nil, fmt.Errorf("annotation %s not found on NodePool %s", npInfraMachineTemplateAnnotationKey, npName)
+	}
+	e2e.Logf("Found infra machine template name = %s", infraMachineTempName)
+
+	infraMachineTempUnstructured, err := h.oc.AdminDynamicClient().Resource(infraMachineTemplateRESTMapping.Resource).Namespace(hcpNs).Get(ctx, infraMachineTempName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error getting infra machine templates %s: %w", infraMachineTempName, err)
+	}
+	e2e.Logf("Found infra machine template %s", infraMachineTempUnstructured.GetName())
+	return infraMachineTempUnstructured, nil
 }
 
 func (h *hostedCluster) DebugHostedClusterNodeWithChroot(caseID string, nodeName string, cmd ...string) (string, error) {

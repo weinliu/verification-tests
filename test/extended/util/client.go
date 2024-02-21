@@ -600,6 +600,11 @@ func (c *CLI) AdminKubeClient() kubernetes.Interface {
 	return kubernetes.NewForConfigOrDie(c.AdminConfig())
 }
 
+// GuestKubeClient provides a Kubernetes client for the guest cluster user.
+func (c *CLI) GuestKubeClient() kubernetes.Interface {
+	return kubernetes.NewForConfigOrDie(c.GuestConfig())
+}
+
 // AdminDynamicClient method
 func (c *CLI) AdminDynamicClient() dynamic.Interface {
 	return dynamic.NewForConfigOrDie(c.AdminConfig())
@@ -617,6 +622,15 @@ func (c *CLI) UserConfig() *rest.Config {
 // AdminConfig method
 func (c *CLI) AdminConfig() *rest.Config {
 	clientConfig, err := getClientConfig(c.adminConfigPath)
+	if err != nil {
+		FatalErr(err)
+	}
+	return clientConfig
+}
+
+// GuestConfig method
+func (c *CLI) GuestConfig() *rest.Config {
+	clientConfig, err := getClientConfig(c.guestConfigPath)
 	if err != nil {
 		FatalErr(err)
 	}

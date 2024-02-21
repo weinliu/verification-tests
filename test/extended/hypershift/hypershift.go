@@ -1,6 +1,7 @@
 package hypershift
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +14,10 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
@@ -1586,5 +1591,88 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		taintsValue, err = hostedcluster.oc.AsGuestKubeconf().Run("get").Args("node", "-lhypershift.openshift.io/nodePool="+np1Name, `-lenv=test2`, `-ojsonpath={.items[*].spec.taints[?(@.key=="env")].value}`).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(taintsValue).Should(o.ContainSubstring("test2"))
+	})
+
+	// Test run duration: 20min
+	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:fxie-Critical-67786-Changes to NodePool .spec.platform should trigger a rolling upgrade [Serial]", func() {
+		// Variables
+		var (
+			testCaseId         = "67786"
+			expectedPlatform   = "aws"
+			resourceNamePrefix = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
+			npName             = fmt.Sprintf("%s-np", resourceNamePrefix)
+			npNumReplicas      = 2
+			npInstanceType     = "m5.xlarge"
+			npInstanceTypeNew  = "m5.large"
+		)
+
+		if iaasPlatform != expectedPlatform {
+			g.Skip(fmt.Sprintf("Test case %s is for %s but current platform is %s, skipping", testCaseId, expectedPlatform, iaasPlatform))
+		}
+
+		// Avoid using an existing NodePool so other Hypershift test cases are unaffected by this one
+		exutil.By("Creating an additional NodePool")
+		releaseImage := hostedcluster.getCPReleaseImage()
+		e2e.Logf("Found release image used by the hosted cluster = %s", releaseImage)
+		defaultSgId := hostedcluster.getDefaultSgId()
+		o.Expect(defaultSgId).NotTo(o.BeEmpty())
+		e2e.Logf("Found default SG ID of the hosted cluster = %s", defaultSgId)
+		defer func() {
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npName), LongTimeout, DefaultTimeout/10).Should(o.BeTrue(), fmt.Sprintf("failed waiting for NodePool/%s to be deleted", npName))
+		}()
+		NewAWSNodePool(npName, hostedcluster.name, hostedcluster.namespace).
+			WithNodeCount(&npNumReplicas).
+			WithReleaseImage(releaseImage).
+			WithInstanceType(npInstanceType).
+			WithSecuritygroupID(defaultSgId).
+			CreateAWSNodePool()
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, DefaultTimeout/10).Should(o.BeTrue(), fmt.Sprintf("failed waiting for NodePool/%s to be ready", npName))
+
+		exutil.By("Checking instance type on CAPI resources")
+		awsMachineTemp, err := hostedcluster.getCurrentInfraMachineTemplatesByNodepool(context.Background(), npName)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		instanceType, found, err := unstructured.NestedString(awsMachineTemp.Object, "spec", "template", "spec", "instanceType")
+		o.Expect(found).To(o.BeTrue())
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(instanceType).To(o.Equal(npInstanceType))
+
+		exutil.By("Checking instance type label on nodes belonging to the newly created NodePool")
+		nodeList, err := oc.GuestKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(map[string]string{
+				hypershiftNodePoolLabelKey: npName,
+				nodeInstanceTypeLabelKey:   npInstanceType,
+			}).String(),
+		})
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(len(nodeList.Items)).To(o.Equal(npNumReplicas))
+
+		exutil.By(fmt.Sprintf("Change instance type to %s", npInstanceTypeNew))
+		patch := fmt.Sprintf(`{"spec":{"platform":{"aws":{"instanceType": "%s"}}}}`, npInstanceTypeNew)
+		doOcpReq(oc, OcpPatch, true, "np", npName, "-n", hostedcluster.namespace, "--type", "merge", "-p", patch)
+
+		exutil.By("Waiting for replace upgrade to complete")
+		upgradeType := hostedcluster.getNodepoolUpgradeType(npName)
+		o.Expect(upgradeType).Should(o.ContainSubstring("Replace"))
+		o.Eventually(hostedcluster.pollCheckNodepoolRollingUpgradeIntermediateStatus(npName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), fmt.Sprintf("failed waiting for NodePool/%s replace upgrade to start", npName))
+		o.Eventually(hostedcluster.pollCheckNodepoolRollingUpgradeComplete(npName), DoubleLongTimeout, DefaultTimeout/5).Should(o.BeTrue(), fmt.Sprintf("failed waiting for NodePool/%s replace upgrade to complete", npName))
+
+		exutil.By("Make sure the instance type is updated on CAPI resources")
+		awsMachineTemp, err = hostedcluster.getCurrentInfraMachineTemplatesByNodepool(context.Background(), npName)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		instanceType, found, err = unstructured.NestedString(awsMachineTemp.Object, "spec", "template", "spec", "instanceType")
+		o.Expect(found).To(o.BeTrue())
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(instanceType).To(o.Equal(npInstanceTypeNew))
+
+		exutil.By("Make sure the node instance types are updated as well")
+		nodeList, err = oc.GuestKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(map[string]string{
+				hypershiftNodePoolLabelKey: npName,
+				nodeInstanceTypeLabelKey:   npInstanceTypeNew,
+			}).String(),
+		})
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(len(nodeList.Items)).To(o.Equal(npNumReplicas))
 	})
 })
