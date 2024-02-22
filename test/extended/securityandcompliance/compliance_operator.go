@@ -5934,6 +5934,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 		subD.complianceSuiteResult(oc, ssbCustomNodeselector.name, "NON-COMPLIANT INCONSISTENT")
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("CPaasrunOnly-Author:xiyuan-High-71325-compliance operator should pass DAST test", func() {
+		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_compliance_v1alpha1.yaml")
+		policyFile := filepath.Join(buildPruningBaseDir, "rapidast/customscan.policy")
+
+		_, err := rapidastScan(oc, oc.Namespace(), configFile, policyFile, "compliance.openshift.io_v1alpha1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
 
 var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on hypershift hosted cluster", func() {
