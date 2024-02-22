@@ -1694,7 +1694,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-52129-Vector Send JSON logs from containers in the same pod to separate indices[Serial]", func() {
+		g.It("CPaasrunOnly-Author:qitang-Medium-52129-Vector Send JSON logs from containers in the same pod to separate indices", func() {
 			app := oc.Namespace()
 			containerName := "log-52129-" + getRandomString()
 			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
@@ -1815,7 +1815,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation[Serial]", func() {
+		g.It("CPaasrunOnly-Author:qitang-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation", func() {
 			containerName := "log-52131-" + getRandomString()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			app1 := oc.Namespace()
@@ -1827,36 +1827,39 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app2, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("create clusterlogforwarder/instance")
+			oc.SetupProject()
+			esProj := oc.Namespace()
+			ees := externalES{
+				namespace:  esProj,
+				version:    "7",
+				serverName: "external-es",
+				httpSSL:    true,
+				secretName: "json-log-52131",
+				loggingNS:  esProj,
+			}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
+
+			g.By("create clusterlogforwarder")
 			clf := clusterlogforwarder{
-				name:         "instance",
-				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-output-default.yaml"),
+				name:                   "clf-52131",
+				namespace:              esProj,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-logs.yaml"),
+				secretName:             ees.secretName,
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "STRUCTURED_CONTAINER=true")
+			clf.create(oc, "STRUCTURED_CONTAINER=true", "URL="+eesURL, "ES_VERSION="+ees.version)
 
-			// create clusterlogging instance
-			cl := clusterlogging{
-				name:          "instance",
-				namespace:     loggingNS,
-				collectorType: "vector",
-				logStoreType:  "elasticsearch",
-				esNodeCount:   1,
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
-
-			g.By("check indices in ES pod")
-			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "app-"+containerName)
+			g.By("check indices in externale ES")
+			ees.waitForIndexAppear(oc, "app-"+containerName)
 
 			g.By("check data in ES")
 			for _, proj := range []string{app1, app2} {
-				count, err := getDocCountByQuery(cl.namespace, esPods.Items[0].Name, "app-"+containerName, "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj+"\"}}}")
+				count, err := ees.getDocCount(oc, "app-"+containerName, "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj+"\"}}}")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(count > 0).To(o.BeTrue())
 			}

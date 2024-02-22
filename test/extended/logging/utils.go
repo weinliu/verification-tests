@@ -3161,11 +3161,11 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	targetConfig := strings.Replace(originConfig, "Bearer sha256~xxxxxxxx", "Bearer "+token, -1)
 	newConfigFile := "/tmp/logdast" + getRandomString()
 	f, err := os.Create(newConfigFile)
-	defer f.Close()
-	defer exec.Command("rm", newConfigFile).Output()
 	if err != nil {
 		return false, err
 	}
+	defer f.Close()
+	defer exec.Command("rm", newConfigFile).Output()
 	f.WriteString(targetConfig)
 
 	//Create configmap
@@ -3236,8 +3236,9 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 		artifactFile := rapidastResultsSubDir + "/" + apiGroupName + "_rapidast.result"
 		e2e.Logf("Write report into %s", artifactFile)
 		f1, err := os.Create(artifactFile)
-		defer f1.Close()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f1.Close()
+
 		_, err = f1.WriteString(podLogs)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
@@ -3262,7 +3263,7 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	e2e.Logf("rapidast result: riskHigh=%v riskMedium=%v", riskHigh, riskMedium)
 
 	if riskHigh > 0 {
-		return false, fmt.Errorf("High risk alert, please check the scan result report")
+		return false, fmt.Errorf("high risk alert, please check the scan result report")
 	}
 	return true, nil
 }

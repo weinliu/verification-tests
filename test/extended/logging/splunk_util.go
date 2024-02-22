@@ -20,27 +20,27 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-func (s *splunkPodServer) checkLogs(query string, quiet bool) bool {
-	e2e.Logf("find logs using query string: %s", query)
-	searchResult, err := s.doQuery(query)
-	if searchResult == nil {
-		if !quiet {
-			e2e.Logf("%v", err)
+func (s *splunkPodServer) checkLogs(query string) bool {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		searchResult, err := s.getSearchResult(query)
+		if err != nil {
+			e2e.Logf("hit error when querying logs with %s: %v, try next round", query, err)
+			return false, nil
 		}
-		e2e.Logf("can't find logs for the query : %s", query)
-		return false
-	}
-	if len(searchResult.Results) == 0 {
-		e2e.Logf("can't find logs for the query: %s : Records.size() = 0", query)
-		return false
-	}
-	e2e.Logf("Found records for the query: %s", query)
-	return true
+		if searchResult == nil || len(searchResult.Results) == 0 {
+			e2e.Logf("no logs found for the query: %s, try next round", query)
+			return false, nil
+		}
+		e2e.Logf("found records for the query: %s", query)
+		return true, nil
+	})
+
+	return err == nil
 }
 
 func (s *splunkPodServer) anyLogFound() bool {
 	for _, logType := range []string{"infrastructure", "application", "audit"} {
-		if s.checkLogs("log_type="+logType+"|head 1", true) {
+		if s.checkLogs("log_type=" + logType + "|head 1") {
 			return true
 		}
 	}
@@ -62,7 +62,7 @@ func (s *splunkPodServer) allQueryFound(queries []string) bool {
 	//return false if any query fail
 	foundAll := true
 	for _, query := range queries {
-		if !s.checkLogs(query, false) {
+		if !s.checkLogs(query) {
 			foundAll = false
 		}
 	}
@@ -79,12 +79,35 @@ func (s *splunkPodServer) allTypeLogsFound() bool {
 	return s.allQueryFound(queries)
 }
 
-func (s *splunkPodServer) doQuery(query string) (*splunkSearchResult, error) {
+func (s *splunkPodServer) getSearchResult(query string) (*splunkSearchResult, error) {
+	h := make(http.Header)
+	h.Add("Content-Type", "application/json")
+	h.Add(
+		"Authorization",
+		"Basic "+base64.StdEncoding.EncodeToString([]byte(s.adminUser+":"+s.adminPassword)),
+	)
+	params := url.Values{}
+	params.Add("output_mode", "json")
+
+	var searchResult *splunkSearchResult
+
 	searchID, err := s.requestSearchTask(query)
-	if searchID == "" {
-		return nil, err
+	if err != nil {
+		return nil, fmt.Errorf("error getting search ID: %v", err)
 	}
-	return s.extractSearchResponse(searchID)
+
+	// to avoid getting `204 No Content`, sleep 10 seconds before getting results
+	time.Sleep(10 * time.Second)
+	resp, err1 := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 2, nil, 200)
+	if err1 != nil {
+		return nil, fmt.Errorf("failed to get response: %v", err1)
+	}
+
+	err2 := json.Unmarshal(resp, &searchResult)
+	if err2 != nil {
+		return nil, fmt.Errorf("failed to unmarshal splunk response: %v", err2)
+	}
+	return searchResult, nil
 }
 
 func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
@@ -97,7 +120,7 @@ func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
 	params := url.Values{}
 	params.Set("search", "search "+query)
 
-	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs", "", "POST", false, 2, strings.NewReader(params.Encode()), 201)
+	resp, err := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs", "", "POST", true, 2, strings.NewReader(params.Encode()), 201)
 	if err != nil {
 		return "", err
 	}
@@ -108,41 +131,6 @@ func (s *splunkPodServer) requestSearchTask(query string) (string, error) {
 		return "", err
 	}
 	return resmap.Sid, nil
-}
-
-func (s *splunkPodServer) extractSearchResponse(searchID string) (*splunkSearchResult, error) {
-	h := make(http.Header)
-	h.Add("Content-Type", "application/json")
-	h.Add(
-		"Authorization",
-		"Basic "+base64.StdEncoding.EncodeToString([]byte(s.adminUser+":"+s.adminPassword)),
-	)
-	params := url.Values{}
-	params.Add("output_mode", "json")
-
-	var searchResult *splunkSearchResult
-	err := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
-		resp, err1 := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 1, nil, 200)
-		if err1 != nil {
-			e2e.Logf("failed to get response: %v, try next round", err1)
-			return false, nil
-		}
-		err2 := json.Unmarshal(resp, &searchResult)
-		if err2 != nil {
-			e2e.Logf("failed to Unmarshal splunk response: %v, try next round", err2)
-			return false, nil
-		}
-
-		if len(searchResult.Results) == 0 {
-			e2e.Logf("no records from splunk server, try next round")
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		return searchResult, fmt.Errorf("can't get records from splunk server")
-	}
-	return searchResult, nil
 }
 
 // Set the default values to the splunkPodServer Object
@@ -363,6 +351,24 @@ func (s *splunkPodServer) destroy(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("statefulset", s.name, "-n", "-n", s.namespace).Execute()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", s.name, "-n", "-n", s.namespace).Execute()
 	oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-scc-from-user", "nonroot", "-z", "default", "-n", s.namespace).Execute()
+}
+
+// createIndexes adds custom index(es) into splunk
+func (s *splunkPodServer) createIndexes(oc *exutil.CLI, indexes ...string) error {
+	splunkPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", s.namespace, "pod", "-l", "app.kubernetes.io/instance="+s.name, "-ojsonpath={.items[0].metadata.name}").Output()
+	if err != nil {
+		return fmt.Errorf("error getting splunk pod: %v", err)
+	}
+	for _, index := range indexes {
+		// curl -k -u admin:gjc2t9jx  https://localhost:8089/servicesNS/admin/search/data/indexes -d name=devtutorial
+		cmd := "curl -k -u admin:" + s.adminPassword + " https://localhost:8089/servicesNS/admin/search/data/indexes -d name=" + index
+		stdout, err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("exec").Args("-n", s.namespace, splunkPod, "--", "/bin/sh", "-x", "-c", cmd).Output()
+		if err != nil {
+			e2e.Logf("query output: %v", stdout)
+			return fmt.Errorf("can't create index %s, error: %v", index, err)
+		}
+	}
+	return nil
 }
 
 // Create the secret which is used in CLF
