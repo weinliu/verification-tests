@@ -2207,6 +2207,27 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 240 seconds")
 		err = oc.AsAdmin().Run("whoami").Args("").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create new project to make sure that openshift-apiserver still functions well.")
+		projectName := "ocp-68647" + exutil.GetRandomString()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(projectName, "--skip-config-write").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", projectName).Execute()
+
+		exutil.By("Create new app")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("openshift/hello-openshift", "-n", projectName, "--import-mode=PreserveOriginal").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
+		var poderr error
+		errPod := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			podOutput, poderr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", projectName, "--no-headers").Output()
+			if poderr == nil && strings.Contains(podOutput, "Running") {
+				e2e.Logf("Pod %v succesfully", podOutput)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errPod, fmt.Sprintf("Pod not running :: %v", poderr))
 	})
 
 	// author: yinzhou@redhat.com
