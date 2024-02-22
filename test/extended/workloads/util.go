@@ -1597,6 +1597,10 @@ func checkBuildStatus(oc *exutil.CLI, buildname string, namespace string, expect
 		}
 		return true, nil
 	})
+	if err != nil {
+		oc.Run("describe").Args("build/"+buildname, "-n", namespace).Execute()
+		oc.Run("logs").Args("build/"+buildname, "-n", namespace, "--tail", "5").Execute()
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("build status is not same as expected"))
 }
 
