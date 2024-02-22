@@ -50,6 +50,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			}
 			return false, nil
 		})
+		if err != nil {
+			oc.Run("get").Args("events", "-n", oc.Namespace()).Execute()
+		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot find the must-gather pod in own namespace"))
 		wg.Wait()
 		err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {

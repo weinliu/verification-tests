@@ -1233,6 +1233,7 @@ func getOauthAudit(mustgatherDir string) []string {
 		}
 
 	}
+	e2e.Logf("The data dir is %v", dataDir)
 	destDir := mustgatherDir + "/" + dataDir + "/audit_logs/oauth-server/"
 	err = filepath.Walk(destDir,
 		func(path string, info os.FileInfo, err error) error {
