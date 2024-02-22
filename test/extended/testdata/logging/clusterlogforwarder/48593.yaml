@@ -19,19 +19,17 @@ objects:
       - application
       outputRefs:
       - es-created-by-user
-      - default
     - name: forward-infra-logs
       inputRefs:
       - infrastructure
       outputRefs:
       - es-created-by-user
-      - default
     - name: forward-audit-logs
       inputRefs:
       - audit
       outputRefs:
       - es-created-by-user
-      - default
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -39,3 +37,5 @@ parameters:
   value: "openshift-logging"
 - name: ES_URL
   value: http://elasticsearch-server.es-aosqe-qa.svc:9200
+- name: SERVICE_ACCOUNT_NAME
+  value: ""
