@@ -228,8 +228,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod1.delete(oc)
 
 			exutil.By("# Use readOnly parameter create pod2 with the pvc: 'spec.containers[0].volumeMounts[0].readOnly: true' and wait for the pod ready ")
-			defer pod2.deleteAsAdmin(oc)
 			pod2.createWithReadOnlyVolume(oc)
+			defer pod2.deleteAsAdmin(oc)
 			pod2.waitReady(oc)
 
 			exutil.By("# Check the file /mnt/storage/testfile exist in the volume and read its content contains 'storage test' ")
@@ -1765,7 +1765,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pvc.deleteAsAdmin(oc)
 
 			exutil.By("Create podA with the created pvc and wait pod ready")
-			podA.createWithExtraParameters(oc.AsAdmin(), extraParameters)
+			podA.createWithExtraParameters(oc, extraParameters)
 			defer podA.deleteAsAdmin(oc)
 			podA.waitReady(oc)
 
@@ -1786,7 +1786,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			exutil.By("Create podB with the same pvc and wait pod ready")
 			podB := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-			podB.createWithExtraParameters(oc.AsAdmin(), extraParameters)
+			podB.createWithExtraParameters(oc, extraParameters)
 			defer podB.deleteAsAdmin(oc)
 			podB.waitReady(oc)
 
@@ -2783,7 +2783,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
-		if isAwsOutpostsCluster(oc) {
+		if isAwsOutpostCluster(oc) {
 			g.Skip("Skip for scenario non-supported AWS Outpost clusters!!!")
 		}
 
@@ -2888,7 +2888,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
-		if isAwsOutpostsCluster(oc) {
+		if isAwsOutpostCluster(oc) {
 			g.Skip("Skip for scenario non-supported AWS Outpost clusters!!!")
 		}
 
@@ -5316,7 +5316,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"runAsGroup":     3000,
 				"seLinuxOptions": selinuxLevel,
 			}
-			podB.createWithExtraParameters(oc.AsAdmin(), extraParameters)
+			podB.createWithExtraParameters(oc, extraParameters)
 			defer podB.deleteAsAdmin(oc)
 			podB.waitReady(oc)
 
@@ -5403,7 +5403,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"runAsGroup":     3000,
 				"seLinuxOptions": selinuxLevel,
 			}
-			podB.createWithExtraParameters(oc.AsAdmin(), extraParameters)
+			podB.createWithExtraParameters(oc, extraParameters)
 			defer podB.deleteAsAdmin(oc)
 			podB.waitReady(oc)
 
