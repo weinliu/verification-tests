@@ -3165,7 +3165,7 @@ nulla pariatur.`
 			"The file /etc/containers/registries.conf has not been properly configured with the new mirror information")
 		logger.Infof("OK!\n")
 
-		exutil.By("Delete the ImageDigestMirrorSet resource")
+		exutil.By("Delete the ImageTagMirrorSet resource")
 		itms.Delete()
 		mcp.waitForComplete()
 		logger.Infof("OK!\n")
@@ -3175,7 +3175,7 @@ nulla pariatur.`
 			"Error getting file /etc/containers/registries.conf")
 
 		o.Expect(rf.GetTextContent()).NotTo(o.ContainSubstring(`example.io/digest-example/ubi-minimal`),
-			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageDigestMirrorSet resource")
+			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageTagMirrorSet resource")
 		logger.Infof("OK!\n")
 
 		checkMirrorRemovalDefaultEvents(node)
@@ -4129,6 +4129,121 @@ nulla pariatur.`
 
 	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-71277-ImageTagMirrorSet. Skip image registry change disruption[Disruptive]", func() {
+		var (
+			itmsName                           = "tc-71277-tag-mirror-skip-drain"
+			overrideDrainConfigMapTemplateName = "image-registry-override-drain-configmap.yaml"
+			overrideDrainConfigMap             = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "image-registry-override-drain")
+			mcp                                = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			node                               = mcp.GetNodesOrFail()[0]
+		)
+
+		// ImageTagMirrorSet is not compatible with ImageContentSourcePolicy.
+		// If any ImageContentSourcePolicy exists we skip this test case.
+		skipTestIfImageContentSourcePolicyExists(oc.AsAdmin())
+
+		exutil.By("Start capturing events and clean pods logs")
+		startTime, dErr := node.GetDate()
+		o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", node.GetName())
+
+		o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
+			"Error getting the latest event in node %s", node.GetName())
+
+		logger.Infof("Removing all MCO pods to clean the logs.")
+		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		exutil.By("Create image-registry-override-drain configmap")
+		defer overrideDrainConfigMap.Delete()
+		o.Expect(
+			NewMCOTemplate(oc.AsAdmin(), overrideDrainConfigMapTemplateName).Create(),
+		).To(o.Succeed(),
+			"Error creating the  image-registry-override-drain configmap to override the drain behavior")
+		logger.Infof("OK!\n")
+
+		exutil.By("Create new machine config to deploy a ImageTagMirrorSet configuring a mirror registry")
+		itms := NewImageTagMirrorSet(oc.AsAdmin(), itmsName, *NewMCOTemplate(oc, "add-image-tag-mirror-set.yaml"))
+		defer mcp.waitForComplete()
+		defer itms.Delete()
+
+		itms.Create("-p", "NAME="+itmsName)
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check logs to verify that a drain operation was skipped reporting the reason. No reboot happened. Crio was restarted")
+		o.Expect(
+			exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
+		).Should(o.And(
+			o.ContainSubstring("Drain was skipped for this image registry update due to the configmap image-registry-override-drain being present. This may not be a safe change"),
+			o.ContainSubstring("crio config reloaded successfully"),
+			o.ContainSubstring("skipping reboot")),
+			"The right actions could not be found in the logs. No drain should happen, no reboot should happen and crio should be restarted")
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify that the node was NOT rebooted")
+		o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
+			"The node %s must NOT be rebooted after applying the configuration, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that no drain nor reboot events were triggered")
+		o.Expect(node.GetEvents()).NotTo(o.Or(
+			HaveEventsSequence("Drain"),
+			HaveEventsSequence("Reboot")),
+			"No Drain and no Reboot events should be triggered")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the  /etc/containers/registries.conf file was configured")
+		rf := NewRemoteFile(node, "/etc/containers/registries.conf")
+		o.Expect(rf.Fetch()).To(o.Succeed(),
+			"Error getting file /etc/containers/registries.conf")
+
+		configRegex := `(?s)` + regexp.QuoteMeta(`[[registry]]`) + ".*" +
+			regexp.QuoteMeta(`registry.redhat.io/openshift4`) + ".*" +
+			regexp.QuoteMeta(`[[registry.mirror]]`) + ".*" +
+			regexp.QuoteMeta(`mirror.example.com/redhat`) + ".*" +
+			`pull-from-mirror *= *"tag-only"`
+
+		o.Expect(rf.GetTextContent()).To(o.MatchRegexp(configRegex),
+			"The file /etc/containers/registries.conf has not been properly configured with the new mirror information")
+		logger.Infof("OK!\n")
+
+		exutil.By("Delete the ImageDigestMirrorSet resource")
+		logger.Infof("Removing all MCO pods to clean the logs.")
+		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		itms.Delete()
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the configuration in file /etc/containers/registries.conf was restored")
+		o.Expect(rf.Fetch()).To(o.Succeed(),
+			"Error getting file /etc/containers/registries.conf")
+
+		o.Expect(rf.GetTextContent()).NotTo(o.ContainSubstring(`example.io/digest-example/ubi-minimal`),
+			"The configuration in file /etc/containers/registries.conf was not restored after deleting the ImageDigestMirrorSet resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check logs to verify that, after deleting the ImageTagMirrorSet, a drain operation was skipped reporting the reason. No reboot happened. Crio was restarted")
+		o.Expect(
+			exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
+		).Should(o.And(
+			o.ContainSubstring("Drain was skipped for this image registry update due to the configmap image-registry-override-drain being present. This may not be a safe change"),
+			o.ContainSubstring("crio config reloaded successfully"),
+			o.ContainSubstring("skipping reboot")),
+			"The right actions could not be found in the logs. No drain should happen, no reboot should happen and crio should be restarted")
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify that the node was NOT rebooted")
+		o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
+			"The node %s must NOT be rebooted after applying the configuration, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that no drain nor reboot events were triggered")
+		o.Expect(node.GetEvents()).NotTo(o.Or(
+			HaveEventsSequence("Drain"),
+			HaveEventsSequence("Reboot")),
+			"No Drain and no Reboot events should be triggered")
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason

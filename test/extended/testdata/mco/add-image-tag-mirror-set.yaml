@@ -6,7 +6,7 @@ objects:
   - kind: ImageTagMirrorSet
     apiVersion: config.openshift.io/v1
     metadata:
-      name: tc-61558-tag-mirror
+      name: "${NAME}"
     spec:
       imageTagMirrors:
       - mirrors:
