@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -103,16 +104,17 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		o.Expect(err).NotTo(o.HaveOccurred())
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		nodeName := getOneRhcosWorkerNodeName(oc)
+		fi1.assertFileintegritynodestatusSucceeded(oc, nodeName)
 
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test" + getRandomString()
-		nodeName := getOneRhcosWorkerNodeName(oc)
 		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
-		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
+		debugNodeStdout, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
-		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatuses", fileintegrityNodeStatusName, "-n", sub.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
+		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
+		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fileintegrityNodeStatusName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
