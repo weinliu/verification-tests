@@ -5440,12 +5440,29 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
-			// Get the present scName
-			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
-
 			// Set the resource definition for the scenario
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
-			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			var (
+				nfsProtocolParameters = map[string]string{
+					"protocol": "nfs",
+				}
+				azurefileNFSextraParameters = map[string]interface{}{
+					"parameters": nfsProtocolParameters,
+				}
+				storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+				sc                   = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+				pvc                  = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+				dep                  = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			)
+
+			if provisioner == "file.csi.azure.com" {
+				exutil.By("Create azurefile csi storageclass")
+				sc.createWithExtraParameters(oc, azurefileNFSextraParameters)
+				defer sc.deleteAsAdmin(oc)
+				pvc.scname = sc.name
+			} else {
+				// Get the present scName
+				pvc.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+			}
 
 			exutil.By("# Create a pvc with the preset csi storageclass")
 			pvc.create(oc)
