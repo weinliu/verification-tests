@@ -18,6 +18,7 @@ type Flowcollector struct {
 	Namespace                 string
 	ProcessorKind             string
 	MultiClusterDeployment    string
+	AddZone                   string
 	LogType                   string
 	DeploymentModel           string
 	LokiEnable                string
@@ -63,6 +64,7 @@ type Flowlog struct {
 	DstK8S_HostIP    string
 	Bytes            int
 	SrcK8S_Type      string
+	SrcK8S_HostName  string
 	DstK8S_HostName  string
 	Proto            int
 	DstAddr          string
@@ -86,6 +88,8 @@ type Flowlog struct {
 	RecordType       string `json:"_RecordType,omitempty"`
 	NumFlowLogs      int    `json:"numFlowLogs,omitempty"`
 	K8S_ClusterName  string `json:"K8S_ClusterName,omitempty"`
+	SrcK8S_Zone      string `json:"SrcK8S_Zone,omitempty"`
+	DstK8S_Zone      string `json:"DstK8S_Zone,omitempty"`
 }
 
 type FlowRecord struct {
@@ -102,6 +106,8 @@ type Lokilabels struct {
 	SrcK8S_OwnerName string
 	DstK8S_OwnerName string
 	K8S_ClusterName  string
+	SrcK8S_Type      string
+	DstK8S_Type      string
 }
 
 // create flowcollector CRD for a given manifest file

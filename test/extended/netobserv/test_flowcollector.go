@@ -899,7 +899,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-69218-Verify cluster ID in multiCluster deployment [Serial]", func() {
+	g.It("NonPreRelease-Author:aramesha-High-69218-High-71291-Verify cluster ID and zone in multiCluster deployment [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Get clusterID of the cluster")
@@ -907,10 +907,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Cluster ID is %s", clusterID)
 
-		g.By("Deploy FlowCollector with multiCluster enabled")
+		g.By("Deploy FlowCollector with multiCluster and addZone enabled")
 		flow := Flowcollector{
 			Namespace:              namespace,
 			MultiClusterDeployment: "true",
+			AddZone:                "true",
 			Template:               flowFixturePath,
 			LokiURL:                lokiURL,
 			LokiTLSCertName:        fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
@@ -937,15 +938,31 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		time.Sleep(60 * time.Second)
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
-		lokilabels := Lokilabels{
+		g.By("Verify K8S_ClusterName = Cluster ID")
+		clusteridlabels := Lokilabels{
 			App:             "netobserv-flowcollector",
 			K8S_ClusterName: clusterID,
 		}
-
-		g.By("Verify K8S_ClusterName = Cluster ID")
-		flowRecords, err := lokilabels.getLokiFlowLogs(oc, bearerToken, ls.Route)
+		clusterIdFlowRecords, err := clusteridlabels.getLokiFlowLogs(oc, bearerToken, ls.Route)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
+		o.Expect(len(clusterIdFlowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
+
+		g.By("Verify SrcK8S_Zone and DstK8S_Zone are present and have expected values")
+		zonelabels := Lokilabels{
+			App:         "netobserv-flowcollector",
+			SrcK8S_Type: "Node",
+			DstK8S_Type: "Node",
+		}
+		zoneFlowRecords, err := zonelabels.getLokiFlowLogs(oc, bearerToken, ls.Route)
+		for _, r := range zoneFlowRecords {
+			expectedSrcK8SZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", r.Flowlog.SrcK8S_HostName, "-o=jsonpath={.metadata.labels.topology\\.kubernetes\\.io/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(r.Flowlog.SrcK8S_Zone).To(o.Equal(expectedSrcK8SZone))
+
+			expectedDstK8SZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", r.Flowlog.DstK8S_HostName, "-o=jsonpath={.metadata.labels.topology\\.kubernetes\\.io/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(r.Flowlog.DstK8S_Zone).To(o.Equal(expectedDstK8SZone))
+		}
 	})
 
 	//Add future NetObserv + Loki test-cases here

@@ -42,6 +42,7 @@ objects:
         imagePullPolicy: IfNotPresent
         logLevel: trace
         multiClusterDeployment: "${{MultiClusterDeployment}}"
+        addZone: "${{AddZone}}"
         metrics:
           server:
             port: 9102
@@ -161,6 +162,8 @@ parameters:
   - name: MetricServerTLSType
     value: "Auto"
   - name: MultiClusterDeployment
+    value: "false"
+  - name: AddZone
     value: "false"
   - name: LogType
     value: "Flows"
