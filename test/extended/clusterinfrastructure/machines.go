@@ -837,7 +837,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		masterArchtype := getArchitectureType(oc)
+		randomMachinesetName, msArchtype := exutil.GetRandomMachineSetNameWithArch(oc)
+		if masterArchtype != msArchtype {
+			g.Skip("The selected machine set's arch is not the same with the master machine's arch, skip this case!")
+		}
 		amiID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.ami.id}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.placement.availabilityZone}").Output()
