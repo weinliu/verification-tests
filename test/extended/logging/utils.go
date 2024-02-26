@@ -3146,6 +3146,31 @@ func convertInterfaceToArray(t interface{}) []string {
 	return data
 }
 
+// send logs over http
+func postDataToHttpserver(oc *exutil.CLI, clfNS string, httpURL string, postJsonString string) bool {
+	CollectorPods, err := oc.AdminKubeClient().CoreV1().Pods(clfNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
+	if err != nil || len(CollectorPods.Items) < 1 {
+		e2e.Logf("failed to get pods: component=collector")
+		return false
+	}
+	//ToDo, send logs to httpserver using service ca, oc get cm/openshift-service-ca.crt -o json |jq '.data."service-ca.crt"'
+	cmd := `curl -s -k -w "%{http_code}" ` + httpURL + " -d '" + postJsonString + "'"
+	result, err := e2eoutput.RunHostCmdWithRetries(clfNS, CollectorPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+	if err != nil {
+		e2e.Logf("Show more status as data can not be sent to httpserver")
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", clfNS, "endpoints").Output()
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", clfNS, "pods").Output()
+		return false
+	}
+	if result == "200" {
+		return true
+	} else {
+		e2e.Logf("Show result as return code is not 200")
+		e2e.Logf("result=%v", result)
+		return false
+	}
+}
+
 // create job for rapiddast test
 // Run a job to do rapiddast, the scan result will be written into pod logs and store in artifactdirPath
 func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, apiGroupName string) (bool, error) {

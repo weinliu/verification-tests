@@ -1,0 +1,54 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: splunk-clf-template
+objects:
+- apiVersion: logging.openshift.io/v1
+  kind: ClusterLogForwarder
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    inputs:
+    - name: httpserver1
+      receiver:
+        http:
+          format: kubeAPIAudit
+          port: 8081
+    - name: httpserver2
+      receiver:
+        http:
+          format: kubeAPIAudit
+          port: 8082
+    - name: httpserver3
+      receiver:
+        http:
+          format: kubeAPIAudit
+          port: 8083
+    outputs:
+    - name: splunk-aosqe
+      type: splunk
+      url: ${URL}
+      secret:
+        name: ${SECRET_NAME}
+    pipelines:
+    - name: pipe1
+      inputRefs: 
+      - httpserver1
+      - httpserver2
+      - httpserver3
+      outputRefs:
+      - splunk-aosqe
+    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
+parameters:
+- name: NAME
+  value: "instance"
+- name: SECRET_NAME
+  value: "to-splunk-secret"
+- name: NAMESPACE
+  value: "openshift-logging"
+- name: URL
+  value: "https://splunk-default-service.splunk-aosqe.svc:8088"
+  required: true
+- name: SERVICE_ACCOUNT_NAME
+  value: ""

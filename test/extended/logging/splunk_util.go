@@ -38,6 +38,10 @@ func (s *splunkPodServer) checkLogs(query string) bool {
 	return err == nil
 }
 
+func (s *splunkPodServer) auditLogFound() bool {
+	return s.checkLogs("log_type=audit|head 1")
+}
+
 func (s *splunkPodServer) anyLogFound() bool {
 	for _, logType := range []string{"infrastructure", "application", "audit"} {
 		if s.checkLogs("log_type=" + logType + "|head 1") {

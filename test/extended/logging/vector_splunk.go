@@ -714,6 +714,57 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in other index, this is not expected")
 			}
 		})
+		g.It("CPaasrunOnly-Author:anli-Critical-68303-mCLF Inputs.receiver.http multiple Inputs.receivers to splunk", func() {
+			clfNS := oc.Namespace()
+			splunkProject := clfNS
 
+			g.By("Deploy splunk server")
+			//define splunk deployment
+			sp := splunkPodServer{
+				namespace: splunkProject,
+				name:      "splunk-http",
+				authType:  "http",
+				version:   "9.0",
+			}
+			sp.init()
+
+			defer sp.destroy(oc)
+			sp.deploy(oc)
+
+			g.By("create clusterlogforwarder/instance")
+			// The secret used in CLF to splunk server
+			clfSecret := toSplunkSecret{
+				name:       "to-splunk-secret-68303",
+				namespace:  clfNS,
+				hecToken:   sp.hecToken,
+				caFile:     "",
+				keyFile:    "",
+				certFile:   "",
+				passphrase: "",
+			}
+			defer clfSecret.delete(oc)
+			clfSecret.create(oc)
+			clf := clusterlogforwarder{
+				name:                      "http-to-splunk",
+				namespace:                 clfNS,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_httpservers_to-splunk_template.yaml"),
+				secretName:                clfSecret.name,
+				serviceAccountName:        "clf-" + getRandomString(),
+				waitForPodReady:           true,
+				collectAuditLogs:          false,
+				collectApplicationLogs:    false,
+				collectInfrastructureLogs: false,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088")
+
+			g.By("send data to httpservers")
+			o.Expect(postDataToHttpserver(oc, clfNS, "https://"+clf.name+"-httpserver1."+clfNS+".svc:8081", `{"test data" : "from httpserver1"}`)).To(o.BeTrue())
+			o.Expect(postDataToHttpserver(oc, clfNS, "https://"+clf.name+"-httpserver2."+clfNS+".svc:8082", `{"test data" : "from httpserver2"}`)).To(o.BeTrue())
+			o.Expect(postDataToHttpserver(oc, clfNS, "https://"+clf.name+"-httpserver3."+clfNS+".svc:8083", `{"test data" : "from httpserver3"}`)).To(o.BeTrue())
+
+			g.By("check logs in splunk")
+			o.Expect(sp.auditLogFound()).To(o.BeTrue())
+		})
 	})
 })

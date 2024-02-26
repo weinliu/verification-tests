@@ -326,5 +326,44 @@ ca_file = "/var/run/ocp-collector/secrets/to-fluentd-60933/ca-bundle.crt"`
 			g.By("check logs in fluentd server")
 			fluentdS.checkData(oc, true, "app.log")
 		})
+		g.It("CPaasrunOnly-Author:anli-Critical-65131-mCLF Inputs.receiver.http over http with default values", func() {
+			clfNS := oc.Namespace()
+			fluentdNS := clfNS
+
+			g.By("deploy fluentd server")
+			keyPassphase := getRandomString()
+			fluentdS := fluentdServer{
+				serverName:                 "fluentdtest",
+				namespace:                  fluentdNS,
+				serverAuth:                 true,
+				clientAuth:                 true,
+				clientPrivateKeyPassphrase: keyPassphase,
+				secretName:                 "to-fluentd-65131",
+				loggingNS:                  clfNS,
+				inPluginType:               "http",
+			}
+			defer fluentdS.remove(oc)
+			fluentdS.deploy(oc)
+
+			g.By("create clusterlogforwarder/instance")
+			clf := clusterlogforwarder{
+				name:               "http-to-http",
+				namespace:          clfNS,
+				templateFile:       filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-httpsever-to-http-template.yaml"),
+				secretName:         fluentdS.secretName,
+				serviceAccountName: "clf-" + getRandomString(),
+				collectAuditLogs:   false,
+				waitForPodReady:    true,
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224")
+
+			g.By("send two records to httpserver")
+			o.Expect(postDataToHttpserver(oc, clfNS, "https://"+clf.name+"-httpserver."+clfNS+".svc:8443", `{"data":"record1"}`)).To(o.BeTrue())
+			o.Expect(postDataToHttpserver(oc, clfNS, "https://"+clf.name+"-httpserver."+clfNS+".svc:8443", `{"data":"record2"}`)).To(o.BeTrue())
+
+			g.By("check auditlogs in fluentd server")
+			fluentdS.checkData(oc, true, "audit.log")
+		})
 	})
 })
