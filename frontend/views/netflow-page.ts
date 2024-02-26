@@ -101,6 +101,9 @@ export namespace colSelectors {
     export const DNSResponseCode = '[data-test=th-DNSResponseCode] > .pf-c-table__column-help > .pf-c-table__button'
     export const DNSId = '[data-test=th-DNSId] > .pf-c-table__button'
     export const DNSError = '[data-test=th-DNSErrNo] > .pf-c-table__button'
+    export const SrcZone = '[data-test=th-SrcZone] > .pf-c-table__button'
+    export const DstZone = '[data-test=th-DstZone] > .pf-c-table__button'
+    export const ClusterName = '[data-test=th-ClusterName] > .pf-c-table__button'
 }
 
 export namespace filterSelectors {

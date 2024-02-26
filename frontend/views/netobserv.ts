@@ -4,6 +4,8 @@ export const project = "netobserv"
 
 export namespace flowcollectorFormSelectors {
     export const ebpfPrivilegedToggle = '#root_spec_agent_ebpf_privileged_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
+    export const zonesToggle = '#root_spec_processor_addZone_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
+    export const multiClusterToggle = '#root_spec_processor_multiClusterDeployment_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
 }
 
 export const Operator = {
@@ -101,6 +103,9 @@ export const Operator = {
                 if (parameters == "Conversations") {
                     Operator.enableConversations()
                 }
+                if (parameters == "ZonesAndMultiCluster") {
+                    Operator.enableZonesAndMultiCluster()
+                }
                 if (parameters == "AllMetrics") {
                     Operator.enableAllFLPMetrics()
                 }
@@ -192,6 +197,14 @@ export const Operator = {
             cy.contains("All").should('exist')
             cy.get('#All-link').click()
         })
+    },
+    enableZonesAndMultiCluster: () => {
+        cy.get('#root_spec_processor_accordion-toggle').click()
+        // Enable zones
+        cy.get(flowcollectorFormSelectors.zonesToggle).click()
+        // Enable multiCluster
+        cy.get("#root_spec_processor_accordion-content div.pf-v5-c-expandable-section > button").should('exist').click()
+        cy.get(flowcollectorFormSelectors.multiClusterToggle).click()
     },
     deleteFlowCollector: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')

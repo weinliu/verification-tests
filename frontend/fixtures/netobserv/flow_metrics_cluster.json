@@ -1,0 +1,128 @@
+{
+  "resultType": "matrix",
+  "result": [
+    {
+      "metric": {},
+      "values": [
+        [
+          1708547400,
+          "1213.7388888888886"
+        ],
+        [
+          1708547760,
+          "4136.386111111111"
+        ],
+        [
+          1708548120,
+          "5937.636111111112"
+        ],
+        [
+          1708548480,
+          "5925.898611111113"
+        ],
+        [
+          1708548840,
+          "5954.87638888889"
+        ],
+        [
+          1708549200,
+          "6167.516666666666"
+        ]
+      ]
+    }
+  ],
+  "stats": {
+    "summary": {
+      "bytesProcessedPerSecond": 1832477094,
+      "linesProcessedPerSecond": 2513100,
+      "totalBytesProcessed": 1102341311,
+      "totalLinesProcessed": 1511776,
+      "execTime": 0.60155803,
+      "queueTime": 9.724042988,
+      "subqueries": 0,
+      "totalEntriesReturned": 1,
+      "splits": 5,
+      "shards": 80,
+      "totalPostFilterLines": 858628,
+      "totalStructuredMetadataBytesProcessed": 0
+    },
+    "querier": {
+      "store": {
+        "totalChunksRef": 0,
+        "totalChunksDownloaded": 0,
+        "chunksDownloadTime": 0,
+        "chunk": {
+          "headChunkBytes": 0,
+          "headChunkLines": 0,
+          "decompressedBytes": 0,
+          "decompressedLines": 0,
+          "compressedBytes": 0,
+          "totalDuplicates": 0,
+          "postFilterLines": 0,
+          "headChunkStructuredMetadataBytes": 0,
+          "decompressedStructuredMetadataBytes": 0
+        }
+      }
+    },
+    "ingester": {
+      "totalReached": 80,
+      "totalChunksMatched": 2110,
+      "totalBatches": 1718,
+      "totalLinesSent": 826968,
+      "store": {
+        "totalChunksRef": 250,
+        "totalChunksDownloaded": 250,
+        "chunksDownloadTime": 26459344,
+        "chunk": {
+          "headChunkBytes": 91933863,
+          "headChunkLines": 131494,
+          "decompressedBytes": 1010407448,
+          "decompressedLines": 1380282,
+          "compressedBytes": 205330084,
+          "totalDuplicates": 6371,
+          "postFilterLines": 858628,
+          "headChunkStructuredMetadataBytes": 0,
+          "decompressedStructuredMetadataBytes": 0
+        }
+      }
+    },
+    "cache": {
+      "chunk": {
+        "entriesFound": 0,
+        "entriesRequested": 0,
+        "entriesStored": 0,
+        "bytesReceived": 0,
+        "bytesSent": 0,
+        "requests": 0,
+        "downloadTime": 0
+      },
+      "index": {
+        "entriesFound": 0,
+        "entriesRequested": 0,
+        "entriesStored": 0,
+        "bytesReceived": 0,
+        "bytesSent": 0,
+        "requests": 0,
+        "downloadTime": 0
+      },
+      "result": {
+        "entriesFound": 0,
+        "entriesRequested": 5,
+        "entriesStored": 5,
+        "bytesReceived": 0,
+        "bytesSent": 0,
+        "requests": 10,
+        "downloadTime": 42514
+      },
+      "statsResult": {
+        "entriesFound": 0,
+        "entriesRequested": 0,
+        "entriesStored": 0,
+        "bytesReceived": 0,
+        "bytesSent": 0,
+        "requests": 0,
+        "downloadTime": 0
+      }
+    }
+  }
+}
