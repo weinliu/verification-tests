@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		exutil.By("Check that the ControllerConfig has been properly synced")
 		o.Eventually(cc.GetImageRegistryBundleUserDataByFileName,
-			"45s", "20s").WithArguments(certFileName).Should(
+			"3m", "20s").WithArguments(certFileName).Should(
 			exutil.Secure(o.Equal(newCertificate)),
 			"The new certificate was not properly added to the controller config imageRegistryBundleUserData")
 
