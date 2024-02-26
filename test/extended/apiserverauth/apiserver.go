@@ -1262,7 +1262,7 @@ spec:
 		}
 
 		exutil.By("7) To add applications to created project, check if Quota usage of the project is changed.")
-		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("openshift/hello-openshift", "--import-mode=PreserveOriginal").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
 		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {

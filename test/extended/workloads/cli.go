@@ -2215,7 +2215,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", projectName).Execute()
 
 		exutil.By("Create new app")
-		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("openshift/hello-openshift", "-n", projectName, "--import-mode=PreserveOriginal").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName, "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
 		var poderr error
