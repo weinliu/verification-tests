@@ -1248,6 +1248,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.By("check all pods are created")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
+			g.By("confirm thanos-ruler is ready")
+			exutil.AssertPodToBeReady(oc, "thanos-ruler-user-workload-0", "openshift-user-workload-monitoring")
+			thanosPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", " app.kubernetes.io/name=thanos-ruler", "-n", "openshift-user-workload-monitoring").Output()
+			e2e.Logf("thanos-ruler pods: \n%v", thanosPod)
+			thanosSaErr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+				thanosSa, err := oc.AsAdmin().Run("get").Args("sa", "thanos-ruler", "-n", "openshift-user-workload-monitoring").Output()
+				if err != nil || strings.Contains(thanosSa, "not found") {
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(thanosSaErr, "sa not created")
+
 			g.By("check the alerts could be found in alertmanager under openshift-user-workload-monitoring project")
 			token := getSAToken(oc, "thanos-ruler", "openshift-user-workload-monitoring")
 			checkMetric(oc, `https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts`, token, "TestAlert1", 3*uwmLoadTime)
@@ -1317,6 +1330,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			)
 			g.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring").Execute()
 
 			g.By("check alertmanager pod is created")
 			err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
