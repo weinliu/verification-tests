@@ -63,7 +63,7 @@
       "risks": [
         {
           "url": "https://openshift-release.apps.ci.l2s4.p1.openshiftapps.com/releasestream/4.10.0-0.nightly/release/4.10.0-0.nightly-2021-11-24-075634",
-          "name": "ReleaseIsRejected",
+          "name": "ReleaseIsRejected!",
           "message": "Too many CI failures on this release, so do not update to it",
           "matchingRules": [
             {

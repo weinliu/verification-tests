@@ -234,7 +234,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"8888888888888888888888888888888888888888888888888888888888888888",
 			"Recommended: False",
-			"Reason: ReleaseIsRejected",
+			"Reason: ExposedToRisks",
 			"Message: Too many CI failures on this release, so do not update to it",
 			"Version: 4.77.777777",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
