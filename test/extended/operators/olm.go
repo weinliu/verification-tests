@@ -9074,11 +9074,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(ipConditions).To(o.ContainSubstring("apiextensions.k8s.io/v1beta1"))
 		o.Expect(ipConditions).To(o.ContainSubstring("Kind=CustomResourceDefinition not found on the cluster"))
 		o.Expect(ipConditions).To(o.ContainSubstring("InstallComponentFailed"))
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallComponentFailed", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
 		subConditions := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}")
 		o.Expect(subConditions).To(o.ContainSubstring("api-server resource not found installing CustomResourceDefinition"))
 		o.Expect(subConditions).To(o.ContainSubstring("apiextensions.k8s.io/v1beta1"))
 		o.Expect(subConditions).To(o.ContainSubstring("Kind=CustomResourceDefinition not found on the cluster"))
-		o.Expect(subConditions).To(o.ContainSubstring("InstallComponentFailed"))
 		exutil.By("4) SUCCESS")
 	})
 
