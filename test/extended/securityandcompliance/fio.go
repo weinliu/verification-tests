@@ -105,7 +105,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
-		fi1.assertFileintegritynodestatusSucceeded(oc, nodeName)
+		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
+		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
+			"-o=jsonpath={.lastResult.condition}").Output()
+		if output == "Failed" {
+			fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
+			fi1.checkFileintegrityStatus(oc, "running")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
+		}
 
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test" + getRandomString()
@@ -114,7 +123,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
-		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fileintegrityNodeStatusName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

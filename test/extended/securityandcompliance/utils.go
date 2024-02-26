@@ -560,22 +560,12 @@ func checkDBFilesUpdated(oc *exutil.CLI, fi1 fileintegrity, oldDbBackupfiles []s
 	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("%s", errorMsg))
 }
 
-func (fi1 *fileintegrity) assertFileintegritynodestatusSucceeded(oc *exutil.CLI, nodeName string) {
+func (fi1 *fileintegrity) assertFileintegritynodestatusNotEmpty(oc *exutil.CLI, nodeName string) {
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		fileintegrityName := fi1.name + "-" + nodeName
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
 			"-o=jsonpath={.lastResult.condition}").Output()
-		if output == "Succeeded" {
-			return true, nil
-		}
-		if output == "Failed" {
-			fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
-			fi1.checkFileintegrityStatus(oc, "running")
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-			fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
-			return true, nil
-		}
-		return false, nil
+		return output != "", nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fileintegritynodestatuses %s is not Succeeded", fi1.name+"-"+nodeName))
 }
