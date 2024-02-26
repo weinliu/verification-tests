@@ -472,18 +472,29 @@ func chkVFStatusWithPassTraffic(oc *exutil.CLI, nadName, nicName, ns, expectVaul
 			chkVFStatusMatch(oc, nodeName, nicName, podMac, expectVaule)
 		}
 	}
+	chkPodsPassTraffic(oc, "testpod0", "testpod1", "net1", ns)
+}
+
+func chkPodsPassTraffic(oc *exutil.CLI, pod1name string, pod2name string, infName string, ns string) {
 	exutil.By("Check the interface is connected, if not skip the connect testing")
-	podConnectStatus, err := e2eoutput.RunHostCmdWithRetries(ns, "testpod1", "ip addr show net1", 3*time.Second, 30*time.Second)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The ip connection show. \n %v", podConnectStatus)
+	cmd := "ip addr show " + infName
+	podConnectStatus1, err1 := e2eoutput.RunHostCmdWithRetries(ns, pod1name, cmd, 3*time.Second, 30*time.Second)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	podConnectStatus2, err2 := e2eoutput.RunHostCmdWithRetries(ns, pod2name, cmd, 3*time.Second, 30*time.Second)
+	o.Expect(err2).NotTo(o.HaveOccurred())
+
+	e2e.Logf("The ip connection of %v show: \n %v", pod1name, podConnectStatus1)
+	e2e.Logf("The ip connection of %v show: \n %v", pod2name, podConnectStatus2)
 	//if podConnectStatus including NO-CARRIER, then skip the connection testing
-	if !strings.Contains(podConnectStatus, "NO-CARRIER") {
+	if !strings.Contains(podConnectStatus1, "NO-CARRIER") && !strings.Contains(podConnectStatus2, "NO-CARRIER") {
 		exutil.By("Check test pod have second interface with assigned ip")
-		pod2ns1IPv4, err := e2eoutput.RunHostCmdWithRetries(ns, "testpod1", "ip -o -4 addr show dev net1 | awk '$3 == \"inet\" {print $4}' | cut -d'/' -f1", 3*time.Second, 30*time.Second)
+		cmd = "ip -o -4 addr show dev " + infName + " | awk '$3 == \"inet\" {print $4}' | cut -d'/' -f1"
+		pod2ns1IPv4, err := e2eoutput.RunHostCmdWithRetries(ns, pod2name, cmd, 3*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		CurlMultusPod2PodPass(oc, ns, "testpod0", pod2ns1IPv4, "net1", "Hello")
+		CurlMultusPod2PodPass(oc, ns, pod1name, pod2ns1IPv4, infName, "Hello")
 	}
+
 }
 
 func (sriovTestPod *sriovTestPod) deleteSriovTestPod(oc *exutil.CLI) {
