@@ -670,8 +670,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			externalTrafficPolicy: "", //This no value parameter will be ignored
 			template:              genericServiceTemplate,
 		}
-
-		svc.ipFamilyPolicy = "SingleStack"
+		if ipStackType == "dualstack" {
+			svc.ipFamilyPolicy = "PreferDualStack"
+		} else {
+			svc.ipFamilyPolicy = "SingleStack"
+		}
 		defer removeResource(oc, true, true, "service", svc.servicename, "-n", svc.namespace)
 		svc.createServiceFromParams(oc)
 		exutil.By("5. Get NodePort at which service listens.")
