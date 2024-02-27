@@ -48,7 +48,11 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 			policys = append(policys, items.Name)
 
 		}
-		rmSriovNetworkPolicy(oc, strings.Join(policys, " "), sriovOpNs)
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"SriovNetworkNodePolicy", "-n", sriovOpNs, "--ignore-not-found"}, policys...)...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("remove sriovnetworknodepolicy %s", strings.Join(policys, " "))
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
 	})
 
 	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-25959-Test container with spoofchk is on [Disruptive]", func() {
