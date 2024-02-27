@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Slow][Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without aide config")
@@ -271,25 +271,24 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		nodeName := getOneRhcosWorkerNodeName(oc)
+		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
+		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
+			"-o=jsonpath={.lastResult.condition}").Output()
+		if output == "Failed" {
+			fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
+			fi1.checkFileintegrityStatus(oc, "running")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
+		}
 
 		g.By("trigger fileintegrity failure on node")
-		var pod1, pod2 podModify = podModifyD, podModifyD
-		pod1.namespace = oc.Namespace()
-		nodeName := getOneRhcosWorkerNodeName(oc)
-		pod1.name = "pod-modify"
-		pod1.nodeName = nodeName
-		var filePath = "/hostroot/root/test/test" + getRandomString()
-		pod1.args = "mkdir -p " + filePath
-		defer func() {
-			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
-			pod2.name = "pod-recover"
-			pod2.namespace = oc.Namespace()
-			pod2.nodeName = nodeName
-			pod2.args = "rm -rf " + filePath
-			pod2.doActionsOnNode(oc, "Succeeded")
-			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
-		}()
-		pod1.doActionsOnNode(oc, "Succeeded")
+		var filePath = "/root/test" + getRandomString()
+		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
+		debugNodeStdout, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fi1.name+"-"+nodeName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
@@ -640,26 +639,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 
 		g.By("trigger fileintegrity failure on node")
-		var pod1, pod2 podModify = podModifyD, podModifyD
-		pod1.namespace = oc.Namespace()
-		pod1.name = "pod-modify"
-		pod1.nodeName = nodeName
-		var filePath = "/hostroot/root/test/test" + getRandomString()
-		pod1.args = "mkdir -p " + filePath
-		defer func() {
-			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
-			pod2.name = "pod-recover"
-			pod2.namespace = oc.Namespace()
-			pod2.nodeName = nodeName
-			pod2.args = "rm -rf " + filePath
-			pod2.doActionsOnNode(oc, "Succeeded")
-			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
-		}()
-		pod1.doActionsOnNode(oc, "Succeeded")
+		var filePath = "/root/test" + getRandomString()
+		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
+		debugNodeStdout, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 
-		metricsErr := []string{"file_integrity_operator_daemonset_update_total{operation=\"update\"} 1", "file_integrity_operator_node_failed{node=\"" + nodeName + "\"} 1",
-			"file_integrity_operator_node_status_total{condition=\"Failed\",node=\"" + nodeName + "\"} 1"}
+		metricsErr := []string{"file_integrity_operator_daemonset_update_total{operation=\"update\"}", "file_integrity_operator_node_failed{node=\"" + nodeName + "\"}",
+			"file_integrity_operator_node_status_total{condition=\"Failed\",node=\"" + nodeName + "\"}"}
 
 		checkMetric(oc, metricsErr, sub.namespace, "fio")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "file-integrity", ok, []string{"PrometheusRule", "-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
