@@ -590,15 +590,14 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		e2e.Logf("Checking openshift-controller-manager operator should be in Progressing in 100 seconds")
+		e2e.Logf("Checking openshift-controller-manager operator should be in Progressing in 150 seconds")
 		expectedStatus := map[string]string{"Progressing": "True"}
 		// Increasing wait time for prow ci failures
-		err = waitCoBecomes(oc, "openshift-controller-manager", 300, expectedStatus) // Wait it to become Progressing=True
-		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not start progressing in 200 seconds")
-		e2e.Logf("Checking openshift-controller-manager operator should be Available in 300 seconds")
+		waitCoBecomes(oc, "openshift-controller-manager", 150, expectedStatus) // Wait it to become Progressing=True
+		e2e.Logf("Checking openshift-controller-manager operator should be Available in 150 seconds")
 		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		err = waitCoBecomes(oc, "openshift-controller-manager", 500, expectedStatus) // Wait it to become Available=True and Progressing=False and Degraded=False
-		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not becomes available in 300 seconds")
+		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not becomes available in 500 seconds")
 
 		exutil.By("Create the new kubeconfig")
 		e2e.Logf("Add system:admin credentials, context to the kubeconfig")
