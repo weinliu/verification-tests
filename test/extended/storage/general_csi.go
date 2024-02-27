@@ -1082,8 +1082,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: Non-supported provisioner!!!")
 		}
 
-		if exutil.Is3MasterNoDedicatedWorkerNode(oc) {
-			g.Skip("Skip: The test cluster is 3 nodes compact cluster not satisfy the test requirement!!")
+		// Check whether the test cluster satisfy the test scenario
+		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("Skipped: SNO/Compact clusters are not satisfy the test scenario!!!")
 		}
 
 		var nonZonedProvisioners = []string{"file.csi.azure.com", "efs.csi.aws.com", "filestore.csi.storage.gke.io"}
