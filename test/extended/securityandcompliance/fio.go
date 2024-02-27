@@ -665,4 +665,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		newCheck("expect", asAdmin, withoutNamespace, contain, "file-integrity", ok, []string{"PrometheusRule", "-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NodeHasIntegrityFailure", ok, []string{"PrometheusRule", "file-integrity", "-n", sub.namespace, "-ojsonpath={.spec.groups[0].rules[0].alert}"}).check(oc)
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("CPaasrunOnly-Author:xiyuan-High-71796-file integrity operator should pass DAST test", func() {
+		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_fileintegrity_v1alpha1.yaml")
+		policyFile := filepath.Join(buildPruningBaseDir, "rapidast/customscan.policy")
+		_, err := rapidastScan(oc, oc.Namespace(), configFile, policyFile, "fileintegrity.openshift.io_v1alpha1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })

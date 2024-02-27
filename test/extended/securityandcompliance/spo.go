@@ -2473,4 +2473,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, `Set logging verbosity to 1`)).To(o.BeTrue())
 	})
+
+	// author: xiyuan@redhat.com
+	g.It("CPaasrunOnly-Author:xiyuan-High-71797-security profiles operator should pass DAST test", func() {
+		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_security-profiles-operator_v1beta1.yaml")
+		policyFile := filepath.Join(buildPruningBaseDir, "rapidast/customscan.policy")
+		_, err := rapidastScan(oc, oc.Namespace(), configFile, policyFile, "security-profiles-operator_v1beta1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
