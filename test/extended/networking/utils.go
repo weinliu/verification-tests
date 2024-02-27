@@ -1438,9 +1438,10 @@ func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The pod's %s 2nd IP in namespace %s is %q", podName, namespace, podIP2)
 		if netutils.IsIPv6String(podIP1) {
-			e2e.Logf("This is IPv6 primary dual stack cluster")
+			e2e.Logf("This is IPv4 primary dual stack cluster")
 			return podIP1, podIP2
 		}
+		e2e.Logf("This is IPv6 primary dual stack cluster")
 		return podIP2, podIP1
 	}
 	return "", ""
