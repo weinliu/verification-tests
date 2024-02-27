@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-66532-[CSI-Driver-Operator] Check Azure-Disk and Azure-File CSI-Driver-Operator configuration on manual mode with Azure Workload Identity
-	g.It("ROSA-OSD_CCS-ARO-Author:wduan-High-66532-[CSI-Driver-Operator] Check Azure-Disk and Azure-File CSI-Driver-Operator configuration on manual mode with Azure Workload Identity", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wduan-High-66532-[CSI-Driver-Operator] Check Azure-Disk and Azure-File CSI-Driver-Operator configuration on manual mode with Azure Workload Identity", func() {
 
 		// Check only on Azure cluster with manual credentialsMode
 		credentialsMode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredentials/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
