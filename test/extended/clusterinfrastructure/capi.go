@@ -145,4 +145,22 @@ machinesets.cluster.x-k8s.io`
 			o.Expect(crds).To(o.ContainSubstring("CustomNoUpgrade"))
 		}
 	})
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71913-[capi] Promote CAPI IPAM CRDs to GA", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere", "gcp", "aws", "alicloud", "ibmcloud", "nutanix")
+
+		expectedCRDs := `ipaddressclaims.ipam.cluster.x-k8s.io
+ipaddresses.ipam.cluster.x-k8s.io`
+
+		expectedCRD := strings.Split(expectedCRDs, "\n")
+
+		g.By("Get capi crds in cluster")
+		for _, crd := range expectedCRD {
+			// Execute `oc get crds <CRD name>` for each CRD
+			crds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crds", crd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(crds).NotTo(o.ContainSubstring("not found"))
+		}
+	})
+
 })
