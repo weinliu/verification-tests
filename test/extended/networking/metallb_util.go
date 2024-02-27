@@ -3,6 +3,8 @@ package networking
 import (
 	"context"
 	"fmt"
+	"net"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -328,7 +330,7 @@ func checkLoadBalancerSvcStatus(oc *exutil.CLI, namespace string, svcName string
 			e2e.Logf("Failed to get service status, error:%s. Trying again", err)
 			return false, nil
 		}
-		if strings.Contains(output, "Pending") || output == "" {
+		if strings.Contains(output, "<pending>") || output == "" {
 			e2e.Logf("Failed to assign address to service, error:%s. Trying again", err)
 			return false, nil
 		}
@@ -345,16 +347,31 @@ func getLoadBalancerSvcIP(oc *exutil.CLI, namespace string, svcName string) stri
 	return svcIP
 }
 
-func validateService(oc *exutil.CLI, nodeName string, svcExternalIP string) bool {
+func validateService(oc *exutil.CLI, curlHost string, svcExternalIP string) bool {
 	e2e.Logf("Validating LoadBalancer service with IP %s", svcExternalIP)
-	stdout, err := exutil.DebugNode(oc, nodeName, "curl", svcExternalIP, "--connect-timeout", "30")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(stdout).Should(o.ContainSubstring("Hello OpenShift!"))
-	if err != nil {
-		e2e.Logf("Error %s", err)
+	curlHostIP := net.ParseIP(curlHost)
+	var curlOutput string
+	var curlErr error
+	connectTimeout := "5"
+	if curlHostIP.To4() != nil {
+		//From test runner with proxy
+		var cmdOutput []byte
+		svcChkCmd := fmt.Sprintf("curl -H 'Cache-Control: no-cache' -x 'http://%s:8888' %s --connect-timeout %s", curlHost, svcExternalIP, connectTimeout)
+		cmdOutput, curlErr = exec.Command("bash", "-c", svcChkCmd).Output()
+		curlOutput = string(cmdOutput)
+	} else {
+		curlOutput, curlErr = exutil.DebugNode(oc, curlHost, "curl", svcExternalIP, "--connect-timeout", connectTimeout)
+	}
+
+	if strings.Contains(curlOutput, "Hello OpenShift!") {
+		return true
+	}
+	if curlErr != nil {
+		e2e.Logf("Error %s", curlErr)
 		return false
 	}
-	return true
+	e2e.Logf("Output of curl %s", curlOutput)
+	return false
 
 }
 
@@ -449,7 +466,7 @@ func deleteIPAddressPool(oc *exutil.CLI, rs ipAddressPoolResource) {
 
 func createL2AdvertisementCR(oc *exutil.CLI, l2advertisement l2AdvertisementResource, l2AdvertisementTemplate string) (status bool) {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", l2advertisement.template, "-p", "NAME="+l2advertisement.name, "NAMESPACE="+l2advertisement.namespace,
-		"IPADDRESSPOOL1="+l2advertisement.ipAddressPools[0], "INTERFACE1="+l2advertisement.interfaces[0], "INTERFACES2="+l2advertisement.interfaces[1], "INTERFACES3="+l2advertisement.interfaces[2],
+		"IPADDRESSPOOL1="+l2advertisement.ipAddressPools[0], "INTERFACE1="+l2advertisement.interfaces[0], "INTERFACE2="+l2advertisement.interfaces[1], "INTERFACE3="+l2advertisement.interfaces[2],
 		"WORKER1="+l2advertisement.nodeSelectorValues[0], "WORKER2="+l2advertisement.nodeSelectorValues[1])
 	if err != nil {
 		e2e.Logf("Error creating l2advertisement %v", err)
@@ -461,7 +478,7 @@ func createL2AdvertisementCR(oc *exutil.CLI, l2advertisement l2AdvertisementReso
 
 func deleteL2Advertisement(oc *exutil.CLI, rs l2AdvertisementResource) {
 	e2e.Logf("delete %s %s in namespace %s", "l2advertisement", rs.name, rs.namespace)
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("l2advertisement", rs.name, "-n", rs.namespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("l2advertisement", rs.name, "-n", rs.namespace, "--ignore-not-found=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -635,4 +652,30 @@ func deleteBGPAdvertisement(oc *exutil.CLI, rs bgpAdvertisementResource) {
 	e2e.Logf("Delete %s %s in namespace %s", "bgpadvertisement", rs.name, rs.namespace)
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("bgpadvertisement", rs.name, "-n", rs.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason string) bool {
+	fieldSelectorArgs := fmt.Sprintf("reason=%s,involvedObject.kind=Service,involvedObject.name=%s", reason, svcName)
+	result := false
+	errCheck := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		var svcEvents string
+		svcEvents, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", namespace, "--field-selector", fieldSelectorArgs).Output()
+		if err != nil {
+			return false, nil
+		}
+		if !strings.Contains(svcEvents, "No resources found") {
+			for _, index := range strings.Split(svcEvents, "\n") {
+				if strings.Contains(index, reason) {
+					e2e.Logf("Processing event %s for service", index)
+					result = true
+				}
+			}
+			return true, nil
+		}
+		return false, nil
+
+	})
+	if errCheck != nil {
+		return result
+	}
+	return result
 }

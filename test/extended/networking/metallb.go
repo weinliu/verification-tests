@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
@@ -27,12 +29,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		serviceLabelValue         = "Test"
 		serviceNodePortAllocation = true
 		testDataDir               = exutil.FixturePath("testdata", "networking/metallb")
-		l2Addresses               = [2]string{"192.168.111.65-192.168.111.74", "192.168.111.75-192.168.111.84"}
+		l2Addresses               = [2][2]string{{"192.168.111.65-192.168.111.69", "192.168.111.70-192.168.111.74"}, {"192.168.111.75-192.168.111.79", "192.168.111.80-192.168.111.85"}}
 		bgpAddresses              = [2][2]string{{"10.10.10.0-10.10.10.10", "10.10.11.1-10.10.11.10"}, {"10.10.12.1-10.10.12.10", "10.10.13.1-10.10.13.10"}}
 		myASN                     = 64500
 		peerASN                   = 64500
 		peerIPAddress             = "192.168.111.60"
 		bgpCommunties             = [1]string{"65001:65500"}
+		proxyHost                 = "10.8.1.181"
 	)
 
 	g.BeforeEach(func() {
@@ -159,7 +162,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
-			addresses:                 l2Addresses[:],
+			addresses:                 l2Addresses[0][:],
 			namespaces:                namespaces[:],
 			priority:                  10,
 			avoidBuggyIPs:             true,
@@ -298,7 +301,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
-			addresses:                 l2Addresses[:],
+			addresses:                 l2Addresses[0][:],
 			namespaces:                namespaces[:],
 			priority:                  10,
 			avoidBuggyIPs:             true,
@@ -439,7 +442,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
-			addresses:                 l2Addresses[:],
+			addresses:                 l2Addresses[0][:],
 			namespaces:                namespaces[:],
 			priority:                  10,
 			avoidBuggyIPs:             true,
@@ -681,6 +684,10 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		}
 		defer deleteBGPAdvertisement(oc, bgpAdvertisement)
 		o.Expect(createBGPAdvertisementCR(oc, bgpAdvertisement)).To(o.BeTrue())
+		addrPoolList, err := json.Marshal(ipaddrpools)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchIPAddresspools := fmt.Sprintf("{\"spec\":{\"ipAddressPools\": %s}}", string(addrPoolList))
+		patchResourceAsAdmin(oc, "bgpadvertisements/"+bgpAdvertisement.name, patchIPAddresspools, "metallb-system")
 
 		exutil.By("8. Create a service to verify it is assigned address from the pool that has higher priority")
 		loadBalancerServiceTemplate := filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
@@ -965,6 +972,440 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 		}
 
+	})
+	// Test cases for CNF-6313 L2 interface selector productization
+	g.It("Longduration-NonPreRelease-Author:asood-High-60513-High-60514-High-60515-High-60518-High-60519-Verify L2 service is reachable if service IP is advertised from specific interface on node using one or more L2 advertisements through the updates to L2 advetisements and gets indication if interface is not configured[Serial]", func() {
+		var (
+			ns                   string
+			namespaces           []string
+			testID               = "60513"
+			serviceSelectorKey   = "environ"
+			serviceSelectorValue = [1]string{"Test"}
+			namespaceLabelKey    = "region"
+			namespaceLabelValue  = [1]string{"NA"}
+			interfaces           = [3]string{"br-ex", "eno1", "eno2"}
+			vmWorkers            []string
+			workers              []string
+			ipaddresspools       []string
+		)
+
+		exutil.By("0.1. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
+		}
+		//Two worker nodes needed to create l2advertisement object
+		exutil.By("0.2. Determine suitability of worker nodes for the test")
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		for i := 0; i < len(workerList.Items); i++ {
+			if strings.Contains(workerList.Items[i].Name, "worker") {
+				vmWorkers = append(vmWorkers, workerList.Items[i].Name)
+			} else {
+				workers = append(workers, workerList.Items[i].Name)
+			}
+		}
+		e2e.Logf("Virtual Nodes %s", vmWorkers)
+		e2e.Logf("Real Nodes %s", workers)
+		if len(workers) < 1 || len(vmWorkers) < 1 {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes, virtual and real each.")
+		}
+		vmList, err := json.Marshal(workers)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1. Get the namespace")
+		ns = oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test"+testID)
+
+		exutil.By("2. Get the master nodes in the cluster for validating service")
+		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:      "metallb",
+			namespace: opNamespace,
+			template:  metallbCRTemplate,
+		}
+		defer deleteMetalLBCR(oc, metallbCR)
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("SUCCESS - MetalLB CR Created")
+
+		exutil.By("4. Create IP addresspools")
+		ipAddresspoolTemplate := filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+
+		for i := 0; i < 2; i++ {
+			ipAddresspool := ipAddressPoolResource{
+				name:                      "ipaddresspool-l2-" + strconv.Itoa(i),
+				namespace:                 opNamespace,
+				addresses:                 l2Addresses[i][:],
+				namespaces:                namespaces[:],
+				priority:                  10,
+				avoidBuggyIPs:             true,
+				autoAssign:                true,
+				serviceLabelKey:           serviceSelectorKey,
+				serviceLabelValue:         serviceSelectorValue[0],
+				serviceSelectorKey:        serviceSelectorKey,
+				serviceSelectorOperator:   "In",
+				serviceSelectorValue:      serviceSelectorValue[:],
+				namespaceLabelKey:         namespaceLabelKey,
+				namespaceLabelValue:       namespaceLabelValue[0],
+				namespaceSelectorKey:      namespaceLabelKey,
+				namespaceSelectorOperator: "In",
+				namespaceSelectorValue:    namespaceLabelValue[:],
+				template:                  ipAddresspoolTemplate,
+			}
+			defer deleteIPAddressPool(oc, ipAddresspool)
+			result = createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)
+			o.Expect(result).To(o.BeTrue())
+			ipaddresspools = append(ipaddresspools, ipAddresspool.name)
+		}
+		exutil.By(fmt.Sprintf("IP address pool %s created successfully", ipaddresspools[:]))
+		//Ensure address is not assigned from address pool automatically by setting autoAssign to false
+		addressList, err := json.Marshal(l2Addresses[1][:])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchInfo := fmt.Sprintf("{\"spec\":{\"autoAssign\": false, \"addresses\": %s}}", string(addressList))
+		patchResourceAsAdmin(oc, "ipaddresspools/"+ipaddresspools[1], patchInfo, "metallb-system")
+
+		exutil.By("5. Create L2 Advertisement")
+		l2AdvertisementTemplate := filepath.Join(testDataDir, "l2advertisement-template.yaml")
+		//Just assign one of the addresspool, use the second one for later
+		ipaddrpools := []string{ipaddresspools[0], ""}
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv",
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddrpools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: vmWorkers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer deleteL2Advertisement(oc, l2advertisement)
+		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("6.0 60513 Verify L2 service with ETP Local or Cluster is reachable if service IP is advertised from specific interface on node.")
+		exutil.By(fmt.Sprintf("6.1 Patch L2 Advertisement to ensure one interface that allows functionl services for test case %s", testID))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"br-ex\"]}}", "metallb-system")
+
+		exutil.By("6.2 Create LoadBalancer services using Layer 2 addresses")
+		loadBalancerServiceTemplate := filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+
+		svc := loadBalancerServiceResource{
+			name:                          "hello-world-" + testID + "-0",
+			namespace:                     ns,
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			allocateLoadBalancerNodePorts: serviceNodePortAllocation,
+			externaltrafficpolicy:         "Cluster",
+			template:                      loadBalancerServiceTemplate,
+		}
+		exutil.By(fmt.Sprintf("6.3. Create a service with ETP cluster with name %s", svc.name))
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("The %s service created successfully", svc.name)
+
+		exutil.By("6.4 Validate LoadBalancer services")
+		svcErr := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
+		checkSvcErr := wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == true {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", svc.name, svcIP))
+
+		svc.name = "hello-world-" + testID + "-1"
+		svc.externaltrafficpolicy = "Local"
+		exutil.By(fmt.Sprintf("6.5 Create a service with ETP %s with name %s", svc.externaltrafficpolicy, svc.name))
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("The %s service created successfully", svc.name)
+
+		exutil.By("6.6 Validate LoadBalancer services")
+		svcErr = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, masterNodeList[0], svcIP)
+			if result == true {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", svc.name, svcIP))
+		testID = "60514"
+		exutil.By("7.0 60514 Verify user is given indication if specified interface does not exist on any of the selected node in L2 advertisement")
+		exutil.By(fmt.Sprint("7.1 Patch L2 Advertisement to use interface that does not exist on nodes for test case", testID))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"eno1\"]}}", "metallb-system")
+		exutil.By(fmt.Sprintf("7.2 Create service for test case %s", testID))
+		svc.name = "hello-world-" + testID
+		svc.externaltrafficpolicy = "Cluster"
+
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("The %s service created successfully", svc.name)
+		svcErr = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+
+		exutil.By("7.3 Check the event is generated for the interface")
+		o.Expect(checkServiceEvents(oc, svc.name, svc.namespace, "announceFailed")).To(o.BeTrue())
+
+		exutil.By("7.4 Validate LoadBalancer service is not reachable")
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == false {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", svc.name, svcIP))
+
+		exutil.By("7.5 Validate LoadBalancer service is reachable after L2 Advertisement is updated")
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"br-ex\"]}}", "metallb-system")
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == true {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", svc.name, svcIP))
+
+		testID = "60515"
+		exutil.By("8.0 60515 Verify service IP from IP addresspool for set of worker nodes is announced from a specific interface")
+		exutil.By(fmt.Sprintf("8.1 Update interfaces and nodeSelector of %s", l2advertisement.name))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"eno1\", \"eno2\"]}}", "metallb-system")
+		patchNodeSelector := fmt.Sprintf("{\"spec\":{\"nodeSelectors\": [{\"matchExpressions\": [{\"key\":\"kubernetes.io/hostname\", \"operator\": \"In\", \"values\": %s}]}]}}", string(vmList))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, patchNodeSelector, "metallb-system")
+
+		exutil.By("8.2 Create L2 service that is unreachable")
+		svc.name = "hello-world-" + testID
+		svc.externaltrafficpolicy = "Cluster"
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("The %s service created successfully", svc.name)
+		svcErr = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+
+		exutil.By("8.3 Validate LoadBalancer service is not reachable")
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == false {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", svc.name, svcIP))
+		exutil.By("8.4 Create another l2advertisement CR with same ip addresspool but different set of nodes and interface")
+		l2advertisement1 := l2AdvertisementResource{
+			name:               "l2-adv-" + testID,
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddrpools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: vmWorkers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer deleteL2Advertisement(oc, l2advertisement1)
+		result = createL2AdvertisementCR(oc, l2advertisement1, l2AdvertisementTemplate)
+		o.Expect(result).To(o.BeTrue())
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement1.name, "{\"spec\":{\"interfaces\": [\"br-ex\"]}}", "metallb-system")
+		patchNodeSelector = fmt.Sprintf("{\"spec\":{\"nodeSelectors\": [{\"matchExpressions\": [{\"key\":\"kubernetes.io/hostname\", \"operator\": \"In\", \"values\": %s}]}]}}", string(vmList))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement1.name, patchNodeSelector, "metallb-system")
+
+		exutil.By("8.5 Check the event is not generated for the interface")
+		o.Expect(checkServiceEvents(oc, svc.name, svc.namespace, "announceFailed")).To(o.BeFalse())
+
+		exutil.By("8.6 Get LoadBalancer service IP announcing node")
+		nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+		e2e.Logf("%s is announcing the service %s with IP %s ", nodeName, svc.name, svcIP)
+
+		exutil.By("8.7 Verify the service is functional as the another L2 advertisement is used for the ip addresspool")
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == true {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", svc.name, svcIP))
+
+		testID = "60518"
+		i := 0
+		var svcIPs []string
+		exutil.By("9.0 60518 Verify configuration changes like updating the L2 advertisement to add interface, removing L2advertisement and updating addresspool works.")
+		deleteL2Advertisement(oc, l2advertisement1)
+
+		exutil.By(fmt.Sprintf("9.1 Update interfaces and nodeSelector of %s", l2advertisement.name))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"br-ex\", \"eno2\"]}}", "metallb-system")
+		patchNodeSelector = fmt.Sprintf("{\"spec\":{\"nodeSelectors\": [{\"matchExpressions\": [{\"key\":\"kubernetes.io/hostname\", \"operator\": \"In\", \"values\": %s}]}]}}", string(vmList))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, patchNodeSelector, "metallb-system")
+
+		exutil.By("9.2 Create L2 service")
+		svc.name = "hello-world-" + testID + "-" + strconv.Itoa(i)
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("The %s service created successfully", svc.name)
+		svcErr = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+
+		exutil.By("9.3 Validate LoadBalancer service is reachable")
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
+
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == true {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", svc.name, svcIP))
+
+		exutil.By(fmt.Sprintf("9.4 Delete the L2 advertisement resource named %s", l2advertisement.name))
+		deleteL2Advertisement(oc, l2advertisement)
+
+		exutil.By(fmt.Sprintf("9.5 Validate service with name %s is unreachable", svc.name))
+		nodeName = getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+		e2e.Logf("%s is announcing the service %s with IP %s ", nodeName, svc.name, svcIP)
+
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == false {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", svc.name, svcIP))
+		svcIPs = append(svcIPs, svcIP)
+
+		exutil.By("9.6 Create another service request IP address from second IP addresspool, so see it is unreachable")
+		i = i + 1
+		loadBalancerServiceAnnotatedTemplate := filepath.Join(testDataDir, "loadbalancer-svc-annotated-template.yaml")
+		annotatedSvc := loadBalancerServiceResource{
+			name:                          "hello-world-" + testID + "-" + strconv.Itoa(i),
+			namespace:                     ns,
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      "environ",
+			labelValue:                    "Prod",
+			annotationKey:                 "metallb.universe.tf/address-pool",
+			annotationValue:               ipaddresspools[1],
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceAnnotatedTemplate,
+		}
+		defer removeResource(oc, true, true, "service", annotatedSvc.name, "-n", annotatedSvc.namespace)
+		o.Expect(createLoadBalancerService(oc, annotatedSvc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		err = checkLoadBalancerSvcStatus(oc, annotatedSvc.namespace, annotatedSvc.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		svcIP = getLoadBalancerSvcIP(oc, annotatedSvc.namespace, annotatedSvc.name)
+		e2e.Logf("The %s service created successfully with %s with annotation %s:%s", annotatedSvc.name, svcIP, annotatedSvc.annotationKey, annotatedSvc.annotationValue)
+		svcIPs = append(svcIPs, svcIP)
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == false {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", annotatedSvc.name, svcIP))
+		exutil.By("9.7 Create L2 Advertisements with both ip address pools")
+		l2advertisement = l2AdvertisementResource{
+			name:               "l2-adv-" + testID,
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddresspools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: vmWorkers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer deleteL2Advertisement(oc, l2advertisement)
+		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
+		o.Expect(result).To(o.BeTrue())
+		addrPoolList, err := json.Marshal(ipaddresspools)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchIPAddresspools := fmt.Sprintf("{\"spec\":{\"ipAddressPools\": %s}}", string(addrPoolList))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, patchIPAddresspools, "metallb-system")
+
+		exutil.By("9.8 Both services are functional")
+		for i = 0; i < 2; i++ {
+			checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+				result := validateService(oc, proxyHost, svcIPs[i])
+				if result == true {
+					return true, nil
+				}
+				return false, nil
+
+			})
+			exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service at %s to be reachable but was unreachable", svcIPs[i]))
+
+		}
+
+		testID = "60519"
+		exutil.By("10.0 60519 Verify interface can be selected across l2advertisements.")
+		exutil.By(fmt.Sprintf("10.1 Update interface list of %s L2 Advertisement object to non functional", l2advertisement.name))
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"eno1\", \"eno2\"]}}", "metallb-system")
+
+		exutil.By("10.2 Create another L2 Advertisement")
+		l2advertisement1 = l2AdvertisementResource{
+			name:               "l2-adv-" + testID,
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddrpools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: vmWorkers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer deleteL2Advertisement(oc, l2advertisement1)
+		result = createL2AdvertisementCR(oc, l2advertisement1, l2AdvertisementTemplate)
+		o.Expect(result).To(o.BeTrue())
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement1.name, "{\"spec\":{\"interfaces\": [\"br-ex\"]}}", "metallb-system")
+		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement1.name, "{\"spec\":{\"nodeSelectors\": []}}", "metallb-system")
+
+		exutil.By("10.3 Create L2 Service")
+		svc.name = "hello-world-" + testID
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("The %s service created successfully", svc.name)
+		svcErr = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+
+		exutil.By("10.4 Validate LoadBalancer service is reachable")
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
+		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result == true {
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", svc.name, svcIP))
 	})
 
 })
