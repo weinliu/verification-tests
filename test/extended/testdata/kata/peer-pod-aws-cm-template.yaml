@@ -15,8 +15,12 @@ objects:
       PODVM_INSTANCE_TYPES: "${PODVM_INSTANCE_TYPES}"
       PROXY_TIMEOUT: "${PROXY_TIMEOUT}"
       PODVM_AMI_ID: "${PODVM_AMI_ID}"
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SUBNET_ID: "${AWS_SUBNET_ID}"
+      AWS_VPC_ID: "${AWS_VPC_ID}"
+      AWS_SG_IDS: "${AWS_SG_IDS}"
 
-# oc process --ignore-unknown-parameters=true -f $L/peer-pod-azure-cm-template.yaml
+# oc process --ignore-unknown-parameters=true -f $L/peer-pod-aws-cm-template.yaml -p PODVM_AMI_ID=${PODVM_AMI_ID} AWS_SUBNET_ID=${AWS_SUBNET_ID} AWS_VPC_ID=${AWS_VPC_ID} AWS_SG_IDS=${AWS_SG_IDS}
 # This is for end user/Jenkins to create a configmap and apply it to your cluster
 
 parameters:
@@ -26,6 +30,14 @@ parameters:
     value: "openshift-sandboxed-containers-operator"
   - name: PODVM_AMI_ID
     value: ""
+  - name: AWS_SUBNET_ID
+    value: ""
+  - name: AWS_VPC_ID
+    value: ""
+  - name: AWS_SG_IDS
+    value: ""
+  - name: AWS_REGION
+    value: "us-east-2"
   - name: PODVM_INSTANCE_TYPE
     value: "t3.medium"
   - name: PODVM_INSTANCE_TYPES

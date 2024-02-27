@@ -666,9 +666,9 @@ func checkPeerPodSecrets(oc *exutil.CLI, opNamespace, provider string, ppSecretN
 
 	switch provider {
 	case "azure":
-		providerVars = append(providerVars, "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_REGION", "AZURE_RESOURCE_GROUP", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID")
+		providerVars = append(providerVars, "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID")
 	case "aws":
-		providerVars = append(providerVars, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SG_IDS", "AWS_SUBNET_ID", "AWS_VPC_ID")
+		providerVars = append(providerVars, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
 	case "libvirt":
 		providerVars = append(providerVars, "LIBVIRT_URI")
 	default:
@@ -712,9 +712,9 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 
 	switch provider {
 	case "azure":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_INSTANCE_SIZE", "AZURE_INSTANCE_SIZES", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_INSTANCE_SIZE", "AZURE_INSTANCE_SIZES", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT", "AZURE_REGION", "AZURE_RESOURCE_GROUP")
 	case "aws":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_INSTANCE_TYPE", "PODVM_INSTANCE_TYPES", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_INSTANCE_TYPE", "PODVM_INSTANCE_TYPES", "AWS_REGION", "AWS_SG_IDS", "AWS_SUBNET_ID", "AWS_VPC_ID", "VXLAN_PORT")
 	case "libvirt":
 		providerVars = append(providerVars, "CLOUD_PROVIDER")
 	default:
@@ -936,9 +936,9 @@ func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodP
 	if err == nil && msg == "" {
 		e2e.Logf("peer-pods-secret exists - skipping creating it")
 		return msg, err
-	} else if err != nil {
-		e2e.Logf("**** peer-pods-secret not found on the cluster - proceeding to create it****")
 	}
+
+	//	e2e.Logf("**** peer-pods-secret not found on the cluster - proceeding to create it****")
 
 	//Read params from peerpods-param-cm and store in ppParam struct
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default").Output()
