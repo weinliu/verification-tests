@@ -108,6 +108,15 @@ func (h *hostedCluster) getDefaultSgId() string {
 	return doOcpReq(h.oc, OcpGet, false, "hc", h.name, "-n", h.namespace, "-o=jsonpath={.status.platform.aws.defaultWorkerSecurityGroupID}")
 }
 
+func (h *hostedCluster) getSvcPublishingStrategyType(svc hcService) hcServiceType {
+	jsonPath := fmt.Sprintf(`-o=jsonpath={.spec.services[?(@.service=="%s")].servicePublishingStrategy.type}`, svc)
+	return hcServiceType(doOcpReq(h.oc, OcpGet, true, "hc", h.name, "-n", h.namespace, jsonPath))
+}
+
+func (h *hostedCluster) getControlPlaneEndpointPort() string {
+	return doOcpReq(h.oc, OcpGet, true, "hc", h.name, "-n", h.namespace, `-o=jsonpath={.status.controlPlaneEndpoint.port}`)
+}
+
 func (h *hostedCluster) hostedClustersReady() (bool, error) {
 	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", h.namespace, "--ignore-not-found", h.name, `-ojsonpath='{.status.conditions[?(@.type=="Available")].status}'`).Output()
 	if er != nil {

@@ -78,20 +78,20 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(2)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 
-		g.By("create HostedClusters node ready")
+		exutil.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
@@ -108,13 +108,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("Create the AWS infrastructure")
+		exutil.By("Create the AWS infrastructure")
 		infraFile := installHelper.dir + "/" + clusterName + "-infra.json"
 		infra := installHelper.createInfraCommonBuilder().
 			withInfraID(clusterName + exutil.RandStrCustomize("123456789", 4)).
@@ -122,7 +122,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSInfra(infra)
 		installHelper.createAWSInfra(infra)
 
-		g.By("Create AWS IAM resources")
+		exutil.By("Create AWS IAM resources")
 		iamFile := installHelper.dir + "/" + clusterName + "-iam.json"
 		iam := installHelper.createIamCommonBuilder(infraFile).
 			withInfraID(infra.InfraID).
@@ -130,7 +130,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSIam(iam)
 		installHelper.createAWSIam(iam)
 
-		g.By("create aws HostedClusters")
+		exutil.By("create aws HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName(clusterName).
 			withInfraJSON(infraFile).
@@ -138,7 +138,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		cluster := installHelper.createAWSHostedClusters(createCluster)
 
-		g.By("check vpc is as expected")
+		exutil.By("check vpc is as expected")
 		vpcID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("awsclusters", "-n", cluster.namespace+"-"+cluster.name, cluster.name, `-ojsonpath='{.spec.network.vpc.id}'`).Output()
 		o.Expect(vpcID).NotTo(o.BeEmpty())
 		vpc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", "-n", cluster.namespace, cluster.name, `-ojsonpath='{.spec.platform.aws.cloudProviderConfig.vpc}'`).Output()
@@ -157,13 +157,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("Create the AWS infrastructure 1")
+		exutil.By("Create the AWS infrastructure 1")
 		infraFile := installHelper.dir + "/" + clusterName + "-infra.json"
 		infra := installHelper.createInfraCommonBuilder().
 			withName(clusterName + "infra1").
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withOutputFile(infraFile)
 		defer installHelper.destroyAWSInfra(infra)
 		installHelper.createAWSInfra(infra)
-		g.By("Create AWS IAM resources 1")
+		exutil.By("Create AWS IAM resources 1")
 		iamFile := installHelper.dir + "/" + clusterName + "-iam.json"
 		iam := installHelper.createIamCommonBuilder(infraFile).
 			withInfraID(infra.InfraID).
@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSIam(iam)
 		installHelper.createAWSIam(iam)
 
-		g.By("Create the AWS infrastructure 2")
+		exutil.By("Create the AWS infrastructure 2")
 		infraFile2 := installHelper.dir + "/" + clusterName + "-infra2.json"
 		infra2 := installHelper.createInfraCommonBuilder().
 			withName(clusterName + "infra2").
@@ -187,7 +187,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withOutputFile(infraFile2)
 		defer installHelper.destroyAWSInfra(infra2)
 		installHelper.createAWSInfra(infra2)
-		g.By("Create AWS IAM resources 2")
+		exutil.By("Create AWS IAM resources 2")
 		iamFile2 := installHelper.dir + "/" + clusterName + "-iam2.json"
 		iam2 := installHelper.createIamCommonBuilder(infraFile2).
 			withInfraID(infra2.InfraID).
@@ -195,9 +195,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSIam(iam2)
 		installHelper.createAWSIam(iam2)
 
-		g.By("Compare two infra file")
+		exutil.By("Compare two infra file")
 		o.Expect(reflect.DeepEqual(getJSONByFile(infraFile, "zones"), getJSONByFile(infraFile2, "zones"))).Should(o.BeTrue())
-		g.By("Compare two iam file")
+		exutil.By("Compare two iam file")
 		o.Expect(strings.Compare(getSha256ByFile(iamFile), getSha256ByFile(iamFile2)) == 0).Should(o.BeTrue())
 	})
 
@@ -212,28 +212,28 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create aws HostedClusters 1")
+		exutil.By("create aws HostedClusters 1")
 		createCluster1 := installHelper.createClusterAWSCommonBuilder().
 			withName("hypershift-" + caseID + "-1").
 			withNodePoolReplicas(1)
 		defer installHelper.deleteHostedClustersManual(createCluster1)
 		hostedCluster1 := installHelper.createAWSHostedClusters(createCluster1)
-		g.By("create aws HostedClusters 2")
+		exutil.By("create aws HostedClusters 2")
 		createCluster2 := installHelper.createClusterAWSCommonBuilder().
 			withName("hypershift-" + caseID + "-2").
 			withNodePoolReplicas(1)
 		defer installHelper.deleteHostedClustersManual(createCluster2)
 		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
 
-		g.By("delete HostedClusters CR background")
+		exutil.By("delete HostedClusters CR background")
 		installHelper.deleteHostedClustersCRAllBackground()
-		g.By("check delete AWS HostedClusters asynchronously")
+		exutil.By("check delete AWS HostedClusters asynchronously")
 		o.Eventually(func() int {
 			deletionTimestamp1, _ := hostedCluster1.getClustersDeletionTimestamp()
 			deletionTimestamp2, _ := hostedCluster2.getClustersDeletionTimestamp()
@@ -257,23 +257,23 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName(clusterName).
 			withNodePoolReplicas(2)
 		defer installHelper.deleteHostedClustersManual(createCluster)
 		hostedCluster := installHelper.createAWSHostedClustersRender(createCluster, func(filename string) error {
-			g.By("Set HighlyAvailable mode")
+			exutil.By("Set HighlyAvailable mode")
 			return replaceInFile(filename, "SingleReplica", "HighlyAvailable")
 		})
 
-		g.By("Check if pods of multi-zonal control plane components spread across multi-zone")
+		exutil.By("Check if pods of multi-zonal control plane components spread across multi-zone")
 		deploymentNames, err := hostedCluster.getHostedClustersHACPWorkloadNames("deployment")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, name := range deploymentNames {
@@ -311,38 +311,38 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err = os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("update taint and label, taint and label use key 'hypershift.openshift.io/cluster'")
+		exutil.By("update taint and label, taint and label use key 'hypershift.openshift.io/cluster'")
 		defer nodeAction.taintNode(nodes[0], "hypershift.openshift.io/cluster="+oc.Namespace()+"-"+clusterName+":NoSchedule-")
 		nodeAction.taintNode(nodes[0], "hypershift.openshift.io/cluster="+oc.Namespace()+"-"+clusterName+":NoSchedule")
 		defer nodeAction.labelNode(nodes[0], "hypershift.openshift.io/cluster-")
 		nodeAction.labelNode(nodes[0], "hypershift.openshift.io/cluster="+oc.Namespace()+"-"+clusterName)
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().withName(clusterName).withNodePoolReplicas(0)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 
-		g.By("Check if control plane pods in HostedClusters are on " + nodes[0])
+		exutil.By("Check if control plane pods in HostedClusters are on " + nodes[0])
 		o.Eventually(hostedCluster.pollIsCPPodOnlyRunningOnOneNode(nodes[0]), DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "Check if control plane pods in HostedClusters error")
 
-		g.By("update taint and label, taint and label use key 'hypershift.openshift.io/control-plane'")
+		exutil.By("update taint and label, taint and label use key 'hypershift.openshift.io/control-plane'")
 		defer nodeAction.taintNode(nodes[1], "hypershift.openshift.io/control-plane=true:NoSchedule-")
 		nodeAction.taintNode(nodes[1], "hypershift.openshift.io/control-plane=true:NoSchedule")
 		defer nodeAction.labelNode(nodes[1], "hypershift.openshift.io/control-plane-")
 		nodeAction.labelNode(nodes[1], "hypershift.openshift.io/control-plane=true")
 
-		g.By("create HostedClusters 2")
+		exutil.By("create HostedClusters 2")
 		createCluster2 := installHelper.createClusterAWSCommonBuilder().withName(clusterName + "-2").withNodePoolReplicas(0)
 		defer installHelper.destroyAWSHostedClusters(createCluster2)
 		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
 
-		g.By("Check if control plane pods in HostedClusters are on " + nodes[1])
+		exutil.By("Check if control plane pods in HostedClusters are on " + nodes[1])
 		o.Eventually(hostedCluster2.pollIsCPPodOnlyRunningOnOneNode(nodes[1]), DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "Check if control plane pods in HostedClusters error")
 	})
 
@@ -359,13 +359,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("Create a nodeport ip bastion")
+		exutil.By("Create a nodeport ip bastion")
 		preStartJobSetup := newPreStartJob(clusterName+"-setup", oc.Namespace(), caseID, "setup", dir)
 		preStartJobTeardown := newPreStartJob(clusterName+"-teardown", oc.Namespace(), caseID, "teardown", dir)
 		defer preStartJobSetup.delete(oc)
@@ -373,19 +373,19 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer preStartJobTeardown.delete(oc)
 		defer preStartJobTeardown.create(oc)
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName(clusterName).
 			withNodePoolReplicas(1)
 		defer installHelper.deleteHostedClustersManual(createCluster)
 		hostedCluster := installHelper.createAWSHostedClustersRender(createCluster, func(filename string) error {
-			g.By("Test NodePort Publishing Strategy")
+			exutil.By("Test NodePort Publishing Strategy")
 			ip := preStartJobSetup.preStartJobIP(oc)
 			e2e.Logf("ip:" + ip)
 			return replaceInFile(filename, "type: LoadBalancer", "type: NodePort\n      nodePort:\n        address: "+ip)
 		})
 
-		g.By("create HostedClusters node ready")
+		exutil.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(1), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
@@ -402,24 +402,24 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters-1")
+		exutil.By("create HostedClusters-1")
 		createCluster1 := installHelper.createClusterAWSCommonBuilder().
 			withName(clusterName + "-1").
 			withNodePoolReplicas(1)
 		defer installHelper.destroyAWSHostedClusters(createCluster1)
 		hostedCluster1 := installHelper.createAWSHostedClusters(createCluster1)
 
-		g.By("check HostedClusters-1 HostedClusterInfrastructureTopology")
+		exutil.By("check HostedClusters-1 HostedClusterInfrastructureTopology")
 		installHelper.createHostedClusterKubeconfig(createCluster1, hostedCluster1)
 		o.Eventually(hostedCluster1.pollGetHostedClusterInfrastructureTopology(), LongTimeout, LongTimeout/10).Should(o.ContainSubstring("SingleReplica"), fmt.Sprintf("--infra-availability-policy (default SingleReplica) error"))
 
-		g.By("create HostedClusters-2 infra-availability-policy: HighlyAvailable")
+		exutil.By("create HostedClusters-2 infra-availability-policy: HighlyAvailable")
 		createCluster2 := installHelper.createClusterAWSCommonBuilder().
 			withName(clusterName + "-2").
 			withNodePoolReplicas(2).
@@ -427,11 +427,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSHostedClusters(createCluster2)
 		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
 
-		g.By("check HostedClusters-2 HostedClusterInfrastructureTopology")
+		exutil.By("check HostedClusters-2 HostedClusterInfrastructureTopology")
 		installHelper.createHostedClusterKubeconfig(createCluster2, hostedCluster2)
 		o.Eventually(hostedCluster2.pollGetHostedClusterInfrastructureTopology(), LongTimeout, LongTimeout/10).Should(o.ContainSubstring("HighlyAvailable"), fmt.Sprintf("--infra-availability-policy HighlyAvailable"))
 
-		g.By("Check if pods of multi-zonal components spread across multi-zone")
+		exutil.By("Check if pods of multi-zonal components spread across multi-zone")
 		o.Eventually(func() string {
 			value, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+hostedCluster2.hostedClustersKubeconfigFile, "deployment", "-A", "-ojsonpath={.items[*].spec.replicas}").Output()
 			return strings.ReplaceAll(strings.ReplaceAll(value, "1", ""), " ", "")
@@ -450,13 +450,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName(clusterName).
 			withNodePoolReplicas(2).
@@ -465,7 +465,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		cluster := installHelper.createAWSHostedClusters(createCluster)
 		installHelper.createHostedClusterKubeconfig(createCluster, cluster)
 
-		g.By("Confirm user defined tags")
+		exutil.By("Confirm user defined tags")
 		checkSubstring(doOcpReq(oc, OcpGet, false, "hostedcluster", "-n", cluster.namespace, cluster.name, `-ojsonpath={.spec.platform.aws.resourceTags}`), []string{`{"key":"adminContact","value":"HyperShiftInstall"}`, `{"key":"customTag","value":"test"}`})
 		o.Expect(strings.Count(doOcpReq(oc, OcpGet, false, "awsmachines", "-n", cluster.namespace+"-"+cluster.name, `-ojsonpath={.items[*].spec.additionalTags}`), "HyperShiftInstall")).Should(o.Equal(2))
 		checkSubstring(doOcpReq(oc, OcpGet, false, "--kubeconfig="+cluster.hostedClustersKubeconfigFile, "infrastructure", "cluster", `-ojsonpath={.status.platformStatus.aws.resourceTags}`), []string{`{"key":"adminContact","value":"HyperShiftInstall"}`, `{"key":"customTag","value":"test"}`})
@@ -490,13 +490,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		release, err := exutil.GetReleaseImage(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		createCluster := installHelper.createClusterAWSCommonBuilder().
@@ -508,7 +508,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 
-		g.By("Check the hostedcluster and nodepool")
+		exutil.By("Check the hostedcluster and nodepool")
 		checkSubstring(doOcpReq(oc, OcpGet, false, "awsmachines", "-n", hostedCluster.namespace+"-"+hostedCluster.name, `-ojsonpath={.items[*].spec.providerID}`), zones[:3])
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(len(zones)), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
@@ -525,18 +525,18 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		installHelper := installHelper{oc: oc, dir: dir, iaasPlatform: iaasPlatform}
-		g.By("install HyperShift operator")
+		exutil.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAzureCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(2)
 		defer installHelper.destroyAzureHostedClusters(createCluster)
 		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
 
-		g.By("create HostedClusters node ready")
+		exutil.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
@@ -553,11 +553,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		installHelper := installHelper{oc: oc, dir: dir, iaasPlatform: iaasPlatform}
-		g.By("install HyperShift operator")
+		exutil.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAzureCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(1).
@@ -565,23 +565,23 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAzureHostedClusters(createCluster)
 		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
 
-		g.By("Check the disk size for the nodepool '" + hostedCluster.name + "'")
+		exutil.By("Check the disk size for the nodepool '" + hostedCluster.name + "'")
 		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(hostedCluster.name)).Should(o.ContainSubstring("64"))
 
-		g.By("create nodepool and check root-disk-size (default 120)")
+		exutil.By("create nodepool and check root-disk-size (default 120)")
 		nodePool1 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
 			WithName(hostedCluster.name + "-1")
 		installHelper.createAzureNodePool(nodePool1)
 		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool1.Name)).Should(o.ContainSubstring("120"))
 
-		g.By("create nodepool and check root-disk-size (256)")
+		exutil.By("create nodepool and check root-disk-size (256)")
 		nodePool2 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
 			WithName(hostedCluster.name + "-2").
 			WithRootDiskSize(256)
 		installHelper.createAzureNodePool(nodePool2)
 		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool2.Name)).Should(o.ContainSubstring("256"))
 
-		g.By("create HostedClusters node ready")
+		exutil.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(3), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
@@ -598,18 +598,18 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		installHelper := installHelper{oc: oc, dir: dir, iaasPlatform: iaasPlatform}
-		g.By("install HyperShift operator")
+		exutil.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAzureCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(1)
 		defer installHelper.destroyAzureHostedClusters(createCluster)
 		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
 
-		g.By("Scale up nodepool")
+		exutil.By("Scale up nodepool")
 		doOcpReq(oc, OcpScale, false, "nodepool", hostedCluster.name, "--namespace", hostedCluster.namespace, "--replicas=2")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
@@ -633,25 +633,26 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err = os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(2)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 
-		g.By("create HostedClusters node ready")
+		exutil.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
 
-	// author: heli@redhat.com
+	// Authors: heli@redhat.com, fxie@redhat.com (the OCPBUGS-19674 and OCPBUGS-20163 part only)
+	// Test run duration: ~30min
 	g.It("Longduration-NonPreRelease-Author:heli-Critical-62085-Critical-60483-Critical-64808-[HyperShiftINSTALL] The cluster should be deleted successfully when there is no identity provider [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 62085,60483,64808 is for AWS - skipping test ...")
@@ -663,7 +664,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
 		region, err := getClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -682,7 +683,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(2).
@@ -693,11 +694,20 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 
-		g.By("create HostedClusters node ready")
+		exutil.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 
-		g.By("delete OpenID connect from aws IAM Identity providers")
+		// For OCPBUGS-19674 and OCPBUGS-20163 (clone of the former)
+		{
+			exutil.By("Make sure the API server is exposed via Route")
+			o.Expect(hostedCluster.getSvcPublishingStrategyType(hcServiceAPIServer)).To(o.Equal(hcServiceTypeRoute))
+
+			exutil.By("Make sure the hosted cluster reports correct control plane endpoint port")
+			o.Expect(hostedCluster.getControlPlaneEndpointPort()).To(o.Equal("443"))
+		}
+
+		exutil.By("delete OpenID connect from aws IAM Identity providers")
 		infraID := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, `-ojsonpath={.spec.infraID}`)
 		provider := fmt.Sprintf("%s.s3.%s.amazonaws.com/%s", bucketName, region, infraID)
 		e2e.Logf("trying to delete OpenIDConnectProvider: %s", provider)
@@ -705,7 +715,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		iamClient := exutil.NewIAMClient()
 		o.Expect(iamClient.DeleteOpenIDConnectProviderByProviderName(provider)).ShouldNot(o.HaveOccurred())
 
-		g.By("update control plane policy to remove security operations")
+		exutil.By("update control plane policy to remove security operations")
 		roleAndPolicyName := infraID + "-control-plane-operator"
 		var policyDocument = `{
   "Version": "2012-10-17",
@@ -741,7 +751,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(policy).ShouldNot(o.ContainSubstring("SecurityGroup"))
 
-		g.By("ocp-64808 check hosted condition ValidAWSIdentityProvider should be unknown")
+		exutil.By("ocp-64808 check hosted condition ValidAWSIdentityProvider should be unknown")
 		o.Eventually(func() string {
 			return doOcpReq(oc, OcpGet, true, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, `-ojsonpath={.status.conditions[?(@.type=="ValidAWSIdentityProvider")].status}`)
 		}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("False"), fmt.Sprintf("%s expected condition ValidAWSIdentityProvider False status not found error", hostedCluster.name))
@@ -759,7 +769,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket")
+		exutil.By("Config AWS Bucket")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
 		region, err := getClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -777,7 +787,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.newAWSS3Client()
 		installHelper.createAWSS3Bucket()
 
-		g.By("install HO without s3 credentials")
+		exutil.By("install HO without s3 credentials")
 		var installCMD = fmt.Sprintf("hypershift install "+
 			"--oidc-storage-provider-s3-bucket-name %s "+
 			"--oidc-storage-provider-s3-region %s "+
@@ -791,7 +801,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		_, err = cmdClient.Run(installCMD).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
-		g.By("create HostedClusters")
+		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(0).
@@ -800,7 +810,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hc := installHelper.createAWSHostedClusterWithoutCheck(createCluster)
 
-		g.By("check hosted cluster condition ValidOIDCConfiguration")
+		exutil.By("check hosted cluster condition ValidOIDCConfiguration")
 		o.Eventually(func() string {
 			return doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", "-o", `jsonpath={.status.conditions[?(@.type=="ValidOIDCConfiguration")].status}`)
 		}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("False"))
@@ -829,7 +839,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("config mgmt cluster: scale a machineseet to repicas==2")
+		exutil.By("config mgmt cluster: scale a machineseet to repicas==2")
 		oriDeletePolicy := doOcpReq(oc, OcpGet, false, "-n", machineAPINamespace, mapiMachineset, msNames[2], `-o=jsonpath={.spec.deletePolicy}`)
 		defer func() {
 			if oriDeletePolicy == "" {
@@ -854,7 +864,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			servingComponentNodes = append(servingComponentNodes, strings.Split(doOcpReq(oc, OcpGet, true, "-n", machineAPINamespace, mapiMachine, "-l", fmt.Sprintf("machine.openshift.io/cluster-api-machineset=%s", msNames[i]), `-o=jsonpath={.items[*].status.nodeRef.name}`), " ")...)
 		}
 
-		g.By("install hypershift operator")
+		exutil.By("install hypershift operator")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
 		region, err := getClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -873,7 +883,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("add label/taint to servingComponentNodes")
+		exutil.By("add label/taint to servingComponentNodes")
 		defer func() {
 			removeNodesTaint(oc, servingComponentNodes, servingComponentNodesTaintKey)
 			removeNodesLabel(oc, servingComponentNodes, servingComponentNodesLabelKey)
@@ -883,7 +893,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			doOcpReq(oc, OcpLabel, true, "node", no, servingComponentNodesLabel)
 		}
 
-		g.By("add label/taint to nonServingComponentNodes")
+		exutil.By("add label/taint to nonServingComponentNodes")
 		defer func() {
 			removeNodesTaint(oc, nonServingComponentNodes, nonServingComponentTaintKey)
 			removeNodesLabel(oc, nonServingComponentNodes, nonServingComponentLabelKey)
@@ -893,7 +903,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			doOcpReq(oc, OcpLabel, true, "node", no, nonServingComponentLabel)
 		}
 
-		g.By("create MachineHealthCheck for serving component machinesets")
+		exutil.By("create MachineHealthCheck for serving component machinesets")
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		mhcBaseDir := exutil.FixturePath("testdata", "hypershift")
@@ -915,7 +925,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer mhc[1].deleteMhc(oc, "mhc-67828-"+msNames[1]+".template")
 		mhc[1].createMhc(oc, "mhc-67828-"+msNames[1]+".template")
 
-		g.By("create a hosted cluster")
+		exutil.By("create a hosted cluster")
 		release, er := exutil.GetReleaseImage(oc)
 		o.Expect(er).NotTo(o.HaveOccurred())
 		createCluster := installHelper.createClusterAWSCommonBuilder().
@@ -928,10 +938,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withReleaseImage(release)
 
 		defer func() {
-			g.By("in defer function, destroy the hosted cluster")
+			exutil.By("in defer function, destroy the hosted cluster")
 			installHelper.destroyAWSHostedClusters(createCluster)
 
-			g.By("check the previous serving nodes are deleted and new serving nodes are created (machinesets are still in ready status)")
+			exutil.By("check the previous serving nodes are deleted and new serving nodes are created (machinesets are still in ready status)")
 			o.Eventually(func() bool {
 				for _, no := range servingComponentNodes {
 					noinfo := doOcpReq(oc, OcpGet, false, "no", "--ignore-not-found", no)
@@ -948,7 +958,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				return true
 			}, 2*DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), fmt.Sprintf("serving node are not deleted %+v", servingComponentNodes))
 
-			g.By("no cluster label annotation in the new serving nodes")
+			exutil.By("no cluster label annotation in the new serving nodes")
 			for i := 0; i < 2; i++ {
 				for _, no := range strings.Split(doOcpReq(oc, OcpGet, true, "-n", machineAPINamespace, mapiMachine, "-l", fmt.Sprintf("machine.openshift.io/cluster-api-machineset=%s", msNames[i]), `-o=jsonpath={.items[*].status.nodeRef.name}`), " ") {
 					o.Expect(doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-ojsonpath={.labels.hypershift\.openshift\.io/cluster}`)).Should(o.BeEmpty())
@@ -960,13 +970,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		hc := installHelper.createAWSHostedClusters(createCluster)
 		hcpNS := hc.namespace + "-" + hc.name
 
-		g.By("check hostedcluster annotation")
+		exutil.By("check hostedcluster annotation")
 		clusterSchValue := doOcpReq(oc, OcpGet, true, "-n", hc.namespace, "hostedcluster", hc.name, "--ignore-not-found", `-ojsonpath={.metadata.annotations.hypershift\.openshift\.io/cluster-scheduled}`)
 		o.Expect(clusterSchValue).Should(o.Equal("true"))
 		clusterTopology := doOcpReq(oc, OcpGet, true, "-n", hc.namespace, "hostedcluster", hc.name, "--ignore-not-found", `-ojsonpath={.metadata.annotations.hypershift\.openshift\.io/topology}`)
 		o.Expect(clusterTopology).Should(o.Equal("dedicated-request-serving-components"))
 
-		g.By("check hosted cluster hcp serving components' node allocation")
+		exutil.By("check hosted cluster hcp serving components' node allocation")
 		var servingComponentsNodeLocation = make(map[string]struct{})
 		hcpServingComponents := []string{"kube-apiserver", "ignition-server-proxy", "oauth-openshift", "private-router"}
 		for _, r := range hcpServingComponents {
@@ -978,7 +988,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 		o.Expect(servingComponentsNodeLocation).ShouldNot(o.BeEmpty())
 
-		g.By("check serving nodes hcp labels and taints are generated automatically on the serving nodes")
+		exutil.By("check serving nodes hcp labels and taints are generated automatically on the serving nodes")
 		for no := range servingComponentsNodeLocation {
 			cluster := doOcpReq(oc, OcpGet, false, "node", no, "--ignore-not-found", `-o=jsonpath={.metadata.labels.hypershift\.openshift\.io/cluster}`)
 			o.Expect(cluster).Should(o.Equal(hcpNS))
@@ -1060,13 +1070,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config AWS Bucket And install HyperShift operator")
+		exutil.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
 
-		g.By("check hosted cluster supported version")
+		exutil.By("check hosted cluster supported version")
 		supportedVersion := doOcpReq(oc, OcpGet, true, "configmap", "-n", "hypershift", "supported-versions", `-ojsonpath={.data.supported-versions}`)
 		e2e.Logf("supported version is: " + supportedVersion)
 
@@ -1074,13 +1084,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		o.Expect(supportedVersion).Should(o.ContainSubstring(minSupportedVersion))
 
-		g.By("get max unsupported HostedClusters version nightly release")
+		exutil.By("get max unsupported HostedClusters version nightly release")
 		maxUnsupportedVersion, err := getVersionWithMajorAndMinor(getLatestUnsupportedOCPVersion())
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		release, err := exutil.GetLatestNightlyImage(maxUnsupportedVersion)
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
-		g.By("create HostedClusters with unsupported version")
+		exutil.By("create HostedClusters with unsupported version")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName("hypershift-" + caseID).
 			withReleaseImage(release).
@@ -1088,7 +1098,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hc := installHelper.createAWSHostedClusterWithoutCheck(createCluster)
 
-		g.By("check hc condition & nodepool condition")
+		exutil.By("check hc condition & nodepool condition")
 		o.Eventually(func() bool {
 			hcStatus := doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", `-o=jsonpath={.status.conditions[?(@.type=="ValidReleaseImage")].status}`)
 			if hcStatus != "False" {
@@ -1104,12 +1114,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			return true
 		}, LongTimeout, LongTimeout/30).Should(o.BeTrue())
 
-		g.By("add annotation to skip release check")
+		exutil.By("add annotation to skip release check")
 		doOcpReq(oc, OcpAnnotate, true, "hostedcluster", hc.name, "-n", hc.namespace, "hypershift.openshift.io/skip-release-image-validation=true")
 		skipReleaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hc.name, "-n", hc.namespace, `-o=jsonpath={.metadata.annotations.hypershift\.openshift\.io/skip-release-image-validation}`)
 		o.Expect(skipReleaseImage).Should(o.ContainSubstring("true"))
 
-		g.By("check nodepool and hc to be recovered")
+		exutil.By("check nodepool and hc to be recovered")
 		o.Eventually(func() bool {
 			hcStatus := doOcpReq(oc, OcpGet, false, "hostedcluster", hc.name, "-n", hc.namespace, "--ignore-not-found", `-o=jsonpath={.status.conditions[?(@.type=="ValidReleaseImage")].status}`)
 			if hcStatus != "True" {
@@ -1129,7 +1139,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ValidReleaseImage could not be recovered back error")
 		o.Eventually(hc.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "AWS HostedClusters install error")
 
-		g.By("create a new nodepool")
+		exutil.By("create a new nodepool")
 		replica := 1
 		npName := caseID + strings.ToLower(exutil.RandStrDefault())
 		NewAWSNodePool(npName, hc.name, hc.namespace).

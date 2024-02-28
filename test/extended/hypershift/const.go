@@ -190,6 +190,30 @@ const (
 	etcdLocalClientReqEndpoint           = "localhost:" + etcdClientReqPort
 )
 
+// Enum for hosted cluster service
+type hcService string
+
+// Hosted cluster services
+const (
+	hcServiceAPIServer    hcService = "APIServer"
+	hcServiceOAuthServer  hcService = "OAuthServer"
+	hcServiceKonnectivity hcService = "Konnectivity"
+	hcServiceIgnition     hcService = "Ignition"
+	hcServiceOVNSbDb      hcService = "OVNSbDb"
+)
+
+// Enum for hosted cluster service types
+type hcServiceType string
+
+// Hosted cluster services type
+const (
+	hcServiceTypeLoadBalancer hcServiceType = "LoadBalancer"
+	hcServiceTypeNodePort     hcServiceType = "NodePort"
+	hcServiceTypeRoute        hcServiceType = "Route"
+	hcServiceTypeNone         hcServiceType = "None"
+	hcServiceTypeS3           hcServiceType = "S3"
+)
+
 type K8SResource string
 
 const (
