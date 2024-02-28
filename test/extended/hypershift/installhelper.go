@@ -255,7 +255,7 @@ func (receiver *installHelper) createNodePoolAzureCommonBuilder(clusterName stri
 	}
 }
 
-func (receiver *installHelper) newAWSS3Client() {
+func (receiver *installHelper) newAWSS3Client() string {
 	accessKeyID, secureKey, err := getAWSKey(receiver.oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	region, err := getClusterRegion(receiver.oc)
@@ -269,6 +269,7 @@ func (receiver *installHelper) newAWSS3Client() {
 
 	receiver.s3Client = exutil.NewS3ClientFromCredFile(filePath, "default", region)
 	receiver.region = region
+	return filePath
 }
 
 func (receiver *installHelper) createAWSS3Bucket() {
@@ -309,13 +310,13 @@ func (receiver *installHelper) hyperShiftInstall() {
 	switch receiver.iaasPlatform {
 	case "aws":
 		e2e.Logf("Config AWS Bucket")
-		receiver.newAWSS3Client()
+		credsPath := receiver.newAWSS3Client()
 		receiver.createAWSS3Bucket()
-		cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s ", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+		cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s ", receiver.bucketName, credsPath, receiver.region)
 
 		//publicAndPrivate
 		if receiver.installType == PublicAndPrivate || receiver.installType == Private {
-			privateCred := getAWSPrivateCredentials()
+			privateCred := getAWSPrivateCredentials(credsPath)
 			cmd = cmd + fmt.Sprintf(" --private-platform AWS --aws-private-creds %s --aws-private-region=%s ", privateCred, receiver.region)
 		}
 

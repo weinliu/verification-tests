@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -11,9 +12,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/s3"
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -862,4 +865,91 @@ func (iamClient *IAMClient) ListOperatsorRolesByPrefix(prefix string, version st
 		operatorRoles = append(operatorRoles, role)
 	}
 	return operatorRoles, nil
+}
+
+// Route53Client extends the route53.Route53 client without overriding its existing methods.
+type Route53Client struct {
+	*route53.Route53
+}
+
+// NewRoute53Client creates a new Route53Client.
+// It is expected to be called after GetAwsCredentialFromCluster which sets AWS-specific environment variables.
+func NewRoute53Client() *Route53Client {
+	return &Route53Client{
+		Route53: route53.New(session.Must(session.NewSession()), aws.NewConfig()),
+	}
+}
+
+// DeleteHostedZoneWithContextAndCheck deletes a hosted zone (delegate to the wrapped route53.Route53 client),
+// then wait for the deletion to take effect.
+func (route53Client *Route53Client) DeleteHostedZoneWithContextAndCheck(ctx context.Context, input *route53.DeleteHostedZoneInput, opts ...request.Option) (*route53.DeleteHostedZoneOutput, error) {
+	e2e.Logf("Deleting hosted zone %s", aws.StringValue(input.Id))
+	deleteHostedZoneOutput, err := route53Client.DeleteHostedZoneWithContext(ctx, input, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	e2e.Logf("Waiting until the deletion takes effect")
+	err = route53Client.WaitUntilResourceRecordSetsChangedWithContext(ctx, &route53.GetChangeInput{
+		Id: deleteHostedZoneOutput.ChangeInfo.Id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	deleteHostedZoneOutput.ChangeInfo.Status = aws.String(route53.ChangeStatusInsync)
+
+	return deleteHostedZoneOutput, nil
+}
+
+// EmptyHostedZoneWithContext removes all except NS/SOA records in a hosted zone,
+// then wait until the changes to take effect.
+func (route53Client *Route53Client) EmptyHostedZoneWithContext(ctx context.Context, hostedZoneId string) (*route53.ChangeResourceRecordSetsOutput, error) {
+	e2e.Logf("Emptying hosted zone %s", hostedZoneId)
+	var changes []*route53.Change
+	pagingCallback := func(page *route53.ListResourceRecordSetsOutput, lastPage bool) bool {
+		for _, recordSet := range page.ResourceRecordSets {
+			// Skip NS and SOA records
+			if aws.StringValue(recordSet.Type) == route53.RRTypeNs || aws.StringValue(recordSet.Type) == route53.RRTypeSoa {
+				continue
+			}
+
+			changes = append(changes, &route53.Change{
+				Action:            aws.String(route53.ChangeActionDelete),
+				ResourceRecordSet: recordSet,
+			})
+		}
+		return !lastPage
+	}
+
+	var err error
+	e2e.Logf("Extracting all except NS/SOA records in the hosted zone")
+	if err = route53Client.ListResourceRecordSetsPagesWithContext(ctx,
+		&route53.ListResourceRecordSetsInput{
+			HostedZoneId: aws.String(hostedZoneId),
+		},
+		pagingCallback,
+	); err != nil {
+		return nil, err
+	}
+
+	var changeResourceRecordSetsOutput *route53.ChangeResourceRecordSetsOutput
+	e2e.Logf("Emptying hosted zone")
+	if changeResourceRecordSetsOutput, err = route53Client.ChangeResourceRecordSetsWithContext(ctx, &route53.ChangeResourceRecordSetsInput{
+		HostedZoneId: aws.String(hostedZoneId),
+		ChangeBatch: &route53.ChangeBatch{
+			Changes: changes,
+		},
+	}); err != nil {
+		return nil, err
+	}
+
+	e2e.Logf("Waiting until changes to the hosted zone take effect")
+	if err = route53Client.WaitUntilResourceRecordSetsChangedWithContext(ctx, &route53.GetChangeInput{
+		Id: changeResourceRecordSetsOutput.ChangeInfo.Id,
+	}); err != nil {
+		return nil, err
+	}
+	changeResourceRecordSetsOutput.ChangeInfo.Status = aws.String(route53.ChangeStatusInsync)
+
+	return changeResourceRecordSetsOutput, nil
 }

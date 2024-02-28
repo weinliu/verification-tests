@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elb"
+	"github.com/aws/aws-sdk-go/service/route53"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -2686,6 +2687,112 @@ spec:
 				e2e.Logf("Found OPENSHIFT_IMG_OVERRIDES=%s", env.Value)
 				o.Expect(env.Value).To(o.ContainSubstring(expectedSubstr))
 			}
+		}
+	})
+
+	/*
+		This test case requires a PublicAndPrivate hosted cluster.
+		External DNS is enabled by necessity, as it is required for PublicAndPrivate hosted clusters.
+
+		Test run duration: ~35min
+	*/
+	g.It("Longduration-NonPreRelease-Author:fxie-Critical-65606-[HyperShiftINSTALL] The cluster can be deleted successfully when hosted zone for private link is missing [Serial]", func() {
+		var (
+			testCaseId         = "65606"
+			resourceNamePrefix = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
+			tempDir            = path.Join("/tmp", "hypershift", resourceNamePrefix)
+			bucketName         = fmt.Sprintf("%s-bucket", resourceNamePrefix)
+			hcName             = fmt.Sprintf("%s-hc", resourceNamePrefix)
+			ctx                = context.Background()
+		)
+
+		exutil.By("Skipping incompatible platforms")
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
+
+		exutil.By("Installing the Hypershift Operator")
+		region, err := getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			err := os.RemoveAll(tempDir)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = os.MkdirAll(tempDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          tempDir,
+			iaasPlatform: iaasPlatform,
+			installType:  PublicAndPrivate,
+			region:       region,
+			externalDNS:  true,
+		}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("Creating a PublicAndPrivate hosted cluster with external DNS enabled")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(hcName).
+			withNodePoolReplicas(1).
+			withEndpointAccess(PublicAndPrivate).
+			withReleaseImage(release).
+			withExternalDnsDomain(HyperShiftExternalDNS).
+			withBaseDomain(HyperShiftExternalDNSBaseDomain)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+
+		// Pause reconciliation so the awsprivatelink controller do not re-create the DNS records which we will delete
+		exutil.By("Pausing reconciliation")
+		defer func() {
+			exutil.By("Un-pausing reconciliation")
+			doOcpReq(oc, OcpPatch, true, "hc", hostedCluster.name, "-n", hostedCluster.namespace, "--type=merge", `--patch={"spec":{"pausedUntil":null}}`)
+
+			// Avoid intricate dependency violations that could occur during the deletion of the HC
+			e2e.Logf("Waiting until the un-pause signal propagates to the HCP")
+			o.Eventually(func() bool {
+				res := doOcpReq(oc, OcpGet, false, "hcp", "-n", hostedCluster.getHostedComponentNamespace(), hostedCluster.name, "-o=jsonpath={.spec.pausedUntil}")
+				return len(res) == 0
+			}).WithTimeout(DefaultTimeout).WithPolling(DefaultTimeout / 10).Should(o.BeTrue())
+		}()
+		doOcpReq(oc, OcpPatch, true, "hc", hostedCluster.name, "-n", hostedCluster.namespace, "--type=merge", `--patch={"spec":{"pausedUntil":"true"}}`)
+
+		exutil.By("Waiting until the awsprivatelink controller is actually paused")
+		// A hack for simplicity
+		_, err = exutil.WaitAndGetSpecificPodLogs(oc, hostedCluster.getHostedComponentNamespace(), "control-plane-operator", "deploy/control-plane-operator", "awsendpointservice | grep -i 'Reconciliation paused'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get Route53 hosted zone for privatelink")
+		hzId := doOcpReq(oc, OcpGet, true, "awsendpointservice/private-router", "-n", hostedCluster.getHostedComponentNamespace(), "-o=jsonpath={.status.dnsZoneID}")
+		e2e.Logf("Found hosted zone ID = %s", hzId)
+		exutil.GetAwsCredentialFromCluster(oc)
+		route53Client := exutil.NewRoute53Client()
+		// Get hosted zone name for logging purpose only
+		var getHzOut *route53.GetHostedZoneOutput
+		getHzOut, err = route53Client.GetHostedZoneWithContext(ctx, &route53.GetHostedZoneInput{
+			Id: aws.String(hzId),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Found hosted zone name = %s", aws.StringValue(getHzOut.HostedZone.Name))
+
+		exutil.By("Delete Route53 hosted zone for privatelink")
+		e2e.Logf("Emptying Route53 hosted zone")
+		if _, err = route53Client.EmptyHostedZoneWithContext(ctx, hzId); err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				e2e.Failf("Failed to empty hosted zone (%s): %v", aerr.Code(), aerr.Message())
+			}
+			e2e.Failf("Failed to empty hosted zone %v", err)
+		}
+		e2e.Logf("Deleting Route53 hosted zone")
+		if _, err = route53Client.DeleteHostedZoneWithContextAndCheck(ctx, &route53.DeleteHostedZoneInput{
+			Id: aws.String(hzId),
+		}); err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				e2e.Failf("Failed to delete hosted zone (%s): %v", aerr.Code(), aerr.Message())
+			}
+			e2e.Failf("Failed to delete hosted zone %v", err)
 		}
 	})
 })

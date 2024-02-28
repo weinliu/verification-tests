@@ -356,12 +356,36 @@ func getAllByFile(filePath string) string {
 	return string(con)
 }
 
-func getAWSPrivateCredentials() string {
-	privateCred := DefaultAWSHyperShiftPrivateSecretFile
-	if cred := os.Getenv(AWS_HYPERSHIFT_PRIVATE_SECRET_FILE); cred != "" {
-		privateCred = cred
+func getAWSPrivateCredentials(defaultCredPaths ...string) string {
+	g.GinkgoHelper()
+
+	// Always prefer environment variable override
+	if envOverride := os.Getenv(AWS_HYPERSHIFT_PRIVATE_SECRET_FILE); envOverride != "" {
+		return envOverride
 	}
-	return privateCred
+
+	// Running in Prow
+	if exutil.GetTestEnv().IsRunningInProw() {
+		return DefaultAWSHyperShiftPrivateSecretFile
+	}
+
+	// Try default paths
+	var res string
+	for _, credPath := range defaultCredPaths {
+		info, err := os.Stat(credPath)
+		if err != nil {
+			e2e.Logf("Error inspecting path %s: %v, skipping", credPath, err)
+			continue
+		}
+		if mode := info.Mode(); !mode.IsRegular() {
+			e2e.Logf("Path %s does not point to a regular file but a(n) %v, skipping", credPath, mode)
+			continue
+		}
+		res = credPath
+		break
+	}
+	o.Expect(res).NotTo(o.BeEmpty())
+	return res
 }
 
 func subtractMinor(version *semver.Version, count uint64) *semver.Version {
