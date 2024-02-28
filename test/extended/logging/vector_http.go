@@ -326,6 +326,7 @@ ca_file = "/var/run/ocp-collector/secrets/to-fluentd-60933/ca-bundle.crt"`
 			g.By("check logs in fluentd server")
 			fluentdS.checkData(oc, true, "app.log")
 		})
+
 		g.It("CPaasrunOnly-Author:anli-Critical-65131-mCLF Inputs.receiver.http over http with default values", func() {
 			clfNS := oc.Namespace()
 			fluentdNS := clfNS

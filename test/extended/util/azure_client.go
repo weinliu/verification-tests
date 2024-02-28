@@ -317,9 +317,16 @@ func GetAzureStorageAccountFromCluster(oc *CLI) (string, string, error) {
 
 // NewAzureContainerClient initializes a new azure blob container client
 func NewAzureContainerClient(oc *CLI, accountName, accountKey, azContainerName string) (azblob.ContainerURL, error) {
+	storageAccountURISuffix := ".blob.core.windows.net"
+	cloudName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+	if strings.ToLower(cloudName) == "azureusgovernmentcloud" {
+		storageAccountURISuffix = ".blob.core.usgovcloudapi.net"
+	}
+	//placeholder if strings.ToLower(cloudName) == "azurechinacloud"
+	//placeholder if strings.ToLower(cloudName) == "azuregermancloud"
+	u, _ := url.Parse(fmt.Sprintf("https://%s%s", accountName, storageAccountURISuffix))
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
 	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
-	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", accountName))
 	serviceURL := azblob.NewServiceURL(*u, p)
 	return serviceURL.NewContainerURL(azContainerName), err
 }

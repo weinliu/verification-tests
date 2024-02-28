@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -3112,5 +3113,92 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		lc.waitForLogsAppearByKey("infrastructure", "log_type", "infrastructure")
 		lc = newLokiClient(route).withToken(user2Token).retry(5)
 		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+	})
+	g.It("CPaasrunOnly-Author:anli-Critical-71049-Inputs.receiver.syslog to lokistack[Serial][Slow]", func() {
+		cliNS := oc.Namespace()
+		g.By("deploy loki stack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-71049",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-71049",
+			storageClass:  sc,
+			bucketName:    "logging-loki-71049-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Create clusterlogforwarder as syslogserver and forward logs to default LokiStack")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-syslog-default.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc)
+
+		g.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			collectorType: "vector",
+			logStoreType:  "lokistack",
+			lokistackName: ls.name,
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		g.By("Create clf-syslog-secret")
+		tmpDir := "/tmp/" + getRandomString()
+		defer exec.Command("rm", "-r", tmpDir).Output()
+		err = os.Mkdir(tmpDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/collector-syslog", "-n", "openshift-logging", "--confirm", "--to="+tmpDir).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "clf-syslog-secret", "-n", cliNS, "--from-file=ca-bundle.crt="+tmpDir+"/tls.crt").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create clusterlogforwarder as syslog cli and forward logs to syslogserver above")
+		sysCLF := clusterlogforwarder{
+			name:                      "instance",
+			namespace:                 cliNS,
+			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
+			secretName:                "clf-syslog-secret",
+			waitForPodReady:           true,
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			serviceAccountName:        "clf-" + getRandomString(),
+		}
+		defer sysCLF.delete(oc)
+		sysCLF.create(oc, "URL=tls://collector-syslog.openshift-logging.svc:6514")
+
+		//check logs in loki stack
+		g.By("check logs in loki")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", cliNS)).Execute()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", cliNS)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", cliNS)
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+
+		lc.waitForLogsAppearByKey("infrastructure", "log_type", "infrastructure")
+
+		sysLog, err := lc.searchLogsInLoki("infrastructure", `{log_type = "infrastructure"}|json|facility = "local0"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sysLogs := extractLogEntities(sysLog)
+		o.Expect(len(sysLogs) > 0).Should(o.BeTrue(), "can't find logs from syslog in lokistack")
+
 	})
 })

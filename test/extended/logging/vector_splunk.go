@@ -714,6 +714,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in other index, this is not expected")
 			}
 		})
+
 		g.It("CPaasrunOnly-Author:anli-Critical-68303-mCLF Inputs.receiver.http multiple Inputs.receivers to splunk", func() {
 			clfNS := oc.Namespace()
 			splunkProject := clfNS

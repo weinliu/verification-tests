@@ -273,6 +273,20 @@ func createSecretForGCSBucket(oc *exutil.CLI, bucketName, secretName, ns string)
 // creates a secret for Loki to connect to azure container
 func createSecretForAzureContainer(oc *exutil.CLI, bucketName, secretName, ns string) error {
 	environment := "AzureGlobal"
+	cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+	if err != nil {
+		return fmt.Errorf("can't get azure cluster type  %v", err)
+	}
+	if strings.ToLower(cloudName) == "azureusgovernmentcloud" {
+		environment = "AzureUSGovernment"
+	}
+	if strings.ToLower(cloudName) == "azurechinacloud" {
+		environment = "AzureChinaCloud"
+	}
+	if strings.ToLower(cloudName) == "azuregermancloud" {
+		environment = "AzureGermanCloud"
+	}
+
 	accountName, accountKey, err1 := exutil.GetAzureStorageAccountFromCluster(oc)
 	if err1 != nil {
 		return fmt.Errorf("can't get azure storage account from cluster: %v", err1)
