@@ -2275,8 +2275,8 @@ nulla pariatur.`
 			mcName      = "mco-tc-55879-create-force-file"
 			mcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 
-			expectedNDMessage = regexp.QuoteMeta(fmt.Sprintf("cannot create %s via Ignition", filePath)) // quotemeta to scape regex characters in the file path
-			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+			expectedRDMessage = regexp.QuoteMeta(fmt.Sprintf("cannot create %s via Ignition", filePath)) // quotemeta to scape regex characters in the file path
+			expectedRDReason  = ""
 		)
 
 		exutil.By("Create the force file using a MC")
@@ -2285,7 +2285,7 @@ nulla pariatur.`
 		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", fileConfig)}
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+		validateMcpRenderDegraded(mc, mcp, expectedRDMessage, expectedRDReason)
 
 	})
 
@@ -2762,8 +2762,8 @@ nulla pariatur.`
 			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 
-			expectedNDMessage = regexp.QuoteMeta("detected change to FIPS flag; refusing to modify FIPS on a running cluster")
-			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+			expectedRDMessage = regexp.QuoteMeta("detected change to FIPS flag; refusing to modify FIPS on a running cluster")
+			expectedRDReason  = ""
 		)
 
 		// If FIPS is already enabled, we skip the test case
@@ -2774,7 +2774,7 @@ nulla pariatur.`
 		mMc.parameters = []string{"FIPS=true"}
 		mMc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mMc, mMcp, expectedNDMessage, expectedNDReason)
+		validateMcpRenderDegraded(mMc, mMcp, expectedRDMessage, expectedRDReason)
 		logger.Infof("OK!\n")
 
 		exutil.By("Try to enable FIPS in worker pool")
@@ -2782,7 +2782,7 @@ nulla pariatur.`
 		wMc.parameters = []string{"FIPS=true"}
 		wMc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(wMc, wMcp, expectedNDMessage, expectedNDReason)
+		validateMcpRenderDegraded(wMc, wMcp, expectedRDMessage, expectedRDReason)
 		logger.Infof("OK!\n")
 
 	})
@@ -2796,8 +2796,8 @@ nulla pariatur.`
 			mMc     = NewMachineConfig(oc.AsAdmin(), mMcName, MachineConfigPoolMaster)
 			wMc     = NewMachineConfig(oc.AsAdmin(), wMcName, MachineConfigPoolWorker)
 
-			expectedNDMessage = regexp.QuoteMeta("detected change to FIPS flag; refusing to modify FIPS on a running cluster")
-			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+			expectedRDMessage = regexp.QuoteMeta("detected change to FIPS flag; refusing to modify FIPS on a running cluster")
+			expectedRDReason  = ""
 		)
 
 		// If FIPS is already disabled, we skip the test case
@@ -2813,11 +2813,11 @@ nulla pariatur.`
 
 		exutil.By("Patch the master-fips MC and set fips=false")
 		mMc.Patch("merge", `{"spec":{"fips": false}}`)
-		checkDegraded(mMcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 1)
+		checkDegraded(mMcp, expectedRDMessage, expectedRDReason, "RenderDegraded", 1)
 
 		exutil.By("Try to disasble FIPS in worker pool")
 		wMc.Patch("merge", `{"spec":{"fips": false}}`)
-		checkDegraded(wMcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 1)
+		checkDegraded(wMcp, expectedRDMessage, expectedRDReason, "RenderDegraded", 1)
 
 	})
 
@@ -3395,8 +3395,8 @@ nulla pariatur.`
 			mcName = "mco-tc-66376-reject-ignition-kernel-arguments"
 			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
 			// quotemeta to scape regex characters in the file path
-			expectedNDMessage = regexp.QuoteMeta(`ignition kargs section contains changes`)
-			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+			expectedRDMessage = regexp.QuoteMeta(`ignition kargs section contains changes`)
+			expectedRDReason  = ""
 		)
 
 		exutil.By("Create a MC with an ignition section that declares kernel arguments")
@@ -3404,7 +3404,7 @@ nulla pariatur.`
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate("add-ignition-kernel-arguments.yaml")
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+		validateMcpRenderDegraded(mc, mcp, expectedRDMessage, expectedRDReason)
 
 	})
 
@@ -4259,16 +4259,16 @@ func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expected
 }
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to RenderDegraded error matching expectedNDMessage, expectedNDReason
-func validateMcpRenderDegraded(mc *MachineConfig, mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string) {
+func validateMcpRenderDegraded(mc *MachineConfig, mcp *MachineConfigPool, expectedRDMessage, expectedRDReason string) {
 	defer o.Eventually(mcp, "5m", "20s").ShouldNot(BeDegraded(), "The MCP was not recovered from Degraded status after deleting the offending MC")
 	defer o.Eventually(mc.deleteNoWait).Should(o.Succeed(), "Could not delete the offending MC")
 	mc.create()
 	logger.Infof("OK!\n")
 
-	checkDegraded(mcp, expectedNDMessage, expectedNDReason, "RenderDegraded", 2)
+	checkDegraded(mcp, expectedRDMessage, expectedRDReason, "RenderDegraded", 2)
 }
 
-func checkDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReason, degradedConditionType string, offset int) {
+func checkDegraded(mcp *MachineConfigPool, expectedMessage, expectedReason, degradedConditionType string, offset int) {
 	oc := mcp.oc
 	expectedNumDegradedMachines := 0
 	if degradedConditionType == "NodeDegraded" {
@@ -4279,7 +4279,7 @@ func checkDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReason, 
 	o.EventuallyWithOffset(offset, mcp, fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "30s").Should(BeDegraded(),
 		"The '%s' MCP should become degraded when we try to create an invalid MC, but it didn't.", mcp.GetName())
 	o.EventuallyWithOffset(offset, mcp.getDegradedMachineCount, "5m", "30s").Should(o.Equal(expectedNumDegradedMachines),
-		"The '%s' MCP should report '1' degraded machine count, but it doesn't.", mcp.GetName())
+		"The '%s' MCP should report '%d' degraded machine count, but it doesn't.", expectedNumDegradedMachines, mcp.GetName())
 
 	logger.Infof("OK!\n")
 
@@ -4289,10 +4289,10 @@ func checkDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReason, 
 	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "status", o.Equal("True")),
 		"'worker' MCP should report degraded status in the %s condition: %s", degradedConditionType, degradedCondition)
 
-	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "message", o.MatchRegexp(expectedNDMessage)),
+	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "message", o.MatchRegexp(expectedMessage)),
 		"'worker' MCP is not reporting the expected message in the %s condition: %s", degradedConditionType, degradedCondition)
 
-	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "reason", o.MatchRegexp(expectedNDReason)),
+	o.ExpectWithOffset(offset, mcp).Should(HaveConditionField(degradedConditionType, "reason", o.MatchRegexp(expectedReason)),
 		"'worker' MCP is not reporting the expected reason in the NodeDegraded condition: %s", degradedConditionType, degradedCondition)
 	logger.Infof("OK!\n")
 
@@ -4308,8 +4308,8 @@ func checkDegraded(mcp *MachineConfigPool, expectedNDMessage, expectedNDReason, 
 	o.EventuallyWithOffset(offset, mco, "5m", "10s").Should(HaveConditionField("Upgradeable", "status", o.Equal("False")),
 		"co/machine-config Upgradeable condition status is not the expected one: %s", mco.GetConditionByType("Upgradeable"))
 
-	expectedMessage := "One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"
-	o.EventuallyWithOffset(offset, mco, "5m", "10s").Should(HaveConditionField("Upgradeable", "message", o.ContainSubstring(expectedMessage)),
+	expectedCOMessage := "One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"
+	o.EventuallyWithOffset(offset, mco, "5m", "10s").Should(HaveConditionField("Upgradeable", "message", o.ContainSubstring(expectedCOMessage)),
 		"co/machine-config Upgradeable condition message is not the expected one: %s", mco.GetConditionByType("Upgradeable"))
 
 	logger.Infof("OK!\n")

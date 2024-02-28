@@ -209,23 +209,17 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 			wrongUser    = "root"
 			passwordHash = "fake-hash"
 
-			expectedNDReason = "1 nodes are reporting degraded status on sync"
+			expectedRDReason  = ""
+			expectedRDMessage = regexp.QuoteMeta(`ignition passwd user section contains unsupported changes: non-core user`)
 		)
 
 		exutil.By("Create a password for a non-core user using a MC")
-		sortedNodes, err := mcp.GetSortedNodes()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the nodes in the worker MCP")
-		fistUpdatedNode := sortedNodes[0]
 
-		expectedNDMessage := regexp.QuoteMeta(fmt.Sprintf(`Node %s is reporting: "can't reconcile config`, fistUpdatedNode.GetName())) +
-			`.*` +
-			regexp.QuoteMeta(`ignition passwd user section contains unsupported changes: non-core user`)
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, wrongUser, passwordHash)}
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
-
+		validateMcpRenderDegraded(mc, mcp, expectedRDMessage, expectedRDReason)
 	})
 
 	g.It("Author:sregidor-NonPreRelease-Longduration-High-59424-ssh keys can be found in new dir on RHCOS9 node [Disruptive]", func() {
