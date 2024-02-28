@@ -337,7 +337,8 @@ data:
 		}
 
 		//Check IAAS platform type
-		iaasPlatform := exutil.CheckPlatform(oc)
+		iaasPlatform, err := getIaasPlatform(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		var providerSpec string
 		switch iaasPlatform {
 		case "aws":

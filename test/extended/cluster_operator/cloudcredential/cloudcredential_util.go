@@ -162,6 +162,13 @@ func getIaasPlatform(oc *exutil.CLI) (string, error) {
 		return "", err
 	}
 	iaasPlatform := strings.ToLower(output)
+
+	if iaasPlatform == "external" {
+		externalPlatformNameOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.external.platformName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		iaasPlatform = strings.ToLower(externalPlatformNameOutput)
+	}
+
 	return iaasPlatform, nil
 }
 
