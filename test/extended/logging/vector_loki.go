@@ -284,8 +284,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if len(sc) == 0 {
 				g.Skip("The cluster doesn't have a storage class for this test!")
 			}
-			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
+			if !validateInfraForLoki(oc) {
+				g.Skip("Current platform not supported!")
 			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
@@ -373,44 +373,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			}
 			lc.waitForLogsAppearByProject("application", appProj)
-		})
-
-	})
-
-	g.Context("ClusterLogging and Loki Integration tests with vector", func() {
-
-		g.BeforeEach(func() {
-			s = getStorageType(oc)
-			if len(s) == 0 {
-				g.Skip("Current cluster doesn't have a proper object storage for this test!")
-			}
-			sc, _ = getStorageClassName(oc)
-			if len(sc) == 0 {
-				g.Skip("The cluster doesn't have a storage class for this test!")
-			}
-			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
-			}
-			loggingBaseDir = exutil.FixturePath("testdata", "logging")
-			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
-			CLO := SubscriptionObjects{
-				OperatorName:  "cluster-logging-operator",
-				Namespace:     cloNS,
-				PackageName:   "cluster-logging",
-				Subscription:  subTemplate,
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			}
-			LO := SubscriptionObjects{
-				OperatorName:  "loki-operator-controller-manager",
-				Namespace:     loNS,
-				PackageName:   "loki-operator",
-				Subscription:  subTemplate,
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			}
-			g.By("deploy CLO and LO")
-			CLO.SubscribeOperator(oc)
-			LO.SubscribeOperator(oc)
-			oc.SetupProject()
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53128-CLO Loki Integration-Verify that by default only app and infra logs are sent to Loki (vector)[Serial]", func() {
@@ -1218,8 +1180,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if len(sc) == 0 {
 				g.Skip("The cluster doesn't have a storage class for this test!")
 			}
-			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
+			if !validateInfraForLoki(oc) {
+				g.Skip("Current platform not supported!")
 			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
@@ -1784,8 +1746,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
 			}
-			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-				g.Skip("the cluster doesn't have enough resources for this test!")
+			if !validateInfraForLoki(oc) {
+				g.Skip("Current platform not supported!")
 			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
@@ -2147,6 +2109,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 	})
 
 	g.It("CPaasrunOnly-Author:qitang-High-65193-Controlling log flow rates per container from selected containers by containerLimit.[Serial][Slow]", func() {
+		if !validateInfraForLoki(oc) {
+			g.Skip("Current platform not supported!")
+		}
 		exutil.By("Create 3 pods in one project")
 		multiplePods := oc.Namespace()
 		for i := 0; i < 3; i++ {
@@ -2274,6 +2239,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 	})
 
 	g.It("CPaasrunOnly-Author:qitang-High-65194-Controlling the flow rate per destination to selected outputs.[Serial][Slow]", func() {
+		if !validateInfraForLoki(oc) {
+			g.Skip("Current platform not supported!")
+		}
 		exutil.By("Create pod to generate some logs")
 		appProj := oc.Namespace()
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "RATE=3000", "-p", "REPLICAS=3").Execute()
@@ -2522,8 +2490,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 		if len(sc) == 0 {
 			g.Skip("The cluster doesn't have a storage class for this test!")
 		}
-		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-			g.Skip("Current platform not supported/resources not available for this test!")
+		if !validateInfraForLoki(oc) {
+			g.Skip("Current platform not supported!")
 		}
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
@@ -2914,6 +2882,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		sc, _ = getStorageClassName(oc)
 		if len(sc) == 0 {
 			g.Skip("The cluster doesn't have a storage class for this test!")
+		}
+		if !validateInfraForLoki(oc) {
+			g.Skip("Current platform not supported!")
 		}
 
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
