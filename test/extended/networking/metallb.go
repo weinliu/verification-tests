@@ -84,14 +84,14 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-High-46560-MetalLB-CR All Workers Creation [Serial]", func() {
+	g.It("Author:asood-High-46560-High-50944-MetalLB-CR All Workers Creation and Verify the logging level of MetalLB can be changed for debugging [Serial]", func() {
 
-		g.By("Check the platform if it is suitable for running the test")
+		exutil.By("Check the platform if it is suitable for running the test")
 		if !(isPlatformSuitable(oc)) {
 			g.Skip("These cases can only be run on networking team's private BM RDU clusters , skip for other envrionment!!!")
 		}
 
-		g.By("Creating metalLB CR on all the worker nodes in cluster")
+		exutil.By("Creating metalLB CR on all the worker nodes in cluster")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
 			name:      "metallb",
@@ -102,12 +102,41 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("SUCCESS - MetalLB CR Created")
-		g.By("Validate speaker pods scheduled on worker nodes")
+		exutil.By("SUCCESS - MetalLB CR Created")
+		exutil.By("Validate speaker pods scheduled on worker nodes")
 		result = validateAllWorkerNodeMCR(oc, opNamespace)
 		o.Expect(result).To(o.BeTrue())
 
-		g.By("SUCCESS - Speaker pods are scheduled on worker nodes")
+		exutil.By("50944-Verify the logging level of MetalLB can be changed for debugging")
+		exutil.By("Validate log level is info")
+		level := "info"
+		components := [2]string{"controller", "speaker"}
+		var err string
+		for _, component := range components {
+			result, err = checkLogLevelPod(oc, component, opNamespace, level)
+			o.Expect(result).To(o.BeTrue())
+			o.Expect(err).Should(o.BeEmpty())
+			e2e.Logf("%s pod log level is %s", component, level)
+		}
+
+		exutil.By("Change the log level")
+		//defer not needed because metallb CR is deleted at the end of the test
+		patchResourceAsAdmin(oc, "metallb/"+metallbCR.name, "{\"spec\":{\"logLevel\": \"debug\"}}", opNamespace)
+
+		exutil.By("Verify th deployment and daemon set have rolled out")
+		dpStatus, dpStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "deployment", "controller", "--timeout", "5m").Output()
+		o.Expect(dpStatusErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(dpStatus, "successfully rolled out")).To(o.BeTrue())
+		dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", "speaker", "--timeout", "5m").Output()
+		o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
+		level = "debug"
+		for _, component := range components {
+			result, err = checkLogLevelPod(oc, component, opNamespace, level)
+			o.Expect(result).To(o.BeTrue())
+			o.Expect(err).Should(o.BeEmpty())
+			e2e.Logf("%s pod log level is %s", component, level)
+		}
 
 	})
 

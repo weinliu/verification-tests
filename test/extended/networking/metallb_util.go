@@ -679,3 +679,38 @@ func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason
 	}
 	return result
 }
+
+func checkLogLevelPod(oc *exutil.CLI, component string, opNamespace string, level string) (bool, string) {
+	var podLogLevelOutput string
+	var err error
+	if component == "controller" {
+		podLogLevelOutput, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("pod", "-n", opNamespace, "-l", "component=controller", "-ojson").Output()
+		if err != nil {
+			e2e.Logf("Failed to get pod details due to %v", err)
+			return false, "Get request to get controller pod failed"
+		}
+	} else {
+		speakerPodList, err := exutil.GetAllPodsWithLabel(oc, opNamespace, "component=speaker")
+		if err != nil {
+			e2e.Logf("Failed to get pod %v", err)
+			return false, "Get request to get speaker pod failed"
+		}
+		if len(speakerPodList) == 0 {
+			return false, "Speaker pod list is empty"
+
+		}
+		podLogLevelOutput, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("pod", speakerPodList[0], "-n", opNamespace, "-ojson").Output()
+		if err != nil {
+			e2e.Logf("Failed to get details of pod %s due to %v", speakerPodList[0], err)
+			return false, "Get request to get log level of speaker pod failed"
+		}
+	}
+	if podLogLevelOutput == "" {
+		return false, fmt.Sprintf("Failed to get log level of %s pod", component)
+	}
+	if strings.Contains(podLogLevelOutput, "--log-level="+level) {
+		return true, ""
+	}
+	return false, fmt.Sprintf("The log level %s not set for %s pod", level, component)
+
+}
