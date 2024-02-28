@@ -512,7 +512,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-ConnectedOnly-ARO-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Slow][Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Slow][Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without aide config")
@@ -524,16 +524,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
-		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
-		assertKeywordsExists(oc, 300, fileintegrityNodeStatusName, "fileintegritynodestatuses", "-o=jsonpath={.items[*].metadata.name}", "-n", fi1.namespace)
+		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
 
 		g.By("Check DB backup results")
 		dbReinit := true
 		dbInitialBackupList, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
 
 		g.By("trigger reinit by applying aide config")
-		fi1.configname = "myconf"
-		fi1.configkey = "aide-conf"
+		fi1.configname = "myconf" + getRandomString()
+		fi1.configkey = "aide-conf" + getRandomString()
+		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 		defer cleanupObjects(oc, objectTableRef{"configmap", sub.namespace, fi1.configname})
 		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
 		newCheck("expect", asAdmin, withoutNamespace, contain, fi1.configname, ok, []string{"configmap", "-n", fi1.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -542,13 +542,18 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
 		dbBackupListAfterInit1, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
-		assertKeywordsExists(oc, 300, fileintegrityNodeStatusName, "fileintegritynodestatuses", "-o=jsonpath={.items[*].metadata.name}", "-n", fi1.namespace)
+		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
 
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test" + getRandomString()
 		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
-		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
+		debugNodeStdout, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
+		debugNodeStdout, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "ls", filePath)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The output of command ls %s is: %s", filePath, debugNodeStdout)
+		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatuses", fileintegrityNodeStatusName, "-n", fi1.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fi1.name+"-"+nodeName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
@@ -556,14 +561,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.getDataFromConfigmap(oc, cmName, filePath)
 
 		g.By("trigger reinit by applying aide config")
-		fi1.configname = "myconf1"
-		fi1.configkey = "aide-conf1"
+		fi1.configname = "myconf1" + getRandomString()
+		fi1.configkey = "aide-conf1" + getRandomString()
 		defer cleanupObjects(oc, objectTableRef{"configmap", sub.namespace, fi1.configname})
 		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile1, "created")
 		fi1.checkConfigmapCreated(oc)
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
 		checkDBFilesUpdated(oc, fi1, dbBackupListAfterInit1, nodeName, dbReinit, isNewFIO)
 	})
 
