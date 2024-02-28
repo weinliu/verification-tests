@@ -1255,10 +1255,10 @@ func waitForCurl(oc *exutil.CLI, podName, baseDomain string, routestring string,
 		if controllerIP != "" {
 			route := routestring + baseDomain + ":80"
 			toDst := routestring + baseDomain + ":80:" + controllerIP
-			output, err = oc.Run("exec").Args(podName, "--", "curl", "-v", "http://"+route, "--resolve", toDst).Output()
+			output, err = oc.Run("exec").Args(podName, "--", "curl", "-v", "http://"+route, "--resolve", toDst, "--connect-timeout", "10").Output()
 		} else {
 			curlCmd2 := routestring + baseDomain
-			output, err = oc.Run("exec").Args(podName, "--", "curl", "-v", "http://"+curlCmd2).Output()
+			output, err = oc.Run("exec").Args(podName, "--", "curl", "-v", "http://"+curlCmd2, "--connect-timeout", "10").Output()
 		}
 		if err != nil {
 			e2e.Logf("curl is not yet resolving, retrying...")

@@ -21,26 +21,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			output              string
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		)
-		g.By("create project, pod, svc resources")
+		exutil.By("create project, pod, svc resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 
-		g.By("expose a service in the project")
+		exutil.By("expose a service in the project")
 		exposeRoute(oc, oc.Namespace(), "svc/service-unsecure")
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure"))
 
-		g.By("annotate the route with haproxy.router.openshift.io/ip_whitelist with 61 CIDR values and verify")
+		exutil.By("annotate the route with haproxy.router.openshift.io/ip_whitelist with 61 CIDR values and verify")
 		setAnnotation(oc, oc.Namespace(), "route/service-unsecure", "haproxy.router.openshift.io/ip_whitelist=192.168.0.0/24 192.168.1.0/24 192.168.2.0/24 192.168.3.0/24 192.168.4.0/24 192.168.5.0/24 192.168.6.0/24 192.168.7.0/24 192.168.8.0/24 192.168.9.0/24 192.168.10.0/24 192.168.11.0/24 192.168.12.0/24 192.168.13.0/24 192.168.14.0/24 192.168.15.0/24 192.168.16.0/24 192.168.17.0/24 192.168.18.0/24 192.168.19.0/24 192.168.20.0/24 192.168.21.0/24 192.168.22.0/24 192.168.23.0/24 192.168.24.0/24 192.168.25.0/24 192.168.26.0/24 192.168.27.0/24 192.168.28.0/24 192.168.29.0/24 192.168.30.0/24 192.168.31.0/24 192.168.32.0/24 192.168.33.0/24 192.168.34.0/24 192.168.35.0/24 192.168.36.0/24 192.168.37.0/24 192.168.38.0/24 192.168.39.0/24 192.168.40.0/24 192.168.41.0/24 192.168.42.0/24 192.168.43.0/24 192.168.44.0/24 192.168.45.0/24 192.168.46.0/24 192.168.47.0/24 192.168.48.0/24 192.168.49.0/24 192.168.50.0/24 192.168.51.0/24 192.168.52.0/24 192.168.53.0/24 192.168.54.0/24 192.168.55.0/24 192.168.56.0/24 192.168.57.0/24 192.168.58.0/24 192.168.59.0/24 192.168.60.0/24")
 		output, err = oc.Run("get").Args("route", "service-unsecure", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("haproxy.router.openshift.io/ip_whitelist"))
 
-		g.By("verify the acl whitelist parameter inside router pod for whitelist with 61 CIDR values")
-		podName := getRouterPod(oc, "default")
+		exutil.By("verify the acl whitelist parameter inside router pod for whitelist with 61 CIDR values")
+		podName := getNewRouterPod(oc, "default")
 		//backendName is the leading context of the route
 		backendName := "be_http:" + oc.Namespace() + ":service-unsecure"
 		output = readHaproxyConfig(oc, podName, backendName, "-A10", "acl whitelist")
@@ -48,13 +48,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring(`tcp-request content reject if !whitelist`))
 		o.Expect(output).NotTo(o.ContainSubstring(`acl whitelist src -f /var/lib/haproxy/router/whitelists/`))
 
-		g.By("annotate the route with haproxy.router.openshift.io/ip_whitelist with more than 61 CIDR values and verify")
+		exutil.By("annotate the route with haproxy.router.openshift.io/ip_whitelist with more than 61 CIDR values and verify")
 		setAnnotation(oc, oc.Namespace(), "route/service-unsecure", "haproxy.router.openshift.io/ip_whitelist=192.168.0.0/24 192.168.1.0/24 192.168.2.0/24 192.168.3.0/24 192.168.4.0/24 192.168.5.0/24 192.168.6.0/24 192.168.7.0/24 192.168.8.0/24 192.168.9.0/24 192.168.10.0/24 192.168.11.0/24 192.168.12.0/24 192.168.13.0/24 192.168.14.0/24 192.168.15.0/24 192.168.16.0/24 192.168.17.0/24 192.168.18.0/24 192.168.19.0/24 192.168.20.0/24 192.168.21.0/24 192.168.22.0/24 192.168.23.0/24 192.168.24.0/24 192.168.25.0/24 192.168.26.0/24 192.168.27.0/24 192.168.28.0/24 192.168.29.0/24 192.168.30.0/24 192.168.31.0/24 192.168.32.0/24 192.168.33.0/24 192.168.34.0/24 192.168.35.0/24 192.168.36.0/24 192.168.37.0/24 192.168.38.0/24 192.168.39.0/24 192.168.40.0/24 192.168.41.0/24 192.168.42.0/24 192.168.43.0/24 192.168.44.0/24 192.168.45.0/24 192.168.46.0/24 192.168.47.0/24 192.168.48.0/24 192.168.49.0/24 192.168.50.0/24 192.168.51.0/24 192.168.52.0/24 192.168.53.0/24 192.168.54.0/24 192.168.55.0/24 192.168.56.0/24 192.168.57.0/24 192.168.58.0/24 192.168.59.0/24 192.168.60.0/24 192.168.61.0/24")
 		output1, err1 := oc.Run("get").Args("route", "service-unsecure", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		o.Expect(output1).To(o.ContainSubstring("haproxy.router.openshift.io/ip_whitelist"))
 
-		g.By("verify the acl whitelist parameter inside router pod for whitelist with 62 CIDR values")
+		exutil.By("verify the acl whitelist parameter inside router pod for whitelist with 62 CIDR values")
 		//backendName is the leading context of the route
 		output2 := readHaproxyConfig(oc, podName, backendName, "-A10", "acl whitelist")
 		o.Expect(output2).To(o.ContainSubstring(`acl whitelist src -f /var/lib/haproxy/router/whitelists/` + oc.Namespace() + `:service-unsecure.txt`))
@@ -68,30 +68,30 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			output              string
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		)
-		g.By("create project, pod, svc resources")
+		exutil.By("create project, pod, svc resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 
-		g.By("expose a service in the project")
+		exutil.By("expose a service in the project")
 		exposeRoute(oc, oc.Namespace(), "svc/service-secure")
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-secure"))
 
-		g.By("annotate the route with haproxy.router.openshift.io/timeout annotation to high value and verify")
+		exutil.By("annotate the route with haproxy.router.openshift.io/timeout annotation to high value and verify")
 		setAnnotation(oc, oc.Namespace(), "route/service-secure", "haproxy.router.openshift.io/timeout=9999d")
 		output, err = oc.Run("get").Args("route", "service-secure", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"9999d`))
 
-		g.By("Verify the haproxy configuration for the set timeout value")
-		podName := getRouterPod(oc, "default")
+		exutil.By("Verify the haproxy configuration for the set timeout value")
+		podName := getNewRouterPod(oc, "default")
 		output = readHaproxyConfig(oc, podName, oc.Namespace(), "-A6", `timeout`)
 		o.Expect(output).To(o.ContainSubstring(`timeout server  2147483647ms`))
 
-		g.By("Verify the pod logs to see any timer overflow error messages")
+		exutil.By("Verify the pod logs to see any timer overflow error messages")
 		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", podName, "-c", "router").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(log).NotTo(o.ContainSubstring(`timer overflow`))
@@ -113,34 +113,34 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("create project and a pod")
+		exutil.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=hello-pod, Ready status not met")
 		podName := getPodName(oc, project1, "name=web-server-rc")
-		defaultContPod := getRouterPod(oc, "default")
+		defaultContPod := getNewRouterPod(oc, "default")
 
-		g.By("create routes and get the details")
+		exutil.By("create routes and get the details")
 		rut.namespace = project1
 		rut.create(oc)
 		getRoutes(oc, project1)
 
-		g.By("check the reachability of the secure route with redirection")
+		exutil.By("check the reachability of the secure route with redirection")
 		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+project1+".apps.", "HTTP/1.1 302 Found", "")
 		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+project1+".apps.", `location: https://hello-pod-`, "")
 
-		g.By("check the reachability of the insecure routes")
+		exutil.By("check the reachability of the insecure routes")
 		waitForCurl(oc, podName[0], baseDomain+"/test/", "hello-pod-http-"+project1+".apps.", "HTTP/1.1 200 OK", "")
 
-		g.By("check the reachability of the secure route")
-		curlCmd := fmt.Sprintf("curl -I -k https://hello-pod-%s.apps.%s", project1, baseDomain)
+		exutil.By("check the reachability of the secure route")
+		curlCmd := fmt.Sprintf("curl -I -k https://hello-pod-%s.apps.%s --connect-timeout 10", project1, baseDomain)
 		statsOut, err := exutil.RemoteShPod(oc, project1, podName[0], "sh", "-c", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
 
-		g.By("check the router pod and ensure the routes are loaded in haproxy.config")
+		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "hello-pod")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_edge_http:" + project1 + ":hello-pod"))
 		searchOutput1 := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "hello-pod-http")
@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Longduration-Author:mjoseph-Critical-53696-Route status should updates accordingly when ingress routes cleaned up [Disruptive]", func() {
+	g.It("Author:mjoseph-NonPreRelease-Critical-53696-Route status should updates accordingly when ingress routes cleaned up [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -160,43 +160,40 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("check the intial canary route status")
+		exutil.By("check the intial canary route status")
 		routerpods := getResourceName(oc, "openshift-ingress", "pods")
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
 
-		g.By("shard the default ingress controller")
+		exutil.By("shard the default ingress controller")
 		defer patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":\"shard\"}}}}")
 		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", routerpods)
 		newrouterpods := getResourceName(oc, "openshift-ingress", "pods")
 
-		g.By("check whether canary route status is cleared")
+		exutil.By("check whether canary route status is cleared")
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status", "default", true)
 
-		g.By("patch the controller back to default check the canary route status")
+		exutil.By("patch the controller back to default check the canary route status")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
 		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", newrouterpods)
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
 
-		g.By("Create a shard ingresscontroller")
+		exutil.By("Create a shard ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = "shard." + baseDomain
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		crouterpod := getRouterPod(oc, ingctrl.name)
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"node-role.kubernetes.io/worker\":\"\"}}}}}")
-		err2 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+crouterpod)
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+crouterpod))
-		custContPod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("check the canary route status with shard controller")
+		exutil.By("patch the shard controller and check the canary route status")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"node-role.kubernetes.io/worker\":\"\"}}}}}")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "ocp53696", false)
 
-		g.By("delete the shard and check the status")
+		exutil.By("delete the shard and check the status")
+		custContPod := getNewRouterPod(oc, ingctrl.name)
 		ingctrl.delete(oc)
 		err3 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+custContPod)
 		exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+custContPod))
@@ -213,25 +210,25 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			cltPodLabel         = "app=hello-pod"
 		)
 
-		g.By("Deploy a project with a client pod")
+		exutil.By("Deploy a project with a client pod")
 		project1 := oc.Namespace()
 		baseDomain := getBaseDomain(oc)
-		g.By("create a client pod")
+		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
 
-		g.By("Check the intial canary route status")
+		exutil.By("Check the intial canary route status")
 		routerpods := getResourceName(oc, "openshift-ingress", "pods")
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
 
-		g.By("Check the reachability of the canary route")
+		exutil.By("Check the reachability of the canary route")
 		routehost := "canary-openshift-ingress-canary.apps." + baseDomain
-		cmdOnPod := []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost}
+		cmdOnPod := []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
 		result := repeatCmd(oc, cmdOnPod, "200 OK", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
 
-		g.By("Patch the ingress controller and deleting the canary route")
+		exutil.By("Patch the ingress controller and deleting the canary route")
 		defer ensureClusterOperatorNormal(oc, "ingress", 5, 300)
 		defer patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":null}}")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":\"default\"}}}}")
@@ -240,14 +237,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", routerpods)
 
-		g.By("Check whether the canary route status cleared and route is not accessible")
+		exutil.By("Check whether the canary route status cleared and route is not accessible")
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status", "default", true)
-		cmdOnPod = []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost}
+		cmdOnPod = []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
 		result = repeatCmd(oc, cmdOnPod, "503", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
 
 		// Wait may be about 300 seconds
-		g.By("Check the ingress operator status to confirm it is in degraded state cause by canary route")
+		exutil.By("Check the ingress operator status to confirm it is in degraded state cause by canary route")
 		jpath := ".status.conditions[*].message"
 		waitForOutput(oc, "default", "co/ingress", jpath, "The \"default\" ingress controller reports Degraded=True")
 		waitForOutput(oc, "default", "co/ingress", jpath, "Canary route is not admitted by the default ingress controller")
@@ -323,26 +320,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		)
 
-		g.By("Create a server pod")
+		exutil.By("Create a server pod")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 
-		g.By("expose a service in the project")
+		exutil.By("expose a service in the project")
 		exposeRoute(oc, project1, "svc/service-unsecure")
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure"))
 
-		g.By("Annotate the route with Ipv6 subnet and verify it")
+		exutil.By("Annotate the route with Ipv6 subnet and verify it")
 		setAnnotation(oc, project1, "route/service-unsecure", "haproxy.router.openshift.io/ip_whitelist=2600:14a0::/40")
 		output, err = oc.Run("get").Args("route", "service-unsecure", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`"haproxy.router.openshift.io/ip_whitelist":"2600:14a0::/40"`))
 
-		g.By("Verify the acl whitelist parameter inside router pod with Ipv6 address")
-		defaultPod := getRouterPod(oc, "default")
+		exutil.By("Verify the acl whitelist parameter inside router pod with Ipv6 address")
+		defaultPod := getNewRouterPod(oc, "default")
 		backendName := "be_http:" + project1 + ":service-unsecure"
 		output = readHaproxyConfig(oc, defaultPod, backendName, "-A5", "acl whitelist src")
 		o.Expect(output).To(o.ContainSubstring(`acl whitelist src 2600:14a0::/40`))
