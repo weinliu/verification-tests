@@ -48,7 +48,7 @@ objects:
             port: 9102
             tls:
               type: "${MetricServerTLSType}"
-          disablealerts: []
+          disableAlerts: []
         resources:
           requests:
             memory: 100Mi
@@ -84,7 +84,7 @@ objects:
             certKey: user.key
             namespace: "${KafkaNamespace}"
       loki:
-        mode: Manual
+        mode: "${LokiMode}"
         enable: "${{LokiEnable}}"
         manual:
           authToken: Forward
@@ -113,6 +113,8 @@ objects:
               name: "${LokiStatusTLSUserCertName}"
               type: secret
               namespace: "${LokiNamespace}"
+        monolithic:
+          url: ${MonolithicLokiURL}
         writeBatchWait: 1s
         writeBatchSize: 10485760
         advanced:
@@ -167,6 +169,8 @@ parameters:
     value: "false"
   - name: LogType
     value: "Flows"
+  - name: LokiMode
+    value: "Manual"
   - name: LokiEnable
     value: "true"
   - name: LokiURL
@@ -181,6 +185,8 @@ parameters:
     value: "lokistack-ca-bundle"
   - name: LokiStatusTLSUserCertName
     value: "lokistack-query-frontend-http"
+  - name: MonolithicLokiURL
+    value: "http://loki.netobserv.svc:3100/"
   - name: LokiNamespace
     value: "netobserv"
   - name: KafkaAddress

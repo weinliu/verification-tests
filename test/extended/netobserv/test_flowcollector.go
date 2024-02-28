@@ -965,6 +965,68 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
+	g.It("NonPreRelease-Author:memodi-Medium-60664-Medium-61482-Alerts-with-NetObserv [Serial]", func() {
+		namespace := oc.Namespace()
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+		}
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+		flow.waitForFlowcollectorReady(oc)
+
+		// verify configured alerts
+		alertRuleName := "flowlogs-pipeline-alert"
+		rules, err := getConfiguredAlertRules(oc, alertRuleName, namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
+		o.Expect(rules).To(o.ContainSubstring("NetObservLokiError"))
+
+		// verify disable alerts feature
+		gen, err := getResourceGeneration(oc, "prometheusRule", "flowlogs-pipeline-alert", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		disableAlertPatchTemp := `[{"op": "$op", "path": "/spec/processor/metrics/disableAlerts", "value": ["NetObservLokiError"]}]`
+		disableAlertPatch := strings.Replace(disableAlertPatchTemp, "$op", "add", 1)
+		out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "--type=json", "-p", disableAlertPatch).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("patched"))
+
+		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, gen, namespace)
+		rules, err = getConfiguredAlertRules(oc, alertRuleName, namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
+		o.Expect(rules).ToNot(o.ContainSubstring("NetObservLokiError"))
+
+		gen, err = getResourceGeneration(oc, "prometheusRule", "flowlogs-pipeline-alert", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		disableAlertPatch = strings.Replace(disableAlertPatchTemp, "$op", "remove", 1)
+		out, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "--type=json", "-p", disableAlertPatch).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("patched"))
+		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, gen, namespace)
+		rules, err = getConfiguredAlertRules(oc, alertRuleName, namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
+		o.Expect(rules).To(o.ContainSubstring("NetObservLokiError"))
+
+		flow.deleteFlowcollector(oc)
+
+		// verify alert firing.
+		// configure flowcollector with incorrect loki URL
+		flow = Flowcollector{
+			Namespace:         namespace,
+			Template:          flowFixturePath,
+			LokiMode:          "Monolithic",
+			MonolithicLokiURL: "http://loki.no-ns.svc:3100",
+		}
+		flow.createFlowcollector(oc)
+		flow.waitForFlowcollectorReady(oc)
+		waitForAlertToBeActive(oc, "NetObservLokiError")
+	})
+
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {

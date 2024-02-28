@@ -424,3 +424,31 @@ func waitUntilDeploymentReady(oc *exutil.CLI, deployment string, namespace strin
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Deployment %s did not become Available", deployment))
 }
+
+func getResourceGeneration(oc *exutil.CLI, resource string, name string, namespace string) (int, error) {
+	gen, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-o=jsonpath='{.metadata.generation}'", "-n", namespace).Output()
+	if err != nil {
+		return -1, err
+	}
+	genI, err := strconv.Atoi(strings.Trim(gen, "'"))
+	if err != nil {
+		return -1, err
+	}
+	return genI, nil
+
+}
+
+func waitForResourceGenerationUpdate(oc *exutil.CLI, resource string, name string, generation int, namespace string) {
+
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(context.Context) (done bool, err error) {
+		gen, err := getResourceGeneration(oc, resource, name, namespace)
+		if err != nil {
+			return false, err
+		}
+		if gen > generation {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s generation did not update", resource, name))
+}

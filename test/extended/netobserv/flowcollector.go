@@ -22,6 +22,7 @@ type Flowcollector struct {
 	LogType                   string
 	DeploymentModel           string
 	LokiEnable                string
+	LokiMode                  string
 	LokiURL                   string
 	LokiTLSCertName           string
 	LokiStatusTLSEnable       string
@@ -29,6 +30,7 @@ type Flowcollector struct {
 	LokiStatusTLSCertName     string
 	LokiStatusTLSUserCertName string
 	LokiNamespace             string
+	MonolithicLokiURL         string
 	KafkaAddress              string
 	KafkaTLSEnable            string
 	KafkaClusterName          string
