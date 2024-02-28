@@ -1,0 +1,62 @@
+# DO NOT MODIFY DIRECTLY
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: rapidast-job-template
+objects:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: "${PVC_NAME}"
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 20M
+  - apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: "${JOB_NAME}"
+    spec:
+      template:
+        metadata:
+          labels:
+            name: "${JOB_NAME}"
+            job-name: "${JOB_NAME}"
+          name: "${JOB_NAME}"
+        spec:
+          serviceAccount: "${SA_NAME}"
+          volumes:
+            - name: config-volume
+              configMap:
+                name: "${CONFIGMAP_NAME}"
+            - name: results-volume
+              persistentVolumeClaim:
+                claimName: "${PVC_NAME}"
+          containers:
+            - name: "${JOB_NAME}"
+              # TODO: change to "quay.io/redhatproductsecurity/rapidast:latest" once new build released
+              image: quay.io/rh-ee-yuewu/rapidast:2.3.0-patch
+              imagePullPolicy: IfNotPresent
+              command:
+                - "sh"
+                - "-c"
+                - >
+                  cp /helm/config/customscan.policy /opt/rapidast/scanners/zap/policies/customscan.policy &&
+                  rapidast.py --config /helm/config/rapidastconfig.yaml &&
+                  find /opt/rapidast/results/${APP_SHORT_NAME} -name zap-report.json -exec cat {} \;
+              securityContext:
+                privileged: true
+              volumeMounts:
+                - name: config-volume
+                  mountPath: "/helm/config"
+                - name: results-volume
+                  mountPath: "/opt/rapidast/results/${APP_SHORT_NAME}"
+          restartPolicy: Never
+parameters:
+  - name: JOB_NAME
+  - name: SA_NAME
+  - name: CONFIGMAP_NAME
+  - name: PVC_NAME
+  - name: APP_SHORT_NAME
