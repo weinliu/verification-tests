@@ -3760,7 +3760,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Check metrics !!!\n")
-		checkMetric(oc, metricSsbStr, subD.namespace, "co")
+		url := fmt.Sprintf("https://metrics." + subD.namespace + ".svc:8585/metrics-co")
+		checkMetric(oc, metricSsbStr, url)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "compliance", ok, []string{"PrometheusRule", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NonCompliant", ok, []string{"PrometheusRule", "compliance", "-n", subD.namespace, "-ojsonpath={.spec.groups[0].rules[0].alert}"}).check(oc)
 
@@ -3804,7 +3805,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.complianceSuiteName(oc, csuiteD.name)
 		subD.complianceSuiteResult(oc, csuiteD.name, "ERROR")
 
-		checkMetric(oc, metricsErr, subD.namespace, "co")
+		url := fmt.Sprintf("https://metrics." + subD.namespace + ".svc:8585/metrics-co")
+		checkMetric(oc, metricsErr, url)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "compliance", ok, []string{"PrometheusRule", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NonCompliant", ok, []string{"PrometheusRule", "compliance", "-n", subD.namespace, "-ojsonpath={.spec.groups[0].rules[0].alert}"}).check(oc)
 

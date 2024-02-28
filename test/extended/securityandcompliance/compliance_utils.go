@@ -944,9 +944,8 @@ func getSAToken(oc *exutil.CLI, account string, ns string) string {
 	return token
 }
 
-func checkMetric(oc *exutil.CLI, metricString []string, namespace string, operator string) {
+func checkMetric(oc *exutil.CLI, metricString []string, url string) {
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-	url := fmt.Sprintf("https://metrics." + namespace + ".svc:8585/metrics-" + operator)
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).OutputToFile("metrics.txt")
 		if err != nil {
