@@ -240,6 +240,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: chaoyang@redhat.com
 	g.It("NonHyperShiftHOST-OSD_CCS-Author:chaoyang-Critical-51995-[GCE-PD-CSI] [Snapshot] Provision image disk snapshot and restore successfully", func() {
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
+
 		var (
 			volumeSnapshotClassTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
 			volumesnapshotTemplate      = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")

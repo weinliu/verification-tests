@@ -2216,6 +2216,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
+
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
@@ -2400,6 +2406,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
+
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
