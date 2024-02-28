@@ -728,7 +728,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
 		toDst := routehost + ":80:" + podIP
 		toDst2 := notExistRoute + ":80:" + podIP
-		output, errCurlRoute := oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst2).Output()
+		output, errCurlRoute := oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst2, "--connect-timeout", "10").Output()
 		o.Expect(errCurlRoute).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("404 Not Found"))
 		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested document was not found"))
@@ -740,7 +740,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, project1, "pod/"+podname)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
-		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+routehost, "--resolve", toDst).Output()
+		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+routehost, "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("503 Service Unavailable"))
 		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested application is not available"))
@@ -820,9 +820,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
 		toDst := notExistRoute + ":80:" + podIP
-		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst}
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmd(oc, cmdOnPod, "200", 5)
-		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst).Output()
+		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.And(
 			o.ContainSubstring("404 Not Found"),
@@ -1521,7 +1521,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		podIP := getPodv4Address(oc, podname, "openshift-ingress")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
 		toDst := notExistRoute + ":80:" + podIP
-		output, err2 := oc.Run("exec").Args(cltPodName, "--", "curl", "-Iv", "http://"+notExistRoute, "--resolve", toDst).Output()
+		output, err2 := oc.Run("exec").Args(cltPodName, "--", "curl", "-Iv", "http://"+notExistRoute, "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("503"))
 		o.Expect(output).ShouldNot(o.And(
@@ -1708,7 +1708,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("curl the route from the client pod")
 		toDst := routehost + ":80:" + podIP
-		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst}
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		result := repeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
 	})
@@ -1994,8 +1994,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
-		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-H reqTestHeader:aaa", "-e", "www.qe-test.com"}
-		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-H reqTestHeader:aaa", "-e", "www.qe-test.com"}
+		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--connect-timeout", "10"}
+		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
@@ -2175,8 +2175,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the reen route, then check http headers in the request or response message")
-		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst}
-		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst}
+		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlReenRouteRes, "200", 30)
@@ -2351,8 +2351,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
-		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst}
-		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst}
+		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30)
@@ -2484,8 +2484,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		routeDst := routeHost + ":80:" + podIP
-		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--resolve", routeDst}
-		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--resolve", routeDst}
+		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
+		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
@@ -2663,8 +2663,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		edgeRouteDst := edgeRouteHost + ":443:" + podIP
-		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst}
-		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst}
+		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30)
@@ -2846,8 +2846,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("send traffic to the reen route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		reenRouteDst := reenRouteHost + ":443:" + podIP
-		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst}
-		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst}
+		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlReenRouteRes, "200", 30)
@@ -2951,9 +2951,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
 		exutil.By("send traffic and check the max http headers specified in a route")
-		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst}
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmd(oc, cmdOnPod, "200", 5)
-		resHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		resHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(resHeaders), "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
@@ -2981,7 +2981,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(haproxyHeaderName).To(o.ContainSubstring(maxHeaderName))
 
 		exutil.By("send traffic and check the max header name specified in a route")
-		resHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		resHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(resHeaders), maxHeaderName+"\": \"value123abc\"")).To(o.BeTrue())
 
@@ -3045,7 +3045,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
 		exutil.By("send traffic and check the max http headers specified in an ingress controller")
-		icResHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		icResHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(icResHeaders), "ocp66566testheader") == maxHTTPHeaders).To(o.BeTrue())
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
@@ -3077,7 +3077,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(routeBackendCfg, maxHeaderName)).To(o.BeTrue())
 
 		exutil.By("send traffic and check the header with max length name specified in an ingress controller")
-		icResHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		icResHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(icResHeaders), maxHeaderName+": value123abc")).To(o.BeTrue())
 
@@ -3237,14 +3237,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		routerpod := getNewRouterPod(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
-		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst}
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmd(oc, cmdOnPod, "200", 5)
-		reqHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst).Output()
+		reqHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(reqHeaders), "\"reqtestheader\": \"req111\"")).To(o.BeTrue())
 
 		exutil.By("send traffic, check the response header restestheader which should be set to resbbb by the ingress-controller")
-		resHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-I", "--resolve", toDst).Output()
+		resHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-I", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(resHeaders, "restestheader: resbbb")).To(o.BeTrue())
 	})
