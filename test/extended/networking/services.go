@@ -805,4 +805,177 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-71385-Endpoints for backend pods are cleared up for OVN service lb as soon as those pods are in terminating state.", func() {
+
+		// For customer bug https://issues.redhat.com/browse/OCPBUGS-24363
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod-with-special-lifecycle.yaml")
+		genericServiceTemplate := filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+
+		exutil.By("1.Get namespace \n")
+		ns := oc.Namespace()
+
+		exutil.By("2. Create test pods and scale test pods to 5 \n")
+		createResourceFromFile(oc, ns, testPodFile)
+		err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=5", "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ns, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "Not all test pods with label name=test-pods are ready")
+
+		exutil.By("3. Create a service in front of the above test pods \n")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "test-pods",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
+		}
+
+		ipStack := checkIPStackType(oc)
+		if ipStack == "dualstack" {
+			svc.ipFamilyPolicy = "PreferDualStack"
+		} else {
+			svc.ipFamilyPolicy = "SingleStack"
+		}
+		svc.createServiceFromParams(oc)
+
+		exutil.By("4. Check OVN service lb status \n")
+		svcOutput, svcErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename).Output()
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
+
+		exutil.By("5. Get IP for the OVN service lb \n")
+		var svcIPv6, svcIPv4, podIPv6, podIPv4 string
+		if ipStack == "dualstack" || ipStack == "ipv6single" {
+			svcIPv6, svcIPv4 = getSvcIP(oc, svc.namespace, svc.servicename)
+		} else {
+			svcIPv4, _ = getSvcIP(oc, svc.namespace, svc.servicename)
+		}
+		e2e.Logf("On this %s cluster, IP for service IP are svcIPv6: %s,  svcIPv4: %s", ipStack, svcIPv6, svcIPv4)
+
+		exutil.By("6. Check OVN service lb endpoints in northdb, it should include all running backend test pods \n")
+		allPods, getPodErr := exutil.GetAllPodsWithLabel(oc, ns, "name=test-pods")
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
+		o.Expect(len(allPods)).NotTo(o.BeEquivalentTo(0))
+
+		var expectedEndpointsv6, expectedEndpointsv4 []string
+		for _, eachPod := range allPods {
+			if ipStack == "dualstack" {
+				podIPv6, podIPv4 = getPodIP(oc, ns, eachPod)
+				expectedEndpointsv6 = append(expectedEndpointsv6, "["+podIPv6+"]:8080")
+				expectedEndpointsv4 = append(expectedEndpointsv4, podIPv4+":8080")
+			} else if ipStack == "ipv6single" {
+				podIPv6, _ = getPodIP(oc, ns, eachPod)
+				expectedEndpointsv6 = append(expectedEndpointsv6, "["+podIPv6+"]:8080")
+			} else {
+				podIPv4, _ = getPodIP(oc, ns, eachPod)
+				expectedEndpointsv4 = append(expectedEndpointsv4, podIPv4+":8080")
+			}
+		}
+		e2e.Logf("\n On this %s cluster, V6 endpoints of service lb are expected to be: %v\n", ipStack, expectedEndpointsv6)
+		e2e.Logf("\n On this %s cluster, V4 endpoints of service lb are expected to be: %v\n", ipStack, expectedEndpointsv4)
+
+		// check service lb endpoints in northdb on each node's ovnkube-pod
+		nodeList, nodeErr := exutil.GetAllNodes(oc)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList)).NotTo(o.BeEquivalentTo(0))
+
+		var endpointsv6, endpointsv4 []string
+		var epErr error
+		for _, eachNode := range nodeList {
+			if ipStack == "dualstack" || ipStack == "ipv6single" {
+				endpointsv6, epErr = getLBListEndpointsbySVCIPPortinNBDB(oc, eachNode, "\\["+svcIPv6+"\\]:27017")
+				e2e.Logf("\n Got V6 endpoints of service lb for node %s : %v\n", eachNode, expectedEndpointsv6)
+				o.Expect(epErr).NotTo(o.HaveOccurred())
+				o.Expect(unorderedEqual(endpointsv6, expectedEndpointsv6)).Should(o.BeTrue(), fmt.Sprintf("V6 service lb endpoints on node %sdo not match expected endpoints!", eachNode))
+			}
+			if ipStack == "dualstack" || ipStack == "ipv4single" {
+				endpointsv4, epErr = getLBListEndpointsbySVCIPPortinNBDB(oc, eachNode, svcIPv4+":27017")
+				e2e.Logf("\n Got V4 endpoints of service lb for node %s : %v\n", eachNode, expectedEndpointsv4)
+				o.Expect(epErr).NotTo(o.HaveOccurred())
+				o.Expect(unorderedEqual(endpointsv4, expectedEndpointsv4)).Should(o.BeTrue(), fmt.Sprintf("V4 service lb endpoints on node %sdo not match expected endpoints!", eachNode))
+			}
+		}
+
+		exutil.By("7. Scale test pods down to 2 \n")
+		scaleErr := oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=2", "-n", ns).Execute()
+		o.Expect(scaleErr).NotTo(o.HaveOccurred())
+
+		var terminatingPods []string
+		o.Eventually(func() bool {
+			terminatingPods = getAllPodsWithLabelAndCertainState(oc, ns, "name=test-pods", "Terminating")
+			return len(terminatingPods) == 3
+		}, "30s", "5s").Should(o.BeTrue(), "Test pods did not scale down to 2")
+		e2e.Logf("\n terminatingPods: %v\n", terminatingPods)
+
+		var expectedCleanedUpEPsv6, expectedCleanedUpEPsv4, expectedRemindedEPsv6, expectedRemindedEPsv4, actualFinalEPsv6, actualFinalEPsv4 []string
+		for _, eachPod := range terminatingPods {
+			if ipStack == "dualstack" {
+				podIPv6, podIPv4 = getPodIP(oc, ns, eachPod)
+				expectedCleanedUpEPsv6 = append(expectedCleanedUpEPsv6, "["+podIPv6+"]:8080")
+				expectedCleanedUpEPsv4 = append(expectedCleanedUpEPsv4, podIPv4+":8080")
+			} else if ipStack == "ipv6single" {
+				podIPv6, _ = getPodIP(oc, ns, eachPod)
+				expectedCleanedUpEPsv6 = append(expectedCleanedUpEPsv6, "["+podIPv6+"]:8080")
+			} else {
+				podIPv4, _ = getPodIP(oc, ns, eachPod)
+				expectedCleanedUpEPsv4 = append(expectedCleanedUpEPsv4, podIPv4+":8080")
+			}
+		}
+		e2e.Logf("\n On this %s cluster, V6 endpoints of service lb are expected to be cleaned up: %v\n", ipStack, expectedCleanedUpEPsv6)
+		e2e.Logf("\n On this %s cluster, V4 endpoints of service lb are expected to be cleaned up: %v\n", ipStack, expectedCleanedUpEPsv4)
+
+		runningPods := getAllPodsWithLabelAndCertainState(oc, ns, "name=test-pods", "Running")
+		e2e.Logf("\n runningPods: %v\n", runningPods)
+
+		for _, eachPod := range runningPods {
+			if ipStack == "dualstack" {
+				podIPv6, podIPv4 = getPodIP(oc, ns, eachPod)
+				expectedRemindedEPsv6 = append(expectedRemindedEPsv6, "["+podIPv6+"]:8080")
+				expectedRemindedEPsv4 = append(expectedRemindedEPsv4, podIPv4+":8080")
+			} else if ipStack == "ipv6single" {
+				podIPv6, _ = getPodIP(oc, ns, eachPod)
+				expectedRemindedEPsv6 = append(expectedRemindedEPsv6, "["+podIPv6+"]:8080")
+			} else {
+				podIPv4, _ = getPodIP(oc, ns, eachPod)
+				expectedRemindedEPsv4 = append(expectedRemindedEPsv4, podIPv4+":8080")
+			}
+		}
+		e2e.Logf("\n On this %s cluster, V6 endpoints of service lb are expected to remind: %v\n", ipStack, expectedCleanedUpEPsv6)
+		e2e.Logf("\n On this %s cluster, V4 endpoints of service lb are expected to remind: %v\n", ipStack, expectedCleanedUpEPsv4)
+
+		exutil.By("8. Check lb-list entries in northdb again in each node's ovnkube-node pod, only running pods' endpoints reminded in service lb endpoints \n")
+		for _, eachNode := range nodeList {
+			if ipStack == "dualstack" || ipStack == "ipv6single" {
+				actualFinalEPsv6, epErr = getLBListEndpointsbySVCIPPortinNBDB(oc, eachNode, "\\["+svcIPv6+"\\]:27017")
+				e2e.Logf("\n\n After scale-down, V6 endpoints from lb-list output on node %s northdb: %v\n\n", eachNode, actualFinalEPsv6)
+				o.Expect(epErr).NotTo(o.HaveOccurred())
+				o.Expect(unorderedEqual(actualFinalEPsv6, expectedRemindedEPsv6)).Should(o.BeTrue(), fmt.Sprintf("After scale-down, V6 service lb endpoints on node %s do not match expected endpoints!", eachNode))
+			}
+			if ipStack == "dualstack" || ipStack == "ipv4single" {
+				actualFinalEPsv4, epErr = getLBListEndpointsbySVCIPPortinNBDB(oc, eachNode, svcIPv4+":27017")
+				o.Expect(epErr).NotTo(o.HaveOccurred())
+				e2e.Logf("\n\n After scale-down, V4 endpoints from lb-list output on node %s northdb: %v\n\n", eachNode, actualFinalEPsv4)
+				o.Expect(unorderedEqual(actualFinalEPsv4, expectedRemindedEPsv4)).Should(o.BeTrue(), fmt.Sprintf("After scale-down, V4 service lb endpoints on node %s do not match expected endpoints!", eachNode))
+			}
+			// Verify terminating pods' endpoints are not in final service lb endpoints
+			if ipStack == "dualstack" || ipStack == "ipv6single" {
+				for _, ep := range expectedCleanedUpEPsv6 {
+					o.Expect(isValueInList(ep, actualFinalEPsv6)).ShouldNot(o.BeTrue(), fmt.Sprintf("After scale-down, terminating pod's V6 endpoint %s is not cleaned up from V6 service lb endpoint", ep))
+				}
+			}
+			if ipStack == "dualstack" || ipStack == "ipv4single" {
+				for _, ep := range expectedCleanedUpEPsv4 {
+					o.Expect(isValueInList(ep, actualFinalEPsv4)).ShouldNot(o.BeTrue(), fmt.Sprintf("After scale-down, terminating pod's V4 endpoint %s is not cleaned up from V4 service lb endpoint", ep))
+				}
+			}
+		}
+	})
+
 })

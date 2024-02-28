@@ -3367,3 +3367,55 @@ func findNodesWithSameSubnet(oc *exutil.CLI, nodeList []string) (bool, []string)
 	}
 	return false, nil
 }
+
+// Get endpoints for service:port in northdb of the node
+func getLBListEndpointsbySVCIPPortinNBDB(oc *exutil.CLI, nodeName, svcPort string) ([]string, error) {
+	// get the ovnkube-node pod of the node
+	ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+	o.Expect(podErr).NotTo(o.HaveOccurred())
+	o.Expect(ovnKubePod).ShouldNot(o.Equal(""))
+	var cmdOutput string
+	var cmdErr error
+	var endpoints []string
+
+	lbCmd := "ovn-nbctl lb-list | grep  \"" + svcPort + "\"  | awk '{print $NF}'"
+	checkOVNDbErr := wait.Poll(2*time.Second, 2*time.Minute, func() (bool, error) {
+		cmdOutput, cmdErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubePod, "northd", lbCmd)
+		if cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+
+		if cmdOutput != "" {
+			cmdOutputLines := strings.Split(cmdOutput, ",")
+			for i := 0; i < len(cmdOutputLines); i++ {
+				endpoints = append(endpoints, cmdOutputLines[i])
+			}
+			return true, nil
+		}
+
+		e2e.Logf("Waiting for expected result to be synced, try again ...")
+		return false, nil
+	})
+	if checkOVNDbErr != nil {
+		e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", cmdOutput)
+	}
+	return endpoints, checkOVNDbErr
+}
+
+// Get all pods with same label and also are in same state
+func getAllPodsWithLabelAndCertainState(oc *exutil.CLI, namespace string, label string, podState string) []string {
+	var allPodsWithCertainState []string
+	allPodsWithLabel, getPodErr := exutil.GetAllPodsWithLabel(oc, namespace, label)
+	o.Expect(getPodErr).NotTo(o.HaveOccurred())
+	o.Expect(len(allPodsWithLabel)).ShouldNot(o.Equal(0))
+
+	for _, eachPod := range allPodsWithLabel {
+		podStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, eachPod).Output()
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+		if strings.Contains(podStatus, podState) {
+			allPodsWithCertainState = append(allPodsWithCertainState, eachPod)
+		}
+	}
+	return allPodsWithCertainState
+}
