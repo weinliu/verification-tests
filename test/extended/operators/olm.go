@@ -94,6 +94,36 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.SkipNoOLMCore(oc)
 	})
 
+	g.It("Author:jiazha-High-72013-Creating an OperatorGroup with 'name: cluster' breaks the whole cluster", func() {
+		exutil.By("1) install a custom OG with the name cluster in the default project")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		ogTemplate := filepath.Join(buildPruningBaseDir, "og-allns.yaml")
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ogTemplate, "-p", "NAME=cluster", "NAMESPACE=default")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("og", "cluster", "-n", "default").Output()
+			if err != nil {
+				e2e.Failf("Fail to delete the cluster OG, error:%v", err)
+			}
+		}()
+		exutil.By("2) the rules of the cluster-admin clusterrole should not null")
+		rules, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole", "cluster-admin", "-o=jsonpath={.rules}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster-admin clusterrole, error:%v", err)
+		}
+		if strings.Contains(rules, "null") {
+			e2e.Failf("The clusterrole cluster-admin has been changed: %s", rules)
+		}
+		exutil.By("3) check if the monitoring CO works well")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "monitoring").Output()
+		if err != nil {
+			e2e.Failf("Fail to get monitoring CO, error:%v", err)
+		}
+		if strings.Contains(status, "subjectaccessreviews.authorization.k8s.io is forbidden") {
+			e2e.Failf("The monitoring CO doesn't work well: %s", status)
+		}
+	})
+
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-71996-package-server-manager forbidden securityContext.seLinuxOptions [Serial]", func() {
 		exutil.By("1) Install a custom SCC which the priority is high")
