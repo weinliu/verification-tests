@@ -94,6 +94,39 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.SkipNoOLMCore(oc)
 	})
 
+	g.It("Author:jiazha-Medium-72017-OLM pod panics when EnsureSecretOwnershipAnnotations runs", func() {
+		exutil.By("1) create a secret in the openshift-operator-lifecycle-manager project")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "secret-72017", "-n", "openshift-operator-lifecycle-manager").Output()
+		if err != nil {
+			e2e.Failf("Fail to create secret-72017, error:%v", err)
+		}
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "secret-72017", "-n", "openshift-operator-lifecycle-manager").Output()
+			if err != nil {
+				e2e.Failf("Fail to delete secret-72017, error:%v", err)
+			}
+		}()
+		exutil.By("2) add the olm.managed to it")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("secret", "secret-72017", "olm.managed=true", "-n", "openshift-operator-lifecycle-manager").Output()
+		if err != nil {
+			e2e.Failf("Fail to add label olm.managed for secret-72017, error:%v", err)
+		}
+		exutil.By("3) restart the olm-operator pod and check if it works well")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=olm-operator", "-n", "openshift-operator-lifecycle-manager").Output()
+		if err != nil {
+			e2e.Failf("Fail to delete olm-operator pod, error:%v", err)
+		}
+		var status string
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=olm-operator", "-n", "openshift-operator-lifecycle-manager").Output()
+			if strings.Contains(status, "Running") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The olm-operator pod didn't recover after 180s: %s", status))
+	})
+
 	g.It("Author:jiazha-High-72013-Creating an OperatorGroup with 'name: cluster' breaks the whole cluster", func() {
 		exutil.By("1) install a custom OG with the name cluster in the default project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
