@@ -9288,6 +9288,95 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("4) SUCCESS")
 	})
 
+	// author: xzha@redhat.com, test case OCP-71779
+	g.It("ConnectedOnly-Author:xzha-Medium-71779-Failing unpack jobs can be auto retried", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		ogtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		og := operatorGroupDescription{
+			name:      "og-71779",
+			namespace: namespace,
+			template:  ogtemplate,
+		}
+		catsrc := catalogSourceDescription{
+			name:        "catsrc-71779",
+			namespace:   namespace,
+			displayName: "Test Catsrc 71779 Operators",
+			publisher:   "Red Hat",
+			sourceType:  "grpc",
+			address:     "quay.io/olmqe/bug29194-index:v1",
+			template:    catsrcImageTemplate,
+		}
+
+		sub := subscriptionDescription{
+			subName:                "sub-71779",
+			namespace:              namespace,
+			ipApproval:             "Automatic",
+			operatorPackage:        "bug29194",
+			catalogSourceName:      catsrc.name,
+			catalogSourceNamespace: namespace,
+			template:               subTemplate,
+			singleNamespace:        true,
+		}
+
+		dr := make(describerResrouce)
+		itName := g.CurrentSpecReport().FullText()
+		dr.addIr(itName)
+
+		exutil.By("1) Create the OperatorGroup")
+		og.createwithCheck(oc, itName, dr)
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("og", og.name, "-n", namespace, "--type=merge", "-p", `{"metadata":{"annotations":{"operatorframework.io/bundle-unpack-timeout":"10s"}}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2) create catalog source")
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+
+		exutil.By("3) Create a Subscription")
+		sub.createWithoutCheck(oc, itName, dr)
+
+		exutil.By("5) Check sub message")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "BundleUnpackFailed", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
+		jobs1 := getResource(oc, asAdmin, withoutNamespace, "job", "-n", sub.namespace, "--selector=operatorframework.io/bundle-unpack-ref", "-o=jsonpath={.items[*].metadata.name}")
+
+		exutil.By("6) Patch OperatorGroup")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("og", og.name, "-n", namespace, "--type=merge", "-p", `{"metadata":{"annotations":{"operatorframework.io/bundle-unpack-min-retry-interval":"1s"}}}`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("7) check unpack job is auto retried")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			output := getResource(oc, asAdmin, withoutNamespace, "job", "-n", sub.namespace, "--selector=operatorframework.io/bundle-unpack-ref", "-o=jsonpath={.items[*].metadata.name}")
+			jobs2 := strings.Split(output, "")
+			for _, jobname := range jobs2 {
+				if !strings.Contains(jobs1, jobname) {
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "unpack job is not auto retried")
+
+		exutil.By("8) check unpack job is auto retried again")
+		jobs2 := getResource(oc, asAdmin, withoutNamespace, "job", "-n", sub.namespace, "--selector=operatorframework.io/bundle-unpack-ref", "-o=jsonpath={.items[*].metadata.name}")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			output := getResource(oc, asAdmin, withoutNamespace, "job", "-n", sub.namespace, "--selector=operatorframework.io/bundle-unpack-ref", "-o=jsonpath={.items[*].metadata.name}")
+			jobs3 := strings.Split(output, "")
+			for _, jobname := range jobs3 {
+				if !strings.Contains(jobs2, jobname) {
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "unpack job is not auto retried")
+
+		exutil.By("SUCCESS")
+
+	})
+
 	// It will cover test case: OCP-40958, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-40958-Indicate invalid OperatorGroup on InstallPlan status [Flaky]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
