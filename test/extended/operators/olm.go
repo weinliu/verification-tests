@@ -95,6 +95,38 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-High-71996-package-server-manager forbidden securityContext.seLinuxOptions [Serial]", func() {
+		exutil.By("1) Install a custom SCC which the priority is high")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		sccYAML := filepath.Join(buildPruningBaseDir, "scc.yaml")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sccYAML).Output()
+		if err != nil {
+			e2e.Failf("Fail to create the custom SCC, error:%v", err)
+		}
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("scc", "datadog").Output()
+			if err != nil {
+				e2e.Failf("Fail to put OLM into a managed state, error:%v", err)
+			}
+		}()
+		exutil.By("2) delete the PSM pod")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", "app=package-server-manager", "-n", "openshift-operator-lifecycle-manager").Output()
+		if err != nil {
+			e2e.Failf("Fail to delete the PSM pod, error:%v", err)
+		}
+		exutil.By("3) check if the PSM pod is recreated well")
+		var status string
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=package-server-manager").Output()
+			if strings.Contains(status, "Running") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("PSM pod didn't recover after 180s: %s", status))
+	})
+
+	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:jiazha-Medium-53771-The certificate relating to operator-lifecycle-manager-packageserver isn't rotated after expired [Disruptive]", func() {
 		var image string
 		customOLMImage := "quay.io/olmqe/operator-framework-olm:cert-rotation-auto"
