@@ -27,8 +27,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	var makeCLI = NewMakeCLI()
 	var mvnCLI = NewMVNCLI()
 	var oc = exutil.NewCLIWithoutNamespace("default")
-	var ocpversion = "4.15"
-	var ocppreversion = "4.14"
+	var ocpversion = "4.16"
+	var ocppreversion = "4.15"
 	var upstream = true
 
 	// author: jfan@redhat.com
@@ -914,10 +914,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("Author:xzha-High-52126-Sync 1.26 to downstream", func() {
+	g.It("Author:xzha-High-52126-Sync 1.27 to downstream", func() {
 		operatorsdkCLI.showInfo = true
 		output, _ := operatorsdkCLI.Run("version").Args().Output()
-		o.Expect(output).To(o.ContainSubstring("v1.26"))
+		o.Expect(output).To(o.ContainSubstring("v1.27"))
 	})
 
 	// author: chuo@redhat.com

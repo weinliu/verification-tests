@@ -114,7 +114,7 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
             BUILD_CMD="make -f ci/prow.Makefile patch build"
         fi
     else
-        if [ "${JENKINS_AGENT}" == 'goc415' ]; then
+        if [ "${JENKINS_AGENT}" == 'goc416' ]; then
             git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
         else
             BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
