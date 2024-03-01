@@ -2268,6 +2268,10 @@ spec:
 			g.Skip("This won't run on SNO cluster, skip.")
 		}
 
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "ImageRegistry")) {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
+		}
+
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
