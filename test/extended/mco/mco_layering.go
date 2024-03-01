@@ -410,7 +410,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-54049-Verify base images in the release image", func() {
+	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Longduration-Medium-54049-Verify base images in the release image", func() {
 		var (
 			oldMachineConfigOsImage = "machine-os-content"
 			coreExtensions          = "rhel-coreos-extensions"
