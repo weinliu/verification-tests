@@ -51,6 +51,8 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			logger.Infof("Restore original image.config spec: %s", initImageConfigSpec)
 			_ = imageConfig.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+initImageConfigSpec+`}]`)
 		}()
+
+		initialCMCreationTime := mergedTrustedImageRegistryCACM.GetOrFail(`{.metadata.creationTimestamp}`)
 		logger.Infof("OK!\n")
 
 		exutil.By("Add new  additionalTrustedCA to the image.config resource")
@@ -91,6 +93,10 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			exutil.Secure(o.Equal(newCertificate)),
 			"The configmap -n  openshift-config-managed merged-trusted-image-registry-ca was not properly synced")
 
+		o.Expect(mergedTrustedImageRegistryCACM.Get(`{.metadata.creationTimestamp}`)).To(
+			o.Equal(initialCMCreationTime),
+			"The %s resource was not patched! it was recreated! The configmap should be patched since https://issues.redhat.com/browse/OCPBUGS-18800")
+
 		logger.Infof("OK!\n")
 
 		// We verify that all nodes in the pools have the new certificate (be aware that windows nodes do not belong to any pool, we are skipping them)
@@ -123,6 +129,10 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		o.Expect(mergedTrustedImageRegistryCACM.GetDataMap()).NotTo(
 			exutil.Secure(o.HaveKey(newCertificate)),
 			"The certificate was not removed from the configmap -n  openshift-config-managed merged-trusted-image-registry-ca")
+
+		o.Expect(mergedTrustedImageRegistryCACM.Get(`{.metadata.creationTimestamp}`)).To(
+			o.Equal(initialCMCreationTime),
+			"The %s resource was not patched! it was recreated! The configmap should be patched since https://issues.redhat.com/browse/OCPBUGS-18800")
 
 		logger.Infof("OK!\n")
 
