@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 		curlCmd := fmt.Sprintf(
-			"curl --resolve  service-secure-%s.ocp50842.%s:443:%s https://service-secure-%s.ocp50842.%s:443 -I -k",
+			"curl --resolve service-secure-%s.ocp50842.%s:443:%s https://service-secure-%s.ocp50842.%s:443 -I -k --connect-timeout 10",
 			oc.Namespace(), baseDomain, controlerIP, oc.Namespace(), baseDomain)
 		statsOut, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -247,7 +247,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 		curlCmd := fmt.Sprintf(
-			"curl --resolve  service-secure1-%s.ocp51980.%s:443:%s https://service-secure1-%s.ocp51980.%s:443 -I -k",
+			"curl --resolve service-secure1-%s.ocp51980.%s:443:%s https://service-secure1-%s.ocp51980.%s:443 -I -k --connect-timeout 10",
 			oc.Namespace(), baseDomain, controlerIP, oc.Namespace(), baseDomain)
 		statsOut, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -265,28 +265,28 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			ingressLabel = "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default"
 		)
 
-		g.By("Check the metrics endpoint to get the intial certificate details")
+		exutil.By("Check the metrics endpoint to get the intial certificate details")
 		routerpod := getRouterPod(oc, "default")
-		curlCmd := fmt.Sprintf("curl -k -v https://localhost:1936/metrics")
+		curlCmd := fmt.Sprintf("curl -k -v https://localhost:1936/metrics --connect-timeout 10")
 		statsOut, err := exutil.RemoteShPod(oc, "openshift-ingress", routerpod, "sh", "-c", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(statsOut, "CAfile: /etc/pki/tls/certs/ca-bundle.crt")).Should(o.BeTrue())
 		dateRe := regexp.MustCompile("(start date.*)")
 		certStartDate := dateRe.FindAllString(string(statsOut), -1)
 
-		g.By("Delete the default CA certificate in openshift-service-ca namespace")
+		exutil.By("Delete the default CA certificate in openshift-service-ca namespace")
 		defer ensureAllClusterOperatorsNormal(oc, 920)
 		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "signing-key", "-n", "openshift-service-ca").Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 
-		g.By("Waiting for some time till the cluster operators stabilize")
+		exutil.By("Waiting for some time till the cluster operators stabilize")
 		ensureClusterOperatorNormal(oc, "authentication", 5, 720)
 
-		g.By("Check the router logs to see the certificate in the metrics reloaded")
+		exutil.By("Check the router logs to see the certificate in the metrics reloaded")
 		ensureLogsContainString(oc, "openshift-ingress", ingressLabel, "reloaded metrics certificate")
 
-		g.By("Check the metrics endpoint to get the certificate details after reload")
-		curlCmd1 := fmt.Sprintf("curl -k -vvv https://localhost:1936/metrics")
+		exutil.By("Check the metrics endpoint to get the certificate details after reload")
+		curlCmd1 := fmt.Sprintf("curl -k -vvv https://localhost:1936/metrics --connect-timeout 10")
 		statsOut1, err3 := exutil.RemoteShPod(oc, "openshift-ingress", routerpod, "sh", "-c", curlCmd1)
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(statsOut1, "CAfile: /etc/pki/tls/certs/ca-bundle.crt")).Should(o.BeTrue())
