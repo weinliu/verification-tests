@@ -42,14 +42,9 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 		o.Expect(err).To(o.BeNil())
 
 		g.By("Check if non BYO VPC cluster")
-		var subnetsNetworkInfo string
-		for _, networkLine := range clusterDetail.Network {
-			if value, containsKey := networkLine["Subnets"]; containsKey {
-				subnetsNetworkInfo = value
-				break
-			}
-		}
-		if subnetsNetworkInfo == "" {
+		isBYOVPC, err := clusterService.IsBYOVPCCluster(clusterID)
+		o.Expect(err).To(o.BeNil())
+		if !isBYOVPC {
 			g.Skip("It does't support the verification for non byo vpc cluster - cannot run this test")
 		}
 
@@ -59,6 +54,13 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 		o.Expect(output.String()).To(o.ContainSubstring("Run the following command to wait for verification to all subnets to complete:\n" + "rosa verify network --watch --status-only"))
 
 		g.By("Get the cluster subnets")
+		var subnetsNetworkInfo string
+		for _, networkLine := range clusterDetail.Network {
+			if value, containsKey := networkLine["Subnets"]; containsKey {
+				subnetsNetworkInfo = value
+				break
+			}
+		}
 		subnets := strings.Replace(subnetsNetworkInfo, " ", "", -1)
 		region := clusterDetail.Region
 		installerRoleArn := clusterDetail.STSRoleArn
@@ -83,16 +85,6 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(output.String()).ToNot(o.ContainSubstring("failed"))
 
-		g.By("Run network verifier vith subnet id")
-		output, err = networkService.CreateNetworkVerifierWithSubnets(
-			"--region", region,
-			"--subnet-ids", subnets,
-			"--role-arn", installerRoleArn,
-		)
-		o.Expect(err).ToNot(o.HaveOccurred())
-		o.Expect(output.String()).To(o.ContainSubstring("Run the following command to wait for verification to all subnets to complete:\n" + "rosa verify network --watch --status-only"))
-		o.Expect(output.String()).To(o.ContainSubstring("pending"))
-
 		g.By("Check the network verifier with tags attributes")
 		output, err = networkService.CreateNetworkVerifierWithCluster(clusterID,
 			"--tags", "t1:v1")
@@ -117,6 +109,20 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 		)
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(output.String()).ToNot(o.ContainSubstring("failed"))
+
+		g.By("Run network verifier vith subnet id")
+		if installerRoleArn == "" {
+			g.Skip("It does't support the verification with subnets for non STS cluster - cannot run this test")
+		}
+		output, err = networkService.CreateNetworkVerifierWithSubnets(
+			"--region", region,
+			"--subnet-ids", subnets,
+			"--role-arn", installerRoleArn,
+			"--tags", "t2:v2",
+		)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		o.Expect(output.String()).To(o.ContainSubstring("Run the following command to wait for verification to all subnets to complete:\n" + "rosa verify network --watch --status-only"))
+		o.Expect(output.String()).To(o.ContainSubstring("pending"))
 
 		g.By("Check the network verifier with hosted-cp attributes")
 		output, err = networkService.CreateNetworkVerifierWithSubnets(
@@ -127,30 +133,6 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Network verifier te
 		)
 		o.Expect(err).ToNot(o.HaveOccurred())
 
-		g.By("Check the network verifier with tags attributes")
-		output, err = networkService.CreateNetworkVerifierWithCluster(clusterID,
-			"--tags", "t1:v1")
-		o.Expect(err).ToNot(o.HaveOccurred())
-
-		g.By("Check the network verifier status")
-		err = wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 200*time.Second, false, func(context.Context) (bool, error) {
-			output, err = networkService.GetNetworkVerifierStatus(
-				"--region", region,
-				"--subnet-ids", subnets,
-			)
-			if strings.Contains(output.String(), "pending") {
-				return false, err
-			}
-			return true, err
-		})
-		exutil.AssertWaitPollNoErr(err, "Network verification result are not ready after 200")
-
-		output, err = networkService.GetNetworkVerifierStatus(
-			"--region", region,
-			"--subnet-ids", subnets,
-		)
-		o.Expect(err).ToNot(o.HaveOccurred())
-		o.Expect(output.String()).ToNot(o.ContainSubstring("failed"))
 	})
 
 })

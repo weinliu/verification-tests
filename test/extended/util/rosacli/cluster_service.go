@@ -24,6 +24,7 @@ type ClusterService interface {
 	IsPrivateCluster(clusterID string) (bool, error)
 	IsUsingReusableOIDCConfig(clusterID string) (bool, error)
 	GetClusterVersion(clusterID string) (Version, error)
+	IsBYOVPCCluster(clusterID string) (bool, error)
 }
 
 type clusterService struct {
@@ -230,4 +231,16 @@ func (c *clusterService) getJSONClusterDescription(clusterID string) (*jsonData,
 	}
 	c.client.Runner.UnsetFormat()
 	return c.client.Parser.JsonData.Input(output).Parse(), nil
+}
+
+// Check if the cluster is byo vpc cluster
+func (c *clusterService) IsBYOVPCCluster(clusterID string) (bool, error) {
+	jsonData, err := c.getJSONClusterDescription(clusterID)
+	if err != nil {
+		return false, err
+	}
+	if len(jsonData.DigString("aws", "subnet_ids")) > 0 {
+		return true, nil
+	}
+	return false, nil
 }
