@@ -38,6 +38,11 @@ type invalidStore struct {
 	errinfo string
 }
 
+type annotationCO struct {
+	name       string
+	annotation map[string]string
+}
+
 // GetDeploymentsYaml dumps out deployment in yaml format in specific namespace
 func GetDeploymentsYaml(oc *exutil.CLI, deploymentName string, namespace string) (string, error) {
 	e2e.Logf("Dumping deployments %s from namespace %s", deploymentName, namespace)

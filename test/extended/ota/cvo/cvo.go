@@ -2101,4 +2101,45 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(checkUpdates(oc, false, 1, 10,
 			"Detected modified SecurityContextConstraints")).To(o.BeFalse(), "Error: There should not be upgradeable=false gate for non-4.13 cluster")
 	})
+
+	//author: jiajliu@redhat.com
+	g.It("NonPreRelease-Author:jiajliu-Medium-70931-CVO reconcile metadata on ClusterOperators [Disruptive]", func() {
+		var annotationCOs []annotationCO
+		resourcePath := "/metadata/annotations"
+		exutil.By("Remove metadata.annotation")
+		operatorName, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args("co", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		operatorList := strings.Fields(operatorName)
+		defer func() {
+			for _, annotationCO := range annotationCOs {
+				anno, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+					Args("co", annotationCO.name, "-o=jsonpath={.metadata.annotations}").Output()
+				if anno == "" {
+					_, err = ocJSONPatch(oc, "", "clusteroperator/"+annotationCO.name, []JSONp{{"add", resourcePath, annotationCO.annotation}})
+					o.Expect(err).NotTo(o.HaveOccurred())
+				}
+			}
+		}()
+		for _, op := range operatorList {
+			var anno map[string]string
+			annoOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").
+				Args("co", op, "-o=jsonpath={.metadata.annotations}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = json.Unmarshal([]byte(annoOutput), &anno)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			annotationCOs = append(annotationCOs, annotationCO{op, anno})
+			_, err = ocJSONPatch(oc, "", "clusteroperator/"+op, []JSONp{{"remove", resourcePath, nil}})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		exutil.By("Check metadata.annotation is reconciled back")
+		for _, op := range operatorList {
+			o.Eventually(func() string {
+				anno, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+					Args("co", op, "-o=jsonpath={.metadata.annotations}").Output()
+				return anno
+			}, 5*time.Minute, 1*time.Minute).ShouldNot(o.BeEmpty(), fmt.Sprintf("Fail to reconcile metadata of %s", op))
+		}
+	})
+
 })
