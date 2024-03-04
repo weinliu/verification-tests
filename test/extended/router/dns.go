@@ -396,18 +396,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheValue)
 
 		exutil.By("3. Check the cache value in Corefile of coredn")
-		cache := pollReadDnsCorefile(oc, oneDnsPod, "cache", "-A2", "denial")
-		o.Expect(cache).Should(o.And(o.ContainSubstring("1800"), o.ContainSubstring("604801")))
+		cache := pollReadDnsCorefile(oc, oneDnsPod, "cache 604801", "-A2", "denial")
+		o.Expect(cache).To(o.ContainSubstring("denial 9984 1800"))
 
 		exutil.By("4. Patch the dns.operator/default with smallest cache values and verify the same")
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheSmallValue)
-		cache1 := pollReadDnsCorefile(oc, oneDnsPod, "cache", "-A2", "denial")
-		o.Expect(cache1).Should(o.And(o.ContainSubstring("1"), o.ContainSubstring("denial 9984 1")))
+		cache1 := pollReadDnsCorefile(oc, oneDnsPod, "cache 1", "-A2", "denial")
+		o.Expect(cache1).To(o.ContainSubstring("denial 9984 1"))
 
 		exutil.By("5. Patch the dns.operator/default with decimal cache values and verify the same")
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheDecimalValue)
-		cache2 := pollReadDnsCorefile(oc, oneDnsPod, "cache", "-A2", "denial")
-		o.Expect(cache2).Should(o.And(o.ContainSubstring("96"), o.ContainSubstring("denial 9984 2")))
+		cache2 := pollReadDnsCorefile(oc, oneDnsPod, "cache 96", "-A2", "denial")
+		o.Expect(cache2).To(o.ContainSubstring("denial 9984 2"))
 
 		exutil.By("6. Patch the dns.operator/default with unrelasitc cache values and check the error messages")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+cacheWrongValue, "--type=json").Output()
