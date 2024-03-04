@@ -45,6 +45,8 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 	})
 
 	g.It("Author:yingwang-Medium-NonPreRelease-Longduration-69600-VF use and release testing [Disruptive]", func() {
+		var caseID = "69600-"
+		networkName := caseID + "net"
 		ns1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns1)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
@@ -61,7 +63,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 		e2e.Logf("device ID is %v", data.DeviceID)
 		e2e.Logf("device Name is %v", data.Name)
 		sriovnetwork := sriovNetwork{
-			name:             data.Name,
+			name:             networkName,
 			resourceName:     data.Name,
 			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
@@ -111,14 +113,15 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 	})
 
 	g.It("Author:yingwang-Medium-NonPreRelease-Longduration-24780-NAD will be deleted too when sriovnetwork is deleted", func() {
+		var caseID = "24780-"
 		ns1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns1)
-
+		networkName := caseID + "net"
 		exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		e2e.Logf("device ID is %v", data.DeviceID)
 		e2e.Logf("device Name is %v", data.Name)
 		sriovnetwork := sriovNetwork{
-			name:             data.Name,
+			name:             networkName,
 			resourceName:     "none",
 			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
@@ -141,6 +144,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 		var caseID = "24713-"
 		ns1 := "e2e-" + caseID + data.Name
 		ns2 := "e2e-" + caseID + data.Name + "-new"
+		networkName := caseID + "net"
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
@@ -154,7 +158,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 		e2e.Logf("device ID is %v", data.DeviceID)
 		e2e.Logf("device Name is %v", data.Name)
 		sriovnetwork := sriovNetwork{
-			name:             data.Name,
+			name:             networkName,
 			resourceName:     "none",
 			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
@@ -186,14 +190,15 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 	})
 
 	g.It("Author:yingwang-Medium-NonPreRelease-Longduration-25287-NAD should be able to restore by sriov operator when it was deleted", func() {
+		var caseID = "25287-"
+		networkName := caseID + "net"
 		ns1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns1)
-
 		exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		e2e.Logf("device ID is %v", data.DeviceID)
 		e2e.Logf("device Name is %v", data.Name)
 		sriovnetwork := sriovNetwork{
-			name:             data.Name,
+			name:             networkName,
 			resourceName:     "nonE",
 			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
@@ -215,6 +220,8 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 	g.It("Author:yingwang-Medium-NonPreRelease-Longduration-21364-Create pod with sriov-cni plugin and macvlan on the same interface [Disruptive]", func() {
 		ns1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns1)
+		var caseID = "21364-"
+		networkName := caseID + "net"
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
 		sriovTestPodTemplate := filepath.Join(buildPruningBaseDir, "sriov-multinet-template.yaml")
 		netMacvlanTemplate := filepath.Join(buildPruningBaseDir, "nad-macvlan-template.yaml")
@@ -230,7 +237,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 		e2e.Logf("###############start to test %v sriov on nic %v ################", data.Name, data.InterfaceName)
 		exutil.By("Create sriovNetwork nad to generate net-attach-def on the target namespace")
 		sriovnetwork := sriovNetwork{
-			name:             data.Name,
+			name:             networkName,
 			resourceName:     data.Name,
 			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
