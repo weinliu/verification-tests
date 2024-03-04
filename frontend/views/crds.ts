@@ -5,7 +5,7 @@ export const crds = {
     cy.get('input[data-test="name-filter-input"]').type("machine");
     const machineResources = ['Machine','MachineAutoscaler','MachineConfig','MachineConfigPool','MachineHealthCheck','MachineSet'];
     machineResources.forEach((machineResource) => {
-      cy.get(`data-test=${machineResource}`).should('not.exist');
+      cy.get(`[data-test=${machineResource}]`).should('not.exist');
     });
   }
 }

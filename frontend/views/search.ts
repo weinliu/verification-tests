@@ -11,7 +11,7 @@ export const searchPage = {
     cy.get('[placeholder="Select Resource"]').type("machine");
     const machineResources = ['MMachine','MAMachineAutoscaler','MCMachineConfig','MCPMachineConfigPool','MHCMachineHealthCheck','MSMachineSet'];
     machineResources.forEach((machineResource) => {
-      cy.get(`data-filter-text=${machineResource}`).should('not.exist');
+      cy.get(`[data-filter-text=${machineResource}]`).should('not.exist');
     });
   },
   clearAllFilters: () => {
