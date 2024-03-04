@@ -920,4 +920,110 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(egressFWMsgsErr3).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(egressFWMsgs3, newNode+": EgressFirewall Rules applied")).ShouldNot(o.BeTrue())
 	})
+
+	// author: jechen@redhat.com
+	g.It("Longduration-NonPreRelease-Author:jechen-High-72028-Join switch IP and management port IP for newly added node should be synced correctly into NBDB, pod on new node can communicate with old pod on old node. [Disruptive]", func() {
+
+		// This is for customer bug: https://issues.redhat.com/browse/OCPBUGS-28724
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		allowFromAllNSNetworkPolicyFile := filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-all-namespaces.yaml")
+
+		exutil.SkipConditionally(oc)
+
+		exutil.By("1. Get an existing schedulable node\n")
+		currentNodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oldNode := currentNodeList.Items[0].Name
+
+		exutil.By("2. Obtain the namespace\n")
+		ns1 := oc.Namespace()
+
+		exutil.By("3.Create a network policy in the namespace\n")
+		createResourceFromFile(oc, ns1, allowFromAllNSNetworkPolicyFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-from-all-namespaces"))
+
+		exutil.By("4. Create a test pod on the namespace on the existing node\n")
+		podOnOldNode := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  oldNode,
+			template:  pingPodNodeTemplate,
+		}
+		podOnOldNode.createPingPodNode(oc)
+		waitPodReady(oc, podOnOldNode.namespace, podOnOldNode.name)
+
+		exutil.By("5. Create a new machineset, get the new node created\n")
+		machinesetName := "machineset-72028"
+		ms := exutil.MachineSetDescription{machinesetName, 1}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
+		newNodeName := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		e2e.Logf("Get new node name: %s", newNodeName)
+
+		exutil.By("6. Create second namespace,create another test pod in it on the new node\n")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		podOnNewNode := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns2,
+			nodename:  newNodeName,
+			template:  pingPodNodeTemplate,
+		}
+		podOnNewNode.createPingPodNode(oc)
+		waitPodReady(oc, podOnNewNode.namespace, podOnNewNode.name)
+
+		exutil.By("7. Get management IP(s) and join switch IP(s) for the new node\n")
+		ipStack := checkIPStackType(oc)
+		var nodeOVNK8sMgmtIPv4, nodeOVNK8sMgmtIPv6 string
+		if ipStack == "dualstack" || ipStack == "ipv6single" {
+			nodeOVNK8sMgmtIPv6 = getOVNK8sNodeMgmtIPv6(oc, newNodeName)
+		}
+		if ipStack == "dualstack" || ipStack == "ipv4single" {
+			nodeOVNK8sMgmtIPv4 = getOVNK8sNodeMgmtIPv4(oc, newNodeName)
+		}
+		e2e.Logf("\n ipStack type:  %s, nodeOVNK8sMgmtIPv4: %s, nodeOVNK8sMgmtIPv6: ---->%s<---- \n", ipStack, nodeOVNK8sMgmtIPv4, nodeOVNK8sMgmtIPv6)
+
+		joinSwitchIPv4, joinSwitchIPv6 := getJoinSwitchIPofNode(oc, newNodeName)
+		e2e.Logf("\n Got joinSwitchIPv4: %v, joinSwitchIPv6: %v\n", joinSwitchIPv4, joinSwitchIPv6)
+
+		exutil.By("8. Check host network adresses in each node's northdb, it should include join switch IP and management IP of newly added node\n")
+		allNodeList, nodeErr := exutil.GetAllNodes(oc)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		o.Expect(len(allNodeList)).NotTo(o.BeEquivalentTo(0))
+
+		for _, eachNodeName := range allNodeList {
+			ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", eachNodeName)
+			o.Expect(podErr).NotTo(o.HaveOccurred())
+			o.Expect(ovnKubePod).ShouldNot(o.Equal(""))
+			if ipStack == "dualstack" || ipStack == "ipv4single" {
+				externalIDv4 := "external_ids:\\\"k8s.ovn.org/id\\\"=\\\"default-network-controller:Namespace:openshift-host-network:v4\\\""
+				hostNetworkIPsv4 := getHostNetworkIPsinNBDB(oc, eachNodeName, externalIDv4)
+				e2e.Logf("\n Got hostNetworkIPsv4 for node %s : %v\n", eachNodeName, hostNetworkIPsv4)
+				o.Expect(contains(hostNetworkIPsv4, nodeOVNK8sMgmtIPv4)).Should(o.BeTrue(), fmt.Sprintf("New node's mgmt IPv4 is not updated to node %s in NBDB!", eachNodeName))
+				o.Expect(unorderedContains(hostNetworkIPsv4, joinSwitchIPv4)).Should(o.BeTrue(), fmt.Sprintf("New node's join switch IPv4 is not updated to node %s in NBDB!", eachNodeName))
+			}
+			if ipStack == "dualstack" || ipStack == "ipv6single" {
+				externalIDv6 := "external_ids:\\\"k8s.ovn.org/id\\\"=\\\"default-network-controller:Namespace:openshift-host-network:v6\\\""
+				hostNetworkIPsv6 := getHostNetworkIPsinNBDB(oc, eachNodeName, externalIDv6)
+				e2e.Logf("\n Got hostNetworkIPsv6 for node %s : %v\n", eachNodeName, hostNetworkIPsv6)
+				o.Expect(contains(hostNetworkIPsv6, nodeOVNK8sMgmtIPv6)).Should(o.BeTrue(), fmt.Sprintf("New node's mgmt IPv6 is not updated to node %s in NBDB!", eachNodeName))
+				o.Expect(unorderedContains(hostNetworkIPsv6, joinSwitchIPv6)).Should(o.BeTrue(), fmt.Sprintf("New node's join switch IPv6 is not updated to node %s in NBDB!", eachNodeName))
+			}
+		}
+
+		exutil.By("9. Verify that new pod on new node can communicate with old pod on old node \n")
+		CurlPod2PodPass(oc, podOnOldNode.namespace, podOnOldNode.name, podOnNewNode.namespace, podOnNewNode.name)
+		CurlPod2PodPass(oc, podOnNewNode.namespace, podOnNewNode.name, podOnOldNode.namespace, podOnOldNode.name)
+	})
+
 })

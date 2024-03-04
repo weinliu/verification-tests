@@ -3419,3 +3419,108 @@ func getAllPodsWithLabelAndCertainState(oc *exutil.CLI, namespace string, label 
 	}
 	return allPodsWithCertainState
 }
+
+// Get OVN-Kubernetes management interface (ovn-k8s-mp0) IPv6 address for the node
+func getOVNK8sNodeMgmtIPv6(oc *exutil.CLI, nodeName string) string {
+	var cmdOutput string
+	var err error
+	checkErr := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		cmdOutput, err = exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", "/usr/sbin/ip -o -6 addr show dev ovn-k8s-mp0 | awk '$3 == \"inet6\" && $6 == \"global\" {print $4}' | cut -d'/' -f1")
+		if cmdOutput == "" || err != nil {
+			e2e.Logf("Did not get node's IPv6 management interface, errors: %v, try again", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Failed to get IPv6 management interface for node %v, err: %v", nodeName, checkErr))
+
+	nodeOVNK8sMgmtIPv6 := strings.Split(cmdOutput, "\n")[0]
+	return nodeOVNK8sMgmtIPv6
+}
+
+// Get joint switch IP(s) by node name
+func getJoinSwitchIPofNode(oc *exutil.CLI, nodeName string) ([]string, []string) {
+	// get the ovnkube-node pod on the node
+	ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+	o.Expect(podErr).NotTo(o.HaveOccurred())
+	o.Expect(ovnKubePod).ShouldNot(o.Equal(""))
+	var cmdOutput string
+	var joinSwitchIPv4s, joinSwitchIPv6s []string
+	var cmdErr error
+	cmd := "ovn-nbctl get logical_router_port rtoj-GR_" + nodeName + " networks"
+	checkOVNDbErr := wait.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+		cmdOutput, cmdErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubePod, "northd", cmd)
+		if cmdOutput == "" || cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkOVNDbErr, fmt.Sprintf("Failed to get join switch networks for node %v, err: %v", nodeName, checkOVNDbErr))
+
+	// output string would be something like: ["100.64.0.8/16", "fd98::8/64"]
+	rightTrimed := strings.TrimRight(strings.TrimLeft(cmdOutput, "["), "]") //trim left [ and right ] from the output string
+	outputs := strings.Split(rightTrimed, ", ")
+	if len(outputs) > 0 {
+		for _, str := range outputs {
+			ipv4orv6 := strings.TrimRight(strings.TrimLeft(str, "\""), "\"") // trim left " and right " around IP address string
+			if IsIPv4(ipv4orv6) {
+				joinSwitchIPv4s = append(joinSwitchIPv4s, ipv4orv6)
+			}
+			if IsIPv6(ipv4orv6) {
+				joinSwitchIPv6s = append(joinSwitchIPv6s, ipv4orv6)
+			}
+		}
+	}
+	return joinSwitchIPv4s, joinSwitchIPv6s
+}
+
+// Get host network IPs in NBDB of node
+func getHostNetworkIPsinNBDB(oc *exutil.CLI, nodeName string, externalID string) []string {
+	// get the ovnkube-node pod on the node
+	ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+	o.Expect(podErr).NotTo(o.HaveOccurred())
+	o.Expect(ovnKubePod).ShouldNot(o.Equal(""))
+	var cmdOutput string
+	var hostNetworkIPs []string
+	var cmdErr error
+	cmd := "ovn-nbctl --column address find address_set " + externalID
+	checkOVNDbErr := wait.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+		cmdOutput, cmdErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubePod, "northd", cmd)
+		if cmdOutput == "" || cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkOVNDbErr, fmt.Sprintf("Failed to get host network IPs for node %v, err: %v", nodeName, checkOVNDbErr))
+
+	// two example outputs from "ovn-nbctl --column address find address_set <externalID>" command
+	// addresses           : ["10.128.0.2", "10.128.2.2", "10.129.0.2", "10.130.0.2", "10.130.2.2", "10.131.2.2", "100.64.0.2"]
+	// addresses           : ["fd01:0:0:1::2", "fd01:0:0:2::2", "fd01:0:0:3::2", "fd01:0:0:5::2", "fd01:0:0:7::2", "fd01:0:0:8::2"]
+	// match out all IP (v4 or v6) addresses under " "
+	re := regexp.MustCompile(`"[^",]+"`)
+	ipStrs := re.FindAllString(cmdOutput, -1)
+	for _, eachIpString := range ipStrs {
+		ip := strings.TrimRight(strings.TrimLeft(eachIpString, "\""), "\"") //trim left " and right " from the string to get IP address
+		hostNetworkIPs = append(hostNetworkIPs, ip)
+	}
+	return hostNetworkIPs
+}
+
+// Check if second array is a subset of first array
+func unorderedContains(first, second []string) bool {
+	set := make(map[string]bool)
+
+	for _, element := range first {
+		set[element] = true
+	}
+
+	for _, element := range second {
+		if !set[element] {
+			return false
+		}
+	}
+
+	return true
+}
