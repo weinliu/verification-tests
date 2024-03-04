@@ -3913,7 +3913,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		exutil.By("Verify pod2 used nodeIP \n")
 		_, node2IP := getNodeIP(oc, nonEgressNode)
-		egressErr = verifyEgressIPinTCPDump(oc, pod1.name, ns1, node2IP, dstHost, ns1, tcpdumpDS.name, true)
+		egressErr = verifyEgressIPinTCPDump(oc, pod2.name, ns1, node2IP, dstHost, ns1, tcpdumpDS.name, true)
 		o.Expect(egressErr).NotTo(o.HaveOccurred())
 	})
 
