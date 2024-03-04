@@ -16,6 +16,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/route53"
 	"github.com/blang/semver"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"github.com/tidwall/gjson"
@@ -115,6 +119,46 @@ func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
 	}
 
 	return token, err
+}
+
+// Get AWS Route53's hosted zone ID. Returning "" means retreiving Route53 hosted zone ID for current env returns none
+// If there are multiple HostedZones sharing the same name (which is relatively rare), it will return the first one matched by AWS SDK.
+func getRoute53HostedZoneID(accessKeyID, secretAccessKey, region, hostedZoneName string) string {
+	awsConfig, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")),
+		config.WithRegion(region),
+	)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Equals: `aws route53 list-hosted-zones-by-name --dns-name qe.devcluster.openshift.com`
+	route53Client := route53.NewFromConfig(awsConfig)
+	list, err := route53Client.ListHostedZonesByName(
+		context.Background(),
+		&route53.ListHostedZonesByNameInput{
+			DNSName: aws.String(hostedZoneName),
+		},
+	)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	hostedZoneID := ""
+	for _, hostedZone := range list.HostedZones {
+		if strings.TrimSuffix(aws.ToString(hostedZone.Name), ".") == hostedZoneName {
+			hostedZoneID = aws.ToString(hostedZone.Id)
+			break
+		}
+	}
+	return strings.TrimPrefix(hostedZoneID, "/hostedzone/")
+}
+
+// Get the parent domain. "a.b.c"'s parent domain is "b.c"
+func getParentDomain(domain string) (string, error) {
+	parts := strings.Split(domain, ".")
+	if len(parts) <= 1 {
+		return "", fmt.Errorf("no parent domain for invalid input: %s", domain)
+	}
+	parentDomain := strings.Join(parts[1:], ".")
+	return parentDomain, nil
 }
 
 // Get cluster's DNS Public Zone. Returning "" generally means cluster is private, except azure-stack env

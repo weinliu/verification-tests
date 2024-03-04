@@ -38,13 +38,6 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
-		g.By("Check if cluster region is us-gov or not")
-		region, err := exutil.GetAWSClusterRegion(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(region, "us-gov") {
-			g.Skip("Skipping for the aws cluster in us-gov region.")
-		}
-
 		g.By("Check if the cluster is STS or not")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
 		if err != nil && strings.Contains(output, "not found") {
@@ -63,19 +56,31 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		_, errSec := oc.AsAdmin().Run("create").Args("-n", "cert-manager", "secret", "generic", "test-secret", "--from-literal=secret-access-key="+secureKey).Output()
 		oc.SetShowInfo()
 		o.Expect(errSec).NotTo(o.HaveOccurred())
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		g.By("Create clusterissuer with route53 as dns01 solver.")
 		defer func() {
 			e2e.Logf("Delete clusterissuers.cert-manager.io letsencrypt-dns01")
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
+		baseDomain := getBaseDomain(oc)
+		e2e.Logf("baseDomain=%s", baseDomain)
+		dnsZone, err := getParentDomain(baseDomain)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("dnsZone=%s", dnsZone)
+		hostedZoneID := getRoute53HostedZoneID(accessKeyID, secureKey, region, dnsZone)
+		if len(hostedZoneID) == 0 {
+			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
+		}
+		e2e.Logf("Route53 HostedZoneID=%s", hostedZoneID)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
-		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "cluster-issuer-acme-dns01-route53.yaml")
-		sedCmd := fmt.Sprintf(`sed -i 's/AWS_ACCESS_KEY_ID/%s/g' %s`, accessKeyID, clusterIssuerFile)
-		_, err = exec.Command("bash", "-c", sedCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
+		oc.NotShowInfo()
+		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		exutil.ApplyClusterResourceFromTemplate(oc, params...)
+		oc.SetShowInfo()
 		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
 			if !strings.Contains(output, "True") || err != nil {
@@ -98,23 +103,15 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}()
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
-		certClusterissuerFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		// Hard code dns zone to be "qe1.devcluster.openshift.com" temporarily.
-		// TODO: when having time in future, change to be: get apps.clustername.yyy...com, trim "apps.clustername.", let dnsZone = yyy...com, implement AWS API for `aws route53 list-hosted-zones | jq -r '.HostedZones[] | select(.Name=="yyyy...com.") | .Id'` to get the hosted zone ID, replace clusterissuer YAML file's hostedZoneID. So even in AWS env not using QE's AWS account, this case can still pass.
-		dnsZone := "qe1.devcluster.openshift.com"
-		f, err := ioutil.ReadFile(certClusterissuerFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
 		randomStr := exutil.GetRandomString()
 		dnsName := randomStr + "." + dnsZone
 		if len(dnsName) > 63 {
 			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
 		}
 		e2e.Logf("dnsName=%s", dnsName)
-		f1 := strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
-		err = ioutil.WriteFile(certClusterissuerFile, []byte(f1), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("create").Args("-f", certClusterissuerFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			output, err := oc.Run("get").Args("certificate").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -491,23 +488,32 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		_, errSec := oc.AsAdmin().Run("create").Args("-n", "cert-manager", "secret", "generic", "test-secret", "--from-literal=secret-access-key="+secureKey).Output()
 		oc.SetShowInfo()
 		o.Expect(errSec).NotTo(o.HaveOccurred())
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Login with normal user and create issuers.\n")
 		oc.SetupProject()
+		baseDomain := getBaseDomain(oc)
+		e2e.Logf("baseDomain=%s", baseDomain)
+		dnsZone, err := getParentDomain(baseDomain)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("dnsZone=%s", dnsZone)
+		hostedZoneID := getRoute53HostedZoneID(accessKeyID, secureKey, region, dnsZone)
+		if len(hostedZoneID) == 0 {
+			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
+		}
+		e2e.Logf("Route53 HostedZoneID=%s", hostedZoneID)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
-		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "cluster-issuer-acme-dns01-route53.yaml")
-		f, err := ioutil.ReadFile(clusterIssuerFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		f1 := strings.ReplaceAll(string(f), "AWS_ACCESS_KEY_ID", accessKeyID)
-		err = ioutil.WriteFile(clusterIssuerFile, []byte(f1), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
+		oc.NotShowInfo()
+		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		exutil.ApplyClusterResourceFromTemplate(oc, params...)
+		oc.SetShowInfo()
 		defer func() {
 			e2e.Logf("Delete clusterissuers.cert-manager.io letsencrypt-dns01")
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
 			if !strings.Contains(output, "True") || err != nil {
@@ -520,24 +526,15 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer ready timeout.")
 
 		g.By("Create the certificate.")
-		// Hard code dns zone to be "qe1.devcluster.openshift.com" temporarily.
-		// TODO: when having time in future, change to be: get apps.clustername.yyy...com, trim "apps.clustername.", let dnsZone = yyy...com, implement AWS API for `aws route53 list-hosted-zones | jq -r '.HostedZones[] | select(.Name=="yyyy...com.") | .Id'` to get the hosted zone ID, replace clusterissuer YAML file's hostedZoneID. So even in AWS env not using QE's AWS account, this case can still pass.
-		dnsZone := "qe1.devcluster.openshift.com"
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
-		certDNS01File := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		f, err = ioutil.ReadFile(certDNS01File)
-		o.Expect(err).NotTo(o.HaveOccurred())
 		randomStr := exutil.GetRandomString()
 		dnsName := randomStr + "." + dnsZone
 		if len(dnsName) > 63 {
 			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
 		}
 		e2e.Logf("dnsName=%s", dnsName)
-		f1 = strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
-		err = ioutil.WriteFile(certDNS01File, []byte(f1), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("create").Args("-f", certDNS01File).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		g.By("Check the certificate and its challenge")
 		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {

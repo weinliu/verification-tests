@@ -1,11 +1,18 @@
-apiVersion: cert-manager.io/v1
-kind: Certificate
+apiVersion: template.openshift.io/v1
+kind: Template
 metadata:
-  name: certificate-from-dns01
-spec:
-  secretName: certificate-from-dns01
-  dnsNames:
-  - DNS_NAME
-  issuerRef:
-    kind: ClusterIssuer
-    name: letsencrypt-dns01
+  name: certificate-from-dns01-template
+objects:
+  - apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: certificate-from-dns01
+    spec:
+      secretName: certificate-from-dns01
+      dnsNames:
+      - "${DNS_NAME}"
+      issuerRef:
+        kind: ClusterIssuer
+        name: letsencrypt-dns01
+parameters:
+  - name: DNS_NAME
