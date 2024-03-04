@@ -2,6 +2,7 @@ package operatorsdk
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -244,7 +245,7 @@ func logDebugInfo(oc *exutil.CLI, ns string, resource ...string) {
 // The method is to create one resource with template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 15*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "olm-config.json")
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)

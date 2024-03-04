@@ -1,6 +1,7 @@
 package operatorsdk
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -135,7 +136,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeoperator-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeoperator.v0.0.2", "-n", oc.Namespace()).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("upgrade to 0.2 success")
@@ -242,7 +243,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err := operatorsdkCLI.Run("cleanup").Args("ownsingleallsupport", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-ownsingleallsupport-bundle-v4-11", "-n", namespace, "--no-headers").Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-ownsingleallsupport-bundle")
@@ -262,7 +263,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, _ = operatorsdkCLI.Run("cleanup").Args("ownsingleallsupport", "-n", namespace).Output()
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
 		// install the operator with og without installmode
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-ownsingleallsupport-bundle-v4-11", "-n", namespace, "--no-headers").Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-ownsingleallsupport-bundle")
@@ -279,7 +280,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// delete the og
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("og", "og-own", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-ownsingleallsupport-bundle-v4-11", "-n", namespace, "--no-headers").Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("quay-io-olmqe-ownsingleallsupport-bundle")
@@ -317,7 +318,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err := operatorsdkCLI.Run("cleanup").Args("all1support", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-all1support-bundle-v4-11", "-n", namespace, "--no-headers").Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-all1support-bundle")
@@ -337,7 +338,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, _ = operatorsdkCLI.Run("cleanup").Args("all1support", "-n", namespace).Output()
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
 		// install the operator with og without installmode
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-all1support-bundle-v4-11", "-n", namespace, "--no-headers").Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-all1support-bundle")
@@ -354,7 +355,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// delete the og
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("og", "og-single", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-all1support-bundle-v4-11", "-n", namespace, "--no-headers").Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-all1support-bundle")
@@ -385,7 +386,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		defer operatorsdkCLI.Run("cleanup").Args("all2support").Output()
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "operator-sdk-og", "-o=jsonpath={.spec.targetNamespaces}", "-n", namespace).Output()
 		o.Expect(msg).To(o.ContainSubstring(""))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", "openshift-operators").Output()
 			if strings.Contains(msg, "all2support.v0.0.1") {
 				e2e.Logf("csv all2support.v0.0.1")
@@ -397,7 +398,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err := operatorsdkCLI.Run("cleanup").Args("all2support", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-all2support-bundle-v4-11", "--no-headers", "-n", namespace).Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-all2support-bundle")
@@ -414,7 +415,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "--install-mode", "AllNamespaces", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", "openshift-operators").Output()
 			if strings.Contains(msg, "all2support.v0.0.1") {
 				e2e.Logf("csv all2support.v0.0.1")
@@ -426,7 +427,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, _ = operatorsdkCLI.Run("cleanup").Args("all2support", "-n", namespace).Output()
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
 		// install the operator with og without installmode
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-all2support-bundle-v4-11", "--no-headers", "-n", namespace).Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-all2support-bundle")
@@ -438,7 +439,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", "openshift-operators").Output()
 			if strings.Contains(msg, "all2support.v0.0.1") {
 				e2e.Logf("csv all2support.v0.0.1")
@@ -452,7 +453,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// delete the og
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("og", "og-allnames", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "quay-io-olmqe-all2support-bundle-v4-11", "--no-headers", "-n", namespace).Output()
 			if strings.Contains(msg, "not found") {
 				e2e.Logf("not found pod quay-io-olmqe-all2support-bundle")
@@ -464,7 +465,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// install the operator without og and installmode, the csv support allnamespace and ownnamespace
 		msg, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", "openshift-operators").Output()
 			if strings.Contains(msg, "all2support.v0.0.1") {
 				e2e.Logf("csv all2support.v0.0.1")
@@ -498,7 +499,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		createSub, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subofupgrade, "-p", "NAME=subofupgrade", "NAMESPACE="+namespace, "SOURCENAME=upgradetest", "OPERATORNAME=upgradeindex", "SOURCENAMESPACE="+namespace, "STARTINGCSV=upgradeindex.v0.0.1").OutputToFile("createsub-41497.json")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createSub, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeindex.v0.0.1", "-o=jsonpath={.status.phase}", "-n", namespace).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("upgradeindexv0.1 installed successfully")
@@ -593,7 +594,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/previousansibletest-controller-manager"))
 
-		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -621,7 +622,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 
 		// max concurrent reconciles
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/previousansibletest-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if strings.Contains(msg, "\"worker count\":1") {
 				e2e.Logf("found worker count:1")
@@ -638,7 +639,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "previoustest-sample") {
@@ -652,7 +653,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No previoustest-sample in project %s", nsOperator))
 
-		waitErr = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/previoustest-sample", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "2 desired | 2 updated | 2 total | 2 available | 0 unavailable") {
@@ -667,7 +668,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/previoustest-sample is wrong")
 
 		// k8s event
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", nsOperator).Output()
 			if strings.Contains(msg, "test-reason") {
 				e2e.Logf("k8s_event test")
@@ -678,7 +679,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get k8s event test-name in %s", nsOperator))
 
 		// k8s status
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("previoustest.ansibletest.qetest.com/previoustest-sample", "-n", nsOperator, "-o", "yaml").Output()
 			if strings.Contains(msg, "hello world") {
 				e2e.Logf("k8s_status test hello world")
@@ -689,7 +690,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get previoustest-sample hello world in %s", nsOperator))
 
 		// migrate test
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", nsOperator).Output()
 			if strings.Contains(msg, "test-secret") {
 				e2e.Logf("found secret test-secret")
@@ -703,7 +704,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(msg).To(o.ContainSubstring("test:  6 bytes"))
 
 		// blacklist
-		waitErr = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("configmap", "test-blacklist-watches", "-n", nsOperator).Output()
 			if strings.Contains(msg, "afdasdfsajsafj") {
 				e2e.Logf("Skipping the blacklist")
@@ -733,7 +734,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createPreviousNginx, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "--no-headers").Output()
 			if strings.Contains(msg, "nginx-sample") {
 				e2e.Logf("found pod nginx-sample")
@@ -853,7 +854,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "manifests", "bases", "catalogtest.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := makeCLI.Run("bundle").Args().Output()
 			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
@@ -880,7 +881,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		createSub, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subofcatalog, "-p", "NAME=cataloginstall", "NAMESPACE="+namespace, "SOURCENAME=cs-catalog", "OPERATORNAME=catalogtest", "SOURCENAMESPACE="+namespace, "STARTINGCSV=catalogtest.v0.0.1").OutputToFile("createsub-34462.json")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createSub, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 390*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 390*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "catalogtest.v0.0.1", "-o=jsonpath={.status.phase}", "-n", namespace).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("catalogtest installed successfully")
@@ -1023,7 +1024,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-34427-controller-manager"))
 
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -1049,7 +1050,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		filePath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached34427.yaml")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", filePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "memcached34427-sample") {
@@ -1062,7 +1063,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			logDebugInfo(oc, nsOperator, "events", "pod")
 		}
 		exutil.AssertWaitPollNoErr(waitErr, "No pod memcached34427-sample")
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached34427-sample-memcached", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "3 desired | 3 updated | 3 total | 3 available | 0 unavailable") {
@@ -1185,7 +1186,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", nsOperator)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		waitErr := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "Running") {
@@ -1235,7 +1236,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "manifests", "bases", "memcached-operator-34883.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := makeCLI.Run("bundle").Args().Output()
 			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
@@ -1282,7 +1283,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "manifests", "bases", "memcached-operator.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args().Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -1398,7 +1399,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "manifests", "bases", "memcached-operator-43660.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args().Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -1428,7 +1429,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached43660-sample]"))
 		pathOutput := filepath.Join(tmpPath, "test-output", "basic", "basic-check-spec-test")
-		waitErr = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 6*time.Second, false, func(ctx context.Context) (bool, error) {
 			if _, err := os.Stat(pathOutput); os.IsNotExist(err) {
 				e2e.Logf("get basic-check-spec-test Failed")
 				return false, nil
@@ -1442,7 +1443,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		pathOutput = filepath.Join(tmpPath, "test-output", "olm", "olm-bundle-validation-test")
-		waitErr = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 6*time.Second, false, func(ctx context.Context) (bool, error) {
 			if _, err := os.Stat(pathOutput); os.IsNotExist(err) {
 				e2e.Logf("get olm-bundle-validation-test Failed")
 				return false, nil
@@ -1508,7 +1509,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			exutil.By("delete nginx-sample")
 			filePath := filepath.Join(tmpPath, "config", "samples", "demo_v1_nginx34426.yaml")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", filePath, "-n", nsOperator).Output()
-			waitErr := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("Nginx34426", "-n", nsOperator).Output()
 				if strings.Contains(output, "nginx34426-sample") {
 					e2e.Logf("nginx34426-sample still exists")
@@ -1577,7 +1578,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/nginx-operator-34426-controller-manager created"))
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -1611,7 +1612,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", filePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(podList, "nginx34426-sample") {
@@ -1704,7 +1705,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "kubeturbo-operator.v8.5.0", "-n", ns).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("upgrade to 8.5.0 success")
@@ -1895,7 +1896,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-44295-controller-manager"))
 
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -1923,7 +1924,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "memcached44295-sample") {
@@ -1937,7 +1938,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44295-sample in project %s", nsOperator))
 
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached44295-sample", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "3 desired | 3 updated | 3 total | 3 available | 0 unavailable") {
@@ -2043,7 +2044,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			template:  clusterrolebindingtemplate,
 		}
 		clusterrolebinding.create(oc)
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -2078,7 +2079,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -2215,7 +2216,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		clusterrolebinding.create(oc)
 
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -2245,7 +2246,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -2370,7 +2371,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-40341-controller-manager"))
 
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -2395,7 +2396,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployfilepath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("memcached40341s.cache.example.com", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "memcached40341-sample") {
@@ -2493,7 +2494,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "memcached-operator-48885.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// make bundle use image digests
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -2588,7 +2589,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "memcached-operator-52813.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// make bundle use image digests
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -2688,7 +2689,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "memcached-operator-52814.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// make bundle use image digests
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -2789,7 +2790,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-44550-controller-manager"))
 
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -2819,7 +2820,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "memcached44550-sample-ansiblehttp") {
@@ -2833,7 +2834,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44550-sample in project %s", nsOperator))
 
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			proxyMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies.config.openshift.io", "cluster", "-o=jsonpath={.spec.httpProxy}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached44550-sample-ansiblehttp", "-n", nsOperator).Output()
@@ -2927,7 +2928,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-44551-controller-manager"))
 
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -2948,7 +2949,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			logDebugInfo(oc, nsOperator, "events", "pod")
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-44551-controller-manager in project %s", nsOperator))
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-44551-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "Starting workers") {
@@ -2964,7 +2965,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "nginx-sample") {
@@ -2978,7 +2979,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44551-sample in project %s", nsOperator))
 
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			proxyMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies.config.openshift.io", "cluster", "-o=jsonpath={.spec.httpProxy}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/nginx-sample", "-n", nsOperator).Output()
@@ -3070,7 +3071,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeindex.v0.0.2", "-n", oc.Namespace()).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("upgrade to 0.0.2 success")
@@ -3223,7 +3224,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-44553-controller-manager"))
 
-		waitErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -3244,7 +3245,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			logDebugInfo(oc, nsOperator, "events", "pod")
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-44553-controller-manager in project %s", nsOperator))
-		waitErr = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-44553-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "Starting workers") {
@@ -3258,7 +3259,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "memcached44553-sample") {
@@ -3272,7 +3273,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44553-sample in project %s", nsOperator))
 
-		waitErr = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			proxyMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies.config.openshift.io", "cluster", "-o=jsonpath={.spec.httpProxy}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached44553-sample", "-n", nsOperator).Output()
@@ -3347,7 +3348,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradefbc.v0.0.2", "-n", oc.Namespace()).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("upgrade to 0.0.2 success")
@@ -3440,7 +3441,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradefbc.v0.0.2", "-n", oc.Namespace()).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("upgrade to 0.0.2 success")
@@ -3464,7 +3465,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeindex.v0.0.2", "-n", oc.Namespace()).Output()
 			if strings.Contains(msg, "Succeeded") {
 				e2e.Logf("upgrade to 0.0.2 success")
@@ -3555,7 +3556,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
 
 		exutil.By("step: make bundle use image digests")
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -3579,7 +3580,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podmanCLI := container.NewPodmanCLI()
 
-		waitErr = wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, _ = podmanCLI.Run("push").Args(bundleImage).Output()
 			if strings.Contains(output, "Writing manifest to image destination") {
 				return true, nil
@@ -3618,7 +3619,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
-		waitErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -3656,7 +3657,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -3757,7 +3758,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "memcached-operator-52572.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// make bundle use image digests
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -3781,7 +3782,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podmanCLI := container.NewPodmanCLI()
 
-		waitErr = wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, _ = podmanCLI.Run("push").Args(bundleImage).Output()
 			if strings.Contains(output, "Writing manifest to image destination") {
 				return true, nil
@@ -3821,7 +3822,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
-		waitErr = wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -3859,7 +3860,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -3967,7 +3968,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "memcached-operator-52814.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// make bundle use image digests
-		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			if err != nil {
 				e2e.Logf("make bundle failed, try again")
@@ -3991,7 +3992,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podmanCLI := container.NewPodmanCLI()
 
-		waitErr = wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, _ = podmanCLI.Run("push").Args(bundleImage).Output()
 			if strings.Contains(output, "Writing manifest to image destination") {
 				return true, nil
@@ -4030,7 +4031,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
-		waitErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -4068,7 +4069,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -4172,7 +4173,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/ansibletest-controller-manager"))
 
-		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -4200,7 +4201,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 
 		// OCP-34292
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/ansibletest-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if strings.Contains(msg, "\"worker count\":1") {
 				e2e.Logf("found worker count:1")
@@ -4217,7 +4218,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "basetest-sample") {
@@ -4232,7 +4233,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No basetest-sample in project %s", nsOperator))
 
 		// OCP-27977
-		waitErr = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/basetest-sample", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "2 desired | 2 updated | 2 total | 2 available | 0 unavailable") {
@@ -4247,7 +4248,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/basetest-sample is wrong")
 
 		// OCP-45141
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", nsOperator).Output()
 			if strings.Contains(msg, "test-reason") {
 				e2e.Logf("k8s_event test")
@@ -4258,7 +4259,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get k8s event test-name in %s", nsOperator))
 
 		// OCP-41497
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("basetest.ansiblebase.qetest.com/basetest-sample", "-n", nsOperator, "-o", "yaml").Output()
 			if strings.Contains(msg, "hello world") {
 				e2e.Logf("k8s_status test hello world")
@@ -4269,7 +4270,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get basetest-sample hello world in %s", nsOperator))
 
 		// OCP-29374
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", nsOperator).Output()
 			if strings.Contains(msg, "test-secret") {
 				e2e.Logf("found secret test-secret")
@@ -4283,7 +4284,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(msg).To(o.ContainSubstring("test:  6 bytes"))
 
 		// OCP-28157
-		waitErr = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("configmap", "test-blacklist-watches", "-n", nsOperator).Output()
 			if strings.Contains(msg, "afdasdfsajsafj") {
 				e2e.Logf("Skipping the blacklist")
@@ -4377,7 +4378,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/contentcollections-controller-manager"))
 
-		waitErr := wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 			podMsg, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pods", "-n", nsOperator).Output()
 			if !strings.Contains(podMsg, "Started container manager") {
 				e2e.Logf("Started container manager failed")
@@ -4390,7 +4391,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			logDebugInfo(oc, nsOperator, "events", "pod")
 		}
 
-		waitErr = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 240*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if !strings.Contains(msg, "Starting workers") {
 				e2e.Logf("Starting workers failed")
@@ -4411,7 +4412,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 
 		// check the dummy task
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if strings.Contains(msg, "dummy : Create ConfigMap") {
 				e2e.Logf("found dummy : Create ConfigMap")
@@ -4497,7 +4498,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/ansiblemetrics-controller-manager"))
 
-		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -4517,7 +4518,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			logDebugInfo(oc, nsOperator, "events", "pod")
 		}
 
-		waitErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/ansiblemetrics-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if !strings.Contains(msg, "Starting workers") {
 				e2e.Logf("Starting workers failed")
@@ -4533,7 +4534,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crFilePath, "-n", nsOperator).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			if strings.Contains(msg, "metrics-sample") {
 				e2e.Logf("metrics created success")
@@ -4653,7 +4654,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-48359-controller-manager"))
 
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -4674,7 +4675,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			logDebugInfo(oc, nsOperator, "events", "pod")
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-48359-controller-manager in project %s", nsOperator))
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-48359-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "Starting workers") {
@@ -4691,7 +4692,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: Create the resource")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "memcachedbackup-sample") {
@@ -4894,7 +4895,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/nginx-operator-69005-controller-manager created"))
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
@@ -4936,7 +4937,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/nginx-operator-69005-controller-manager created"))
-		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")

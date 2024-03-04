@@ -1,6 +1,7 @@
 package operatorsdk
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ func buildPushOperatorImage(architecture architecture.Architecture, tmpPath, ima
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("Successfully"))
 
-	waitErr := wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 		imagePushOutput, _ := podmanCLI.Run("push").Args(imageTag).Output()
 		if strings.Contains(imagePushOutput, "Writing manifest to image destination") {
 			return true, nil
@@ -136,7 +137,7 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 // if it is AtLatestKnown, get installed csv from sub and save it to dr.
 // if it is not AtLatestKnown, raise error.
 func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		state := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
 		if strings.Compare(state, "AtLatestKnown") == 0 {
 			return true, nil
@@ -234,7 +235,7 @@ func (catsrc *catalogSourceDescription) getSCC(oc *exutil.CLI) string {
 
 func (catsrc *catalogSourceDescription) createWithCheck(oc *exutil.CLI, itName string, dr describerResrouce) {
 	catsrc.create(oc, itName, dr)
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
 		if strings.Compare(status, "READY") != 0 {
 			e2e.Logf("catsrc %s lastObservedState is %s, not READY", catsrc.name, status)
@@ -380,7 +381,7 @@ func (dr describerResrouce) rmIr(itName string) {
 func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
-	err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("output is %v, error is %v, and try next", result, err)
@@ -404,7 +405,7 @@ func removeResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, paramet
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	err = wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil && (strings.Contains(output, "NotFound") || strings.Contains(output, "No resources found")) {
 			e2e.Logf("the resource is delete successfully")
@@ -494,7 +495,7 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 // present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
 func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
 	parameters = append(parameters, "--ignore-not-found")
-	err := wait.Poll(3*time.Second, 70*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 70*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)
@@ -538,7 +539,7 @@ func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCom
 		return ret
 	}
 	e2e.Logf("Running: oc get asAdmin(%t) withoutNamespace(%t) %s", asAdmin, withoutNamespace, strings.Join(parameters, " "))
-	return wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)
