@@ -1094,4 +1094,86 @@ type OverridesConfig struct {
 	RetentionPeriod         *string                  `yaml:"retention_period,omitempty"`
 	RetentionStream         *RetentionStream         `yaml:"retention_stream,omitempty"`
 	RulerAlertmanagerConfig *RulerAlertmanagerConfig `yaml:"ruler_alertmanager_config,omitempty"`
+	ShardStreams            struct {
+		Enabled     bool   `yaml:"enabled"`
+		DesiredRate string `yaml:"desired_rate"`
+	} `yaml:"shard_streams"`
+}
+
+/*
+Loki Schema Config
+
+schema_config:
+  configs:
+    - from: "2023-10-15"
+      index:
+        period: 24h
+        prefix: index_
+      object_store: s3
+      schema: v13
+      store: tsdb
+
+*/
+
+type StorageSchemaConfig struct {
+	SchemaConfig SchemaConfig `yaml:"schema_config"`
+}
+
+type SchemaConfig struct {
+	Configs []ConfigEntry `yaml:"configs"`
+}
+
+type ConfigEntry struct {
+	From        string `yaml:"from"`
+	Index       Index  `yaml:"index"`
+	ObjectStore string `yaml:"object_store"`
+	Schema      string `yaml:"schema"`
+	Store       string `yaml:"store"`
+}
+
+type Index struct {
+	Period string `yaml:"period"`
+	Prefix string `yaml:"prefix"`
+}
+
+/*
+Loki limits config
+*/
+
+type LokiLimitsConfig struct {
+	LimitsConfig LimitsConfig `yaml:"limits_config"`
+}
+
+type LimitsConfig struct {
+	IngestionRateStrategy      string `yaml:"ingestion_rate_strategy"`
+	IngestionRateMB            int    `yaml:"ingestion_rate_mb"`
+	IngestionBurstSizeMB       int    `yaml:"ingestion_burst_size_mb"`
+	MaxLabelNameLength         int    `yaml:"max_label_name_length"`
+	MaxLabelValueLength        int    `yaml:"max_label_value_length"`
+	MaxLabelNamesPerSeries     int    `yaml:"max_label_names_per_series"`
+	RejectOldSamples           bool   `yaml:"reject_old_samples"`
+	RejectOldSamplesMaxAge     string `yaml:"reject_old_samples_max_age"`
+	CreationGracePeriod        string `yaml:"creation_grace_period"`
+	EnforceMetricName          bool   `yaml:"enforce_metric_name"`
+	MaxStreamsPerUser          int    `yaml:"max_streams_per_user"`
+	MaxLineSize                int    `yaml:"max_line_size"`
+	MaxEntriesLimitPerQuery    int    `yaml:"max_entries_limit_per_query"`
+	MaxGlobalStreamsPerUser    int    `yaml:"max_global_streams_per_user"`
+	MaxChunksPerQuery          int    `yaml:"max_chunks_per_query"`
+	MaxQueryLength             string `yaml:"max_query_length"`
+	MaxQueryParallelism        int    `yaml:"max_query_parallelism"`
+	TSDBMaxQueryParallelism    int    `yaml:"tsdb_max_query_parallelism"`
+	MaxQuerySeries             int    `yaml:"max_query_series"`
+	CardinalityLimit           int    `yaml:"cardinality_limit"`
+	MaxStreamsMatchersPerQuery int    `yaml:"max_streams_matchers_per_query"`
+	QueryTimeout               string `yaml:"query_timeout"`
+	MaxCacheFreshnessPerQuery  string `yaml:"max_cache_freshness_per_query"`
+	PerStreamRateLimit         string `yaml:"per_stream_rate_limit"`
+	PerStreamRateLimitBurst    string `yaml:"per_stream_rate_limit_burst"`
+	SplitQueriesByInterval     string `yaml:"split_queries_by_interval"`
+	ShardStreams               struct {
+		Enabled     bool   `yaml:"enabled"`
+		DesiredRate string `yaml:"desired_rate"`
+	} `yaml:"shard_streams"`
+	AllowStructuredMetadata bool `yaml:"allow_structured_metadata"`
 }

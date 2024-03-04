@@ -13,6 +13,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -3172,4 +3173,332 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		o.Expect(len(sysLogs) > 0).Should(o.BeTrue(), "can't find logs from syslog in lokistack")
 
 	})
+})
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Efficient OTEL Support", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                    = exutil.NewCLI("loki-otel-support", exutil.KubeConfigPath())
+		loggingBaseDir, s, sc string
+	)
+
+	g.BeforeEach(func() {
+		s = getStorageType(oc)
+		if len(s) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		sc, _ = getStorageClassName(oc)
+		if len(sc) == 0 {
+			g.Skip("The cluster doesn't have a storage class for this test!")
+		}
+		if !validateInfraForLoki(oc) {
+			g.Skip("Current platform not supported!")
+		}
+
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		g.By("deploy CLO and LO")
+		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
+	})
+
+	g.It("CPaasrunOnly-Author:kbharti-High-70683-Medium-70684-Validate new Loki installations support TSDBv3 and v13 storage schema and automatic stream sharding[Serial]", func() {
+
+		g.By("Deploy Loki stack with v13 schema and tsdb store")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+
+		ls := lokiStack{
+			name:          "lokistack-70683",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-70683",
+			storageClass:  sc,
+			bucketName:    "logging-loki-70683-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Create clusterlogforwarder instance to forward all logs to default LokiStack")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    cloNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc)
+
+		g.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     cloNS,
+			collectorType: "vector",
+			logStoreType:  "lokistack",
+			lokistackName: ls.name,
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		g.By("Extracting Loki config ...")
+		dirname := "/tmp/" + oc.Namespace() + "-loki-otel-support"
+		defer os.RemoveAll(dirname)
+		err = os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", ls.namespace, "--confirm", "--to="+dirname).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Validate Loki is using v13 schema in config")
+		lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		storageSchemaConfig := StorageSchemaConfig{}
+		err = yaml.Unmarshal(lokiStackConf, &storageSchemaConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(storageSchemaConfig.SchemaConfig.Configs[0].Schema).Should(o.Equal("v13"))
+		o.Expect(storageSchemaConfig.SchemaConfig.Configs[0].Store).Should(o.Equal("tsdb"))
+
+		g.By("Validate Automatic stream sharding")
+		lokiLimitsConfig := LokiLimitsConfig{}
+		err = yaml.Unmarshal(lokiStackConf, &lokiLimitsConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(lokiLimitsConfig.LimitsConfig.ShardStreams.Enabled).Should(o.Equal(true))
+		o.Expect(lokiLimitsConfig.LimitsConfig.ShardStreams.DesiredRate).Should(o.Equal("3MB"))
+		o.Expect(lokiLimitsConfig.LimitsConfig.AllowStructuredMetadata).Should(o.Equal(true))
+
+		g.By("Check exposed metrics for Loki Stream Sharding")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", cloNS)).Execute()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", cloNS)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token := getSAToken(oc, "default", cloNS)
+		for _, metric := range []string{"loki_rate_store_refresh_failures_total", "loki_rate_store_streams", "loki_rate_store_max_stream_shards", "loki_rate_store_max_stream_rate_bytes", "loki_rate_store_max_unique_stream_rate_bytes", "loki_stream_sharding_count"} {
+			e2e.Logf("Checking metric: " + metric)
+			checkMetric(oc, token, metric, 3)
+		}
+
+		g.By("Override default value for desired stream sharding rate on tenants")
+		patchConfig := `
+spec:
+  limits:
+    global:
+      ingestion:
+        perStreamDesiredRate: 4
+    tenants:
+      application:
+        ingestion:
+          perStreamDesiredRate: 5
+      audit:
+        ingestion:
+          perStreamDesiredRate: 6
+`
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("lokistack", ls.name, "-n", ls.namespace, "--type", "merge", "-p", patchConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		_, err = exec.Command("bash", "-c", "rm -rf "+dirname).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", ls.namespace, "--confirm", "--to="+dirname).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//Validating config.yaml below
+		lokiStackConf, err = os.ReadFile(dirname + "/config.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = yaml.Unmarshal(lokiStackConf, &lokiLimitsConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(lokiLimitsConfig.LimitsConfig.ShardStreams.Enabled).Should(o.Equal(true))
+		o.Expect(lokiLimitsConfig.LimitsConfig.ShardStreams.DesiredRate).Should(o.Equal("4MB"))
+		//Validating runtime-config.yaml below
+		overridesConfig, err := os.ReadFile(dirname + "/runtime-config.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		runtimeConfig := RuntimeConfig{}
+		err = yaml.Unmarshal(overridesConfig, &runtimeConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(runtimeConfig.Overrides.Application.ShardStreams.DesiredRate).Should(o.Equal("5MB"))
+		o.Expect(runtimeConfig.Overrides.Audit.ShardStreams.DesiredRate).Should(o.Equal("6MB"))
+		e2e.Logf("Overrides validated successfully!")
+
+		g.By("Check that __stream_shard__ label is applied to streams")
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(token).retry(5)
+		for _, logType := range []string{"infrastructure", "audit"} {
+			lc.waitForLogsAppearByKey(logType, "log_type", logType)
+			labels, err := lc.listLabels(logType, "")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("\nthe %s log labels are: %v\n", logType, labels)
+			if !contain(labels, "__stream_shard__") {
+				e2e.Failf("__stream_shard__ label is missing under " + logType + " logs")
+			}
+			e2e.Logf("__stream_shard__ label is found under " + logType + " logs")
+		}
+
+	})
+
+	g.It("CPaasrunOnly-Author:kbharti-High-70714-Show warning to user for upgrading to TSDBv3 store and v13 schema[Serial]", func() {
+
+		// The Alert will be only be shown on a tshirt size of 1x.extra-small and greater
+		if !validateInfraAndResourcesForLoki(oc, "35Gi", "16") {
+			g.Skip("Current platform not supported/resources not available for this test!")
+		}
+
+		g.By("Deploy Loki stack with v12 schema and bolt-db shipper")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+
+		ls := lokiStack{
+			name:          "lokistack-70714",
+			namespace:     loggingNS,
+			tSize:         "1x.extra-small",
+			storageType:   s,
+			storageSecret: "storage-secret-70714",
+			storageClass:  sc,
+			bucketName:    "logging-loki-70714-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc, "-p", "STORAGE_SCHEMA_VERSION=v12")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ls.namespace)).Execute()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ls.namespace)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token := getSAToken(oc, "default", ls.namespace)
+
+		queryAlertManagerForActiveAlerts(oc, token, false, "LokistackSchemaUpgradesRequired", 5)
+		e2e.Logf("Alert LokistackSchemaUpgradesRequired is firing...")
+	})
+
+	g.It("CPaasrunOnly-Author:kbharti-High-70685-Validate support for blocking queries on Loki[Serial]", func() {
+
+		g.Skip(" Blocked due to LOG-4927")
+		// Case untested due to above bug.
+
+		g.By("Create 3 application generator projects")
+		oc.SetupProject()
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		appProj1 := oc.Namespace()
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		oc.SetupProject()
+		appProj2 := oc.Namespace()
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		oc.SetupProject()
+		appProj3 := oc.Namespace()
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj3, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploy Loki stack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+
+		ls := lokiStack{
+			name:          "lokistack-70685",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-70685",
+			storageClass:  sc,
+			bucketName:    "logging-loki-70685-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		// patch spec to block specific queries
+		patchConfig := `
+spec:
+  limits:
+    tenants:
+      application:
+        queries:
+          blocked
+          - pattern: '{kubernetes_namespace_name="%s"}'
+          - pattern: '.*%s.*'
+            regex: true
+`
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("lokistack", ls.name, "-n", ls.namespace, "--type", "merge", "-p", fmt.Sprintf(patchConfig, appProj1, appProj2)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     cloNS,
+			collectorType: "vector",
+			logStoreType:  "lokistack",
+			lokistackName: ls.name,
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ls.namespace)).Execute()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ls.namespace)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token := getSAToken(oc, "default", ls.namespace)
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(token).retry(5)
+		lc.waitForLogsAppearByKey("application", "log_type", "application")
+
+		// Cannot query {kubernetes_namespace_name="appProj1"} since this query is blocked by policy
+		g.By("Validate queries are blocked as per the spec config")
+		_, err = lc.searchLogsInLoki("application", "{kubernetes_namespace_name="+appProj1+"}")
+		o.Expect(err).To(o.HaveOccurred())
+		if !strings.Contains("query blocked by policy", err.Error()) {
+			e2e.Failf("Query failed but Error message does not match for: " + appProj1)
+		}
+
+		// Any query containing appProj2 would be blocked by policy (regex)
+		_, err = lc.searchLogsInLoki("application", "{kubernetes_namespace_name="+appProj2+"}")
+		o.Expect(err).To(o.HaveOccurred())
+		//check err message contains 'query blocked by policy'
+		if !strings.Contains("query blocked by policy", err.Error()) {
+			e2e.Failf("Query failed but Error message does not match for: " + appProj2)
+		}
+
+		//Success since no policy exists on appProj3
+		logs, err := lc.searchLogsInLoki("application", "{kubernetes_namespace_name="+appProj3+"}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(logs.Status).Should(o.Equal("success"))
+		o.Expect(len(logs.Data.Result) > 0).Should(o.BeTrue())
+		o.Expect(logs.Data.Result[0].Stream.LogType).Should(o.Equal("application"))
+
+	})
+
 })
