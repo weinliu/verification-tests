@@ -382,6 +382,24 @@ func (n *Node) IsSchedulableOrFail() bool {
 	return schedulable
 }
 
+// HasTaintEffect Returns true if the node has any taint with the given effect
+func (n *Node) HasTaintEffect(taintEffect string) (bool, error) {
+	taint, err := n.Get(`{.spec.taints[?(@.effect=="` + taintEffect + `")]}`)
+	if err != nil {
+		return false, err
+	}
+
+	return taint != "", nil
+}
+
+// HasTaintEffectOrFail Returns true if the node has any taint with the given effect and fails the test if any error happened
+func (n *Node) HasTaintEffectOrFail(taintEffect string) bool {
+	hasTaintEffect, err := n.HasTaintEffect(taintEffect)
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error while getting the taints effects in node %s", n.GetName())
+
+	return hasTaintEffect
+}
+
 // IsEdge Returns true if th node is an edge node
 func (n *Node) IsEdge() (bool, error) {
 	_, err := n.GetLabel(`node-role.kubernetes.io/edge`)

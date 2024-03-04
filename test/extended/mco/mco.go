@@ -2461,6 +2461,11 @@ nulla pariatur.`
 
 		allCoreOsNodes := NewNodeList(oc.AsAdmin()).GetAllCoreOsNodesOrFail()
 		for _, node := range allCoreOsNodes {
+			if node.HasTaintEffectOrFail("NoExecute") {
+				logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
+				continue
+			}
+
 			exutil.By(fmt.Sprintf("log into node %s to check audit rule file exists or not", node.GetName()))
 			o.Expect(node.DebugNodeWithChroot("stat", auditRuleFile)).ShouldNot(
 				o.ContainSubstring("No such file or directory"),
@@ -2468,6 +2473,7 @@ nulla pariatur.`
 
 			exutil.By("check expected msgtype in audit log rule file")
 			grepOut, _ := node.DebugNodeWithOptions([]string{"--quiet"}, "chroot", "/host", "bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditRuleFile))
+
 			o.Expect(grepOut).NotTo(o.BeEmpty(), "expected excluded audit log msgtype not found")
 			o.Expect(grepOut).Should(o.And(
 				o.ContainSubstring("NETFILTER_CFG"),
