@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -18,7 +19,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go/service/sts"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -568,6 +572,14 @@ func NewS3ClientFromCredFile(filename, profile, region string) *S3Client {
 
 }
 
+// NewDelegatingS3Client creates an S3Client which delegates calls to methods that are not implemented by itself
+// to the wrapped s3.S3 client.
+func NewDelegatingS3Client(wrappedClient *s3.S3) *S3Client {
+	return &S3Client{
+		svc: wrappedClient,
+	}
+}
+
 // CreateBucket create S3 bucket
 // param: bucket name from user input
 func (sc *S3Client) CreateBucket(name string) error {
@@ -637,6 +649,23 @@ func (sc *S3Client) PutBucketPolicy(name, policy string) error {
 	return nil
 }
 
+// EmptyBucketWithContextAndCheck empties a bucket, then wait for the deletions to take effect.
+func (sc *S3Client) EmptyBucketWithContextAndCheck(ctx context.Context, bucketName string) error {
+	e2e.Logf("Batch deleting objects")
+	iter := s3manager.NewDeleteListIterator(sc.svc, &s3.ListObjectsInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err := s3manager.NewBatchDeleteWithClient(sc.svc).Delete(ctx, iter); err != nil {
+		return fmt.Errorf("empty bucket %s and check: %w", bucketName, err)
+	}
+
+	if err := sc.WaitForBucketEmptinessWithContext(ctx, bucketName, BucketEmpty,
+		5*time.Second /* Interval */, 1*time.Minute /* Timeout */); err != nil {
+		return fmt.Errorf("empty bucket %s and check: %w", bucketName, err)
+	}
+	return nil
+}
+
 // DeleteBucket delete S3 bucket
 // param: name bucket name from user input
 func (sc *S3Client) DeleteBucket(name string) error {
@@ -680,6 +709,51 @@ func (sc *S3Client) HeadBucket(name string) error {
 
 }
 
+func (sc *S3Client) IsBucketEmptyWithContext(ctx aws.Context, input *s3.ListObjectsV2Input, opts ...request.Option) (bool, error) {
+	listObjOutput, err := sc.svc.ListObjectsV2WithContext(ctx, input, opts...)
+	if err != nil {
+		return false, fmt.Errorf("error checking if bucket is empty: %w", err)
+	}
+	return len(listObjOutput.Contents) == 0, nil
+}
+
+// BucketEmptiness captures a S3 bucket's state of emptiness i.e. it is empty or not.
+type BucketEmptiness bool
+
+const (
+	BucketEmpty    BucketEmptiness = true
+	BucketNonEmpty BucketEmptiness = false
+)
+
+func (be BucketEmptiness) String() string {
+	if be {
+		return "empty"
+	}
+	return "non-empty"
+}
+
+// WaitForBucketEmptinessWithContext waits for the expected bucket emptiness (i.e. empty/non-empty) to be fulfilled.
+func (sc *S3Client) WaitForBucketEmptinessWithContext(ctx context.Context, bucketName string,
+	bucketEmptiness BucketEmptiness, interval, timeout time.Duration) error {
+	e2e.Logf("Waiting for bucket %s to be %s", bucketName, bucketEmptiness)
+	if err := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (done bool, err error) {
+		var bucketIsEmpty bool
+		bucketIsEmpty, err = sc.IsBucketEmptyWithContext(ctx, &s3.ListObjectsV2Input{
+			Bucket: aws.String(bucketName),
+		})
+		if err != nil {
+			e2e.Logf("Error checking if bucket %s is empty: %v", bucketName, err)
+			return false, nil
+		}
+		return bool(bucketEmptiness) == bucketIsEmpty, nil
+	}); err != nil {
+		return fmt.Errorf("error waiting for bucket %s to be %s: %w", bucketName, bucketEmptiness, err)
+	}
+
+	e2e.Logf("Bucket %s is now %s", bucketName, bucketEmptiness)
+	return nil
+}
+
 // IAMClient struct for IAM operations
 type IAMClient struct {
 	svc *iam.IAM
@@ -696,6 +770,14 @@ func NewIAMClient() *IAMClient {
 	}
 }
 
+// NewDelegatingIAMClient creates an IAMClient which delegates calls to methods that are not implemented by itself
+// to the wrapped iam.IAM client.
+func NewDelegatingIAMClient(wrappedClient *iam.IAM) *IAMClient {
+	return &IAMClient{
+		svc: wrappedClient,
+	}
+}
+
 // NewIAMClientFromCredFile constructor to create IAM client with user's credential file
 func NewIAMClientFromCredFile(filename, region string) *IAMClient {
 	return &IAMClient{
@@ -704,6 +786,14 @@ func NewIAMClientFromCredFile(filename, region string) *IAMClient {
 			aws.NewConfig().WithCredentials(credentials.NewSharedCredentials(filename, "default")).WithRegion(region),
 		),
 	}
+}
+
+func (iamClient *IAMClient) CreateRoleWithContext(ctx aws.Context, input *iam.CreateRoleInput, opts ...request.Option) (*iam.CreateRoleOutput, error) {
+	return iamClient.svc.CreateRoleWithContext(ctx, input, opts...)
+}
+
+func (iamClient *IAMClient) DeleteRoleWithContext(ctx aws.Context, input *iam.DeleteRoleInput, opts ...request.Option) (*iam.DeleteRoleOutput, error) {
+	return iamClient.svc.DeleteRoleWithContext(ctx, input, opts...)
 }
 
 func (iamClient *IAMClient) DeleteOpenIDConnectProviderByProviderName(providerName string) error {
@@ -952,4 +1042,17 @@ func (route53Client *Route53Client) EmptyHostedZoneWithContext(ctx context.Conte
 	changeResourceRecordSetsOutput.ChangeInfo.Status = aws.String(route53.ChangeStatusInsync)
 
 	return changeResourceRecordSetsOutput, nil
+}
+
+// StsClient extends the sts.STS client without overriding its existing methods.
+type StsClient struct {
+	*sts.STS
+}
+
+// NewDelegatingStsClient creates an StsClient which delegates calls to methods that are not implemented by itself
+// to the wrapped sts.STS client.
+func NewDelegatingStsClient(wrappedClient *sts.STS) *StsClient {
+	return &StsClient{
+		STS: wrappedClient,
+	}
 }

@@ -16,11 +16,22 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
+	"github.com/blang/semver/v4"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	awsiam "github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/sts"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/kubernetes/test/utils/format"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
@@ -1815,5 +1826,136 @@ data:
 		}).WithTimeout(DoubleLongTimeout).WithPolling(LongTimeout / 10).Should(o.BeTrue())
 		_, err = exutil.WaitAndGetSpecificPodLogs(oc, hcpNs, "etcd", "etcd-0", "defrag")
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	/*
+		Test environment requirements:
+		This test case runs against an STS management cluster which is not equipped with the root cloud credentials.
+		Interactions with the cloud provider must rely on a set of credentials that are unavailable on Jenkins agents.
+		Therefore, rehearsals have to be conducted locally.
+
+		Test run duration:
+		The CronJob created by the HCP controller is scheduled (hard-coded) to run at the beginning of each hour.
+		Consequently, the test run duration can vary between ~10 minutes and ~65min.
+	*/
+	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:fxie-Critical-72055-Automated etcd backups for Managed services", func() {
+		// Skip incompatible platforms
+		// The etcd snapshots will be backed up to S3 so this test case runs on AWS only
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
+		// The management cluster has to be an STS cluster as the SA token will be used to assume an existing AWS role
+		if !exutil.IsSTSCluster(oc) {
+			g.Skip("This test case must run on an STS management cluster, skipping")
+		}
+		// Restrict CPO's version to >= 4.16.0
+		// TODO(fxie): remove this once https://github.com/openshift/hypershift/pull/3034 gets merged and is included in the payload
+		hcVersion := exutil.GetHostedClusterVersion(oc, hostedcluster.name, hostedcluster.namespace)
+		e2e.Logf("Found hosted cluster version = %q", hcVersion)
+		hcVersion.Pre = nil
+		minHcVersion := semver.MustParse("4.16.0")
+		if hcVersion.LT(minHcVersion) {
+			g.Skip(fmt.Sprintf("The hosted cluster's version (%q) is too low, skipping", hcVersion))
+		}
+
+		var (
+			testCaseId              = getTestCaseIDs()[0]
+			resourceNamePrefix      = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
+			etcdBackupBucketName    = fmt.Sprintf("%s-bucket", resourceNamePrefix)
+			etcdBackupRoleName      = fmt.Sprintf("%s-role", resourceNamePrefix)
+			etcdBackupRolePolicyArn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+			hcpNs                   = hostedcluster.getHostedComponentNamespace()
+			adminKubeClient         = oc.AdminKubeClient()
+			ctx                     = context.Background()
+		)
+
+		// It is impossible to rely on short-lived tokens like operators on the management cluster:
+		// there isn't a preexisting role with enough permissions for us to assume.
+		exutil.By("Getting an AWS session with credentials obtained from cluster profile")
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		creds := credentials.NewSharedCredentials(getAWSPrivateCredentials(), "default")
+		var sess *session.Session
+		sess, err = session.NewSession(&aws.Config{
+			Credentials: creds,
+			Region:      aws.String(region),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Getting AWS account ID")
+		stsClient := exutil.NewDelegatingStsClient(sts.New(sess))
+		var getCallerIdOutput *sts.GetCallerIdentityOutput
+		getCallerIdOutput, err = stsClient.GetCallerIdentityWithContext(ctx, &sts.GetCallerIdentityInput{})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		awsAcctId := aws.StringValue(getCallerIdOutput.Account)
+		e2e.Logf("Found AWS account ID = %s", awsAcctId)
+
+		exutil.By("Getting SA issuer of the management cluster")
+		saIssuer := doOcpReq(oc, OcpGet, true, "authentication/cluster", "-o=jsonpath={.spec.serviceAccountIssuer}")
+		// An OIDC provider's URL is prefixed with https://
+		saIssuerStripped := strings.TrimPrefix(saIssuer, "https://")
+		e2e.Logf("Found SA issuer of the management cluster = %s", saIssuerStripped)
+
+		exutil.By("Creating AWS role")
+		iamClient := exutil.NewDelegatingIAMClient(awsiam.New(sess))
+		var createRoleOutput *awsiam.CreateRoleOutput
+		createRoleOutput, err = iamClient.CreateRoleWithContext(ctx, &awsiam.CreateRoleInput{
+			RoleName:                 aws.String(etcdBackupRoleName),
+			AssumeRolePolicyDocument: aws.String(iamRoleTrustPolicyForEtcdBackup(awsAcctId, saIssuerStripped, hcpNs)),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			_, err = iamClient.DeleteRoleWithContext(ctx, &awsiam.DeleteRoleInput{
+				RoleName: aws.String(etcdBackupRoleName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		e2e.Logf("Attaching policy %s to role %s", etcdBackupRolePolicyArn, etcdBackupRoleName)
+		o.Expect(iamClient.AttachRolePolicy(etcdBackupRoleName, etcdBackupRolePolicyArn)).NotTo(o.HaveOccurred())
+		defer func() {
+			// Required for role deletion
+			o.Expect(iamClient.DetachRolePolicy(etcdBackupRoleName, etcdBackupRolePolicyArn)).NotTo(o.HaveOccurred())
+		}()
+		roleArn := aws.StringValue(createRoleOutput.Role.Arn)
+
+		exutil.By("Creating AWS S3 bucket")
+		s3Client := exutil.NewDelegatingS3Client(s3.New(sess))
+		o.Expect(s3Client.CreateBucket(etcdBackupBucketName)).NotTo(o.HaveOccurred())
+		defer func() {
+			// Required for bucket deletion
+			o.Expect(s3Client.EmptyBucketWithContextAndCheck(ctx, etcdBackupBucketName)).NotTo(o.HaveOccurred())
+			o.Expect(s3Client.DeleteBucket(etcdBackupBucketName)).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("Creating CM/etcd-backup-config")
+		e2e.Logf("Found management cluster region = %s", region)
+		etcdBackupConfigCm := corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "etcd-backup-config",
+			},
+			Data: map[string]string{
+				"bucket-name": etcdBackupBucketName,
+				"region":      region,
+				"role-arn":    roleArn,
+			},
+		}
+		_, err = adminKubeClient.CoreV1().ConfigMaps(hcpNs).Create(ctx, &etcdBackupConfigCm, metav1.CreateOptions{})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer doOcpReq(oc, OcpDelete, true, "cm/etcd-backup-config", "-n", hcpNs)
+		e2e.Logf("CM/etcd-backup-config created:\n%s", format.Object(etcdBackupConfigCm, 0))
+
+		exutil.By("Waiting for the etcd backup CronJob to be created")
+		o.Eventually(func() bool {
+			return oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("cronjob/etcd-backup", "-n", hcpNs).Execute() == nil
+		}).WithTimeout(DefaultTimeout).WithPolling(DefaultTimeout / 10).Should(o.BeTrue())
+
+		exutil.By("Waiting for the first job execution to be successful")
+		o.Eventually(func() bool {
+			lastSuccessfulTime, _, err := oc.AsAdmin().WithoutNamespace().Run(OcpGet).
+				Args("cronjob/etcd-backup", "-n", hcpNs, "-o=jsonpath={.status.lastSuccessfulTime}").Outputs()
+			return err == nil && len(lastSuccessfulTime) > 0
+		}).WithTimeout(70 * time.Minute).WithPolling(5 * time.Minute).Should(o.BeTrue())
+
+		exutil.By("Waiting for the backup to be uploaded")
+		o.Expect(s3Client.WaitForBucketEmptinessWithContext(ctx, etcdBackupBucketName,
+			exutil.BucketNonEmpty, 5*time.Second /* Interval */, 1*time.Minute /* Timeout */)).NotTo(o.HaveOccurred())
 	})
 })

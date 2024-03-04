@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/blang/semver/v4"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -234,4 +235,19 @@ func GetNodePoolNamesbyHostedClusterName(oc *CLI, hostedClusterName, hostedClust
 	nodePoolName = strings.Fields(nodePoolNameList)
 	e2e.Logf("\n\nGot nodepool(s) for the hosted cluster %s: %v\n", hostedClusterName, nodePoolName)
 	return nodePoolName
+}
+
+// GetHostedClusterVersion gets a HostedCluster's version from the management cluster.
+func GetHostedClusterVersion(mgmtOc *CLI, hostedClusterName, hostedClusterNs string) semver.Version {
+	hcVersionStr, _, err := mgmtOc.
+		AsAdmin().
+		WithoutNamespace().
+		Run("get").
+		Args("hostedcluster", hostedClusterName, "-n", hostedClusterNs, `-o=jsonpath={.status.version.history[?(@.state!="")].version}`).
+		Outputs()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	hcVersion := semver.MustParse(hcVersionStr)
+	e2e.Logf("Found hosted cluster %s version = %q", hostedClusterName, hcVersion)
+	return hcVersion
 }

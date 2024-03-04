@@ -366,7 +366,7 @@ func getAWSPrivateCredentials(defaultCredPaths ...string) string {
 
 	// Running in Prow
 	if exutil.GetTestEnv().IsRunningInProw() {
-		return DefaultAWSHyperShiftPrivateSecretFile
+		return filepath.Join(os.Getenv("CLUSTER_PROFILE_DIR"), ".awscred")
 	}
 
 	// Try default paths
@@ -477,4 +477,17 @@ func getVersionWithMajorAndMinor(version string) (string, error) {
 func isRequestServingComponent(name string) bool {
 	servingComponentRegex := regexp.MustCompile("^(kube-apiserver|ignition-server-proxy|oauth-openshift|router).*")
 	return servingComponentRegex.MatchString(name)
+}
+
+// getTestCaseIDs extracts test case IDs from the Ginkgo nodes. Should be called within g.It.
+func getTestCaseIDs() (testCaseIDs []string) {
+	pattern := `-(\d{5,})-`
+	re := regexp.MustCompile(pattern)
+	for _, match := range re.FindAllStringSubmatch(g.CurrentSpecReport().FullText(), -1) {
+		// Should be fulfilled all the time but just in case
+		o.Expect(match).To(o.HaveLen(2))
+		testCaseIDs = append(testCaseIDs, match[1])
+	}
+	o.Expect(testCaseIDs).NotTo(o.BeEmpty())
+	return testCaseIDs
 }
