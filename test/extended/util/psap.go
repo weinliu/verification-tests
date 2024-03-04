@@ -130,15 +130,21 @@ func CountNodeNumByOS(oc *CLI) (linuxNum int, windowsNum int) {
 func GetFirstLinuxMachineSets(oc *CLI) string {
 	machinesets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-machine-api").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var regularMachineset []string
 	machinesetsArray := strings.Split(machinesets, " ")
 	//Remove windows machineset
-	for i, machineset := range machinesetsArray {
-		if machineset == "windows" {
-			machinesetsArray = append(machinesetsArray[:i], machinesetsArray[i+1:]...)
-			e2e.Logf("%T,%v", machinesets, machinesets)
+	for _, machineset := range machinesetsArray {
+
+		if strings.Contains(machineset, "windows") || strings.Contains(machineset, "edge") {
+			continue
 		}
+		regularMachineset = append(regularMachineset, machineset)
+		e2e.Logf("None windows or edge is %v\n", regularMachineset)
+
 	}
-	return machinesetsArray[0]
+	e2e.Logf("regularMachineset is %v\n", regularMachineset)
+	return regularMachineset[0]
 }
 
 // InstallNFD attempts to install the Node Feature Discovery operator and verify that it is running
