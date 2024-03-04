@@ -44,15 +44,6 @@ type metalLBCRResource struct {
 	namespace string
 	template  string
 }
-
-type addressPoolResource struct {
-	name      string
-	namespace string
-	protocol  string
-	addresses []string
-	template  string
-}
-
 type loadBalancerServiceResource struct {
 	name                          string
 	namespace                     string
@@ -225,8 +216,10 @@ func createMetalLBCR(oc *exutil.CLI, metallbcr metalLBCRResource, metalLBCRTempl
 	g.By("Creating MetalLB CR from template")
 
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", metallbcr.template, "-p", "NAME="+metallbcr.name, "NAMESPACE="+metallbcr.namespace)
-	e2e.Logf("Error creating MetalLB CR %v", err)
-
+	if err != nil {
+		e2e.Logf("Error creating MetalLB CR %v", err)
+		return false
+	}
 	err = waitForPodWithLabelReady(oc, metallbcr.namespace, "component=speaker")
 	exutil.AssertWaitPollNoErr(err, "The pods with label component=speaker are not ready")
 	if err != nil {
@@ -282,16 +275,6 @@ func isWorkerNode(oc *exutil.CLI, nodeName string, nodeList []string) bool {
 
 }
 
-func createAddressPoolCR(oc *exutil.CLI, addresspool addressPoolResource, addressPoolTemplate string) (status bool) {
-	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", addresspool.template, "-p", "NAME="+addresspool.name, "NAMESPACE="+addresspool.namespace, "PROTOCOL="+addresspool.protocol, "ADDRESS1="+addresspool.addresses[0], "ADDRESS2="+addresspool.addresses[1])
-	if err != nil {
-		e2e.Logf("Error creating addresspool %v", err)
-		return false
-	}
-	return true
-
-}
-
 func createLoadBalancerService(oc *exutil.CLI, loadBalancerSvc loadBalancerServiceResource, loadBalancerServiceTemplate string) (status bool) {
 	var msg, svcFile string
 	var err error
@@ -322,8 +305,16 @@ func createLoadBalancerService(oc *exutil.CLI, loadBalancerSvc loadBalancerServi
 	return true
 }
 
-func checkLoadBalancerSvcStatus(oc *exutil.CLI, namespace string, svcName string) error {
-	return wait.Poll(20*time.Second, 120*time.Second, func() (bool, error) {
+// statusCheckTime is interval and timeout in seconds e.g. 10 and 30
+func checkLoadBalancerSvcStatus(oc *exutil.CLI, namespace string, svcName string, statusCheckTime ...time.Duration) error {
+	interval := 10 * time.Second
+	timeout := 120 * time.Second
+	if len(statusCheckTime) > 0 {
+		e2e.Logf("Interval %s, Timeout %s", statusCheckTime[0], statusCheckTime[1])
+		interval = statusCheckTime[0]
+		timeout = statusCheckTime[1]
+	}
+	return wait.Poll(interval, timeout, func() (bool, error) {
 		e2e.Logf("Checking status of service %s", svcName)
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
 		if err != nil {
@@ -378,12 +369,6 @@ func validateService(oc *exutil.CLI, curlHost string, svcExternalIP string) bool
 func deleteMetalLBCR(oc *exutil.CLI, rs metalLBCRResource) {
 	e2e.Logf("delete %s %s in namespace %s", "metallb", rs.name, rs.namespace)
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("metallb", rs.name, "-n", rs.namespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func deleteAddressPool(oc *exutil.CLI, rs addressPoolResource) {
-	e2e.Logf("delete %s %s in namespace %s", "addresspool", rs.name, rs.namespace)
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("addresspool", rs.name, "-n", rs.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -653,9 +638,10 @@ func deleteBGPAdvertisement(oc *exutil.CLI, rs bgpAdvertisementResource) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("bgpadvertisement", rs.name, "-n", rs.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
-func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason string) bool {
+func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason string) (bool, string) {
 	fieldSelectorArgs := fmt.Sprintf("reason=%s,involvedObject.kind=Service,involvedObject.name=%s", reason, svcName)
 	result := false
+	message := ""
 	errCheck := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 		var svcEvents string
 		svcEvents, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", namespace, "--field-selector", fieldSelectorArgs).Output()
@@ -666,6 +652,10 @@ func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason
 			for _, index := range strings.Split(svcEvents, "\n") {
 				if strings.Contains(index, reason) {
 					e2e.Logf("Processing event %s for service", index)
+					if reason == "AllocationFailed" {
+						messageString := strings.Split(index, ":")
+						message = messageString[1]
+					}
 					result = true
 				}
 			}
@@ -675,9 +665,9 @@ func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason
 
 	})
 	if errCheck != nil {
-		return result
+		return result, ""
 	}
-	return result
+	return result, message
 }
 
 func checkLogLevelPod(oc *exutil.CLI, component string, opNamespace string, level string) (bool, string) {

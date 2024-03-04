@@ -1191,7 +1191,8 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
 
 		exutil.By("7.3 Check the event is generated for the interface")
-		o.Expect(checkServiceEvents(oc, svc.name, svc.namespace, "announceFailed")).To(o.BeTrue())
+		isEvent, _ := checkServiceEvents(oc, svc.name, svc.namespace, "announceFailed")
+		o.Expect(isEvent).To(o.BeTrue())
 
 		exutil.By("7.4 Validate LoadBalancer service is not reachable")
 		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
@@ -1264,7 +1265,8 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement1.name, patchNodeSelector, "metallb-system")
 
 		exutil.By("8.5 Check the event is not generated for the interface")
-		o.Expect(checkServiceEvents(oc, svc.name, svc.namespace, "announceFailed")).To(o.BeFalse())
+		isEvent, _ = checkServiceEvents(oc, svc.name, svc.namespace, "announceFailed")
+		o.Expect(isEvent).To(o.BeFalse())
 
 		exutil.By("8.6 Get LoadBalancer service IP announcing node")
 		nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
@@ -1435,6 +1437,177 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 		})
 		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", svc.name, svcIP))
+	})
+
+	// Test cases service annotation
+	g.It("Author:asood-High-43155-High-43156-Verify static address is associated with LoadBalancer service specified in YAML and approriate messages are logged if it cannot be [Serial]", func() {
+		var (
+			ns                   string
+			namespaces           []string
+			testID               = "43155"
+			serviceSelectorKey   = "environ"
+			serviceSelectorValue = [1]string{"Test"}
+			namespaceLabelKey    = "region"
+			namespaceLabelValue  = [1]string{"NA"}
+			interfaces           = [3]string{"br-ex", "eno1", "eno2"}
+			vmWorkers            []string
+			ipaddresspools       []string
+			requestedIp          = "192.168.111.65"
+		)
+
+		exutil.By("1.1. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
+		}
+		//Two worker nodes needed to create l2advertisement object
+		exutil.By("1.2. Determine suitability of worker nodes for the test")
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes, virtual and real each.")
+		}
+		for i := 0; i < 2; i++ {
+			vmWorkers = append(vmWorkers, workerList.Items[i].Name)
+		}
+		exutil.By("2. Get the namespace")
+		ns = oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test"+testID)
+
+		exutil.By("3. Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:      "metallb",
+			namespace: opNamespace,
+			template:  metallbCRTemplate,
+		}
+		defer deleteMetalLBCR(oc, metallbCR)
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+		exutil.By("SUCCESS - MetalLB CR Created")
+
+		exutil.By("4. Create IP addresspools")
+		ipAddresspoolTemplate := filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+
+		for i := 0; i < 2; i++ {
+			ipAddresspool := ipAddressPoolResource{
+				name:                      "ipaddresspool-l2-" + strconv.Itoa(i),
+				namespace:                 opNamespace,
+				addresses:                 l2Addresses[i][:],
+				namespaces:                namespaces[:],
+				priority:                  10,
+				avoidBuggyIPs:             true,
+				autoAssign:                true,
+				serviceLabelKey:           serviceSelectorKey,
+				serviceLabelValue:         serviceSelectorValue[0],
+				serviceSelectorKey:        serviceSelectorKey,
+				serviceSelectorOperator:   "In",
+				serviceSelectorValue:      serviceSelectorValue[:],
+				namespaceLabelKey:         namespaceLabelKey,
+				namespaceLabelValue:       namespaceLabelValue[0],
+				namespaceSelectorKey:      namespaceLabelKey,
+				namespaceSelectorOperator: "In",
+				namespaceSelectorValue:    namespaceLabelValue[:],
+				template:                  ipAddresspoolTemplate,
+			}
+			defer deleteIPAddressPool(oc, ipAddresspool)
+			result = createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)
+			o.Expect(result).To(o.BeTrue())
+			ipaddresspools = append(ipaddresspools, ipAddresspool.name)
+		}
+		exutil.By(fmt.Sprintf("IP address pool %s created successfully", ipaddresspools[:]))
+		//Ensure address is not assigned from address pool automatically by setting autoAssign to false
+		addressList, err := json.Marshal(l2Addresses[1][:])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchInfo := fmt.Sprintf("{\"spec\":{\"autoAssign\": false, \"addresses\": %s, \"serviceAllocation\":{\"serviceSelectors\":[], \"namespaces\":[\"%s\"], \"namespaceSelectors\":[] }}}", string(addressList), "test-"+testID)
+		patchResourceAsAdmin(oc, "ipaddresspools/"+ipaddresspools[1], patchInfo, "metallb-system")
+
+		exutil.By("5. Create L2 Advertisement")
+		l2AdvertisementTemplate := filepath.Join(testDataDir, "l2advertisement-template.yaml")
+		//Just assign one of the addresspool, use the second one later
+		ipaddrpools := []string{ipaddresspools[0], ""}
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv",
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddrpools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: vmWorkers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer deleteL2Advertisement(oc, l2advertisement)
+		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By(fmt.Sprintf("6.0 %s Verify L2 service requesting specific IP %s.", testID, requestedIp))
+		exutil.By("6.1 Create L2 LoadBalancer service with annotated IP address")
+		loadBalancerServiceAnnotatedTemplate := filepath.Join(testDataDir, "loadbalancer-svc-annotated-template.yaml")
+		annotatedSvc := loadBalancerServiceResource{
+			name:                          "hello-world-" + testID,
+			namespace:                     namespaces[0],
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      "environ",
+			labelValue:                    "Prod",
+			annotationKey:                 "metallb.universe.tf/loadBalancerIPs",
+			annotationValue:               requestedIp,
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceAnnotatedTemplate,
+		}
+		exutil.By(fmt.Sprintf("6.2. Create a service with ETP Cluster with name %s", annotatedSvc.name))
+		defer removeResource(oc, true, true, "service", annotatedSvc.name, "-n", annotatedSvc.namespace)
+		o.Expect(createLoadBalancerService(oc, annotatedSvc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		exutil.By("6.3 Validate LoadBalancer service")
+		svcErr := checkLoadBalancerSvcStatus(oc, annotatedSvc.namespace, annotatedSvc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		svcIP := getLoadBalancerSvcIP(oc, annotatedSvc.namespace, annotatedSvc.name)
+		e2e.Logf("The service %s External IP is %s", annotatedSvc.name, svcIP)
+		checkSvcErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 4*time.Minute, false, func(ctx context.Context) (bool, error) {
+			result := validateService(oc, proxyHost, svcIP)
+			if result {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", annotatedSvc.name, svcIP))
+
+		testID = "43156"
+		exutil.By(fmt.Sprintf("7.0 %s Verify L2 service requesting IP from pool %s for AllocationFailed.", testID, ipaddresspools[1]))
+		exutil.By("7.1 Create L2 LoadBalancer service with annotated IP address pool")
+		annotatedSvc.name = "hello-world-" + testID + "-0"
+		annotatedSvc.annotationKey = "metallb.universe.tf/address-pool"
+		annotatedSvc.annotationValue = ipaddresspools[1]
+		defer removeResource(oc, true, true, "service", annotatedSvc.name, "-n", annotatedSvc.namespace)
+		o.Expect(createLoadBalancerService(oc, annotatedSvc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+
+		exutil.By("7.2 Validate LoadBalancer service")
+		//Use interval and timeout as it is expected IP assignment will fail
+		svcErr = checkLoadBalancerSvcStatus(oc, annotatedSvc.namespace, annotatedSvc.name, 5*time.Second, 30*time.Second)
+		o.Expect(svcErr).To(o.HaveOccurred())
+
+		exutil.By("7.3 Validate allocation failure reason")
+		isEvent, msg := checkServiceEvents(oc, annotatedSvc.name, annotatedSvc.namespace, "AllocationFailed")
+		o.Expect(isEvent).To(o.BeTrue())
+		o.Expect(strings.Contains(msg, fmt.Sprintf("pool %s not compatible for ip assignment", ipaddresspools[1]))).To(o.BeTrue())
+
+		exutil.By("7.4 Update IP address pool %s address range for already used IP address")
+		patchInfo = fmt.Sprintf("{\"spec\":{\"addresses\":[\"%s-%s\"]}}", requestedIp, requestedIp)
+		patchResourceAsAdmin(oc, "ipaddresspools/"+ipaddresspools[0], patchInfo, "metallb-system")
+
+		exutil.By("7.5 Create another service AllocationFailed reason ")
+		annotatedSvc.name = "hello-world-" + testID + "-1"
+		annotatedSvc.annotationKey = "metallb.universe.tf/address-pool"
+		annotatedSvc.annotationValue = ipaddresspools[0]
+		defer removeResource(oc, true, true, "service", annotatedSvc.name, "-n", annotatedSvc.namespace)
+		o.Expect(createLoadBalancerService(oc, annotatedSvc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+
+		exutil.By("7.6 Validate LoadBalancer service")
+		//Use interval and timeout as it is expected IP assignment will fail
+		svcErr = checkLoadBalancerSvcStatus(oc, annotatedSvc.namespace, annotatedSvc.name, 5*time.Second, 30*time.Second)
+		o.Expect(svcErr).To(o.HaveOccurred())
+
+		exutil.By("7.7 Validate allocation failure reason")
+		isEvent, msg = checkServiceEvents(oc, annotatedSvc.name, annotatedSvc.namespace, "AllocationFailed")
+		o.Expect(isEvent).To(o.BeTrue())
+		o.Expect(strings.Contains(msg, fmt.Sprintf("no available IPs in pool \"%s\"", ipaddresspools[0]))).To(o.BeTrue())
 	})
 
 })
