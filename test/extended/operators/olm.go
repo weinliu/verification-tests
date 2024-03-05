@@ -9040,6 +9040,25 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	})
 
+	// author: xzha@redhat.com, test case OCP-72018
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-72018-Do not sync namespaces that have no subscriptions", func() {
+		oc.SetupProject()
+		namespaceName := oc.Namespace()
+		catPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=catalog-operator", "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(catPodname).NotTo(o.BeEmpty())
+		catalogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(catPodname, "-n", "openshift-operator-lifecycle-manager", "--since=60s").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(catalogs).NotTo(o.BeEmpty())
+		for _, line := range strings.Split(catalogs, "\n") {
+			if strings.Contains(line, namespaceName) {
+				e2e.Logf(line)
+				o.Expect(line).NotTo(o.ContainSubstring("found 0 operatorGroups"))
+			}
+		}
+
+	})
+
 	// Test case: OCP-42829, author:xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-42829-Install plan should be blocked till a valid OperatorGroup is detected", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
