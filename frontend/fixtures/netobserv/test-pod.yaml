@@ -1,0 +1,36 @@
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: netobserv-test
+  labels:
+    name: netobserv-test
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: test
+  name: test
+  namespace: netobserv-test
+spec:
+  containers:
+  - command:
+      - sh
+      - -c
+      - "curl -kIL https://52.200.142.250 --output /tmp/test ;"
+    image: quay.io/openshifttest/hello-openshift:multiarch
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+        privileged: false
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    name: utils
+    resources: {}
+  restartPolicy: Never
+status: {}
