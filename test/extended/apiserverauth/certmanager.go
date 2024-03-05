@@ -2,7 +2,6 @@ package apiserverauth
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -332,13 +331,6 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
-		g.By("Check if cluster region is us-gov or not")
-		region, err := exutil.GetAWSClusterRegion(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(region, "us-gov") {
-			g.Skip("Skipping for the aws cluster in us-gov region.")
-		}
-
 		g.By("Skip test when the cluster is with STS credential")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
 		if err != nil && strings.Contains(output, "not found") {
@@ -356,22 +348,31 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		_, errSec := oc.AsAdmin().Run("create").Args("-n", "cert-manager", "secret", "generic", "test-secret", "--from-literal=secret-access-key="+secureKey).Output()
 		oc.SetShowInfo()
 		o.Expect(errSec).NotTo(o.HaveOccurred())
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Prepare a clusterissuer which uses AWS hosted zone qe.devcluster.openshift.com as target hosted zone.")
+		g.By("Create clusterissuer with route53 as dns01 solver.")
+		baseDomain := getBaseDomain(oc)
+		e2e.Logf("baseDomain=%s", baseDomain)
+		dnsZone, err := getParentDomain(baseDomain)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("dnsZone=%s", dnsZone)
+		hostedZoneID := getRoute53HostedZoneID(accessKeyID, secureKey, region, dnsZone)
+		if len(hostedZoneID) == 0 {
+			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
+		}
+		e2e.Logf("Route53 HostedZoneID=%s", hostedZoneID)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
-		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-overlapped-zone.yaml")
-		f, err := ioutil.ReadFile(clusterIssuerFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		f1 := strings.ReplaceAll(string(f), "AWS_ACCESS_KEY_ID", accessKeyID)
-		err = ioutil.WriteFile(clusterIssuerFile, []byte(f1), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-overlapped-zone.yaml")
+		oc.NotShowInfo()
+		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		exutil.ApplyClusterResourceFromTemplate(oc, params...)
+		oc.SetShowInfo()
 		defer func() {
 			e2e.Logf("Delete clusterissuers.")
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "hosted-zone-overlapped").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
 			if !strings.Contains(output, "True") || err != nil {
@@ -386,19 +387,14 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		g.By("create certificate which references previous clusterissuer")
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
-		certClusterissuerFile := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("ingressDomain=%s", string(output))
-		f, err = ioutil.ReadFile(certClusterissuerFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ingressDomain=%s", ingressDomain)
 		randomStr := exutil.GetRandomString()
-		dnsName := randomStr + "." + output
-		f1 = strings.ReplaceAll(string(f), "DNS_NAME", dnsName)
-		err = ioutil.WriteFile(certClusterissuerFile, []byte(f1), 0644)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("create").Args("-f", certClusterissuerFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		dnsName := randomStr + "." + ingressDomain
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			output, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
