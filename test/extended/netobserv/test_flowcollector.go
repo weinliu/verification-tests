@@ -111,7 +111,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Deploy lokiStack")
 		// get storageClass Name
 		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil || len(sc) == 0 {
+			g.Skip("StorageClass not found in cluster, skip this case")
+		}
+
 		lokiTenant := "openshift-network"
 
 		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
