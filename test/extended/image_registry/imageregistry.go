@@ -4226,6 +4226,48 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 	})
 
+	g.It("Author:xiuwang-Medium-30419-Medium-30266-Image registry pods could be running when add infra node nodeAffinity scheduler [Disruptive]", func() {
+		g.By("Check if cluster is sno")
+		workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
+		if len(workerNodes) == 1 {
+			g.Skip("Skip for sno cluster")
+		}
+
+		g.By("Set infra node nodeAffinity when no infra node land - 30266")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
+		defer func() {
+			g.By("Recover image registry change")
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":null}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/infra","operator":"In","values":[""]}]},"weight":100}]}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set infra node nodeAffinity when infra node set - 30419")
+		infraworkers, err := oc.AsAdmin().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", `-o=jsonpath={.items[*].metadata.name}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		infraList := strings.Fields(infraworkers)
+
+		defer oc.AsAdmin().Run("label").Args("node", infraList[0], infraList[1], "node-role.kubernetes.io/infra-").Execute()
+		err = oc.AsAdmin().Run("label").Args("node", infraList[0], infraList[1], `node-role.kubernetes.io/infra=`).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":null,"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"node-role.kubernetes.io/infra","operator":"In","values":[""]}]}]}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		nodeList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", "openshift-image-registry", "-l", "docker-registry=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(nodeList, infraList[0]) || !strings.Contains(nodeList, infraList[1]) {
+			e2e.Failf("The registry pods don't be scheduled to infra nodes")
+		}
+	})
+
 	g.It("NonHyperShiftHOST-Author:xiuwang-Medium-24353-Registry operator storage setup - azure [Disruptive]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
 		g.By("Set status variables")
