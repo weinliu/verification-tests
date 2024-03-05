@@ -400,7 +400,8 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		e2e.Logf("Node announcing the service IP %s ", nodeName)
 
 		g.By("6.2 Obtain MAC address for  Load Balancer Service IP")
-		macAddress := obtainMACAddressForIP(oc, masterNodeList[0], svcIP, 5)
+		macAddress, result := obtainMACAddressForIP(oc, masterNodeList[0], svcIP, 5)
+		o.Expect(result).To(o.BeTrue())
 		o.Expect(macAddress).NotTo(o.BeEmpty())
 		e2e.Logf("MAC address by ARP Lookup %s ", macAddress)
 
@@ -1197,15 +1198,9 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("7.4 Validate LoadBalancer service is not reachable")
 		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
 		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
-		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
-			result := validateService(oc, proxyHost, svcIP)
-			if result == false {
-				return true, nil
-			}
-			return false, nil
-
-		})
-		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", svc.name, svcIP))
+		//There should not be any MAC address associated with service IP.
+		_, macAddressResult := obtainMACAddressForIP(oc, masterNodeList[1], svcIP, 5)
+		o.Expect(macAddressResult).To(o.BeFalse())
 
 		exutil.By("7.5 Validate LoadBalancer service is reachable after L2 Advertisement is updated")
 		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"br-ex\"]}}", "metallb-system")
@@ -1239,15 +1234,9 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("8.3 Validate LoadBalancer service is not reachable")
 		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
 		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
-		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
-			result := validateService(oc, proxyHost, svcIP)
-			if result == false {
-				return true, nil
-			}
-			return false, nil
+		_, macAddressResult = obtainMACAddressForIP(oc, masterNodeList[1], svcIP, 5)
+		o.Expect(macAddressResult).To(o.BeFalse())
 
-		})
-		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", svc.name, svcIP))
 		exutil.By("8.4 Create another l2advertisement CR with same ip addresspool but different set of nodes and interface")
 		l2advertisement1 := l2AdvertisementResource{
 			name:               "l2-adv-" + testID,
@@ -1323,16 +1312,9 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By(fmt.Sprintf("9.5 Validate service with name %s is unreachable", svc.name))
 		nodeName = getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
 		e2e.Logf("%s is announcing the service %s with IP %s ", nodeName, svc.name, svcIP)
+		_, macAddressResult = obtainMACAddressForIP(oc, masterNodeList[1], svcIP, 5)
+		o.Expect(macAddressResult).To(o.BeFalse())
 
-		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
-			result := validateService(oc, proxyHost, svcIP)
-			if result == false {
-				return true, nil
-			}
-			return false, nil
-
-		})
-		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", svc.name, svcIP))
 		svcIPs = append(svcIPs, svcIP)
 
 		exutil.By("9.6 Create another service request IP address from second IP addresspool, so see it is unreachable")
@@ -1356,15 +1338,8 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		svcIP = getLoadBalancerSvcIP(oc, annotatedSvc.namespace, annotatedSvc.name)
 		e2e.Logf("The %s service created successfully with %s with annotation %s:%s", annotatedSvc.name, svcIP, annotatedSvc.annotationKey, annotatedSvc.annotationValue)
 		svcIPs = append(svcIPs, svcIP)
-		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
-			result := validateService(oc, proxyHost, svcIP)
-			if result == false {
-				return true, nil
-			}
-			return false, nil
-
-		})
-		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be unreachable but was reachable", annotatedSvc.name, svcIP))
+		_, macAddressResult = obtainMACAddressForIP(oc, masterNodeList[1], svcIP, 5)
+		o.Expect(macAddressResult).To(o.BeFalse())
 		exutil.By("9.7 Create L2 Advertisements with both ip address pools")
 		l2advertisement = l2AdvertisementResource{
 			name:               "l2-adv-" + testID,

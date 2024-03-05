@@ -372,7 +372,7 @@ func deleteMetalLBCR(oc *exutil.CLI, rs metalLBCRResource) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string, arpReuests int) string {
+func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string, arpReuests int) (string, bool) {
 	defInterface, intErr := getDefaultInterface(oc)
 	o.Expect(intErr).NotTo(o.HaveOccurred())
 	cmd := fmt.Sprintf("arping -I %s %s -c %d", defInterface, svcExternalIP, arpReuests)
@@ -385,8 +385,10 @@ func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string
 	if re.MatchString(output) {
 		submatchall := re.FindAllString(output, -1)
 		macAddress = submatchall[0]
+		return macAddress, true
+	} else {
+		return "", false
 	}
-	return macAddress
 }
 
 func getNodeAnnouncingL2Service(oc *exutil.CLI, svcName string, namespace string) string {
