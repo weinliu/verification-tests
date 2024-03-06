@@ -1190,7 +1190,7 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 				schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 			}
 		}
-	} else if zoneName == "UTC" {
+	} else if zoneName == "UTC" || zoneName == "EST" {
 		timeZoneName = "America/New_York"
 		utc, err := time.LoadLocation("America/New_York")
 		if err != nil {
