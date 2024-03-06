@@ -27,6 +27,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.24.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.12.0
 	github.com/blang/semver v3.5.1+incompatible
+	github.com/blang/semver/v4 v4.0.0
 	github.com/containers/image/v5 v5.27.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/docker v24.0.5+incompatible
@@ -123,7 +124,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.7.0 // indirect
 	github.com/aws/smithy-go v1.14.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/checkpoint-restore/go-criu/v5 v5.3.0 // indirect
