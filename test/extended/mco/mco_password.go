@@ -203,7 +203,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-59900-Create a password for a user different from 'core' user[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-72137-Create a password for a user different from 'core' user[Disruptive]", func() {
 		var (
 			mcName       = "mco-tc-59900-wrong-user-password"
 			wrongUser    = "root"

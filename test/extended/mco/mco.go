@@ -2266,7 +2266,7 @@ nulla pariatur.`
 			"There are failed units in the bootstrap machine")
 
 	})
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-55879-Don't allow creating the force file via MachineConfig [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-72129-Don't allow creating the force file via MachineConfig [Disruptive]", func() {
 		var (
 			filePath    = "/run/machine-config-daemon-force"
 			fileContent = ""
@@ -2761,7 +2761,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-25819-enable FIPS by MCO not supported [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-72132-enable FIPS by MCO not supported [Disruptive]", func() {
 		var (
 			mcTemplate = "change-fips.yaml"
 			mcName     = "mco-tc-25819-master-fips"
@@ -2793,7 +2793,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Low-25822-Refuse to disable FIPS mode by MCO[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Low-72135-Refuse to disable FIPS mode by MCO[Disruptive]", func() {
 		var (
 			mMcName = "99-master-fips"
 			wMcName = "99-worker-fips"
@@ -3396,7 +3396,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Low-66376-Reject MCs with ignition containing kernelArguments [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Low-72136-Reject MCs with ignition containing kernelArguments [Disruptive]", func() {
 		var (
 			mcName = "mco-tc-66376-reject-ignition-kernel-arguments"
 			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
