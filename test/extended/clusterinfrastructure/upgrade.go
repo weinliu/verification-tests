@@ -2,6 +2,7 @@ package clusterinfrastructure
 
 import (
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -127,5 +128,100 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check External-IP assigned")
 		getLBSvcIP(oc, loadBalancerService)
+	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PreChkUpgrade-Author:huliu-High-72031-[Upgrade] Instances with custom DHCP option set should not block upgrade - AWS [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+
+		g.By("Create a new dhcpOptions")
+		var newDhcpOptionsID, currentDhcpOptionsID string
+		exutil.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("example72031.com")
+		if err != nil {
+			g.Skip("The credential is insufficient to perform create dhcpOptions operation, skip the cases!!")
+		}
+
+		g.By("Associate the VPC with the new dhcpOptionsId")
+		machineName := exutil.ListWorkerMachineNames(oc)[0]
+		instanceID, err := awsClient.GetAwsInstanceID(machineName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		currentDhcpOptionsID, err = awsClient.GetDhcpOptionsIDOfVpc(vpcID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = awsClient.AssociateDhcpOptions(vpcID, newDhcpOptionsID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new machineset")
+		machinesetName := "machineset-72031"
+		ms := exutil.MachineSetDescription{machinesetName, 1}
+		ms.CreateMachineSet(oc)
+		//Add a specicacl tag for the original dhcp so that we can find it in PstChkUpgrade case
+		err = awsClient.CreateTag(currentDhcpOptionsID, "specialName", clusterID+"previousdhcp72031")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		machineNameOfMachineSet := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		nodeName := exutil.GetNodeNameFromMachine(oc, machineNameOfMachineSet)
+		readyStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(readyStatus).Should(o.Equal("True"))
+		internalDNS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machineNameOfMachineSet, "-o=jsonpath={.status.addresses[?(@.type==\"InternalDNS\")].address}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(internalDNS, "example72031.com")).To(o.BeTrue())
+	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-huliu-High-72031-[Upgrade] Instances with custom DHCP option set should not block upgrade - AWs [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		machinesetName := "machineset-72031"
+		machineset, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace).Output()
+		if strings.Contains(machineset, "not found") {
+			g.Skip("The machineset machineset-72031 is not created before upgrade, skip this case!")
+		}
+		exutil.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+
+		machineName := exutil.ListWorkerMachineNames(oc)[0]
+		instanceID, err := awsClient.GetAwsInstanceID(machineName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newDhcpOptionsID, err := awsClient.GetDhcpOptionsIDOfVpc(vpcID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		previousDhcpOptionsID, err := awsClient.GetDhcpOptionsIDFromTag("specialName", clusterID+"previousdhcp72031")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			err := awsClient.DeleteDhcpOptions(newDhcpOptionsID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		defer func() {
+			err := awsClient.AssociateDhcpOptions(vpcID, previousDhcpOptionsID[0])
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		defer func() {
+			err := awsClient.DeleteTag(previousDhcpOptionsID[0], "specialName", clusterID+"previousdhcp72031")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+
+		g.By("Check machine is still Running and node is still Ready")
+		phase, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(phase).Should(o.Equal("Running"))
+		nodeName := exutil.GetNodeNameFromMachine(oc, exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0])
+		readyStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(readyStatus).Should(o.Equal("True"))
 	})
 })

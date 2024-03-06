@@ -324,6 +324,34 @@ func (a *AwsClient) CreateDhcpOptions() (string, error) {
 	return *dhcpOptionsID, err
 }
 
+// CreateDhcpOptions Create a dhcpOptions with domainName
+func (a *AwsClient) CreateDhcpOptionsWithDomainName(domainName string) (string, error) {
+	input := &ec2.CreateDhcpOptionsInput{
+		DhcpConfigurations: []*ec2.NewDhcpConfiguration{
+			{
+				Key: aws.String("domain-name-servers"),
+				Values: []*string{
+					aws.String("AmazonProvidedDNS"),
+				},
+			},
+			{
+				Key: aws.String("domain-name"),
+				Values: []*string{
+					aws.String(domainName),
+				},
+			},
+		},
+	}
+	result, err := a.svc.CreateDhcpOptions(input)
+	if err != nil {
+		e2e.Logf("err: %v", err)
+		return "", err
+	}
+	dhcpOptionsID := result.DhcpOptions.DhcpOptionsId
+	e2e.Logf("The created dhcpOptionsId is %s", *dhcpOptionsID)
+	return *dhcpOptionsID, err
+}
+
 // DeleteDhcpOptions Delete a dhcpOptions
 func (a *AwsClient) DeleteDhcpOptions(dhcpOptionsID string) error {
 	input := &ec2.DeleteDhcpOptionsInput{
@@ -372,6 +400,30 @@ func (a *AwsClient) GetDhcpOptionsIDOfVpc(vpcID string) (string, error) {
 	dhcpOptionsID := result.Vpcs[0].DhcpOptionsId
 	e2e.Logf("The %s dhcpOptionsId is %s ", vpcID, *dhcpOptionsID)
 	return *dhcpOptionsID, err
+}
+
+// GetDhcpOptionsIDFromTag Get the dhcpOptionsID that have a tag
+func (a *AwsClient) GetDhcpOptionsIDFromTag(tagKey string, tagValue string) ([]string, error) {
+	filters := []*ec2.Filter{
+		{
+			Name: aws.String("tag:" + tagKey),
+			Values: []*string{
+				aws.String(tagValue),
+			},
+		},
+	}
+	input := ec2.DescribeDhcpOptionsInput{Filters: filters}
+	dhcpOptionsIDs := []string{}
+	result, err := a.svc.DescribeDhcpOptions(&input)
+	if err != nil {
+		e2e.Logf("err: %v", err)
+		return dhcpOptionsIDs, err
+	}
+	for _, value := range result.DhcpOptions {
+		dhcpOptionsIDs = append(dhcpOptionsIDs, *value.DhcpOptionsId)
+		e2e.Logf("Found dhcpOptionsId %s that have a tag %s:%s", *value.DhcpOptionsId, tagKey, tagValue)
+	}
+	return dhcpOptionsIDs, err
 }
 
 // AssociateDhcpOptions Associate a VPC with a dhcpOptions
@@ -447,6 +499,20 @@ func (a *AwsClient) CreateTag(resource string, key string, value string) error {
 		},
 	}
 	_, err := a.svc.CreateTags(createTagInput)
+	return err
+}
+
+func (a *AwsClient) DeleteTag(resource string, key string, value string) error {
+	deleteTagInput := &ec2.DeleteTagsInput{
+		Resources: []*string{aws.String(resource)},
+		Tags: []*ec2.Tag{
+			{
+				Key:   aws.String(key),
+				Value: aws.String(value),
+			},
+		},
+	}
+	_, err := a.svc.DeleteTags(deleteTagInput)
 	return err
 }
 
