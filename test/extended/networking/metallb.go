@@ -1415,7 +1415,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 	})
 
 	// Test cases service annotation
-	g.It("Author:asood-High-43155-High-43156-Verify static address is associated with LoadBalancer service specified in YAML and approriate messages are logged if it cannot be [Serial]", func() {
+	g.It("Author:asood-High-43155-High-43156-High-43313-Verify static address is associated with LoadBalancer service specified in YAML, approriate messages are logged if it cannot be and services can share IP [Serial]", func() {
 		var (
 			ns                   string
 			namespaces           []string
@@ -1583,6 +1583,78 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		isEvent, msg = checkServiceEvents(oc, annotatedSvc.name, annotatedSvc.namespace, "AllocationFailed")
 		o.Expect(isEvent).To(o.BeTrue())
 		o.Expect(strings.Contains(msg, fmt.Sprintf("no available IPs in pool \"%s\"", ipaddresspools[0]))).To(o.BeTrue())
+
+		testID = "43313"
+		exutil.By(fmt.Sprintf("8.0 %s Verify one address can be associated with more than one service using annotation metallb.universe.tf/allow-shared-ip", testID))
+		exutil.By(fmt.Sprintf("8.1 Patch IP addresspool pool %s address range to original range", ipaddresspools[0]))
+		addressList, err = json.Marshal(l2Addresses[0][:])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchInfo = fmt.Sprintf("{\"spec\":{\"addresses\": %s}}", string(addressList))
+		patchResourceAsAdmin(oc, "ipaddresspools/"+ipaddresspools[0], patchInfo, "metallb-system")
+		annotationForSvc := fmt.Sprintf("\"shared-ip-%s-svc\"", testID)
+
+		exutil.By("8.2 Create first L2 LoadBalancer service with annotation")
+		annotatedSvc.name = "hello-world-" + testID + "-tcp"
+		annotatedSvc.annotationKey = "metallb.universe.tf/allow-shared-ip"
+		annotatedSvc.annotationValue = annotationForSvc
+
+		defer removeResource(oc, true, true, "service", annotatedSvc.name, "-n", annotatedSvc.namespace)
+		o.Expect(createLoadBalancerService(oc, annotatedSvc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+
+		exutil.By("8.3 Validate LoadBalancer service is assigned an IP")
+		svcErr = checkLoadBalancerSvcStatus(oc, annotatedSvc.namespace, annotatedSvc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		svcIP1 := getLoadBalancerSvcIP(oc, annotatedSvc.namespace, annotatedSvc.name)
+		e2e.Logf("The service %s External IP is %s", annotatedSvc.name, svcIP1)
+
+		exutil.By("8.4 Create second L2 LoadBalancer service with annotation")
+		annotatedSvc.name = "hello-world-" + testID + "-udp"
+		annotatedSvc.annotationKey = "metallb.universe.tf/allow-shared-ip"
+		annotatedSvc.annotationValue = annotationForSvc
+		annotatedSvc.protocol = "UDP"
+		defer removeResource(oc, true, true, "service", annotatedSvc.name, "-n", annotatedSvc.namespace)
+		o.Expect(createLoadBalancerService(oc, annotatedSvc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+
+		exutil.By("8.5 Validate LoadBalancer service is assigned an IP")
+		svcErr = checkLoadBalancerSvcStatus(oc, annotatedSvc.namespace, annotatedSvc.name)
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+
+		svcIP2 := getLoadBalancerSvcIP(oc, annotatedSvc.namespace, annotatedSvc.name)
+		e2e.Logf("The service %s External IP is %s", annotatedSvc.name, svcIP2)
+		o.Expect(svcIP1).To(o.BeEquivalentTo(svcIP2))
+
+		exutil.By(fmt.Sprintf("8.6 Validate LoadBalancer services sharing the IP address %s", svcIP1))
+		exutil.By(fmt.Sprintf("8.6.1 LoadBalancer service at IP address %s configured with TCP", svcIP1))
+
+		checkSvcErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 4*time.Minute, false, func(ctx context.Context) (bool, error) {
+			result := validateService(oc, proxyHost, svcIP1)
+			if result {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, fmt.Sprintf("Expected service %s at %s to be reachable but was unreachable", annotatedSvc.name, svcIP))
+		exutil.By(fmt.Sprintf("8.6.2 LoadBalancer service at IP address %s configured with UDP", svcIP2))
+		allUdpSvcPods, getPodsErr := exutil.GetAllPodsWithLabel(oc, ns, "name="+annotatedSvc.name)
+		o.Expect(getPodsErr).NotTo(o.HaveOccurred())
+		exutil.By("Listen on port 80 on a backend pod of UDP service")
+		e2e.Logf("Listening on pod %s", allUdpSvcPods[0])
+		cmdNcat, cmdOutput, _, ncatCmdErr := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, allUdpSvcPods[0], "bash", "-c", `timeout --preserve-status 60 ncat -u -l 8080`).Background()
+		defer cmdNcat.Process.Kill()
+		o.Expect(ncatCmdErr).NotTo(o.HaveOccurred())
+
+		allTcpSvcPods, getPodsErr := exutil.GetAllPodsWithLabel(oc, ns, "name=hello-world-"+testID+"-tcp")
+		o.Expect(getPodsErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Sending UDP packets from pod %s to service %s", allTcpSvcPods[0], annotatedSvc.name)
+		cmd := fmt.Sprintf("echo hello | ncat -v -u %s 80", svcIP2)
+		for i := 0; i < 5; i++ {
+			output, ncatCmdErr := execCommandInSpecificPod(oc, ns, allTcpSvcPods[0], cmd)
+			o.Expect(ncatCmdErr).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(string(output), "bytes sent")).To(o.BeTrue())
+		}
+		e2e.Logf("UDP pod server output %s", cmdOutput)
+		o.Expect(strings.Contains(cmdOutput.String(), "hello")).To(o.BeTrue())
+
 	})
 
 })

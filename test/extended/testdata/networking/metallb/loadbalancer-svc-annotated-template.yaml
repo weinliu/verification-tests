@@ -25,7 +25,7 @@ objects:
             name: "${NAME}"
             ports:
             - containerPort: 8080
-              protocol: TCP
+              protocol: "${PROTOCOL}"
             resources:
               limits:
                 cpu: 200m
@@ -51,7 +51,7 @@ objects:
     ports:
     - port: 80
       targetPort: 8080
-      protocol: TCP
+      protocol: "${PROTOCOL}"
     selector:
       name: "${NAME}"
     type: LoadBalancer
@@ -60,6 +60,8 @@ objects:
 parameters:
 - name: NAME
 - name: NAMESPACE
+- name: PROTOCOL
+  value: "TCP"
 - name: ANNOTATIONKEY
 - name: ANNOTATIONVALUE
 - name: LABELKEY1

@@ -47,6 +47,7 @@ type metalLBCRResource struct {
 type loadBalancerServiceResource struct {
 	name                          string
 	namespace                     string
+	protocol                      string
 	annotationKey                 string
 	annotationValue               string
 	labelKey                      string
@@ -281,11 +282,13 @@ func createLoadBalancerService(oc *exutil.CLI, loadBalancerSvc loadBalancerServi
 	if strings.Contains(loadBalancerServiceTemplate, "annotated") {
 		e2e.Logf("Template %s", loadBalancerServiceTemplate)
 		svcFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", loadBalancerSvc.template, "-p", "NAME="+loadBalancerSvc.name, "NAMESPACE="+loadBalancerSvc.namespace,
+			"PROTOCOL="+loadBalancerSvc.protocol,
 			"LABELKEY1="+loadBalancerSvc.labelKey, "LABELVALUE1="+loadBalancerSvc.labelValue,
 			"ANNOTATIONKEY="+loadBalancerSvc.annotationKey, "ANNOTATIONVALUE="+loadBalancerSvc.annotationValue,
 			"EXTERNALTRAFFICPOLICY="+loadBalancerSvc.externaltrafficpolicy, "NODEPORTALLOCATION="+strconv.FormatBool(loadBalancerSvc.allocateLoadBalancerNodePorts)).OutputToFile(getRandomString() + "svc.json")
 	} else {
 		svcFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", loadBalancerSvc.template, "-p", "NAME="+loadBalancerSvc.name, "NAMESPACE="+loadBalancerSvc.namespace,
+			"PROTOCOL="+loadBalancerSvc.protocol,
 			"LABELKEY1="+loadBalancerSvc.labelKey, "LABELVALUE1="+loadBalancerSvc.labelValue,
 			"EXTERNALTRAFFICPOLICY="+loadBalancerSvc.externaltrafficpolicy, "NODEPORTALLOCATION="+strconv.FormatBool(loadBalancerSvc.allocateLoadBalancerNodePorts)).OutputToFile(getRandomString() + "svc.json")
 	}
