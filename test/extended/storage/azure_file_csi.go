@@ -626,6 +626,50 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		})
 	}
 
+	// author: wduan@redhat.com
+	// OCP-71559 - [Azure-File-CSI-Driver] [nfs] support actimeo as the default mount option if not specified
+	g.It("ARO-Author:wduan-Medium-71559-[Azure-File-CSI-Driver] [nfs] support actimeo as the default mount option if not specified", func() {
+		// Set up a specified project share for all the phases
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject()
+
+		// Set the resource definition for the scenario
+		// This only supported with nfs protocol
+		storageClassParameters := map[string]string{
+			"protocol": "nfs",
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		exutil.By("Create storageclass")
+		sc.createWithExtraParameters(oc, extraParameters)
+		defer sc.deleteAsAdmin(oc)
+
+		exutil.By("Create PVC")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("Create deployment")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		exutil.By("Check the deployment's pod mounted volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		// Specifying actimeo sets all of acregmin, acregmax, acdirmin, and acdirmax, the acdirmin(default value is 30) is absent.
+		exutil.By("Check the mount option on the node should contain the actimeo series parameters")
+		pvName := pvc.getVolumeName(oc)
+		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		output, err := execCommandInSpecificNode(oc, nodeName, "mount | grep "+pvName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("acregmin=30,acregmax=30,acdirmax=30"))
+	})
+
 })
 
 // Get resourceGroup/account/share name by creating a new azure-file volume
