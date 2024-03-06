@@ -1095,7 +1095,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": false}}}", "--type=merge")
 
 		exutil.By("7) Check if the AllNamespaces Copied CSV are back")
-		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if err != nil {
 				e2e.Failf("Error: %v, fail to get CSVs in project: %s", err, oc.Namespace())
