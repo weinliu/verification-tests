@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	machineAPINamespace = "openshift-machine-api"
+	MachineAPINamespace = "openshift-machine-api"
 	//MapiMachineset means the fullname of mapi machineset
 	MapiMachineset = "machinesets.machine.openshift.io"
 	//MapiMachine means the fullname of mapi machine
@@ -42,10 +42,10 @@ type MachineSetDescription struct {
 }
 
 // CreateMachineSet create a new machineset
-func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) string {
+func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) {
 	e2e.Logf("Creating a new MachineSets ...")
-	machinesetName, arch := GetRandomMachineSetNameWithArch(oc)
-	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	machinesetName := GetRandomMachineSetName(oc)
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", MachineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	bytes, _ := ioutil.ReadFile(machineSetJSON)
@@ -64,14 +64,13 @@ func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) string {
 	} else {
 		WaitForMachinesRunning(oc, ms.Replicas, ms.Name)
 	}
-	return arch
 }
 
 // CreateMachineSetByArch create a new machineset by arch
 func (ms *MachineSetDescription) CreateMachineSetByArch(oc *CLI, arch string) {
 	e2e.Logf("Creating a new MachineSets ...")
 	machinesetName := GetRandomMachineSetNameByArch(oc, arch)
-	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", MachineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	bytes, _ := ioutil.ReadFile(machineSetJSON)
@@ -95,13 +94,13 @@ func (ms *MachineSetDescription) CreateMachineSetByArch(oc *CLI, arch string) {
 // DeleteMachineSet delete a machineset
 func (ms *MachineSetDescription) DeleteMachineSet(oc *CLI) error {
 	e2e.Logf("Deleting a MachineSets ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", machineAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", MachineAPINamespace).Execute()
 }
 
 // ListAllMachineNames list all machines
 func ListAllMachineNames(oc *CLI) []string {
 	e2e.Logf("Listing all Machines ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
@@ -109,7 +108,7 @@ func ListAllMachineNames(oc *CLI) []string {
 // ListWorkerMachineSetNamesByArch list all linux worker machineSets by arch
 func ListWorkerMachineSetNamesByArch(oc *CLI, arch string) []string {
 	e2e.Logf("Listing all MachineSets by arch ...")
-	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if machineSetNames == "" {
 		g.Skip("Skip this test scenario because there are no machinesets in this cluster")
@@ -117,9 +116,9 @@ func ListWorkerMachineSetNamesByArch(oc *CLI, arch string) []string {
 	workerMachineSetNames := strings.Split(machineSetNames, " ")
 	var linuxWorkerMachineSetNames []string
 	for _, workerMachineSetName := range workerMachineSetNames {
-		machineSetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.spec.template.metadata.labels}", "-n", machineAPINamespace).Output()
+		machineSetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.spec.template.metadata.labels}", "-n", MachineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		machineSetAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.metadata.annotations.capacity\\.cluster-autoscaler\\.kubernetes\\.io/labels}", "-n", machineAPINamespace).Output()
+		machineSetAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.metadata.annotations.capacity\\.cluster-autoscaler\\.kubernetes\\.io/labels}", "-n", MachineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(machineSetAnnotation, "kubernetes.io/arch="+arch) && !strings.Contains(machineSetLabels, `"machine.openshift.io/os-id":"Windows"`) {
 			linuxWorkerMachineSetNames = append(linuxWorkerMachineSetNames, workerMachineSetName)
@@ -132,7 +131,7 @@ func ListWorkerMachineSetNamesByArch(oc *CLI, arch string) []string {
 // ListWorkerMachineSetNames list all linux worker machineSets
 func ListWorkerMachineSetNames(oc *CLI) []string {
 	e2e.Logf("Listing all MachineSets ...")
-	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if machineSetNames == "" {
 		g.Skip("Skip this test scenario because there are no machinesets in this cluster")
@@ -140,7 +139,7 @@ func ListWorkerMachineSetNames(oc *CLI) []string {
 	workerMachineSetNames := strings.Split(machineSetNames, " ")
 	var linuxWorkerMachineSetNames []string
 	for _, workerMachineSetName := range workerMachineSetNames {
-		machineSetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.spec.template.metadata.labels}", "-n", machineAPINamespace).Output()
+		machineSetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, workerMachineSetName, "-o=jsonpath={.spec.template.metadata.labels}", "-n", MachineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(machineSetLabels, `"machine.openshift.io/os-id":"Windows"`) {
 			linuxWorkerMachineSetNames = append(linuxWorkerMachineSetNames, workerMachineSetName)
@@ -153,7 +152,7 @@ func ListWorkerMachineSetNames(oc *CLI) []string {
 // ListWorkerMachineNames list all worker machines
 func ListWorkerMachineNames(oc *CLI) []string {
 	e2e.Logf("Listing all Machines ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=worker", "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=worker", "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
@@ -161,7 +160,7 @@ func ListWorkerMachineNames(oc *CLI) []string {
 // ListMasterMachineNames list all master machines
 func ListMasterMachineNames(oc *CLI) []string {
 	e2e.Logf("Listing all Machines ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=master", "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=master", "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
@@ -190,14 +189,22 @@ func ListNonOutpostWorkerNodes(oc *CLI) []string {
 // GetMachineNamesFromMachineSet get all Machines in a Machineset
 func GetMachineNamesFromMachineSet(oc *CLI, machineSetName string) []string {
 	e2e.Logf("Getting all Machines in a Machineset ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
 
+// GetNodeNamesFromMachineSet get all Nodes in a Machineset
+func GetNodeNamesFromMachineSet(oc *CLI, machineSetName string) []string {
+	e2e.Logf("Getting all Nodes in a Machineset ...")
+	nodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].status.nodeRef.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", MachineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(nodeNames, " ")
+}
+
 // GetNodeNameFromMachine get node name for a machine
 func GetNodeNameFromMachine(oc *CLI, machineName string) string {
-	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.nodeRef.name}", "-n", machineAPINamespace).Output()
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.nodeRef.name}", "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return nodeName
 }
@@ -227,17 +234,6 @@ func GetRandomMachineSetName(oc *CLI) string {
 	return filteredMachineSetNames[rand.Int31n(int32(len(filteredMachineSetNames)))]
 }
 
-// GetRandomMachineSetNameWithArch get a random MachineSet name and arch
-func GetRandomMachineSetNameWithArch(oc *CLI) (string, string) {
-	machinesetName := GetRandomMachineSetName(oc)
-	machineSetAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-o=jsonpath={.metadata.annotations.capacity\\.cluster-autoscaler\\.kubernetes\\.io/labels}", "-n", machineAPINamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	start := strings.Index(machineSetAnnotation, "=")
-	arch := machineSetAnnotation[start+1:]
-	e2e.Logf("arch: %s", arch)
-	return machinesetName, arch
-}
-
 // GetRandomMachineSetNameByArch get a random MachineSet name by arch
 func GetRandomMachineSetNameByArch(oc *CLI, arch string) string {
 	e2e.Logf("Getting a random MachineSet by arch ...")
@@ -251,7 +247,7 @@ func GetRandomMachineSetNameByArch(oc *CLI, arch string) string {
 // GetMachineSetReplicas get MachineSet replicas
 func GetMachineSetReplicas(oc *CLI, machineSetName string) int {
 	e2e.Logf("Getting MachineSets replicas ...")
-	replicasVal, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
+	replicasVal, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.spec.replicas}", "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	replicas, _ := strconv.Atoi(replicasVal)
 	return replicas
@@ -260,7 +256,7 @@ func GetMachineSetReplicas(oc *CLI, machineSetName string) int {
 // ScaleMachineSet scale a MachineSet by replicas
 func ScaleMachineSet(oc *CLI, machineSetName string, replicas int) {
 	e2e.Logf("Scaling MachineSets ...")
-	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), MapiMachineset, machineSetName, "-n", machineAPINamespace).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), MapiMachineset, machineSetName, "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	WaitForMachinesRunning(oc, replicas, machineSetName)
 }
@@ -268,14 +264,14 @@ func ScaleMachineSet(oc *CLI, machineSetName string, replicas int) {
 // DeleteMachine delete a machine
 func DeleteMachine(oc *CLI, machineName string) error {
 	e2e.Logf("Deleting Machine ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachine, machineName, "-n", machineAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachine, machineName, "-n", MachineAPINamespace).Execute()
 }
 
 // WaitForMachinesRunning check if all the machines are Running in a MachineSet
 func WaitForMachinesRunning(oc *CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", MachineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
 			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[*].status.phase}").Output()
@@ -342,7 +338,7 @@ func WaitForMachineProvisioned(oc *CLI, machineSetName string) {
 func WaitForMachinesDisapper(oc *CLI, machineSetName string) {
 	e2e.Logf("Waiting for the machines Dissapper ...")
 	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
-		machineNames, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", machineAPINamespace).Output()
+		machineNames, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", MachineAPINamespace).Output()
 		if machineNames != "" {
 			e2e.Logf(" Still have machines are not Disappered yet and waiting up to 1 minutes ...")
 			return false, nil
@@ -357,7 +353,7 @@ func WaitForMachinesDisapper(oc *CLI, machineSetName string) {
 func WaitForMachinesRunningByLabel(oc *CLI, machineNumber int, labels string) []string {
 	e2e.Logf("Waiting for the machines Running ...")
 	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].status.phase}", "-n", machineAPINamespace).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].status.phase}", "-n", MachineAPINamespace).Output()
 		machinesRunning := strings.Count(msg, "Running")
 		if machinesRunning == machineNumber {
 			e2e.Logf("Expected %v machines are Running", machineNumber)
@@ -367,7 +363,7 @@ func WaitForMachinesRunningByLabel(oc *CLI, machineNumber int, labels string) []
 		return false, nil
 	})
 	AssertWaitPollNoErr(err, "Wait machine running failed.")
-	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 	return strings.Split(msg, " ")
 }
 
@@ -376,14 +372,14 @@ func WaitForMachineRunningByField(oc *CLI, field string, fieldValue string, labe
 	e2e.Logf("Waiting for the machine Running ...")
 	var newMachineName string
 	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
-		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 		if err2 != nil {
 			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
 			return false, nil
 		}
 		for _, machineName := range strings.Split(msg, " ") {
-			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", machineAPINamespace).Output()
-			machineFieldValue, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, field, "-n", machineAPINamespace).Output()
+			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", MachineAPINamespace).Output()
+			machineFieldValue, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, field, "-n", MachineAPINamespace).Output()
 			if phase == "Running" && machineFieldValue == fieldValue {
 				e2e.Logf("The machine with field %s = %s is Running %s", field, fieldValue, machineName)
 				newMachineName = machineName
@@ -402,13 +398,13 @@ func WaitForMachineRunningBySuffix(oc *CLI, machineNameSuffix string, labels str
 	e2e.Logf("Waiting for the machine Running ...")
 	var newMachineName string
 	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
-		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 		if err2 != nil {
 			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
 			return false, nil
 		}
 		for _, machineName := range strings.Split(msg, " ") {
-			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", machineAPINamespace).Output()
+			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", MachineAPINamespace).Output()
 			if phase == "Running" && strings.HasSuffix(machineName, machineNameSuffix) {
 				e2e.Logf("The machine with suffix %s is Running %s", machineNameSuffix, machineName)
 				newMachineName = machineName
@@ -426,7 +422,7 @@ func WaitForMachineRunningBySuffix(oc *CLI, machineNameSuffix string, labels str
 func WaitForMachineRunningByName(oc *CLI, machineName string) {
 	e2e.Logf("Waiting for %s machine Running ...", machineName)
 	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
-		phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", machineAPINamespace).Output()
+		phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", MachineAPINamespace).Output()
 		if phase == "Running" {
 			e2e.Logf("The machine %s is Running", machineName)
 			return true, nil
@@ -441,7 +437,7 @@ func WaitForMachineRunningByName(oc *CLI, machineName string) {
 func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels string) {
 	e2e.Logf("Waiting for the machine disappear by suffix ...")
 	err := wait.Poll(60*time.Second, 1800*time.Second, func() (bool, error) {
-		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 		if err2 != nil {
 			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
 			return false, nil
@@ -462,13 +458,13 @@ func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels s
 func WaitForMachineDisappearBySuffixAndField(oc *CLI, machineNameSuffix string, field string, fieldValue string, labels string) {
 	e2e.Logf("Waiting for the machine disappear by suffix and field...")
 	err := wait.Poll(60*time.Second, 1800*time.Second, func() (bool, error) {
-		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", MachineAPINamespace).Output()
 		if err2 != nil {
 			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
 			return false, nil
 		}
 		for _, machineName := range strings.Split(msg, " ") {
-			machineFieldValue, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, field, "-n", machineAPINamespace).Output()
+			machineFieldValue, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, field, "-n", MachineAPINamespace).Output()
 			if strings.HasSuffix(machineName, machineNameSuffix) && machineFieldValue == fieldValue {
 				e2e.Logf("The machine %s is not disappear and waiting up to 1 minutes ...", machineName)
 				return false, nil
@@ -484,7 +480,7 @@ func WaitForMachineDisappearBySuffixAndField(oc *CLI, machineNameSuffix string, 
 func WaitForMachineDisappearByName(oc *CLI, machineName string) {
 	e2e.Logf("Waiting for the machine disappear by name ...")
 	err := wait.Poll(60*time.Second, 1800*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-n", machineAPINamespace).Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-n", MachineAPINamespace).Output()
 		if strings.Contains(output, "not found") {
 			e2e.Logf("machine %s is disappear", machineName)
 			return true, nil
@@ -529,7 +525,7 @@ func SkipTestIfSupportedPlatformNotMatched(oc *CLI, supported ...string) {
 
 // SkipConditionally check the total number of Running machines, if greater than zero, we think machines are managed by machine api operator.
 func SkipConditionally(oc *CLI) {
-	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "--no-headers", "-n", machineAPINamespace).Output()
+	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "--no-headers", "-n", MachineAPINamespace).Output()
 	machinesRunning := strings.Count(msg, "Running")
 	if machinesRunning == 0 {
 		g.Skip("Expect at least one Running machine. Found none!!!")

@@ -27,7 +27,7 @@ type MachineSetNonSpotDescription struct {
 func (ms *MachineSetNonSpotDescription) CreateMachineSet(oc *CLI) {
 	g.By("Creating a new MachineSets having dedicated machines ...")
 	machinesetName := GetRandomMachineSetName(oc)
-	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", MachineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	bytes, _ := ioutil.ReadFile(machineSetJSON)
@@ -71,7 +71,7 @@ func (ms *MachineSetNonSpotDescription) CreateMachineSetBasedOnExisting(oc *CLI,
 		AsAdmin().
 		WithoutNamespace().
 		Run("get").
-		Args(MapiMachineset, existingMset, "-n", machineAPINamespace, "-o=json").
+		Args(MapiMachineset, existingMset, "-n", MachineAPINamespace, "-o=json").
 		OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer func() {
@@ -111,14 +111,14 @@ func (ms *MachineSetNonSpotDescription) CreateMachineSetBasedOnExisting(oc *CLI,
 // DeleteMachineSet delete a machineset
 func (ms *MachineSetNonSpotDescription) DeleteMachineSet(oc *CLI) error {
 	By("Deleting a MachineSet ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", machineAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", MachineAPINamespace).Execute()
 }
 
 // DeleteMachinesetIfDedicatedMachinesAreNotRunning check labeled machines are running if not delete machineset
 func (ms *MachineSetNonSpotDescription) DeleteMachinesetIfDedicatedMachinesAreNotRunning(oc *CLI, machineNumber int, machineSetName string) {
 	g.By("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 920*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", MachineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)

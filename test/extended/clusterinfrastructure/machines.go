@@ -47,18 +47,25 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
-		archtype := ms.CreateMachineSet(oc)
-		g.By("Update machineset with acceleratedNetworking: true")
-		switch archtype {
-		case "amd64":
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D2s_v3"}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		case "arm64":
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D8ps_v5"}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		ms.CreateMachineSet(oc)
+		arch, err := architecture.GetArchitectureFromMachineSet(oc, machinesetName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var vmSize string
+		switch arch {
+		case architecture.AMD64:
+			vmSize = "Standard_D2s_v3"
+		case architecture.ARM64:
+			vmSize = "Standard_D8ps_v5"
 		default:
-			e2e.Logf("Couldn't get architecture type")
+			g.Skip("This case doesn't support other architectures than arm64, amd64")
 		}
+		g.By("Update machineset with acceleratedNetworking: true")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n",
+			machineAPINamespace, "-p",
+			fmt.Sprintf(`{"spec":{"replicas":1,"template":{"spec":{"providerSpec":`+
+				`{"value":{"acceleratedNetworking":true,"vmSize":"%s"}}}}}}`, vmSize),
+			"--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//test when set acceleratedNetworking: true, machine running needs nearly 9 minutes. so change the method timeout as 10 minutes.
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
@@ -80,19 +87,25 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
-		archtype := ms.CreateMachineSet(oc)
-		g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
-		switch archtype {
-		case "amd64":
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D2s_v3","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		case "arm64":
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D2plds_v5","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		ms.CreateMachineSet(oc)
+		arch, err := architecture.GetArchitectureFromMachineSet(oc, machinesetName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var vmSize string
+		switch arch {
+		case architecture.AMD64:
+			vmSize = "Standard_D2s_v3"
+		case architecture.ARM64:
+			vmSize = "Standard_D2plds_v5"
 		default:
-			e2e.Logf("Couldn't get the architecture type")
-
+			g.Skip("This case doesn't support other architectures than arm64, amd64")
 		}
+		g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n",
+			machineAPINamespace, "-p",
+			fmt.Sprintf(`{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"%s",`+
+				`"osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},`+
+				`"managedDisk":{"storageAccountType":""}}}}}}}}`, vmSize), "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 
@@ -837,8 +850,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		masterArchtype := getArchitectureType(oc)
-		randomMachinesetName, msArchtype := exutil.GetRandomMachineSetNameWithArch(oc)
+		masterArchtype := architecture.GetControlPlaneArch(oc)
+		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		msArchtype, err := architecture.GetArchitectureFromMachineSet(oc, randomMachinesetName)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if masterArchtype != msArchtype {
 			g.Skip("The selected machine set's arch is not the same with the master machine's arch, skip this case!")
 		}

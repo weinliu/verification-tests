@@ -26,7 +26,7 @@ type MachineSetwithLabelDescription struct {
 func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *CLI) {
 	e2e.Logf("Creating a new MachineSets with labels ...")
 	machinesetName := GetRandomMachineSetName(oc)
-	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", MachineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	bytes, _ := ioutil.ReadFile(machineSetJSON)
@@ -65,14 +65,14 @@ func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *CLI) {
 // DeleteMachineSet delete a machineset
 func (ms *MachineSetwithLabelDescription) DeleteMachineSet(oc *CLI) error {
 	e2e.Logf("Deleting a MachineSets ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", machineAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", MachineAPINamespace).Execute()
 }
 
 // AssertLabelledMachinesRunningDeleteIfNot check labeled machines are running if not delete machineset
 func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfNot(oc *CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 920*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", MachineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)

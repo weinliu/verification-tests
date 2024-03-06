@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -109,7 +110,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "aws":
 			changeInstanceType = "m5.xlarge"
 			backupInstanceType = "m6i.xlarge"
-			if getArchitectureType(oc) == "arm64" {
+			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
 				changeInstanceType = "m6gd.xlarge"
 				backupInstanceType = "m6g.xlarge"
 			}
@@ -119,7 +120,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "azure":
 			changeInstanceType = "Standard_D4s_v3"
 			backupInstanceType = "Standard_D8s_v3"
-			if getArchitectureType(oc) == "arm64" {
+			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
 				changeInstanceType = "Standard_D4ps_v5"
 				backupInstanceType = "Standard_D8ps_v5"
 			}
@@ -135,7 +136,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				changeInstanceType = "c2d-standard-4"
 				backupInstanceType = "n2d-standard-4"
 			}
-			if getArchitectureType(oc) == "arm64" {
+			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
 				changeInstanceType = "t2a-standard-8"
 				backupInstanceType = "t2a-standard-4"
 			}
@@ -274,7 +275,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "aws":
 			changeInstanceType = "m5.xlarge"
 			backupInstanceType = "m6i.xlarge"
-			if getArchitectureType(oc) == "arm64" {
+			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
 				changeInstanceType = "m6gd.xlarge"
 				backupInstanceType = "m6g.xlarge"
 			}
@@ -284,7 +285,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "azure":
 			changeInstanceType = "Standard_D4s_v3"
 			backupInstanceType = "Standard_D8s_v3"
-			if getArchitectureType(oc) == "arm64" {
+			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
 				changeInstanceType = "Standard_D4ps_v5"
 				backupInstanceType = "Standard_D8ps_v5"
 			}
@@ -300,7 +301,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				changeInstanceType = "c2d-standard-4"
 				backupInstanceType = "n2d-standard-4"
 			}
-			if getArchitectureType(oc) == "arm64" {
+			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
 				changeInstanceType = "t2a-standard-8"
 				backupInstanceType = "t2a-standard-4"
 			}
