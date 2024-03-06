@@ -4067,6 +4067,10 @@ nulla pariatur.`
 		allNodes, err := NewNodeList(oc.AsAdmin()).GetAllLinux()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Get all linux nodes failed")
 		for _, node := range allNodes {
+			if node.HasTaintEffectOrFail("NoExecute") {
+				logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
+				continue
+			}
 			logger.Infof("Check apiserver-url.env file on node %s", node.GetName())
 			rf := NewRemoteFile(node, apiserverURLEnvFile)
 			o.Expect(rf.Exists()).Should(o.BeTrue(), "file %s not found on node %s", apiserverURLEnvFile, node.GetName())
