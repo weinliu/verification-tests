@@ -667,4 +667,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		_, err := rapidastScan(oc, oc.Namespace(), configFile, policyFile, "fileintegrity.openshift.io_v1alpha1")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
+	// author: bgudi@redhat.com
+	g.It("NonHyperShiftHOST-Author:bgudi-High-72019-Check http version for file-integrity-operator", func() {
+		g.By("Check http version for metric serive")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		url := fmt.Sprintf("https://metrics.%v.svc:8585/metrics-fio", sub.namespace)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-i", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), `HTTP/1.1 200 OK`)).To(o.BeTrue())
+	})
 })
