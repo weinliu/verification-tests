@@ -37,22 +37,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("check the annotation of nodeport service")
+		exutil.By("check the annotation of nodeport service")
 		annotation := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-nodeport-ocp42276", ".metadata.annotations")
 		o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
 
 		// In IBM cloud the externalTrafficPolicy will be 'Cluster' for default LB service, so skipping the same
 		platformtype := exutil.CheckPlatform(oc)
 		if !strings.Contains(platformtype, "ibm") {
-			g.By("check the annotation of default LoadBalancer service if it is available")
+			exutil.By("check the annotation of default LoadBalancer service if it is available")
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ingress", "service", "router-default", "-o=jsonpath={.spec.type}").Output()
 			// LB service is supported on public cloud platform like aws, gcp, azure and alibaba
 			if strings.Contains(output, "LoadBalancer") {
@@ -82,11 +81,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("check the env variable of the router pod to verify the default log length")
-		newrouterpod := getRouterPod(oc, "ocp46287")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 		logLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(logLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=1024`))
 
@@ -126,24 +124,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("patch the existing custom ingress controller with log length value less than minimum threshold")
+		exutil.By("patch the existing custom ingress controller with log length value less than minimum threshold")
 		output1, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/ocp46288", "-p", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"syslog\":{\"maxLength\":479}}}}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(output1).To(o.ContainSubstring("Invalid value: 479: spec.logging.access.destination.syslog.maxLength in body should be greater than or equal to 480"))
 
-		g.By("patch the existing custom ingress controller with log length value more than maximum threshold")
+		exutil.By("patch the existing custom ingress controller with log length value more than maximum threshold")
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/ocp46288", "-p", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"syslog\":{\"maxLength\":4097}}}}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(output2).To(o.ContainSubstring("Invalid value: 4097: spec.logging.access.destination.syslog.maxLength in body should be less than or equal to 4096"))
 
-		g.By("check the haproxy config on the router pod to verify the default log length is enabled")
-		routerpod := getRouterPod(oc, "ocp46288")
+		exutil.By("check the haproxy config on the router pod to verify the default log length is enabled")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 		checkoutput := readRouterPodData(oc, routerpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
 	})
@@ -164,34 +161,29 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("patch the existing custom ingress controller with NLB")
-		routerpod := getRouterPod(oc, "ocp52837")
+		exutil.By("patch the existing custom ingress controller with NLB")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"NLB\"}}}}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
-		g.By("check the LB service and ensure the annotations are updated")
+		exutil.By("check the LB service and ensure the annotations are updated")
 		findAnnotation, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(findAnnotation).To(o.ContainSubstring("nlb"))
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
 
-		g.By("patch the existing custom ingress controller with CLB")
-		routerpod = getRouterPod(oc, "ocp52837")
+		exutil.By("patch the existing custom ingress controller with CLB")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"Classic\"}}}}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		// Classic LB doesn't has explicit "classic" annotation but it needs proxy-protocol annotation
 		// so we use "aws-load-balancer-proxy-protocol" to check if using CLB
-		g.By("check the LB service and ensure the annotations are updated")
+		exutil.By("check the LB service and ensure the annotations are updated")
 		findAnnotation, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(findAnnotation).To(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("nlb"))
@@ -287,7 +279,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jpath, "UnknownUnmanagedDNS")
 
 		// there was a bug OCPBUGS-2247 in the below test step
-		// g.By("check the default dnsManagementPolicy value of ingress-controller2 not matching the base domain, which should be Unmanaged")
+		// exutil.By("check the default dnsManagementPolicy value of ingress-controller2 not matching the base domain, which should be Unmanaged")
 		// output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy}").Output()
 		// o.Expect(output).To(o.ContainSubstring("Unmanaged"))
 
@@ -296,7 +288,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("FalseUnknown"))
 
 		// there was a bug OCPBUGS-2247 in the below test step
-		// g.By("check the default dnsManagementPolicy value of dnsrecord ocp54868cus2, which should be Unmanaged, too")
+		// exutil.By("check the default dnsManagementPolicy value of dnsrecord ocp54868cus2, which should be Unmanaged, too")
 		// output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(dnsrecordResource2, "-n", ingctrl2.namespace, "-o=jsonpath={.spec.dnsManagementPolicy}").Output()
 		// o.Expect(output).To(o.ContainSubstring("Unmanaged"))
 
@@ -362,7 +354,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		// skip if platform is not AWS, GCP, AZURE or IBM
-		g.By("Pre-flight check for the platform type")
+		exutil.By("Pre-flight check for the platform type")
 		platformtype := exutil.CheckPlatform(oc)
 		platforms := map[string]bool{
 			"aws":      true,
@@ -374,30 +366,29 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch the custom ingress-controller with IP address ranges to which access to the load balancer should be restricted")
+		exutil.By("Patch the custom ingress-controller with IP address ranges to which access to the load balancer should be restricted")
 		output, errCfg := patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
 			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"10.0.0.0/8\"]}}}}")
 		o.Expect(errCfg).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingresscontroller.operator.openshift.io/ocp55223 patched"))
 
-		g.By("Check the LB svc of the custom controller")
+		exutil.By("Check the LB svc of the custom controller")
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `10.0.0.0/8`)
 
-		g.By("Patch the custom ingress-controller with more 'allowedSourceRanges' value")
+		exutil.By("Patch the custom ingress-controller with more 'allowedSourceRanges' value")
 		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
 			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"20.0.0.0/8\", \"50.0.0.0/16\", \"3dee:ef5::/12\"]}}}}")
 		o.Expect(errCfg).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingresscontroller.operator.openshift.io/ocp55223 patched"))
 
-		g.By("Check the LB svc of the custom controller for additional values")
+		exutil.By("Check the LB svc of the custom controller for additional values")
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `20.0.0.0/8`)
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `50.0.0.0/16`)
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `3dee:ef5::/12`)
@@ -417,7 +408,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		// skip if platform is not AWS, GCP, AZURE or IBM
-		g.By("Pre-flight check for the platform type")
+		exutil.By("Pre-flight check for the platform type")
 		platformtype := exutil.CheckPlatform(oc)
 		platforms := map[string]bool{
 			"aws":      true,
@@ -429,37 +420,36 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Add the IP address ranges for an custom IngressController using annotation")
+		exutil.By("Add the IP address ranges for an custom IngressController using annotation")
 		err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
 			"-n", "openshift-ingress", "svc/router-ocp55341", "service.beta.kubernetes.io/load-balancer-source-ranges=10.0.0.0/8", "--overwrite").Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 
-		g.By("Verify the annotation presence")
+		exutil.By("Verify the annotation presence")
 		findAnnotation := getAnnotation(oc, "openshift-ingress", "svc", "router-ocp55341")
 		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/load-balancer-source-ranges"))
 		o.Expect(findAnnotation).To(o.ContainSubstring("10.0.0.0/8"))
 
-		g.By("Check the annotation value in the allowedSourceRanges in the controller status")
+		exutil.By("Check the annotation value in the allowedSourceRanges in the controller status")
 		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges", `10.0.0.0/8`)
 
-		g.By("Patch the loadBalancerSourceRanges in the LB service")
+		exutil.By("Patch the loadBalancerSourceRanges in the LB service")
 		patchResourceAsAdmin(oc, "openshift-ingress", "svc/router-ocp55341", "{\"spec\":{\"loadBalancerSourceRanges\":[\"30.0.0.0/16\"]}}")
 
-		g.By("Check the annotation value and sourcerange value in LB svc")
+		exutil.By("Check the annotation value and sourcerange value in LB svc")
 		findAnnotation = getAnnotation(oc, "openshift-ingress", "svc", "router-ocp55341")
 		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/load-balancer-source-ranges"))
 		o.Expect(findAnnotation).To(o.ContainSubstring("10.0.0.0/8"))
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55341", ".spec.loadBalancerSourceRanges", `30.0.0.0/16`)
 
-		g.By("Check the controller status and confirm the sourcerange value's precedence over the annotation")
+		exutil.By("Check the controller status and confirm the sourcerange value's precedence over the annotation")
 		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges", `30.0.0.0/16`)
 	})
 
@@ -478,7 +468,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		// skip if platform is not AWS, GCP, AZURE or IBM
-		g.By("Pre-flight check for the platform type")
+		exutil.By("Pre-flight check for the platform type")
 		platformtype := exutil.CheckPlatform(oc)
 		platforms := map[string]bool{
 			"aws":      true,
@@ -490,36 +480,35 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch the custom ingress-controller with only IP address")
+		exutil.By("Patch the custom ingress-controller with only IP address")
 		output, errCfg := patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
 			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"10.0.0.0\"]}}}}")
 		o.Expect(errCfg).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("The IngressController \"ocp55381\" is invalid"))
 
-		g.By("Patch the custom ingress-controller with a invalid IPv6 address")
+		exutil.By("Patch the custom ingress-controller with a invalid IPv6 address")
 		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
 			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"3dee:ef5:/12\"]}}}}")
 		o.Expect(errCfg).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("The IngressController \"ocp55381\" is invalid"))
 
-		g.By("Patch the custom ingress-controller with IP address ranges")
+		exutil.By("Patch the custom ingress-controller with IP address ranges")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"10.0.0.0/8\"]}}}}")
 
-		g.By("Delete the allowedSourceRanges from custom controller")
+		exutil.By("Delete the allowedSourceRanges from custom controller")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[]}}}}")
 
-		g.By("Check the ingress operator status to confirm whether it is still in Progress")
+		exutil.By("Check the ingress operator status to confirm whether it is still in Progress")
 		ensureClusterOperatorProgress(oc, "ingress")
 
-		g.By("Patch the same loadBalancerSourceRanges value in the LB service to remove the Progressing from the ingress operator")
+		exutil.By("Patch the same loadBalancerSourceRanges value in the LB service to remove the Progressing from the ingress operator")
 		patchResourceAsAdmin(oc, "openshift-ingress", "svc/router-ocp55381", "{\"spec\":{\"loadBalancerSourceRanges\":[]}}")
 	})
 
@@ -572,7 +561,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// Bug: 2039339
 	g.It("Author:mjoseph-Medium-57002-cluster-ingress-operator should report Un-upgradeable if user has modified the aws resources annotations [Disruptive]", func() {
-		g.By("Pre-flight check for the platform type")
+		exutil.By("Pre-flight check for the platform type")
 		platformtype := exutil.CheckPlatform(oc)
 		if !strings.Contains(platformtype, "aws") {
 			g.Skip("Skip for non-supported platform, it runs on AWS cloud only")
@@ -589,27 +578,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create one custom ingresscontroller")
+		exutil.By("Create one custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Annotate the LB service with 'service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags' and verify")
-		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", "openshift-ingress", "svc/router-ocp57002", "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags=testqe", "--overwrite").Execute()
+		exutil.By("Annotate the LB service with 'service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags' and verify")
+		err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", "openshift-ingress", "svc/router-ocp57002", "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags=testqe", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		findAnnotation := getAnnotation(oc, "openshift-ingress", "svc", "router-ocp57002")
 		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags":"testqe"`))
 
-		g.By("Verify from the ingresscontroller status the operand is not upgradeable")
+		exutil.By("Verify from the ingresscontroller status the operand is not upgradeable")
 		status := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].status}")
 		o.Expect(status).To(o.ContainSubstring("False"))
 		status1 := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].reason}")
 		o.Expect(status1).To(o.ContainSubstring("OperandsNotUpgradeable"))
 
-		g.By("Verify from the ingress operator status the controller is not upgradeable")
+		exutil.By("Verify from the ingress operator status the controller is not upgradeable")
 		status3 := fetchJSONPathValue(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].status}")
 		o.Expect(status3).To(o.ContainSubstring("False"))
 		status4 := fetchJSONPathValue(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].reason}")
@@ -617,7 +605,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Longduration-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -728,7 +716,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:shudili-Medium-60013-matchExpressions for namespaceSelector defined in an ingress-controller", func() {
+	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Author:shudili-Medium-60013-matchExpressions for namespaceSelector defined in an ingress-controller", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -842,7 +830,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		waitForOutput(oc, project3, "route/shard-ns3", jsonPath, "")
 	})
 
-	g.It("Author:mjoseph-NonPreRelease-Longduration-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
+	g.It("Author:mjoseph-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
@@ -854,64 +842,60 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, "ocp38674")
-		defaultRouterpod := getRouterPod(oc, "default")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		defaultRouterpod := getNewRouterPod(oc, "default")
 
-		g.By("Annotate the ingresses.config/cluster with ingress.operator.openshift.io/hard-stop-after globally")
+		exutil.By("Annotate the ingresses.config/cluster with ingress.operator.openshift.io/hard-stop-after globally")
 		defer oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
 			"-n", ingctrl.namespace, "ingresses.config/cluster", "ingress.operator.openshift.io/hard-stop-after-").Execute()
 		err0 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
 			"-n", ingctrl.namespace, "ingresses.config/cluster", "ingress.operator.openshift.io/hard-stop-after=30m", "--overwrite").Execute()
 		o.Expect(err0).NotTo(o.HaveOccurred())
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+defaultRouterpod)
+		err := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+defaultRouterpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+defaultRouterpod))
-		err1 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
-		g.By("Verify the annotation presence in the cluster gloabl config")
-		newRouterpod := getRouterPod(oc, "ocp38674")
-		newDefaultRouterpod := getRouterPod(oc, "default")
+		exutil.By("Verify the annotation presence in the cluster gloabl config")
+		newRouterpod := getNewRouterPod(oc, ingctrl.name)
+		newDefaultRouterpod := getNewRouterPod(oc, "default")
 		findAnnotation := getAnnotation(oc, oc.Namespace(), "ingress.config.openshift.io", "cluster")
 		o.Expect(findAnnotation).To(o.ContainSubstring(`"ingress.operator.openshift.io/hard-stop-after":"30m"`))
 
-		g.By("Check the env variable of the custom router pod to verify the hard stop duration is 30m")
+		exutil.By("Check the env variable of the custom router pod to verify the hard stop duration is 30m")
 		env := readRouterPodEnv(oc, newRouterpod, "ROUTER_HARD_STOP_AFTER")
 		o.Expect(env).To(o.ContainSubstring(`30m`))
 
-		g.By("Check the env variable of the default router pod to verify the hard stop duration is 30m")
+		exutil.By("Check the env variable of the default router pod to verify the hard stop duration is 30m")
 		env1 := readRouterPodEnv(oc, newDefaultRouterpod, "ROUTER_HARD_STOP_AFTER")
 		o.Expect(env1).To(o.ContainSubstring(`30m`))
 
-		g.By("Annotate the ingresses.config/cluster with ingress.operator.openshift.io/hard-stop-after per ingresscontroller basis")
+		exutil.By("Annotate the ingresses.config/cluster with ingress.operator.openshift.io/hard-stop-after per ingresscontroller basis")
 		err2 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
 			"-n", ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "ingress.operator.openshift.io/hard-stop-after=45m", "--overwrite").Execute()
 		o.Expect(err2).NotTo(o.HaveOccurred())
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+newRouterpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+newRouterpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
-		g.By("Verify the annotation presence in the ocp38674 controller config")
-		newRouterpod1 := getRouterPod(oc, "ocp38674")
+		exutil.By("Verify the annotation presence in the ocp38674 controller config")
+		newRouterpod1 := getNewRouterPod(oc, ingctrl.name)
 		findAnnotation2 := getAnnotation(oc, ingctrl.namespace, "ingresscontroller.operator.openshift.io", ingctrl.name)
 		o.Expect(findAnnotation2).To(o.ContainSubstring(`"ingress.operator.openshift.io/hard-stop-after":"45m"`))
 
-		g.By("Check the haproxy config on the defualt router pod to verify the hard stop value is still 30m")
+		exutil.By("Check the haproxy config on the defualt router pod to verify the hard stop value is still 30m")
 		checkoutput := readRouterPodData(oc, newDefaultRouterpod, "cat haproxy.config", "hard")
 		o.Expect(checkoutput).To(o.ContainSubstring(`hard-stop-after 30m`))
 
-		g.By("Check the haproxy config on the router pod to verify the hard stop value is changed to 45m")
+		exutil.By("Check the haproxy config on the router pod to verify the hard stop value is changed to 45m")
 		checkoutput1 := readRouterPodData(oc, newRouterpod1, "cat haproxy.config", "hard")
 		o.Expect(checkoutput1).To(o.ContainSubstring(`hard-stop-after 45m`))
 	})
 
 	g.It("Author:mjoseph-Critical-51255-cluster-ingress-operator can set AWS ELB idle Timeout on per controller basis", func() {
-		g.By("Pre-flight check for the platform type")
+		exutil.By("Pre-flight check for the platform type")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
@@ -925,26 +909,25 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch the new custom ingress controller with connectionIdleTimeout as 2m")
+		exutil.By("Patch the new custom ingress controller with connectionIdleTimeout as 2m")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"classicLoadBalancer\":{\"connectionIdleTimeout\":\"2m\"}}}}}}}")
 
-		g.By("Check the LB service and ensure the annotations are updated")
+		exutil.By("Check the LB service and ensure the annotations are updated")
 		waitForOutput(oc, "openshift-ingress", "svc/router-"+ingctrl.name, ".metadata.annotations", `"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout":"120"`)
 
-		g.By("Check the connectionIdleTimeout value in the controller status")
+		exutil.By("Check the connectionIdleTimeout value in the controller status")
 		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, ".status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout", "2m0s")
 	})
 
 	g.It("Author:mjoseph-Medium-51256-cluster-ingress-operator does not accept negative value of AWS ELB idle Timeout option", func() {
-		g.By("Pre-flight check for the platform type")
+		exutil.By("Pre-flight check for the platform type")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
@@ -958,22 +941,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch the new custom ingress controller with connectionIdleTimeout with a negative value")
+		exutil.By("Patch the new custom ingress controller with connectionIdleTimeout with a negative value")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"classicLoadBalancer\":{\"connectionIdleTimeout\":\"-2m\"}}}}}}}")
 
-		g.By("Check the LB service and ensure the annotation is not added")
+		exutil.By("Check the LB service and ensure the annotation is not added")
 		findAnnotation := getAnnotation(oc, "openshift-ingress", "svc", "router-"+ingctrl.name)
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout"))
 
-		g.By("Check the connectionIdleTimeout value is '0s' in the controller status")
+		exutil.By("Check the connectionIdleTimeout value is '0s' in the controller status")
 		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, ".status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout", "0s")
 	})
 
@@ -1063,7 +1045,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if !acceptedPlatform {
 			g.Skip("Test cases should be run on AWS cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
-		g.By("0. Create a custom ingress controller")
+		exutil.By("0. Create a custom ingress controller")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customIngressControllerTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
 		var (
@@ -1077,10 +1059,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("1. Annotate ingress controller")
+		exutil.By("1. Annotate ingress controller")
 		addAnnotationPatch := `{"metadata":{"annotations":{"ingress.operator.openshift.io/auto-delete-load-balancer":""}}}`
 		errAnnotate := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "--type=merge", "-p", addAnnotationPatch).Execute()
 		o.Expect(errAnnotate).NotTo(o.HaveOccurred())
@@ -1088,30 +1069,30 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		strategyScope = append(strategyScope, `{"spec":{"endpointPublishingStrategy":{"loadBalancer":{"scope":"Internal"},"type":"LoadBalancerService"}}}`)
 		strategyScope = append(strategyScope, `{"spec":{"endpointPublishingStrategy":{"loadBalancer":{"scope":"External"},"type":"LoadBalancerService"}}}`)
 
-		g.By("2. Get the health check node port")
+		exutil.By("2. Get the health check node port")
 		prevHealthCheckNodePort, err := oc.AsAdmin().Run("get").Args("svc", "router-"+ingctrl.name, "-n", namespace, "-o=jsonpath={.spec.healthCheckNodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for i := 0; i < len(strategyScope); i++ {
-			g.By("3. Change the endpoint publishing strategy")
+			exutil.By("3. Change the endpoint publishing strategy")
 			changeScope := strategyScope[i]
 			changeScopeErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "--type=merge", "-p", changeScope).Execute()
 			o.Expect(changeScopeErr).NotTo(o.HaveOccurred())
 
-			g.By("3.1 Check the state of custom ingress operator")
+			exutil.By("3.1 Check the state of custom ingress operator")
 			err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
 
-			g.By("3.2 Check the pods are in running state")
+			exutil.By("3.2 Check the pods are in running state")
 			podList, podListErr := exutil.GetAllPodsWithLabel(oc, namespace, "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
 			o.Expect(podListErr).NotTo(o.HaveOccurred())
 			o.Expect(len(podList)).ShouldNot(o.Equal(0))
 			podName := podList[0]
 
-			g.By("3.3 Get node name of one of the pod")
+			exutil.By("3.3 Get node name of one of the pod")
 			nodeName, nodeNameErr := exutil.GetPodNodeName(oc, namespace, podName)
 			o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
 
-			g.By("3.4. Get new health check node port")
+			exutil.By("3.4. Get new health check node port")
 			err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
 				healthCheckNodePort, healthCheckNPErr := oc.AsAdmin().Run("get").Args("svc", "router-"+ingctrl.name, "-n", namespace, "-o=jsonpath={.spec.healthCheckNodePort}").Output()
 				o.Expect(healthCheckNPErr).NotTo(o.HaveOccurred())
@@ -1124,7 +1105,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get health check node port %s", err))
 
-			g.By("3.5. Check endpoint is 1")
+			exutil.By("3.5. Check endpoint is 1")
 			cmd := fmt.Sprintf("curl %s -s --connect-timeout 5", curlURL)
 			output, err := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1197,10 +1178,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl1.create(oc)
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
-		err1 := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
-		err2 := waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
-		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "1")
+		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
 
 		exutil.By("8. Check the custom DNS management status")
 		dnsManagementPolicy1 := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/ocp64611external-wildcard", ".spec.dnsManagementPolicy")
@@ -1237,11 +1216,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("2. Check the env variable of the router pod to verify the default log length")
-		newrouterpod := getRouterPod(oc, "ocp65827")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 		logLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(logLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=1024`))
 
@@ -1250,24 +1228,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(checkoutput).To(o.ContainSubstring(`log /var/lib/rsyslog/rsyslog.sock len 1024 local1 info`))
 
 		exutil.By("4. Patch the existing custom ingress controller with minimum log length value")
-		routerpod := getRouterPod(oc, "ocp65827")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp65827", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"container\":{\"maxLength\":480}}}}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("5. Check the env variable of the router pod to verify the minimum log length")
-		newrouterpod = getRouterPod(oc, "ocp65827")
+		newrouterpod = getNewRouterPod(oc, ingctrl.name)
 		minimumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(minimumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=480`))
 
 		exutil.By("6. Patch the existing custom ingress controller with maximum log length value")
-		routerpod = getRouterPod(oc, "ocp65827")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp65827", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"container\":{\"maxLength\":8192}}}}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("7. Check the env variable of the router pod to verify the maximum log length")
-		newrouterpod = getRouterPod(oc, "ocp65827")
+		newrouterpod = getNewRouterPod(oc, ingctrl.name)
 		maximumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(maximumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=8192`))
 	})
@@ -1300,18 +1274,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl1.create(oc)
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
-		err1 := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
-		err2 := waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
-		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "1")
+		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
 
 		exutil.By("2. Check the haproxy config on the syslog router pod to verify the default log length")
-		syslogRouterpod := getRouterPod(oc, "ocp65903syslog")
+		syslogRouterpod := getNewRouterPod(oc, ingctrl1.name)
 		checkoutput1 := readRouterPodData(oc, syslogRouterpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput1).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
 
 		exutil.By("3. Check the haproxy config on the sidecar router pod to verify the default log length")
-		sidecarRouterpod := getRouterPod(oc, "ocp65903sidecar")
+		sidecarRouterpod := getNewRouterPod(oc, ingctrl2.name)
 		checkoutput2 := readRouterPodData(oc, sidecarRouterpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput2).To(o.ContainSubstring(`log /var/lib/rsyslog/rsyslog.sock len 1024 local1 info`))
 

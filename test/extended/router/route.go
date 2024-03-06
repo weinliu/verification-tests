@@ -99,7 +99,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
-		//curling through defualt controller will not work for proxy cluster.
+		// curling through default controller will not work for proxy cluster.
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, skip the test.")
 		}
