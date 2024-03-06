@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	sub := subscription{
 		name:        "cluster-kube-descheduler-operator",
 		namespace:   kubeNamespace,
-		channelName: "4.13",
+		channelName: "stable",
 		opsrcName:   "qe-app-registry",
 		sourceName:  "openshift-marketplace",
 		template:    subscriptionT,

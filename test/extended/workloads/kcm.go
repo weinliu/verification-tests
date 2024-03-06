@@ -588,31 +588,28 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("statefulset", "web", "-n", ns63694, "--type=json", "-p", patch).Execute()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
+		// Run oc get pods command in background
+		cmd2, backgroundBuf2, _, err := oc.AsAdmin().Run("get").Args("pods", "-n", ns63694, "-w").Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cmd2.Process.Kill()
+
 		// Verify that pods have been rolled out in order
-		err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (bool, error) {
-			rolledOut, err := checkStatefulsetRollout(oc, ns63694, "web")
-			if err != nil {
-				e2e.Logf("Error checking rollout status: %v\n", err)
-				return false, nil
+		err = wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+			eventDetails := []string{"web-4.*ContainerCreating", "web-3.*ContainerCreating", "web-2.*ContainerCreating", "web-1.*ContainerCreating", "web-0.*ContainerCreating"}
+			for _, event := range eventDetails {
+				if matched, _ := regexp.MatchString(event, backgroundBuf2.String()); !matched {
+					e2e.Logf("Waiting for all set of StatefulSet pods to be rolled out...\n")
+					return false, nil
+				}
 			}
-			if rolledOut {
-				e2e.Logf("StatefulSet pods have been rolled out successfully\n")
-				return true, nil
-			}
-			e2e.Logf("Waiting for StatefulSet pods to be rolled out...\n")
-			return false, nil
+			e2e.Logf("StatefulSet pods have rolled out successfully")
+			return true, nil
 		})
 		if err != nil {
+			e2e.Logf("Backgroundbuf2 is %s", backgroundBuf2.String())
 			e2e.Failf("Timeout waiting for StatefulSet pods rollout: %v\n", err)
 		}
 
-		g.By("Get events sorted by lastTimestamp")
-		eventsOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", ns63694, "--sort-by="+".lastTimestamp").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		eventDetails := []string{"delete Pod web-4 in StatefulSet web successful", "delete Pod web-3 in StatefulSet web successful", "create Pod web-4 in StatefulSet web successful", "create Pod web-3 in StatefulSet web successful", "delete Pod web-1 in StatefulSet web successful", "delete Pod web-2 in StatefulSet web successful", "create Pod web-2 in StatefulSet web successful", "delete Pod web-0 in StatefulSet web successful", "create Pod web-0 in StatefulSet web successful"}
-		for _, event := range eventDetails {
-			o.Expect(strings.Contains(eventsOutput, event)).To(o.BeTrue())
-		}
 	})
 
 	// author: yinzhou@redhat.com

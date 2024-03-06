@@ -147,7 +147,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 
 		rodoCsvOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.0.1")).To(o.BeTrue())
+		o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.1.0")).To(o.BeTrue())
 
 		//Add the k8 dependencies checkpoint for RODO
 		g.By("Get the latest version of Kubernetes")
@@ -161,7 +161,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		o.Expect(rodoErr).NotTo(o.HaveOccurred())
 		rebasedVersion := strings.Split(minkuberversion, ".")[0] + "." + strings.Split(minkuberversion, ".")[1]
 
-		if !strings.Contains(rebasedVersion, kuberVersion) || !strings.Contains(rebasedVersion, "1.26") {
+		if !strings.Contains(rebasedVersion, kuberVersion) || !strings.Contains(rebasedVersion, "1.28") {
 			e2e.Failf("RODO operator not rebased with latest kubernetes")
 		}
 

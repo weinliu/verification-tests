@@ -35,7 +35,7 @@ spec:
           matchLabels:
             app: infinite-pod-creation-69072
       containers:
-      - image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:a9db83f67aa4389811bad29af878d038e18bc39f63673fe77fe30f9bf1bd97de
+      - image: quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83
         imagePullPolicy: IfNotPresent
         name: infinite-pod-creation
         ports:
