@@ -286,6 +286,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-High-70620-[CCM] Region and zone labels should be available on the nodes", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "openstack")
+		if iaasPlatform == "azure" {
+			azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+			o.Expect(azureErr).NotTo(o.HaveOccurred())
+			if azureStackCloud == "AzureStackCloud" {
+				g.Skip("Skip for ASH due to we went straight to the CCM for ASH, so won't have the old labels!")
+			}
+		}
 		nodeLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--show-labels").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(nodeLabel, "failure-domain.beta.kubernetes.io/region") && strings.Contains(nodeLabel, "topology.kubernetes.io/region") && strings.Contains(nodeLabel, "failure-domain.beta.kubernetes.io/zone") && strings.Contains(nodeLabel, "topology.kubernetes.io/zone")).To(o.BeTrue())
