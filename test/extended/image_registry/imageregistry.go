@@ -4592,4 +4592,54 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		foundLog := dePodLogs(podsOfOpenshiftApiserver, oc, ApiServerInfo)
 		o.Expect(foundLog).NotTo(o.BeTrue())
 	})
+
+	g.It("NonHyperShiftHOST-Author:wewang-Critical-72015-secret of Image-registry operator require more keys while using swift storage backend [Disruptive]", func() {
+		g.By("Check platforms")
+		exutil.SkipIfPlatformTypeNot(oc, "OpenStack")
+		expectedStatus1 := map[string]string{"Progressing": "True"}
+		expectedStatus2 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
+		g.By("Get the URL for obtaining an authentication token")
+		authurl := get_osp_authurl(oc)
+		if authurl == "" {
+			g.Skip("no authurl for the cluster, skip test")
+		}
+
+		g.By("Add authurl to swift storage config")
+		pathInfo := fmt.Sprintf("{\"spec\":{\"storage\":{\"swift\":{\"authURL\":\"%v\",\"regionName\":null, \"regionID\":null, \"domainID\":null, \"domain\":null, \"tenantID\":null}}}}", authurl)
+		recoverInfo := fmt.Sprintf("{\"spec\":{\"storage\":{\"swift\":{\"authURL\":null}}}}")
+		defer func() {
+			g.By("recover registry storage config")
+			output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", recoverInfo, "--type=merge").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("patched"))
+			err = waitCoBecomes(oc, "image-registry", 60, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		out, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", pathInfo, "--type=merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("patched"))
+		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a custom secret with invalid value")
+		defer func() {
+			g.By("Recover registry")
+			err = oc.WithoutNamespace().AsAdmin().Run("delete").Args("secret/image-registry-private-configuration-user", "-n", "openshift-image-registry").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 100, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "generic", "image-registry-private-configuration-user", "-n", "openshift-image-registry").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("secret/image-registry-private-configuration-user", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("image-registry-private-configuration-user"))
+
+		g.By("check the co/image-registry is degrade")
+		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		message, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].message}").Output()
+		o.Expect(message).To(o.ContainSubstring("unable to sync storage configuration"))
+	})
 })

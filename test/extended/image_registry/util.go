@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1360,4 +1361,20 @@ func checkImagePruners(oc *exutil.CLI) bool {
 		return false
 	}
 	return true
+}
+
+func get_osp_authurl(oc *exutil.CLI) string {
+	g.By("get authurl")
+	var authURL string
+	credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/openstack-credentials", "-n", "kube-system", "-o", `jsonpath={.data.clouds\.yaml}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	credential, err := base64.StdEncoding.DecodeString(credentials)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	r, _ := regexp.Compile("auth_url:.*")
+	match := r.FindAllString(string(credential), -1)
+	if strings.Contains(match[0], "auth_url") {
+		authURL = strings.Split(match[0], " ")[1]
+		return authURL
+	}
+	return ""
 }
