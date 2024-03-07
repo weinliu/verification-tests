@@ -35,8 +35,7 @@ describe('(OCP-70972 Network_Observability) Netflow traffic pages on workloads',
 
     it('(OCP-70972, memodi, Network_Observability), netflow traffic pages should appear on workloads', { tags: ["e2e", "admin", "@smoke"] }, function () {
         pagesToVisit.forEach((page) => {
-            cy.checkNetflowTraffic(page)
-
+            cy.visitNetflowTrafficTab(page)
         })
     })
     after("after all tests are done", function () {

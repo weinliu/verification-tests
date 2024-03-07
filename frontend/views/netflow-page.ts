@@ -261,13 +261,18 @@ Cypress.Commands.add('changeQueryOption', (name) => {
     cy.get('#filter-toolbar-search-filters').contains('Query options').click();
 });
 
-Cypress.Commands.add('checkNetflowTraffic', (page) => {
+Cypress.Commands.add('visitNetflowTrafficTab', (page) => {
     cy.visit(page)
     cy.get('[role="gridcell"]').eq(0).should('exist').within(() => {
         cy.get('a').should('exist').click()
     })
     cy.byLegacyTestID('horizontal-link-Network Traffic').should('exist').click()
 
+    // validate netflow-traffic page shows values
+    cy.checkNetflowTraffic()
+});
+
+Cypress.Commands.add('checkNetflowTraffic', () => {
     // overview panels
     cy.get('li.overviewTabButton').should('exist').click()
     cy.checkPanel(overviewSelectors.defaultPanels)
@@ -293,7 +298,8 @@ declare global {
             checkQuerySummary(metric: JQuery<HTMLElement>): Chainable<Element>
             checkPerformance(page: string, loadTime: number, memoryUsage: number): Chainable<Element>
             changeQueryOption(name: string): Chainable<Element>
-            checkNetflowTraffic(page: string): Chainable<Element>
+            visitNetflowTrafficTab(page: string): Chainable<Element>
+            checkNetflowTraffic(): Chainable<Element>
         }
     }
 }
