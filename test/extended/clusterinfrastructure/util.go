@@ -56,3 +56,11 @@ func skipTestIfSpotWorkers(oc *exutil.CLI) {
 		g.Skip("This case cannot be tested using spot instance!")
 	}
 }
+
+// Get the cluster history versions
+func getClusterHistoryVersions(oc *exutil.CLI) string {
+	historyVersions, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.history[*].version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Cluster history versions are %s", historyVersions)
+	return historyVersions
+}

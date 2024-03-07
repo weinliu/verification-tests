@@ -69,6 +69,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-61086-[Upgrade] Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		historyVersions := getClusterHistoryVersions(oc)
+		if strings.Contains(historyVersions, "4.6") {
+			g.Skip("Skipping this case due to IMDSv2 is only supported on AWS clusters that were created with version 4.7 or later")
+		}
+
 		g.By("Create a new machineset")
 		machinesetName := "machineset-61086"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
