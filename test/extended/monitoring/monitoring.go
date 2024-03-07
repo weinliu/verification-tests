@@ -681,6 +681,75 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get result with namespace parameter"))
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-69195-Replace OAuth-proxy container with Kube-RBAC-proxy in Prometheus pod", func() {
+		g.By("check prometheus-k8s-kube-rbac-proxy-web added")
+		checkSecret, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "prometheus-k8s-kube-rbac-proxy-web", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSecret).NotTo(o.ContainSubstring("not found"))
+
+		g.By("check secret prometheus-k8s-proxy removed")
+		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "prometheus-k8s-proxy", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSecret).To(o.ContainSubstring("not found"))
+
+		g.By("check prometheus k8s configs, kube-rbac-proxy-web related configs should exist")
+		checkPrometheusK8s, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-web\")].ports}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkPrometheusK8s).To(o.ContainSubstring("9091"))
+		o.Expect(checkPrometheusK8s).To(o.ContainSubstring("web"))
+		checkPrometheusK8s, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-web\")].volumeMounts}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkPrometheusK8s).To(o.ContainSubstring("secret-prometheus-k8s-kube-rbac-proxy-web"))
+		checkPrometheusK8s, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", "-ojsonpath={.spec.secrets}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkPrometheusK8s).To(o.ContainSubstring("prometheus-k8s-kube-rbac-proxy-web"))
+
+		g.By("check prometheus k8s pods, prometheus-proxy container is removed")
+		checkPO, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "prometheus-k8s-0", "-ojsonpath={.spec.containers[*].name}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkPO).NotTo(o.ContainSubstring("prometheus-proxy"))
+
+		g.By("check prometheus-k8s sa, annotations should be removed")
+		checkSA, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceAccount", "prometheus-k8s", "-ojsonpath={.metadata.annotations}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSA).To(o.Equal(""))
+
+		g.By("check prometheus-k8s servicemonitor, port should be keep at metrics")
+		checkSM, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceMonitor", "prometheus-k8s", "-ojsonpath={.spec.endpoints[]}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSM).To(o.ContainSubstring(`"port":"metrics"`))
+
+		g.By("check telemeter-client deploy")
+		checkTL, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].env[?(@.name==\"FROM\")]}", "-n", "openshift-monitoring").Output()
+		if !strings.Contains(checkTL, `"telemeter-client" not found`) {
+			o.Expect(checkTL).To(o.ContainSubstring(`"value":"https://prometheus-k8s.openshift-monitoring.svc:9091"`))
+		}
+
+		g.By("check secret thanos-querier-kube-rbac-proxy-metrics")
+		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-kube-rbac-proxy-metrics", "-ojsonpath={.metadata.labels}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/component":"query-layer"`))
+		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/instance":"thanos-querier"`))
+
+		g.By("check secret thanos-querier-kube-rbac-proxy-web")
+		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-kube-rbac-proxy-web", "-ojsonpath={.metadata.labels}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/component":"query-layer"`))
+		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/instance":"thanos-querier"`))
+
+		g.By("test role access to prometheus-k8s")
+		g.By("Get token of current user")
+		token := oc.UserConfig().BearerToken
+
+		g.By("Get route of prometheus-k8s")
+		host, hostErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-ojsonpath={.spec.host}", "-n", "openshift-monitoring").Output()
+		o.Expect(hostErr).NotTo(o.HaveOccurred())
+
+		g.By("test role can NOT access to prometheus-k8s")
+		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
+		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "Forbidden", 2*platformLoadTime)
+
+		g.By("add role access to prometheus-k8s")
+		admErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "cluster-monitoring-metrics-api", oc.Username()).Execute()
+		o.Expect(admErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "cluster-monitoring-metrics-api", oc.Username()).Execute()
+
+		g.By("test role access to prometheus-k8s")
+		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
+		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "up", 2*platformLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
