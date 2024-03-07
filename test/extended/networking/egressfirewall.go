@@ -1347,6 +1347,122 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 	})
+
+	// author: jechen@redhat.com
+	g.It("ConnectedOnly-Author:jechen-High-72054-EgressFirewall rules should include all IPs of matched node when nodeSelector is used.", func() {
+
+		// https://issues.redhat.com/browse/OCPBUGS-13665
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall3-template.yaml")
+
+		exutil.By("1. Label one node to match egressfirewall rule")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+
+		// node1 is going to be labelled to be a matched node, node2 is not labelled so it is not a matched node
+		node1 := nodeList.Items[0].Name
+		node2 := nodeList.Items[1].Name
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "ef-dep")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, node1, "ef-dep", "qe")
+
+		// Get all host IPs of both nodes
+		allNode1IPsv4, allNode1IPsv6 := getAllHostCIDR(oc, node1)
+		allNode2IPsv4, allNode2IPRv6 := getAllHostCIDR(oc, node2)
+
+		exutil.By("2. Get new namespace")
+		ns := oc.Namespace()
+
+		exutil.By("3. Create a pod in the namespace")
+		testPod := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		testPod.createPingPod(oc)
+		waitPodReady(oc, testPod.namespace, testPod.name)
+
+		exutil.By("4.Check the nodes can be acccessed before egressFirewall with nodeSelector is applied")
+		if !checkNodeAccessibilityFromAPod(oc, node1, testPod.namespace, testPod.name) || !checkNodeAccessibilityFromAPod(oc, node2, testPod.namespace, testPod.name) {
+			g.Skip("Pre-test check failed, test is skipped!")
+		}
+
+		exutil.By(" 5. Create an egressFirewall with rule nodeSelector.")
+		ipStackType := checkIPStackType(oc)
+		var cidrValue string
+		if ipStackType == "ipv6single" {
+			cidrValue = "::/0"
+		} else {
+			cidrValue = "0.0.0.0/0" // for Dualstack, test with v4 CIDR first, then test V6 CIDR later
+		}
+
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Deny",
+			cidr:      cidrValue,
+			template:  egressFWTemplate,
+		}
+		defer egressFW2.deleteEgressFW2Object(oc)
+		egressFW2.createEgressFW2Object(oc)
+		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By(" 6. Verify Egress firewall rules in NBDB of all nodes.")
+		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s | grep allow", ns)
+		nodelist, nodeErr := exutil.GetAllNodes(oc) // unlike nodeList at beginning of the case, this nodelist includes master nodes
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		o.Expect(len(nodelist)).NotTo(o.BeEquivalentTo(0))
+
+		for _, eachNode := range nodelist {
+			ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", eachNode)
+			o.Expect(podErr).NotTo(o.HaveOccurred())
+			listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubePod, ovnACLCmd)
+			o.Expect(listErr).NotTo(o.HaveOccurred())
+
+			// egressFirewall rules should include all the IPs of the matched node1 in NBDB, but do not include IPs for unmatched node2
+			if ipStackType == "dualstack" || ipStackType == "ipv4single" {
+				for _, nodeIPv4Addr := range allNode1IPsv4 {
+					o.Expect(listOutput).Should(o.ContainSubstring(nodeIPv4Addr), fmt.Sprintf("%s for node %s is not in egressfirewall rules as expected", nodeIPv4Addr, node1))
+				}
+				for _, nodeIPv4Addr := range allNode2IPsv4 {
+					o.Expect(listOutput).ShouldNot(o.ContainSubstring(nodeIPv4Addr), fmt.Sprintf("%s for node %s should not be in egressfirewall rules", nodeIPv4Addr, node2))
+				}
+			}
+
+			if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+				for _, nodeIPv6Addr := range allNode1IPsv6 {
+					o.Expect(listOutput).Should(o.ContainSubstring(nodeIPv6Addr), fmt.Sprintf("%s for node %s is not in egressfirewall rules as expected", nodeIPv6Addr, node1))
+				}
+				for _, nodeIPv6Addr := range allNode2IPRv6 {
+					o.Expect(listOutput).ShouldNot(o.ContainSubstring(nodeIPv6Addr), fmt.Sprintf("%s for node %s should not be in egressfirewall rules", nodeIPv6Addr, node2))
+				}
+			}
+		}
+
+		exutil.By(" 7. Verified matched node can be accessed from all its interfaces, unmatched node can not be accessed from any of its interfaces.")
+		result1 := checkNodeAccessibilityFromAPod(oc, node1, testPod.namespace, testPod.name)
+		o.Expect(result1).Should(o.BeTrue())
+		result2 := checkNodeAccessibilityFromAPod(oc, node2, testPod.namespace, testPod.name)
+		o.Expect(result2).Should(o.BeFalse())
+
+		if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+			// Delete original egressFirewall, recreate the egressFirewall with IPv6 CIDR, then check access to nodes through IPv6 interfaces
+			egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.cidr = "::/0"
+			defer egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.createEgressFW2Object(oc)
+
+			result1 := checkNodeAccessibilityFromAPod(oc, node1, testPod.namespace, testPod.name)
+			o.Expect(result1).Should(o.BeTrue())
+			result2 := checkNodeAccessibilityFromAPod(oc, node2, testPod.namespace, testPod.name)
+			o.Expect(result2).Should(o.BeFalse())
+		}
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {

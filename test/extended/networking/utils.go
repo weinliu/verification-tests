@@ -3524,3 +3524,56 @@ func unorderedContains(first, second []string) bool {
 
 	return true
 }
+
+// Get all host CIDRs for a cluster node, including those for multiple interefaces
+func getAllHostCIDR(oc *exutil.CLI, nodeName string) ([]string, []string) {
+	var allNodeIPsv4, allNodeIPsv6 []string
+	outputString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org\\/host-cidrs}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// sample output from the command:  ["172.22.0.237/24","192.168.111.25/24","fd2e:6f44:5dd8:c956::19/128"]
+	hostCIDRsString := strings.TrimRight(strings.TrimLeft(outputString, "["), "]") // trim the left [ and right ] around the CIDRs string
+	hostCIDRs := strings.Split(hostCIDRsString, ",")
+
+	if len(hostCIDRs) != 0 {
+		for _, eachCIDR := range hostCIDRs {
+			ipString := strings.TrimRight(strings.TrimLeft(eachCIDR, "\""), "\"") // trim the left " and right "" around the IP string
+			ip := strings.Split(ipString, "/")[0]                                 //remove IP prefix, only get IP address
+			if IsIPv4(ip) {
+				allNodeIPsv4 = append(allNodeIPsv4, ip)
+			}
+			if IsIPv6(ip) {
+				allNodeIPsv6 = append(allNodeIPsv6, ip)
+			}
+		}
+	}
+	e2e.Logf("\n cluster ipStackType: %s, for node %s, got all its v4 CIDRs: %v, v6 CIDRs: %v\n", checkIPStackType(oc), nodeName, allNodeIPsv4, allNodeIPsv6)
+	return allNodeIPsv4, allNodeIPsv6
+}
+
+// Check a node can be accessed from any of its host interface from a pod
+func checkNodeAccessibilityFromAPod(oc *exutil.CLI, nodeName, ns, podName string) bool {
+	// Get all host IPs of the node
+	ipStackType := checkIPStackType(oc)
+	allNodeIPsv4, allNodeIPsv6 := getAllHostCIDR(oc, nodeName)
+
+	if ipStackType == "dualstack" || ipStackType == "ipv4single" {
+		for _, nodeIPv4Addr := range allNodeIPsv4 {
+			_, err := e2eoutput.RunHostCmd(ns, podName, "ping -c 2 "+nodeIPv4Addr)
+			if err != nil {
+				e2e.Logf(fmt.Sprintf("Access to node %s failed at interface %s", nodeName, nodeIPv4Addr))
+				return false
+			}
+		}
+	}
+	if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+		for _, nodeIPv6Addr := range allNodeIPsv6 {
+			_, err := e2eoutput.RunHostCmd(ns, podName, "ping -c 2 "+nodeIPv6Addr)
+			if err != nil {
+				e2e.Logf(fmt.Sprintf("Access to node %s failed at interface %s", nodeName, nodeIPv6Addr))
+				return false
+			}
+		}
+	}
+	return true
+}
