@@ -166,16 +166,23 @@ func (fi1 *fileintegrity) checkFileintegrityStatus(oc *exutil.CLI, expected stri
 }
 
 func (fi1 *fileintegrity) getDataFromConfigmap(oc *exutil.CLI, cmName string, expected string) {
+	var res string
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		_, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", fi1.namespace, "configmap/"+cmName, "--to=/tmp", "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		aideResult, err := os.ReadFile("/tmp/integritylog")
+		res = string(aideResult)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(string(aideResult), expected) {
+		matched, _ := regexp.MatchString(expected, res)
+		if matched {
 			return true, nil
 		}
 		return false, nil
 	})
+	if err != nil {
+		// Expose more info when configmap not contains the expected string
+		e2e.Logf("The aide report details is: %s", res)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmName %s does not include %s", cmName, expected))
 }
 
@@ -299,16 +306,19 @@ func (fi1 *fileintegrity) checkConfigmapCreated(oc *exutil.CLI) {
 }
 
 func (fi1 *fileintegrity) checkFileintegritynodestatus(oc *exutil.CLI, nodeName string, expected string) {
+	var output string
+	fileintegrityName := fi1.name + "-" + nodeName
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-		fileintegrityName := fi1.name + "-" + nodeName
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
 			"-o=jsonpath={.lastResult.condition}").Output()
-		matched, _ := regexp.MatchString(expected, output)
-		if matched {
-			return true, nil
-		}
-		return false, nil
+		return output == expected, nil
 	})
+	if err != nil {
+		// Expose more info when not get the expected condition of the fileintegritynodestatuses
+		e2e.Logf("The fileintegritynodestatuses %s for node %s is: %s", fileintegrityName, nodeName, output)
+		res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace).Output()
+		e2e.Logf("The fileintegritynodestatuses for all nodes are: %s", res)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fileintegritynodestatuses %s is not expected %s", fi1.name+"-"+nodeName, expected))
 }
 
