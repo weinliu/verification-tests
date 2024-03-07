@@ -529,8 +529,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		if len(getStorageType(oc)) == 0 {
 			g.Skip("Current cluster doesn't have a proper object storage for this test!")
 		}
-		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-			g.Skip("The cluster doesn't have sufficient CPU/Memory for this test!")
+		if !validateInfraForLoki(oc) {
+			g.Skip("Current platform not supported!")
 		}
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		clo := SubscriptionObjects{
@@ -540,7 +540,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		}
 		lo := SubscriptionObjects{
 			OperatorName: "loki-operator-controller-manager",
-			Namespace:    eoNS,
+			Namespace:    "openshift-operators-redhat",
 			PackageName:  "loki-operator",
 		}
 		g.By("uninstall CLO and LO")
@@ -549,18 +549,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		for _, crd := range []string{"alertingrules.loki.grafana.com", "lokistacks.loki.grafana.com", "recordingrules.loki.grafana.com", "rulerconfigs.loki.grafana.com"} {
 			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crd).Execute()
 		}
-		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
 	})
 	g.AfterEach(func() {
 		for _, crd := range []string{"alertingrules.loki.grafana.com", "lokistacks.loki.grafana.com", "recordingrules.loki.grafana.com", "rulerconfigs.loki.grafana.com"} {
 			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crd).Execute()
 		}
-		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
 	})
 
 	// author qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
-		var targetchannel = "stable-5.9"
+		g.Skip("Skip for logging 5.9 is not released!")
+		var targetchannel = "stable"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
@@ -632,15 +631,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			collectorType: "vector",
 			logStoreType:  "lokistack",
 			lokistackName: ls.name,
-			//waitForReady:  true,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc)
-		// since logging 5.8 is not released, in catsrc/redhat-operators, stable channel is pointed to logging 5.7
-		// in logging 5.7, there is only one ds, using ls.waitForLokiStackToBeReady(oc) will always fail.
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
 
 		//get current csv version
 		preCloCSV := preCLO.getInstalledCSV(oc)
@@ -679,11 +674,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			g.By("checking if the collector can collect logs after upgrading")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			defer removeClusterRoleFromServiceAccount(oc, appProj, "default", "cluster-admin")
+			addClusterRoleToServiceAccount(oc, appProj, "default", "cluster-admin")
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			bearerToken := getSAToken(oc, "default", appProj)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
@@ -704,7 +701,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53404-Cluster Logging upgrade with Vector as collector - major version.[Serial][Slow]", func() {
-		// to add logging 5.7, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
+		// to add logging 5.8, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		tag, err := getIndexImageTag(oc)
@@ -713,12 +710,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 5.8, test upgrade from 5.7 to 5.8
-		// remove clusterrolebinding created in 5.7, so the other case can can be exected as in fresh install
-		// note: this step can be removed after 5.8
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "logging-all-authenticated-application-logs-reader").Execute()
-
-		preSource := CatalogSourceObjects{"stable-5.7", catsrc.name, catsrc.namespace}
+		// for 5.9, test upgrade from 5.8 to 5.9
+		preSource := CatalogSourceObjects{"stable-5.8", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{
@@ -748,7 +741,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		ls := lokiStack{
 			name:          "loki-53404",
 			namespace:     loggingNS,
-			tSize:         "1x.extra-small",
+			tSize:         "1x.demo",
 			storageType:   getStorageType(oc),
 			storageSecret: "storage-secret-53404",
 			storageClass:  sc,
@@ -799,8 +792,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		checkResource(oc, true, true, "Succeeded", []string{"csv", loCurrentCSV, "-n", preLO.Namespace, "-ojsonpath={.status.phase}"})
 		WaitForDeploymentPodsToBeReady(oc, preLO.Namespace, preLO.OperatorName)
 
-		g.By("waiting for the Loki and Vector pods to be ready after upgrade")
-		ls.update(oc, "", "{\"spec\": {\"size\": \"1x.demo\"}}", "--type=merge")
 		ls.waitForLokiStackToBeReady(oc)
 		cl.waitForLoggingReady(oc)
 		// In upgrade testing, sometimes a pod may not be ready but the deployment/statefulset might be ready
@@ -810,10 +801,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		g.By("checking if the collector can collect logs after upgrading")
 		oc.SetupProject()
 		appProj := oc.Namespace()
+		defer removeClusterRoleFromServiceAccount(oc, appProj, "default", "cluster-admin")
+		addClusterRoleToServiceAccount(oc, appProj, "default", "cluster-admin")
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+		bearerToken := getSAToken(oc, "default", appProj)
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
 		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
@@ -831,6 +824,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		exutil.AssertWaitPollNoErr(err, "application logs are not found")
 
 		g.By("checking if regular user can view his logs after upgrading")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "cluster-logging-application-view", oc.Username(), "-n", appProj).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		userToken, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		lc0 := newLokiClient(route).withToken(userToken).retry(5)
@@ -846,7 +841,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			e2e.Logf("\n len(res.Data.Result) not > 0, continue\n")
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "application logs are not found")
+		exutil.AssertWaitPollNoErr(err, "can't get application logs with normal user")
 	})
 })
 
