@@ -1116,3 +1116,26 @@ func setApplyToFalseForAllCrs(oc *exutil.CLI, namespace string, ssbName string) 
 			"-o=jsonpath={.status.applicationState}"}).check(oc)
 	}
 }
+
+func assertCompliancescanDone(oc *exutil.CLI, namespace string, parameters ...string) {
+	var res string
+	var errRes error
+	err := wait.Poll(5*time.Second, 360*time.Second, func() (bool, error) {
+		res, errRes = oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
+		if errRes != nil {
+			return false, errRes
+		}
+		return res == "DONE", nil
+	})
+	if err != nil {
+		// Expose more info when scan not finished in the hardcoded timer
+		e2e.Logf("The scan phase is: ", res)
+		resPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace).Output()
+		e2e.Logf("The result of \"oc get pod -n %s\" is: %s", namespace, resPod)
+		resPv, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", "-n", namespace).Output()
+		e2e.Logf("The result of \"oc get pvc -n %s\" is: %s", namespace, resPv)
+		resPvc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-n", namespace).Output()
+		e2e.Logf("The result of \"oc get pvc -n %s\" is: %s", namespace, resPvc)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The compliance scan not finished in the limited timer"))
+}

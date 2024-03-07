@@ -190,10 +190,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteMD.namespace = subD.namespace
 		g.By("Create master-compliancesuite !!!\n")
 		csuiteMD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteMD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check master-compliancesuite name and result..!!!\n")
 		subD.complianceSuiteResult(oc, csuiteMD.name, "NON-COMPLIANT")
@@ -435,8 +433,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create compliancesuite !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check rhcos-csuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "NON-COMPLIANT")
@@ -493,8 +490,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscanD.namespace = subD.namespace
 		g.By("Create compliancescan.. !!!\n")
 		cscanD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceScan name and result.. !!!\n")
 		subD.complianceScanName(oc, cscanD.name)
@@ -627,8 +623,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create compliancesuite !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -688,10 +683,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create master-scan !!!\n")
 		cscanMD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanMD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check master-scan name and result..!!!\n")
 		subD.complianceScanName(oc, cscanD.name)
@@ -738,8 +731,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscanD.namespace = subD.namespace
 		g.By("Create compliancescan !!!\n")
 		cscanD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceScan name and result..!!!\n")
 		subD.complianceScanName(oc, cscanD.name)
@@ -835,10 +827,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create master-scan.. !!!\n")
 		cscanMD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanMD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -935,8 +926,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create compliancesuite.. !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -961,8 +951,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuite.namespace = subD.namespace
 		g.By("Create compliancesuite.. !!!\n")
 		csuite.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuite.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, "worker-compliancesuite")
@@ -1044,8 +1033,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscanD.namespace = subD.namespace
 		g.By("Create compliancescan.. !!!\n")
 		cscanD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceScan name and result.. !!!\n")
 		subD.complianceScanName(oc, cscanD.name)
@@ -1067,8 +1055,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscan.namespace = subD.namespace
 		g.By("Create compliancescan.. !!!\n")
 		cscan.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscan.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscan.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceScan name and result.. !!!\n")
 		subD.complianceScanName(oc, cscan.name)
@@ -1121,10 +1108,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create platform-new-scan.. !!!\n")
 		cscanMD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanMD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check platform-scan pod.. !!!\n")
 		subD.scanPodName(oc, csuiteD.scanname+"-api-checks-pod")
@@ -1173,8 +1158,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create platform-new-scan.. !!!\n")
 		cscanMD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanMD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check platform-new-scan pod.. !!!\n")
 		subD.scanPodName(oc, cscanMD.name+"-api-checks-pod")
@@ -1214,8 +1198,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create platform-compliancesuite.. !!!\n")
 		csuiteD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check platform-scan pod.. !!!\n")
 		subD.scanPodName(oc, csuiteD.scanname+"-api-checks-pod")
@@ -1286,8 +1269,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create worker-compliancesuite !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check worker-compliancesuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -1303,8 +1285,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create master-compliancesuite !!!\n")
 		csuiteMD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteMD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check master-compliancesuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteMD.name)
@@ -1325,8 +1306,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create rhcos-compliancesuite !!!\n")
 		csuiteRD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteRD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteRD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check master-compliancesuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteRD.name)
@@ -1367,8 +1347,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create platform-compliancesuite.. !!!\n")
 		csuiteD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check platform-scan pod.. !!!\n")
 		subD.scanPodName(oc, csuiteD.scanname+"-api-checks-pod")
@@ -1390,8 +1369,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.namespace, "-o=jsonpath={.status.scanStatuses[*].currentIndex}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"pod", "-l", "compliance.openshift.io/suite=" + csuiteD.name + ",workload=suitererunner", "-n",
 			subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check platform-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "NON-COMPLIANT")
@@ -1431,8 +1409,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create worker-compliancesuite.. !!!\n")
 		csuiteD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
@@ -1449,8 +1426,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.namespace, "-o=jsonpath={.status.scanStatuses[*].currentIndex}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"pod", "-l", "compliance.openshift.io/suite=" + csuiteD.name + ",workload=suitererunner", "-n",
 			subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Verify the suitererunner resource requests and limits doubled through jobs.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "{\"cpu\":\"50m\",\"memory\":\"100Mi\"}", ok, []string{"jobs", "-l", "compliance.openshift.io/suite=" + csuiteD.name + ",workload=suitererunner", "-n",
@@ -1503,8 +1479,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create worker-compliancesuite.. !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
@@ -1527,8 +1502,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.namespace, "-o=jsonpath={.status.scanStatuses[*].currentIndex}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"pod", "-l", "compliance.openshift.io/suite=" + csuiteD.name + ",workload=suitererunner", "-n",
 			subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
@@ -1584,8 +1558,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		timestampRunning, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancesuite", csuiteD.name, "-n", subD.namespace,
 			"-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].lastTransitionTime}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NotRunning", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].reason}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Done", ok, []string{"compliancesuite", csuiteD.name, "-n",
@@ -1622,8 +1595,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.namespace, "-o=jsonpath={.status.scanStatuses[*].currentIndex}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"pod", "-l", "compliance.openshift.io/suite=" + csuiteD.name + ",workload=suitererunner", "-n",
 			subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NotRunning", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"Processing\")].reason}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Done", ok, []string{"compliancesuite", csuiteD.name, "-n",
@@ -1644,8 +1616,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.namespace, "-o=jsonpath={.status.scanStatuses[*].currentIndex}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"pod", "-l", "compliance.openshift.io/suite=" + csuiteD.name + ",workload=suitererunner", "-n",
 			subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
@@ -1700,8 +1671,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create compliancesuite !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -1826,8 +1796,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create compliancesuite !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -1878,8 +1847,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscanD.namespace = subD.namespace
 		g.By("Create compliancescan !!!\n")
 		cscanD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result..!!!\n")
 		subD.complianceScanName(oc, "rhcos-scan")
@@ -1937,8 +1905,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteD.namespace = subD.namespace
 		g.By("Create worker-compliancesuite !!!\n")
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -2071,7 +2038,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
@@ -2141,10 +2108,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create master-scan.. !!!\n")
 		cscanMD.create(oc)
 
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanMD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancescan", cscanMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check worker-compliancesuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -2249,8 +2214,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			csuiteMD.namespace = subD.namespace
 			g.By("Create master-compliancesuite !!!\n")
 			csuiteMD.create(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteMD.name, "-n",
-				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteMD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 			g.By("check the https proxy in the configmap!!!\n")
 			newCheck("expect", asAdmin, withoutNamespace, contain, httpsProxy, ok, []string{"cm", csuiteMD.scanname + "-openscap-env-map", "-n",
@@ -2470,8 +2434,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule")
 		csuiteD.namespace = subD.namespace
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 
@@ -2503,7 +2466,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace,  "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Check ComplianceSuite status !!!\n")
@@ -2566,10 +2529,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n", csuiteD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteMD.name, "-n", csuiteMD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", csuiteD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteMD.name, "-n", csuiteMD.namespace, "-o=jsonpath={.status.phase}")
 
 		fipsOut := checkFipsStatus(oc, subD.namespace)
 		if strings.Contains(fipsOut, "FIPS mode is enabled.") {
@@ -2611,8 +2572,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Check the instructions exists for cis manual rules.. !!!\n")
@@ -2684,8 +2644,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify 'ocp4-moderate-scansettingbinding-exists' rule status through compliancecheck result.. !!!\n")
@@ -2731,8 +2690,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify TokenMaxAge, TokenInactivityTimeout and no-ldap-insecure rules status through compliancecheck result.. !!!\n")
@@ -2763,8 +2721,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan using oc-compliance plugin.. !!")
 		_, err := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Verify TokenMaxAge, TokenInactivityTimeout and no-ldap-insecure rules status through compliancecheck result after rescan.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -2788,8 +2745,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan using oc-compliance plugin.. !!")
 		_, err3 := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Verify 'ocp4-moderate-ocp-no-ldap-insecure' rule status again through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-moderate-ocp-no-ldap-insecure", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
@@ -2835,8 +2791,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify 'ocp4-moderate-oauth-or-oauthclient-token-maxage' rule status through compliancecheck result.. !!!\n")
@@ -2853,8 +2808,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check ComplianceSuite status.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Verify 'ocp4-moderate-oauth-or-oauthclient-token-maxage' rule status again through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
 			"ocp4-moderate-oauth-or-oauthclient-token-maxage", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
@@ -2875,8 +2829,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		_, err1 := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		g.By("Check ComplianceSuite status.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Verify TokenMaxAge & TokenInactivityTimeout rules status through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -2946,8 +2899,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		fioObj, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegrities", "--all-namespaces",
@@ -3042,8 +2994,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify audit rules status through compliancecheck result.. !!!\n")
@@ -3113,8 +3064,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan and check ComplianceSuite status & result.. !!!\n")
 		_, err9 := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err9).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify audit rules status again through compliancecheck result.. !!!\n")
@@ -3159,8 +3109,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify motd and banner or login rules status through compliancecheck result.. !!!\n")
@@ -3180,8 +3129,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan using oc-compliance plugin.. !!")
 		_, err2 := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Verify motd and banner or login rules status again through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -3200,8 +3148,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan using oc-compliance plugin.. !!")
 		_, err3 := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Verify ocp4-moderate-banner-or-login-template-set rule status through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -3274,8 +3221,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 		g.By("Verify ocp4-moderate-configure-network-policies-namespaces rule status through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
@@ -3296,8 +3242,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan using oc-compliance plugin.. !!")
 		_, err := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", ssb.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Verify ocp4-moderate-configure-network-policies-namespaces rule status through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-moderate-configure-network-policies-namespaces", "-n", ssb.namespace, "-o=jsonpath={.status}"}).check(oc)
@@ -3309,8 +3254,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan using oc-compliance plugin.. !!")
 		_, err2 := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", ssb.namespace).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Verify motd and banner or login rules status again through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
 			"ocp4-moderate-configure-network-policies-namespaces", "-n", ssb.namespace, "-o=jsonpath={.status}"}).check(oc)
@@ -3340,8 +3284,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		cisRlueList := []string{"ocp4-cis-rbac-limit-cluster-admin", "ocp4-cis-rbac-limit-secrets-access", "ocp4-cis-rbac-wildcard-use", "ocp4-cis-rbac-pod-creation-access",
@@ -3430,14 +3373,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuite.create(oc)
 		csuiteCD.create(oc)
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n", csuiteD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", csuiteD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuiteD.name, "NON-COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", csuite.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuite.name, "-n", csuite.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteCD.name, "-n", csuiteCD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteCD.name, "-n", csuiteCD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuiteCD.name, "NON-COMPLIANT")
 
 		g.By("Verify worker-scan-audit-rules-dac-modification-chmod rule status through compliancecheckresult & complianceremediations.. !!!\n")
@@ -3481,14 +3421,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		_, err3 := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", csuiteCD.name, "-n", csuiteCD.namespace).Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n", csuiteD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", csuiteD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", csuite.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuite.name, "-n", csuite.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuite.name, "COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteCD.name, "-n", csuiteCD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteCD.name, "-n", csuiteCD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuiteCD.name, "COMPLIANT")
 
 		g.By("Verify rules status through compliancecheck result again.. !!!\n")
@@ -3562,7 +3499,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
@@ -3677,7 +3614,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun scan using oc-compliance plugin.. !!")
 		_, err1 := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Verify motd and banner or login rules status again through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -3798,8 +3735,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Create compliancesuite !!!\n")
 		csuiteD.namespace = subD.namespace
 		csuiteD.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
-			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result..!!!\n")
 		subD.complianceSuiteName(oc, csuiteD.name)
@@ -3863,7 +3799,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 		g.By("Check complianceSuite result through exit-code.. !!!\n")
@@ -3882,8 +3818,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Rerun the scan and check result... !!")
 		_, err := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "COMPLIANT")
 
 		g.By("Verify the rule status through compliancecheckresult and value through apiservers cluster object... !!!\n")
@@ -4471,8 +4406,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify rules status through compliancecheck result.. !!!\n")
@@ -4504,8 +4438,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify rules status through compliancecheck result.. !!!\n")
@@ -4537,8 +4470,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Check if audit prometheusrules is already available.. !!!\n")
@@ -4566,8 +4498,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 				"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 			g.By("Check ComplianceSuite status and result.. !!!\n")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 			subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 			g.By("Verify audit rule status through compliancecheck result.. !!!\n")
 			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -4683,9 +4614,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbN.name, "-n", ssbN.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbN.name, "-n", ssbN.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Check complianceSuite name and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbP.name, "-n", ssbP.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbP.name, "-n", ssbP.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbN.name, "COMPLIANT")
 		subD.complianceSuiteResult(oc, ssbP.name, "COMPLIANT")
@@ -4720,8 +4651,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		auditRules := []string{"master-directory-permissions-var-log-kube-audit", "master-directory-permissions-var-log-oauth-audit", "master-directory-permissions-var-log-ocp-audit",
@@ -4841,8 +4771,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbWithPC, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbWithPC, "NON-COMPLIANT INCONSISTENT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ss.priorityclassname, ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
@@ -4869,8 +4798,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbWithoutPC, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbWithoutPC, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbWithoutPC, "NON-COMPLIANT INCONSISTENT")
 		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"compliancesuite", ssbWithoutPC, "-n", subD.namespace,
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
@@ -4933,13 +4861,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuite.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, csuite.name, ok, []string{"compliancesuite", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", csuite.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuite.name, "-n", csuite.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuite.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, prioritym.name, ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
@@ -4958,13 +4884,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuiteWithoutPC.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, csuiteWithoutPC.name, ok, []string{"compliancesuite", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuiteWithoutPC.name, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"compliancesuite", csuiteWithoutPC.name, "-n", subD.namespace,
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
@@ -5028,13 +4952,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		csuite.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, csuite.name, ok, []string{"compliancesuite", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", csuite.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuite.name, "-n", csuite.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuite.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, csuite.name, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"compliancesuite", csuite.name, "-n", subD.namespace,
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
@@ -5057,8 +4979,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbWithPC, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbWithPC, "NON-COMPLIANT INCONSISTENT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ss.priorityclassname, ok, []string{"compliancesuite", ssbWithPC, "-n", subD.namespace,
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
@@ -5195,8 +5116,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 	})
 
@@ -5477,8 +5397,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Performing second scan using oc-compliance plugin.. !!!\n")
 		_, err2 := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbStig, "-n", subD.namespace).Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbStig, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbStig, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbStig, "COMPLIANT")
@@ -5581,8 +5500,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Check compliancesuite status and make sure ongoing compliancesuite will not be impacted.. !!! \n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbName, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbName, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbName+"-rerunner", ok, []string{"cronjob", "-n",
 			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -5602,8 +5520,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
 			"-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbName, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbName, "NON-COMPLIANT")
 
 		g.By("The ocp-67425 An administrator can suspend the scansettingbinding and resume the scan schedule.. !!!\n")
@@ -5659,8 +5576,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check compliancesuite status.. !!! \n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
 			"-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbName, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+
 		subD.complianceSuiteResult(oc, ssbName, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbName+"-rerunner", ok, []string{"cronjob", "-n",
 			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -5726,10 +5643,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Check compliancesuite status and make sure ongoing compliancesuite will not be impacted.. !!! \n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbNameCis, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbNamePcidss, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbNameCis, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbNamePcidss, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbNameCis, "NON-COMPLIANT")
 		subD.complianceSuiteResult(oc, ssbNamePcidss, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameCis+"-rerunner", ok, []string{"cronjob", "-n",
@@ -5818,8 +5733,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Check the scanLimit for the ComplianceSuite.. !!!\n")
@@ -5872,7 +5786,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertParameterValueForBulkPods(oc, `{"node-role.kubernetes.io/master":""}`, "pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].spec.nodeSelector}")
 
 		g.By("Check the scan result pods for the first round scan.. !!!\n")
-		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbDefaultNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbDefaultNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 		subD.complianceSuiteResult(oc, ssbDefaultNodeselector.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Create the sedond scansetting and scansettingbinding !!!\n")
@@ -5896,7 +5810,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertParameterValueForBulkPods(oc, `{"node-role.kubernetes.io/worker":""}`, "pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].spec.nodeSelector}")
 
 		g.By("Check the scan result pods.. !!!\n")
-		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 		subD.complianceSuiteResult(oc, ssbCustomNodeselector.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Patch the ss to apply toleration !!!\n")
@@ -5933,7 +5847,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertParameterValueForBulkPods(oc, `{"node-role.kubernetes.io/worker":""}`, "pod", "-l", label, "-n", subD.namespace, "-o=jsonpath={.items[*].spec.nodeSelector}")
 
 		g.By("Check the scan result pods.. !!!\n")
-		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 		subD.complianceSuiteResult(oc, ssbCustomNodeselector.name, "NON-COMPLIANT INCONSISTENT")
 	})
 
@@ -6037,7 +5951,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", sub.namespace)
+		assertCompliancescanDone(oc, sub.namespace, "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", sub.namespace)
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		sub.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
