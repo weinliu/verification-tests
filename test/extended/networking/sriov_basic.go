@@ -9,6 +9,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
@@ -400,6 +401,67 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 				sriovnetwork.createSriovNetwork(oc)
 
 				chkVFStatusWithPassTraffic(oc, sriovnetwork.name, data.InterfaceName, ns1, "mtu "+strconv.Itoa(mtuValue))
+
+			}()
+		}
+	})
+
+	g.It("Author:yingwang-Medium-NonPreRelease-Longduration-69582-dpdk for sriov vf can be worked well [Disruptive]", func() {
+		var caseID = "69582-"
+
+		for _, data := range testData {
+			data := data
+			// Create VF on with given device
+			policyName := data.Name
+			networkName := data.Name + "dpdk" + "net"
+			result := initDpdkVF(oc, data.Name, data.DeviceID, data.InterfaceName, data.Vendor, sriovOpNs, vfNum)
+			// if the deviceid is not exist on the worker, skip this
+			if !result {
+				continue
+			}
+			func() {
+				ns1 := "e2e-" + caseID + data.Name
+				err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+				exutil.SetNamespacePrivileged(oc, ns1)
+
+				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+				e2e.Logf("device ID is %v", data.DeviceID)
+				e2e.Logf("device Name is %v", data.Name)
+				sriovnetwork := sriovNetwork{
+					name:             networkName,
+					resourceName:     policyName,
+					networkNamespace: ns1,
+					template:         sriovNeworkTemplate,
+					namespace:        sriovOpNs,
+				}
+
+				//defer
+				defer func() {
+					rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+				}()
+				sriovnetwork.createSriovNetwork(oc)
+				//create pods
+				sriovTestPodDpdkTemplate := filepath.Join(buildPruningBaseDir, "sriov-dpdk-template.yaml")
+				sriovTestPod := sriovTestPod{
+					name:        "sriovdpdk",
+					namespace:   ns1,
+					networkName: sriovnetwork.name,
+					template:    sriovTestPodDpdkTemplate,
+				}
+				sriovTestPod.createSriovTestPod(oc)
+				err1 := waitForPodWithLabelReady(oc, ns1, "name=sriov-dpdk")
+				exutil.AssertWaitPollNoErr(err1, "this pod with label name=sriov-dpdk not ready")
+
+				g.By("Check testpmd running well")
+				pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name, policyName)
+				command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
+				testpmdOutput, err := e2eoutput.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
+
+				sriovTestPod.deleteSriovTestPod(oc)
 
 			}()
 		}

@@ -444,6 +444,38 @@ func initVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string, vf
 	return true
 }
 
+func initDpdkVF(oc *exutil.CLI, name, deviceID, interfaceName, vendor, ns string, vfNum int) bool {
+	deviceType := "vfio-pci"
+	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
+	sriovNetworkNodePolicyTemplate := filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
+	if vendor == "15b3" {
+		deviceType = "netdevice"
+		sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-mlx-dpdk-template.yaml")
+	}
+	sriovPolicy := sriovNetworkNodePolicy{
+		policyName:   name,
+		deviceType:   deviceType,
+		deviceID:     deviceID,
+		pfName:       interfaceName,
+		vendor:       vendor,
+		numVfs:       vfNum,
+		resourceName: name,
+		template:     sriovNetworkNodePolicyTemplate,
+		namespace:    ns,
+	}
+
+	exutil.By("Check the deviceID if exist on the cluster worker")
+	e2e.Logf("Create VF on name: %s, deviceID: %s, interfacename: %s, vendor: %s", name, deviceID, interfaceName, vendor)
+	if !chkPfExist(oc, deviceID, interfaceName) {
+		e2e.Logf("the cluster do not contain the sriov card. skip this testing!")
+		return false
+	}
+	// create dpdk policy
+	sriovPolicy.createPolicy(oc)
+	waitForSriovPolicyReady(oc, ns)
+	return true
+}
+
 func chkVFStatusWithPassTraffic(oc *exutil.CLI, nadName, nicName, ns, expectVaule string) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/sriov")
 	sriovTestPodTemplate := filepath.Join(buildPruningBaseDir, "sriov-netdevice-template.yaml")
@@ -586,4 +618,117 @@ func rmNAD(oc *exutil.CLI, ns string, name string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).NotTo(o.BeEmpty())
 	e2e.Logf("the NAD %v is removed", name)
+}
+
+func setSriovWebhook(oc *exutil.CLI, status string) {
+	//enable webhook
+	var patchYamlToRestore string
+	if status == "true" {
+		patchYamlToRestore = `[{"op":"replace","path":"/spec/enableOperatorWebhook","value": true}]`
+	} else if status == "false" {
+		patchYamlToRestore = `[{"op":"replace","path":"/spec/enableOperatorWebhook","value": false}]`
+	}
+
+	output, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("sriovoperatorconfigs", "default", "-n", "openshift-sriov-network-operator",
+		"--type=json", "-p", patchYamlToRestore).Output()
+	e2e.Logf("patch result is %v", output)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	matchStr := "sriovoperatorconfig.sriovnetwork.openshift.io/default patched"
+	o.Expect(output).Should(o.ContainSubstring(matchStr))
+
+	// check webhook is set correctly
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovoperatorconfigs", "default", "-n", "openshift-sriov-network-operator", "-o=jsonpath={.spec.enableOperatorWebhook}").Output()
+	e2e.Logf("the status of sriov webhook is %v", output)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).Should(o.ContainSubstring(status))
+
+}
+
+func chkSriovWebhookResource(oc *exutil.CLI, status bool) {
+
+	output1, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "operator-webhook", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output1)
+	output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "operator-webhook-sa", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output2)
+	output3, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "operator-webhook-service", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output3)
+	output4, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole", "operator-webhook", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output4)
+	output5, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("MutatingWebhookConfiguration", "sriov-operator-webhook-config", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output5)
+	output6, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding", "operator-webhook-role-binding ", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output6)
+
+	if status == true {
+		o.Expect(output1).Should(o.ContainSubstring("operator-webhook"))
+		o.Expect(output2).Should(o.ContainSubstring("operator-webhook"))
+		o.Expect(output3).Should(o.ContainSubstring("operator-webhook"))
+		o.Expect(output4).Should(o.ContainSubstring("operator-webhook"))
+		o.Expect(output5).Should(o.ContainSubstring("operator-webhook"))
+		o.Expect(output6).Should(o.ContainSubstring("operator-webhook"))
+	} else {
+		o.Expect(output1).Should(o.ContainSubstring("not found"))
+		o.Expect(output2).Should(o.ContainSubstring("not found"))
+		o.Expect(output3).Should(o.ContainSubstring("not found"))
+		o.Expect(output4).Should(o.ContainSubstring("not found"))
+		o.Expect(output5).Should(o.ContainSubstring("not found"))
+		o.Expect(output6).Should(o.ContainSubstring("not found"))
+	}
+
+}
+
+func setSriovInjector(oc *exutil.CLI, status string) {
+	//enable sriov resource injector
+	var patchYamlToRestore string
+	if status == "true" {
+		patchYamlToRestore = `[{"op":"replace","path":"/spec/enableInjector","value": true}]`
+	} else if status == "false" {
+		patchYamlToRestore = `[{"op":"replace","path":"/spec/enableInjector","value": false}]`
+	}
+
+	output, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("sriovoperatorconfigs", "default", "-n", "openshift-sriov-network-operator",
+		"--type=json", "-p", patchYamlToRestore).Output()
+	e2e.Logf("patch result is %v", output)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	matchStr := "sriovoperatorconfig.sriovnetwork.openshift.io/default patched"
+	o.Expect(output).Should(o.ContainSubstring(matchStr))
+
+	// check injector is set correctly
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovoperatorconfigs", "default", "-n", "openshift-sriov-network-operator", "-o=jsonpath={.spec.enableInjector}").Output()
+	e2e.Logf("the status of sriov resource injector is %v", output)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).Should(o.ContainSubstring(status))
+
+}
+
+func chkSriovInjectorResource(oc *exutil.CLI, status bool) {
+	output1, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "network-resources-injector", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output1)
+	output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "network-resources-injector-sa", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output2)
+	output3, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "network-resources-injector-service", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output3)
+	output4, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole", "network-resources-injector", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output4)
+	output5, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("MutatingWebhookConfiguration", "network-resources-injector-config", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output5)
+	output6, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding", "network-resources-injector-role-binding", "-n", "openshift-sriov-network-operator").Output()
+	e2e.Logf("the result of output is %v", output6)
+
+	if status == true {
+		o.Expect(output1).Should(o.ContainSubstring("network-resources-injector"))
+		o.Expect(output2).Should(o.ContainSubstring("network-resources-injector"))
+		o.Expect(output3).Should(o.ContainSubstring("network-resources-injector"))
+		o.Expect(output4).Should(o.ContainSubstring("network-resources-injector"))
+		o.Expect(output5).Should(o.ContainSubstring("network-resources-injector"))
+		o.Expect(output6).Should(o.ContainSubstring("network-resources-injector"))
+	} else {
+		o.Expect(output1).Should(o.ContainSubstring("not found"))
+		o.Expect(output2).Should(o.ContainSubstring("not found"))
+		o.Expect(output3).Should(o.ContainSubstring("not found"))
+		o.Expect(output4).Should(o.ContainSubstring("not found"))
+		o.Expect(output5).Should(o.ContainSubstring("not found"))
+		o.Expect(output6).Should(o.ContainSubstring("not found"))
+	}
+
 }

@@ -62,7 +62,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: yingwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yingwang-Medium-51732-Only one EgressQoS CRD is allowed per namespace.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yingwang-Medium-51732-EgressQoS resource applies only to its namespace.", func() {
 		var (
 			networkBaseDir   = exutil.FixturePath("testdata", "networking")
 			egressBaseDir    = filepath.Join(networkBaseDir, "egressqos")
@@ -78,6 +78,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("1) ####### Create egressqos and testpod in one namespace  ##########")
 		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
 		e2e.Logf("create namespace %s", ns1)
 
 		egressQos1 := egressQosResource{
@@ -105,6 +106,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("2) ####### Create egressqos and testpod in a new namespace  ##########")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns2)
 		e2e.Logf("create namespace %s", ns2)
 		egressQos2 := egressQosResource{
 			name:      "default",
@@ -176,7 +178,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-template.yaml")
 			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
 		)
-
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		egressQos := egressQosResource{
 			name:      "default",
 			namespace: oc.Namespace(),
@@ -224,7 +226,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-template.yaml")
 			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
 		)
-
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		egressQos := egressQosResource{
 			name:      "default",
 			namespace: oc.Namespace(),
@@ -281,7 +283,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-podselector-template.yaml")
 			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
 		)
-
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		egressQos := egressQosResource{
 			name:      "default",
 			namespace: oc.Namespace(),
@@ -310,6 +312,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("2) ####### Create testpod1 which match the second podselector  ##########")
 		defer testPod1.delete(oc)
 		testPod1.create(oc, "NAME="+testPod1.name, "NAMESPACE="+testPod1.namespace)
+		errPodRdy := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+testPod1.name)
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("testpod isn't ready"))
 
 		g.By("3) ####### Check dscp value in egress traffic  ##########")
 		defer rmPktsFile(a, oc, dscpSvcIP, pktFile1)
@@ -322,7 +326,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("4) ####### Create testpod2 which match the second podselector  ##########")
 		defer testPod2.delete(oc)
-		testPod1.create(oc, "NAME="+testPod2.name, "NAMESPACE="+testPod2.namespace)
+		testPod2.create(oc, "NAME="+testPod2.name, "NAMESPACE="+testPod2.namespace)
+		errPodRdy = waitForPodWithLabelReady(oc, oc.Namespace(), "name="+testPod2.name)
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("testpod isn't ready"))
 
 		g.By("5) ####### Check dscp value in egress traffic  ##########")
 		defer rmPktsFile(a, oc, dscpSvcIP, pktFile2)
@@ -377,7 +383,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-podselector-template.yaml")
 			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
 		)
-
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		egressQos := egressQosResource{
 			name:      "default",
 			namespace: oc.Namespace(),
@@ -399,6 +405,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("2) ####### Create testpod1 which match the second podselector  ##########")
 		defer testPod.delete(oc)
 		testPod.create(oc, "NAME="+testPod.name, "NAMESPACE="+testPod.namespace)
+		errPodRdy := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+testPod.name)
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("testpod isn't ready"))
+
 		//label testpod with priority Critical
 		err := exutil.LabelPod(oc, testPod.namespace, testPod.name, "priority="+priorityValue)
 		o.Expect(err).NotTo(o.HaveOccurred())

@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 		exutil.AssertWaitPollWithErr(errChk2, "Can not find NAD in ns after sriovnetwork is removed")
 
 	})
-	g.It("Author:yingwang-Medium-NonPreRelease-Longduration-24713-NAD can be also updated when networknamespace is change", func() {
+	g.It("Author:yingwang-Medium-NonPreRelease-24713-NAD can be also updated when networknamespace is change", func() {
 		var caseID = "24713-"
 		ns1 := "e2e-" + caseID + data.Name
 		ns2 := "e2e-" + caseID + data.Name + "-new"
@@ -277,4 +277,47 @@ var _ = g.Describe("[sig-networking] SDN sriov-nic", func() {
 
 	})
 
+	g.It("Author:yingwang-Medium-NonPreRelease-25847-SR-IOV operator-webhook can be disable by edit SR-IOV Operator Config [Serial]", func() {
+		// check webhook pods are running
+		chkPodsStatus(oc, sriovOpNs, "app=operator-webhook")
+		//disable webhook
+		defer chkSriovWebhookResource(oc, true)
+		defer chkPodsStatus(oc, sriovOpNs, "app=operator-webhook")
+		defer setSriovWebhook(oc, "true")
+		setSriovWebhook(oc, "false")
+		// webhook pods should be deleted
+		o.Eventually(func() string {
+			podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=operator-webhook", "-n", sriovOpNs).Output()
+			return podStatus
+		}, 20*time.Second, 5*time.Second).Should(o.ContainSubstring("No resources found"), fmt.Sprintf("sriov webhook pods are removed"))
+		chkSriovWebhookResource(oc, false)
+		// set webhook true
+		setSriovWebhook(oc, "true")
+		// webhook pods should be recovered
+		chkPodsStatus(oc, sriovOpNs, "app=operator-webhook")
+		chkSriovWebhookResource(oc, true)
+
+	})
+
+	g.It("Author:yingwang-Medium-NonPreRelease-25814-SR-IOV resource injector can be disable by edit SR-IOV Operator Config [Serial]", func() {
+		// check network-resources-injector pods are running
+		chkPodsStatus(oc, sriovOpNs, "app=network-resources-injector")
+		//disable network-resources-injector
+		defer chkSriovInjectorResource(oc, true)
+		defer chkPodsStatus(oc, sriovOpNs, "app=network-resources-injector")
+		defer setSriovInjector(oc, "true")
+		setSriovInjector(oc, "false")
+		// network-resources-injector pods should be deleted
+		o.Eventually(func() string {
+			podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=network-resources-injector", "-n", sriovOpNs).Output()
+			return podStatus
+		}, 20*time.Second, 5*time.Second).Should(o.ContainSubstring("No resources found"), fmt.Sprintf("sriov network-resources-injector pods are removed"))
+		chkSriovInjectorResource(oc, false)
+		// set network-resources-injector true
+		setSriovInjector(oc, "true")
+		// network-resources-injector pods should be recovered
+		chkPodsStatus(oc, sriovOpNs, "app=network-resources-injector")
+		chkSriovInjectorResource(oc, true)
+
+	})
 })
