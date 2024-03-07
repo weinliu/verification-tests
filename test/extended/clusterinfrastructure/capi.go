@@ -127,8 +127,6 @@ clusterresourcesetbindings.addons.cluster.x-k8s.io
 clusterresourcesets.addons.cluster.x-k8s.io
 clusters.cluster.x-k8s.io
 extensionconfigs.runtime.cluster.x-k8s.io
-ipaddressclaims.ipam.cluster.x-k8s.io
-ipaddresses.ipam.cluster.x-k8s.io
 machinedeployments.cluster.x-k8s.io
 machinehealthchecks.cluster.x-k8s.io
 machinepools.cluster.x-k8s.io
