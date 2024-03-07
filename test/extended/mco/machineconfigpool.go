@@ -455,7 +455,11 @@ func (mcp *MachineConfigPool) GetSortedNodes() ([]Node, error) {
 		return nil, err
 	}
 
-	return sortNodeList(poolNodes), nil
+	if !mcp.IsMaster() {
+		return sortNodeList(poolNodes), nil
+	}
+
+	return sortMasterNodeList(mcp.oc, poolNodes)
 
 }
 

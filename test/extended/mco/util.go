@@ -428,6 +428,35 @@ func sortNodeList(nodes []Node) []Node {
 	return nodes
 }
 
+// sortMasterNodeList returns the list of nodes sorted by the order used to updated them in MCO master pool.
+//
+//	Master pool will use the same order as the rest of the pools, but the node running the operator pod will be the last one to be updated.
+func sortMasterNodeList(oc *exutil.CLI, nodes []Node) ([]Node, error) {
+	masterSortedNodes := []Node{}
+	operatorNode, err := GetOperatorNode(oc)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Infof("MCO operator pod running in node: %s", operatorNode)
+
+	var latestNode Node
+	for _, item := range sortNodeList(nodes) {
+		node := item
+		if node.GetName() == operatorNode.GetName() {
+			latestNode = node
+			continue
+		}
+		masterSortedNodes = append(masterSortedNodes, node)
+	}
+
+	masterSortedNodes = append(masterSortedNodes, latestNode)
+
+	logger.Infof("Sorted master nodes: %s", masterSortedNodes)
+
+	return masterSortedNodes, nil
+}
+
 func getMachineConfigControllerPod(oc *exutil.CLI) (string, error) {
 	pods, err := exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, "k8s-app=machine-config-controller")
 	logger.Infof("machine-config-controller pod name is %s", pods[0])

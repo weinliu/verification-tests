@@ -170,7 +170,7 @@ func (r *Resource) Exists() bool {
 }
 
 // String implements the Stringer interface
-func (r *Resource) String() string {
+func (r Resource) String() string {
 	return fmt.Sprintf("<Kind: %s, Name: %s, Namespace: %s>", r.kind, r.name, r.namespace)
 }
 

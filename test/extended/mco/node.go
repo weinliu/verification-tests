@@ -1171,3 +1171,25 @@ func FilterSchedulableNodesOrFail(nodes []Node) []Node {
 	}
 	return returnNodes
 }
+
+// GetOperatorNode returns the node running the MCO operator pod
+func GetOperatorNode(oc *exutil.CLI) (*Node, error) {
+	podsList := NewNamespacedResourceList(oc.AsAdmin(), "pods", MachineConfigNamespace)
+	podsList.ByLabel("k8s-app=machine-config-operator")
+
+	mcoPods, err := podsList.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mcoPods) != 1 {
+		return nil, fmt.Errorf("There should be 1 and only 1 MCO operator pod. Found operator pods: %s", mcoPods)
+	}
+
+	nodeName, err := mcoPods[0].Get(`{.spec.nodeName}`)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewNode(oc, nodeName), nil
+}
