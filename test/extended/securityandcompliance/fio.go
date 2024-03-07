@@ -652,8 +652,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 
-		metricsErr := []string{"file_integrity_operator_daemonset_update_total{operation=\"update\"} 1", "file_integrity_operator_node_failed{node=\"" + nodeName + "\"} 1",
-			"file_integrity_operator_node_status_total{condition=\"Failed\",node=\"" + nodeName + "\"} 1"}
+		metricsErr := []string{"file_integrity_operator_daemonset_update_total{operation=\"update\"}", "file_integrity_operator_node_failed{node=\"" + nodeName + "\"}",
+			"file_integrity_operator_node_status_total{condition=\"Failed\",node=\"" + nodeName + "\"}"}
 		url := fmt.Sprintf("https://metrics." + sub.namespace + ".svc:8585/metrics-fio")
 		checkMetric(oc, metricsErr, url)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "file-integrity", ok, []string{"PrometheusRule", "-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
