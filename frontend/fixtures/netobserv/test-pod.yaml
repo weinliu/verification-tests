@@ -2,9 +2,9 @@
 kind: Namespace
 apiVersion: v1
 metadata:
-  name: netobserv-test
+  name: netobserv-test-67615
   labels:
-    name: netobserv-test
+    name: netobserv-test-67615
 
 ---
 apiVersion: v1
@@ -14,7 +14,7 @@ metadata:
   labels:
     run: test
   name: test
-  namespace: netobserv-test
+  namespace: netobserv-test-67615
 spec:
   containers:
   - command:

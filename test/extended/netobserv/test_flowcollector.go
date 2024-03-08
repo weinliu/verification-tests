@@ -154,7 +154,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.Context("FLP, Console metrics:", func() {
 		g.When("process.metrics.TLS == Disabled", func() {
-			g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
+			g.It("NonPreRelease-Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
 					namespace = oc.Namespace()
@@ -200,7 +200,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		})
 
 		g.When("processor metrics.TLS == Auto", func() {
-			g.It("Author:aramesha-High-54043-High-66031-Verify flowlogs-pipeline, Console metrics [Serial]", func() {
+			g.It("NonPreRelease-Author:aramesha-High-54043-High-66031-Verify flowlogs-pipeline, Console metrics [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
 					flpPromSA = "flowlogs-pipeline-prom"
@@ -244,7 +244,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		})
 	})
 
-	g.It("Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-Verify flow correctness [Serial]", func() {
+	g.It("NonPreRelease-Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-High-68310-Verify flow correctness and metrics [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
@@ -336,6 +336,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// allow only 10% of flows to have Bytes violating minBytes and maxBytes.
 		tolerance := math.Ceil(nflows * 0.10)
 		o.Expect(errFlows).Should(o.BeNumerically("<=", tolerance))
+
+		// verify inner metrics
+		query := fmt.Sprintf(`sum(rate(netobserv_workload_ingress_bytes_total{SrcK8S_Namespace="%s"}[1m]))`, testTemplate.ClientNS)
+		metrics := pollMetrics(oc, query)
+
+		// verfy metric is between 270 and 330
+		o.Expect(metrics).Should(o.BeNumerically("~", 330, 270))
 	})
 
 	g.It("NonPreRelease-Longduration-Author:aramesha-High-60701-Verify connection tracking [Serial]", func() {
@@ -740,7 +747,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
 
-		//Scenario1: Verify SCTP traffic
+		// Scenario1: Verify SCTP traffic
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
 			SrcK8S_Namespace: SCTPns,
@@ -755,7 +762,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(SCTPflows)).Should(o.BeNumerically(">", 0), "expected number of SCTP flows > 0")
 
-		//Scenario2: Verify ICMP traffic
+		// Scenario2: Verify ICMP traffic
 		g.By("sctpclient ping sctpserver")
 		e2eoutput.RunHostCmd(SCTPns, sctpClientPodname, "ping -c 10 "+sctpServerPodIP)
 
@@ -968,7 +975,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("NonPreRelease-Author:memodi-Medium-60664-Medium-61482-Alerts-with-NetObserv [Serial]", func() {
+	g.It("NonPreRelease-Longduration-Author:memodi-Medium-60664-Medium-61482-Alerts-with-NetObserv [Serial][Slow]", func() {
 		namespace := oc.Namespace()
 		flow := Flowcollector{
 			Namespace:       namespace,
@@ -1123,7 +1130,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}
 		})
 
-		g.It("NonPreRelease-Longduration-Author:aramesha-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial]", func() {
+		g.It("NonPreRelease-Longduration-Author:aramesha-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial][Slow]", func() {
 			namespace := oc.Namespace()
 
 			g.By("Deploy FlowCollector with Kafka TLS")
@@ -1336,7 +1343,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(len(consolePod)).To(o.Equal(0))
 		})
 
-		g.It("NonPreRelease-Longduration-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
+		g.It("NonPreRelease-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
 			namespace := oc.Namespace()
 			g.By("Create a new namespace for flowcollector")
 			flowNS := "netobserv-test"

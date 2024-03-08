@@ -101,13 +101,15 @@ func popMetricValue(metrics []metric) int {
 }
 
 // polls any prometheus metrics
-func pollMetrics(oc *exutil.CLI, promQuery string) {
+func pollMetrics(oc *exutil.CLI, promQuery string) int {
+	var metricsVal int
+	e2e.Logf("Query is %s", promQuery)
 	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 300*time.Second, false, func(context.Context) (bool, error) {
 		metrics, err := getMetric(oc, promQuery)
 		if err != nil {
 			return false, err
 		}
-		metricsVal := popMetricValue(metrics)
+		metricsVal = popMetricValue(metrics)
 		if metricsVal < 0 {
 			e2e.Logf("%s did not return metrics value > 0, will try again", promQuery)
 		}
@@ -116,6 +118,7 @@ func pollMetrics(oc *exutil.CLI, promQuery string) {
 
 	msg := fmt.Sprintf("%s did not return valid metrics in 300 seconds", promQuery)
 	exutil.AssertWaitPollNoErr(err, msg)
+	return metricsVal
 }
 
 // verify FLP metrics
