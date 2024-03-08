@@ -709,3 +709,26 @@ func checkLogLevelPod(oc *exutil.CLI, component string, opNamespace string, leve
 	return false, fmt.Sprintf("The log level %s not set for %s pod", level, component)
 
 }
+
+func checkPrometheusMetrics(oc *exutil.CLI, interval time.Duration, timeout time.Duration, pollImmediate bool, metrics string, matchExpected bool) (bool, error) {
+	prometheusURL := "localhost:9090/api/v1/query?query=" + metrics
+	var metricsOutput string
+	var err error
+	metricsErr := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, pollImmediate, func(ctx context.Context) (bool, error) {
+		metricsOutput, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "--", "curl", prometheusURL).Output()
+		if err != nil {
+			e2e.Logf("Could not get metrics %s status and trying again, the error is:%v", metrics, err)
+			return false, nil
+		}
+		if matchExpected && !strings.Contains(metricsOutput, metrics) {
+			return false, nil
+		}
+		if !matchExpected && strings.Contains(metricsOutput, metrics) {
+			return false, nil
+		}
+		e2e.Logf("Metrics output %s", metricsOutput)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Failed to get metric status due to %v", metricsErr))
+	return true, nil
+}

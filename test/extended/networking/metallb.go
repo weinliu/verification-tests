@@ -278,7 +278,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-High-53333-Verify for the service IP address of NodePort or LoadBalancer service ARP requests gets response from one interface only. [Serial]", func() {
+	g.It("Author:asood-High-53333-High-49622-Verify for the service IP address of NodePort or LoadBalancer service ARP requests gets response from one interface only and prometheus metrics are updated when service is removed. [Serial]", func() {
 		var (
 			ns                   string
 			namespaces           []string
@@ -296,7 +296,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		if !(isPlatformSuitable(oc)) {
 			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
 		}
-		exutil.By("1. Obtain the masters, workers and namespace")
+		exutil.By("1.0 Obtain the masters, workers and namespace")
 		//Two worker nodes needed to create l2advertisement object
 		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -311,6 +311,11 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		ns = oc.Namespace()
 		namespaces = append(namespaces, ns)
 		namespaces = append(namespaces, "test"+testID)
+
+		exutil.By(fmt.Sprintf("1.1 Add label to operator namespace %s to enable monitoring", opNamespace))
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", opNamespace, "openshift.io/cluster-monitoring-").Execute()
+		labelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", opNamespace, "openshift.io/cluster-monitoring=true").Execute()
+		o.Expect(labelErr).NotTo(o.HaveOccurred())
 
 		exutil.By("2. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -410,6 +415,15 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		o.Expect(macAddress1).NotTo(o.BeEmpty())
 		e2e.Logf("MAC address of announcing node %s ", macAddress1)
 		o.Expect(strings.ToLower(macAddress)).Should(o.Equal(macAddress1))
+
+		exutil.By("LoadBalancer service prometheus metrics are updated when service is removed")
+		l2Metrics := "metallb_speaker_announced"
+		exutil.By(fmt.Sprintf("6.7 Get %s metrics for the service %s at %s IP Address", l2Metrics, svc.name, svcIP))
+		o.Expect(checkPrometheusMetrics(oc, 10*time.Second, 150*time.Second, false, l2Metrics, true)).To(o.BeTrue())
+		exutil.By("6.8 Delete the service and check meterics are removed")
+		removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		o.Expect(checkPrometheusMetrics(oc, 5*time.Second, 30*time.Second, true, l2Metrics, false)).To(o.BeTrue())
+
 	})
 
 	g.It("Author:asood-High-60182-Verify the nodeport is not allocated to VIP based LoadBalancer service type [Disruptive]", func() {
