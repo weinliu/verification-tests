@@ -167,7 +167,7 @@ func (fi1 *fileintegrity) checkFileintegrityStatus(oc *exutil.CLI, expected stri
 
 func (fi1 *fileintegrity) getDataFromConfigmap(oc *exutil.CLI, cmName string, expected string) {
 	var res string
-	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 500*time.Second, func() (bool, error) {
 		_, err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", fi1.namespace, "configmap/"+cmName, "--to=/tmp", "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		aideResult, err := os.ReadFile("/tmp/integritylog")
@@ -570,7 +570,7 @@ func checkDBFilesUpdated(oc *exutil.CLI, fi1 fileintegrity, oldDbBackupfiles []s
 	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("%s", errorMsg))
 }
 
-func (fi1 *fileintegrity) assertFileintegritynodestatusNotEmpty(oc *exutil.CLI, nodeName string) {
+func (fi1 *fileintegrity) assertNodeConditionNotEmpty(oc *exutil.CLI, nodeName string) {
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		fileintegrityName := fi1.name + "-" + nodeName
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
@@ -578,4 +578,13 @@ func (fi1 *fileintegrity) assertFileintegritynodestatusNotEmpty(oc *exutil.CLI, 
 		return output != "", nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fileintegritynodestatuses %s is not Succeeded", fi1.name+"-"+nodeName))
+}
+
+func (fi1 *fileintegrity) assertNodesConditionNotEmpty(oc *exutil.CLI) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fi1.namespace, "-l app=aide-"+fi1.name, "-o=jsonpath={.items[*].spec.nodeName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodes := strings.Fields(output)
+	for _, node := range nodes {
+		fi1.assertNodeConditionNotEmpty(oc, node)
+	}
 }

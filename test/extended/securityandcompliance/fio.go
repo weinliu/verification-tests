@@ -104,8 +104,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		o.Expect(err).NotTo(o.HaveOccurred())
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
-		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
 		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
 			"-o=jsonpath={.lastResult.condition}").Output()
@@ -271,8 +271,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
-		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
 		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
 			"-o=jsonpath={.lastResult.condition}").Output()
@@ -523,11 +523,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		nodeName := getOneRhcosWorkerNodeName(oc)
-		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
+		fi1.assertNodesConditionNotEmpty(oc)
 
 		g.By("Check DB backup results")
 		dbReinit := true
+		nodeName := getOneRhcosWorkerNodeName(oc)
 		dbInitialBackupList, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
 
 		g.By("trigger reinit by applying aide config")
@@ -542,7 +542,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
 		dbBackupListAfterInit1, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
-		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
+		fi1.assertNodesConditionNotEmpty(oc)
 
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test" + getRandomString()
@@ -553,7 +553,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		debugNodeStdout, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "ls", filePath)
 		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The output of command ls %s is: %s", filePath, debugNodeStdout)
-		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
+		fi1.assertNodesConditionNotEmpty(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatuses", fileintegrityNodeStatusName, "-n", fi1.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fi1.name+"-"+nodeName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
@@ -569,7 +569,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		fi1.assertFileintegritynodestatusNotEmpty(oc, nodeName)
+		fi1.assertNodesConditionNotEmpty(oc)
 		checkDBFilesUpdated(oc, fi1, dbBackupListAfterInit1, nodeName, dbReinit, isNewFIO)
 	})
 
