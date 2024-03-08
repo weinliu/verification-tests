@@ -1295,4 +1295,51 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/ocp65903sidecar", "-p", "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"container\":{\"maxLength\":8193}}}}}}", "--type=merge", "-n", ingctrl2.namespace).Output()
 		o.Expect(output2).To(o.ContainSubstring("spec.logging.access.destination.container.maxLength: Invalid value: 8193: spec.logging.access.destination.container.maxLength in body should be less than or equal to 8192"))
 	})
+
+	// author: hongli@redhat.com
+	g.It("Author:hongli-High-72126-Support multiple cidr blocks for one NSG rule in the IngressController", func() {
+		g.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-azure-cidr.yaml")
+		ns := "openshift-ingress"
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp72126",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create the custom ingresscontroller with 3998 CIDRs")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		// check the LB service event if any error before exit
+		if err != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "service", "router-"+ingctrl.name).Output()
+			e2e.Logf("The output of describe LB service: %v", output)
+		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("2. Check the LB service event to ensure no exceeds maximum number error")
+		output1, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "service", "router-"+ingctrl.name).Output()
+		o.Expect(output1).To(o.ContainSubstring(`Ensured load balancer`))
+		o.Expect(output1).NotTo(o.ContainSubstring(`exceeds the maximum number of source IP addresses`))
+
+		exutil.By("3. Patch the custom ingress controller and add one more IP to allowedSourceRanges")
+		jsonPatch := "[{\"op\":\"add\", \"path\": \"/spec/endpointPublishingStrategy/loadBalancer/allowedSourceRanges/-\", \"value\":\"1.1.16.175/32\"}]"
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ingctrl.namespace, "ingresscontroller", ingctrl.name, "--type=json", "-p", jsonPatch).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Check the error message in event of the Load Balancer service")
+		// wait 3 seconds for recocile the service
+		time.Sleep(3 * time.Second)
+		output2, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "service", "router-"+ingctrl.name).Output()
+		o.Expect(output2).To(o.ContainSubstring(`exceeds the maximum number of source IP addresses (4001 > 4000)`))
+	})
 })
