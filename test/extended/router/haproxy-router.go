@@ -36,16 +36,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a NP ingresscontroller with PROXY protocol set")
+		exutil.By("Create a NP ingresscontroller with PROXY protocol set")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Check the router env to verify the PROXY variable is applied")
-		podname := getRouterPod(oc, "ocp40677")
+		exutil.By("Check the router env to verify the PROXY variable is applied")
+		podname := getNewRouterPod(oc, ingctrl.name)
 		dssearch := readRouterPodEnv(oc, podname, "ROUTER_USE_PROXY_PROTOCOL")
 		o.Expect(dssearch).To(o.ContainSubstring(`ROUTER_USE_PROXY_PROTOCOL=true`))
 	})
@@ -63,22 +62,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("check whether there are more than two worker nodes present for testing hostnetwork")
+		exutil.By("check whether there are more than two worker nodes present for testing hostnetwork")
 		workerNodeCount, _ := exactNodeDetails(oc)
 		if workerNodeCount <= 2 {
 			g.Skip("Skipping as we need more than two worker nodes")
 		}
 
-		g.By("Create a hostNetwork ingresscontroller with PROXY protocol set")
+		exutil.By("Create a hostNetwork ingresscontroller with PROXY protocol set")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Check the router env to verify the PROXY variable is applied")
-		routername := getRouterPod(oc, "ocp40675")
+		exutil.By("Check the router env to verify the PROXY variable is applied")
+		routername := getNewRouterPod(oc, ingctrl.name)
 		pollReadPodData(oc, "openshift-ingress", routername, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 	})
 
@@ -140,15 +138,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: jechen@redhat.com
 	g.It("Author:jechen-Medium-42878-Errorfile stanzas and dummy default html files have been added to the router", func() {
-		g.By("Get pod (router) in openshift-ingress namespace")
-		podname := getRouterPod(oc, "default")
+		exutil.By("Get pod (router) in openshift-ingress namespace")
+		podname := getNewRouterPod(oc, "default")
 
-		g.By("Check if there are default 404 and 503 error pages on the router")
+		exutil.By("Check if there are default 404 and 503 error pages on the router")
 		searchOutput := readRouterPodData(oc, podname, "ls -l", "error-page")
 		o.Expect(searchOutput).To(o.ContainSubstring(`error-page-404.http`))
 		o.Expect(searchOutput).To(o.ContainSubstring(`error-page-503.http`))
 
-		g.By("Check if errorfile stanzas have been added into haproxy-config.template")
+		exutil.By("Check if errorfile stanzas have been added into haproxy-config.template")
 		searchOutput = readRouterPodData(oc, podname, "cat haproxy-config.template", "errorfile")
 		o.Expect(searchOutput).To(o.ContainSubstring(`ROUTER_ERRORFILE_404`))
 		o.Expect(searchOutput).To(o.ContainSubstring(`ROUTER_ERRORFILE_503`))
@@ -167,16 +165,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("1. create a custom ingresscontroller, and get its router name")
+		exutil.By("1. create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		originalRouterpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("2.  Configure a customized error page configmap from files in openshift-config namespace")
+		exutil.By("2.  Configure a customized error page configmap from files in openshift-config namespace")
 		configmapName := "custom-43115-error-code-pages"
 		cmFile1 := filepath.Join(buildPruningBaseDir, "error-page-503.http")
 		cmFile2 := filepath.Join(buildPruningBaseDir, "error-page-404.http")
@@ -184,29 +180,28 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(error).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", configmapName, "-n", "openshift-config").Output()
 
-		g.By("3. Check if configmap is successfully configured in openshift-config namesapce")
-		err = checkConfigMap(oc, "openshift-config", configmapName)
+		exutil.By("3. Check if configmap is successfully configured in openshift-config namesapce")
+		err := checkConfigMap(oc, "openshift-config", configmapName)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cm %v not found", configmapName))
 
-		g.By("4. Patch the configmap created above to the custom ingresscontroller in openshift-ingress namespace")
+		exutil.By("4. Patch the configmap created above to the custom ingresscontroller in openshift-ingress namespace")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"httpErrorCodePages\":{\"name\":\"custom-43115-error-code-pages\"}}}")
 
-		g.By("5. Check if configmap is successfully patched into openshift-ingress namesapce, configmap with name ingctrl.name-errorpages should be created")
+		exutil.By("5. Check if configmap is successfully patched into openshift-ingress namesapce, configmap with name ingctrl.name-errorpages should be created")
 		expectedCmName := ingctrl.name + `-errorpages`
 		err = checkConfigMap(oc, "openshift-ingress", expectedCmName)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cm %v not found", expectedCmName))
 
-		g.By("6. Obtain new router pod created, and check if error_code_pages directory is created on it")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+originalRouterpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+originalRouterpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		exutil.By("6. Obtain new router pod created, and check if error_code_pages directory is created on it")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("Check /var/lib/haproxy/conf directory to see if error_code_pages subdirectory is created on the router")
+		exutil.By("Check /var/lib/haproxy/conf directory to see if error_code_pages subdirectory is created on the router")
 		searchOutput := readRouterPodData(oc, newrouterpod, "ls -al /var/lib/haproxy/conf", "error_code_pages")
 		o.Expect(searchOutput).To(o.ContainSubstring(`error_code_pages`))
 
-		g.By("7. Check if custom error code pages have been mounted")
+		exutil.By("7. Check if custom error code pages have been mounted")
 		searchOutput = readRouterPodData(oc, newrouterpod, "ls -al /var/lib/haproxy/conf/error_code_pages", "error")
 		o.Expect(searchOutput).To(o.ContainSubstring(`error-page-503.http -> ..data/error-page-503.http`))
 		o.Expect(searchOutput).To(o.ContainSubstring(`error-page-404.http -> ..data/error-page-404.http`))
@@ -234,16 +229,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("Verify the default server/client fin and default timeout values")
+		exutil.By("Verify the default server/client fin and default timeout values")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", `cat haproxy.config | grep -we "timeout client" -we "timeout client-fin" -we "timeout server" -we "timeout server-fin"`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkoutput).To(o.ContainSubstring(`timeout client 30s`))
@@ -251,14 +245,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(checkoutput).To(o.ContainSubstring(`timeout server 30s`))
 		o.Expect(checkoutput).To(o.ContainSubstring(`timeout server-fin 1s`))
 
-		g.By("Patch ingresscontroller with new timeout options")
+		exutil.By("Patch ingresscontroller with new timeout options")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"3s\",\"clientTimeout\":\"33s\",\"serverFinTimeout\":\"3s\",\"serverTimeout\":\"33s\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("verify the timeout variables from the new router pods")
+		exutil.By("verify the timeout variables from the new router pods")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "TIMEOUT")
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_CLIENT_FIN_TIMEOUT=3s`))
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_DEFAULT_CLIENT_TIMEOUT=33s`))
@@ -279,28 +272,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("Verify the default tls values")
+		exutil.By("Verify the default tls values")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", `cat haproxy.config | grep -w "inspect-delay"| uniq`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkoutput).To(o.ContainSubstring(`tcp-request inspect-delay 5s`))
 
-		g.By("Patch ingresscontroller with a tls inspect timeout option")
+		exutil.By("Patch ingresscontroller with a tls inspect timeout option")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"tlsInspectDelay\": \"15s\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("verify the new tls inspect timeout value in the router pod")
+		exutil.By("verify the new tls inspect timeout value in the router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_INSPECT_DELAY")
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_INSPECT_DELAY=15s`))
 
@@ -319,28 +310,25 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
-
-		g.By("Verify the default tls values")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		exutil.By("Verify the default tls values")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", `cat haproxy.config | grep -w "timeout tunnel"`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkoutput).To(o.ContainSubstring(`timeout tunnel 1h`))
 
-		g.By("Patch ingresscontroller with a tunnel timeout option")
+		exutil.By("Patch ingresscontroller with a tunnel timeout option")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"tunnelTimeout\": \"2h\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("verify the new tls inspect timeout value in the router pod")
+		exutil.By("verify the new tls inspect timeout value in the router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_DEFAULT_TUNNEL_TIMEOUT")
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_DEFAULT_TUNNEL_TIMEOUT=2h`))
 
@@ -359,22 +347,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("Patch ingresscontroller with negative values for the tuningOptions settings and check the ingress operator config post the change")
+		exutil.By("Patch ingresscontroller with negative values for the tuningOptions settings and check the ingress operator config post the change")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"-7s\",\"clientTimeout\": \"-33s\",\"serverFinTimeout\": \"-3s\",\"serverTimeout\": \"-27s\",\"tlsInspectDelay\": \"-11s\",\"tunnelTimeout\": \"-1h\"}}}")
 		output := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrl.name, ".spec.tuningOptions")
 		o.Expect(output).To(o.ContainSubstring("{\"clientFinTimeout\":\"-7s\",\"clientTimeout\":\"-33s\",\"reloadInterval\":\"0s\",\"serverFinTimeout\":\"-3s\",\"serverTimeout\":\"-27s\",\"tlsInspectDelay\":\"-11s\",\"tunnelTimeout\":\"-1h\"}"))
 
-		g.By("Check the timeout option set in the haproxy pods post the changes applied")
+		exutil.By("Check the timeout option set in the haproxy pods post the changes applied")
 		checktimeout := readRouterPodData(oc, routerpod, "cat haproxy.config", "timeout")
 		o.Expect(checktimeout).To(o.ContainSubstring("timeout connect 5s"))
 		o.Expect(checktimeout).To(o.ContainSubstring("timeout client 30s"))
@@ -397,27 +384,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch ingresscontroller with logEmptyRequests set to Ignore option")
+		exutil.By("Patch ingresscontroller with logEmptyRequests set to Ignore option")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"type\":\"Container\"},\"logEmptyRequests\":\"Ignore\"}}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("verify the Dontlog variable inside the  router pod")
+		exutil.By("verify the Dontlog variable inside the  router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_DONT_LOG_NULL")
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_DONT_LOG_NULL=true`))
 
-		g.By("Verify the parameter set in the haproxy configuration of the router pod")
+		exutil.By("Verify the parameter set in the haproxy configuration of the router pod")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", newrouterpod, "--", "bash", "-c", `cat haproxy.config | grep -w "dontlognull"`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkoutput).To(o.ContainSubstring(`option dontlognull`))
@@ -437,27 +421,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch ingresscontroller with logEmptyRequests set to Ignore option")
+		exutil.By("Patch ingresscontroller with logEmptyRequests set to Ignore option")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"httpEmptyRequestsPolicy\":\"Ignore\"}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
-
-		g.By("verify the Dontlog variable inside the  router pod")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		exutil.By("verify the Dontlog variable inside the  router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_HTTP_IGNORE_PROBES")
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_HTTP_IGNORE_PROBES=true`))
 
-		g.By("Verify the parameter set in the haproxy configuration of the router pod")
+		exutil.By("Verify the parameter set in the haproxy configuration of the router pod")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", newrouterpod, "--", "bash", "-c", `cat haproxy.config | grep -w "http-ignore-probes"`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkoutput).To(o.ContainSubstring(`option http-ignore-probes`))
@@ -476,29 +456,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch ingresscontroller with httpCompression option")
+		exutil.By("Patch ingresscontroller with httpCompression option")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"httpCompression\":{\"mimeTypes\":[\"text/html\",\"text/css; charset=utf-8\",\"application/json\"]}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("check the env variable of the router pod")
+		exutil.By("check the env variable of the router pod")
 		checkenv1 := readRouterPodEnv(oc, newrouterpod, "ROUTER_ENABLE_COMPRESSION")
 		o.Expect(checkenv1).To(o.ContainSubstring(`ROUTER_ENABLE_COMPRESSION=true`))
 		checkenv2 := readRouterPodEnv(oc, newrouterpod, "ROUTER_COMPRESSION_MIME")
 		o.Expect(checkenv2).To(o.ContainSubstring(`ROUTER_COMPRESSION_MIME=text/html "text/css; charset=utf-8" application/json`))
 
-		g.By("check the haproxy config on the router pod for compression algorithm")
+		exutil.By("check the haproxy config on the router pod for compression algorithm")
 		algo := readRouterPodData(oc, newrouterpod, "cat haproxy.config", "compression")
 		o.Expect(algo).To(o.ContainSubstring(`compression algo gzip`))
 		o.Expect(algo).To(o.ContainSubstring(`compression type text/html "text/css; charset=utf-8" application/json`))
@@ -517,25 +494,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("Patch ingresscontroller with wrong httpCompression data and check whether it is configurable")
+		exutil.By("Patch ingresscontroller with wrong httpCompression data and check whether it is configurable")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/46898", "-p", "{\"spec\":{\"httpCompression\":{\"mimeTypes\":[\"text/\",\"text/css; charset=utf-8\",\"//\"]}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"text/\": spec.httpCompression.mimeTypes[0] in body should match"))
 		o.Expect(output).To(o.ContainSubstring("application|audio|image|message|multipart|text|video"))
 
-		g.By("check the env variable of the router pod")
+		exutil.By("check the env variable of the router pod")
 		output1, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "/usr/bin/env | grep ROUTER_ENABLE_COMPRESSION").Output()
 		o.Expect(output1).NotTo(o.ContainSubstring(`ROUTER_ENABLE_COMPRESSION=true`))
 
-		g.By("check the haproxy config on the router pod for compression algorithm")
+		exutil.By("check the haproxy config on the router pod for compression algorithm")
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat haproxy.config | grep compression").Output()
 		o.Expect(output2).NotTo(o.ContainSubstring(`compression algo gzip`))
 	})
@@ -705,11 +681,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
-		g.By("create a client pod")
+		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
-		g.By("create an unsecure service and its backend pod")
+		exutil.By("create an unsecure service and its backend pod")
 		createResourceFromFile(oc, project1, testPodSvc)
 		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
@@ -802,7 +778,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
-		g.By("create a client pod")
+		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
@@ -848,7 +824,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.ContainSubstring("Custom error page:THE REQUESTED APPLICATION IS NOT AVAILABLE YET!")))
 
 		// the following test step will be added after bug 1990020 is fixed(https://bugzilla.redhat.com/show_bug.cgi?id=1990020)
-		// g.By("curl the non-existing route, expect to get the new custom http 404 Not Found error")
+		// exutil.By("curl the non-existing route, expect to get the new custom http 404 Not Found error")
 		// output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst).Output()
 		// o.Expect(err).NotTo(o.HaveOccurred())
 		// o.Expect(output).Should(o.And(
@@ -866,14 +842,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
 		addSvc := filepath.Join(buildPruningBaseDir, "svc-additional-backend.yaml")
 
-		g.By("Deploy project with pods and service resources")
+		exutil.By("Deploy project with pods and service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		createResourceFromFile(oc, oc.Namespace(), addSvc)
 		checkPodstate := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(checkPodstate, "project resource creation failed!")
 
-		g.By("Expose a edge/insecure/REEN/passthrough type routes via the services inside project")
+		exutil.By("Expose a edge/insecure/REEN/passthrough type routes via the services inside project")
 		edgeRoute := "route-edge" + "-" + oc.Namespace() + "." + baseDomain
 		reenRoute := "route-reen" + "-" + oc.Namespace() + "." + baseDomain
 		passthRoute := "route-passth" + "-" + oc.Namespace() + "." + baseDomain
@@ -894,7 +870,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure1"))
 
-		g.By("Check the default loadbalance algorithm inside proxy pod")
+		exutil.By("Check the default loadbalance algorithm inside proxy pod")
 		edgeBackend := "be_edge_http:" + project1 + ":route-edge"
 		reenBackend := "be_secure:" + project1 + ":route-reen"
 		insecBackend := "be_http:" + project1 + ":service-unsecure"
@@ -905,7 +881,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		lbAlgoCheckInsecure := readHaproxyConfig(oc, defaultPod, insecBackend, "-A5", "balance")
 		o.Expect(lbAlgoCheckInsecure).To(o.ContainSubstring("random"))
 
-		g.By("Add service as weighted backend to the routes and check the balancing algorithm value")
+		exutil.By("Add service as weighted backend to the routes and check the balancing algorithm value")
 		passthBackend := "be_tcp:" + project1 + ":route-passth"
 		_, edgerr := oc.Run("set").WithoutNamespace().Args("route-backends", "route-edge", "service-unsecure1=100", "service-unsecure2=150").Output()
 		o.Expect(edgerr).NotTo(o.HaveOccurred())
@@ -934,20 +910,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
 
-		g.By("Deploy project with pods and service resources")
+		exutil.By("Deploy project with pods and service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		checkPodstate := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(checkPodstate, "project resource creation failed!")
 
-		g.By("Expose a passthrough type routes via the services inside project")
+		exutil.By("Expose a passthrough type routes via the services inside project")
 		passthRoute := "route-passth" + "-" + oc.Namespace() + "." + baseDomain
 		exposeRoutePassth(oc, oc.Namespace(), "route-passth", "service-secure1", passthRoute)
 		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("route-passth"))
 
-		g.By("Check the default loadbalance algorithm inside proxy pod and check the default LB variable to confirm power-of-two is active")
+		exutil.By("Check the default loadbalance algorithm inside proxy pod and check the default LB variable to confirm power-of-two is active")
 		rtrParamCheck := readPodEnv(oc, defaultPod, "openshift-ingress", "ROUTER_LOAD_BALANCE_ALGORITHM")
 		o.Expect(rtrParamCheck).To(o.ContainSubstring("random"))
 		passthBackend := "be_tcp:" + project1 + ":route-passth"
@@ -969,39 +945,36 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
 
-		g.By("Create a custom ingresscontroller, and get its router name")
+		exutil.By("Create a custom ingresscontroller, and get its router name")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		routerpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("Patch ingresscontroller with unsupportedConfigOverrides option")
+		exutil.By("Patch ingresscontroller with unsupportedConfigOverrides option")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"unsupportedConfigOverrides\":{\"loadBalancingAlgorithm\":\"leastconn\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("verify ROUTER_LOAD_BALANCE_ALGORITHM variable of the deployed router pod")
+		exutil.By("verify ROUTER_LOAD_BALANCE_ALGORITHM variable of the deployed router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOAD_BALANCE_ALGORITHM")
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_LOAD_BALANCE_ALGORITHM=leastconn`))
 
-		g.By("deploy pod resource and expose a route via the ingresscontroller")
+		exutil.By("deploy pod resource and expose a route via the ingresscontroller")
 		oc.SetupProject()
 		project1 := oc.Namespace()
 		edgeRoute := "route-edge" + "-" + project1 + "." + ingctrl.domain
 		createResourceFromFile(oc, project1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "project resource creation failed!")
 		exposeRouteEdge(oc, project1, "route-edge", "service-unsecure1", edgeRoute)
 		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("route-edge"))
 
-		g.By("Check the router config for the default LB algorithm set at the backend")
+		exutil.By("Check the router config for the default LB algorithm set at the backend")
 		edgeBackend := "be_edge_http:" + project1 + ":route-edge"
 		lbAlgoCheckEdge := readHaproxyConfig(oc, newrouterpod, edgeBackend, "-A5", "balance")
 		o.Expect(lbAlgoCheckEdge).To(o.ContainSubstring("leastconn"))
@@ -1011,20 +984,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-High-41042-The Power-of-two balancing features defaults to random LB algorithm instead of leastconn for REEN/Edge/insecure routes", func() {
 		var (
 			baseDomain = getBaseDomain(oc)
-			defaultPod = getRouterPod(oc, "default")
+			defaultPod = getNewRouterPod(oc, "default")
 		)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
 		addSvc := filepath.Join(buildPruningBaseDir, "svc-additional-backend.yaml")
 
-		g.By("Deploy project with pods and service resources")
+		exutil.By("Deploy project with pods and service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
 		createResourceFromFile(oc, project1, addSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "project resource creation failed!")
 
-		g.By("Expose a edge/insecure/REEN/passthrough type routes via the services inside project")
+		exutil.By("Expose a edge/insecure/REEN/passthrough type routes via the services inside project")
 		edgeRoute := "route-edge" + "-" + project1 + "." + baseDomain
 		reenRoute := "route-reen" + "-" + project1 + "." + baseDomain
 		exposeRouteEdge(oc, project1, "route-edge", "service-unsecure1", edgeRoute)
@@ -1040,7 +1013,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure1"))
 
-		g.By("Check the default loadbalance algorithm inside proxy pod")
+		exutil.By("Check the default loadbalance algorithm inside proxy pod")
 		edgeBackend := "be_edge_http:" + project1 + ":route-edge"
 		reenBackend := "be_secure:" + project1 + ":route-reen"
 		insecBackend := "be_http:" + project1 + ":service-unsecure"
@@ -1055,18 +1028,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	g.It("Author:aiyengar-High-41187-The Power of two balancing  honours the per route balancing algorithm defined via haproxy.router.openshift.io/balance annotation", func() {
 		var (
-			defaultPod = getRouterPod(oc, "default")
+			defaultPod = getNewRouterPod(oc, "default")
 		)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
 
-		g.By("Deploy project with pods and service resources")
+		exutil.By("Deploy project with pods and service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "project resource creation failed!")
 
-		g.By("Expose a route from the project and set route LB annotation")
+		exutil.By("Expose a route from the project and set route LB annotation")
 		exposeRoute(oc, project1, "svc/service-unsecure1")
 		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1077,7 +1050,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getAlgoValue := gjson.Get(string(findAnnotation), "haproxy\\.router\\.openshift\\.io/balance").String()
 		o.Expect(getAlgoValue).To(o.ContainSubstring("leastconn"))
 
-		g.By("Check the default loadbalance algorithm inside proxy pod and check the default LB variable to confirm power-of-two is active")
+		exutil.By("Check the default loadbalance algorithm inside proxy pod and check the default LB variable to confirm power-of-two is active")
 		insecBackend := "be_http:" + project1 + ":service-unsecure1"
 		rtrParamCheck := readPodEnv(oc, defaultPod, "openshift-ingress", "ROUTER_LOAD_BALANCE_ALGORITHM")
 		o.Expect(rtrParamCheck).To(o.ContainSubstring("random"))
@@ -1511,7 +1484,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Deploy a project with a client pod used to send traffic")
 		project1 := oc.Namespace()
-		g.By("create a client pod")
+		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
@@ -1549,55 +1522,54 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		custContPod := getRouterPod(oc, "ocp56898")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		custContPod := getNewRouterPod(oc, ingctrl.name)
 		custContIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 
-		g.By("Deploy a backend pod and its service resources")
+		exutil.By("Deploy a backend pod and its service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
 
-		g.By("Create a client pod")
+		exutil.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
 
-		g.By("Expose a route with the unsecure service inside the project")
+		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "service-unsecure-" + project1 + "." + ingctrl.domain
 		SrvErr := oc.Run("expose").Args("svc/service-unsecure", "--hostname="+routehost).Execute()
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		routeOutput := getRoutes(oc, project1)
 		o.Expect(routeOutput).To(o.ContainSubstring("service-unsecure"))
 
-		g.By("Check the router pod and ensure the routes are loaded in haproxy.config")
+		exutil.By("Check the router pod and ensure the routes are loaded in haproxy.config")
 		haproxyOutput := pollReadPodData(oc, "openshift-ingress", custContPod, "cat haproxy.config", "service-unsecure")
 		o.Expect(haproxyOutput).To(o.ContainSubstring("backend be_http:" + project1 + ":service-unsecure"))
 
-		g.By("Check the reachability of the insecure route")
+		exutil.By("Check the reachability of the insecure route")
 		waitForCurl(oc, cltPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
 
-		g.By("Idle the insecure service")
+		exutil.By("Idle the insecure service")
 		idleOutput, err := oc.AsAdmin().WithoutNamespace().Run("idle").Args("service-unsecure", "-n", project1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(idleOutput).To(o.ContainSubstring("The service \"" + project1 + "/service-unsecure\" has been marked as idled"))
 
-		g.By("Verify the Idle annotation")
+		exutil.By("Verify the Idle annotation")
 		findAnnotation := getAnnotation(oc, project1, "svc", "service-unsecure")
 		o.Expect(findAnnotation).To(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
 		o.Expect(findAnnotation).To(o.ContainSubstring(`idling.alpha.openshift.io/unidle-targets":"[{\"kind\":\"ReplicationController\",\"name\":\"web-server-rc\",\"replicas\":1}]`))
 
-		g.By("Wake the Idle resource by accessing its route")
+		exutil.By("Wake the Idle resource by accessing its route")
 		waitForCurl(oc, cltPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
 
-		g.By("Confirm the Idle annotation got removed")
+		exutil.By("Confirm the Idle annotation got removed")
 		findAnnotation = getAnnotation(oc, project1, "svc", "service-unsecure")
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
 	})
@@ -1616,7 +1588,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		project1 := oc.Namespace()
 		defer exutil.RecoverNamespaceRestricted(oc, project1)
 		exutil.SetNamespacePrivileged(oc, project1)
-		g.By("create a h2c service and its backend pod")
+		exutil.By("create a h2c service and its backend pod")
 		createResourceFromFile(oc, project1, srvPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
@@ -1715,12 +1687,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// bugzilla: 1941592 1859134
 	g.It("Author:mjoseph-Medium-57406-HAProxyDown message only for pods and No reaper messages for zombie processes", func() {
-		g.By("Verify there will be precise message pointing to the  router nod, when HAProxy is down")
+		exutil.By("Verify there will be precise message pointing to the  router nod, when HAProxy is down")
 		output := fetchJSONPathValue(oc, "openshift-ingress-operator", "PrometheusRule", ".items[0].spec.groups[0].rules[?(@.alert==\"HAProxyDown\")].annotations.message")
 		o.Expect(output).To(o.ContainSubstring(`HAProxy metrics are reporting that HAProxy is down on pod {{ $labels.namespace }} / {{ $labels.pod }}`))
 
-		g.By("Check the router pod logs and confirm there is no periodic reper error message  for zombie process")
-		podname := getRouterPod(oc, "default")
+		exutil.By("Check the router pod logs and confirm there is no periodic reper error message  for zombie process")
+		podname := getNewRouterPod(oc, "default")
 		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", podname).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(log, "waitid: no child processes") {
@@ -1743,46 +1715,45 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		custContPod := getRouterPod(oc, "ocp57404")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		custContPod := getNewRouterPod(oc, ingctrl.name)
 		custContIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 
-		g.By("Deploy the statefulset and its service resources")
+		exutil.By("Deploy the statefulset and its service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "app=echoenv-sts")
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
 
-		g.By("Create a client pod")
+		exutil.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
 		err = waitForPodWithLabelReady(oc, project1, "app=hello-pod")
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
 
-		g.By("Expose a route with the unsecure service inside the project")
+		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "echoenv-statefulset-service-" + project1 + "." + ingctrl.domain
 		SrvErr := oc.Run("expose").Args("svc/echoenv-statefulset-service", "--hostname="+routehost).Execute()
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		routeOutput := getRoutes(oc, project1)
 		o.Expect(routeOutput).To(o.ContainSubstring("echoenv-statefulset-service"))
 
-		g.By("Check the reachability of the insecure route")
+		exutil.By("Check the reachability of the insecure route")
 		waitForCurl(oc, "hello-pod", baseDomain, "echoenv-statefulset-service-"+project1+"."+"ocp57404.", "HTTP/1.1 200 OK", custContIP)
 
-		g.By("Trying to idle the statefulset-service")
+		exutil.By("Trying to idle the statefulset-service")
 		idleOutput, _ := oc.AsAdmin().WithoutNamespace().Run("idle").Args("echoenv-statefulset-service", "-n", project1).Output()
 		o.Expect(idleOutput).To(o.ContainSubstring("idling StatefulSet is not supported yet"))
 
-		g.By("Verify the Idle annotation is not present")
+		exutil.By("Verify the Idle annotation is not present")
 		findAnnotation := getAnnotation(oc, project1, "svc", "echoenv-statefulset-service")
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
 
-		g.By("Recheck the reachability of the insecure route")
+		exutil.By("Recheck the reachability of the insecure route")
 		waitForCurl(oc, "hello-pod", baseDomain, "echoenv-statefulset-service-"+project1+"."+"ocp57404.", "HTTP/1.1 200 OK", custContIP)
 	})
 
@@ -1802,49 +1773,47 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			ingctrlResource = "ingresscontrollers/" + ingctrl.name
 		)
 
-		g.By("create a custom ingresscontroller")
+		exutil.By("create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
-		g.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be PROXY")
+		exutil.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be PROXY")
 		jpath := ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol"
 		protocol := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring("PROXY"))
 
-		g.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
 		pollReadPodData(oc, "openshift-ingress", routerpod, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 
-		g.By("Ensure the proxy-protocol annotation is added to the LB service")
+		exutil.By("Ensure the proxy-protocol annotation is added to the LB service")
 		findAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "router-ocp59951", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.kubernetes.io/ibm-load-balancer-cloud-provider-enable-features":"proxy-protocol"`))
 
-		g.By("patch the custom ingresscontroller with protocol option TCP")
+		exutil.By("patch the custom ingresscontroller with protocol option TCP")
 		patchPath := "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"ibm\":{\"protocol\":\"TCP\"}}}}}}"
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
 
-		g.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be TCP")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		exutil.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be TCP")
 		jpath = ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol"
 		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring("TCP"))
 
-		g.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should not present")
-		routerpod = getRouterPod(oc, ingctrl.name)
+		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should not present")
+		routerpod = getNewRouterPod(oc, ingctrl.name)
 		proxyEnv, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "/usr/bin/env | grep ROUTER_USE_PROXY_PROTOCOL").Output()
 		o.Expect(proxyEnv).NotTo(o.ContainSubstring("ROUTER_USE_PROXY_PROTOCOL"))
 
-		g.By("patch the custom ingresscontroller with protocol option omitted")
+		exutil.By("patch the custom ingresscontroller with protocol option omitted")
 		patchPath = "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"ibm\":{\"protocol\":\"\"}}}}}}"
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
 
-		g.By(`check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be ""`)
+		exutil.By(`check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be ""`)
 		jpath = ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm"
 		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring(`{}`))
@@ -1863,42 +1832,41 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a custom ingresscontroller")
+		exutil.By("Create a custom ingresscontroller")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
-		custContPod := getRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		custContPod := getNewRouterPod(oc, ingctrl.name)
 
-		g.By("Deploy a backend pod and its service resources")
+		exutil.By("Deploy a backend pod and its service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
 
-		g.By("Expose a route with the unsecure service inside the project")
+		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "service-unsecure-" + project1 + "." + ingctrl.domain
 		SrvErr := oc.Run("expose").Args("svc/service-unsecure", "--hostname="+routehost).Execute()
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		routeOutput := getRoutes(oc, project1)
 		o.Expect(routeOutput).To(o.ContainSubstring("service-unsecure"))
 
-		g.By("Cross check the selector value of the 'service-unsecure' service")
+		exutil.By("Cross check the selector value of the 'service-unsecure' service")
 		jpath := ".spec.selector"
 		output := fetchJSONPathValue(oc, project1, "svc/service-unsecure", jpath)
 		o.Expect(output).To(o.ContainSubstring(`"name":"web-server-rc"`))
 
-		g.By("Delete the service selector for the 'service-unsecure' service")
+		exutil.By("Delete the service selector for the 'service-unsecure' service")
 		patchPath := "{\"spec\":{\"selector\":null}}"
 		patchResourceAsAdmin(oc, project1, "svc/service-unsecure", patchPath)
 
-		g.By("Check the service config to confirm the value of the selector is empty")
+		exutil.By("Check the service config to confirm the value of the selector is empty")
 		output = fetchJSONPathValue(oc, project1, "svc/service-unsecure", jpath)
 		o.Expect(output).To(o.BeEmpty())
 
-		g.By("Check the router pod logs and confirm there is no reload error message")
+		exutil.By("Check the router pod logs and confirm there is no reload error message")
 		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", custContPod).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(log, "error reloading router") {
