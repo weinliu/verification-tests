@@ -1673,3 +1673,50 @@ func applyResourceFromTemplateOnMicroshift(oc *exutil.CLI, parameters ...string)
 	e2e.Logf("the file of resource is %s", configFile)
 	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
+
+// return a map that pod's image is key and imagePullPolicy is value
+func GetPodImageAndPolicy(oc *exutil.CLI, podName, project string) (imageMap map[string]string) {
+	imageMap = make(map[string]string)
+	if podName == "" || project == "" {
+		return imageMap
+	}
+	containers := []string{"initContainers", "containers"}
+	for _, v := range containers {
+		jsonPathImage := fmt.Sprintf("-o=jsonpath={.spec.%s[*].image}", v)
+		jsonPathPolicy := fmt.Sprintf("-o=jsonpath={.spec.%s[*].imagePullPolicy}", v)
+
+		imageNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, jsonPathImage, "-n", project).Output()
+		// sometimes some job's pod maybe deleted so skip it
+		if err != nil && !strings.Contains(err.Error(), "not found") {
+			e2e.Failf("Fail to get %s image, error:%v", v, err)
+		}
+		imageNameSlice := strings.Split(imageNames, " ")
+
+		imagePullPolicys, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, jsonPathPolicy, "-n", project).Output()
+		if err != nil && !strings.Contains(err.Error(), "not found") {
+			e2e.Failf("Fail to get %s imagePullPolicy, error:%v", v, err)
+		}
+		imagePullPolicySlice := strings.Split(imagePullPolicys, " ")
+
+		for i := 0; i < len(imageNameSlice); i++ {
+			if _, ok := imageMap[imageNameSlice[i]]; !ok {
+				imageMap[imageNameSlice[i]] = imagePullPolicySlice[i]
+			}
+		}
+	}
+	return imageMap
+}
+
+// return a pod slice
+func getProjectPods(oc *exutil.CLI, project string) (podSlice []string) {
+	podSlice = []string{}
+	if project == "" {
+		return podSlice
+	}
+	pods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "name", "-n", project).Output()
+	if err != nil {
+		e2e.Failf("Fail to get %s pods, error:%v", project, err)
+	}
+	podSlice = strings.Split(pods, "\n")
+	return podSlice
+}

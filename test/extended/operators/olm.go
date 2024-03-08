@@ -94,6 +94,37 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.SkipNoOLMCore(oc)
 	})
 
+	g.It("Author:jiazha-Critical-72192-OLM is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
+		exutil.By("1) get marketplace and OLM pods' image/imagePullPolicy")
+		allImageMap := make(map[string]string)
+		podMap := make(map[string]string)
+		podSlice := getProjectPods(oc, "openshift-marketplace")
+		for _, pod := range podSlice {
+			podMap[pod] = "openshift-marketplace"
+		}
+		podSlice1 := getProjectPods(oc, "openshift-operator-lifecycle-manager")
+		for _, pod := range podSlice1 {
+			podMap[pod] = "openshift-operator-lifecycle-manager"
+		}
+		for pod, project := range podMap {
+			podImageMap := GetPodImageAndPolicy(oc, pod, project)
+			for image, policy := range podImageMap {
+				if _, ok := allImageMap[image]; !ok {
+					allImageMap[image] = policy
+				}
+			}
+		}
+		exutil.By("2) check the imagePullPolicy of the container that uses the tag image.")
+		for image, policy := range allImageMap {
+			// check the tag kind image, not the digest image
+			if !strings.Contains(image, "@sha256") && strings.Contains(image, ":") {
+				if !strings.Contains(policy, "Always") {
+					e2e.Failf("%s doesn't use the Always imagePullPolicy! %v", image, allImageMap)
+				}
+			}
+		}
+	})
+
 	g.It("Author:jiazha-Medium-72017-OLM pod panics when EnsureSecretOwnershipAnnotations runs", func() {
 		exutil.By("1) create a secret in the openshift-operator-lifecycle-manager project")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "secret-72017", "-n", "openshift-operator-lifecycle-manager").Output()
