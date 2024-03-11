@@ -181,7 +181,8 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-Medium-64076-Init container setup should have the proper securityContext", func() {
+	// The case always runs into failure with OCP 4.15 and later due to https://issues.redhat.com/browse/OCPBUGS-28866, add Flaky tag to skip execution until the bug get fixed.
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-Medium-64076-Init container setup should have the proper securityContext [Flaky]", func() {
 		var (
 			apiserverItems = []struct {
 				label     string
