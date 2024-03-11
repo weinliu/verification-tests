@@ -16,6 +16,7 @@ if [[ "x${http_proxy}x" != "xx" ]] || [[ "x${https_proxy}x" != "xx" ]]; then
 fi
 
 sudo rm -rf /tmp/fixture-testdata-*
+sudo rm -rf /tmp/ocp-*
 rm -rf /tmp/*
 podman rm -a -f
 podman rmi -a -f
@@ -38,14 +39,14 @@ fi
 
 sudo rm -f /etc/yum.repos.d/redhat_offcial.repo /etc/yum.repos.d/localdev-rhel-8-baseos-rpms.repo /etc/yum.repos.d/google-cloud-sdk.repo /etc/yum.repos.d/azure-cli.repo
 #sudo cp ${WORKBUILDDIR}/pipeline/repo-file/aos-devel-$NIGHTLYFLAG.repo /etc/yum.repos.d/puddle.repo
-sudo cp -f ${WORKBUILDDIR}/pipeline/repo-file/rhel8.7-baseos.repo /etc/yum.repos.d/rhel8.7-baseos.repo
+sudo cp -f ${WORKBUILDDIR}/pipeline/repo-file/rhel9.3-baseos.repo /etc/yum.repos.d/rhel9.3-baseos.repo
 sudo ls -lrt /etc/yum.repos.d/
+sudo yum-config-manager --enable rhel9.3-baseos
 sudo yum remove 'origin*.x86_64' 'atomic-openshift*.x86_64' 'openshift-clients*.x86_64' -y
 #sudo yum -y install openshift-clients
-sudo yum -y install jq patch docker
-sudo yum -y --enablerepo=rhel8.7-baseos install sos
+sudo yum -y install jq patch docker sos zip unzip
 sudo yum clean all -y
-sudo pip3 install requests
+pip3 install requests
 sos -h
 #get oc client
 echo "------------------get oc------------------------"

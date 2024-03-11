@@ -1,0 +1,5 @@
+[rhel9.3-baseos]
+name=rhel9.3-baseos
+baseurl=http://download.eng.rdu.redhat.com/rhel-9/rel-eng/RHEL-9/latest-RHEL-9.3/compose/BaseOS/x86_64/os
+enabled=0
+gpgcheck=1
