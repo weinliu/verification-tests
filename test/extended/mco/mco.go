@@ -4254,6 +4254,62 @@ nulla pariatur.`
 			"No Drain and no Reboot events should be triggered")
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-72025-nmstate keeps service yamls[Disruptive]", func() {
+		var (
+			node                             = GetCompactCompatiblePool(oc.AsAdmin()).GetNodesOrFail()[0]
+			nmstateConfigFileFullPath        = "/etc/nmstate/mco-tc-72025-basic-nmsconfig.yml"
+			nmstateConfigFileAppliedFullPath = strings.ReplaceAll(nmstateConfigFileFullPath, ".yml", ".applied")
+
+			nmstateConfigRemote        = NewRemoteFile(node, nmstateConfigFileFullPath)
+			nmstateConfigAppliedRemote = NewRemoteFile(node, nmstateConfigFileAppliedFullPath)
+
+			nmstateBasicConfigTemp = `
+capture:
+  ethernet-nics: interfaces.type=="ethernet"
+desiredState:
+  interfaces:
+  - name: "%s"
+    type: ethernet
+    state: up
+`
+		)
+
+		exutil.By(fmt.Sprintf("Create a config file for nmstate in node %s", node.GetName()))
+		logger.Infof("Getting the name of the ethernet interface")
+		cmdOut, err := node.DebugNodeWithChroot("sh", "-c", "nmcli d |grep ethernet |grep connected")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error executing nmcli to get the interface name")
+		logger.Infof("nmcli command output: %s", cmdOut)
+
+		interfaceName := strings.Split(strings.Trim(cmdOut, " "), " ")[0]
+		configFileContent := fmt.Sprintf(nmstateBasicConfigTemp, interfaceName)
+		defer func() {
+			nmstateConfigRemote.Rm("-f")
+			nmstateConfigAppliedRemote.Rm("-f")
+			logger.Infof("Restarting nmstate service")
+			_, err := node.DebugNodeWithChroot("systemctl", "restart", "nmstate")
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error restarting the nsmtate service in node %s", node.GetName())
+		}()
+		logger.Infof("Creating the config file")
+		o.Expect(nmstateConfigRemote.Create([]byte(configFileContent), 0o600)).To(o.Succeed(),
+			"Error creating the basic config file %s in node %s", nmstateConfigFileFullPath, node.GetName())
+
+		nmstateConfigRemote.PrintDebugInfo()
+		logger.Infof("OK!\n")
+
+		exutil.By(fmt.Sprintf("Restart nmstate service in node %s", node.GetName()))
+		_, err = node.DebugNodeWithChroot("systemctl", "restart", "nmstate")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error restarting the nsmtate service in node %s", node.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the configuration file was not removed and it was correctly cloned")
+		o.Expect(nmstateConfigRemote.Exists()).To(o.BeTrue(),
+			"The configuration file %s does not exist after restarting the nmstate service, but it should exist", nmstateConfigRemote.GetFullPath())
+
+		o.Expect(nmstateConfigAppliedRemote.Exists()).To(o.BeTrue(),
+			"The applied configuration file %s does not exist after restarting the nmstate service, but it should exist", nmstateConfigAppliedRemote.GetFullPath())
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason

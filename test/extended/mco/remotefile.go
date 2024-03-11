@@ -267,3 +267,63 @@ func (rf RemoteFile) Exists() (bool, error) {
 
 	return false, err
 }
+
+// Rm removes the remote file from the node
+func (rf RemoteFile) Rm(args ...string) error {
+	logger.Infof("Removing file %s from node %s", rf.fullPath, rf.node.GetName())
+	cmd := []string{"rm"}
+
+	if len(args) > 0 {
+		cmd = append(cmd, args...)
+	}
+
+	cmd = append(cmd, rf.fullPath)
+	output, err := rf.node.DebugNodeWithChroot(cmd...)
+	logger.Infof(output)
+
+	return err
+}
+
+// Create this file in the node with the given content and permissions. It will be created with root/root user/grou since there are no methods to modify the user and the group.
+// In the future we can modify this method to accept the user and the group as parameters
+func (rf RemoteFile) Create(content []byte, perm os.FileMode) error {
+	tmpFile := filepath.Join(e2e.TestContext.OutputDir, fmt.Sprintf("fetch-%s", exutil.GetRandomString()))
+
+	if err := os.WriteFile(tmpFile, content, perm); err != nil {
+		logger.Errorf("Could not read the content from tmp file  %s. Error: %s", tmpFile, err)
+		return err
+	}
+
+	if err := rf.node.CopyFromLocal(tmpFile, rf.fullPath); err != nil {
+		logger.Errorf("Could not copy the file %s from local to path %s in node %s. Error: %s", tmpFile, rf.fullPath, rf.node.GetName(), err)
+		return err
+	}
+
+	// Actually, the "oc adm copy-to-node" file will ignore the file permissions. Hence, we need to manually set the required permissions
+	if err := rf.PushNewPermissions(fmt.Sprintf("%#o", perm)); err != nil {
+		logger.Infof("Could not set the right permissions in remote file %s in node %s. Error: %s", rf.fullPath, rf.node.GetName(), err)
+	}
+
+	return nil
+}
+
+// PrintDebug prints a log message with the stats and the content of the remote file
+func (rf RemoteFile) PrintDebugInfo() error {
+	logger.Infof("Remote file %s in node %s", rf.fullPath, rf.node.GetName())
+
+	stdout, _, err := rf.node.DebugNodeWithChrootStd("stat", statFormat, rf.fullPath)
+	if err != nil {
+		return err
+	}
+
+	logger.Infof("Stat: \n%s", stdout)
+
+	stdout, _, err = rf.node.DebugNodeWithChrootStd("cat", rf.fullPath)
+	if err != nil {
+		return err
+	}
+
+	logger.Infof("Content: \n%s", stdout)
+
+	return nil
+}
