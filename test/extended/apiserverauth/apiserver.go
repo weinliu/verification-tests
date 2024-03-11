@@ -7106,4 +7106,25 @@ EOF`, serverconf, fqdnName)
 		certDetails, err = urlHealthCheck(fqdnName, originCA, returnValues)
 		o.Expect(err).To(o.HaveOccurred())
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-PstChkUpgrade-Author:rgangwar-Medium-34223-[Apiserver] kube-apiserver and openshift-apiserver should have zero-disruption upgrade", func() {
+		defer oc.AsAdmin().WithoutNamespace().Run("ns").Args("project", "ocp-34223-proj", "--ignore-not-found").Execute()
+		cmExistsCmd, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "log", "-n", "ocp-34223-proj").Output()
+		if strings.Contains(cmExistsCmd, "No resources found") || err != nil {
+			g.Skip("Skipping case as ConfigMap ocp-34223 does not exist")
+		}
+
+		result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/log", "-n", "ocp-34223-proj", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Check if the result contains any failure messages
+		failures := regexp.MustCompile(`failed`).FindAllString(result, -1)
+
+		// Verify if there are less than or equal to 1 failure message
+		if len(failures) <= 1 {
+			e2e.Logf("Test case paased: Zero-disruption upgrade")
+		} else {
+			e2e.Failf("Test case failed: Upgrade disruption detected::\n %v", failures)
+		}
+	})
 })
