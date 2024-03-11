@@ -72,10 +72,14 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			template:  egressFWTemplate,
 		}
 		egressFW1.createEgressFWObject1(oc)
+		efErr := waitEgressFirewallApplied(oc, egressFW1.name, ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Check www.test.com is blocked \n")
-		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.test.com --connect-timeout 5")
-		o.Expect(err).To(o.HaveOccurred())
+		o.Eventually(func() error {
+			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.test.com --connect-timeout 5")
+			return err
+		}, "60s", "10s").Should(o.HaveOccurred())
 
 		exutil.By("6. Check www.redhat.com is allowed \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
