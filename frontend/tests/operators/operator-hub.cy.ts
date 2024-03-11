@@ -159,8 +159,14 @@ describe('Operator Hub tests', () => {
       operatorHubPage.filter(operator);
       cy.contains("No Results Match the Filter Criteria").should(state);
     }
-    cy.exec(`oc get nodes -o yaml -o jsonpath={.items[*].status.nodeInfo.operatingSystem} | xargs -n 1 | uniq`, { failOnNonZeroExit: false }).then((result) => {
-      return nodeOS = result.stdout;
+    cy.exec(`oc get nodes -o yaml -o jsonpath={.items[*].status.nodeInfo.operatingSystem} \
+                --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | \
+             xargs -n 1 | \
+             uniq`, { failOnNonZeroExit: false })
+      .then((result) => {
+        return nodeOS = result.stdout;
+        cy.log(result.stdout);
+        cy.log(result.stderr);
     });
     /* Aqua operator has label operatorframework.io/os.windows: supported
         which means it will only shown on OperatorHub page when node os has windows type */
@@ -179,8 +185,12 @@ describe('Operator Hub tests', () => {
       let opt = win.SERVER_FLAGS.nodeOperatingSystems;
       expect(opt).contain(nodeOS);
     });
-    cy.exec(`oc get configmaps console-config -n openshift-console -o yaml | awk '$1 == "-"{ if (key == "nodeOperatingSystems:") print $NF; next } {key=$1}'`, { failOnNonZeroExit: false }).then((output) => {
-      expect(output.stdout).to.include(nodeOS);
+    cy.exec(`oc get configmaps console-config -n openshift-console -o yaml \
+                --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | \
+             awk '$1 == "-"{ if (key == "nodeOperatingSystems:") print $NF; next } {key=$1}' \
+             `, { failOnNonZeroExit: false })
+      .then((output) => {
+        expect(output.stdout).to.include(nodeOS);
     })
   });
 })
