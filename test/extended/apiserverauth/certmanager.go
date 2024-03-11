@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blang/semver"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -19,7 +20,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+		oc = exutil.NewCLI("default-"+getRandomString(8), exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
 		exutil.SkipMissingQECatalogsource(oc)
@@ -102,7 +103,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}()
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
-		randomStr := exutil.GetRandomString()
+		randomStr := getRandomString(4)
 		dnsName := randomStr + "." + dnsZone
 		if len(dnsName) > 63 {
 			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
@@ -390,7 +391,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("ingressDomain=%s", ingressDomain)
-		randomStr := exutil.GetRandomString()
+		randomStr := getRandomString(4)
 		dnsName := randomStr + "." + ingressDomain
 		certTemplate := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
@@ -458,6 +459,9 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Check and verify issued certificate content")
 		verifyCertificate(oc, "certificate-hosted-zone-overlapped", oc.Namespace())
 	})
+
+	// author: geliu@redhat.com
+	// This case contains two Polarion cases: 63555 and 69798. The root case is 63555.
 	g.It("ROSA-Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
 		g.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
@@ -522,7 +526,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer ready timeout.")
 
 		g.By("Create the certificate.")
-		randomStr := exutil.GetRandomString()
+		randomStr := getRandomString(4)
 		dnsName := randomStr + "." + dnsZone
 		if len(dnsName) > 63 {
 			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
@@ -600,6 +604,67 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		e2e.Logf("Check and verify issued certificate content")
 		verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
+
+		// author: yuewu@redhat.com
+		// Medium-69798-ACME dns01 solver should work in OpenShift proxy env with DNS over HTTPS (DoH) for doing the self-checks
+		currentVersion, _ := semver.Parse(getCertManagerOperatorVersion(oc))
+		minDoHSupportedVersion, _ := semver.Parse("1.13.0")
+		// semverA.Compare(semverB) > -1 means 'semverA' greater than or equal to 'semverB', see: https://pkg.go.dev/github.com/blang/semver#Version.Compare
+		if currentVersion.Compare(minDoHSupportedVersion) > -1 {
+			e2e.Logf("Start to execute test case OCP-69798\n")
+
+			g.By("Configure with an invalid server as negative test.")
+			patchPath = "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\", \"--dns01-recursive-nameservers=https://1.1.1.1/negative-test-dummy-dns-query\"]}}}"
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, "cert-manager", 10*time.Second, 120*time.Second)
+
+			g.By("Create a new certificate.")
+			randomStr = getRandomString(4)
+			dnsName = randomStr + "." + dnsZone
+			if len(dnsName) > 63 {
+				g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
+			}
+			e2e.Logf("dnsName=%s", dnsName)
+			certTemplate = filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+			params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+			g.By("Check if challenge will be pending and show HTTP 403 error")
+			statusErr = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+				output, err = oc.Run("get").Args("challenge", "-o", "wide").Output()
+				if !strings.Contains(output, "403 Forbidden") || !strings.Contains(output, "pending") || err != nil {
+					e2e.Logf("challenge is still in processing, and status is not as expected: %s\n", output)
+					return false, nil
+				}
+				e2e.Logf("challenge's output is as expected: %s\n", output)
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(statusErr, "timed out after 90s waiting challenge to be pending state and show HTTP 403 error")
+
+			g.By("Configure with a valid server.")
+			patchPath = "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\", \"--dns01-recursive-nameservers=https://1.1.1.1/dns-query\"]}}}"
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, "cert-manager", 10*time.Second, 120*time.Second)
+
+			g.By("Check if certificate will be True.")
+			statusErr = wait.Poll(10*time.Second, 150*time.Second, func() (bool, error) {
+				output, err = oc.Run("get").Args("certificate", "certificate-from-dns01").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(output, "True") {
+					e2e.Logf("certificate status is normal.")
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(statusErr, "timed out after 150s waiting certificate to be True")
+
+			g.By("Check and verify issued certificate content")
+			verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
+		} else {
+			e2e.Logf("currentVersion(%s) < minDoHSupportedVersion(%s), therefore skipping the DoH checkpoint test (case 69798)", currentVersion, minDoHSupportedVersion)
+		}
 	})
 
 	// author: geliu@redhat.com

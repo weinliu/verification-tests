@@ -97,15 +97,17 @@ func getCredentialFromCluster(oc *exutil.CLI, cloudProvider string) (string, str
 	return accessKeyID, secureKey
 }
 
-func getRandomString() string {
+// Generate a random string with given number of digits
+func getRandomString(digit int) string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
-	buffer := make([]byte, 8)
+	buffer := make([]byte, digit)
 	for index := range buffer {
 		buffer[index] = chars[seed.Intn(len(chars))]
 	}
 	return string(buffer)
 }
+
 func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
 	e2e.Logf("Getting a token assgined to specific serviceaccount from %s namespace...", ns)
 	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", sa, "-n", ns).Output()
@@ -393,6 +395,14 @@ func getCurrentCSVDescVersion(oc *exutil.CLI, sourceNamespace string, source str
 	ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sourceNamespace, "-l", "catalog="+source, "--field-selector", "metadata.name="+subscriptionName, "-o=jsonpath={.items[0].status.channels[?(@.name=='"+channelName+"')].currentCSVDesc.version}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return ver
+}
+
+// Get installed cert-manager Operator version. The return value format is semantic 'x.y.z'.
+func getCertManagerOperatorVersion(oc *exutil.CLI) string {
+	version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "-o=jsonpath={.status.installedCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(version).NotTo(o.BeEmpty())
+	return strings.TrimPrefix(version, "cert-manager-operator.v")
 }
 
 // rapidastScan performs RapiDAST scan for apiGroupName using configFile and policyFile
