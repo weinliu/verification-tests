@@ -6,7 +6,7 @@ export const ClusterSettingPage = {
   },
   goToClusterSettingConfiguration: () => cy.visit('/settings/cluster/globalconfig'),
   clickToClustSettingDetailTab: () => cy.get('[data-test-id="horizontal-link-Details"]').click(),
-  checkUpstreamUrlDisabled: () => cy.get('button[data-test-id="cluster-version-upstream-server-url"]').should("have.attr", "aria-disabled").and("eq", "true"),
+  checkUpstreamUrlDisabled: () => cy.get('button[data-test-id*="upstream-server-url"]').should("have.attr", "aria-disabled").and("eq", "true"),
   checkAlertMsg: (msg) => {
     cy.get('[class*="alert__title"]').should('contain', `${msg}`);
   },
@@ -30,7 +30,7 @@ export const ClusterSettingPage = {
     })
   },
   editUpstreamConfig: () => {
-    cy.get('[data-test-id="cluster-version-upstream-server-url"]').click();
+    cy.get('[data-test-id*="upstream-server-url"]').click();
     cy.get('[data-test="Custom update service.-radio-input"]').click();
     cy.get('[id="cluster-version-custom-upstream-server-url"]')
       .clear()

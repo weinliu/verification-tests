@@ -87,5 +87,11 @@ export const Pages = {
   gotoNodeOverviewPage: (nodeName: string) => {
     cy.visit(`/k8s/cluster/nodes/${nodeName}/`);
     cy.get('[data-test-id="dashboard"]').should('be.visible');
+  },
+  gotoMCPListPage: () => {
+    cy.visit("/k8s/cluster/machineconfiguration.openshift.io~v1~MachineConfigPool");
+  },
+  gotoMCPDetailsPage: (mcpname: string) => {
+    cy.visit(`/k8s/cluster/machineconfiguration.openshift.io~v1~MachineConfigPool/${mcpname}`)
   }
 }
