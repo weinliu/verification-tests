@@ -5982,7 +5982,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(efips, "FIPS mode is enabled") {
 			g.Skip("skip it without impacting function")
