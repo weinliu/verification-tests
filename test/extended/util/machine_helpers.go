@@ -199,6 +199,9 @@ func GetNodeNamesFromMachineSet(oc *CLI, machineSetName string) []string {
 	e2e.Logf("Getting all Nodes in a Machineset ...")
 	nodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].status.nodeRef.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", MachineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	if nodeNames == "" {
+		return []string{}
+	}
 	return strings.Split(nodeNames, " ")
 }
 

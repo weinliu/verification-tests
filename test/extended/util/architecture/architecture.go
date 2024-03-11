@@ -179,9 +179,9 @@ func GetArchitectureFromMachineSet(oc *exutil.CLI, machineSetName string) (Archi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		capacityLabels := mapFromCommaSeparatedKV(machineSetAnnotationCapacity)
 		e2e.Logf("capacityLabels: %s", capacityLabels)
-		for _, kv := range capacityLabels {
-			if strings.Contains(kv, NodeArchitectureLabel) {
-				return FromString(capacityLabels[NodeArchitectureLabel]), nil
+		for k, v := range capacityLabels {
+			if strings.Contains(k, NodeArchitectureLabel) {
+				return FromString(v), nil
 			}
 		}
 		return UNKNOWN, fmt.Errorf(
