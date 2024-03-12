@@ -555,7 +555,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		pod1.createPingPod(oc)
 		waitPodReady(oc, ns, pod1.name)
-		podIP := getPodIPv4(oc, ns, pod1.name)
+
+		ipStack := checkIPStackType(oc)
+		var podIPv6, podIPv4 string
+		if ipStack == "dualstack" {
+			podIPv6, podIPv4 = getPodIP(oc, ns, pod1.name)
+		} else if ipStack == "ipv6single" {
+			podIPv6, _ = getPodIP(oc, ns, pod1.name)
+		} else {
+			podIPv4, _ = getPodIP(oc, ns, pod1.name)
+		}
 
 		exutil.By("Create a test service which is in front of the above pods")
 		svc := genericServiceResource{
@@ -564,10 +573,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			protocol:              "TCP",
 			selector:              "hello-pod",
 			serviceType:           "ClusterIP",
-			ipFamilyPolicy:        "SingleStack",
+			ipFamilyPolicy:        "",
 			internalTrafficPolicy: "Cluster",
 			externalTrafficPolicy: "", //This no value parameter will be ignored
 			template:              genericServiceTemplate,
+		}
+
+		if ipStack == "dualstack" {
+			svc.ipFamilyPolicy = "PreferDualStack"
+		} else {
+			svc.ipFamilyPolicy = "SingleStack"
 		}
 		svc.createServiceFromParams(oc)
 
@@ -577,34 +592,62 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
 
 		exutil.By("Get service IP")
-		svcIP, _ := getSvcIP(oc, svc.namespace, svc.servicename)
+		var svcIP6, svcIP4, clusterVIP string
+		if ipStack == "dualstack" || ipStack == "ipv6single" {
+			svcIP6, svcIP4 = getSvcIP(oc, svc.namespace, svc.servicename)
+		} else {
+			svcIP4, _ = getSvcIP(oc, svc.namespace, svc.servicename)
+		}
+		e2e.Logf("ipstack type: %s, SVC's IPv4: %s, SVC's IPv6: %s", ipStack, svcIP4, svcIP6)
 
 		exutil.By("Check nb loadbalancer entries")
 		ovnPod := getOVNKMasterOVNkubeNode(oc)
 		o.Expect(ovnPod).ShouldNot(o.BeEmpty())
 		e2e.Logf("\n ovnKMasterPod: %v\n", ovnPod)
-		lbCmd := fmt.Sprintf("ovn-nbctl find load_balancer name=Service_%s/%s_TCP_cluster", ns, svc.servicename)
+		lbCmd := fmt.Sprintf("ovn-nbctl --column vip find load_balancer name=Service_%s/%s_TCP_cluster", ns, svc.servicename)
 		lbOutput, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmd)
+		e2e.Logf("\nlbOutput: %s\n", lbOutput)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterVIP := fmt.Sprintf("\"%s:%s\"=\"%s:%s\"", svcIP, "27017", podIP, "8080")
-		o.Expect(lbOutput).Should(o.ContainSubstring(clusterVIP))
+		if ipStack == "dualstack" || ipStack == "ipv6single" {
+			clusterVIP = fmt.Sprintf("\"[%s]:%s\"=\"[%s]:%s\"", svcIP6, "27017", podIPv6, "8080")
+			o.Expect(lbOutput).Should(o.ContainSubstring(clusterVIP))
+
+		}
+		if ipStack == "dualstack" || ipStack == "ipv4single" {
+			clusterVIP = fmt.Sprintf("\"%s:%s\"=\"%s:%s\"", svcIP4, "27017", podIPv4, "8080")
+			o.Expect(lbOutput).Should(o.ContainSubstring(clusterVIP))
+		}
 
 		exutil.By("Delete svc")
 		removeResource(oc, true, true, "service", svc.servicename, "-n", ns)
 
 		exutil.By("Manually add load_balancer entry in nb with same name as previous one.")
 		// no need to defer to remove, as this will be overrided by following service recreated.
-		lbCmdAdd := fmt.Sprintf("ovn-nbctl lb-add \"Service_%s/%s_TCP_cluster\" %s:%s %s:%s", ns, svc.servicename, svcIP, "27017", podIP, "8080")
-		_, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmdAdd)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		var lbCmdAdd string
+		if ipStack == "dualstack" || ipStack == "ipv6single" {
+			lbCmdAdd = fmt.Sprintf("ovn-nbctl lb-add \"Service_%s/%s_TCP_cluster\" [%s]:%s [%s]:%s", ns, svc.servicename, svcIP6, "27017", podIPv6, "8080")
+			_, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmdAdd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		if ipStack == "dualstack" || ipStack == "ipv4single" {
+			lbCmdAdd = fmt.Sprintf("ovn-nbctl lb-add \"Service_%s/%s_TCP_cluster\" %s:%s %s:%s", ns, svc.servicename, svcIP4, "27017", podIPv4, "8080")
+			_, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmdAdd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		exutil.By("Recreate svc")
 		svc.createServiceFromParams(oc)
 		svcOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
+
 		exutil.By("Get service IP again")
-		svcIP, _ = getSvcIP(oc, svc.namespace, svc.servicename)
+		if ipStack == "dualstack" || ipStack == "ipv6single" {
+			svcIP6, svcIP4 = getSvcIP(oc, svc.namespace, svc.servicename)
+		} else {
+			svcIP4, _ = getSvcIP(oc, svc.namespace, svc.servicename)
+		}
+		e2e.Logf("ipstack type: %s, recreated SVC's IPv4: %s, SVC's IPv6: %s", ipStack, svcIP4, svcIP6)
 
 		exutil.By("No error logs")
 		podlogs, getLogsErr := oc.AsAdmin().Run("logs").Args(ovnPod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-controller", "--since", "90s").Output()
@@ -612,10 +655,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.Contains(podlogs, "failed to ensure service")).ShouldNot(o.BeTrue())
 
 		exutil.By("Check nb load_balancer entries again!")
+		lbCmd = fmt.Sprintf("ovn-nbctl --column vip find load_balancer name=Service_%s/%s_TCP_cluster", ns, svc.servicename)
 		lbOutput, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmd)
+		e2e.Logf("\nlbOutput after SVC recreated: %s\n", lbOutput)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterVIP = fmt.Sprintf("\"%s:%s\"=\"%s:%s\"", svcIP, "27017", podIP, "8080")
-		o.Expect(lbOutput).Should(o.ContainSubstring(clusterVIP))
+		if ipStack == "dualstack" || ipStack == "ipv6single" {
+			clusterVIP = fmt.Sprintf("\"[%s]:%s\"=\"[%s]:%s\"", svcIP6, "27017", podIPv6, "8080")
+			o.Expect(lbOutput).Should(o.ContainSubstring(clusterVIP))
+
+		}
+		if ipStack == "dualstack" || ipStack == "ipv4single" {
+			clusterVIP = fmt.Sprintf("\"%s:%s\"=\"%s:%s\"", svcIP4, "27017", podIPv4, "8080")
+			o.Expect(lbOutput).Should(o.ContainSubstring(clusterVIP))
+		}
 
 		exutil.By("Validate service")
 		CurlPod2SvcPass(oc, ns, ns, pod1.name, svc.servicename)
