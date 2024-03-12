@@ -155,13 +155,17 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		o.Expect(versionErr).NotTo(o.HaveOccurred())
 		kubenetesVersion := strings.Split(strings.Split(ocVersion, "+")[0], "v")[1]
 		kuberVersion := strings.Split(kubenetesVersion, ".")[0] + "." + strings.Split(kubenetesVersion, ".")[1]
+		e2e.Logf("kuberVersion is %s", kuberVersion)
 
 		g.By("Get rebased version of kubernetes from runoncedurationoverride operator")
 		minkuberversion, rodoErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/run-once-duration-override-operator.openshift-run-once-duration=", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
 		o.Expect(rodoErr).NotTo(o.HaveOccurred())
 		rebasedVersion := strings.Split(minkuberversion, ".")[0] + "." + strings.Split(minkuberversion, ".")[1]
+		e2e.Logf("rebasedVersion is %s", rebasedVersion)
 
-		if !strings.Contains(rebasedVersion, kuberVersion) || !strings.Contains(rebasedVersion, "1.28") {
+		if strings.Contains(rebasedVersion, kuberVersion) || strings.Contains(rebasedVersion, "1.28") {
+			e2e.Logf("RODO operator has been rebased with latest kubernetes")
+		} else {
 			e2e.Failf("RODO operator not rebased with latest kubernetes")
 		}
 

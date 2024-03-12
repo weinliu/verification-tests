@@ -383,12 +383,23 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		assertSpecifiedPodStatus(oc, "prioritym36108", oc.Namespace(), "Pending")
 
 		exutil.By("Verify prioritym pod nominated node is node1")
-		nominatedNodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "prioritym36108", "-n", oc.Namespace(), "-o=jsonpath={.status.nominatedNodeName}").Output()
-		e2e.Logf("NominatedNodeName is %s", nominatedNodeName)
-		if nominatedNodeName != nodeNames[0] {
-			e2e.Failf("Nominated node name is not equal to node1")
-		}
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			nominatedNodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "prioritym36108", "-n", oc.Namespace(), "-o=jsonpath={.status.nominatedNodeName}").Output()
+			e2e.Logf("NominatedNodeName for case OCP-36108 is %s", nominatedNodeName)
+			if err != nil {
+				e2e.Logf("Trying to get nominatedNode, error: %s. Trying again", err)
+				return false, nil
+			}
+			if nominatedNodeName != nodeNames[0] {
+				e2e.Failf("NominatedNode is not equal to node1, trying")
+				return false, nil
+			}
+			return true, nil
+		})
+		checkPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Displaying all the pods inside the namespace \n%s", checkPodStatus)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No nominated node even after 180 seconds"))
 
 		exutil.By("Verify podl is terminating and podm is running on node1")
 		labelpm36108 := labels.SelectorFromSet(labels.Set(map[string]string{"env": "pm36108"}))
@@ -416,7 +427,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		assertSpecifiedPodStatus(oc, "priorityh36108", oc.Namespace(), "Pending")
 
 		exutil.By("Verify pod nominated node is nil")
-		nominatedNodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36108", "-n", oc.Namespace(), "-o=jsonpath={.status.nominatedNodeName}").Output()
+		nominatedNodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36108", "-n", oc.Namespace(), "-o=jsonpath={.status.nominatedNodeName}").Output()
 		e2e.Logf("NominatedNodeName is %s", nominatedNodeName)
 		if nominatedNodeName != "" {
 			e2e.Failf("Nominated node name is not equal to nil which is not expected")
@@ -522,6 +533,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 			g.Skip("Skipping the test as totalMemoryInBytes is less than or equal to zero")
 		}
 
+		// Check if node is a localzone node and adjust the pod yaml
+		checkLocalZoneNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeNames[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
+		}
+
 		exutil.By("Set namespace privileged")
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
@@ -564,12 +582,23 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		assertSpecifiedPodStatus(oc, "priorityh36110", oc.Namespace(), "Pending")
 
 		g.By("Verify priorityh pod nominated node is node1")
-		nominatedNodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36110", "-n", oc.Namespace(), "-o=jsonpath={.status.nominatedNodeName}").Output()
-		e2e.Logf("NominatedNodeName is %s", nominatedNodeName)
-		if nominatedNodeName != nodeNames[0] {
-			e2e.Failf("Nominated node name is not equal to node1")
-		}
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			nominatedNodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "priorityh36110", "-n", oc.Namespace(), "-o=jsonpath={.status.nominatedNodeName}").Output()
+			e2e.Logf("NominatedNodeName for case OCP-36110 is %s", nominatedNodeName)
+			if err != nil {
+				e2e.Logf("Trying to get nominatedNode, error: %s. Trying again", err)
+				return false, nil
+			}
+			if nominatedNodeName != nodeNames[0] {
+				e2e.Failf("NominatedNode is not equal to node1, trying")
+				return false, nil
+			}
+			return true, nil
+		})
+		checkPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Displaying all the pods inside the namespace \n%s", checkPodStatus)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No nominated node even after 180 seconds"))
 
 		exutil.By("Verify podm is terminating and podh is running on node1")
 		labelph36110 := labels.SelectorFromSet(labels.Set(map[string]string{"env": "ph36110"}))

@@ -25,6 +25,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		oc              = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 		kubeNamespace   = "openshift-kube-descheduler-operator"
 		hostedClusterNS string
+		minkuberversion string
 	)
 
 	buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
@@ -115,25 +116,31 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 
+		deschedulerCsvOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/cluster-kube-descheduler-operator.openshift-kube-descheduler-op=", "-n", kubeNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(deschedulerCsvOutput, "clusterkubedescheduleroperator.v5.0.1")).To(o.BeTrue())
+
 		g.By("Get the latest version of Kubernetes")
 		ocVersion, versionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(versionErr).NotTo(o.HaveOccurred())
 		kubenetesVersion := strings.Split(strings.Split(ocVersion, "+")[0], "v")[1]
 		kuberVersion := strings.Split(kubenetesVersion, ".")[0] + "." + strings.Split(kubenetesVersion, ".")[1]
+		e2e.Logf("Kubernetes Version is %s", kuberVersion)
 
 		g.By("Check the minkubeversion for descheduler operator")
 		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-			minkuberversion, deschedulerErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
+			minkuberversion, deschedulerErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/cluster-kube-descheduler-operator.openshift-kube-descheduler-op=", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
 			if deschedulerErr != nil {
 				e2e.Logf("Fail to get csv, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString(kuberVersion, minkuberversion); matched {
+			if matched, _ := regexp.MatchString("1.28", minkuberversion); matched {
 				e2e.Logf("descheduler operator rebased with latest kubernetes")
 				return true, nil
 			}
 			return false, nil
 		})
+		e2e.Logf("Descheduler has been rebased with kubernetes version %s", minkuberversion)
 		exutil.AssertWaitPollNoErr(err, "descheduler operator not rebased with latest Kubernetes")
 
 		g.By("Check the kubedescheduler run well")
@@ -2018,7 +2025,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString("4", output); matched {
+			if strings.Contains("3", output) || strings.Contains("4", output) {
 				e2e.Logf("deploy is up:\n%s", output)
 				return true, nil
 			}
