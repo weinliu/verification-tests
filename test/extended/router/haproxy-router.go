@@ -1962,8 +1962,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
-		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--connect-timeout", "10"}
-		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--connect-timeout", "10"}
+		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--connect-timeout", "10"}
+		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
@@ -1992,7 +1992,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-High-66662-adding/deleting http headers to a reen route by a router owner", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-66662-adding/deleting http headers to a reen route by a router owner", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -2118,7 +2118,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		exutil.By("check backend reen route in haproxy that headers to be set or deleted")
-		routerpod = getRouterPod(oc, "ocp66662")
+		routerpod = getNewRouterPod(oc, "ocp66662")
 		readHaproxyConfig(oc, routerpod, "be_secure:"+project1+":r2-reen", "-A43", "X-SSL-Client-Cert")
 		routeBackendCfg := getBlockConfig(oc, routerpod, "be_secure:"+project1+":r2-reen")
 		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-SSL-Client-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
@@ -2143,8 +2143,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the reen route, then check http headers in the request or response message")
-		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlReenRouteRes, "200", 30)
@@ -2173,7 +2173,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-High-62528-adding/deleting http headers to an edge route by a router owner", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-62528-adding/deleting http headers to an edge route by a router owner", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -2319,8 +2319,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
-		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30)
@@ -2452,8 +2452,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		routeDst := routeHost + ":80:" + podIP
-		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
-		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-H reqTestHeader:aaa", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
+		curlHTTPRouteReq := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
+		curlHTTPRouteRes := []string{cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
@@ -2484,7 +2484,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-High-67009-adding/deleting http headers to an edge route by an ingress-controller as a cluster administrator", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-67009-adding/deleting http headers to an edge route by an ingress-controller as a cluster administrator", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -2631,8 +2631,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		edgeRouteDst := edgeRouteHost + ":443:" + podIP
-		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteReq := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteRes := []string{cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30)
@@ -2663,7 +2663,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-High-67010-adding/deleting http headers to a reen route by an ingress-controller as a cluster administrator", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-67010-adding/deleting http headers to a reen route by an ingress-controller as a cluster administrator", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -2814,8 +2814,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("send traffic to the reen route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		reenRouteDst := reenRouteHost + ":443:" + podIP
-		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "-H reqTestHeader:aaa", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteReq := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteRes := []string{cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlReenRouteRes, "200", 30)
