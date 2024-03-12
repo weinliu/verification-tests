@@ -381,7 +381,10 @@ func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string
 	cmd := fmt.Sprintf("arping -I %s %s -c %d", defInterface, svcExternalIP, arpReuests)
 	//https://issues.redhat.com/browse/OCPBUGS-10321 DebugNodeWithOptionsAndChroot replaced
 	output, arpErr := exutil.DebugNodeWithOptions(oc, nodeName, []string{"-q"}, "bin/sh", "-c", cmd)
-	o.Expect(arpErr).NotTo(o.HaveOccurred())
+	//CI run the command returns non-zero exit code from debug container
+	if arpErr != nil {
+		return "", false
+	}
 	e2e.Logf("ARP request response %s", output)
 	re := regexp.MustCompile(`([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})`)
 	var macAddress string
