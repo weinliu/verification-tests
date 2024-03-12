@@ -154,7 +154,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.Context("FLP, Console metrics:", func() {
 		g.When("process.metrics.TLS == Disabled", func() {
-			g.It("NonPreRelease-Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
+			g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
 					namespace = oc.Namespace()
@@ -200,7 +200,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		})
 
 		g.When("processor metrics.TLS == Auto", func() {
-			g.It("NonPreRelease-Author:aramesha-High-54043-High-66031-Verify flowlogs-pipeline, Console metrics [Serial]", func() {
+			g.It("Author:aramesha-High-54043-High-66031-Verify flowlogs-pipeline, Console metrics [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
 					flpPromSA = "flowlogs-pipeline-prom"
@@ -244,7 +244,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		})
 	})
 
-	g.It("NonPreRelease-Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-High-68310-Verify flow correctness and metrics [Serial]", func() {
+	g.It("Author:memodi-High-53595-High-49107-High-45304-High-54929-High-54840-High-68310-Verify flow correctness and metrics [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
