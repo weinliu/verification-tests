@@ -13,6 +13,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
@@ -1024,6 +1025,63 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.By("9. Verify that new pod on new node can communicate with old pod on old node \n")
 		CurlPod2PodPass(oc, podOnOldNode.namespace, podOnOldNode.name, podOnNewNode.namespace, podOnNewNode.name)
 		CurlPod2PodPass(oc, podOnNewNode.namespace, podOnNewNode.name, podOnOldNode.namespace, podOnOldNode.name)
+	})
+
+	g.It("Author:qiowang-Medium-68920-kubernetes service route is recoverable if it's cleared [Disruptive]", func() {
+		e2e.Logf("It is for OCPBUGS-1715")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get service subnets")
+		svcSubnetStr, getSubnetsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("network.operator", "cluster", `-ojsonpath={.spec.serviceNetwork}`).Output()
+		o.Expect(getSubnetsErr).NotTo(o.HaveOccurred())
+		svcSubnets := strings.Split(strings.Trim(svcSubnetStr, "[]"), ",")
+
+		for _, svcSubnet := range svcSubnets {
+			svcSubnet := strings.Trim(svcSubnet, `"`)
+			var verFlag string
+			if strings.Count(svcSubnet, ":") >= 2 {
+				verFlag = "-6"
+			} else if strings.Count(svcSubnet, ".") >= 2 {
+				verFlag = "-4"
+			}
+
+			exutil.By("Delete service route on one of the worker node")
+			origSvcRouteStr, getRouteErr := exutil.DebugNode(oc, nodeName, "ip", verFlag, "route", "show", svcSubnet)
+			o.Expect(getRouteErr).NotTo(o.HaveOccurred())
+			origSvcRoute := strings.Split(origSvcRouteStr, "\n")[0]
+			defer func() {
+				svcRoute1, deferErr := exutil.DebugNode(oc, nodeName, "ip", verFlag, "route", "show", svcSubnet)
+				o.Expect(deferErr).NotTo(o.HaveOccurred())
+				if !strings.Contains(svcRoute1, origSvcRoute) {
+					addCmd := "ip " + verFlag + " route add " + origSvcRoute
+					exutil.DebugNode(oc, nodeName, "bash", "-c", addCmd)
+				}
+			}()
+			delCmd := "ip " + verFlag + " route del " + origSvcRoute
+			_, delRouteErr := exutil.DebugNode(oc, nodeName, "bash", "-c", delCmd)
+			o.Expect(delRouteErr).NotTo(o.HaveOccurred())
+
+			exutil.By("Check the service route is restored")
+			routeOutput := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+				svcRoute, getRouteErr1 := exutil.DebugNode(oc, nodeName, "ip", verFlag, "route", "show", svcSubnet)
+				o.Expect(getRouteErr1).NotTo(o.HaveOccurred())
+				if strings.Contains(svcRoute, origSvcRoute) {
+					return true, nil
+				}
+				e2e.Logf("Route is not restored and try again")
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(routeOutput, fmt.Sprintf("Fail to restore route and the error is:%s", routeOutput))
+
+			exutil.By("Check the log for restore the service route")
+			ovnkubePod, getPodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+			o.Expect(getPodErr).NotTo(o.HaveOccurred())
+			filter := "'Route Manager:.*Dst: " + svcSubnet + "' | tail -1"
+			podLogs, getLogErr := checkLogMessageInPod(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnkubePod, filter)
+			o.Expect(getLogErr).NotTo(o.HaveOccurred())
+			o.Expect(podLogs).To(o.ContainSubstring("netlink route addition event"))
+		}
 	})
 
 })
