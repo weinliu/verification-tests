@@ -4771,9 +4771,34 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-Author:jitli-Critical-49884-Add support for external bundle validators", func() {
 
+		tmpPath := "/tmp/ocp-49884-" + getRandomString()
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpPath)
+
 		tmpBasePath := exutil.FixturePath("testdata", "operatorsdk", "ocp-49960-data")
 		exutil.By("Get the external bundle validator")
-		exvalidator := filepath.Join("/home", "cloud-user", "testdata", "validator-poc")
+		command := "wget -P " + tmpPath + " http://virt-openshift-05.lab.eng.nay.redhat.com/jitli/testdata/validator-poc"
+		wgetOutput, err := exec.Command("bash", "-c", command).Output()
+		if err != nil {
+			e2e.Logf(string(wgetOutput))
+			e2e.Failf("Fail to wget the validator-poc %v", err)
+		}
+		exvalidator := filepath.Join(tmpPath, "validator-poc")
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			if _, err := os.Stat(exvalidator); os.IsNotExist(err) {
+				e2e.Logf("get validator-poc Failed")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "get validator-poc Failed")
+
+		err = os.Chmod(exvalidator, os.FileMode(0o755))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		updatedFileInfo, err := os.Stat(exvalidator)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(updatedFileInfo.Mode().Perm()).To(o.Equal(os.FileMode(0o755)), "File permissions not set correctly")
 
 		exutil.By("bundle validate with external validater")
 		output, _ := operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--alpha-select-external", exvalidator).Output()
