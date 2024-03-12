@@ -1726,6 +1726,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(metricsOutput).To(o.Or(
 			o.ContainSubstring("bad certificate"),
 			o.ContainSubstring("errno = 104"),
+			o.ContainSubstring("certificate required"),
+			o.ContainSubstring("error:1409445C"),
+			o.ContainSubstring("exit code 56"),
 			o.ContainSubstring("errno = 32")))
 
 		g.By("Get NTO metrics informaton with ssl key and crt, should be access, get the metric information...")
