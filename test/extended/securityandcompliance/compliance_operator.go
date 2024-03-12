@@ -5748,6 +5748,81 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-60340-Check the timeout and maxRetryOnTimeout parameter work as expected [Serial]", func() {
+		var (
+			ss = scanSettingDescription{
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "myss" + getRandomString(),
+				namespace:              "",
+				roles1:                 "master",
+				roles2:                 "worker",
+				rotation:               5,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
+				suspend:                false,
+				template:               scansettingTemplate,
+			}
+			ssb = scanSettingBindingDescription{
+				name:            "timeout-" + getRandomString(),
+				namespace:       "",
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis",
+				profilename2:    "ocp4-cis-node",
+				scansettingname: ss.name,
+				template:        scansettingbindingTemplate,
+			}
+		)
+
+		defer cleanupObjects(oc,
+			objectTableRef{"scansettingbinding", subD.namespace, ssb.name},
+			objectTableRef{"scansetting", subD.namespace, ss.name})
+
+		g.By("Create scansetting !!!\n")
+		ss.namespace = subD.namespace
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		patch := `{"maxRetryOnTimeout":2,"timeout":"10s"}`
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "-n", subD.namespace, "--type", "merge", "-p", patch)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "2", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.maxRetryOnTimeout}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "10s", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.timeout}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssb.namespace = subD.namespace
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
+
+		g.By("Check complianceSuite name and result.. !!!\n")
+		subD.complianceSuiteName(oc, ssb.name)
+		subD.complianceSuiteResult(oc, ssb.name, "ERROR")
+
+		g.By("Check complianceSuite result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "2", ok, []string{"compliancesuite", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.scanStatuses[?(@.name==\"ocp4-cis\")].currentIndex}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Timeout while waiting for the scan pod to be finished", ok, []string{"compliancesuite", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.scanStatuses[?(@.name==\"ocp4-cis\")].errormsg}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "2", ok, []string{"compliancesuite", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.scanStatuses[?(@.name==\"ocp4-cis-node-master\")].currentIndex}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Timeout while waiting for the scan pod to be finished", ok, []string{"compliancesuite", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.scanStatuses[?(@.name==\"ocp4-cis-node-master\")].errormsg}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "2", ok, []string{"compliancesuite", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.scanStatuses[?(@.name==\"ocp4-cis-node-worker\")].currentIndex}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Timeout while waiting for the scan pod to be finished", ok, []string{"compliancesuite", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.scanStatuses[?(@.name==\"ocp4-cis-node-worker\")].errormsg}"}).check(oc)
+
+		g.By("ocp-60340 Check the timeout and maxRetryOnTimeout parameter work as expected... !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-45414-Verify the nodeSelector and tolerations are configurable for result server pod [Slow][Disruptive]", func() {
 		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("Skipped: Skip test for SNO/Compact clusters")
