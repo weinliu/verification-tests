@@ -133,8 +133,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		ipStackType := checkIPStackType(oc)
 
-		g.By("test ipv4 singlestack cluster")
 		if ipStackType == "ipv4single" {
+			g.By("test ipv4 singlestack cluster")
 			g.By("create sctpServiceIPv4")
 			createResourceFromFile(oc, oc.Namespace(), sctpServicev4)
 			output, err := oc.WithoutNamespace().Run("get").Args("service").Output()
@@ -165,8 +165,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 
-		g.By("test ipv6 singlestack cluster")
 		if ipStackType == "ipv6single" {
+			g.By("test ipv6 singlestack cluster")
 			g.By("create sctpServiceIPv4")
 			createResourceFromFile(oc, oc.Namespace(), sctpServicev6)
 			output, err := oc.WithoutNamespace().Run("get").Args("service").Output()
@@ -174,7 +174,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(output).To(o.ContainSubstring("sctpservice-v6"))
 
 			g.By("get service ipv6 address")
-			sctpServiceIPv6 := getSvcIPv6(oc, oc.Namespace(), "sctpservice-v6")
+			sctpServiceIPv6, _ := getSvcIP(oc, oc.Namespace(), "sctpservice-v6")
 
 			g.By("sctpserver pod start to wait for sctp traffic")
 			_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
@@ -197,8 +197,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 
-		g.By("test ip dualstack cluster")
 		if ipStackType == "dualstack" {
+			g.By("test ip dualstack cluster")
 			g.By("create sctpservicedualstack")
 			createResourceFromFile(oc, oc.Namespace(), sctpServiceDualstack)
 			output, err := oc.WithoutNamespace().Run("get").Args("service").Output()

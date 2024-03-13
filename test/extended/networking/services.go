@@ -655,7 +655,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.Contains(podlogs, "failed to ensure service")).ShouldNot(o.BeTrue())
 
 		exutil.By("Check nb load_balancer entries again!")
-		lbCmd = fmt.Sprintf("ovn-nbctl --column vip find load_balancer name=Service_%s/%s_TCP_cluster", ns, svc.servicename)
 		lbOutput, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lbCmd)
 		e2e.Logf("\nlbOutput after SVC recreated: %s\n", lbOutput)
 		o.Expect(err).NotTo(o.HaveOccurred())
