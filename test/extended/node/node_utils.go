@@ -174,6 +174,12 @@ type ctrcfgOverlayDescription struct {
 	template string
 }
 
+type podDevFuseDescription struct {
+	name      string
+	namespace string
+	template  string
+}
+
 type podLogLinkDescription struct {
 	name      string
 	namespace string
@@ -215,6 +221,28 @@ func (podWASM *podWASM) create(oc *exutil.CLI) {
 func (podWASM *podWASM) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podWASM.namespace, "pod", podWASM.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podDevFuse *podDevFuseDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podDevFuse.template, "-p", "NAME="+podDevFuse.name, "NAMESPACE="+podDevFuse.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podDevFuse *podDevFuseDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podDevFuse.namespace, "pod", podDevFuse.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func checkDevFuseMount(oc *exutil.CLI, namespace string, podname string) error {
+	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", namespace, podname, "/bin/bash", "-c", "ls -al /dev | grep fuse").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(status, "fuse") {
+			e2e.Logf("\ndev fuse is mounted inside the pod")
+			return true, nil
+		}
+		return false, nil
+	})
 }
 
 func (podLogLink *podLogLinkDescription) create(oc *exutil.CLI) {

@@ -53,6 +53,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podWASMTemp               = filepath.Join(buildPruningBaseDir, "pod-wasm.yaml")
 		podDisruptionBudgetTemp   = filepath.Join(buildPruningBaseDir, "pod-disruption-budget.yaml")
 		genericDeploymentTemp     = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
+		podDevFuseTemp            = filepath.Join(buildPruningBaseDir, "pod-dev-fuse.yaml")
+
+		podDevFuse70987 = podDevFuseDescription{
+			name:      "",
+			namespace: "",
+			template:  podDevFuseTemp,
+		}
 
 		podLogLink65404 = podLogLinkDescription{
 			name:      "",
@@ -385,6 +392,25 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Check init container not restart again")
 		err = podInitCon38271.initContainerNotRestart(oc)
 		exutil.AssertWaitPollNoErr(err, "init container restart")
+	})
+
+	// author: schoudha@redhat.com
+	g.It("Author:schoudha-High-70987-Allow dev fuse by default in CRI-O", func() {
+		exutil.By("Test for case OCP-70987")
+		podDevFuse70987.name = "pod-devfuse"
+		podDevFuse70987.namespace = oc.Namespace()
+
+		defer podDevFuse70987.delete(oc)
+		exutil.By("Create a pod with dev fuse")
+		podDevFuse70987.create(oc)
+
+		exutil.By("Check pod status")
+		err := podStatus(oc, podDevFuse70987.namespace, podDevFuse70987.name)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		exutil.By("Check if dev fuse is mounted inside the pod")
+		err = checkDevFuseMount(oc, podDevFuse70987.namespace, podDevFuse70987.name)
+		exutil.AssertWaitPollNoErr(err, "dev fuse is not mounted inside pod")
 	})
 
 	// author: pmali@redhat.com
