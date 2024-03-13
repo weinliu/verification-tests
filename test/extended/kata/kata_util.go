@@ -1110,10 +1110,6 @@ func createAWSPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretName,
 		"stringData": map[string]string{
 			"AWS_ACCESS_KEY_ID":     accessKey,
 			"AWS_SECRET_ACCESS_KEY": secretKey,
-			"AWS_REGION":            ppParam.AWS_REGION,
-			"AWS_SUBNET_ID":         ppParam.AWS_SUBNET_ID,
-			"AWS_VPC_ID":            ppParam.AWS_VPC_ID,
-			"AWS_SG_IDS":            ppParam.AWS_SG_IDS,
 		},
 	}
 
@@ -1198,8 +1194,6 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 			"AZURE_CLIENT_SECRET":   clientSecret,
 			"AZURE_TENANT_ID":       tenantId,
 			"AZURE_SUBSCRIPTION_ID": subscriptionId,
-			"AZURE_REGION":          ppParam.AZURE_REGION,
-			"AZURE_RESOURCE_GROUP":  ppParam.AZURE_RESOURCE_GROUP,
 		},
 	}
 
@@ -1378,7 +1372,9 @@ func createAWSPeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfigMa
 	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
 	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
 		"-p", "VXLAN_PORT="+ppParam.VXLAN_PORT, "PODVM_INSTANCE_TYPE="+ppParam.PODVM_INSTANCE_TYPE,
-		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
+		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT, "AWS_REGION="+ppParam.AWS_REGION,
+		"AWS_SUBNET_ID="+ppParam.AWS_SUBNET_ID, "AWS_VPC_ID="+ppParam.AWS_VPC_ID,
+		"AWS_SG_IDS="+ppParam.AWS_SG_IDS).OutputToFile(getRandomString() + "peer-pods-cm.json")
 
 	if configFile != "" {
 		osStatMsg, configFileExists := os.Stat(configFile)
@@ -1397,7 +1393,8 @@ func createAzurePeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfig
 	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
 		"-p", "VXLAN_PORT="+ppParam.VXLAN_PORT, "AZURE_INSTANCE_SIZE="+ppParam.AZURE_INSTANCE_SIZE,
 		"AZURE_SUBNET_ID="+ppParam.AZURE_SUBNET_ID, "AZURE_NSG_ID="+ppParam.AZURE_NSG_ID,
-		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
+		"PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT, "AZURE_REGION="+ppParam.AZURE_REGION,
+		"AZURE_RESOURCE_GROUP="+ppParam.AZURE_RESOURCE_GROUP).OutputToFile(getRandomString() + "peer-pods-cm.json")
 
 	if configFile != "" {
 		osStatMsg, configFileExists := os.Stat(configFile)
