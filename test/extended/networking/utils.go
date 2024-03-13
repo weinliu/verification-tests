@@ -2568,6 +2568,33 @@ func getOVNAlertNetworkingRules(oc *exutil.CLI, alertName string) (string, strin
 	}
 }
 
+// return severity, expr and runbook of specific ovn alert in master-rules
+func getOVNAlertMasterRules(oc *exutil.CLI, alertName string) (string, string, string) {
+	// get all ovn alert names in networking-rules
+	ns := "openshift-ovn-kubernetes"
+	allAlerts, nameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", ns, "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
+	o.Expect(nameErr).NotTo(o.HaveOccurred())
+	e2e.Logf("The alert are %v", allAlerts)
+
+	if !strings.Contains(allAlerts, alertName) {
+		e2e.Failf("Target alert %v is not found", alertName)
+		return "", "", ""
+	} else {
+		var severity, expr string
+		severity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", ns, "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\""+alertName+"\")].labels.severity}").Output()
+		o.Expect(severityErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alert severity is %v", severity)
+		expr, exprErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", ns, "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\""+alertName+"\")].expr}").Output()
+		o.Expect(exprErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alert expr is %v", expr)
+		runbook, runbookErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", ns, "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\""+alertName+"\")].annotations.runbook_url}").Output()
+		o.Expect(runbookErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alert runbook is %v", runbook)
+
+		return severity, expr, runbook
+	}
+}
+
 // returns all the logical routers and switches on all the nodes
 func getOVNConstructs(oc *exutil.CLI, constructType string, nodeNames []string) []string {
 	var ovnConstructs []string

@@ -153,4 +153,33 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
 		o.Expect(alertExpr).To(o.ContainSubstring("increase(ovnkube_resource_retry_failures_total[10m]) > 0"))
 	})
+
+	g.It("Author:qiowang-Medium-72328-Verify alert OVNKubernetesNodePodAddError and OVNKubernetesNodePodDeleteError", func() {
+		alertSeverity1, alertExpr1, _ := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodePodAddError")
+		o.Expect(alertSeverity1).To(o.ContainSubstring("warning"))
+		o.Expect(alertExpr1).To(o.ContainSubstring(`sum by(instance, namespace) (rate(ovnkube_node_cni_request_duration_seconds_count{command="ADD",err="true"}[5m]))`))
+
+		alertSeverity2, alertExpr2, _ := getOVNAlertNetworkingRules(oc, "OVNKubernetesNodePodDeleteError")
+		o.Expect(alertSeverity2).To(o.ContainSubstring("warning"))
+		o.Expect(alertExpr2).To(o.ContainSubstring(`sum by(instance, namespace) (rate(ovnkube_node_cni_request_duration_seconds_count{command="DEL",err="true"}[5m]))`))
+	})
+
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-72329-Verify alert OVNKubernetesNorthboundDatabaseCPUUsagehigh and OVNKubernetesSouthboundDatabaseCPUUsagehigh", func() {
+		alertSeverity1, alertExpr1, _ := getOVNAlertMasterRules(oc, "OVNKubernetesNorthboundDatabaseCPUUsageHigh")
+		o.Expect(alertSeverity1).To(o.ContainSubstring("info"))
+		o.Expect(alertExpr1).To(o.ContainSubstring(`(sum(rate(container_cpu_usage_seconds_total{container="nbdb"}[5m])) BY`))
+		o.Expect(alertExpr1).To(o.ContainSubstring(`(instance, name, namespace)) > 0.8`))
+
+		alertSeverity2, alertExpr2, _ := getOVNAlertMasterRules(oc, "OVNKubernetesSouthboundDatabaseCPUUsageHigh")
+		o.Expect(alertSeverity2).To(o.ContainSubstring("info"))
+		o.Expect(alertExpr2).To(o.ContainSubstring(`(sum(rate(container_cpu_usage_seconds_total{container="sbdb"}[5m])) BY`))
+		o.Expect(alertExpr2).To(o.ContainSubstring(`(instance, name, namespace)) > 0.8`))
+	})
+
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-72330-Verify alert V6SubnetAllocationThresholdExceeded", func() {
+		alertSeverity, alertExpr, _ := getOVNAlertMasterRules(oc, "V6SubnetAllocationThresholdExceeded")
+		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+		o.Expect(alertExpr).To(o.ContainSubstring(`ovnkube_clustermanager_allocated_v6_host_subnets / ovnkube_clustermanager_num_v6_host_subnets`))
+		o.Expect(alertExpr).To(o.ContainSubstring(`> 0.8`))
+	})
 })
