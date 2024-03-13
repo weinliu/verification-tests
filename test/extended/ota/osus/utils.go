@@ -1,6 +1,7 @@
 package osus
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -54,6 +56,11 @@ type updateService struct {
 	releases  string
 	template  string
 	replicas  int
+}
+
+type supportedMap struct {
+	osusver string
+	ocpver  []string
 }
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
@@ -450,14 +457,104 @@ func installOSUSOperator(oc *exutil.CLI, version string, mode string) {
 	if mode == "Manual" && version != "" {
 		e2e.Logf("Approve installplan manually...")
 		jsonpath := fmt.Sprintf("-o=jsonpath={.items[?(@.spec.clusterServiceVersionNames[]=='%s')].metadata.name}", csv)
-		o.Consistently(func() string {
+		o.Eventually(func() string {
 			osusIP, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", jsonpath, "-n", oc.Namespace()).Output()
 			e2e.Logf("waiting for ip: %s", osusIP)
 			return osusIP
-		}, 300*time.Second, 60*time.Second).ShouldNot(o.BeEmpty(), "Fail to generate installplan!")
+		}, 3*time.Minute, 1*time.Minute).ShouldNot(o.BeEmpty(), "Fail to generate installplan!")
 		osusIP, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", jsonpath, "-n", oc.Namespace()).Output()
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("installplan", osusIP, "--type=json", "-p", "[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\": true}]", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	waitForPodReady(oc, "name=updateservice-operator", oc.Namespace())
+}
+
+func upgradeOSUS(oc *exutil.CLI, usname string, version string) error {
+	e2e.Logf("Check installplan available...")
+	ips, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+	if err != nil {
+		return err
+	}
+	if len(strings.Fields(ips)) != 2 {
+		return fmt.Errorf("unexpected installplan found: %s", ips)
+	}
+	preOPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=name=updateservice-operator", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+	if err != nil {
+		return err
+	}
+	preAPPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=app="+usname, "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+	if err != nil {
+		return err
+	}
+	e2e.Logf("Manually approve new installplan for update...")
+	jsonpath := fmt.Sprintf("-o=jsonpath={.items[?(@.spec.clusterServiceVersionNames[]=='update-service-operator.v%s')].metadata.name}", version)
+	osusIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", jsonpath, "-n", oc.Namespace()).Output()
+	if err != nil {
+		return err
+	}
+	err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("installplan", osusIP, "--type=json", "-p", "[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\": true}]", "-n", oc.Namespace()).Execute()
+	if err != nil {
+		return err
+	}
+	e2e.Logf("Waiting for operator and operand pods rolling...")
+	var (
+		postOPName string
+		errOP      error
+	)
+	preAppList := strings.Fields(preAPPName)
+	err = wait.PollUntilContextTimeout(context.Background(), 1*time.Minute, 5*time.Minute, true, func(context.Context) (bool, error) {
+		postOPName, errOP = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=name=updateservice-operator", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+		postAPPName, errAPP := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=app="+usname, "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+		if errOP != nil || errAPP != nil {
+			return false, nil
+		}
+		if strings.Compare(postOPName, preOPName) == 0 {
+			e2e.Logf("waiting: operator pods after upgrade: %s; while operator pods before upgrade: %s", postOPName, preOPName)
+			return false, nil
+		}
+		for _, pre := range preAppList {
+			if strings.Contains(postAPPName, pre) {
+				e2e.Logf("waiting: app pods after upgrade: %s; while app pods before upgrade: %s", postAPPName, preAPPName)
+				return false, nil
+			}
+		}
+		if len(strings.Fields(postAPPName)) != len(preAppList) {
+			e2e.Logf("waiting for pods [%s] to expected number %d", postAPPName, len(preAppList))
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("pod is not rolling successfully after upgrade: %v", err)
+	}
+	csvInPostPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", postOPName, "-o=jsonpath={.spec.containers[].env[?(@.name=='OPERATOR_CONDITION_NAME')].value}", "-n", oc.Namespace()).Output()
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(csvInPostPod, version) {
+		return fmt.Errorf("unexpected operator version upgraded: %s", csvInPostPod)
+	}
+	return nil
+}
+
+func skipUnsupportedOCPVer(oc *exutil.CLI, version string) {
+	mapTest := supportedMap{
+		osusver: "4.9.1",
+		ocpver:  []string{"4.8", "4.9", "4.10", "4.11"},
+	}
+	clusterVersion, _, err := exutil.GetClusterVersion(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if version != mapTest.osusver {
+		g.Skip(fmt.Sprintf("Skip test for cluster with unrecoginzed old osus version %s!", version))
+	}
+	skip := true
+	for _, ver := range mapTest.ocpver {
+		if clusterVersion == ver {
+			skip = false
+			break
+		}
+	}
+	if skip {
+		g.Skip("Skip test for cluster with old osus on unsupported ocp version!")
+	}
 }

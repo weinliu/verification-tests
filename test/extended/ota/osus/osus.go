@@ -151,36 +151,51 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = verifyOSUS(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		preAPPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=app=update-service-oc-mirror", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("z-version upgrade against operator and operand")
-		ips, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
+		err = upgradeOSUS(oc, "update-service-oc-mirror", updatePath["tgtver"])
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(strings.Fields(ips))).To(o.Equal(2), "Unexpected installplan found: %s", ips)
-		e2e.Logf("Manually approve new installplan for update...")
-		jsonpath := fmt.Sprintf("-o=jsonpath={.items[?(@.spec.clusterServiceVersionNames[]=='update-service-operator.v%s')].metadata.name}", updatePath["tgtver"])
-		osusIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", jsonpath, "-n", oc.Namespace()).Output()
+	})
+
+	//author: jiajliu@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jiajliu-High-69204-y version upgrade OSUS operator and operand for connected cluster", func() {
+		updatePath := map[string]string{
+			"srcver": "4.9.1",
+			"tgtver": "5.0.1",
+		}
+		oc.SetupProject()
+		skipUnsupportedOCPVer(oc, updatePath["srcver"])
+		exutil.By("Install osus operator with srcver")
+		installOSUSOperator(oc, updatePath["srcver"], "Manual")
+		preOPName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=name=updateservice-operator", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("installplan", osusIP, "--type=json", "-p", "[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\": true}]", "-n", oc.Namespace()).Execute()
+		csvInPrePod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", preOPName, "-o=jsonpath={.spec.containers[].env[?(@.name=='OPERATOR_CONDITION_NAME')].value}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(csvInPrePod).To(o.ContainSubstring(updatePath["srcver"]), "Unexpected operator version installed: %s.", csvInPrePod)
+
+		exutil.By("Install OSUS instance")
+		usTemp := exutil.FixturePath("testdata", "ota", "osus", "updateservice.yaml")
+		us := updateService{
+			name:      "us69204",
+			namespace: oc.Namespace(),
+			template:  usTemp,
+			graphdata: "quay.io/openshift-qe-optional-operators/graph-data:latest",
+			releases:  "quay.io/openshifttest/ocp-release",
+			replicas:  1,
+		}
+		defer uninstallOSUSApp(oc)
+		err = installOSUSAppOC(oc, us)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		e2e.Logf("Waiting for operator and operand pods rolling...")
-		var postOPName string
-		err = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
-			postOPName, errOP := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=name=updateservice-operator", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
-			postAPPName, errAPP := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=app=update-service-oc-mirror", "-o=jsonpath={.items[*].metadata.name}", "-n", oc.Namespace()).Output()
-			if errOP != nil || errAPP != nil || strings.Compare(postOPName, preOPName) == 0 || strings.Compare(postAPPName, preAPPName) == 0 {
-				e2e.Logf("error: %v|%v; running pods after upgrade: %s|%s; while running pods before upgrade: %s|%s", errOP, errAPP, postOPName, postAPPName, preOPName, preAPPName)
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "pod is not rolling successfully after upgrade")
-		csvInPostPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", postOPName, "-o=jsonpath={.spec.containers[].env[?(@.name=='OPERATOR_CONDITION_NAME')].value}", "-n", oc.Namespace()).Output()
+		exutil.By("Verify OSUS instance works")
+		err = verifyOSUS(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(csvInPostPod).To(o.ContainSubstring(updatePath["tgtver"]), "Unexpected operator version upgraded: %s.", csvInPostPod)
+
+		exutil.By("Y-version upgrade against operator and operand")
+		err = upgradeOSUS(oc, us.name, updatePath["tgtver"])
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
 })
 
 var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
