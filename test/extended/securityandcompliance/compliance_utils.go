@@ -167,6 +167,19 @@ type priorityClassDescription struct {
 	template     string
 }
 
+type serviceDescription struct {
+	name        string
+	namespace   string
+	profilekind string
+	template    string
+}
+
+func (service *serviceDescription) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME="+service.name,
+		"NAMESPACE="+service.namespace, "PROFILEKIND="+service.profilekind)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (priorityClassD *priorityClassDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", priorityClassD.namespace, "-f", priorityClassD.template, "-p", "NAME="+priorityClassD.name,
 		"NAMESPACE="+priorityClassD.namespace, "PRIORITYVALUE="+strconv.Itoa(priorityClassD.prirotyValue))

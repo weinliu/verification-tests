@@ -60,6 +60,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		tprofileHypershfitTemplate       string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
+		serviceYAML                      string
 		ogD                              operatorGroupDescription
 		subD                             subscriptionDescription
 		storageClass                     storageClassDescription
@@ -105,6 +106,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		resourceQuotaYAML = filepath.Join(buildPruningBaseDir, "resource-quota.yaml")
 		tprofileWithoutDescriptionYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutdescription.yaml")
 		tprofileWithoutTitleYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withouttitle.yaml")
+		serviceYAML = filepath.Join(buildPruningBaseDir, "service-unsecure.yaml")
 
 		ogD = operatorGroupDescription{
 			name:      "openshift-compliance",
@@ -3623,22 +3625,51 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("ocp-45692 The NERC CIP compliance profiles perform scan and manual fix as expected with default scanSettings... !!!\n")
 	})
 
-	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-46991-Check the PCI DSS compliance profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
-		var ssb = scanSettingBindingDescription{
-			name:            "pci-dss-test" + getRandomString(),
-			namespace:       "",
-			profilekind1:    "Profile",
-			profilename1:    "ocp4-pci-dss",
-			profilename2:    "ocp4-pci-dss-node",
-			scansettingname: "default",
-			template:        scansettingbindingTemplate,
-		}
+	// author: pdhamdhe@redhat.com/bgudi@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-46991-High-66791-Check the PCI DSS compliance profiles perform scan as expected with default scanSettings and check for rule ocp4-routes-protected-by-tls [Serial]", func() {
+		var (
+			ns1    = "mytest" + getRandomString()
+			route1 = "myedge" + getRandomString()
+			ssb    = scanSettingBindingDescription{
+				name:            "pci-dss-test" + getRandomString(),
+				namespace:       "",
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-pci-dss",
+				profilename2:    "ocp4-pci-dss-node",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			serviceTemplate = serviceDescription{
+				name:        "service-unsecure" + getRandomString(),
+				namespace:   ns1,
+				profilekind: "Service",
+				template:    serviceYAML,
+			}
+		)
 
 		g.By("Check default profiles name ocp4-pci-dss .. !!!\n")
 		subD.getProfileName(oc, "ocp4-pci-dss")
 		g.By("Check default profiles name ocp4-pci-dss-node .. !!!\n")
 		subD.getProfileName(oc, "ocp4-pci-dss-node")
+
+		g.By("Create new namespace  !!!")
+		defer func() { cleanupObjects(oc, objectTableRef{"ns", serviceTemplate.namespace, serviceTemplate.namespace}) }()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", serviceTemplate.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("%s", msg)
+
+		g.By("Create service !!!")
+		defer func() { cleanupObjects(oc, objectTableRef{"service", serviceTemplate.namespace, serviceTemplate.name}) }()
+		serviceTemplate.create(oc)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", serviceTemplate.namespace, "service", serviceTemplate.name, "-o=jsonpath={.metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("%s", msg)
+
+		g.By("Create route !!!")
+		defer func() { cleanupObjects(oc, objectTableRef{"route", serviceTemplate.namespace, route1}) }()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "edge", route1, "--"+"service="+serviceTemplate.name, "-n", serviceTemplate.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("%s", msg)
 
 		g.By("Create scansettingbinding !!!\n")
 		ssb.namespace = subD.namespace
@@ -3655,7 +3686,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check complianceSuite result through exit-code.. !!!\n")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
 
-		g.By("ocp-46991 The PCI DSS compliance profiles perform scan as expected with default scanSettings... !!!\n")
+		g.By("ocp-66791 Check whether ocp4-pci-dss-routes-protected-by-tls ccr pass")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			"ocp4-pci-dss-routes-protected-by-tls", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 	})
 
 	// author: pdhamdhe@redhat.com
