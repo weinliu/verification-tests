@@ -4642,4 +4642,29 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		message, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].message}").Output()
 		o.Expect(message).To(o.ContainSubstring("unable to sync storage configuration"))
 	})
+
+	g.It("NonHyperShiftHOST-Author:wewang-High-66533-Users providing custom gcp tags are set with bucket creation", func() {
+		g.By("Check platforms")
+		exutil.SkipIfPlatformTypeNot(oc, "GCP")
+
+		g.By("Check the cluster is with resourceTags")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.gcp}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "resourceTags") {
+			g.Skip("Skip for no resourceTags")
+		}
+
+		g.By("Get storage bucket and region")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bucketName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.gcs.bucket}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		regionName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.gcs.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the tags")
+		getResourceTags, err := getgcloudClient(oc).GetResourceTags(bucketName, regionName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(getResourceTags).To(o.ContainSubstring("tagValues/281475558055748"))
+		o.Expect(getResourceTags).To(o.ContainSubstring("tagValues/281479576182962"))
+	})
 })

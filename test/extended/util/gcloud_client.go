@@ -223,3 +223,11 @@ func (gcloud *Gcloud) GetPdVolumeInfo(pvName string, filterArgs ...string) ([]by
 	}
 	return pdVolumeInfo, err
 }
+
+func (gcloud *Gcloud) GetResourceTags(bucketName string, zone string) ([]byte, error) {
+	ResourceTags, err := exec.Command("bash", "-c", fmt.Sprintf(`gcloud resource-manager tags bindings list --parent=//storage.googleapis.com/projects/_/buckets/%s --location=%s`, bucketName, zone)).Output()
+	if len(ResourceTags) == 0 {
+		err = fmt.Errorf("Couldn't find resourcetags")
+	}
+	return ResourceTags, err
+}

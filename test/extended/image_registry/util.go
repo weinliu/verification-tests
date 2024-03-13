@@ -1378,3 +1378,13 @@ func get_osp_authurl(oc *exutil.CLI) string {
 	}
 	return ""
 }
+
+func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
+	if exutil.CheckPlatform(oc) != "gcp" {
+		g.Skip("it is not gcp platform!")
+	}
+	projectID, err := exutil.GetGcpProjectID(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	gcloud := exutil.Gcloud{ProjectID: projectID}
+	return gcloud.Login()
+}
