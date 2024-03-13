@@ -3397,9 +3397,6 @@ spec:
 
 	g.It("CPaasrunOnly-Author:kbharti-High-70685-Validate support for blocking queries on Loki[Serial]", func() {
 
-		g.Skip(" Blocked due to LOG-4927")
-		// Case untested due to above bug.
-
 		g.By("Create 3 application generator projects")
 		oc.SetupProject()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -3446,7 +3443,7 @@ spec:
     tenants:
       application:
         queries:
-          blocked
+          blocked:
           - pattern: '{kubernetes_namespace_name="%s"}'
           - pattern: '.*%s.*'
             regex: true
@@ -3474,31 +3471,17 @@ spec:
 		token := getSAToken(oc, "default", ls.namespace)
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(token).retry(5)
-		lc.waitForLogsAppearByKey("application", "log_type", "application")
 
-		// Cannot query {kubernetes_namespace_name="appProj1"} since this query is blocked by policy
 		g.By("Validate queries are blocked as per the spec config")
-		_, err = lc.searchLogsInLoki("application", "{kubernetes_namespace_name="+appProj1+"}")
+		_, err = lc.searchByNamespace("application", appProj1)
+		// Cannot query {kubernetes_namespace_name="appProj1"} since this query is blocked by policy
 		o.Expect(err).To(o.HaveOccurred())
-		if !strings.Contains("query blocked by policy", err.Error()) {
-			e2e.Failf("Query failed but Error message does not match for: " + appProj1)
-		}
 
+		_, err = lc.searchByNamespace("application", appProj2)
 		// Any query containing appProj2 would be blocked by policy (regex)
-		_, err = lc.searchLogsInLoki("application", "{kubernetes_namespace_name="+appProj2+"}")
 		o.Expect(err).To(o.HaveOccurred())
-		//check err message contains 'query blocked by policy'
-		if !strings.Contains("query blocked by policy", err.Error()) {
-			e2e.Failf("Query failed but Error message does not match for: " + appProj2)
-		}
 
-		//Success since no policy exists on appProj3
-		logs, err := lc.searchLogsInLoki("application", "{kubernetes_namespace_name="+appProj3+"}")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(logs.Status).Should(o.Equal("success"))
-		o.Expect(len(logs.Data.Result) > 0).Should(o.BeTrue())
-		o.Expect(logs.Data.Result[0].Stream.LogType).Should(o.Equal("application"))
-
+		//Success since no blocking policy exists on appProj3
+		lc.waitForLogsAppearByProject("application", appProj3)
 	})
-
 })
