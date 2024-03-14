@@ -392,7 +392,7 @@ func getRouterPod(oc *exutil.CLI, icname string) string {
 	return podName
 }
 
-// For collecting env details with grep from router pod [usage example: readDeploymentData(oc, podname, "search string")] .
+// For collecting env details with grep from router pod [usage example: readRouterPodEnv(oc, podname, "search string")] .
 // NOTE: This requires getRouterPod function to collect the podname variable first!
 func readRouterPodEnv(oc *exutil.CLI, routername, envname string) string {
 	ns := "openshift-ingress"
@@ -400,11 +400,13 @@ func readRouterPodEnv(oc *exutil.CLI, routername, envname string) string {
 	return output
 }
 
-// For collecting env details with grep [usage example: readDeploymentData(oc, namespace, podname, "search string")]
+// For collecting env details with grep [usage example: readPodEnv(oc, namespace, podname, "search string")]
 func readPodEnv(oc *exutil.CLI, routername, ns string, envname string) string {
 	cmd := fmt.Sprintf("/usr/bin/env | grep %s", envname)
 	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, routername, "--", "bash", "-c", cmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		output = "NotFound"
+	}
 	e2e.Logf("the matched Env are: %v", output)
 	return output
 }

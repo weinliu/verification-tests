@@ -516,6 +516,22 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output2).NotTo(o.ContainSubstring(`compression algo gzip`))
 	})
 
+	// author: hongli@redhat.com
+	g.It("Author:hongli-Low-47344-check haproxy router v4v6 mode", func() {
+		exutil.By("Get ROUTER_IP_V4_V6_MODE env, if NotFound then v4 is using by default")
+		defaultRouterPod := getNewRouterPod(oc, "default")
+		checkEnv := readRouterPodEnv(oc, defaultRouterPod, "ROUTER_IP_V4_V6_MODE")
+		ipStackType := checkIPStackType(oc)
+		e2e.Logf("the cluster IP stack type is: %v", ipStackType)
+		if ipStackType == "ipv6single" {
+			o.Expect(checkEnv).To(o.ContainSubstring("=v6"))
+		} else if ipStackType == "dualstack" {
+			o.Expect(checkEnv).To(o.ContainSubstring("=v4v6"))
+		} else {
+			o.Expect(checkEnv).To(o.ContainSubstring("NotFound"))
+		}
+	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-Low-49131-check haproxy's version", func() {
 		var expVersion = "haproxy28-2.8.5-1.rhaos4.16.el9"
