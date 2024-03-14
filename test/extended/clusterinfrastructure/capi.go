@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-51141-[CAPI] worker-user-data secret should be synced up [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
 		skipForCAPINotExist(oc)
 
 		g.By("Delete worker-user-data in openshift-cluster-api namespace")
@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: dtobolik@redhat.com
 	g.It("NonHyperShiftHOST-Author:dtobolik-Medium-61980-[CAPI] Workload annotation missing from deployments", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "vsphere")
 		skipForCAPINotExist(oc)
 
 		deployments, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", clusterAPINamespace, "-oname").Output()
