@@ -270,7 +270,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
 
 		g.By("The Google Cloud sink in Vector config must use the intermediate tlsSecurityProfile")
-		searchString := `[sinks.gcp_logging.tls]
+		searchString := `[sinks.output_gcp_logging.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
 		result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
@@ -300,7 +300,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("The Google Cloud sink in Vector config must use the Modern tlsSecurityProfile")
-		searchString = `[sinks.gcp_logging.tls]
+		searchString = `[sinks.output_gcp_logging.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
 		result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)

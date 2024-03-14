@@ -32,6 +32,7 @@ objects:
       }
       :msg, contains, "_STREAM_ID" /var/log/clf/infra.log
       :msg, contains, "auditID" /var/log/clf/audit.log
+      :msg, contains, "audit.linux" /var/log/clf/audit-linux.log
 parameters:
 - name: NAME
   value: "rsyslogserver"

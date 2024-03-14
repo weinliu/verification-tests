@@ -477,7 +477,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf.create(oc, "URL="+kafkaEndpoint)
 
 			g.By("The Kafka sink in Vector config must use the Custom tlsSecurityProfile")
-			searchString := `[sinks.kafka_app.tls]
+			searchString := `[sinks.output_kafka_app.tls]
 enabled = true
 min_tls_version = "VersionTLS12"
 ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
@@ -512,7 +512,7 @@ ca_file = "/var/run/ocp-collector/secrets/vector-kafka/ca-bundle.crt"`
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("The Kafka sink in Vector config must use the Old tlsSecurityProfile")
-			searchString = `[sinks.kafka_app.tls]
+			searchString = `[sinks.output_kafka_app.tls]
 enabled = true
 min_tls_version = "VersionTLS10"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256,AES128-SHA,AES256-SHA,DES-CBC3-SHA"

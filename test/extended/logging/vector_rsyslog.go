@@ -274,7 +274,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf.create(oc, "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514")
 
 			g.By("The Syslog sink in Vector config must use the Custom tlsSecurityProfile")
-			searchString := `[sinks.external_syslog.tls]
+			searchString := `[sinks.output_external_syslog.tls]
 enabled = true
 min_tls_version = "VersionTLS12"
 ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256"
@@ -295,7 +295,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("The Syslog sink in Vector config must use the Intermediate tlsSecurityProfile")
-			searchString = `[sinks.external_syslog.tls]
+			searchString = `[sinks.output_external_syslog.tls]
 enabled = true
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"

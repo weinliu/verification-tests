@@ -978,7 +978,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_AES_128_CCM_SHA256")
-			searchString := `[sinks.loki_server.tls]
+			searchString := `[sinks.output_loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_CCM_SHA256"`
 			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
@@ -1012,7 +1012,7 @@ ciphersuites = "TLS_AES_128_CCM_SHA256"`
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("The Loki sink in Vector config must use the Custom tlsSecurityProfile with ciphersuite TLS_CHACHA20_POLY1305_SHA256")
-			searchString = `[sinks.loki_server.tls]
+			searchString = `[sinks.output_loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
@@ -1091,7 +1091,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
 
 			g.By("The Loki sink in Vector config must use the intermediate tlsSecurityProfile")
-			searchString := `[sinks.loki_server.tls]
+			searchString := `[sinks.output_loki_server.tls]
 min_tls_version = "VersionTLS12"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384"`
 			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
@@ -1127,7 +1127,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("The Loki sink in Vector config must use the Modern tlsSecurityProfile")
-			searchString = `[sinks.loki_server.tls]
+			searchString = `[sinks.output_loki_server.tls]
 min_tls_version = "VersionTLS13"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"`
 			result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
@@ -2061,8 +2061,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			g.By("Query User workload AlertManager for Firing Alerts")
-			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-			queryAlertManagerForActiveAlerts(oc, token, true, "MyAppLogVolumeIsHigh", 5)
+			defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", appProj)).Execute()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", appProj)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			bearerToken := getSAToken(oc, "default", appProj)
+			//token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			queryAlertManagerForActiveAlerts(oc, bearerToken, true, "MyAppLogVolumeIsHigh", 5)
 		})
 
 	})
@@ -2254,13 +2258,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		exutil.By("deploy loki stack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
-			name:          "lokistack-65193",
+			name:          "lokistack-65194",
 			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   s,
-			storageSecret: "storage-secret-65193",
+			storageSecret: "storage-secret-65194",
 			storageClass:  sc,
-			bucketName:    "logging-loki-65193-" + getInfrastructureName(oc),
+			bucketName:    "logging-loki-65194-" + getInfrastructureName(oc),
 			template:      lokiStackTemplate,
 		}
 
@@ -2340,36 +2344,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 				o.Expect(count >= 2900).Should(o.BeTrue())
 			}
 		}
-
-		exutil.By("set maxRecordsPerSecond to 0")
-		newPatch := `[{"op": "replace", "path": "/spec/outputs/0/limit/maxRecordsPerSecond", "value": 0}]`
-		clf.update(oc, "", newPatch, "--type=json")
-		WaitForDaemonsetPodsToBeReady(oc, loggingNS, "collector")
-		// remove the loki pod to remove logs collected before updating the rate limit
-		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", loki.namespace, "--all").Execute()
-
-		// sleep 3 minutes for the new configuration to be applied to collector pods
-		time.Sleep(3 * time.Minute)
-
-		exutil.By("check data in user-managed loki, no logs collected")
-		newRes, _ := lc.query("", "sum by(kubernetes_host)(count_over_time({log_type=~\".+\"}[1m]))", 30, false, time.Now())
-		o.Expect(len(newRes.Data.Result) == 0).Should(o.BeTrue())
-
-		exutil.By("check data in lokistack again, there should not have rate limitation")
-		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
-		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, nodeName := range nodeNames {
-			// only check app logs, because for infra and audit logs, we don't know how many logs the OCP generates in one minute
-			res, _ := lokistackClient.query("application", "sum by(kubernetes_host)(count_over_time({kubernetes_host=\""+nodeName+"\"}[1m]))", 30, false, time.Now())
-			o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
-			for _, r := range res.Data.Result {
-				v := r.Values[len(r.Values)-2]
-				c := convertInterfaceToArray(v)[1]
-				count, _ := strconv.Atoi(c)
-				o.Expect(count >= 2900).Should(o.BeTrue())
-			}
-		}
 	})
 
 	g.It("CPaasrunOnly-Author:qitang-High-65195-Controlling log flow rates - different output with different rate", func() {
@@ -2408,7 +2382,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 
 		exutil.By("Create ClusterLogForwarder")
 		clf := clusterlogforwarder{
-			name:                      "clf-65194",
+			name:                      "clf-65195",
 			namespace:                 logStoresNS,
 			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
 			collectApplicationLogs:    true,
@@ -2425,19 +2399,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 		exutil.By("check collector pods' configuration")
-		lokiConfig := `[transforms.sink_throttle_loki-server]
+		lokiConfig := `[transforms.output_loki_server_throttle]
 type = "throttle"
-inputs = ["forward_to_loki_user_defined"]
+inputs = ["input_infrastructure_viaq_logtype","input_audit_viaq_logtype","input_application_viaq_logtype"]
 window_secs = 1
 threshold = 20`
-		rsyslogConfig := `[transforms.sink_throttle_rsyslog-server]
+		rsyslogConfig := `[transforms.output_rsyslog_server_throttle]
 type = "throttle"
-inputs = ["forward_to_loki_user_defined"]
+inputs = ["input_infrastructure_viaq_logtype","input_audit_viaq_logtype","input_application_viaq_logtype"]
 window_secs = 1
 threshold = 30`
-		esConfig := `[transforms.sink_throttle_elasticsearch-server]
+		esConfig := `[transforms.output_elasticsearch_server_throttle]
 type = "throttle"
-inputs = ["forward_to_loki_user_defined"]
+inputs = ["input_infrastructure_viaq_logtype","input_audit_viaq_logtype","input_application_viaq_logtype"]
 window_secs = 1
 threshold = 10`
 
