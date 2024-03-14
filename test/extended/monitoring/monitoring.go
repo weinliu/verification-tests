@@ -151,9 +151,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_namespace_labels{namespace="openshift-monitoring"}'`, token, `"label_kubernetes_io_metadata_name"`, uwmLoadTime)
 
 		g.By("Check labels for PDB")
-		//SNO cluster do not have PDB under openshift-monitoring
-		if !exutil.IsSNOCluster(oc) {
-			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_poddisruptionbudget_labels{poddisruptionbudget="thanos-querier-pdb"}'`, token, `"label_app_kubernetes_io_name"`, uwmLoadTime)
+		checkPDB, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pdb", "thanos-querier-pdb", "-n", "openshift-monitoring").Output()
+		if !strings.Contains(checkPDB, `"thanos-querier-pdb" not found`) {
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_poddisruptionbudget_labels{poddisruptionbudget="thanos-querier-pdb"}'`, token, `"label_app_kubernetes_io_name"`, uwmLoadTime)
 		}
 
 		g.By("Check labels for PV/PVC if need")
