@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
-	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -415,6 +415,11 @@ func (l ResourceList) GetAll() ([]Resource, error) {
 	return allResources, nil
 }
 
+// Exister interface for any object having a "Exists() (bool)" method. So that they can use the "Exist" gomega matcher
+type Exister interface {
+	Exists() bool
+}
+
 // Exist returns a gomega matcher that checks if a resource exists or not
 func Exist() types.GomegaMatcher {
 	return &existMatcher{}
@@ -424,18 +429,18 @@ type existMatcher struct {
 }
 
 func (matcher *existMatcher) Match(actual interface{}) (success bool, err error) {
-	resource, ok := actual.(ResourceInterface)
+	resource, ok := actual.(Exister)
 	if !ok {
-		return false, fmt.Errorf("Exist matcher expects a Resource in case %v", g.CurrentSpecReport().FullText())
+		return false, fmt.Errorf("Exist matcher expects a resource implementing the Exister interface")
 	}
 
 	return resource.Exists(), nil
 }
 
 func (matcher *existMatcher) FailureMessage(actual interface{}) (message string) {
-	return fmt.Sprintf("Expected resource\n\t%s\nto exist", actual)
+	return fmt.Sprintf("Expected %s \n\t%s\nto exist", reflect.TypeOf(actual), actual)
 }
 
 func (matcher *existMatcher) NegatedFailureMessage(actual interface{}) (message string) {
-	return fmt.Sprintf("Expected resource\n\t%s\nnot to exist", actual)
+	return fmt.Sprintf("Expected %s \n\t%s\nnot to exist", reflect.TypeOf(actual), actual)
 }

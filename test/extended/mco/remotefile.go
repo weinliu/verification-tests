@@ -17,7 +17,7 @@ const (
 	statParser = `Name: (?P<name>.+)\n` +
 		`Size: (?P<size>\d+)\n` +
 		`Kind: (?P<kind>.*)\n` +
-		`Permissions: (?P<nperm>\d+)\/(?P<rwxperm>\S+)\n` +
+		`Permissions: (?P<octalperm>\d+)\/(?P<rwxperm>\S+)\n` +
 		`UID: (?P<uidnumber>\d+)\/(?P<uidname>\S+)\n` +
 		`GID: (?P<gidnumber>\d+)\/(?P<gidname>\S+)\n` +
 		`Links: (?P<links>\d+)\n` +
@@ -103,7 +103,7 @@ func (rf *RemoteFile) PushNewTextContent(newTextContent string) error {
 
 // PushNewContent modifies the remote file's content
 func (rf *RemoteFile) PushNewContent(newContent []byte) error {
-	exists, err := rf.Exists()
+	exists, err := rf.ExistsSafe()
 	if err != nil {
 		return err
 	}
@@ -183,9 +183,14 @@ func (rf *RemoteFile) GetKind() string {
 	return rf.statData["kind"]
 }
 
-// GetNpermissions returns permissions in numeric format (0664). Always 4 digits
+// GetNpermissions deprecated. Use GetOctalPermissions instead
 func (rf *RemoteFile) GetNpermissions() string {
-	return rf.statData["nperm"]
+	return rf.statData["octalperm"]
+}
+
+// GetOctalPermissions returns permissions in numeric format (0664). Always 4 digits
+func (rf *RemoteFile) GetOctalPermissions() string {
+	return rf.statData["octalperm"]
 }
 
 // GetUIDNumber the file's UID number
@@ -253,7 +258,8 @@ func (rf RemoteFile) GetFullPath() string {
 	return rf.fullPath
 }
 
-func (rf RemoteFile) Exists() (bool, error) {
+// ExistsSafe check if a file exists. Returns an error in case of not being able to know if the file exists or not
+func (rf RemoteFile) ExistsSafe() (bool, error) {
 	output, err := rf.node.DebugNodeWithChroot("stat", rf.fullPath)
 	logger.Infof("\n%s", output)
 
@@ -266,6 +272,12 @@ func (rf RemoteFile) Exists() (bool, error) {
 	}
 
 	return false, err
+}
+
+// Exists is like ExistsSafe but if any error happens the file is considered to be non existent
+func (rf RemoteFile) Exists() bool {
+	exists, err := rf.ExistsSafe()
+	return exists && (err == nil)
 }
 
 // Rm removes the remote file from the node
@@ -326,4 +338,14 @@ func (rf RemoteFile) PrintDebugInfo() error {
 	logger.Infof("Content: \n%s", stdout)
 
 	return nil
+}
+
+// Read is the same function as Fetch but it returns itself as a value, so that it can be used in gomega assertions easily
+func (rf RemoteFile) Read() (RemoteFile, error) {
+	return rf, rf.Fetch()
+}
+
+// String implements the stringer interface
+func (rf RemoteFile) String() string {
+	return fmt.Sprintf("file %s in node %s", rf.fullPath, rf.node.GetName())
 }

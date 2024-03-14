@@ -4045,7 +4045,7 @@ nulla pariatur.`
 
 		exutil.By("Check kubelet configuration in worker pool")
 		o.Expect(
-			NewRemoteFile(wMcp.GetNodesOrFail()[0], kubeletConfPath),
+			NewRemoteFile(wMcp.GetNodesOrFail()[0], kubeletConfPath).Read(),
 		).To(
 			HaveContent(o.ContainSubstring(`"kubeAPIBurst": 7000`)),
 		)
@@ -4053,7 +4053,7 @@ nulla pariatur.`
 
 		exutil.By("Check kubelet configuration in infra pool")
 		o.Expect(
-			NewRemoteFile(infraMcp.GetNodesOrFail()[0], kubeletConfPath),
+			NewRemoteFile(infraMcp.GetNodesOrFail()[0], kubeletConfPath).Read(),
 		).To(o.And(
 			HaveContent(o.ContainSubstring(`"kubeAPIBurst": 9000`)),
 			o.Not(HaveContent(o.ContainSubstring(`"kubeAPIBurst": 8000`))),
