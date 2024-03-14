@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-mco] MCO Layering", func() {
 		logger.Infof("test dir %s is cleaned up", tmpdir)
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-VMonly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and rpm [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and rpm [Disruptive]", func() {
 
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 
@@ -221,7 +221,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonBootableImage, layeringMcName, expectedNDMessage, expectedNDReason)
 	})
 
-	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Longduration-Medium-54054-Not pullable layered osImage provided[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-54054-Not pullable layered osImage provided[Disruptive]", func() {
 		var (
 			nonPullableImage  = "quay.io/openshifttest/tc54054fakeimage:latest"
 			layeringMcName    = "not-pullable-image-tc54054"
@@ -233,7 +233,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonPullableImage, layeringMcName, expectedNDMessage, expectedNDReason)
 	})
 
-	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-Critical-54159-Apply a new osImage on a cluster with already installed rpms [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-54159-Apply a new osImage on a cluster with already installed rpms [Disruptive]", func() {
 		var (
 			rpmName         = "wget"
 			yumRepoTemplate = generateTemplateAbsolutePath("centos.repo")
@@ -463,7 +463,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK!\n")
 
 	})
-	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-High-54909-Configure extensions while using a custom osImage [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54909-Configure extensions while using a custom osImage [Disruptive]", func() {
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 		var (
 			rpmName            = "zsh"
@@ -724,7 +724,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 	})
 
-	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-High-54915-Configure kerneltype while using a custom osImage [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54915-Configure kerneltype while using a custom osImage [Disruptive]", func() {
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE, architecture.ARM64)
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
 
@@ -940,7 +940,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 	})
 
-	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-Medium-55002-Get OSImageURL override related metric data available in telemetry [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-55002-Get OSImageURL override related metric data available in telemetry [Disruptive]", func() {
 		var (
 			osImageURLOverrideQuery = `os_image_url_override`
 
