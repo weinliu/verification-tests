@@ -927,4 +927,72 @@ etcd:
 		}
 	})
 
+	// author: geliu@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:geliu-High-71790-Etcd db defragment manually. [Disruptive]", func() {
+		g.By("Find the etcd leader pods and record each db size.")
+		e2e.Logf("Discover all the etcd pods")
+		etcdPodList := getPodListByLabel(oc, "etcd=true")
+		etcdMemDbSize := make(map[string]int)
+		etcdMemDbSizeLater := make(map[string]int)
+		etcdLeaderPod := ""
+		for _, etcdPod := range etcdPodList {
+			e2e.Logf("login etcd pod: %v to get etcd member db size.", etcdPod)
+			etcdCmd := "unset ETCDCTL_ENDPOINTS;etcdctl --command-timeout=30s --endpoints=https://localhost:2379 endpoint status |awk '{print $4}'"
+			output, err := exutil.RemoteShPod(oc, "openshift-etcd", etcdPod, "sh", "-c", etcdCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			etcdMemDbSize[etcdPod], _ = strconv.Atoi(output)
+			e2e.Logf("login etcd pod: %v to check endpoints status.", etcdPod)
+			etcdCmd = "unset ETCDCTL_ENDPOINTS;etcdctl --command-timeout=30s --endpoints=https://localhost:2379 endpoint status |awk '{print $6}'"
+			output, err = exutil.RemoteShPod(oc, "openshift-etcd", etcdPod, "sh", "-c", etcdCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "true") {
+				etcdLeaderPod = etcdPod
+			} else {
+				e2e.Logf("login non-leader etcd pod: %v to do defrag db.", etcdPod)
+				etcdCmd = "unset ETCDCTL_ENDPOINTS;etcdctl --command-timeout=30s --endpoints=https://localhost:2379 defrag"
+				_, err = exutil.RemoteShPod(oc, "openshift-etcd", etcdPod, "sh", "-c", etcdCmd)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("login non-leader etcd pod: %v to record db size after defrag.", etcdPod)
+				etcdCmd = "unset ETCDCTL_ENDPOINTS;etcdctl --command-timeout=30s --endpoints=https://localhost:2379 endpoint status |awk '{print $4}'"
+				output, err = exutil.RemoteShPod(oc, "openshift-etcd", etcdPod, "sh", "-c", etcdCmd)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				etcdMemDbSizeLater[etcdPod], _ = strconv.Atoi(output)
+			}
+		}
+		e2e.Logf("login etcd leader pod: %v to do defrag db.", etcdLeaderPod)
+		etcdCmd := "unset ETCDCTL_ENDPOINTS;etcdctl --command-timeout=30s --endpoints=https://localhost:2379 defrag"
+		_, err := exutil.RemoteShPod(oc, "openshift-etcd", etcdLeaderPod, "sh", "-c", etcdCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("login etcd leader pod: %v to record db size after defrag.", etcdLeaderPod)
+		etcdCmd = "unset ETCDCTL_ENDPOINTS;etcdctl --command-timeout=30s --endpoints=https://localhost:2379 endpoint status |awk '{print $4}'"
+		output, err := exutil.RemoteShPod(oc, "openshift-etcd", etcdLeaderPod, "sh", "-c", etcdCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		etcdMemDbSizeLater[etcdLeaderPod], _ = strconv.Atoi(output)
+		e2e.Logf(fmt.Sprintf("etcdleaderPod: %v", etcdLeaderPod))
+
+		g.By("Compare etcd db size before/after defrage.")
+		e2e.Logf("etcd db size before defrag.")
+		for k, v := range etcdMemDbSize {
+			e2e.Logf("etcd pod name: %v, db size: %d", k, v)
+		}
+		e2e.Logf("etcd db size after defrag.")
+		for k, v := range etcdMemDbSizeLater {
+			e2e.Logf("etcd pod name: %v, db size: %d", k, v)
+		}
+		for k, v := range etcdMemDbSize {
+			if v <= etcdMemDbSizeLater[k] {
+				e2e.Failf("etcd: %v db size is not reduce after defrag.", k)
+			}
+		}
+
+		g.By("Clear it if any NOSPACE alarms.")
+		etcdCmd = "etcdctl alarm list"
+		output, err = exutil.RemoteShPod(oc, "openshift-etcd", etcdLeaderPod, "sh", "-c", etcdCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if output != "" {
+			etcdCmd = "etcdctl alarm disarm"
+			_, err = exutil.RemoteShPod(oc, "openshift-etcd", etcdLeaderPod, "sh", "-c", etcdCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	})
 })
