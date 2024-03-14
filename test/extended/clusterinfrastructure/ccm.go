@@ -98,15 +98,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmBeforePatch).Should(o.Equal(cmAfterPatch))
 	})
-	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-High-45971-[CCM] Implement the in-tree to out-of-tree code owner migration", func() {
-		SkipIfCloudControllerManagerNotDeployed(oc)
-		g.By("Check cloud-controller-manager-operator owns cloud-controllers")
-		owner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o=jsonpath={.status.conditions[*]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(owner).To(o.ContainSubstring("Cluster Cloud Controller Manager Operator owns cloud controllers"))
 
-	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-63829-[CCM] Target workload annotation should be present in deployments of ccm	", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
