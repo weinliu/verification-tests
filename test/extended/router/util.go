@@ -1634,3 +1634,24 @@ func addExtraParametersToYamlFile(originalFile, flagPara, AddedContent string) s
 	os.WriteFile(newFile, []byte(newFileContent), 0644)
 	return newFile
 }
+
+// this function returns IPv6 and IPv4 on dual stack and main IP in case of single stack (v4 or v6)
+func getPodIP(oc *exutil.CLI, namespace string, podName string) []string {
+	ipStack := checkIPStackType(oc)
+	var podIp []string
+	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
+		podIp1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The pod  %s IP in namespace %s is %q", podName, namespace, podIp1)
+		podIp = append(podIp, podIp1)
+	} else if ipStack == "dualstack" {
+		podIp1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The pod's %s 1st IP in namespace %s is %q", podName, namespace, podIp1)
+		podIp2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[1].ip}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The pod's %s 2nd IP in namespace %s is %q", podName, namespace, podIp2)
+		podIp = append(podIp, podIp1, podIp2)
+	}
+	return podIp
+}

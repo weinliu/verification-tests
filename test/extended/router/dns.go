@@ -11,6 +11,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	netutils "k8s.io/utils/net"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
@@ -354,10 +355,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(digOutput1).To(o.ContainSubstring("udp: 1232"))
 
 		exutil.By("Check the different DNS records")
-		// To find the PTR record
 		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
+		// to identify which address type the cluster IP belongs
+		iplist := getPodIP(oc, "openshift-ingress-operator", ingressContPod[0])
+		ptrValue := "10.0.30.172.in-addr.arpa"
+		if netutils.IsIPv6String(iplist[0]) {
+			ptrValue = "a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.d.f.ip6.arpa"
+		}
+
+		// To find the PTR record
 		digOutput3, err3 := oc.AsAdmin().Run("exec").Args("-n", "openshift-ingress-operator", ingressContPod[0],
-			"--", "dig", "+short", "10.0.30.172.in-addr.arpa", "PTR").Output()
+			"--", "dig", "+short", ptrValue, "PTR").Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(digOutput3).To(o.ContainSubstring("dns-default.openshift-dns.svc.cluster.local."))
 
