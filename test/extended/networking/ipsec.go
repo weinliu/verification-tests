@@ -252,39 +252,56 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Medium-67474-IPsec tunnel can be up after restart ipsec service,  [Disruptive]", func() {
-		g.Skip("Due to bug https://issues.redhat.com/browse/OCPBUGS-27839,skip this case for now")
-		exutil.By("Checking ipsec session was established between worker node and external host")
-		cmd := "ipsec whack --trafficstatus"
-		ipsecStatus, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
-		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
-		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+	g.It("Author:huirwang-Longduration-NonPreRelease-Medium-67474-Medium-69176-IPSec tunnel can be up after restart IPSec service or restart node,  [Disruptive]", func() {
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+		policyName := "ipsec-policy-transport-69176"
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
 
-		exutil.By("Restart ipsec service on right node")
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
+
+		//Due to bug https://issues.redhat.com/browse/OCPBUGS-27839,skip below step for now"
+		/*exutil.By("Restart ipsec service on right node")
 		ns := oc.Namespace()
 		cmd2 := "systemctl restart ipsec.service"
 		_, ipsecErr = exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd2)
-		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+		o.Expect(ipsecErr).NotTo(o.HaveOccurred())*/
+
+		exutil.By("Reboot node which is configured IPSec NS")
+		defer checkNodeStatus(oc, rightNode, "Ready")
+		rebootNode(oc, rightNode)
+		checkNodeStatus(oc, rightNode, "NotReady")
+		checkNodeStatus(oc, rightNode, "Ready")
 
 		exutil.By("Verify ipsec session was established between worker node and external host again!")
-		ipsecStatus, ipsecErr = exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
-		o.Expect(ipsecErr).NotTo(o.HaveOccurred())
-		o.Expect(ipsecStatus).To(o.ContainSubstring(ipsecTunnel))
+		o.Eventually(func() bool {
+			cmd := fmt.Sprintf("ip xfrm policy get src %s/32 dst %s/32 dir out ; ip xfrm policy get src %s/32 dst %s/32 dir in  ", rightIP, leftIP, leftIP, rightIP)
+			ipXfrmPolicy, ipsecErr := exutil.DebugNodeWithChroot(oc, rightNode, "/bin/bash", "-c", cmd)
+			return ipsecErr == nil && strings.Contains(ipXfrmPolicy, "transport")
+		}, "300s", "30s").Should(o.BeTrue(), "IPSec tunnel connection was not restored.")
 
 		exutil.By("Start tcpdump for ipsec on right node")
+		ns := oc.Namespace()
 		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
 		phyInf, nicError := getSnifPhyInf(oc, rightNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
 		exutil.SetNamespacePrivileged(oc, ns)
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
-		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		cmdTcpdump, cmdOutput, _, _ := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
 		time.Sleep(5 * time.Second)
 		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
-		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		err := sshRunCmd(leftPublicIP, "core", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdTcpdump.Wait()
 		e2e.Logf("tcpdump output for ping is \n%s", cmdOutput.String())
@@ -346,5 +363,70 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		cmdTcpdump.Wait()
 		e2e.Logf("tcpdump output for curl to hostpod is \n%s", cmdOutput.String())
 		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-69178-High-38873-Tunnel mode can be setup for IPSec NS,IPSec NS tunnel can be teared down by nmstate config. [Disruptive]", func() {
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		var (
+			policyName  = "ipsec-policy-tunnel-69178"
+			ipsecTunnel = "plutoTunnelVM"
+			rightIP     = "10.0.128.3"
+			nodeCert    = "10_0_128_3"
+		)
+		rightNode = getNodeNameByIPv4(oc, rightIP)
+		if rightNode == "" {
+			g.Skip(fmt.Sprintf("There is no worker node with IPSec rightIP %v, skip the testing.", rightIP))
+		}
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "tunnel")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "tunnel")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, _ := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
+		err := sshRunCmd(leftPublicIP, "core", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+
+		exutil.By("Remove IPSec interface")
+		removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+
+		exutil.By("Verify IPSec interface was removed from node")
+		ifaceList, ifaceErr := exutil.DebugNodeWithChroot(oc, rightNode, "nmcli", "con", "show")
+		o.Expect(ifaceErr).NotTo(o.HaveOccurred())
+		e2e.Logf(ifaceList)
+		o.Expect(ifaceList).NotTo(o.ContainSubstring(ipsecTunnel))
+
+		exutil.By("Verify the tunnel was teared down")
+		verifyIPSecTunnelDown(oc, rightNode, rightIP, leftIP, "tunnel")
+
+		exutil.By("Verify connection to exteranl host was not broken")
+		// workaorund for bug https://issues.redhat.com/browse/RHEL-24802
+		cmd := fmt.Sprintf("ip x p flush;ip x s flush; sleep 2; ping -c4 %s &", rightIP)
+		err = sshRunCmd(leftPublicIP, "core", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })

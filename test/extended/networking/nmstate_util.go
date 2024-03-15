@@ -405,3 +405,9 @@ func verifyIPSecTunnelUp(oc *exutil.CLI, nodeName, src, dst, mode string) {
 	o.Expect(ipsecErr).NotTo(o.HaveOccurred())
 	o.Expect(ipXfrmPolicy).Should(o.ContainSubstring(mode))
 }
+
+func verifyIPSecTunnelDown(oc *exutil.CLI, nodeName, src, dst, mode string) {
+	cmd := fmt.Sprintf("ip xfrm policy get src %s/32 dst %s/32 dir out ; ip xfrm policy get src %s/32 dst %s/32 dir in  ", src, dst, dst, src)
+	_, ipsecErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmd)
+	o.Expect(ipsecErr).To(o.HaveOccurred())
+}
