@@ -150,7 +150,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Associate the VPC with the new dhcpOptionsId")
-		machineName := exutil.ListWorkerMachineNames(oc)[0]
+		machineName := exutil.ListMasterMachineNames(oc)[0]
 		instanceID, err := awsClient.GetAwsInstanceID(machineName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
@@ -192,7 +192,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 
-		machineName := exutil.ListWorkerMachineNames(oc)[0]
+		machineName := exutil.ListMasterMachineNames(oc)[0]
 		instanceID, err := awsClient.GetAwsInstanceID(machineName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
