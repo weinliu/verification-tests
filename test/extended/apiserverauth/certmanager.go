@@ -760,6 +760,79 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: yuewu@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:yuewu-Medium-65031-Operand and operator log levels can be set [Serial]", func() {
+		const (
+			operandNamespace  = "cert-manager"
+			operatorNamespace = "cert-manager-operator"
+		)
+
+		g.By("Set operands log level to an invalid value")
+		patchPath := `{"spec":{"logLevel":"xxx"}}`
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("certmanager.operator", "cluster", "--type=merge", "-p", patchPath).Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Unsupported value: "xxx"`))
+
+		// The valid values can be "Normal", "Debug", "Trace", and "TraceAll", default is "Normal".
+		g.By("Set operands log level to a valid value")
+		patchPath = `{"spec":{"logLevel":"Trace"}}`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("certmanager.operator", "cluster", "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("[defer] Unset operands log level")
+			patchPath := `{"spec":{"logLevel":""}}`
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
+		}()
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
+
+		g.By("Validate the operands log level")
+		podList, err := exutil.GetAllPodsWithLabel(oc, operandNamespace, "app.kubernetes.io/instance=cert-manager")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range podList {
+			// Arg '--v=6' equals to 'Trace'
+			args, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, pod, "-o=jsonpath='{.spec.containers[*].args}'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(args).To(o.ContainSubstring("--v=6"))
+
+			// The logs include 'GET https://' means verbosity is indeed increased to '6'
+			log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(pod, "-n", operandNamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(log, "GET https://")).To(o.BeTrue())
+		}
+
+		// No meaningful negative test for OPERATOR_LOG_LEVEL. Therefore no automation for negative test.
+
+		// The valid values range from 1 to 10, default is 2.
+		g.By("Set operator log level to a valid value")
+		patchPath = `{"spec":{"config":{"env":[{"name":"OPERATOR_LOG_LEVEL","value":"6"}]}}}`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "openshift-cert-manager-operator", "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("[defer] Unset operator log level")
+			patchPath = `{"spec":{"config":{"env":[{"name":"OPERATOR_LOG_LEVEL","value":"2"}]}}}`
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "openshift-cert-manager-operator", "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operatorNamespace, 10*time.Second, 120*time.Second)
+		}()
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operatorNamespace, 10*time.Second, 120*time.Second)
+
+		g.By("Validate the operator log level")
+		podList, err = exutil.GetAllPodsWithLabel(oc, operatorNamespace, "name=cert-manager-operator")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range podList {
+			env, err := oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "pod", pod, "-n", operatorNamespace, "--list").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(env).To(o.ContainSubstring("OPERATOR_LOG_LEVEL=6"))
+
+			// The logs include 'GET https://' means verbosity is indeed increased to '6'
+			log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(pod, "-n", operatorNamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(log, "GET https://")).To(o.BeTrue())
+		}
+	})
+
+	// author: yuewu@redhat.com
 	g.It("CPaasrunOnly-NonPreRelease-Author:yuewu-Medium-71327-cert-manager Operator should pass DAST scan", func() {
 		// ensure componentName and apiGroupName to follow the file naming conventions
 		const (
