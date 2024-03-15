@@ -1309,7 +1309,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}()
 
 		exutil.By("#. Create a RAID disk on each worker node")
-		raidDiskName := "md69772"
+		raidDiskName := "md1"
 		defer func() {
 			for _, workerNode := range workerNodeList {
 				removeRAIDLevelDisk(oc, workerNode.name, raidDiskName)
