@@ -6539,7 +6539,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		e2e.Logf("platform: %v", platform)
 		proxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") ||
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") ||
 			strings.Contains(platform, "vsphere") || strings.Contains(platform, "osp") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
