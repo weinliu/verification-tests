@@ -1948,3 +1948,54 @@ func getSha256SumFromFile(fileName string) string {
 	}
 	return fileSum
 }
+
+func getTimeFromNode(oc *exutil.CLI, nodeName string) time.Time {
+	timeStr, _, dErr := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "--", "chroot", "/host", "date", "+%Y-%m-%dT%H:%M:%SZ").Outputs()
+	o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", nodeName)
+	layout := "2006-01-02T15:04:05Z"
+	returnTime, perr := time.Parse(layout, timeStr)
+	o.Expect(perr).NotTo(o.HaveOccurred())
+	return returnTime
+}
+
+func checkMustgatherLogTime(mustgatherDir string, nodeName string, timestamp string) {
+	filesUnderGather, err := ioutil.ReadDir(mustgatherDir)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to read the must-gather dir")
+	dataDir := ""
+	for _, fileD := range filesUnderGather {
+		if fileD.IsDir() {
+			dataDir = fileD.Name()
+		}
+	}
+	e2e.Logf("The data dir is %v", dataDir)
+	nodeLogsFile := mustgatherDir + "/" + dataDir + "/nodes/" + nodeName + "/" + nodeName + "_logs_kubelet.gz"
+	e2e.Logf("The node log file is %v", nodeLogsFile)
+	nodeLogsData, err := exec.Command("bash", "-c", fmt.Sprintf("zcat %v ", nodeLogsFile)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if strings.Contains(string(nodeLogsData), timestamp) {
+		e2e.Failf("Got unexpected time %v, must-gather wrong", timestamp)
+	} else {
+		e2e.Logf("Only able to successfully retreieve logs after timestamp %v", timestamp)
+	}
+}
+func checkInspectLogTime(inspectDir string, podName string, timestamp string) {
+	podLogsDir := inspectDir + "/namespaces/openshift-multus/pods/" + podName + "/kube-multus/kube-multus/logs"
+	var fileList []string
+	err := filepath.Walk(podLogsDir, func(path string, info os.FileInfo, err error) error {
+		fileList = append(fileList, path)
+		return nil
+	})
+	if err != nil {
+		e2e.Failf("Failed to check inspect directory")
+	}
+	for i := 1; i < len(fileList); i++ {
+		podLogData, err := ioutil.ReadFile(fileList[i])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(podLogData), timestamp) {
+			e2e.Failf("Got unexpected time, inspect wrong")
+		} else {
+			e2e.Logf("Only able to successfully retreive the inspect logs after timestamp %v which is expected", timestamp)
+		}
+	}
+}

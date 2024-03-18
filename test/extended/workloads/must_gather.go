@@ -100,4 +100,85 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--node-name", nodeName, "--dest-dir=/tmp/must-gather-60213").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 	})
+
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-70982-must-gather support since and since-time flags", func() {
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-70982").Output()
+		exutil.By("1. Test must-gather with correct since format should succeed.\n")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since=1m", "--dest-dir=/tmp/must-gather-70982").Output()
+		if err != nil {
+			e2e.Failf("Must-gather falied with error %v", err)
+		}
+
+		exutil.By("2. Test must-gather with correct since format and special logs should succeed.\n")
+		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		timeNow := getTimeFromNode(oc, workerNodeList[0])
+		e2e.Logf("The time now is  %v", timeNow)
+		timeStampOne := timeNow.Add(time.Minute * -5).Format("15:04:05")
+		e2e.Logf("The time stamp is  %v", timeStampOne)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since=2m", "--dest-dir=/tmp/must-gather-70982/mustgather2", "--", "/usr/bin/gather_network_logs").Output()
+		if err != nil {
+			e2e.Failf("Must-gather falied with error %v", err)
+		}
+
+		checkMustgatherLogTime("/tmp/must-gather-70982/mustgather2", workerNodeList[0], timeStampOne)
+
+		exutil.By("3. Test must-gather with correct since-time format should succeed.\n")
+		now := getTimeFromNode(oc, workerNodeList[0])
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since-time="+now.Add(time.Minute*-2).Format("2006-01-02T15:04:05Z"), "--dest-dir=/tmp/must-gather-70982").Output()
+		if err != nil {
+			e2e.Failf("Must-gather falied with error %v", err)
+		}
+		exutil.By("4. Test must-gather with correct since-time format and specidal logs should succeed.\n")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since-time="+now.Add(time.Minute*-1).Format("2006-01-02T15:04:05Z"), "--dest-dir=/tmp/must-gather-70982", "--", "/usr/bin/gather_network_logs").Output()
+		if err != nil {
+			e2e.Failf("Must-gather falied with error %v", err)
+		}
+		exutil.By("5. Test must-gather with wrong since-time format should falied.\n")
+		_, warningErr, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since-time="+now.Format("2006-01-02"), "--dest-dir=/tmp/must-gather-70982", "--", "/usr/bin/gather_network_logs").Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		exutil.By("6. Test must-gather with wrong since-time format should falied.\n")
+		o.Expect(strings.Contains(warningErr, "since-time only accepts times matching RFC3339")).To(o.BeTrue())
+		_, warningErr, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since-time="+now.Format("2006-01-02T15:04:05"), "--dest-dir=/tmp/must-gather-70982", "--", "/usr/bin/gather_network_logs").Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(warningErr, "since-time only accepts times matching RFC3339")).To(o.BeTrue())
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-71212-oc adm inspect should support since and sincetime", func() {
+		defer exec.Command("bash", "-c", "rm -rf /tmp/inspect71212").Output()
+		exutil.By("1. Test inspect with correct since-time format should succeed and gather correct logs.\n")
+		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		now := getTimeFromNode(oc, workerNodeList[0])
+		timeStamp := now.Add(time.Minute * -5).Format("2006-01-02T15:04:05Z")
+
+		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-multus", "-l", "app=multus", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "ns", "openshift-multus", "--since-time="+now.Add(time.Minute*-2).Format("2006-01-02T15:04:05Z"), "--dest-dir=/tmp/inspect71212").Output()
+		if err != nil {
+			e2e.Failf("Inspect falied with error %v", err)
+		}
+		checkInspectLogTime("/tmp/inspect71212", podname, timeStamp)
+		exutil.By("2. Test inspect with wrong since-time format should failed.\n")
+		_, warningErr, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "ns", "openshift-multus", "--since-time="+now.Format("2006-01-02T15:04:05"), "--dest-dir=/tmp/inspect71212").Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(warningErr, "--since-time only accepts times matching RFC3339")).To(o.BeTrue())
+		exutil.By("3. Test inspect with wrong since-time format should failed.\n")
+		_, warningErr, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "ns", "openshift-multus", "--since-time="+now.Format("2006-01-02"), "--dest-dir=/tmp/inspect71212").Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(warningErr, "--since-time only accepts times matching RFC3339")).To(o.BeTrue())
+		exutil.By("4. Test inspect with correct since format should succeed.\n")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "ns", "openshift-multus", "--since=1m", "--dest-dir=/tmp/inspect71212").Output()
+		if err != nil {
+			e2e.Failf("Inspect falied with error %v", err)
+		}
+		exutil.By("5. Test inspect with wrong since format should falied.\n")
+		_, warningErr, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "ns", "openshift-multus", "--since=1", "--dest-dir=/tmp/inspect71212").Outputs()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(warningErr, "time: missing unit")).To(o.BeTrue())
+	})
 })
