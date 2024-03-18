@@ -91,18 +91,21 @@ describe('Operator Hub tests', () => {
       operatorName: 'infinispan-operator',
       csvName: 'Infinispan Operator'
     }
-    cy.createProject(`${params.ns}`);
+    cy.cliLogin();
+    cy.createProjectWithCLI(`${params.ns}`);
     operatorHubPage.installOperator(`${params.operatorName}`, `${testParams.catalogName}`,`${params.ns}`);
     installedOperatorPage.goToWithNS(`${params.ns}`)
     operatorHubPage.checkOperatorStatus(`${params.csvName}`, 'Succeeded')
     operatorHubPage.goToWithNamespace(`${params.ns}`);
     operatorHubPage.checkInstallStateCheckBox('installed')
     operatorHubPage.filter('infinispan');
-    cy.byTestID('success-icon')
-      .parent()
-      .contains('Installed')
-      .click();
-    cy.byLegacyTestID('operator-uninstall-btn').should('exist')
+    cy.get('[class*="card__footer"] span').should('contain.text', "Installed");
+    cy.get(`[data-test*="infinispan"]`)
+      .should('have.attr','href')
+      .then((href) => {
+        cy.visit(href);
+        cy.byLegacyTestID('operator-uninstall-btn').should('exist');
+      });
     cy.get('[data-test-id="operator-modal-box"]').contains('has been installed');
     cy.get('[data-test-id="operator-modal-box"] p a')
       .contains('View it here')
