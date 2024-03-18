@@ -59,25 +59,50 @@ describe('Operators Installed page test', () => {
       .then(result => { expect(result.stdout).contain("infinispan")})
     cy.adminCLI(`oc get csv -n openshift-console`)
       .then(result => { expect(result.stdout).contain("infinispan")})
+
+    const MAX_RETRIES = 5;
+    const RETRY_INTERVAL = 15000; // milliseconds
+    let retries = 0;
+
+    function checkCondition() {
+      return cy.adminCLI(`oc get olmconfigs cluster -o jsonpath='{.status.conditions[0]}'`)
+          .then(result => {
+            if (result.stdout.includes("True")) {
+              return true;
+            } else {
+              retries++;
+              if (retries < MAX_RETRIES) {
+                return cy.wait(RETRY_INTERVAL).then(checkCondition);
+              } else {
+                throw new Error("Failed to set para disableCopiedCSV to True.");
+              }
+            }
+          });
+    }
     /*
-       Check for normal user
-       1. The Flag can take affect after OLMConfig being updated
-       2. The Flag only take affect for the operator installed in All namespace
-       3. When Flag = true, the golbal installed operator's CSV ns will update to 'openshit'
-            And new lable 'olm.copiedFrom' is added for the Operator
+    Check for normal user
+    1. The Flag can take affect after OLMConfig being updated
+    2. The Flag only take affect for the operator installed in All namespace
+    3. When Flag = true, the golbal installed operator's CSV ns will update to 'openshit'
+         And new lable 'olm.copiedFrom' is added for the Operator
     */
-    cy.adminCLI(`oc patch olmconfigs cluster --type=merge -p 'spec: {features: {disableCopiedCSVs: true}}'`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
-    cy.uiLogout();
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
-    cy.visit(`/k8s/ns/${params.ns54975}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-    listPage.filter.byName('sonarqube');
-    listPage.rows.shouldNotExist(`Sonarqube Operator`);
-    listPage.filter.byName('infinispan');
-    listPage.rows.shouldExist('Infinispan Operator').click();
-    cy.get('[data-test-id="openshift"]').should("exist");
-    cy.get('[data-test="label-key"]').should("contain.text","olm.copiedFrom");
+    cy.adminCLI(`oc patch olmconfigs cluster --type=merge -p 'spec: {features: {disableCopiedCSVs: True}}'`);
+    checkCondition().then(conditionMet => {
+        if (conditionMet) {
+          cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+          cy.visit(`/k8s/cluster/user.openshift.io~v1~User/${Cypress.env('LOGIN_USERNAME')}/roles`)
+          cy.get('[data-test="msg-box-title"]').should('contain.text','Restricted Access');
+          cy.visit(`/k8s/ns/${params.ns54975}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+          cy.get(`[data-test-id="resource-title"]`, { timeout: 15000 }).should('contain.text',"Installed Operators");
+          listPage.filter.byName('sonarqube');
+          listPage.rows.shouldNotExist(`Sonarqube Operator`);
+          listPage.filter.byName('infinispan');
+          listPage.rows.shouldExist('Infinispan Operator').click();
+          cy.get('[data-test-id="openshift"]').should("exist");
+          cy.get('[data-test="label-key"]').should("contain.text","olm.copiedFrom");
+        }
     });
+  });
 
   it('(OCP-65876,xiyuzhao,UserInterface) Non cluster-admin user should able to update the operator in Console	',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${params.specialNs}`);
