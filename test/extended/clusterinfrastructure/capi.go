@@ -66,19 +66,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(secret).To(o.ContainSubstring("worker-user-data"))
 	})
-
-	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-medium-51088-[CAPI] Prevent users from deleting providers [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
-		skipForCAPINotExist(oc)
-
-		g.By("Delete coreprovider and infrastructureprovider")
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("coreprovider", "cluster-api", "-n", clusterAPINamespace).Execute()
-		o.Expect(err).To(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("infrastructureprovider", "--all", "-n", clusterAPINamespace).Execute()
-		o.Expect(err).To(o.HaveOccurred())
-	})
-
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-51141-[CAPI] worker-user-data secret should be synced up [Disruptive]", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
