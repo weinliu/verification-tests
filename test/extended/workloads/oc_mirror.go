@@ -1,6 +1,7 @@
 package workloads
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
@@ -1411,4 +1412,235 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		installOperatorFromCustomCS(oc, nvidiaSub, nvidiaOG, "nvidia-network-operator", "nvidia-network-operator-controller-manager")
 	})
 
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-70047-Medium-70052-oc-mirror requires that the default channel of an operator is mirrored [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case70047"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-66869")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-66869")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		publicRegistry := serInfo.serviceName
+
+		exutil.By("Get the default channel for special package")
+		getOperatorDefaultChannelCMD := fmt.Sprintf("oc-mirror list operators --catalog %s  |awk '$1~/^%s/ {print $NF}'", "registry.redhat.io/redhat/redhat-operator-index:v4.14", "elasticsearch-operator")
+		channel, err := exec.Command("bash", "-c", getOperatorDefaultChannelCMD).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defaultChannelName := strings.ReplaceAll(string(channel), "\n", "")
+		e2e.Logf("the default name %v", defaultChannelName)
+
+		exutil.By("Get the channel list for special package exclude the defaultchannel")
+		getOperatorChannelCMD := fmt.Sprintf("oc-mirror list operators --catalog %s  --package %s |awk '$2 != \"%s\"{print}' |awk '$2~/^stable*/ {print $2}'", "registry.redhat.io/redhat/redhat-operator-index:v4.14", "elasticsearch-operator", defaultChannelName)
+
+		channelList, err := exec.Command("bash", "-c", getOperatorChannelCMD).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		channelNameList := strings.Fields(strings.ReplaceAll(string(channelList), "\n", " "))
+		o.Expect(channelNameList).NotTo(o.BeEmpty())
+		e2e.Logf("the channel list %v", channelNameList)
+
+		invalidImageSetYamlFile := dirname + "/invalidimagesetconfig.yaml"
+		invalidImageSetYaml := fmt.Sprintf(`apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: %s
+      packages:
+        - name: %s
+          defaultChannel: %s
+          channels:
+            - name: %s
+`, "registry.redhat.io/redhat/redhat-operator-index:v4.14", "elasticsearch-operator", channelNameList[0], channelNameList[1])
+		exutil.By("2 Create a invalid imageset configure file")
+		f, err := os.Create(invalidImageSetYamlFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, werr := w.WriteString(invalidImageSetYaml)
+		w.Flush()
+		o.Expect(werr).NotTo(o.HaveOccurred())
+		_, outerr, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", invalidImageSetYamlFile, "docker://"+publicRegistry, "--dest-skip-tls").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(outerr).To(o.ContainSubstring("defaultChannel has been set with"))
+		imageSetYamlFile := dirname + "/imagesetconfig.yaml"
+		imageSetYaml := fmt.Sprintf(`apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: %s
+      packages:
+        - name: %s
+          defaultChannel: %s
+          channels:
+            - name: %s
+            - name: %s
+`, "registry.redhat.io/redhat/redhat-operator-index:v4.14", "elasticsearch-operator", channelNameList[0], channelNameList[0], channelNameList[1])
+
+		exutil.By("3 Create a valid imageset configure file")
+		imageSetF, err := os.Create(imageSetYamlFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer imageSetF.Close()
+		imageSetW := bufio.NewWriter(imageSetF)
+		_, werr = imageSetW.WriteString(imageSetYaml)
+		imageSetW.Flush()
+		o.Expect(werr).NotTo(o.HaveOccurred())
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFile, "docker://"+publicRegistry, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+		defer removeCSAndISCP(oc)
+		createCSAndISCP(oc, "cs-redhat-operator-index", "openshift-marketplace", "Running", 1)
+
+		waitErr = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+			out, err := oc.AsAdmin().Run("get").Args("packagemanifests", "--selector=catalog=cs-redhat-operator-index", "-o=jsonpath={.items[*].status.channels[*].name}").Output()
+			packageChennelItemList := strings.Fields(out)
+			if len(packageChennelItemList) != 2 || err != nil {
+				e2e.Logf("the err:%v and chennelItemList: %v, and try next round", err, out)
+				return false, nil
+			}
+			o.Expect(string(channelList)).To(o.ContainSubstring(packageChennelItemList[0]))
+			o.Expect(string(channelList)).To(o.ContainSubstring(packageChennelItemList[1]))
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but still can't find  packagemanifest information")
+	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Medium-70105-oc-mirror should ignore the sequence check when use --skip-pruning [Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case70105"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		publicRegistry := serInfo.serviceName
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-70105-first.yaml")
+		imageSetYamlFileS := filepath.Join(ocmirrorBaseDir, "config-70105-second.yaml")
+		imageSetYamlFileT := filepath.Join(ocmirrorBaseDir, "config-70105-third.yaml")
+
+		exutil.By("1 The first mirror")
+		defer os.RemoveAll("oc-mirror-workspace")
+		defer os.RemoveAll("output70105")
+		defer os.RemoveAll(".oc-mirror.log")
+
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://output70105").Execute()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+
+		exutil.By("2 The second mirror")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileS, "file://output70105").Execute()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+
+		exutil.By("3 The third mirror")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileT, "file://output70105").Execute()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+
+		exutil.By("4 Mirror the tar by sequence")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "output70105/mirror_seq1_000000.tar", "docker://"+publicRegistry+"/sequence2", "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "output70105/mirror_seq2_000000.tar", "docker://"+publicRegistry+"/sequence2", "--dest-skip-tls").Output()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("Deleting manifest", out); !matched {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "output70105/mirror_seq3_000000.tar", "docker://"+publicRegistry+"/sequence2", "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+
+		exutil.By("5 Mirror the tar without sequence and skip-pruning")
+		_, outerr, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "output70105/mirror_seq3_000000.tar", "docker://"+publicRegistry+"/nonesequence3", "--dest-skip-tls").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(outerr).To(o.ContainSubstring("invalid mirror sequence order"))
+
+		exutil.By("6 Mirror the tar without sequence but with skip-pruning")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "output70105/mirror_seq3_000000.tar", "docker://"+publicRegistry+"/nonesequence3", "--skip-pruning", "--dest-skip-tls").Output()
+			if err != nil {
+				e2e.Logf("Mirror operator failed, retrying...")
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("skipped pruning", out); !matched {
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+	})
 })
