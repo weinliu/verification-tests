@@ -511,6 +511,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-44061-Check the default registry credential path for oc", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
 		g.By("check the help info for the registry config locations")
 		clusterImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.image}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -656,6 +659,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-44928-oc image mirror support registry which authorization server's url is different from registry url", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
 		g.By("Skip if the cluster is AzureStackCloud")
 		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 		o.Expect(azureErr).NotTo(o.HaveOccurred())
@@ -886,7 +892,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-51018-oc adm release extract support manifest list", func() {
 		if !assertPullSecret(oc) {
-			g.Skip("the cluster do not has all pull-secret for public registry")
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
 		}
 		extractTmpDirName := "/tmp/case51018"
 		err := os.MkdirAll(extractTmpDirName, 0755)
@@ -923,6 +929,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-61607-oc image mirror always copy blobs if the target is file", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
 		g.By("Skip if the cluster is AzureStackCloud")
 		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 		o.Expect(azureErr).NotTo(o.HaveOccurred())
@@ -1348,6 +1357,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-67013-oc image mirror with multi-arch images and --filter-by-os", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
 		g.By("Skip if the cluster is AzureStackCloud")
 		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 		o.Expect(azureErr).NotTo(o.HaveOccurred())
@@ -1850,6 +1862,9 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-37363-High-38859-Check oc image mirror with multi-arch images", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
 		g.By("Skip if the cluster is AzureStackCloud")
 		azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 		o.Expect(azureErr).NotTo(o.HaveOccurred())
