@@ -42,7 +42,8 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author:kewang-Medium-62093-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
+	// The case always runs into failure due to regression bug https://issues.redhat.com/browse/OCPBUGS-30986, add Flaky tag to skip execution until the bug get fixed.
+	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author:kewang-Medium-62093-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Flaky][Slow][Disruptive]", func() {
 
 		var (
 			defaultCipherPatch = `{"spec": {"configuration": {"apiServer": null}}}`
