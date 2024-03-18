@@ -2,11 +2,15 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -127,6 +131,77 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		fi1.getDataFromConfigmap(oc, cmName, filePath)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Longduration-NonPreRelease-CPaasrunOnly-Author:xiyuan-Critical-27599-check operator file-integrity-operator could run file integrity checks on the cluster nodes and shows relevant fileintegritynodestatuses [Slow][Serial]", func() {
+		g.By("trigger fileintegrity failure on node")
+		var filePath = "/root/test27599"
+		nodeName := getOneRhcosWorkerNodeName(oc)
+		createCmd := fmt.Sprintf(`mkdir %s; touch %s/test`, filePath, filePath)
+		delCmd := fmt.Sprintf(`if [ -d "%s" ]; then rm -rf %s; fi`, filePath, filePath)
+		defer exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", delCmd)
+		debugNodeStdout, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", createCmd)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
+
+		g.By("Create fileintegrity")
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
+			"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		fi1.checkFileintegrityStatus(oc, "running")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
+			"-o=jsonpath={.lastResult.condition}").Output()
+		if output == "Failed" {
+			fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
+			fi1.checkFileintegrityStatus(oc, "running")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
+		}
+
+		g.By("trigger fileintegrity failure on node")
+		cmd := fmt.Sprintf(`semanage fcontext -a -t httpd_sys_content_t "%s(/.*)?"; restorecon -Rv %s;
+			useradd usr1; useradd usr2; useradd usr3; groupadd test1; gpasswd -a usr1 test1; gpasswd -a usr2 test1;
+			chown root:test1 %s; chmod 770 %s; setfacl -m u:usr3:rx %s`, filePath, filePath, filePath, filePath, filePath)
+		RecoverCmd := fmt.Sprintf(`rm -rf %s; userdel usr1; userdel usr2; userdel usr3; groupdel test1`, filePath)
+		defer exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", RecoverCmd)
+		debugNodeStdout, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmd)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
+		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
+		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fileintegrityNodeStatusName, "-n", sub.namespace,
+			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the configmap contains expected string")
+		var res string
+		defer os.RemoveAll("/tmp/integritylog")
+		err = wait.Poll(5*time.Second, 500*time.Second, func() (bool, error) {
+			_, errRes := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", fi1.namespace, "configmap/"+cmName, "--to=/tmp", "--confirm").Output()
+			o.Expect(errRes).NotTo(o.HaveOccurred())
+			aideResult, err := os.ReadFile("/tmp/integritylog")
+			res = string(aideResult)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			matchedFile, _ := regexp.MatchString(filePath+"/test", res)
+			matchedSelinux, _ := regexp.MatchString(`system_u:object_r:httpd_sys_cont`, res)
+			matchedGroup, _ := regexp.MatchString(`/hostroot/etc/group`, res)
+			matchedShadow, _ := regexp.MatchString("/hostroot/etc/shadow", res)
+			matchedPermission, _ := regexp.MatchString("other::---", res)
+			e2e.Logf("The result is: matchedFile - %v, matchedSelinux - %v, matchedGroup - %v, matchedShadow - %v, matchedPermission - %v", matchedFile, matchedSelinux, matchedGroup, matchedShadow, matchedPermission)
+			if matchedFile && matchedSelinux && matchedGroup && matchedShadow && matchedPermission {
+				return true, nil
+			}
+			return false, nil
+		})
+		if err != nil {
+			// Expose more info when configmap not contains the expected string
+			e2e.Logf("The aide report details is: %s", res)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmName %s does not include expected content", cmName))
+		}
 	})
 
 	//author: xiyuan@redhat.com
