@@ -119,6 +119,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
 		objectStorageType := getStorageType(oc)
+		if len(objectStorageType) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
 
 		ls = lokiStack{
 			Name:          "lokistack",
