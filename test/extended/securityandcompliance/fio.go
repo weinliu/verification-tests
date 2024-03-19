@@ -572,6 +572,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
 		var filePath = "/root/test" + getRandomString()
 		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
@@ -696,6 +697,87 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			o.Expect(err).NotTo(o.HaveOccurred())
 			fi1.getDataFromConfigmap(oc, cmName, filePath)
 		}
+	})
+
+	//author: xiyuan@redhat.com
+	g.It("ARO-NonHyperShiftHOST-NonPreRelease-CPaasrunOnly-ConnectedOnly-Author:xiyuan-High-60960-check the initialDelay could work as expected [Serial]", func() {
+		var (
+			fioInitialdelayTemplate = filepath.Join(buildPruningBaseDir, "fileintegrity_initialdelay.yaml")
+			cmMaster                = "master-aide-conf"
+			cmWorker                = "worker-aide-conf"
+			initialdelay            = 100
+			fileintegrityMaster     = fileintegrity{
+				name:              "fileintegrity-master-" + getRandomString(),
+				namespace:         "openshift-file-integrity",
+				configname:        cmMaster,
+				configkey:         "aide-conf",
+				graceperiod:       30,
+				debug:             false,
+				nodeselectorkey:   "node-role.kubernetes.io/master",
+				nodeselectorvalue: "",
+				template:          fioInitialdelayTemplate,
+			}
+			fileintegrityWorker = fileintegrity{
+				name:              "fileintegrity-worker" + getRandomString(),
+				namespace:         "openshift-file-integrity",
+				configname:        cmWorker,
+				configkey:         "aide-conf",
+				graceperiod:       30,
+				debug:             false,
+				nodeselectorkey:   "node-role.kubernetes.io/worker",
+				nodeselectorvalue: "",
+				template:          fioInitialdelayTemplate,
+			}
+		)
+
+		g.By("Create configmaps and fileintegrites..")
+		defer cleanupObjects(oc,
+			objectTableRef{"configmap", fileintegrityMaster.namespace, fileintegrityMaster.configname},
+			objectTableRef{"fileintegrity", fileintegrityMaster.namespace, fileintegrityMaster.name},
+			objectTableRef{"configmap", fileintegrityMaster.namespace, fileintegrityWorker.configname},
+			objectTableRef{"fileintegrity", fileintegrityMaster.namespace, fileintegrityWorker.name})
+		fileintegrityMaster.createConfigmapFromFile(oc, fileintegrityMaster.configname, fileintegrityMaster.configkey, configFile, "created")
+		fileintegrityMaster.createConfigmapFromFile(oc, fileintegrityMaster.configname, fileintegrityMaster.configkey, configFile1, "created")
+		fileintegrityMaster.checkConfigmapCreated(oc)
+		fileintegrityWorker.checkConfigmapCreated(oc)
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fileintegrityMaster.namespace, "-f", fileintegrityMaster.template, "-p", "NAME="+fileintegrityMaster.name,
+			"NAMESPACE="+fileintegrityMaster.namespace, "GRACEPERIOD="+strconv.Itoa(fileintegrityWorker.graceperiod), "DEBUG="+strconv.FormatBool(fileintegrityWorker.debug), "CONFNAME="+fileintegrityMaster.configname,
+			"CONFKEY="+fileintegrityMaster.configkey, "NODESELECTORKEY="+fileintegrityMaster.nodeselectorkey, "INITIALDELAY="+strconv.Itoa(initialdelay))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fileintegrityWorker.namespace, "-f", fileintegrityWorker.template, "-p", "NAME="+fileintegrityWorker.name,
+			"NAMESPACE="+fileintegrityWorker.namespace, "GRACEPERIOD="+strconv.Itoa(fileintegrityWorker.graceperiod), "DEBUG="+strconv.FormatBool(fileintegrityWorker.debug), "CONFNAME="+fileintegrityWorker.configname,
+			"CONFKEY="+fileintegrityWorker.configkey, "NODESELECTORKEY="+fileintegrityWorker.nodeselectorkey, "INITIALDELAY="+strconv.Itoa(initialdelay))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, fileintegrityMaster.name, ok, []string{"fileintegrity", "-n", fileintegrityMaster.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, fileintegrityWorker.name, ok, []string{"fileintegrity", "-n", fileintegrityWorker.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check the fileintegrity daemonset will not be ready due to the initialdelay..")
+		res, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegrity", "-n", fileintegrityMaster.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		list := strings.Fields(res)
+		for _, fileintegrityName := range list {
+			err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", "aide-"+fileintegrityName, "-n", fileintegrityMaster.namespace).Output()
+				if err != nil && strings.Contains(output, "NotFound") {
+					return false, nil
+				}
+				if err != nil && !strings.Contains(output, "NotFound") {
+					return false, err
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollWithErr(err, "The timeout err is expected")
+		}
+
+		g.By("Check daemonset and fileintegrity status..")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fileintegrityMaster.name, "-n", fileintegrityMaster.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fileintegrityWorker.name, "-n", fileintegrityWorker.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		checkPodsStautsOfDaemonset(oc, "aide-"+fileintegrityMaster.name, fileintegrityMaster.namespace)
+		checkPodsStautsOfDaemonset(oc, "aide-"+fileintegrityWorker.name, fileintegrityWorker.namespace)
+		fileintegrityMaster.assertNodesConditionNotEmpty(oc)
+		fileintegrityWorker.assertNodesConditionNotEmpty(oc)
 	})
 
 	//author: pdhamdhe@redhat.com
