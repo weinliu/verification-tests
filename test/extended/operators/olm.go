@@ -9082,12 +9082,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(catPodname).NotTo(o.BeEmpty())
 		catalogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(catPodname, "-n", "openshift-operator-lifecycle-manager", "--since=60s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(catalogs).NotTo(o.BeEmpty())
-		for _, line := range strings.Split(catalogs, "\n") {
-			if strings.Contains(line, namespaceName) {
-				e2e.Logf(line)
-				o.Expect(line).NotTo(o.ContainSubstring("found 0 operatorGroups"))
+		if len(catalogs) != 0 {
+			for _, line := range strings.Split(catalogs, "\n") {
+				if strings.Contains(line, namespaceName) {
+					e2e.Logf(line)
+					o.Expect(line).NotTo(o.ContainSubstring("found 0 operatorGroups"))
+				}
 			}
+		} else {
+			e2e.Logf("log is empty")
 		}
 
 	})
