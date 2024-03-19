@@ -600,4 +600,43 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-72388-Apply hypershift cluster-profile for ibm-cloud-managed", func() {
+		//Check if include.release.openshift.io/hypershift:true exists in the output
+		exutil.By("Check Project metadata annotations")
+		projectMetadata, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", "openshift-kube-scheduler-operator", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(projectMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
+
+		exutil.By("Check rolebinding metadata annotations")
+		roleBindingMetadata, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebinding", "prometheus-k8s", "-n", "openshift-kube-scheduler-operator", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(roleBindingMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
+
+		exutil.By("Check role metadata annotations")
+		roleMetadata, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("role", "prometheus-k8s", "-n", "openshift-kube-scheduler-operator", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(roleMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
+
+		exutil.By("Check sa metadata annotations")
+		saMetadata, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "openshift-kube-scheduler-operator", "-n", "openshift-kube-scheduler-operator", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(saMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
+
+		exutil.By("Check clusterrolebinding metadata annotations")
+		clusterRoleBindingMetadata, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterRoleBinding", "system:openshift:operator:cluster-kube-scheduler-operator", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(clusterRoleBindingMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
+
+		exutil.By("Check configmap metadata annotations")
+		configmapMetadata, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "openshift-kube-scheduler-operator-config", "-n", "openshift-kube-scheduler-operator", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(configmapMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
+
+		exutil.By("Check kubescheduler cluster metadata annotations")
+		kubeSchedulerMetadata, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("KubeScheduler", "cluster", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(kubeSchedulerMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
+	})
+
 })
