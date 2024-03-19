@@ -26,28 +26,6 @@ func isFlowCollectorAPIExists(oc *exutil.CLI) (bool, error) {
 	return strings.Contains(stdout, "FlowCollector"), nil
 }
 
-// returns true/false if flow collection is enabled on cluster
-func checkFlowcollectionEnabled(oc *exutil.CLI) string {
-	collectorName, err, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("flowcollector").Template("{{range .items}}{{.metadata.name}}{{end}}").Outputs()
-
-	if err != "" {
-		return ""
-	}
-	return collectorName
-}
-
-// get name of flowlogsPipeline pod by label
-func getFlowlogsPipelinePod(oc *exutil.CLI, ns, name string) string {
-	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "app="+name, "-o=jsonpath={.items[0].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return podName
-}
-
-func waitPodReady(oc *exutil.CLI, ns string, label string) {
-	podName := getFlowlogsPipelinePod(oc, ns, label)
-	exutil.AssertPodToBeReady(oc, podName, ns)
-}
-
 // Verify flow records from logs
 func verifyFlowRecordFromLogs(podLog string) {
 	re := regexp.MustCompile("{\"AgentIP\":.*")
@@ -129,7 +107,7 @@ func (lokilabels Lokilabels) getLokiQuery(parameters ...string) string {
 
 // TODO: add argument for condition to be matched.
 // Get flows from Loki logs
-func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, lokiRoute string, parameters ...string) ([]FlowRecord, error) {
+func (lokilabels Lokilabels) getLokiFlowLogs(token, lokiRoute string, parameters ...string) ([]FlowRecord, error) {
 	lc := newLokiClient(lokiRoute).withToken(token).retry(5)
 	tenantID := "network"
 	lokiQuery := lokilabels.getLokiQuery(parameters...)
@@ -163,7 +141,7 @@ func (lokilabels Lokilabels) getLokiFlowLogs(oc *exutil.CLI, token, lokiRoute st
 }
 
 // Verify loki flow records and if it was written in the last 5 minutes
-func verifyLokilogsTime(oc *exutil.CLI, token, lokiRoute string) error {
+func verifyLokilogsTime(token, lokiRoute string) error {
 	lc := newLokiClient(lokiRoute).withToken(token).retry(5)
 	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\", FlowDirection=\"0\"}")
 
