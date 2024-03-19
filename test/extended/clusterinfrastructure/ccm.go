@@ -423,4 +423,19 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.By("2.4Check result,the svc can be accessed")
 		waitForLoadBalancerReady(oc, externalIPForLabel)
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-High-72119-[CCM] Pull images from GCR repository should succeed [Disruptive]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		g.By("Create a new project for testing")
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "hello-gcr72119").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "hello-gcr72119").Execute()
+		g.By("Create a new app using the image on GCR")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-gcr", "--image=gcr.io/openshift-qe/hello-gcr:latest", "--allow-missing-images", "-n", "hello-gcr72119").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Wait the pod ready")
+		err = waitForPodWithLabelReady(oc, "hello-gcr72119", "deployment=hello-gcr")
+		exutil.AssertWaitPollNoErr(err, "the pod failed to be ready state within allowed time!")
+	})
 })
