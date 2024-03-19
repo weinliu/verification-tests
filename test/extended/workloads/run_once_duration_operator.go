@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		architecture.SkipArchitectures(oc, architecture.MULTI)
 
 		// Skip the test if no qe-app-registry catalog is present
-		skipMissingCatalogsource(oc)
+		sub.skipMissingCatalogsources(oc)
 	})
 
 	// author: knarra@redhat.com
@@ -147,7 +147,12 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 
 		rodoCsvOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.1.0")).To(o.BeTrue())
+		if sub.opsrcName == "redhat-operators" {
+			o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.1.0")).To(o.BeTrue())
+		}
+		if sub.opsrcName == "qe-app-registry" {
+			o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.1.1")).To(o.BeTrue())
+		}
 
 		//Add the k8 dependencies checkpoint for RODO
 		g.By("Get the latest version of Kubernetes")

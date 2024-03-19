@@ -3,8 +3,11 @@ package workloads
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -92,4 +95,19 @@ func (rodods *runOnceDurationOverride) createrunOnceDurationOverride(oc *exutil.
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("RunOnceDurationOverrideOperator has not been created successfully"))
+}
+
+func (sub *rodoSubscription) skipMissingCatalogsources(oc *exutil.CLI) {
+	output, errQeReg := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if errQeReg != nil && strings.Contains(output, "NotFound") {
+		output, errRed := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "redhat-operators").Output()
+		if errRed != nil && strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsources not available")
+		} else {
+			o.Expect(errRed).NotTo(o.HaveOccurred())
+		}
+		sub.opsrcName = "redhat-operators"
+	} else {
+		o.Expect(errQeReg).NotTo(o.HaveOccurred())
+	}
 }
