@@ -1525,6 +1525,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	g.It("Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
 		defer func() {
 			g.By("delete Security Profile Operator !!!")
+			cleanupObjectsIgnoreNotFound(oc,
+				objectTableRef{"seccompprofiles", subD.namespace, "--all"},
+				objectTableRef{"selinuxprofiles", subD.namespace, "--all"},
+				objectTableRef{"rawselinuxprofiles", subD.namespace, "--all"},
+				objectTableRef{"mutatingwebhookconfiguration", subD.namespace, "spo-mutating-webhook-configuration"})
 			deleteNamespace(oc, subD.namespace)
 			g.By("the Security Profile Operator is deleted successfully !!!")
 		}()
@@ -1544,12 +1549,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 		g.By("Check the SeccompProfile is created sucessfully !!!")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", "--selector=spo.x-k8s.io/profile-id=SeccompProfile-sleep-sh-pod", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
-
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n", subD.namespace, "--ignore-not-found").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("seccompprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("rawselinuxprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
-		g.By("delete seccompprofiles, selinuxprofiles and rawselinuxprofiles !!!")
 	})
 
 	// author: jkuriako@redhat.com

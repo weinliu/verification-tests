@@ -96,6 +96,12 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		}
 		return false, nil
 	})
+	// Expose more info when sub status is not AtLatestKnown
+	if errCheck != nil {
+		e2e.Logf("The result of \"oc get sub %s -n %s -o=jsonpath={.status.state}\" is: %s", sub.subName, sub.namespace, msg)
+		subStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
+		e2e.Logf("The result of \"oc get sub %s -n %s -o=jsonpath={.status}\" is: %s", sub.subName, sub.namespace, subStatus)
+	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
 
 	g.By("Get csvName to check its finish !!!")
@@ -111,6 +117,14 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		}
 		return false, nil
 	})
+	// Expose more info when csv not finished
+	if errCheck != nil {
+		e2e.Logf("The result of \"oc get csv %s -n %s -o=jsonpath={.status.phase}{.status.reason}\" is: %s", csvName, sub.namespace, msg)
+		resPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", sub.namespace).Output()
+		e2e.Logf("The result of \"oc get pod -n %s\" is: %s", sub.namespace, resPod)
+		resContainerStatuses, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", sub.namespace, "-o=jsonpath={.items[*].status.containerStatuses[0]}").Output()
+		e2e.Logf("The result of \"oc get pod -n %s -o=jsonpath={.items[*].status.containerStatuses[0]}\" is: %s", sub.namespace, resContainerStatuses)
+	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
@@ -118,6 +132,10 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 
 func deleteNamespace(oc *exutil.CLI, namespace string) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+	if err != nil {
+		nsStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", namespace, "-n", namespace, "-o=jsonpath={.status}").Output()
+		e2e.Logf("The result of \"oc get ns %s -n %s =-o=jsonpath={.status}\" is: %s", namespace, namespace, nsStatus)
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
