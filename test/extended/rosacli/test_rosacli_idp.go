@@ -2,6 +2,7 @@ package rosacli
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -62,7 +63,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing",
 		output, err = rosaClient.User.DescribeAdmin(clusterID)
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(textData).Should(o.ContainSubstring("There is an admin on cluster"))
+		o.Expect(textData).Should(o.ContainSubstring(fmt.Sprintf("There is 'cluster-admin' user on cluster '%s'", clusterID)))
 
 		g.By("List IDP")
 		idpTab, _, err := idpService.ListIDP(clusterID)
@@ -79,7 +80,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing",
 		output, err = rosaClient.User.DescribeAdmin(clusterID)
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(textData).Should(o.ContainSubstring("There is no admin on cluster"))
+		o.Expect(textData).Should(o.ContainSubstring(fmt.Sprintf("There is no 'cluster-admin' user on cluster '%s'", clusterID)))
 
 		g.By("List IDP after the admin is deleted")
 		idpTab, _, err = idpService.ListIDP(clusterID)
@@ -109,7 +110,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service IDP/admin testing",
 		output, err = rosaClient.User.DescribeAdmin(clusterID)
 		o.Expect(err).To(o.BeNil())
 		textData = rosaClient.Parser.TextData.Input(output).Parse().Tip()
-		o.Expect(textData).Should(o.ContainSubstring("There is an admin on cluster"))
+		o.Expect(textData).Should(o.ContainSubstring(fmt.Sprintf("There is 'cluster-admin' user on cluster '%s'", clusterID)))
 
 		g.By("List IDP")
 		idpTab, _, err = idpService.ListIDP(clusterID)
