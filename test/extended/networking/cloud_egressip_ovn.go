@@ -4107,7 +4107,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc              = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		oc              = exutil.NewCLI("networking-eip-multinic-"+getRandomString(), exutil.KubeConfigPath())
 		egressNodeLabel = "k8s.ovn.org/egress-assignable"
 		ipv4Addr1       = "10.10.0.10/24"
 		ipv4Addr2       = "10.10.0.11/24"
@@ -4317,6 +4317,107 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {
 			}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
 
 		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-Medium-66297-EgressIP uses the longest prefix match for secondary NIC assignment. [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		exutil.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Require 1 worker node for this test, no enough worker nodes, skip the test!")
+		}
+		egressNode1 := nodeList.Items[0].Name
+
+		exutil.By("Apply EgressLabel Key for this test on one node.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, egressNodeLabel)
+
+		exutil.By("Create two dummy interfaces on egress node.\n")
+		ipStackType := checkIPStackType(oc)
+		var egressIP, dummyIP1, dummyIP2 string
+
+		dummyNICName1 := "dummy1-66297"
+		dummyNICName2 := "dummy2-66297"
+
+		if ipStackType == "ipv6single" {
+			dummyIP1 = ipv6Addr1
+			egressIP = ipv6eip1
+			dummyIP2 = "2001::3/60"
+		} else {
+			dummyIP1 = ipv4Addr1
+			egressIP = ipv4eip1
+			dummyIP2 = "10.10.0.20/16"
+		}
+		addDummyInferface(oc, egressNode1, dummyIP1, dummyNICName1)
+		defer removeDummyInterface(oc, egressNode1, dummyNICName1)
+		addDummyInferface(oc, egressNode1, dummyIP2, dummyNICName2)
+		defer removeDummyInterface(oc, egressNode1, dummyNICName2)
+
+		exutil.By("Create an egressIP object.\n")
+		egressip1 := egressIPResource1{
+			name:          "egressip-66297",
+			template:      egressIP2Template,
+			egressIP1:     egressIP,
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("Get current namespace\n")
+		ns1 := oc.Namespace()
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+		exutil.By("Apply a label to test namespace.\n")
+		oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+
+		exutil.By("Apply label to one pod in test namespace\n")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify egressIP was assigned to the interface which has longest prefix match!!\n")
+		o.Eventually(func() bool {
+			cmd := fmt.Sprintf("ip a show %s", dummyNICName1)
+			output, debugNodeErr := exutil.DebugNode(oc, egressNode1, "bash", "-c", cmd)
+			o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+			e2e.Logf("The egressIP was added to interface %s \n %s", dummyNICName1, output)
+			return strings.Contains(output, egressIP)
+		}, "120s", "20s").Should(o.BeTrue(), "The egressIP was not assigend to the interface with LPM")
+
+		if ipStackType == "dualstack" {
+			exutil.By("Verify IPv6 in dualstack cluster.\n")
+			ipv6Addr2 := "2001::2/60"
+			addIPtoInferface(oc, egressNode1, ipv6Addr1, dummyNICName1)
+			addIPtoInferface(oc, egressNode1, ipv6Addr2, dummyNICName2)
+			egressip1.deleteEgressIPObject1(oc)
+			egressip1.egressIP1 = ipv6eip1
+			egressip1.createEgressIPObject2(oc)
+			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+			exutil.By("Verify egressIP was assigned to the interface which has longest prefix match!!\n")
+			o.Eventually(func() bool {
+				cmd := fmt.Sprintf("ip a show %s", dummyNICName1)
+				output, debugNodeErr := exutil.DebugNode(oc, egressNode1, "bash", "-c", cmd)
+				o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+				e2e.Logf("The egressIP was added to interface %s \n %s", dummyNICName1, output)
+				return strings.Contains(output, ipv6eip1)
+			}, "120s", "20s").Should(o.BeTrue(), "The egressIP was not assigend to the interface with LPM")
+		}
+
 	})
 
 })
