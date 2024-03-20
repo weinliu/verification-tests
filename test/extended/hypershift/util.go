@@ -251,10 +251,11 @@ func parse(obj interface{}) ([]string, error) {
 		v = v.Elem()
 	}
 
-	if v.Kind() == reflect.Struct {
+	k := v.Kind()
+	if k == reflect.Struct {
 		return parseStruct(v.Interface(), params)
 	}
-	return []string{}, nil
+	return []string{}, fmt.Errorf("unsupported type: %s (supported types: struct, pointer to struct)", k)
 }
 
 func parseStruct(obj interface{}, params []string) ([]string, error) {
@@ -278,37 +279,56 @@ func parseStruct(obj interface{}, params []string) ([]string, error) {
 			varValueV = varValueV.Elem()
 		}
 
+		varValue := varValueV.Interface()
+		varKind := varType.Kind()
+
 		var err error
-		if varType.Kind() == reflect.Struct {
-			params, err = parseStruct(varValueV.Interface(), params)
+		if varKind == reflect.Struct {
+			params, err = parseStruct(varValue, params)
 			if err != nil {
 				return []string{}, err
 			}
 			continue
 		}
 
-		varValue := varValueV.Interface()
 		tagName := t.Field(i).Tag.Get("param")
 		if tagName == "" {
 			continue
 		}
 
-		switch varType.Kind() {
-		case reflect.String:
+		switch {
+		case varKind == reflect.Map && isStringMap(varValueV):
+			params = append(params, stringMapToParams(varValue.(map[string]string), tagName)...)
+		case varKind == reflect.String:
 			if varValue.(string) != "" {
 				params = append(params, "--"+tagName+"="+varValue.(string))
 			}
-		case reflect.Int:
+		case varKind == reflect.Int:
 			params = append(params, "--"+tagName+"="+strconv.Itoa(varValue.(int)))
-		case reflect.Int64:
+		case varKind == reflect.Int64:
 			params = append(params, "--"+tagName+"="+strconv.FormatInt(varValue.(int64), 10))
-		case reflect.Bool:
+		case varKind == reflect.Bool:
 			params = append(params, "--"+tagName+"="+strconv.FormatBool(varValue.(bool)))
 		default:
 			e2e.Logf("parseTemplateVarParams params %s %v not support, ignore it", varType.Kind(), varValue)
 		}
 	}
 	return params, nil
+}
+
+func isStringMap(v reflect.Value) bool {
+	t := v.Type()
+	return t.Kind() == reflect.Map &&
+		t.Key().Kind() == reflect.String &&
+		t.Elem().Kind() == reflect.String
+}
+
+func stringMapToParams(m map[string]string, flagName string) []string {
+	params := make([]string, 0, len(m))
+	for k, v := range m {
+		params = append(params, fmt.Sprintf("--%s=%s=%s", flagName, k, v))
+	}
+	return params
 }
 
 func getSha256ByFile(file string) string {

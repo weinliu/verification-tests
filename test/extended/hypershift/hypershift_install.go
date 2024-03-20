@@ -686,9 +686,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
-			withName("hypershift-" + caseID).
+			withName("hypershift-"+caseID).
 			withNodePoolReplicas(2).
-			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withEndpointAccess(PublicAndPrivate).
 			withExternalDnsDomain(HyperShiftExternalDNS).
 			withBaseDomain(HyperShiftExternalDNSBaseDomain)
@@ -804,9 +804,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		exutil.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
-			withName("hypershift-" + caseID).
+			withName("hypershift-"+caseID).
 			withNodePoolReplicas(0).
-			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withEndpointAccess(PublicAndPrivate)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hc := installHelper.createAWSHostedClusterWithoutCheck(createCluster)
@@ -930,9 +930,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		release, er := exutil.GetReleaseImage(oc)
 		o.Expect(er).NotTo(o.HaveOccurred())
 		createCluster := installHelper.createClusterAWSCommonBuilder().
-			withName("hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStr(5))).
+			withName("hypershift-"+caseID+"-"+strings.ToLower(exutil.RandStr(5))).
 			withNodePoolReplicas(2).
-			withAnnotations(`hypershift.openshift.io/topology=dedicated-request-serving-components`).
+			withAnnotation("hypershift.openshift.io/topology", "dedicated-request-serving-components").
 			withEndpointAccess(PublicAndPrivate).
 			withExternalDnsDomain(HyperShiftExternalDNS).
 			withBaseDomain(HyperShiftExternalDNSBaseDomain).
@@ -1186,9 +1186,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		release, err := exutil.GetReleaseImage(oc)
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		createCluster := installHelper.createClusterAWSCommonBuilder().
-			withName("hypershift-" + caseID).
+			withName("hypershift-"+caseID).
 			withNodePoolReplicas(2).
-			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withEndpointAccess(PublicAndPrivate).
 			withExternalDnsDomain(HyperShiftExternalDNS).
 			withBaseDomain(HyperShiftExternalDNSBaseDomain).
@@ -1343,7 +1343,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName(hcName).
 			withNodePoolReplicas(1).
-			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withReleaseImage(release)
 		defer installHelper.deleteHostedClustersManual(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
@@ -1502,9 +1502,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		exutil.By("create HostedClusters config")
 		nodeReplicas := 1
 		createCluster := installHelper.createClusterAWSCommonBuilder().
-			withName("hypershift-" + caseID).
+			withName("hypershift-"+caseID).
 			withNodePoolReplicas(nodeReplicas).
-			withAnnotations(`hypershift.openshift.io/cleanup-cloud-resources="true"`).
+			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withEndpointAccess(PublicAndPrivate).
 			withExternalDnsDomain(HyperShiftExternalDNS).
 			withBaseDomain(HyperShiftExternalDNSBaseDomain)
@@ -1919,7 +1919,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName(hcName).
 			withNodePoolReplicas(1).
-			withAnnotations(hcRequestServingTopologyAnnotation).
+			withAnnotation(hcTopologyAnnotationKey, "dedicated-request-serving-components").
 			withReleaseImage(release)
 		defer installHelper.deleteHostedClustersManual(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
@@ -2460,7 +2460,7 @@ spec:
 		createCluster1 := installHelper.createClusterAWSCommonBuilder().
 			withName(hc1Name).
 			withNodePoolReplicas(1).
-			withAnnotations(hcRequestServingTopologyAnnotation).
+			withAnnotation(hcTopologyAnnotationKey, "dedicated-request-serving-components").
 			withReleaseImage(release)
 		defer installHelper.destroyAWSHostedClusters(createCluster1)
 		_ = installHelper.createAWSHostedClusters(createCluster1)
@@ -2482,7 +2482,7 @@ spec:
 		createCluster2 := installHelper.createClusterAWSCommonBuilder().
 			withName(hc2Name).
 			withNodePoolReplicas(1).
-			withAnnotations(hcRequestServingTopologyAnnotation).
+			withAnnotation(hcTopologyAnnotationKey, "dedicated-request-serving-components").
 			withReleaseImage(release)
 		defer installHelper.destroyAWSHostedClusters(createCluster2)
 		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
@@ -2794,5 +2794,103 @@ spec:
 			}
 			e2e.Failf("Failed to delete hosted zone %v", err)
 		}
+	})
+
+	/*
+		For the sake of this test, it is sufficient to create un-deletable PV in the hosted cluster
+		which is much simpler than installing the AWS EFS operator.
+
+		Test run duration: ~40min
+	*/
+	g.It("Longduration-NonPreRelease-Author:fxie-Critical-67225-[HyperShiftINSTALL] Test annotation 'hypershift.openshift.io/destroy-grace-period' in the HostedCluster [Serial]", func() {
+		var (
+			testCaseId         = getTestCaseIDs()[0]
+			resourceNamePrefix = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
+			tempDir            = path.Join("/tmp", "hypershift", resourceNamePrefix)
+			bucketName         = fmt.Sprintf("%s-bucket", resourceNamePrefix)
+			hcName             = fmt.Sprintf("%s-hc", resourceNamePrefix)
+			pvName             = fmt.Sprintf("%s-pv", resourceNamePrefix)
+			pvYamlStr          = fmt.Sprintf(`apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: %s
+  finalizers:
+  - what/ever
+spec:
+  capacity:
+    storage: 1Mi
+  accessModes:  
+  - ReadWriteOnce
+  nfs:
+    path: /what/ever
+    server: 127.0.0.1`, pvName)
+		)
+
+		exutil.By("Installing the Hypershift Operator")
+		defer func() {
+			_ = os.RemoveAll(tempDir)
+		}()
+		err := os.MkdirAll(tempDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var region string
+		region, err = getClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		installHelper := installHelper{
+			oc:           oc,
+			bucketName:   bucketName,
+			dir:          tempDir,
+			iaasPlatform: iaasPlatform,
+			region:       region,
+		}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("Creating a public HostedCluster")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(hcName).
+			withNodePoolReplicas(1).
+			withAnnotation(cleanupCloudResAnnotationKey, "true").
+			withAnnotation(destroyGracePeriodAnnotationKey, "120s").
+			withReleaseImage(release)
+		// Delete HC manually as it could be gone at this point
+		defer installHelper.deleteHostedClustersManual(createCluster)
+		hc := installHelper.createAWSHostedClusters(createCluster)
+
+		exutil.By("Creating an un-deletable PV in the hosted cluster")
+		var pvFile *os.File
+		pvFile, err = os.CreateTemp(tempDir, resourceNamePrefix)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			_ = pvFile.Close()
+		}()
+		_, err = io.MultiWriter(g.GinkgoWriter, pvFile).Write([]byte(pvYamlStr))
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		installHelper.createHostedClusterKubeconfig(createCluster, hc)
+		oc.SetGuestKubeconf(hc.hostedClustersKubeconfigFile)
+		doOcpReq(oc.AsGuestKubeconf(), OcpCreate, true, "-f", pvFile.Name())
+
+		exutil.By("Deleting the hosted cluster in a non blocking fashion")
+		doOcpReq(oc, OcpDelete, true, "hc", hc.name, "-n", hc.namespace, "--wait=false")
+
+		exutil.By("Waiting for the CloudResourcesDestroyed condition to be set")
+		o.Eventually(func() bool {
+			msg := doOcpReq(oc, OcpGet, false, "hc", hc.name, "-n", hc.namespace, `-o=jsonpath={.status.conditions[?(@.type=="CloudResourcesDestroyed")].message}`)
+			return strings.Contains(msg, "Remaining resources: persistent-volumes")
+		}).WithTimeout(LongTimeout).WithPolling(DefaultTimeout / 10).Should(o.BeTrue())
+
+		exutil.By("Waiting for the HostedClusterDestroyed condition to be set")
+		o.Eventually(func() bool {
+			reason := doOcpReq(oc, OcpGet, false, "hc", hc.name, "-n", hc.namespace, `-o=jsonpath={.status.conditions[?(@.type=="HostedClusterDestroyed")].reason}`)
+			return reason == "WaitingForGracePeriod"
+		}).WithTimeout(DoubleLongTimeout).WithPolling(DefaultTimeout / 10).Should(o.BeTrue())
+
+		exutil.By("Waiting for the HostedCluster to be deleted")
+		o.Eventually(func() bool {
+			_, stderr, err := oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("hc", hc.name, "-n", hc.namespace).Outputs()
+			return err != nil && strings.Contains(stderr, "NotFound")
+		}).WithTimeout(DefaultTimeout).WithPolling(DefaultTimeout / 10).Should(o.BeTrue())
 	})
 })

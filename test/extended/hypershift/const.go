@@ -157,6 +157,12 @@ const (
 	nodeInstanceTypeLabelKey = "node.kubernetes.io/instance-type"
 )
 
+// cluster lifecycle
+const (
+	cleanupCloudResAnnotationKey    = "hypershift.openshift.io/cleanup-cloud-resources"
+	destroyGracePeriodAnnotationKey = "hypershift.openshift.io/destroy-grace-period"
+)
+
 // Expected to be read-only
 var platform2InfraMachineTemplateKind = map[string]string{
 	AWSPlatform: capiAwsMachineTemplateKind,

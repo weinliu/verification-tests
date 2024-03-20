@@ -44,7 +44,7 @@ type createCluster struct {
 	InfraAvailabilityPolicy        string                `param:"infra-availability-policy"`
 	Zones                          string                `param:"zones"`
 	SSHKey                         string                `param:"ssh-key"`
-	Annotations                    string                `param:"annotations"`
+	Annotations                    map[string]string     `param:"annotations"`
 	EndpointAccess                 AWSEndpointAccessType `param:"endpoint-access"`
 	ExternalDnsDomain              string                `param:"external-dns-domain"`
 	ReleaseImage                   string                `param:"release-image"`
@@ -167,8 +167,21 @@ func (c *createCluster) withEndpointAccess(endpointAccess AWSEndpointAccessType)
 	return c
 }
 
-func (c *createCluster) withAnnotations(annotations string) *createCluster {
-	c.Annotations = strings.TrimPrefix(c.Annotations+","+annotations, ",")
+func (c *createCluster) withAnnotation(key, value string) *createCluster {
+	if c.Annotations == nil {
+		c.Annotations = make(map[string]string)
+	}
+	c.Annotations[key] = value
+	return c
+}
+
+func (c *createCluster) withAnnotationMap(annotations map[string]string) *createCluster {
+	if c.Annotations == nil {
+		c.Annotations = make(map[string]string)
+	}
+	for key, value := range annotations {
+		c.Annotations[key] = value
+	}
 	return c
 }
 
@@ -349,10 +362,16 @@ func (receiver *installHelper) hyperShiftInstall() {
 }
 
 func (receiver *installHelper) hyperShiftUninstall() {
+	// hypershift install renders crds before resources by default.
+	// Delete resources before crds to avoid unrecognized resource failure.
+	e2e.Logf("Uninstalling the Hypershift operator and relevant resources")
 	var bashClient = NewCmdClient().WithShowInfo(true)
-	_, err := bashClient.Run("hypershift install render --format=yaml | oc delete -f -").Output()
+	_, err := bashClient.Run("hypershift install render --format=yaml --outputs resources | oc delete -f -").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	e2e.Logf("check hyperShift operator uninstall")
+	_, err = bashClient.Run("hypershift install render --format=yaml --outputs crds | oc delete -f -").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	e2e.Logf("Waiting until the Hypershift operator and relevant resources is uninstalled")
 	o.Eventually(func() string {
 		value, er := receiver.oc.AsAdmin().WithoutNamespace().Run("get").Args("all", "-n", "hypershift").Output()
 		if er != nil {
