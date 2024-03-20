@@ -1611,13 +1611,17 @@ func isValueInList(value string, list []string) bool {
 // getPodMultiNetwork is designed to get both v4 and v6 addresses from pod's secondary interface(net1) which is not in the cluster's SDN or OVN network
 // currently the v4 address of pod's secondary interface is always displyed before v6 address no matter the order configred in the net-attach-def YAML file
 func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (string, string) {
-	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Eo '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
-	cmd2 := "ip a sho net1 | awk 'NR==5{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
-	podIPv4, err := e2eoutput.RunHostCmd(namespace, podName, cmd1)
+	cmd1 := "ip -o -4 addr show dev net1 | awk '$3 == \"inet\" {print $4}' | cut -d'/' -f1"
+	cmd2 := "ip -o -6 addr show dev net1 | awk '$3 == \"inet6\" {print $4}' | head -1 | cut -d'/' -f1"
+	podIPv4, err := e2eoutput.RunHostCmdWithRetries(namespace, podName, cmd1, 2*time.Second, 10*time.Second)
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("pod net1 ipv4 is: %s", podIPv4)
+	o.Expect(podIPv4).NotTo(o.BeNil())
 	pod2ns1IPv4 := strings.TrimSpace(podIPv4)
-	podIPv6, err1 := e2eoutput.RunHostCmd(namespace, podName, cmd2)
+	podIPv6, err1 := e2eoutput.RunHostCmdWithRetries(namespace, podName, cmd2, 2*time.Second, 10*time.Second)
 	o.Expect(err1).NotTo(o.HaveOccurred())
+	e2e.Logf("pod net1 ipv6 is: %s", podIPv6)
+	o.Expect(podIPv6).NotTo(o.BeNil())
 	pod2ns1IPv6 := strings.TrimSpace(podIPv6)
 	return pod2ns1IPv4, pod2ns1IPv6
 }

@@ -281,7 +281,7 @@ func (sriovNetwork *sriovNetwork) createSriovNetwork(oc *exutil.CLI) {
 			sriovNetwork.trust = "on"
 		}
 		if sriovNetwork.linkState == "" {
-			sriovNetwork.linkState = "disable"
+			sriovNetwork.linkState = "auto"
 		}
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNetwork.template, "-p", "NAMESPACE="+sriovNetwork.namespace, "SRIOVNETNAME="+sriovNetwork.name, "TARGETNS="+sriovNetwork.networkNamespace, "SRIOVNETPOLICY="+sriovNetwork.resourceName, "SPOOFCHK="+sriovNetwork.spoolchk, "TRUST="+sriovNetwork.trust, "LINKSTATE="+sriovNetwork.linkState, "MINTXRATE="+strconv.Itoa(sriovNetwork.minTxRate), "MAXTXRATE="+strconv.Itoa(sriovNetwork.maxTxRate), "VLANID="+strconv.Itoa(sriovNetwork.vlanId), "VLANQOS="+strconv.Itoa(sriovNetwork.vlanQoS))
 		if err1 != nil {

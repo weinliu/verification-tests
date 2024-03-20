@@ -12,7 +12,11 @@ objects:
     ipam: |
       {
         "type": "whereabouts",
-        "range":"10.30.0.0/30"
+        "ipRanges": [{
+            "range": "10.30.0.0/30"
+          }, {
+            "range": "2001::0/126"
+        }]
       }
     vlan: "${{VLANID}}"
     vlanQoS: "${{VLANQOS}}"

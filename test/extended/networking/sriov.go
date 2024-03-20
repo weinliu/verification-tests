@@ -2,8 +2,10 @@ package networking
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -813,5 +815,102 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		sriovScheduleDisableNodeName2 := findSchedulingDisabledNode(oc, 5*time.Second, 2*time.Minute, sriovNodeLabel)
 		e2e.Logf("Currently scheduleDisable worker is %s", sriovScheduleDisableNodeName2)
 		o.Expect(sriovScheduleDisableNodeName2).NotTo(o.Equal(sriovScheduleDisableNodeName))
+	})
+
+	g.It("Author:zzhao-Medium-54368-Medium-54393-The MAC address entry in the ARP table of the source pod should be updated when the MAC address of the destination pod changes while retaining the same IP address [Disruptive]", func() {
+		var (
+			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNeworkTemplate  = filepath.Join(buildPruningBaseDir, "sriovnetwork-whereabouts-template.yaml")
+			sriovTestPodTemplate = filepath.Join(buildPruningBaseDir, "sriov-netdevice-template.yaml")
+			sriovOpNs            = "openshift-sriov-network-operator"
+			policyName           = "e810c"
+			deviceID             = "1593"
+			interfaceName        = "ens2f2"
+			vendorID             = "8086"
+			vfNum                = 4
+			caseID               = "54368-"
+			networkName          = caseID + "net"
+		)
+
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		exutil.By("Create snnp to create VF")
+		// Create VF on with given device
+		defer rmSriovNetworkPolicy(oc, policyName, sriovOpNs)
+		result := initVF(oc, policyName, deviceID, interfaceName, vendorID, sriovOpNs, vfNum)
+		// if the deviceid is not exist on the worker, skip this
+		if !result {
+			g.Skip(fmt.Sprintf("This nic which has deviceID %s is not found on this cluster!!!", deviceID))
+		}
+		exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+		sriovnetwork := sriovNetwork{
+			name:             networkName,
+			resourceName:     policyName,
+			networkNamespace: ns1,
+			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
+			spoolchk:         "off",
+			trust:            "on",
+		}
+
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+
+		exutil.By("Create 2 test pods to consume the whereabouts ip")
+		//create full number pods which use all of the VFs
+		testpodPrex := "testpod"
+		testpodNum := 2
+
+		createNumPods(oc, sriovnetwork.name, ns1, testpodPrex, testpodNum)
+
+		exutil.By("now from one testpod to ping another one and check the mac address from arp")
+		pod1Name := getPodName(oc, ns1, "name=sriov-netdevice")
+		pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns1, pod1Name[0])
+		e2e.Logf("The second interface v4 address of pod1 is: %v", pod1IPv4)
+		e2e.Logf("The second interface v6 address of pod1 is: %v", pod1IPv6)
+		command := fmt.Sprintf("ping -c 3 %s && ping6 -c 3 %s", pod1IPv4, pod1IPv6)
+		pingOutput, err := e2eoutput.RunHostCmdWithRetries(ns1, pod1Name[1], command, 3*time.Second, 12*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(pingOutput).To(o.ContainSubstring("3 received"))
+
+		exutil.By("new pods will fail because all ips from whereabouts already be used")
+		sriovTestNewPod := sriovTestPod{
+			name:        "testpodnew",
+			namespace:   ns1,
+			networkName: sriovnetwork.name,
+			template:    sriovTestPodTemplate,
+		}
+		sriovTestNewPod.createSriovTestPod(oc)
+		e2e.Logf("creating new testpod should fail, because all ips from whereabouts already be used")
+		o.Eventually(func() string {
+			podStatus, _ := getPodStatus(oc, ns1, sriovTestNewPod.name)
+			return podStatus
+		}, 10*time.Second, 2*time.Second).Should(o.Equal("Pending"), fmt.Sprintf("Pod: %s should not be in Running state", sriovTestNewPod.name))
+
+		exutil.By("delete the first pod and testpodnew will be ready")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "pod", pod1Name[0]).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertPodToBeReady(oc, sriovTestNewPod.name, ns1)
+		newPodMac, err := e2eoutput.RunHostCmdWithRetries(ns1, sriovTestNewPod.name, "ip link show net1 | awk '/link\\/ether/ {print $2}'", 3*time.Second, 30*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newPodMac = strings.TrimSpace(newPodMac)
+		e2e.Logf("new pod mac is: %v", newPodMac)
+
+		exutil.By("check the entry of arp table for ipv4 is updated")
+		commandv4 := fmt.Sprintf("ip neigh show %s | awk '{print $5}'", pod1IPv4)
+		arpIpv4MacOutput, err := e2eoutput.RunHostCmdWithRetries(ns1, pod1Name[1], commandv4, 3*time.Second, 12*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("arp for ipv4: %v", arpIpv4MacOutput)
+		//comment this for temp because this bug https://issues.redhat.com/browse/OCPBUGS-30549
+		//o.Expect(arpIpv4MacOutput).To(o.ContainSubstring(newPodMac))
+
+		exutil.By("check the entry of arp table for ipv6 is updated")
+		commandv6 := fmt.Sprintf("ip neigh show %s | awk '{print $5}'", pod1IPv6)
+		arpIpv6MacOutput, err := e2eoutput.RunHostCmdWithRetries(ns1, pod1Name[1], commandv6, 3*time.Second, 12*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("arp for ipv6: %v", arpIpv6MacOutput)
+		o.Expect(arpIpv6MacOutput).To(o.ContainSubstring(newPodMac))
+
 	})
 })
