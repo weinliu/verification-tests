@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -437,5 +438,40 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Wait the pod ready")
 		err = waitForPodWithLabelReady(oc, "hello-gcr72119", "deployment=hello-gcr")
 		exutil.AssertWaitPollNoErr(err, "the pod failed to be ready state within allowed time!")
+	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Author:huliu-Medium-70689-[CCM] CCM pods should restart to react to changes after credentials update [Disruptive]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "vsphere", "openstack")
+		var secretName, jsonString, patchPath, podLabel string
+		iaasPlatform := exutil.CheckPlatform(oc)
+		if iaasPlatform == "vsphere" {
+			secretName = "vsphere-creds"
+			jsonString = "-o=jsonpath={.data.vcenter\\.devqe\\.ibmc\\.devcluster\\.openshift\\.com\\.password}"
+			patchPath = `{"data":{"vcenter.devqe.ibmc.devcluster.openshift.com.password": `
+			podLabel = "infrastructure.openshift.io/cloud-controller-manager=VSphere"
+		} else {
+			secretName = "openstack-credentials"
+			jsonString = "-o=jsonpath={.data.clouds\\.yaml}"
+			patchPath = `{"data":{"clouds.yaml": `
+			podLabel = "infrastructure.openshift.io/cloud-controller-manager=OpenStack"
+		}
+		currentSecret, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("get").Args("secret", secretName, jsonString, "-n", "kube-system").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ccmPodNameStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cloud-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ccmPodNames := strings.Split(ccmPodNameStr, " ")
+		defer func() {
+			err := waitForPodWithLabelReady(oc, "openshift-cloud-controller-manager", podLabel)
+			exutil.AssertWaitPollNoErr(err, "pod recovery fails!")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret", secretName, "-n", "kube-system", "-p", patchPath+`"`+currentSecret+`"}}`, "--type=merge").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret", secretName, "-n", "kube-system", "-p", patchPath+`"`+base64.StdEncoding.EncodeToString([]byte(exutil.GetRandomString()))+`"}}`, "--type=merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Wait old ccm pods disappear")
+		for _, value := range ccmPodNames {
+			err = waitForResourceToDisappear(oc, "openshift-cloud-controller-manager", "pod/"+value)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("CCM %v failed to fully terminate", "pod/"+value))
+		}
 	})
 })
