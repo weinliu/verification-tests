@@ -1044,61 +1044,46 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			msg          string
 		)
 		kataNodes := exutil.GetNodeListByLabel(oc, kataocLabel)
-		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
+		o.Expect(len(kataNodes) > 0).To(o.BeTrue(), fmt.Sprintf("kata nodes list is empty %v", kataNodes))
 
 		if !kataconfig.enablePeerPods {
 			g.By("Verify no instaces exists before the test")
 			numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
-			o.Expect(numOfVMs == 0).To(o.BeTrue())
+			//TO DO wait for some time to enable disposal of previous test instances
+			o.Expect(numOfVMs).To(o.Equal(0), fmt.Sprintf("initial number of VM instances should be zero"))
 		}
 
 		g.By("Create deployment config from template")
 		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
-		if err != nil {
-			e2e.Logf("Could not create configFile %v %v", configFile, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not create deployment configFile %v", configFile))
 
 		g.By("Applying deployment file " + configFile)
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
-		if err != nil {
-			e2e.Logf("Could not apply configFile %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not apply configFile %v", msg))
 
 		g.By("Wait for deployment to be ready")
 		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg == strconv.Itoa(initReplicas)).To(o.BeTrue())
-
-		// If the deployment is ready, pod will be.  Might not need this
-		g.By("Wait for pods to be ready")
-		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
-			if !strings.Contains(msg, "No resources found") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
+		errReplicasMsg := fmt.Sprintf("Deployment %v number of ready replicas don't match requested", deployName)
+		o.Expect(msg).To(o.Equal(strconv.Itoa(initReplicas)), errReplicasMsg)
 
 		if !kataconfig.enablePeerPods {
 			g.By("Verifying actual number of VM instances")
 			numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
-			o.Expect(numOfVMs == initReplicas).To(o.BeTrue())
+			o.Expect(numOfVMs).To(o.Equal(initReplicas), fmt.Sprintf("actual number of VM instances doesn't match"))
 		}
 
 		g.By(fmt.Sprintf("Scaling deployment from %v to %v", initReplicas, maxReplicas))
 		err = oc.AsAdmin().Run("scale").Args("deployment", deployName, "--replicas="+strconv.Itoa(maxReplicas), "-n", podNs).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not Scale deployment %v", msg))
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg == strconv.Itoa(maxReplicas)).To(o.BeTrue())
+		o.Expect(msg).To(o.Equal(strconv.Itoa(maxReplicas)), errReplicasMsg)
 
 		if !kataconfig.enablePeerPods {
 			numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
-			o.Expect(numOfVMs == maxReplicas).To(o.BeTrue())
+			o.Expect(numOfVMs).To(o.Equal(maxReplicas), fmt.Sprintf("actual number of VM instances doesn't match"))
 		}
 		g.By("SUCCESSS - deployment scale-up finished successfully")
 	})
@@ -1115,61 +1100,47 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		kataNodes := exutil.GetNodeListByLabel(oc, kataocLabel)
-		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
+		o.Expect(len(kataNodes) > 0).To(o.BeTrue(), fmt.Sprintf("kata nodes list is empty %v", kataNodes))
 
 		if !kataconfig.enablePeerPods {
 			g.By("Verify no instaces exists before the test")
 			numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
-			o.Expect(numOfVMs == 0).To(o.BeTrue())
+			//TO DO wait for some time to enable disposal of previous test instances
+			o.Expect(numOfVMs).To(o.Equal(0), fmt.Sprintf("initial number of VM instances should be zero"))
 		}
 
 		g.By("Create deployment config from template")
 		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
-		if err != nil {
-			e2e.Logf("Could not create configFile %v %v", configFile, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not create deployment configFile %v", configFile))
 
 		g.By("Applying deployment file " + configFile)
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
-		if err != nil {
-			e2e.Logf("Could not apply configFile %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not apply configFile %v", msg))
 
 		g.By("Wait for deployment to be ready")
 		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg == strconv.Itoa(initReplicas)).To(o.BeTrue())
-
-		// If the deployment is ready, pod will be.  Might not need this
-		g.By("Wait for pods to be ready")
-		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
-			if !strings.Contains(msg, "No resources found") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
+		errReplicasMsg := fmt.Sprintf("Deployment %v number of ready replicas don't match requested", deployName)
+		o.Expect(msg).To(o.Equal(strconv.Itoa(initReplicas)), errReplicasMsg)
 
 		if !kataconfig.enablePeerPods {
 			g.By("Verifying actual number of VM instances")
 			numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
-			o.Expect(numOfVMs == initReplicas).To(o.BeTrue())
+			o.Expect(numOfVMs).To(o.Equal(initReplicas), fmt.Sprintf("actual number of VM instances doesn't match"))
 		}
 
 		g.By(fmt.Sprintf("Scaling deployment from %v to %v", initReplicas, updReplicas))
 		err = oc.AsAdmin().Run("scale").Args("deployment", deployName, "--replicas="+strconv.Itoa(updReplicas), "-n", podNs).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not Scale deployment %v", msg))
+
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg == strconv.Itoa(updReplicas)).To(o.BeTrue())
+		o.Expect(msg).To(o.Equal(strconv.Itoa(updReplicas)), errReplicasMsg)
 
 		if !kataconfig.enablePeerPods {
 			numOfVMs = getTotalInstancesOnNodes(oc, opNamespace, kataNodes)
-			o.Expect(numOfVMs == updReplicas).To(o.BeTrue())
+			o.Expect(numOfVMs).To(o.Equal(updReplicas), fmt.Sprintf("actual number of VM instances doesn't match"))
 		}
 		g.By("SUCCESSS - deployment scale-down finished successfully")
 	})
@@ -1190,36 +1161,16 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
 			"-p", "NAME="+deployName, "-p", "IMAGE="+ocpHelloImage,
 			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
-		if err != nil {
-			e2e.Logf("Could not create configFile %v %v", configFile, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not create configFile %v", configFile))
 
 		g.By("Applying deployment file " + configFile)
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
-		if err != nil {
-			e2e.Logf("Could not apply configFile %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not apply configFile %v", msg))
 
 		g.By("Wait for deployment to be ready")
 		defer oc.AsAdmin().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
 		msg, err = waitForDeployment(oc, podNs, deployName)
-		if err != nil {
-			e2e.Logf("Deployment didn't reached expected state: %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// If the deployment is ready, pod will be.  Might not need this
-		g.By("Wait for pods to be ready")
-		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
-			if !strings.Contains(msg, "No resources found") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Deployment %v didn't reached expected state: %v", deployName, msg))
 
 		g.By("Expose deployment and its service")
 		defer deleteRouteAndService(oc, deployName, podNs)
@@ -1228,12 +1179,10 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		e2e.Logf("route host=%v", host)
 
 		g.By("send request via the route")
-		resp, err := getHttpResponse("http://"+host, statusCode)
-		if err != nil {
-			e2e.Logf("send request via the route failed with: %v", err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(resp, testPageBody)).To(o.BeTrue())
+		strURL := "http://" + host
+		resp, err := getHttpResponse(strURL, statusCode)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("send request via the route %v failed with: %v", strURL, err))
+		o.Expect(resp).To(o.ContainSubstring(testPageBody), fmt.Sprintf("Response doesn't match"))
 
 		g.By("SUCCESSS - deployment Expose service finished successfully")
 	})
@@ -1271,17 +1220,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
 			"-p", "NAME="+deployName, "-p", "REPLICAS="+initReplicas,
 			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
-		if err != nil {
-			e2e.Logf("Could not create deployment configFile %v %v", configFile, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not create deployment configFile %v", configFile))
 
 		g.By("Applying deployment file " + configFile)
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", configFile, "-n", podNs).Output()
-		if err != nil {
-			e2e.Logf("Could not apply configFile %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not apply configFile %v", msg))
 
 		defer deleteKataResource(oc, "deploy", podNs, deployName)
 
@@ -1289,15 +1232,13 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		e2e.Logf("Deployment has initially %v pods", msg)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.Equal(initReplicas))
+		errReplicasMsg := fmt.Sprintf("Deployment %v number of ready replicas don't match requested", deployName)
+		o.Expect(msg).To(o.Equal(initReplicas), errReplicasMsg)
 
 		extraReplicas := strconv.Itoa((podIntLimit + 1) * kataNodesAmount)
 		g.By(fmt.Sprintf("Scaling deployment from %v to %v", initReplicas, extraReplicas))
 		msg, err = oc.AsAdmin().Run("scale").Args("deployment", deployName, "--replicas="+extraReplicas, "-n", podNs).Output()
-		if err != nil {
-			e2e.Logf("Could not Scale deployment %v %v", msg, err)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not Scale deployment %v", msg))
 
 		extraPods := strconv.Itoa(kataNodesAmount)
 		g.By("Wait for 30sec to check deployment has " + extraPods + " pending pods w/o corresponding podvm, because of the limit")
@@ -1311,7 +1252,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for %v additional pending pods %v %v", extraPods, msg, err))
 
 		msg, err = oc.AsAdmin().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
-		o.Expect(msg).To(o.Equal(initReplicas))
+		o.Expect(msg).To(o.Equal(initReplicas), errReplicasMsg)
 
 		g.By("restore podvm limit")
 		patchPeerPodLimit(oc, opNamespace, defaultLimit)
@@ -1320,7 +1261,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		msg, err = waitForDeployment(oc, podNs, deployName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Deployment has %v running pods after patching the limit", msg)
-		o.Expect(msg).To(o.Equal(extraReplicas))
+		o.Expect(msg).To(o.Equal(extraReplicas), errReplicasMsg)
 
 		g.By("SUCCESSS - deployment peer pods podvm limit - finished successfully")
 	})
@@ -1334,14 +1275,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		oc.SetupProject()
 
 		kataNodes := exutil.GetNodeListByLabel(oc, kataocLabel)
-		o.Expect(len(kataNodes) > 0).To(o.BeTrue())
+		o.Expect(len(kataNodes) > 0).To(o.BeTrue(), fmt.Sprintf("kata nodes list is empty %v", kataNodes))
 
 		eligibleNodes := exutil.GetNodeListByLabel(oc, featureLabel)
-		o.Expect(len(eligibleNodes) == len(kataNodes)).To(o.BeTrue())
+		o.Expect(len(eligibleNodes) == len(kataNodes)).To(o.BeTrue(), fmt.Sprintf("kata nodes list length is differ from eligible ones"))
 
 		for _, node := range kataNodes {
 			found, _ := exutil.StringsSliceContains(eligibleNodes, node)
-			o.Expect(found).To(o.BeTrue())
+			o.Expect(found).To(o.BeTrue(), fmt.Sprintf("node %v is not in the list of eligible nodes %v", node, eligibleNodes))
 		}
 	})
 
@@ -1478,8 +1419,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
 		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(actualSize).To(o.Equal(instanceSize[provider]))
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed rsh to pod %v to provide metadata", podName))
+		o.Expect(actualSize).To(o.Equal(instanceSize[provider]), fmt.Sprintf("Instance size don't match provided annotations"))
 
 		g.By("SUCCESS - Podvm with required instance type was launched")
 	})
@@ -1517,8 +1458,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
 		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(actualSize).To(o.Equal(instanceSize[provider]))
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed rsh to pod %v to provide metadata", podName))
+		o.Expect(actualSize).To(o.Equal(instanceSize[provider]), fmt.Sprintf("Instance size don't match provided annotations"))
 
 		g.By("SUCCESS - Podvm with required instance type was launched")
 	})
