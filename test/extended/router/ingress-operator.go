@@ -1313,7 +1313,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		exutil.By("1. Create the custom ingresscontroller with 3998 CIDRs")
+		exutil.By("1. Create the custom ingresscontroller with 3998 CIDRs, by default 2 CIDRs are occupied on non private cluster")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
@@ -1331,8 +1331,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output1).To(o.ContainSubstring(`Ensured load balancer`))
 		o.Expect(output1).NotTo(o.ContainSubstring(`exceeds the maximum number of source IP addresses`))
 
-		exutil.By("3. Patch the custom ingress controller and add one more IP to allowedSourceRanges")
-		jsonPatch := "[{\"op\":\"add\", \"path\": \"/spec/endpointPublishingStrategy/loadBalancer/allowedSourceRanges/-\", \"value\":\"1.1.16.175/32\"}]"
+		exutil.By("3. Patch the custom ingress controller and add three more IPs to allowedSourceRanges")
+		jsonPatch := "[{\"op\":\"add\", \"path\": \"/spec/endpointPublishingStrategy/loadBalancer/allowedSourceRanges/-\", \"value\":\"1.1.16.175/32\"},{\"op\":\"add\", \"path\": \"/spec/endpointPublishingStrategy/loadBalancer/allowedSourceRanges/-\", \"value\":\"1.1.16.176/32\"},{\"op\":\"add\", \"path\": \"/spec/endpointPublishingStrategy/loadBalancer/allowedSourceRanges/-\", \"value\":\"1.1.16.177/32\"}]"
 		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ingctrl.namespace, "ingresscontroller", ingctrl.name, "--type=json", "-p", jsonPatch).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1340,6 +1340,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// wait 3 seconds for recocile the service
 		time.Sleep(3 * time.Second)
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "service", "router-"+ingctrl.name).Output()
-		o.Expect(output2).To(o.ContainSubstring(`exceeds the maximum number of source IP addresses (4001 > 4000)`))
+		o.Expect(output2).To(o.MatchRegexp(`exceeds the maximum number of source IP addresses \(400[1-9] > 4000\)`))
 	})
 })
