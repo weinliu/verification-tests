@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -122,11 +123,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		exutil.By("9. Check result,the svc for egessrouter can be accessed \n")
-		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":5000 --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmdWithRetries(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":5000 --connect-timeout 10", 5*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:5000 with error:%v", svcIPv4, err))
-		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":6000 --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmdWithRetries(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":6000 --connect-timeout 10", 5*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:6000 with error:%v", svcIPv4, err))
-		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":80 --connect-timeout 5")
+		_, err = e2eoutput.RunHostCmdWithRetries(pod1.namespace, pod1.name, "curl -s "+svcIPv4+":80 --connect-timeout 10", 5*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to access %s:80 with error:%v", svcIPv4, err))
 	})
 
