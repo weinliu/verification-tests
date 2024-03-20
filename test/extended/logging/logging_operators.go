@@ -54,9 +54,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 
 	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-42405-No configurations when forward to external ES with only username or password set in pipeline secret[Serial]", func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		oc.SetupProject()
 		esProj := oc.Namespace()
 		ees := externalES{
@@ -107,9 +104,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 
 	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-49440-[LOG-1415] Allow users to set fluentd read_lines_limit.[Serial]", func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		clf := clusterlogforwarder{
 			name:         "instance",
 			namespace:    loggingNS,
@@ -148,9 +142,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 
 	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-53221-Expose more fluentd knobs to support optimizing fluentd for different environments[Serial]", func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		g.By("Create Cluster Logging instance")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -257,9 +248,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 	)
 
 	g.BeforeEach(func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		CLO := SubscriptionObjects{
 			OperatorName: "cluster-logging-operator",
@@ -1345,9 +1333,6 @@ spec:
 
 	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Critical-65644-Creating multiple ClusterLogForwarders shouldn't affect the legacy forwarders.[Serial][Slow]", func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		appProj := oc.Namespace()
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()

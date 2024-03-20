@@ -198,9 +198,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial]", func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		platform := exutil.CheckPlatform(oc)
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")

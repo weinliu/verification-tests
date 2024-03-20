@@ -352,9 +352,6 @@ spec:
 
 	g.Context("ClusterLogging and Loki Integration tests with fluentd", func() {
 		g.BeforeEach(func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			s := getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
@@ -689,9 +686,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	g.Context("Test forward logs to external Grafana Loki log store", func() {
 		g.BeforeEach(func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",

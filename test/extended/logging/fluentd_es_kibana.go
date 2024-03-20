@@ -28,9 +28,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	g.Context("Cluster Logging Instance tests", func() {
 
 		g.BeforeEach(func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO and EO")
 			CLO := SubscriptionObjects{
@@ -284,9 +281,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 	)
 
 	g.BeforeEach(func() {
-		if isFipsEnabled(oc) {
-			g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-		}
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		g.By("deploy CLO and EO")
 		CLO := SubscriptionObjects{

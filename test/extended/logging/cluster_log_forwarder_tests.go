@@ -55,10 +55,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:kbharti-High-41598-forward logs only from specific pods via a label selector inside the Log Forwarding API[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
-
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			)
@@ -122,10 +118,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:kbharti-High-41599-Forward Logs from specified pods combining namespaces and label selectors[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
-
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
 			)
@@ -231,9 +223,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-42981-Collect OVN audit logs [Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			g.By("Check the network type for the test")
 			networkType := checkNetworkType(oc)
 			if !strings.Contains(networkType, "ovnkubernetes") {
@@ -316,9 +305,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-45256-[fluentd]Forward logs to log store for multiline log assembly[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			multilineLogTypes := map[string][]string{
 				"java":   {javaExc, complexJavaExc, nestedJavaExc},
 				"go":     {goExc, goOnGaeExc, goSignalExc, goHTTP},
@@ -436,9 +422,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-49040-High-49041-Forward logs to multiple log stores for multiline log assembly[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			multilineLogTypes := map[string][]string{
 				"java":   {javaExc, complexJavaExc, nestedJavaExc},
 				"go":     {goExc, goOnGaeExc, goSignalExc, goHTTP},
@@ -584,9 +567,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-41134-Forward Log under different namespaces to different external Elasticsearch[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
@@ -668,9 +648,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41240-BZ1905615 The application logs can be sent to the default ES when part of projects logs are sent to external aggregator[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
@@ -725,9 +702,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-45419-ClusterLogForwarder Forward logs to remote syslog with tls[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -770,9 +744,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-55014-[LOG-2843]Forward logs to remote-syslog - mtls with private key passphrase[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -820,9 +791,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-43250-Forward logs to fluentd enable mTLS with shared_key and tls_client_private_key_passphrase[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -890,9 +858,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//Author: kbharti@redhat.com
 		g.It("CPaasrunOnly-Author:kbharti-High-43745-Forward to Loki using default value via http[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			//create a project and app to generate some logs
 			g.By("create project for app logs")
 			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_non_json_log_template.json")
@@ -966,9 +931,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//Author: kbharti@redhat.com
 		g.It("CPaasrunOnly-Author:kbharti-High-43746-Forward to Loki using loki.tenantkey[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			//create a project and app to generate some logs
 			g.By("create project for app logs")
 			appProj := oc.Namespace()
@@ -1025,9 +987,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:kbharti-High-43771-Forward to Loki using correct loki.tenantKey.kubernetes.namespace_name via http[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			//create a project and app to generate some logs
 			g.By("create project for app logs")
 			appProj := oc.Namespace()
@@ -1085,9 +1044,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:kbharti-Low-43770-Forward to Loki using loki.labelKeys which does not exist[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			//This case covers OCP-45697 and OCP-43770
 			//create a project and app to generate some logs
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1194,9 +1150,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43839-Fluentd logs to Cloudwatch group by namespaceName and groupPrefix [Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			cw.setGroupPrefix("logging-43839-" + getInfrastructureName(oc))
 			cw.setGroupType("namespaceName")
 			// Disable audit, so the test be more stable
@@ -1237,9 +1190,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43840-Forward logs to Cloudwatch group by namespaceUUID and groupPrefix [Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			cw.setGroupPrefix("logging-43840-" + getInfrastructureName(oc))
 			cw.setGroupType("namespaceUUID")
 			// Disable audit, so the test be more stable
@@ -1284,9 +1234,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-47052-[fluentd]CLF API change for Opt-in to multiline error detection (Forward to CloudWatch)[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			cw.setGroupPrefix("logging-47052-" + getInfrastructureName(oc))
 			cw.setGroupType("logType")
 			cw.setLogTypes("infrastructure", "audit", "application")
@@ -1363,9 +1310,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-41726-Forward logs to different kafka brokers[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
@@ -1484,9 +1428,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author gkarager@redhat.com
 		g.It("CPaasrunOnly-Author:gkarager-Medium-45368-Forward logs to kafka using sasl-plaintext[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1551,9 +1492,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author gkarager@redhat.com
 		g.It("CPaasrunOnly-Author:gkarager-Medium-41771-Forward logs to kafka using sasl-ssl[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1618,9 +1556,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author gkarager@redhat.com
 		g.It("CPaasrunOnly-Author:gkarager-Medium-32333-Forward logs to kafka topic via Mutual Chained certificates[Serial][Slow]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1700,9 +1635,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-48844-Fluentd forward logs to logstash[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1758,9 +1690,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			CLO.SubscribeOperator(oc)
 		})
 		g.It("CPaasrunOnly-Author:anli-Medium-60934-fluentd Forward logs to fluentd over http - https[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1809,9 +1738,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-Medium-60925-fluentd Forward logs to fluentd over http - http[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1858,9 +1784,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-Medium-60935-fluentd Forward logs to fluentd over http - TLSSkipVerify[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -1921,9 +1844,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 		// author anli@redhat.com
 		g.It("CPaasrunOnly-Author:anli-Medium-60937-fluentd forward logs to fluentdserver over http - mtls[Serial]", func() {
-			if isFipsEnabled(oc) {
-				g.Skip("skip fluentd test on fips enabled cluster for LOG-3933")
-			}
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
