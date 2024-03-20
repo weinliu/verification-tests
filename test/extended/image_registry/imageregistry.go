@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -4666,5 +4667,74 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(getResourceTags).To(o.ContainSubstring("tagValues/281475558055748"))
 		o.Expect(getResourceTags).To(o.ContainSubstring("tagValues/281479576182962"))
+	})
+
+	g.It("NonHyperShiftHOST-Author:wewang-Critical-72014-Image Registry Operator should short lease acquire time [Disruptive]", func() {
+		g.By("Check deployment/cluster-image-registry-operator strategy is Recreate")
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/cluster-image-registry-operator", "-n", "openshift-image-registry", "-o=jsonpath={.spec.strategy.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("Recreate"))
+
+		g.By("Set image registry to Unmanaged")
+		defer func() {
+			g.By("Recover image registry change")
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Unmanaged"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get registry operator pod name")
+		oldPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-image-registry", "-l", "name=cluster-image-registry-operator", "-o", "name").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Add an annotation to the operator deployment")
+		defer func() {
+			g.By("Recover registry operator")
+			err = oc.AsAdmin().Run("patch").Args("deploy/cluster-image-registry-operator", "-p", `{"spec":{"template":{"metadata":{"annotations":{"test":null}}}}}`, "-n", "openshift-image-registry", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			out, err = oc.AsAdmin().Run("get").Args("deployment/cluster-image-registry-operator", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.metadata.annotations}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(out).ShouldNot(o.Equal("invalid"))
+			err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.AsAdmin().Run("patch").Args("deploy/cluster-image-registry-operator", "-p", `{"spec":{"template":{"metadata":{"annotations":{"test":"invalid"}}}}}`, "-n", "openshift-image-registry", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err = oc.AsAdmin().Run("get").Args("deployment/cluster-image-registry-operator", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.metadata.annotations.test}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("invalid"))
+		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Confirm image registry operator redeployed")
+		err = wait.Poll(20*time.Second, 1*time.Minute, func() (bool, error) {
+			newPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-image-registry", "-l", "name=cluster-image-registry-operator", "-o", "name").Output()
+			if err != nil {
+				return false, err
+			}
+			if newPod == oldPod {
+				e2e.Logf("Continue to next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "image registry is not redeployed")
+
+		g.By("Check less than 1 minute waiting for the lease acquire")
+		result, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/cluster-image-registry-operator", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(result, "lease openshift-image-registry/openshift-master-controllers")).To(o.BeTrue())
+		regLog, _ := regexp.Compile(".*attempting to acquire leader lease openshift-image-registry/openshift-master-controllers.*")
+		requestLog := regLog.FindAllString(result, 1)
+		regLog, _ = regexp.Compile(".*successfully acquired lease openshift-image-registry/openshift-master-controllers.*")
+		acquiredLog := regLog.FindAllString(result, 1)
+
+		startTime := filterTimestampFromLogs(requestLog[0], 1)
+		endTime := filterTimestampFromLogs(acquiredLog[0], 1)
+		o.Expect(getTimeDifferenceInMinute(startTime[0], endTime[0])).Should(o.BeNumerically("<", 0.1))
 	})
 })

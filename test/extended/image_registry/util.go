@@ -1388,3 +1388,24 @@ func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
 	gcloud := exutil.Gcloud{ProjectID: projectID}
 	return gcloud.Login()
 }
+
+func filterTimestampFromLogs(logs string, numberOfTimestamp int) []string {
+	return regexp.MustCompile("(?m)[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}.[0-9]{1,6}").FindAllString(logs, numberOfTimestamp)
+}
+
+func getTimeDifferenceInMinute(oldTimestamp, newTimestamp string) float64 {
+	oldTimeValues := strings.Split(oldTimestamp, ":")
+	oldTimeHour, _ := strconv.Atoi(oldTimeValues[0])
+	oldTimeMinute, _ := strconv.Atoi(oldTimeValues[1])
+	oldTimeSecond, _ := strconv.Atoi(strings.Split(oldTimeValues[2], ".")[0])
+	oldTimeNanoSecond, _ := strconv.Atoi(strings.Split(oldTimeValues[2], ".")[1])
+	newTimeValues := strings.Split(newTimestamp, ":")
+	newTimeHour, _ := strconv.Atoi(newTimeValues[0])
+	newTimeMinute, _ := strconv.Atoi(newTimeValues[1])
+	newTimeSecond, _ := strconv.Atoi(strings.Split(newTimeValues[2], ".")[0])
+	newTimeNanoSecond, _ := strconv.Atoi(strings.Split(newTimeValues[2], ".")[1])
+	y, m, d := time.Now().Date()
+	oldTime := time.Date(y, m, d, oldTimeHour, oldTimeMinute, oldTimeSecond, oldTimeNanoSecond, time.UTC)
+	newTime := time.Date(y, m, d, newTimeHour, newTimeMinute, newTimeSecond, newTimeNanoSecond, time.UTC)
+	return newTime.Sub(oldTime).Minutes()
+}
