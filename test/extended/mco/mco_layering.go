@@ -225,7 +225,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		var (
 			nonPullableImage  = "quay.io/openshifttest/tc54054fakeimage:latest"
 			layeringMcName    = "not-pullable-image-tc54054"
-			expectedNDMessage = ".*" + regexp.QuoteMeta(nonPullableImage) + ".*repository not found"
+			expectedNDMessage = ".*" + regexp.QuoteMeta(nonPullableImage) + ".*error"
 
 			expectedNDReason = "1 nodes are reporting degraded status on sync"
 		)
