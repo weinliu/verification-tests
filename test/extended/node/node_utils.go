@@ -20,6 +20,12 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
+type cpuPerfProfile struct {
+	name     string
+	isolated string
+	template string
+}
+
 type liveProbeTermPeriod struct {
 	name                  string
 	namespace             string
@@ -213,6 +219,16 @@ type triggerAuthenticationDescription struct {
 	template   string
 }
 
+func (cpuPerfProfile *cpuPerfProfile) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cpuPerfProfile.template, "-p", "NAME="+cpuPerfProfile.name, "ISOLATED="+cpuPerfProfile.isolated)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (cpuPerfProfile *cpuPerfProfile) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", cpuPerfProfile.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (podWASM *podWASM) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podWASM.template, "-p", "NAME="+podWASM.name, "NAMESPACE="+podWASM.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -303,6 +319,72 @@ func (podNoWkloadCpu *podNoWkloadCpuDescription) create(oc *exutil.CLI) {
 func (podNoWkloadCpu *podNoWkloadCpuDescription) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podNoWkloadCpu.namespace, "pod", podNoWkloadCpu.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func getWorkersList(oc *exutil.CLI) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Fields(output)
+}
+
+func getCpuNum(oc *exutil.CLI, node string) int {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.status.capacity.cpu}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cpuNum, err := strconv.Atoi(output)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Cpu num is: [%d]\n", cpuNum)
+	return cpuNum
+}
+
+func getCgroupVersion(oc *exutil.CLI) string {
+	workerNodes := getWorkersList(oc)
+	cgroupV, err := exutil.DebugNodeWithChroot(oc, workerNodes[0], "/bin/bash", "-c", "stat -fc %T /sys/fs/cgroup")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(string(cgroupV), "tmpfs") {
+		return "tmpfs"
+	} else if strings.Contains(string(cgroupV), "cgroup2fs") {
+		return "cgroup2fs"
+	} else {
+		return cgroupV
+	}
+}
+
+func checkReservedCpu(oc *exutil.CLI, reservedCpu string) {
+	workerNodes := getWorkersList(oc)
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		for _, node := range workerNodes {
+			nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(statusErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\nNode %s Status is %s\n", node, nodeStatus)
+
+			if nodeStatus == "True" {
+				kubeletConf, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "cat /etc/kubernetes/kubelet.conf | grep reservedSystemCPUs")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				//need match : "reservedSystemCPUs": "0-3"
+				cpuStr := `"reservedSystemCPUs": "` + reservedCpu + `"`
+				if strings.Contains(string(kubeletConf), cpuStr) {
+					e2e.Logf("Reserved Cpu: [%s], is expected \n", kubeletConf)
+					crioOutput, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "pgrep crio | while read i; do taskset -cp $i; done")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					crioCpuStr := "current affinity list: " + reservedCpu
+					if strings.Contains(crioOutput, crioCpuStr) {
+						e2e.Logf("crio use CPU: [%s], is expected \n", crioOutput)
+						return true, nil
+					} else {
+						e2e.Logf("crio use CPU: [%s], not expected \n", crioOutput)
+						return false, nil
+					}
+				} else {
+					e2e.Logf("Reserved Cpu: [%s], not expected \n", kubeletConf)
+					return false, nil
+				}
+			} else {
+				e2e.Logf("\n NODE %s IS NOT READY\n", node)
+			}
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check reservedCpu failed!\n"))
 }
 
 // deployment generator function (uses default image from template)
@@ -1131,7 +1213,8 @@ func configExist(oc *exutil.CLI, config []string, configPath string) error {
 }
 
 func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) error {
-	return wait.Poll(10*time.Second, 15*time.Minute, func() (bool, error) {
+	//when mcp master change cgroup from v2 to v1, it takes more than 15 minutes
+	return wait.Poll(10*time.Second, 18*time.Minute, func() (bool, error) {
 		mCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.machineCount}").Output()
 		unmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.unavailableMachineCount}").Output()
 		dmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.degradedMachineCount}").Output()

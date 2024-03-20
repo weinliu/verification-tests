@@ -1333,6 +1333,62 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		err = configExist(oc, registryConfig, configPath)
 		exutil.AssertWaitPollNoErr(err, "registry config is not set as expected")
 	})
+
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-41897-Restricting CPUs for infra and application containers[Disruptive][Slow]", func() {
+		exutil.By("Check cpu core num on the node")
+		workerNodes := getWorkersList(oc)
+		cpu_num := getCpuNum(oc, workerNodes[0])
+		//This case can only run on a node with more than 4 cpu cores
+		if cpu_num <= 4 {
+			g.Skip("This cluster has less than 4 cpu cores, skip the test.")
+		}
+		exutil.By("Test for case OCP-41897")
+		cpuPerformanceprofile := filepath.Join(buildPruningBaseDir, "cpu-performanceprofile.yaml")
+		perfProfile41897 := cpuPerfProfile{
+			name:     "performance-41897",
+			isolated: "",
+			template: cpuPerformanceprofile,
+		}
+		isolatedCpu := "0,5-" + strconv.Itoa(cpu_num-1)
+		perfProfile41897.isolated = isolatedCpu
+
+		exutil.By("1)Create a performanceProfile")
+		//when delete the performanceprofile, only mcp worker will update
+		defer func() {
+			err := checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer perfProfile41897.delete(oc)
+		perfProfile41897.create(oc)
+
+		//for 4.14+, master and worker pool need update to change cgroup from v2 to v1, then worker pool update to apply performanceprofile
+		exutil.By("2)Check the mcp finish updating")
+		//if cgroup is v2, then mcp master and worker need update to change to v1 first
+		cgroupV := getCgroupVersion(oc)
+		if cgroupV == "cgroup2fs" {
+			err := checkMachineConfigPoolStatus(oc, "master")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+			err = checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}
+
+		// the kubelet get generated when the mcp worker update to apply performanceprofile
+		exutil.By("3)Check the kubeletconfig get generated")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeletconfig", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, perfProfile41897.name)).Should(o.BeTrue())
+		e2e.Logf("kubeletconfig exist: [%v], then check the mcp worker finish updating\n", output)
+		err = checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("4)Check the reserved cpu are as expected")
+		// 1) "reservedSystemCPUs": "1-4" from /etc/kubernetes/kubelet.conf
+		// 2) sh-5.1# pgrep systemd |while read i; do taskset -cp $i; done  || results: pid 1's current affinity list: 1-4
+		//isolatedCpu := "0,5-" + strconv.Itoa(cpu_num-1)
+		reservedCpu := "1-4"
+		checkReservedCpu(oc, reservedCpu)
+	})
+
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {
