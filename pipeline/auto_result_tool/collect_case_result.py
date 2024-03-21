@@ -155,13 +155,14 @@ class SummaryClient:
             return True
         if "dial tcp: lookup" in message and "no such host" in message:
             return True
+        if "dial tcp" in message and "i/o timeout" in message:
+            return True
         if "TLS handshake timeout" in message:
             return True
         if "server misbehaving" in message:
             return True
         return False
 
-        
     def get_prow_case_result(self):
         self.logger.info("get_prow_case_result")
         day_number = self.days
