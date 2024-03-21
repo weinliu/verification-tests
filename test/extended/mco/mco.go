@@ -4264,25 +4264,18 @@ nulla pariatur.`
 			nmstateConfigRemote        = NewRemoteFile(node, nmstateConfigFileFullPath)
 			nmstateConfigAppliedRemote = NewRemoteFile(node, nmstateConfigFileAppliedFullPath)
 
-			nmstateBasicConfigTemp = `
-capture:
-  ethernet-nics: interfaces.type=="ethernet"
+			nmstateBasicConfig = `
 desiredState:
   interfaces:
-  - name: "%s"
-    type: ethernet
-    state: up
+  - name: dummytc72025
+    type: dummy
+    state: absent
 `
 		)
 
 		exutil.By(fmt.Sprintf("Create a config file for nmstate in node %s", node.GetName()))
-		logger.Infof("Getting the name of the ethernet interface")
-		cmdOut, err := node.DebugNodeWithChroot("sh", "-c", "nmcli d |grep ethernet |grep connected")
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error executing nmcli to get the interface name")
-		logger.Infof("nmcli command output: %s", cmdOut)
 
-		interfaceName := strings.Split(strings.Trim(cmdOut, " "), " ")[0]
-		configFileContent := fmt.Sprintf(nmstateBasicConfigTemp, interfaceName)
+		logger.Infof("Config content:\n%s", nmstateBasicConfig)
 		defer func() {
 			nmstateConfigRemote.Rm("-f")
 			nmstateConfigAppliedRemote.Rm("-f")
@@ -4291,14 +4284,14 @@ desiredState:
 			o.Expect(err).NotTo(o.HaveOccurred(), "Error restarting the nsmtate service in node %s", node.GetName())
 		}()
 		logger.Infof("Creating the config file")
-		o.Expect(nmstateConfigRemote.Create([]byte(configFileContent), 0o600)).To(o.Succeed(),
+		o.Expect(nmstateConfigRemote.Create([]byte(nmstateBasicConfig), 0o600)).To(o.Succeed(),
 			"Error creating the basic config file %s in node %s", nmstateConfigFileFullPath, node.GetName())
 
 		nmstateConfigRemote.PrintDebugInfo()
 		logger.Infof("OK!\n")
 
 		exutil.By(fmt.Sprintf("Restart nmstate service in node %s", node.GetName()))
-		_, err = node.DebugNodeWithChroot("systemctl", "restart", "nmstate")
+		_, err := node.DebugNodeWithChroot("systemctl", "restart", "nmstate")
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error restarting the nsmtate service in node %s", node.GetName())
 		logger.Infof("OK!\n")
 
