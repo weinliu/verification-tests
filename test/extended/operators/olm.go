@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.SkipNoOLMCore(oc)
 	})
 
-	g.It("Author:jiazha-Critical-72192-OLM is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
+	g.It("Author:jiazha-LEVEL0-Critical-72192-OLM is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
 		exutil.By("1) get marketplace and OLM pods' image/imagePullPolicy")
 		allImageMap := make(map[string]string)
 		podMap := make(map[string]string)
@@ -158,7 +158,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The olm-operator pod didn't recover after 180s: %s", status))
 	})
 
-	g.It("Author:jiazha-High-72013-Creating an OperatorGroup with 'name: cluster' breaks the whole cluster", func() {
+	g.It("Author:jiazha-LEVEL0-High-72013-Creating an OperatorGroup with 'name: cluster' breaks the whole cluster", func() {
 		exutil.By("1) install a custom OG with the name cluster in the default project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogTemplate := filepath.Join(buildPruningBaseDir, "og-allns.yaml")
@@ -3503,7 +3503,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("ConnectedOnly-Author:jiazha-Critical-22070-support grpc sourcetype [Serial]", func() {
+	g.It("ConnectedOnly-Author:jiazha-LEVEL0-Critical-22070-support grpc sourcetype [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
@@ -5633,7 +5633,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: bandrade@redhat.com
-	g.It("Author:bandrade-Critical-41026-OCS should only one installplan generated when creating subscription", func() {
+	g.It("Author:bandrade-LEVEL0-Critical-41026-OCS should only one installplan generated when creating subscription", func() {
 
 		var (
 			itName              = g.CurrentSpecReport().FullText()
