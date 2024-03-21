@@ -15,8 +15,8 @@ objects:
           iamInstanceProfile: ${PROFILE}
           instanceType: ${INSTANCETYPE}
           failureDomain: ${ZONE}
-          cloudInit:
-            insecureSkipSecretsManager: true
+          ignition:
+            storageType: UnencryptedUserData
           ami:
             id: ${AMI}
           subnet:
