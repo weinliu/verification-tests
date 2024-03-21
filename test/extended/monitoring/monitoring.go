@@ -750,6 +750,59 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "up", 2*platformLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-72560-Replace oauth-proxy container with kube-rbac-proxy in Alertmanager pods", func() {
+		g.By("check new configs added to alertmanager main")
+		checkAlertmanager, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager", "main", "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-web\")]}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"--secure-listen-address=0.0.0.0:9095"`))
+		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"--upstream=http://127.0.0.1:9093"`))
+		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"--config-file=/etc/kube-rbac-proxy/config.yaml"`))
+		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"name":"kube-rbac-proxy-web"`))
+		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"mountPath":"/etc/kube-rbac-proxy"`))
+		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"name":"secret-alertmanager-kube-rbac-proxy-web"`))
+
+		g.By("check new secret added and old one removed")
+		checkSecret, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "alertmanager-kube-rbac-proxy-web", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSecret).NotTo(o.ContainSubstring("not found"))
+		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "alertmanager-main-proxy", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSecret).To(o.ContainSubstring("not found"))
+
+		g.By("check alertmanager pods, alertmanager-proxy container is removed")
+		checkPO, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "alertmanager-main-0", "-ojsonpath={.spec.containers[*].name}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkPO).NotTo(o.ContainSubstring("alertmanager-proxy"))
+
+		g.By("check alertmanager-main sa, annotations should be removed")
+		checkSA, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceAccount", "alertmanager-main", "-ojsonpath={.metadata.annotations}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkSA).To(o.Equal(""))
+
+		g.By("check role, monitoring-alertmanager-edit add new resourceNames")
+		checkRole, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("role", "monitoring-alertmanager-edit", "-ojsonpath={.rules}", "-n", "openshift-monitoring").Output()
+		o.Expect(checkRole).To(o.ContainSubstring(`"resourceNames":["main"]`))
+		o.Expect(checkRole).To(o.ContainSubstring(`"resources":["alertmanagers/api"]`))
+		o.Expect(checkRole).To(o.ContainSubstring(`"verbs":["*"]`))
+
+		g.By("test user access to alertmanager")
+		g.By("Get token of current user")
+		token := oc.UserConfig().BearerToken
+
+		g.By("Get route of alertmanager-main")
+		host, hostErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "alertmanager-main", "-ojsonpath={.spec.host}", "-n", "openshift-monitoring").Output()
+		o.Expect(hostErr).NotTo(o.HaveOccurred())
+
+		g.By("test role can NOT access to alertmanager")
+		// % curl -H "Authorization: Bearer $TOKEN" -k "https://$HOST/api/v2/receivers"
+		checkMetric(oc, "https://"+host+"/api/v2/receivers", token, "Forbidden", 2*platformLoadTime)
+
+		g.By("add role access to alertmanager")
+		admErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "monitoring-alertmanager-edit", oc.Username()).Execute()
+		o.Expect(admErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "monitoring-alertmanager-edit", oc.Username()).Execute()
+
+		g.By("test role access to alertmanager")
+		// % curl -H "Authorization: Bearer $TOKEN" -k "https://$HOST/api/v2/receivers"
+		checkMetric(oc, "https://"+host+"/api/v2/receivers", token, `"name":"Watchdog"`, 2*platformLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
