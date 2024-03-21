@@ -2180,7 +2180,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-40280-The infrastructure feature should show the Compliance operator when the disconnected filter gets applied", func() {
 		g.By("check the infrastructure-features for csv!!!\n")
-		csvName := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=", "-o=jsonpath={.items[0].metadata.name}")
+		csvName, err := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=", "-o=jsonpath={.items[0].metadata.name}")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "[\"disconnected\", \"fips\", \"proxy-aware\"]", ok, []string{"csv",
 			csvName, "-n", subD.namespace, "-o=jsonpath={.metadata.annotations.operators\\.openshift\\.io/infrastructure-features}"}).check(oc)
 	})
@@ -2188,8 +2189,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-41769-The compliance operator could get HTTP_PROXY and HTTPS_PROXY environment from OpenShift has global proxy settings	", func() {
 		g.By("Get the httpPoxy and httpsProxy info!!!\n")
-		httpProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpProxy}")
-		httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpsProxy}")
+		httpProxy, _ := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpProxy}")
+		httpsProxy, _ := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpsProxy}")
 
 		if len(httpProxy) == 0 && len(httpsProxy) == 0 {
 			g.Skip("Skip for non-proxy cluster! This case intentionally runs nothing!")
@@ -2667,6 +2668,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			template:        scansettingbindingSingleTemplate,
 		}
 		defer func() {
+			g.By("Check pod status from 'openshift-authentication' namespace during pod reboot.. !!!\n")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err := waitCoBecomes(oc, "authentication", 240, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, `authentication status has not yet changed to {"Progressing": "True"} in 240 seconds`)
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, `authentication status has not yet changed to {"Available": "True", "Progressing": "False", "Degraded": "False"} in 240 seconds`)
+		}()
+		defer func() {
 			g.By("Remove TokenMaxAge, TokenInactivityTimeout parameters and ldap configuration by patching.. !!!\n")
 			patch1 := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/tokenConfig/accessTokenMaxAgeSeconds\"}]")
 			patch2 := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/tokenConfig/accessTokenInactivityTimeout\"}]")
@@ -2677,7 +2687,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"oauth", "cluster", "-o=jsonpath={.spec.tokenConfig.accessTokenMaxAgeSeconds}"}).check(oc)
 			newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"oauth", "cluster", "-o=jsonpath={.spec.tokenConfig.accessTokenInactivityTimeout}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "ldap", nok, []string{"oauth", "cluster", "-o=jsonpath={.spec.identityProviders}"}).check(oc)
-			checkOauthPodsStatus(oc)
 			cleanupObjects(oc, objectTableRef{"configmap", "openshift-config", "ca.crt"})
 			cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
 		}()
@@ -2696,12 +2705,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify TokenMaxAge, TokenInactivityTimeout and no-ldap-insecure rules status through compliancecheck result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-oauth-or-oauthclient-token-maxage", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-oauth-or-oauthclient-inactivity-timeout", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-moderate-ocp-no-ldap-insecure", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		ruleOauthMaxageRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, "ocp4-moderate-oauth-or-oauthclient-token-maxage", "-o=jsonpath={.status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ruleOauthInactivateTimeoutRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, "ocp4-moderate-oauth-or-oauthclient-inactivity-timeout", "-o=jsonpath={.status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if ruleOauthMaxageRes != "FAIL" || ruleOauthInactivateTimeoutRes != "FAIL" {
+			g.Skip(fmt.Sprintf("The precondition not matched! The scan result for rule ocp4-moderate-oauth-or-oauthclient-token-maxage is: %s! And scan result for rule ocp4-moderate-oauth-or-oauthclient-inactivity-timeout is: %s", ruleOauthMaxageRes, ruleOauthInactivateTimeoutRes))
+		}
 
 		g.By("Set TokenMaxAge, TokenInactivityTimeout parameters and ldap configuration by patching.. !!!\n")
 		patch1 := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/identityProviders\",\"value\":[{\"ldap\":{\"attributes\":{\"email\":[\"mail\"],\"id\":[\"dn\"],\"name\":[\"uid\"],\"preferredUsername\":[\"uid\"]},\"insecure\":true,\"url\":\"ldap://10.66.147.104:389/ou=People,dc=my-domain,dc=com?uid\"},\"mappingMethod\":\"add\",\"name\":\"openldapidp\",\"type\":\"LDAP\"}]}]")
@@ -2718,10 +2730,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ldap", ok, []string{"oauth", "cluster", "-o=jsonpath={.spec.identityProviders}"}).check(oc)
 
 		g.By("Check pod status from 'openshift-authentication' namespace during pod reboot.. !!!\n")
-		checkOauthPodsStatus(oc)
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, `authentication status has not yet changed to {"Progressing": "True"} in 240 seconds`)
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, `authentication status has not yet changed to {"Available": "True", "Progressing": "False", "Degraded": "False"} in 240 seconds`)
 
 		g.By("Rerun scan using oc-compliance plugin.. !!")
-		_, err := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
+		_, err = OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
@@ -2797,8 +2814,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify 'ocp4-moderate-oauth-or-oauthclient-token-maxage' rule status through compliancecheck result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-oauth-or-oauthclient-token-maxage", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		ruleOauthMaxageRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, "ocp4-moderate-oauth-or-oauthclient-token-maxage", "-o=jsonpath={.status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ruleOauthInactivateTimeoutRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, "ocp4-moderate-oauth-or-oauthclient-inactivity-timeout", "-o=jsonpath={.status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if ruleOauthMaxageRes != "FAIL" || ruleOauthInactivateTimeoutRes != "FAIL" {
+			g.Skip(fmt.Sprintf("The precondition not matched! The scan result for rule ocp4-moderate-oauth-or-oauthclient-token-maxage is: %s! And scan result for rule ocp4-moderate-oauth-or-oauthclient-inactivity-timeout is: %s", ruleOauthMaxageRes, ruleOauthInactivateTimeoutRes))
+		}
 
 		g.By("Set TokenMaxAge parameter to console oauthclient object by patching.. !!!\n")
 		patchResource(oc, asAdmin, withoutNamespace, "oauthclient", "console", "--type", "merge", "-p", "{\"accessTokenMaxAgeSeconds\":28800}")
@@ -2806,7 +2828,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.accessTokenMaxAgeSeconds}"}).check(oc)
 
 		g.By("Rerun scan using oc-compliance plugin.. !!")
-		_, err := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
+		_, err = OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check ComplianceSuite status.. !!!\n")

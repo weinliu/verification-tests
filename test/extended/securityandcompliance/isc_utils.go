@@ -92,7 +92,8 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 
 func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName string, dr describerResrouce) {
 	newCheck("expect", asAdmin, withoutNamespace, compare, "AtLatestKnown", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
-	installedCSV := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}")
+	installedCSV, err := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}")
+	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(installedCSV).NotTo(o.BeEmpty())
 	if strings.Compare(sub.installedCSV, installedCSV) != 0 {
 		sub.installedCSV = installedCSV
@@ -172,7 +173,7 @@ func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, pres
 	return true
 }
 
-func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
+func getResourceToBeReady(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	err := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)

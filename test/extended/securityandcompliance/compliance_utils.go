@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1151,4 +1152,48 @@ func assertCompliancescanDone(oc *exutil.CLI, namespace string, parameters ...st
 		e2e.Logf("The result of \"oc get pvc -n %s\" is: %s", namespace, resPvc)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The compliance scan not finished in the limited timer"))
+}
+
+func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
+	errCo := wait.Poll(20*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		gottenStatus := getCoStatus(oc, coName, expectedStatus)
+		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+		if eq {
+			eq := reflect.DeepEqual(expectedStatus, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+			if eq {
+				// For True False False, we want to wait some bit more time and double check, to ensure it is stably healthy
+				time.Sleep(100 * time.Second)
+				gottenStatus := getCoStatus(oc, coName, expectedStatus)
+				eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+				if eq {
+					e2e.Logf("Given operator %s becomes available/non-progressing/non-degraded", coName)
+					return true, nil
+				}
+			} else {
+				e2e.Logf("Given operator %s becomes %s", coName, gottenStatus)
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if errCo != nil {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	return errCo
+}
+
+func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
+	newStatusToCompare := make(map[string]string)
+	for key := range statusToCompare {
+		args := fmt.Sprintf(`-o=jsonpath={.status.conditions[?(.type == '%s')].status}`, key)
+		status, _ := getResource(oc, asAdmin, withoutNamespace, "co", coName, args)
+		newStatusToCompare[key] = status
+	}
+	return newStatusToCompare
+}
+
+// Get something existing resource
+func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
+	return doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 }
