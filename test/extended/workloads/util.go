@@ -1949,8 +1949,8 @@ func getSha256SumFromFile(fileName string) string {
 	return fileSum
 }
 
-func getTimeFromNode(oc *exutil.CLI, nodeName string) time.Time {
-	timeStr, _, dErr := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "--", "chroot", "/host", "date", "+%Y-%m-%dT%H:%M:%SZ").Outputs()
+func getTimeFromNode(oc *exutil.CLI, nodeName string, ns string) time.Time {
+	timeStr, _, dErr := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", ns, "--", "chroot", "/host", "date", "+%Y-%m-%dT%H:%M:%SZ").Outputs()
 	o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", nodeName)
 	layout := "2006-01-02T15:04:05Z"
 	returnTime, perr := time.Parse(layout, timeStr)

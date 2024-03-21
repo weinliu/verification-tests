@@ -102,8 +102,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-70982-must-gather support since and since-time flags", func() {
+	g.It("NonPreRelease-Longduration-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-70982-must-gather support since and since-time flags", func() {
 		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-70982").Output()
+		exutil.By("Set namespace as privileged namespace")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		exutil.By("1. Test must-gather with correct since format should succeed.\n")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since=1m", "--dest-dir=/tmp/must-gather-70982").Output()
 		if err != nil {
@@ -114,7 +116,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		timeNow := getTimeFromNode(oc, workerNodeList[0])
+		timeNow := getTimeFromNode(oc, workerNodeList[0], oc.Namespace())
 		e2e.Logf("The time now is  %v", timeNow)
 		timeStampOne := timeNow.Add(time.Minute * -5).Format("15:04:05")
 		e2e.Logf("The time stamp is  %v", timeStampOne)
@@ -126,7 +128,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		checkMustgatherLogTime("/tmp/must-gather-70982/mustgather2", workerNodeList[0], timeStampOne)
 
 		exutil.By("3. Test must-gather with correct since-time format should succeed.\n")
-		now := getTimeFromNode(oc, workerNodeList[0])
+		now := getTimeFromNode(oc, workerNodeList[0], oc.Namespace())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--since-time="+now.Add(time.Minute*-2).Format("2006-01-02T15:04:05Z"), "--dest-dir=/tmp/must-gather-70982").Output()
 		if err != nil {
 			e2e.Failf("Must-gather falied with error %v", err)
@@ -149,11 +151,13 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-71212-oc adm inspect should support since and sincetime", func() {
 		defer exec.Command("bash", "-c", "rm -rf /tmp/inspect71212").Output()
+		exutil.By("Set namespace as privileged namespace")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		exutil.By("1. Test inspect with correct since-time format should succeed and gather correct logs.\n")
 		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		now := getTimeFromNode(oc, workerNodeList[0])
+		now := getTimeFromNode(oc, workerNodeList[0], oc.Namespace())
 		timeStamp := now.Add(time.Minute * -5).Format("2006-01-02T15:04:05Z")
 
 		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-multus", "-l", "app=multus", "-o=jsonpath={.items[0].metadata.name}").Output()
