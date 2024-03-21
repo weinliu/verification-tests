@@ -1852,7 +1852,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: system-ocp44295/g' `grep -rl \"name: system\" %s`", tmpPath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: system/namespace: %s/g'  `grep -rl \"namespace: system\" %s`", nsSystem, tmpPath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: memcached-operator-44295-system/namespace: %s/g'  `grep -rl \"namespace: memcached-operator-44295-system\" %s`", nsOperator, tmpPath)).Output()
-		err = copy(filepath.Join(dataPath, "memcached_controller.go"), filepath.Join(tmpPath, "controllers", "memcached44295_controller.go"))
+		err = copy(filepath.Join(dataPath, "memcached_controller.go"), filepath.Join(tmpPath, "internal", "controller", "memcached44295_controller.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if !upstream {
