@@ -1538,12 +1538,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.By("Create a namespace with a long name")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().Run("delete").Args("project", testNs, "--ignore-not-found").Execute()
 		defer func() {
 			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
 			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
 		}()
-
-		defer oc.AsAdmin().Run("delete").Args("project", testNs, "--ignore-not-found").Execute()
 		nsCreateErr := oc.WithoutNamespace().Run("new-project").Args(testNs).Execute()
 		o.Expect(nsCreateErr).NotTo(o.HaveOccurred())
 
