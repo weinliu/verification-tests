@@ -617,6 +617,16 @@ func isAzurePrivate(oc *exutil.CLI) bool {
 	return false
 }
 
+func isAzureStack(oc *exutil.CLI) bool {
+	cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.ToLower(cloudName) == "azurestackcloud" {
+		e2e.Logf("This is Azure Stack cluster.")
+		return true
+	}
+	return false
+}
+
 func getAzureIntSvcResrouceGroup(oc *exutil.CLI) (string, error) {
 	azureResourceGroup, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.networkResourceGroupName}").Output()
 	if err != nil {

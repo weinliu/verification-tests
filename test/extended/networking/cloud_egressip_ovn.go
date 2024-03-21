@@ -95,6 +95,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}
 		case "azure":
 			e2e.Logf("\n Azure is detected, running the case on Azure\n")
+			if isAzureStack(oc) {
+				// Due to bug https://issues.redhat.com/browse/OCPBUGS-5860 and was closed as won't do, skip azure stack cluster.
+				g.Skip("This is Azure Stack cluster,skip the tests!")
+			}
 			if ipEchoURL == "" {
 				// If an int-svc instance with external IP found, IpEcho service will be installed on the int-svc instance
 				// otherwise, use tcpdump to verify egressIP
