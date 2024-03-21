@@ -3162,7 +3162,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}()
 
 		exutil.By("step: init Go Based Operator")
-		output, err := operatorsdkCLI.Run("init").Args("--domain=httpproxy.com", "--repo=github.com/example-inc/memcached-operator").Output()
+		output, err := operatorsdkCLI.Run("init").Args("--domain=httpproxy.com", "--repo=github.com/example-inc/memcached-operator", "--plugins=go/v4").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("create api"))
 
@@ -3186,7 +3186,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// copy controllers/memcached44553_controller.go
-		err = copy(filepath.Join(dataPath, "memcached44553_controller.go"), filepath.Join(tmpPath, "controllers", "memcached44553_controller.go"))
+		err = copy(filepath.Join(dataPath, "memcached44553_controller.go"), filepath.Join(tmpPath, "internal", "controller", "memcached44553_controller.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// copy api/v1/memcached44553_types.go
 		err = copy(filepath.Join(dataPath, "memcached44553_types.go"), filepath.Join(tmpPath, "api", "v1", "memcached44553_types.go"))
@@ -3204,11 +3204,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
 
-		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/operator-framework/operator-lib/proxy").Output()
-		exec.Command("bash", "-c", "cd "+tmpPath+" && go get k8s.io/apimachinery/pkg/util/diff@v0.24.0").Output()
-		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/evanphx/json-patch").Output()
-		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/example-inc/memcached-operator").Output()
-		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/google/gnostic/openapiv2").Output()
+		// replace the go.sum & go.mod
+		err = copy(filepath.Join(dataPath, "44553gosum"), filepath.Join(tmpPath, "go.sum"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "44553gomod"), filepath.Join(tmpPath, "go.mod"))
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		podmanCLI := container.NewPodmanCLI()
 		podmanCLI.ExecCommandPath = tmpPath
