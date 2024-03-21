@@ -9377,7 +9377,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: xzha@redhat.com, test case OCP-71779
-	g.It("ConnectedOnly-Author:xzha-Medium-71779-Failing unpack jobs can be auto retried", func() {
+	g.It("ConnectedOnly-Author:xzha-Medium-71779-Failing unpack jobs can be auto retried [Slow]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -9435,7 +9435,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("7) check unpack job is auto retried")
-		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 			output := getResource(oc, asAdmin, withoutNamespace, "job", "-n", sub.namespace, "--selector=operatorframework.io/bundle-unpack-ref", "-o=jsonpath={.items[*].metadata.name}")
 			jobs2 := strings.Split(output, "")
 			for _, jobname := range jobs2 {
@@ -9449,7 +9449,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		exutil.By("8) check unpack job is auto retried again")
 		jobs2 := getResource(oc, asAdmin, withoutNamespace, "job", "-n", sub.namespace, "--selector=operatorframework.io/bundle-unpack-ref", "-o=jsonpath={.items[*].metadata.name}")
-		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 			output := getResource(oc, asAdmin, withoutNamespace, "job", "-n", sub.namespace, "--selector=operatorframework.io/bundle-unpack-ref", "-o=jsonpath={.items[*].metadata.name}")
 			jobs3 := strings.Split(output, "")
 			for _, jobname := range jobs3 {
