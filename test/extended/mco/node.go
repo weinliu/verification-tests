@@ -928,7 +928,14 @@ func (n *Node) removeIPTablesRulesByRegexp(ipv6 bool, regx string) ([]string, er
 		logger.Infof("%s. Removing %s rule: %s", n.GetName(), command, rule)
 		removeCommand := strings.Replace(rule, "-A", "-D", 1)
 		output, err := n.DebugNodeWithChroot(append([]string{command}, splitCommandString(removeCommand)...)...)
-		if err != nil {
+		// OCPQE-20258 if the rule is removed already, retry will be failed as well. add this logic to catach this error
+		// if the error message indicates the rule does not exist, i.e. it's already removed, we consider the retry is succeed
+		alreadyRemoved := strings.Contains(output, "does a matching rule exist in that chain")
+		if alreadyRemoved {
+			logger.Warnf("iptable rule %s is already removed", rule)
+		}
+
+		if err != nil && !alreadyRemoved {
 			logger.Errorf("Output: %s", output)
 			return removedRules, err
 		}
