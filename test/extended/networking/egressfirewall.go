@@ -897,8 +897,8 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		exutil.By("3. Check www.facebook.com is blocked \n")
 		o.Eventually(func() bool {
-			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
-			return err != nil
+			_, stderr, _ := e2eoutput.RunHostCmdWithFullOutput(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
+			return stderr != ""
 		}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work as expected!!")
 
 		exutil.By("4. Check www.google.com is allowed \n")
@@ -928,7 +928,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(checkAclErr, fmt.Sprintf("ACLs were not synced correctly!"))
+		exutil.AssertWaitPollNoErr(checkAclErr, "ACLs were not synced correctly!")
 
 		exutil.By("6. Restart OVNK nodes\n")
 		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
@@ -954,12 +954,12 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(checkAclErr, fmt.Sprintf("ACLs were not synced correctly!"))
+		exutil.AssertWaitPollNoErr(checkAclErr, "ACLs were not synced correctly!")
 
 		exutil.By("8. Check egressfirewall rules still work correctly after restart \n")
 		o.Eventually(func() bool {
-			_, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
-			return err != nil
+			_, stderr, _ := e2eoutput.RunHostCmdWithFullOutput(pod1.namespace, pod1.name, "curl -I -k https://www.facebook.com --connect-timeout 5")
+			return stderr != ""
 		}, "120s", "10s").Should(o.BeTrue(), "Deny rule did not work correctly after restart!!")
 
 		o.Eventually(func() bool {
