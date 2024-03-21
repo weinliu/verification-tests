@@ -97,15 +97,27 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Deploy loki operator")
+		// check if Loki Operator exists
 		namespace := oc.Namespace()
 		Lokiexisting = checkOperatorStatus(oc, lokiNS, lokiPackageName)
 
 		// Don't delete if Loki Operator existed already before NetObserv
+		//  unless it is not using the 'stable' operator
 		// If Loki Operator was installed by NetObserv tests,
-		// it will install and uninstall after each spec/test.
+		//  it will install and uninstall after each spec/test.
 		if !Lokiexisting {
 			LO.SubscribeOperator(oc)
 			waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
+		} else {
+			channelName, err := checkOperatorChannel(oc, lokiNS, lokiPackageName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if channelName != "stable" {
+				e2e.Logf("found %s channel for loki operator, removing and reinstalling with %s channel instead", channelName, lokiSource.Channel)
+				LO.uninstallOperator(oc)
+				LO.SubscribeOperator(oc)
+				waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
+				Lokiexisting = false
+			}
 		}
 
 		g.By("Deploy lokiStack")

@@ -316,6 +316,14 @@ func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 	}
 }
 
+func checkOperatorChannel(oc *exutil.CLI, operatorNamespace string, operatorName string) (string, error) {
+	channelName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.spec.channel}").Output()
+	if err != nil {
+		return "", err
+	}
+	return channelName, nil
+}
+
 func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName string) bool {
 	err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", operatorNamespace).Execute()
 	if err == nil {
