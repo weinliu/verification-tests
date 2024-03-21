@@ -2,6 +2,7 @@ package apiserverauth
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -757,6 +758,82 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if !strings.Contains(challenge3, "test-example.com") || err != nil {
 			e2e.Failf("challenge3 has not output as expected.")
 		}
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-Low-63583-Check operand metrics by using user-workload-monitoring [Serial]", func() {
+		const (
+			operandNamespace                = "cert-manager"
+			clusterMonitoringNamespace      = "openshift-monitoring"
+			clusterMonitoringConfigMapName  = "cluster-monitoring-config"
+			userWorkloadMonitoringNamespace = "openshift-user-workload-monitoring"
+			metricsQueryURL                 = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query"
+		)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+
+		g.By("Check if the cluster-monitoring ConfigMap exists")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", clusterMonitoringConfigMapName, "-n", clusterMonitoringNamespace).Output()
+		if err != nil {
+			e2e.Logf("Got error(%v) when trying to get 'configmap/%s', command output: %s", err, clusterMonitoringConfigMapName, output)
+			o.Expect(output).To(o.ContainSubstring("not found"))
+		} else {
+			e2e.Logf("The cluster-monitoring ConfigMap already exists, backup the origin YAML to revert")
+			originConfigMapFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", clusterMonitoringConfigMapName, "-n", clusterMonitoringNamespace, "-oyaml").OutputToFile("63583-origin-cm.yaml")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", clusterMonitoringConfigMapName, "-n", clusterMonitoringNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer func() {
+				e2e.Logf("Revert to the origin ConfigMap")
+				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", originConfigMapFile).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("Delete backup-ed YAML file")
+				os.Remove(originConfigMapFile)
+			}()
+		}
+
+		g.By("Enable monitoring for user-defined projects")
+		configFile := filepath.Join(buildPruningBaseDir, "cluster-monitoring-config.yaml")
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("Delete created ConfigMap")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", clusterMonitoringConfigMapName, "-n", clusterMonitoringNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, userWorkloadMonitoringNamespace, 10*time.Second, 120*time.Second)
+
+		g.By("Create Service Monitor to collect metrics")
+		serviceMonitorFile := filepath.Join(buildPruningBaseDir, "servicemonitor.yaml")
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-n", operandNamespace, "-f", serviceMonitorFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("Delete created ServiceMonitor")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("servicemonitor", "cert-manager", "-n", operandNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("Prepare Prometheus SA token for making queries")
+		token, err := getSAToken(oc, "prometheus-k8s", clusterMonitoringNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+
+		g.By("Query metrics from HTTP API")
+		queryString := `query={endpoint="tcp-prometheus-servicemonitor"}`
+		cmd := fmt.Sprintf(`curl -s -S -k -H "Authorization: Bearer %s" %s --data-urlencode '%s'`, token, metricsQueryURL, queryString)
+		oc.NotShowInfo()
+		statusErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			output, err = exutil.RemoteShPod(oc, clusterMonitoringNamespace, "prometheus-k8s-0", "sh", "-c", cmd)
+			if !strings.Contains(output, `"status":"success"`) || !strings.Contains(output, `"namespace":"`+operandNamespace+`"`) || err != nil {
+				return false, nil
+			}
+			e2e.Logf("Query succeeded, metrics results: %s\n", output)
+			return true, nil
+		})
+		oc.SetShowInfo()
+		if statusErr != nil {
+			e2e.Logf("Metrics results are not as expected: %s\n", output)
+		}
+		exutil.AssertWaitPollNoErr(statusErr, "timed out after 180s waiting query to be success and return expected results")
 	})
 
 	// author: yuewu@redhat.com
