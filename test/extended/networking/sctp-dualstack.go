@@ -499,4 +499,76 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			checkSCTPResultPASS(oc, ns, sctpServerPodName, sctpClientPodname, nodeIP1, sctpNodePort)
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-Medium-29645-Networkpolicy allow SCTP Client. [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			sctpClientPod       = filepath.Join(buildPruningBaseDir, "sctp/sctpclient.yaml")
+			sctpServerPod       = filepath.Join(buildPruningBaseDir, "sctp/sctpserver.yaml")
+			sctpModule          = filepath.Join(buildPruningBaseDir, "sctp/load-sctp-module.yaml")
+			defaultDenyPolicy   = filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
+			allowSCTPPolicy     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-sctpclient.yaml")
+			sctpServerPodName   = "sctpserver"
+			sctpClientPodname   = "sctpclient"
+		)
+		exutil.By("Preparing the nodes for SCTP")
+		prepareSCTPModule(oc, sctpModule)
+
+		exutil.By("Setting privileges on the namespace")
+		ns := oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		exutil.By("create sctpClientPod")
+		createResourceFromFile(oc, ns, sctpClientPod)
+		err1 := waitForPodWithLabelReady(oc, ns, "name=sctpclient")
+		exutil.AssertWaitPollNoErr(err1, "sctpClientPod is not running")
+
+		exutil.By("create sctpServerPod")
+		createResourceFromFile(oc, ns, sctpServerPod)
+		err2 := waitForPodWithLabelReady(oc, ns, "name=sctpserver")
+		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("Verify sctp server pod can be accessed")
+		var sctpServerIPv6, sctpServerIPv4, sctpServerIP string
+		if ipStackType == "dualstack" {
+			sctpServerIPv6, sctpServerIPv4 = getPodIP(oc, ns, sctpServerPodName)
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv4, sctpServerPodName, sctpClientPodname, true)
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv6, sctpServerPodName, sctpClientPodname, true)
+		} else {
+			sctpServerIP, _ = getPodIP(oc, ns, sctpServerPodName)
+			verifySctpConnPod2IP(oc, ns, sctpServerIP, sctpServerPodName, sctpClientPodname, true)
+		}
+
+		exutil.By("create default deny ingress type networkpolicy")
+		createResourceFromFile(oc, ns, defaultDenyPolicy)
+		output, err := oc.Run("get").Args("networkpolicy", "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("default-deny-ingress"))
+
+		exutil.By("Verify sctp server pod was blocked")
+		if ipStackType == "dualstack" {
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv4, sctpServerPodName, sctpClientPodname, false)
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv6, sctpServerPodName, sctpClientPodname, false)
+		} else {
+			verifySctpConnPod2IP(oc, ns, sctpServerIP, sctpServerPodName, sctpClientPodname, false)
+		}
+
+		exutil.By("Create allow deny sctp client networkpolicy")
+		createResourceFromFile(oc, ns, allowSCTPPolicy)
+		output, err = oc.Run("get").Args("networkpolicy", "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allowsctpclient"))
+
+		exutil.By("Verify sctp server pod can be accessed again")
+		if ipStackType == "dualstack" {
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv4, sctpServerPodName, sctpClientPodname, true)
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv6, sctpServerPodName, sctpClientPodname, true)
+		} else {
+			verifySctpConnPod2IP(oc, ns, sctpServerIP, sctpServerPodName, sctpClientPodname, true)
+		}
+
+	})
 })

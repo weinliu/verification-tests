@@ -3608,3 +3608,38 @@ func checkNodeAccessibilityFromAPod(oc *exutil.CLI, nodeName, ns, podName string
 	}
 	return true
 }
+
+func verifySctpConnPod2IP(oc *exutil.CLI, namespace, sctpServerPodIP, sctpServerPodName, sctpClientPodname string, pass bool) {
+	e2e.Logf("sctpserver pod start to wait for sctp traffic")
+	msg, err := e2eoutput.RunHostCmdWithRetries(namespace, sctpServerPodName, "ps aux | grep sctp", 3*time.Second, 30*time.Second)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp") {
+		e2e.Logf("sctpserver pod is already listening on port 30102.")
+	} else {
+		cmdNcat, _, _, _ := oc.Run("exec").Args("-n", namespace, sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+		defer cmdNcat.Process.Kill()
+		e2e.Logf("check sctp process enabled in the sctp server pod")
+		o.Eventually(func() string {
+			msg, err := e2eoutput.RunHostCmdWithRetries(namespace, sctpServerPodName, "ps aux | grep sctp", 3*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return msg
+		}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
+	}
+
+	e2e.Logf("sctpclient pod start to send sctp traffic")
+	e2eoutput.RunHostCmd(namespace, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+
+	e2e.Logf("server sctp process will end after get sctp traffic from sctp client")
+	if pass {
+		o.Eventually(func() string {
+			msg, err := e2eoutput.RunHostCmdWithRetries(namespace, sctpServerPodName, "ps aux | grep sctp", 3*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return msg
+		}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
+	} else {
+		msg, err := e2eoutput.RunHostCmd(namespace, sctpServerPodName, "ps aux | grep sctp")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process ended after get sctp traffic from sctp client")
+	}
+
+}
