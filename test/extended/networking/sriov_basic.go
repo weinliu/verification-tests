@@ -411,6 +411,10 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 
 		for _, data := range testData {
 			data := data
+			// skip bcm nics: OCPBUGS-30909
+			if strings.Contains(data.Name, "bcm") {
+				continue
+			}
 			// Create VF on with given device
 			policyName := data.Name
 			networkName := data.Name + "dpdk" + "net"
