@@ -9,7 +9,7 @@ let normal_user:any, normal_user_passwd:any, admin_user:any, admin_user_passwd:a
 
 describe('pod log page', () => {
   before(() => {
-    const up_pair = Cypress.env('LOGIN_UP_PAIR').split(',');
+    const up_pair = Cypress.env('LOGIN_USERS').split(',');
     const [a, b] = up_pair;
     normal_user = a.split(':')[0];
     normal_user_passwd = a.split(':')[1];

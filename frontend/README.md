@@ -35,10 +35,8 @@ in order to run Cypress tests, we need to export some environment variables that
 export CYPRESS_BASE_URL=https://<console_route_spec_host>
 export CYPRESS_LOGIN_IDP=flexy-htpasswd-provider
 **[Note] Use `flexy-htpasswd-provider` above when running tests on flexy installed clusters and using any user other than kubeadmin. Use `kube:admin` when running tests as kubeadmin
-export CYPRESS_LOGIN_USERNAME=testuser
-export CYPRESS_LOGIN_PASSWORD=testpassword
+export CYPRESS_LOGIN_USERS=USER1:Password1,USER2:Password2,USER3:Password3
 export CYPRESS_KUBECONFIG_PATH=/path/to/kubeconfig
-export CYPRESS_LOGIN_UP_PAIR=uiauto1:redhat(optional)
 ```
 ### Start Cypress
 we can either open Cypress GUI(open) or run Cypress in headless mode(run)

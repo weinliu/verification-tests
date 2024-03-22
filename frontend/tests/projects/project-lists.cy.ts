@@ -7,7 +7,7 @@ let login_user_one:any, login_passwd_one:any, login_user_two:any, login_passwd_t
 
 describe('project list tests', () => {
   before(() => {
-    const up_pair = Cypress.env('LOGIN_UP_PAIR').split(',');
+    const up_pair = Cypress.env('LOGIN_USERS').split(',');
     const [a, b] = up_pair;
     login_user_one = a.split(':')[0];
     login_passwd_one = a.split(':')[1];

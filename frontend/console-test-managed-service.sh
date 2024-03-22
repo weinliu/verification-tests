@@ -35,9 +35,7 @@ console_route=$(oc get route console -n openshift-console -o jsonpath='{.spec.ho
 idp_name=$(oc get oauths.config.openshift.io cluster -o jsonpath='{.spec.identityProviders[-1].name}')
 export CYPRESS_BASE_URL=https://$console_route
 export CYPRESS_LOGIN_IDP=$idp_name
-export CYPRESS_LOGIN_USERNAME=$(echo ${USERS} | awk -F ',' '{print $1}' | awk -F ':' '{print $1}')
-export CYPRESS_LOGIN_PASSWORD=$(echo ${USERS} | awk -F ',' '{print $1}' | awk -F ':' '{print $2}')
-export CYPRESS_LOGIN_UP_PAIR=${USERS}
+export CYPRESS_LOGIN_USERS=${USERS}
 export NO_COLOR=1
 ls -ltr
 echo "triggering tests"

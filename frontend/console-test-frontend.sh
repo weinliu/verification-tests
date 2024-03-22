@@ -71,9 +71,7 @@ set +x
 console_route=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}')
 export CYPRESS_BASE_URL=https://$console_route
 export CYPRESS_LOGIN_IDP=uiauto-htpasswd-idp
-export CYPRESS_LOGIN_USERNAME=uiauto-test-1
-export CYPRESS_LOGIN_PASSWORD=$(echo $users | awk -F ',' '{print $1}' | awk -F ':' '{print $2}')
-export CYPRESS_LOGIN_UP_PAIR=$users
+export CYPRESS_LOGIN_USERS=$users
 export NO_COLOR=1
 ls -ltr
 echo "triggering tests"
