@@ -14,11 +14,48 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+const (
+	changeInstanceTypeCon             = "changeInstanceType"
+	backupInstanceTypeCon             = "backupInstanceType"
+	getInstanceTypeJSONCon            = "getInstanceTypeJSON"
+	patchInstanceTypePrefixCon        = "patchInstanceTypePrefix"
+	patchInstanceTypeSuffixCon        = "patchInstanceTypeSuffix"
+	getMachineAvailabilityZoneJSONCon = "getMachineAvailabilityZoneJSON"
+	getCPMSAvailabilityZonesJSONCon   = "getCPMSAvailabilityZonesJSON"
+)
+
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = exutil.NewCLI("control-plane-machineset", exutil.KubeConfigPath())
-		iaasPlatform string
+		oc                         = exutil.NewCLI("control-plane-machineset", exutil.KubeConfigPath())
+		iaasPlatform               string
+		changeToBackupInstanceType = map[string]map[architecture.Architecture]map[string]string{
+			"aws": {architecture.AMD64: {changeInstanceTypeCon: "m5.xlarge", backupInstanceTypeCon: "m6i.xlarge"},
+				architecture.ARM64: {changeInstanceTypeCon: "m6gd.xlarge", backupInstanceTypeCon: "m6g.xlarge"}},
+			"azure": {architecture.AMD64: {changeInstanceTypeCon: "Standard_D4s_v3", backupInstanceTypeCon: "Standard_D8s_v3"},
+				architecture.ARM64: {changeInstanceTypeCon: "Standard_D4ps_v5", backupInstanceTypeCon: "Standard_D8ps_v5"}},
+			"gcp": {architecture.AMD64: {changeInstanceTypeCon: "e2-standard-4", backupInstanceTypeCon: "n2-standard-4"},
+				architecture.ARM64: {changeInstanceTypeCon: "t2a-standard-8", backupInstanceTypeCon: "t2a-standard-4"}},
+		}
+		getInstanceTypeJsonByCloud = map[string]map[string]string{
+			"aws": {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.instanceType}",
+				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"`,
+				patchInstanceTypeSuffixCon: `"}}}}}}}`},
+			"azure": {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}",
+				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`,
+				patchInstanceTypeSuffixCon: `"}}}}}}}`},
+			"gcp": {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}",
+				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`,
+				patchInstanceTypeSuffixCon: `"}}}}}}}`},
+		}
+		getAvailabilityZoneJSONByCloud = map[string]map[string]string{
+			"aws": {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}",
+				getCPMSAvailabilityZonesJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"},
+			"azure": {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.zone}",
+				getCPMSAvailabilityZonesJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.azure[*].zone}"},
+			"gcp": {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.zone}",
+				getCPMSAvailabilityZonesJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.gcp[*].zone}"},
+		}
 	)
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
@@ -104,51 +141,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
-		var changeInstanceType, backupInstanceType, getInstanceTypeJSON string
-		var patchstrPrefix, patchstrSuffix string
-		switch iaasPlatform {
-		case "aws":
-			changeInstanceType = "m5.xlarge"
-			backupInstanceType = "m6i.xlarge"
-			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
-				changeInstanceType = "m6gd.xlarge"
-				backupInstanceType = "m6g.xlarge"
-			}
-			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.instanceType}"
-			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"`
-			patchstrSuffix = `"}}}}}}}`
-		case "azure":
-			changeInstanceType = "Standard_D4s_v3"
-			backupInstanceType = "Standard_D8s_v3"
-			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
-				changeInstanceType = "Standard_D4ps_v5"
-				backupInstanceType = "Standard_D8ps_v5"
-			}
-			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}"
-			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`
-			patchstrSuffix = `"}}}}}}}`
-		case "gcp":
-			changeInstanceType = "e2-standard-4"
-			backupInstanceType = "n2-standard-4"
+		controlPlaneArch := architecture.GetControlPlaneArch(oc)
+		changeInstanceType := changeToBackupInstanceType[iaasPlatform][controlPlaneArch][changeInstanceTypeCon]
+		backupInstanceType := changeToBackupInstanceType[iaasPlatform][controlPlaneArch][backupInstanceTypeCon]
+		if iaasPlatform == "gcp" && controlPlaneArch == architecture.AMD64 {
 			confidentialCompute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.confidentialCompute}", "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if confidentialCompute == "Enabled" {
 				changeInstanceType = "c2d-standard-4"
 				backupInstanceType = "n2d-standard-4"
 			}
-			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
-				changeInstanceType = "t2a-standard-8"
-				backupInstanceType = "t2a-standard-4"
-			}
-			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
-			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
-			patchstrSuffix = `"}}}}}}}`
-		default:
-			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
 		}
 
 		g.By("Get current instanceType")
-		currentInstanceType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getInstanceTypeJSON, "-n", machineAPINamespace).Output()
+		currentInstanceType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getInstanceTypeJsonByCloud[iaasPlatform][getInstanceTypeJSONCon], "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("currentInstanceType:%s", currentInstanceType)
 		if currentInstanceType == changeInstanceType {
@@ -157,8 +163,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		labelsAfter := "machine.openshift.io/instance-type=" + changeInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
 		labelsBefore := "machine.openshift.io/instance-type=" + currentInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
-		patchstrChange := patchstrPrefix + changeInstanceType + patchstrSuffix
-		patchstrRecover := patchstrPrefix + currentInstanceType + patchstrSuffix
+		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + changeInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + currentInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
 
 		g.By("Change instanceType to trigger RollingUpdate")
 		defer printNodeInfo(oc)
@@ -234,23 +240,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		machineName := exutil.ListMasterMachineNames(oc)[rand.Int31n(int32(len(exutil.ListMasterMachineNames(oc))))]
 		suffix := getMachineSuffix(oc, machineName)
 		var getMachineAvailabilityZoneJSON string
-		flag := 0
-		switch iaasPlatform {
-		case "aws":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
-		case "azure", "gcp":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
-		default:
-			flag = 1
-			e2e.Logf("The " + iaasPlatform + " Platform is not supported AvailabilityZone for now.")
-		}
 		labels := "machine.openshift.io/cluster-api-machine-type=master"
-		if flag == 0 {
+		if iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "gcp" {
+			getMachineAvailabilityZoneJSON = getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
 			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machineName, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			labels = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
-			if availabilityZone == "" {
-				labels = "machine.openshift.io/cluster-api-machine-type=master"
+			if availabilityZone != "" {
+				labels = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
 			}
 		}
 		g.By("Delete the master machine to trigger RollingUpdate")
@@ -269,51 +265,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
-		var changeInstanceType, backupInstanceType, getInstanceTypeJSON string
-		var patchstrPrefix, patchstrSuffix string
-		switch iaasPlatform {
-		case "aws":
-			changeInstanceType = "m5.xlarge"
-			backupInstanceType = "m6i.xlarge"
-			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
-				changeInstanceType = "m6gd.xlarge"
-				backupInstanceType = "m6g.xlarge"
-			}
-			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.instanceType}"
-			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"`
-			patchstrSuffix = `"}}}}}}}`
-		case "azure":
-			changeInstanceType = "Standard_D4s_v3"
-			backupInstanceType = "Standard_D8s_v3"
-			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
-				changeInstanceType = "Standard_D4ps_v5"
-				backupInstanceType = "Standard_D8ps_v5"
-			}
-			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}"
-			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`
-			patchstrSuffix = `"}}}}}}}`
-		case "gcp":
-			changeInstanceType = "e2-standard-4"
-			backupInstanceType = "n2-standard-4"
+		controlPlaneArch := architecture.GetControlPlaneArch(oc)
+		changeInstanceType := changeToBackupInstanceType[iaasPlatform][controlPlaneArch][changeInstanceTypeCon]
+		backupInstanceType := changeToBackupInstanceType[iaasPlatform][controlPlaneArch][backupInstanceTypeCon]
+		if iaasPlatform == "gcp" && controlPlaneArch == architecture.AMD64 {
 			confidentialCompute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.confidentialCompute}", "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if confidentialCompute == "Enabled" {
 				changeInstanceType = "c2d-standard-4"
 				backupInstanceType = "n2d-standard-4"
 			}
-			if architecture.GetControlPlaneArch(oc) == architecture.ARM64 {
-				changeInstanceType = "t2a-standard-8"
-				backupInstanceType = "t2a-standard-4"
-			}
-			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
-			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
-			patchstrSuffix = `"}}}}}}}`
-		default:
-			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
 		}
 
 		g.By("Get current instanceType")
-		currentInstanceType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getInstanceTypeJSON, "-n", machineAPINamespace).Output()
+		currentInstanceType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getInstanceTypeJsonByCloud[iaasPlatform][getInstanceTypeJSONCon], "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("currentInstanceType:%s", currentInstanceType)
 		if currentInstanceType == changeInstanceType {
@@ -321,8 +286,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		labelsAfter := "machine.openshift.io/instance-type=" + changeInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
-		patchstrChange := patchstrPrefix + changeInstanceType + patchstrSuffix
-		patchstrRecover := patchstrPrefix + currentInstanceType + patchstrSuffix
+		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + changeInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + currentInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
 
 		g.By("Update strategy to OnDelete, change instanceType to trigger OnDelete update")
 		defer printNodeInfo(oc)
@@ -417,17 +382,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Update strategy to OnDelete")
 		key, value, machineName := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
-		var getMachineAvailabilityZoneJSON, getCPMSAvailabilityZonesJSON string
-		switch iaasPlatform {
-		case "aws":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
-			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-		case "azure", "gcp":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
-			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform + "[*].zone}"
-		default:
-			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
-		}
+		getMachineAvailabilityZoneJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
+		getCPMSAvailabilityZonesJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getCPMSAvailabilityZonesJSONCon]
 		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform+"["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -506,23 +462,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Random pick a master machine and delete manually to trigger OnDelete update")
 		toDeletedMachineName := exutil.ListMasterMachineNames(oc)[rand.Int31n(int32(len(exutil.ListMasterMachineNames(oc))))]
 		var getMachineAvailabilityZoneJSON string
-		flag := 0
-		switch iaasPlatform {
-		case "aws":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
-		case "azure", "gcp":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
-		default:
-			flag = 1
-			e2e.Logf("The " + iaasPlatform + " Platform is not supported AvailabilityZone for now.")
-		}
 		labels := "machine.openshift.io/cluster-api-machine-type=master"
-		if flag == 0 {
+		if iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "gcp" {
+			getMachineAvailabilityZoneJSON = getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
 			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, toDeletedMachineName, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			labels = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
-			if availabilityZone == "" {
-				labels = "machine.openshift.io/cluster-api-machine-type=master"
+			if availabilityZone != "" {
+				labels = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
 			}
 		}
 		exutil.DeleteMachine(oc, toDeletedMachineName)
@@ -656,17 +602,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		availabilityZones = getCPMSAvailabilityZones(oc, iaasPlatform)
 		key, value, machineName := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
 		suffix := getMachineSuffix(oc, machineName)
-		var getMachineAvailabilityZoneJSON, getCPMSAvailabilityZonesJSON string
-		switch iaasPlatform {
-		case "aws":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
-			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-		case "azure", "gcp":
-			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
-			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform + "[*].zone}"
-		default:
-			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
-		}
+		getMachineAvailabilityZoneJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
+		getCPMSAvailabilityZonesJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getCPMSAvailabilityZonesJSONCon]
 		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform+"["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
