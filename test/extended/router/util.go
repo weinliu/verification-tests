@@ -956,6 +956,27 @@ func waitDNSLogsAppear(oc *exutil.CLI, podList []string, searchStr string) strin
 	return result
 }
 
+func waitRouterLogsAppear(oc *exutil.CLI, routerpod, searchStr string) string {
+	result := ""
+	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(routerpod, "-c", "logs", "-n", "openshift-ingress").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		primary := false
+		outputList := strings.Split(output, "\n")
+		for _, line := range outputList {
+			if strings.Contains(line, searchStr) {
+				primary = true
+				result = line
+				e2e.Logf("the searchline has result:%v", line)
+				break
+			}
+		}
+		return primary, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("expected string \"%s\" is not found in the router pod's logs", searchStr))
+	return result
+}
+
 // this function to get one dns pod's Corefile info related to the modified time, it looks like {{"dns-default-0001", "2021-12-30 18.011111 Modified"}}
 func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 	attrList := [][]string{}

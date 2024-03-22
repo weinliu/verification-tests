@@ -1342,4 +1342,64 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "service", "router-"+ingctrl.name).Output()
 		o.Expect(output2).To(o.MatchRegexp(`exceeds the maximum number of source IP addresses \(400[1-9] > 4000\)`))
 	})
+
+	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-30059-NetworkEdge Create an ingresscontroller that logs to a sidecar container", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-sidecar.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			srvName             = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp30059",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create a sidecar-log ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+
+		exutil.By("2. Check if the a sidecar container with name 'logs' is deployed")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		containerName := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, ".spec.containers[1].name")
+		o.Expect(containerName).To(o.ContainSubstring("logs"))
+
+		// check the function of logs to a sidecar container in the following steps by curl a route and check the router logs
+		exutil.By("3. create a client pod, a server pod and an unsecure service")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, clientPod)
+		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		createResourceFromFile(oc, project1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time!")
+
+		exutil.By("4. create an route")
+		routehost := srvName + "-" + project1 + "." + ingctrl.domain
+		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "route", ".items[0].metadata.name", srvName)
+
+		exutil.By("5. curl the route, and then check the router pod's logs which should contain the new http request")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":80:" + podIP
+		jsonPath := ".subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port"
+		ep := fetchJSONPathValue(oc, project1, "endpoints/"+srvName, jsonPath)
+		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		result := repeatCmd(oc, cmdOnPod, "200", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
+		output := waitRouterLogsAppear(oc, routerpod, ep)
+		o.Expect(output).To(o.MatchRegexp("haproxy.+" + ep + ".+HTTP/1.1"))
+	})
 })
