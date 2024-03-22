@@ -4606,7 +4606,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Created helm-charts"))
 		// Create go api
-		output, err = operatorsdkCLI.Run("create").Args("api", "--group=cache6", "--version=v1", "--kind=MemcachedBackup", "--resource", "--controller", "--plugins=go/v3").Output()
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group=cache6", "--version=v1", "--kind=MemcachedBackup", "--resource", "--controller", "--plugins=go/v4").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("make manifests"))
 
@@ -4617,15 +4617,16 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// update the Dockerfile
 		dockerFilePath := filepath.Join(tmpPath, "Dockerfile")
 		replaceContent(dockerFilePath, "golang:", "quay.io/olmqe/golang:")
+		replaceContent(dockerFilePath, "COPY controllers/ controllers/", "COPY internal/controller/ internal/controller/")
+		replaceContent(dockerFilePath, "RUN GOOS=linux GOARCH=amd64 go build -a -o manager cmd/main.go", "RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go")
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
-		replaceContent(makefileFilePath, "docker build -t ${IMG}", "docker build -t ${IMG} .")
 		// copy memcachedbackup_types.go
 		err = copy(filepath.Join(dataPath, "memcachedbackup_types.go"), filepath.Join(tmpPath, "api", "v1", "memcachedbackup_types.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// copy memcachedbackup_controller.go ./controllers/memcachedbackup_controller.go
-		err = copy(filepath.Join(dataPath, "memcachedbackup_controller.go"), filepath.Join(tmpPath, "controllers", "memcachedbackup_controller.go"))
+		err = copy(filepath.Join(dataPath, "memcachedbackup_controller.go"), filepath.Join(tmpPath, "internal", "controller", "memcachedbackup_controller.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// copy kubmize
 		exutil.By("step: Install kustomize")
