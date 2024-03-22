@@ -1209,8 +1209,7 @@ func waitApiserverRestartOfHypershift(oc *exutil.CLI, appLabel string, ns string
 	re, err := regexp.Compile(`(0/[0-9]|Pending|Terminating|Init)`)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	errKas := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+appLabel, "--no-headers", "-n", ns).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		out, _ := getResource(oc, asAdmin, withoutNamespace, "pods", "-l", "app="+appLabel, "--no-headers", "-n", ns)
 		if matched := re.MatchString(out); matched {
 			e2e.Logf("#### %s was restarting ...", appLabel)
 			return false, nil
@@ -1218,8 +1217,7 @@ func waitApiserverRestartOfHypershift(oc *exutil.CLI, appLabel string, ns string
 		// Recheck status of pods and to do further confirm , avoid false restarts
 		for i := 1; i <= 3; i++ {
 			time.Sleep(10 * time.Second)
-			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+appLabel, "--no-headers", "-n", ns).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			out, _ = getResource(oc, asAdmin, withoutNamespace, "pods", "-l", "app="+appLabel, "--no-headers", "-n", ns)
 			if matchedAgain := re.MatchString(out); matchedAgain {
 				e2e.Logf("#### %s was restarting ...", appLabel)
 				return false, nil

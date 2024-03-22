@@ -1,7 +1,11 @@
 package apiserverauth
 
 import (
+	"encoding/base64"
 	"fmt"
+	"io/ioutil"
+	"net/url"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -25,6 +29,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		guestClusterKube string
 		hostedClusterNS  string
 		iaasPlatform     string
+		tmpdir           string
 	)
 
 	g.BeforeEach(func() {
@@ -39,6 +44,15 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		}
 		guestClusterNS = hostedClusterNS + "-" + guestClusterName
 		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
+		tmpdir = "/tmp/-OCP-apisever-cases-" + exutil.GetRandomString() + "/"
+		err := os.MkdirAll(tmpdir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	g.JustAfterEach(func() {
+		if err := os.RemoveAll(tmpdir); err == nil {
+			e2e.Logf("test dir %s is cleaned up", tmpdir)
+		}
 	})
 
 	// author: kewang@redhat.com
@@ -241,5 +255,142 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			o.Expect(errCmd).To(o.HaveOccurred())
 			o.Expect(cmdOut).Should(o.ContainSubstring("Read-only file system"))
 		}
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("HyperShiftMGMT-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
+		var (
+			patchToRecover           = `{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": []}}}}}`
+			originHostdKubeconfigBkp = "kubeconfig.origin"
+			originHostedKube         = guestClusterKube
+			originCA                 = tmpdir + "certificate-authority-data-origin.crt"
+			newCA                    = tmpdir + "certificate-authority-data-origin-new.crt"
+			CN_BASE                  = "kas-test-cert"
+			caKeypem                 = tmpdir + "/caKey.pem"
+			caCertpem                = tmpdir + "/caCert.pem"
+			serverKeypem             = tmpdir + "/serverKey.pem"
+			serverconf               = tmpdir + "/server.conf"
+			serverWithSANcsr         = tmpdir + "/serverWithSAN.csr"
+			serverCertWithSAN        = tmpdir + "/serverCertWithSAN.pem"
+			originHostedKubeconfPath string
+		)
+
+		restoreCluster := func(oc *exutil.CLI) {
+			err := oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			output := getResourceToBeReady(oc, asAdmin, withoutNamespace, "secret", "-n", "clusters")
+			if strings.Contains(output, "custom-api-cert") {
+				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "custom-api-cert", "-n", "clusters", "--ignore-not-found").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("Cluster openshift-config secret reset to default values")
+			}
+		}
+
+		updateKubeconfigWithConcatenatedCert := func(caCertPath, originCertPath, kubeconfigPath string, newCertPath string) error {
+			caCert, err := ioutil.ReadFile(caCertPath)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			originCert, err := ioutil.ReadFile(originCertPath)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			concatenatedCert := append(caCert, originCert...)
+			err = ioutil.WriteFile(newCertPath, concatenatedCert, 0644)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			base64EncodedCert := base64.StdEncoding.EncodeToString(concatenatedCert)
+			updateCmdKubeconfg := fmt.Sprintf(`sed -i "s/certificate-authority-data: .*/certificate-authority-data: %s/" %s`, base64EncodedCert, kubeconfigPath)
+			_, err = exec.Command("bash", "-c", updateCmdKubeconfg).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Kubeconfig file updated successfully.")
+			return nil
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "custom-api-cert", "-n", "clusters", "--ignore-not-found").Execute()
+
+		//Taking backup of old hosted kubeconfig to restore old kubeconfig
+		exutil.By("1. Get the original hosted kubeconfig backup")
+		originHostedKubeconfPath = CopyToFile(originHostedKube, originHostdKubeconfigBkp)
+
+		defer func() {
+			exutil.By("Restoring hosted hypershift cluster")
+			_, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", patchToRecover).Output()
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			o.Expect(errKas).NotTo(o.HaveOccurred())
+			e2e.Logf("Restore original hosted hypershift kubeconfig")
+			bkpCmdKubeConf := fmt.Sprintf("cp -f %s %s", originHostedKubeconfPath, originHostedKube)
+			_, err := exec.Command("bash", "-c", bkpCmdKubeConf).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restoreCluster(oc)
+			e2e.Logf("Cluster recovered")
+		}()
+
+		apiServerURL, err := oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("config").Args("view", "-ojsonpath={.clusters[0].cluster.server}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		fqdnName, err := url.Parse(apiServerURL)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Get the original CA")
+		caCmd := fmt.Sprintf(`grep certificate-authority-data %s | grep -Eo "[^ ]+$" | base64 -d > %s`, originHostedKube, originCA)
+		_, err = exec.Command("bash", "-c", caCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create certificates with SAN.")
+		opensslCMD := fmt.Sprintf("openssl genrsa -out %v 2048", caKeypem)
+		_, caKeyErr := exec.Command("bash", "-c", opensslCMD).Output()
+		o.Expect(caKeyErr).NotTo(o.HaveOccurred())
+		opensslCMD = fmt.Sprintf(`openssl req -x509 -new -nodes -key %v -days 100000 -out %v -subj "/CN=%s_ca"`, caKeypem, caCertpem, CN_BASE)
+		_, caCertErr := exec.Command("bash", "-c", opensslCMD).Output()
+		o.Expect(caCertErr).NotTo(o.HaveOccurred())
+		opensslCMD = fmt.Sprintf("openssl genrsa -out %v 2048", serverKeypem)
+		_, serverKeyErr := exec.Command("bash", "-c", opensslCMD).Output()
+		o.Expect(serverKeyErr).NotTo(o.HaveOccurred())
+		serverconfCMD := fmt.Sprintf(`cat > %v << EOF
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+[req_distinguished_name]
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth, serverAuth
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = %s
+EOF`, serverconf, fqdnName.Hostname())
+		_, serverconfErr := exec.Command("bash", "-c", serverconfCMD).Output()
+		o.Expect(serverconfErr).NotTo(o.HaveOccurred())
+		serverWithSANCMD := fmt.Sprintf(`openssl req -new -key %v -out %v -subj "/CN=%s_server" -config %v`, serverKeypem, serverWithSANcsr, CN_BASE, serverconf)
+		_, serverWithSANErr := exec.Command("bash", "-c", serverWithSANCMD).Output()
+		o.Expect(serverWithSANErr).NotTo(o.HaveOccurred())
+		serverCertWithSANCMD := fmt.Sprintf(`openssl x509 -req -in %v -CA %v -CAkey %v -CAcreateserial -out %v -days 100000 -extensions v3_req -extfile %s`, serverWithSANcsr, caCertpem, caKeypem, serverCertWithSAN, serverconf)
+		_, serverCertWithSANErr := exec.Command("bash", "-c", serverCertWithSANCMD).Output()
+		o.Expect(serverCertWithSANErr).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Creating custom secret using server certificate")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "tls", "custom-api-cert", "--cert="+serverCertWithSAN, "--key="+serverKeypem, "-n", "clusters").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. Add new certificate to apiserver")
+		patchCmd := fmt.Sprintf(`{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": [{"names": ["%s"], "servingCertificate": {"name": "custom-api-cert"}}]}}}}}`, fqdnName.Hostname())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", patchCmd).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6. Add new certificates to hosted kubeconfig")
+		// To avoid error "Unable to connect to the server: tls: failed to verify certificate: x509: certificate signed by unknown authority." updating kubeconfig
+		updateKubeconfigWithConcatenatedCert(caCertpem, originCA, originHostedKube, newCA)
+
+		exutil.By("7. Checking if kube-apiserver is restarted")
+		waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+
+		exutil.By("8. Validate new certificates")
+		returnValues := []string{"Subject", "Issuer"}
+		certDetails, err := urlHealthCheck(fqdnName.Hostname(), caCertpem, returnValues)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(certDetails.Subject)).To(o.ContainSubstring("CN=kas-test-cert_server"))
+		o.Expect(string(certDetails.Issuer)).To(o.ContainSubstring("CN=kas-test-cert_ca"))
+
+		exutil.By("9. Validate old certificates should not work")
+		certDetails, err = urlHealthCheck(fqdnName.Hostname(), originCA, returnValues)
+		o.Expect(err).To(o.HaveOccurred())
 	})
 })
