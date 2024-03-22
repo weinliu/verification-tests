@@ -49,19 +49,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-High-49514-federate service endpoint and route of platform Prometheus", func() {
 		var err error
-		g.By("Bind cluster-monitoring-view cluster role to current user")
+		exutil.By("Bind cluster-monitoring-view cluster role to current user")
 		clusterRoleBindingName := "clusterMonitoringViewFederate"
 		defer deleteClusterRoleBinding(oc, clusterRoleBindingName)
 		clusterRoleBinding, err := bindClusterRoleToUser(oc, "cluster-monitoring-view", oc.Username(), clusterRoleBindingName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Created: %v %v", "ClusterRoleBinding", clusterRoleBinding.Name)
 
-		g.By("Get token of current user")
+		exutil.By("Get token of current user")
 		token := oc.UserConfig().BearerToken
-		g.By("check federate endpoint service")
+		exutil.By("check federate endpoint service")
 		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/federate --data-urlencode 'match[]=prometheus_build_info'", token, "prometheus_build_info", 3*platformLoadTime)
 
-		g.By("check federate route")
+		exutil.By("check federate route")
 		checkRoute(oc, "openshift-monitoring", "prometheus-k8s-federate", token, "match[]=prometheus_build_info", "prometheus_build_info", 3*platformLoadTime)
 	})
 
@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			validAlertmanagerConfig   = filepath.Join(monitoringBaseDir, "valid-alertmanagerconfig.yaml")
 		)
 
-		g.By("Get prometheus-operator-admission-webhook deployment")
+		exutil.By("Get prometheus-operator-admission-webhook deployment")
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "prometheus-operator-admission-webhook", "-n", "openshift-monitoring").Execute()
 		if err != nil {
 			e2e.Logf("Unable to get deployment prometheus-operator-admission-webhook.")
@@ -85,12 +85,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		oc.SetupProject()
 		namespace = oc.Namespace()
 
-		g.By("Create invalid AlertmanagerConfig, should throw out error")
+		exutil.By("Create invalid AlertmanagerConfig, should throw out error")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", invalidAlertmanagerConfig, "-n", namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("The AlertmanagerConfig \"invalid-test-config\" is invalid"))
 
-		g.By("Create valid AlertmanagerConfig, should not have error")
+		exutil.By("Create valid AlertmanagerConfig, should not have error")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", validAlertmanagerConfig, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("valid-test-config created"))
@@ -98,25 +98,25 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Medium-42800-Allow configuration of the log level for Alertmanager in the CMO configmap", func() {
-		g.By("Check alertmanager container logs")
+		exutil.By("Check alertmanager container logs")
 		exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "alertmanager", "alertmanager-main-0", "level=debug")
 	})
 
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Medium-43748-Ensure label namespace exists on all alerts", func() {
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check alerts, should have label namespace exists on all alerts")
+		exutil.By("check alerts, should have label namespace exists on all alerts")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="Watchdog"}'`, token, `"namespace":"openshift-monitoring"`, 2*platformLoadTime)
 	})
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Medium-47307-Add external label of origin to platform alerts", func() {
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check alerts, could see the `openshift_io_alert_source` field for in-cluster alerts")
+		exutil.By("check alerts, could see the `openshift_io_alert_source` field for in-cluster alerts")
 		checkMetric(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts", token, `"openshift_io_alert_source":"platform"`, 2*platformLoadTime)
 	})
 
@@ -126,37 +126,37 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			ns          string
 			helloPodPvc = filepath.Join(monitoringBaseDir, "helloPodPvc.yaml")
 		)
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check if the cluster have default storage class")
+		exutil.By("check if the cluster have default storage class")
 		checkSC, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "--no-headers").Output()
 		e2e.Logf("storage class: %s", checkSC)
 		hasSC := false
 		if strings.Contains(checkSC, "default") {
 			hasSC = true
-			g.By("create project ns then attach pv/pvc")
+			exutil.By("create project ns then attach pv/pvc")
 			oc.SetupProject()
 			ns = oc.Namespace()
 			createResourceFromYaml(oc, ns, helloPodPvc)
 		}
 
-		g.By("Check labels for pod")
+		exutil.By("Check labels for pod")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_labels{pod="alertmanager-main-0"}'`, token, `"label_statefulset_kubernetes_io_pod_name"`, uwmLoadTime)
 
-		g.By("Check labels for node")
+		exutil.By("Check labels for node")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_node_labels'`, token, `"label_kubernetes_io_hostname"`, uwmLoadTime)
 
-		g.By("Check labels for namespace")
+		exutil.By("Check labels for namespace")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_namespace_labels{namespace="openshift-monitoring"}'`, token, `"label_kubernetes_io_metadata_name"`, uwmLoadTime)
 
-		g.By("Check labels for PDB")
+		exutil.By("Check labels for PDB")
 		checkPDB, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pdb", "thanos-querier-pdb", "-n", "openshift-monitoring").Output()
 		if !strings.Contains(checkPDB, `"thanos-querier-pdb" not found`) {
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_poddisruptionbudget_labels{poddisruptionbudget="thanos-querier-pdb"}'`, token, `"label_app_kubernetes_io_name"`, uwmLoadTime)
 		}
 
-		g.By("Check labels for PV/PVC if need")
+		exutil.By("Check labels for PV/PVC if need")
 		if hasSC {
 			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolume_labels'`, token, `"persistentvolume"`, 2*uwmLoadTime)
 			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolumeclaim_labels'`, token, `"persistentvolumeclaim"`, 2*uwmLoadTime)
@@ -170,7 +170,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("prometheus-adapter Pods: %v", podList)
 
-		g.By("check the audit logs")
+		exutil.By("check the audit logs")
 		for _, pod := range podList {
 			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
 			output, err := exutil.RemoteShContainer(oc, "openshift-monitoring", pod, "prometheus-adapter", "cat", "/var/log/adapter/audit.log")
@@ -181,25 +181,25 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Medium-48432-Allow OpenShift users to configure request logging for Thanos Querier query endpoint", func() {
-		g.By("check thanos-querier pods are normal and able to see the request.logging-config setting")
+		exutil.By("check thanos-querier pods are normal and able to see the request.logging-config setting")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"thanos-query\")].args}"
 		checkYamlconfig(oc, "openshift-monitoring", "deploy", "thanos-querier", cmd, "request.logging-config", true)
 
 		//thanos-querier pod name will changed when cm modified, pods may not restart yet during the first check
-		g.By("double confirm thanos-querier pods are ready")
+		exutil.By("double confirm thanos-querier pods are ready")
 		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/instance=thanos-querier")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range podList {
 			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
 		}
 
-		g.By("query with thanos-querier svc")
+		exutil.By("query with thanos-querier svc")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster_version"`, 3*uwmLoadTime)
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster-version-operator"`, 3*uwmLoadTime)
 
-		g.By("check from thanos-querier logs")
+		exutil.By("check from thanos-querier logs")
 		//oc -n openshift-monitoring logs -l app.kubernetes.io/instance=thanos-querier -c thanos-query --tail=-1
 		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/instance=thanos-querier", "thanos-query", "query=cluster_version", true)
 	})
@@ -215,7 +215,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("kube-apiserver Pods: %v", podList)
 
-		g.By("check the kube-apiserver logs, should not have error for v1beta1.metrics.k8s.io")
+		exutil.By("check the kube-apiserver logs, should not have error for v1beta1.metrics.k8s.io")
 		for _, pod := range podList {
 			exutil.AssertPodToBeReady(oc, pod, "openshift-kube-apiserver")
 			result, _ = exutil.GetSpecificPodLogs(oc, "openshift-kube-apiserver", "kube-apiserver", pod, searchString)
@@ -226,17 +226,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Low-55670-Prometheus should not collecting error messages for completed pods [Serial]", func() {
-		g.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
+		exutil.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check pod conditioning in openshift-kube-scheduler")
+		exutil.By("check pod conditioning in openshift-kube-scheduler")
 		podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-scheduler").Output()
 		e2e.Logf("kube-scheduler Pods:\n%s", podStatus)
 		o.Expect(podStatus).To(o.ContainSubstring("Completed"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check prometheus-adapter pod logs")
+		exutil.By("check prometheus-adapter pod logs")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, logsErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=prometheus-adapter", "-c", "prometheus-adapter", "--tail=-1", "-n", "openshift-monitoring").Output()
 		o.Expect(logsErr).NotTo(o.HaveOccurred())
@@ -248,10 +248,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Medium-55767-Missing metrics in kube-state-metrics", func() {
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check kube-state-metrics metrics, the following metrics should be visible")
+		exutil.By("check kube-state-metrics metrics, the following metrics should be visible")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/label/__name__/values`, token, `"kube_pod_container_status_terminated_reason"`, uwmLoadTime)
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/label/__name__/values`, token, `"kube_pod_init_container_status_terminated_reason"`, uwmLoadTime)
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/label/__name__/values`, token, `"kube_pod_status_scheduled_time"`, uwmLoadTime)
@@ -264,52 +264,52 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			exampleApp  = filepath.Join(monitoringBaseDir, "example-app.yaml")
 			roleBinding = filepath.Join(monitoringBaseDir, "sa-prometheus-k8s-access.yaml")
 		)
-		g.By("Create example app")
+		exutil.By("Create example app")
 		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
 		createResourceFromYaml(oc, ns, exampleApp)
 		exutil.AssertAllPodsToBeReady(oc, ns)
 
-		g.By("add role and role binding for example app")
+		exutil.By("add role and role binding for example app")
 		createResourceFromYaml(oc, ns, roleBinding)
 
-		g.By("label namespace")
+		exutil.By("label namespace")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/cluster-monitoring=true").Execute()
 
-		g.By("check target is up")
+		exutil.By("check target is up")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, "up", 2*uwmLoadTime)
 	})
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-High-56168-PstChkUpgrade-NonPreRelease-Prometheus never sees endpoint propagation of a deleted pod", func() {
-		g.By("get the ns name in PreChkUpgrade")
+		exutil.By("get the ns name in PreChkUpgrade")
 		ns := "56168-upgrade-ns"
 
-		g.By("delete related resource at the end of case")
+		exutil.By("delete related resource at the end of case")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns).Execute()
 
-		g.By("delete example app deployment")
+		exutil.By("delete example app deployment")
 		deleteApp, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "prometheus-example-app", "-n", ns).Output()
 		o.Expect(deleteApp).To(o.ContainSubstring(`"prometheus-example-app" deleted`))
 
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check metric up==0 under the test project, return null")
+		exutil.By("check metric up==0 under the test project, return null")
 		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=up{namespace=\"56168-upgrade-ns\"}==0'", token, `"result":[]`, 2*uwmLoadTime)
 
-		g.By("check no alert 'TargetDown'")
+		exutil.By("check no alert 'TargetDown'")
 		checkAlertNotExist(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{namespace=\"56168-upgrade-ns\"}'", token, "TargetDown", uwmLoadTime)
 	})
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Medium-57254-oc adm top node/pod output should not give negative numbers", func() {
-		g.By("check on node")
+		exutil.By("check on node")
 		checkNode, err := exec.Command("bash", "-c", `oc adm top node | awk '{print $2,$3,$4,$5}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkNode).NotTo(o.ContainSubstring("-"))
 
-		g.By("check on pod under specific namespace")
+		exutil.By("check on pod under specific namespace")
 		checkNs, err := exec.Command("bash", "-c", `oc -n openshift-monitoring adm top pod | awk '{print $2,$3}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkNs).NotTo(o.ContainSubstring("-"))
@@ -317,7 +317,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: tagao@redhat.com
 	g.It("ConnectedOnly-Author:tagao-Medium-55696-add telemeter alert TelemeterClientFailures", func() {
-		g.By("check telemetry prometheusrule exists")
+		exutil.By("check telemetry prometheusrule exists")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-n", "openshift-monitoring").Output()
 		// Error from server (NotFound): prometheusrules.monitoring.coreos.com "telemetry" not found
 		if strings.Contains(output, `"telemetry" not found`) {
@@ -325,17 +325,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.Skip("this env does not have telemetry prometheusrule, skip the case")
 		}
 
-		g.By("check TelemeterClientFailures alert is added")
+		exutil.By("check TelemeterClientFailures alert is added")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-ojsonpath={.spec.groups}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("TelemeterClientFailures"))
 	})
 
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Medium-62092-Don't fire NodeFilesystemAlmostOutOfSpace alert for certain tmpfs mount points", func() {
-		g.By("check NodeFilesystemAlmostOutOfSpace alert from node-exporter-rules prometheusrules")
+		exutil.By("check NodeFilesystemAlmostOutOfSpace alert from node-exporter-rules prometheusrules")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "node-exporter-rules", `-ojsonpath={.spec.groups[*].rules[?(@.alert=="NodeFilesystemAlmostOutOfSpace")].expr}`, "-n", "openshift-monitoring").Output()
 		e2e.Logf("NodeFilesystemAlmostOutOfSpace alert expr: %v", output)
-		g.By("mountpoint /var/lib/ibmc-s3fs.* is excluded")
+		exutil.By("mountpoint /var/lib/ibmc-s3fs.* is excluded")
 		o.Expect(output).To(o.ContainSubstring(`mountpoint!~"/var/lib/ibmc-s3fs.*"`))
 	})
 
@@ -344,60 +344,60 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			alertManagerConfig = filepath.Join(monitoringBaseDir, "valid-alertmanagerconfig.yaml")
 		)
-		g.By("check clusterrole alert-routing-edit exists")
+		exutil.By("check clusterrole alert-routing-edit exists")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole").Output()
 		o.Expect(strings.Contains(output, "alert-routing-edit")).To(o.BeTrue())
 
-		g.By("create project, add alert-routing-edit RoleBinding to specific user")
+		exutil.By("create project, add alert-routing-edit RoleBinding to specific user")
 		oc.SetupProject()
 		ns := oc.Namespace()
 		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "-n", ns, "alert-routing-edit", oc.Username()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("create AlertmanagerConfig under the project")
+		exutil.By("create AlertmanagerConfig under the project")
 		createResourceFromYaml(oc, ns, alertManagerConfig)
 
-		g.By("check AlertmanagerConfig is created")
+		exutil.By("check AlertmanagerConfig is created")
 		output, _ = oc.WithoutNamespace().Run("get").Args("AlertmanagerConfig", "-n", ns).Output()
 		o.Expect(output).To(o.ContainSubstring("valid-test-config"))
 
-		g.By("the user should able to change AlertmanagerConfig")
+		exutil.By("the user should able to change AlertmanagerConfig")
 		err = oc.WithoutNamespace().Run("patch").Args("AlertmanagerConfig", "valid-test-config", "-p", `{"spec":{"receivers":[{"name":"webhook","webhookConfigs":[{"url":"https://test.io/push"}]}]}}`, "--type=merge", "-n", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check AlertmanagerConfig is updated")
+		exutil.By("check AlertmanagerConfig is updated")
 		output, _ = oc.WithoutNamespace().Run("get").Args("AlertmanagerConfig", "valid-test-config", "-ojsonpath={.spec.receivers}", "-n", ns).Output()
 		o.Expect(output).To(o.ContainSubstring("https://test.io/push"))
 
-		g.By("the user should able to delete AlertmanagerConfig")
+		exutil.By("the user should able to delete AlertmanagerConfig")
 		err = oc.WithoutNamespace().Run("delete").Args("AlertmanagerConfig", "valid-test-config", "-n", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check AlertmanagerConfig is deleted")
+		exutil.By("check AlertmanagerConfig is deleted")
 		output, _ = oc.WithoutNamespace().Run("get").Args("AlertmanagerConfig", "-n", ns).Output()
 		o.Expect(output).NotTo(o.ContainSubstring("valid-test-config"))
 	})
 
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Low-62957-Prometheus and Alertmanager should configure ExternalURL correctly", func() {
-		g.By("get console route")
+		exutil.By("get console route")
 		consoleURL, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "console", `-ojsonpath={.spec.host}`, "-n", "openshift-console").Output()
 		e2e.Logf("console route is: %v", consoleURL)
 
-		g.By("get externalUrl for alertmanager main")
+		exutil.By("get externalUrl for alertmanager main")
 		alertExternalUrl, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager", "main", `-ojsonpath={.spec.externalUrl}`, "-n", "openshift-monitoring").Output()
 		e2e.Logf("alertmanager main externalUrl is: %v", alertExternalUrl)
 		o.Expect(alertExternalUrl).To(o.ContainSubstring("https://" + consoleURL))
 
-		g.By("get externalUrl for prometheus k8s")
+		exutil.By("get externalUrl for prometheus k8s")
 		prometheusExternalUrl, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", `-ojsonpath={.spec.externalUrl}`, "-n", "openshift-monitoring").Output()
 		e2e.Logf("prometheus k8s externalUrl is: %v", prometheusExternalUrl)
 		o.Expect(prometheusExternalUrl).To(o.ContainSubstring("https://" + consoleURL))
 
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check from alertmanager API, the generatorURL should include https://${consoleURL}")
+		exutil.By("check from alertmanager API, the generatorURL should include https://${consoleURL}")
 		checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="Watchdog"}`, token, `"generatorURL":"https://`+consoleURL, 2*platformLoadTime)
 	})
 
@@ -406,34 +406,34 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			invalidServiceMonitor = filepath.Join(monitoringBaseDir, "invalid-ServiceMonitor.yaml")
 		)
-		g.By("delete test ServiceMonitor at the end of case")
+		exutil.By("delete test ServiceMonitor at the end of case")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("servicemonitor", "console-test-monitoring", "-n", "openshift-monitoring").Execute()
 
-		g.By("create one ServiceMonitor, set scrapeTimeout bigger than scrapeInterval, and no targetLabel setting")
+		exutil.By("create one ServiceMonitor, set scrapeTimeout bigger than scrapeInterval, and no targetLabel setting")
 		createResourceFromYaml(oc, "openshift-monitoring", invalidServiceMonitor)
 
-		g.By("able to see error in prometheus-operator logs")
+		exutil.By("able to see error in prometheus-operator logs")
 		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-operator", "prometheus-operator", `error="scrapeTimeout \"120s\" greater than scrapeInterval \"30s\""`, true)
 
-		g.By("check the configuration is not loaded to prometheus")
+		exutil.By("check the configuration is not loaded to prometheus")
 		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", `serviceMonitor/openshift-monitoring/console-test-monitoring/0`, false)
 
-		g.By("edit ServiceMonitor, and set value for scrapeTimeout less than scrapeInterval")
+		exutil.By("edit ServiceMonitor, and set value for scrapeTimeout less than scrapeInterval")
 		//oc patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "replace", "path": "/spec/endpoints/0/scrapeTimeout", "value":"20s"}]' -n openshift-monitoring
 		patchConfig := `[{"op": "replace", "path": "/spec/endpoints/0/scrapeTimeout", "value":"20s"}]`
 		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
-		g.By("able to see error for missing targetLabel in prometheus-operator logs")
+		exutil.By("able to see error for missing targetLabel in prometheus-operator logs")
 		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-operator", "prometheus-operator", `relabel configuration for replace action needs targetLabel value`, true)
 
-		g.By("add targetLabel to ServiceMonitor")
+		exutil.By("add targetLabel to ServiceMonitor")
 		//oc -n openshift-monitoring patch servicemonitor console-test-monitoring --type='json' -p='[{"op": "add", "path": "/spec/endpoints/0/relabelings/0/targetLabel", "value": "namespace"}]'
 		patchConfig = `[{"op": "add", "path": "/spec/endpoints/0/relabelings/0/targetLabel", "value": "namespace"}]`
 		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "console-test-monitoring", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
-		g.By("check the configuration loaded to prometheus")
+		exutil.By("check the configuration loaded to prometheus")
 		checkPrometheusConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "serviceMonitor/openshift-monitoring/console-test-monitoring/0", true)
 	})
 
@@ -443,46 +443,46 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			alertingRule       = filepath.Join(monitoringBaseDir, "alertingRule.yaml")
 			alertRelabelConfig = filepath.Join(monitoringBaseDir, "alertRelabelConfig.yaml")
 		)
-		g.By("delete the created AlertingRule/AlertRelabelConfig at the end of the case")
+		exutil.By("delete the created AlertingRule/AlertRelabelConfig at the end of the case")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertingRule", "monitoring-example", "-n", "openshift-monitoring").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("AlertRelabelConfig", "monitoring-watchdog", "-n", "openshift-monitoring").Execute()
 
-		g.By("check AlertingRule/AlertRelabelConfig apiVersion is v1")
+		exutil.By("check AlertingRule/AlertRelabelConfig apiVersion is v1")
 		_, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertingRule", "--api-version=monitoring.openshift.io/v1").Output()
 		o.Expect(explainErr).NotTo(o.HaveOccurred())
 
 		_, explainErr = oc.WithoutNamespace().AsAdmin().Run("explain").Args("AlertRelabelConfig", "--api-version=monitoring.openshift.io/v1").Output()
 		o.Expect(explainErr).NotTo(o.HaveOccurred())
 
-		g.By("create AlertingRule/AlertRelabelConfig under openshift-monitoring")
+		exutil.By("create AlertingRule/AlertRelabelConfig under openshift-monitoring")
 		createResourceFromYaml(oc, "openshift-monitoring", alertingRule)
 		createResourceFromYaml(oc, "openshift-monitoring", alertRelabelConfig)
 
-		g.By("check AlertingRule/AlertRelabelConfig are created")
+		exutil.By("check AlertingRule/AlertRelabelConfig are created")
 		output, _ := oc.WithoutNamespace().Run("get").Args("AlertingRule/monitoring-example", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("monitoring-example"))
 		output, _ = oc.WithoutNamespace().Run("get").Args("AlertRelabelConfig/monitoring-watchdog", "-ojsonpath={.metadata.name}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("monitoring-watchdog"))
 
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check the alert defined in AlertingRule could be found in thanos-querier API")
+		exutil.By("check the alert defined in AlertingRule could be found in thanos-querier API")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ExampleAlert"}'`, token, `"alertname":"ExampleAlert"`, 2*platformLoadTime)
 
-		g.By("Watchdog alert, the alert label is changed from \"severity\":\"none\" to \"severity\":\"critical\" in alertmanager API")
+		exutil.By("Watchdog alert, the alert label is changed from \"severity\":\"none\" to \"severity\":\"critical\" in alertmanager API")
 		checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="Watchdog"}`, token, `"severity":"critical"`, 2*platformLoadTime)
 	})
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Medium-66860-add startup probe for prometheus-adapter", func() {
-		g.By("check startupProbe config in prometheus-adapter deployment")
+		exutil.By("check startupProbe config in prometheus-adapter deployment")
 		// % oc -n openshift-monitoring get deploy prometheus-adapter -ojsonpath='{.spec.template.spec.containers[?(@.name=="prometheus-adapter")].startupProbe}'
 		output, deployErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].startupProbe}", "-n", "openshift-monitoring").Output()
 		o.Expect(deployErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`{"failureThreshold":18,"httpGet":{"path":"/livez","port":"https","scheme":"HTTPS"},"periodSeconds":10,"successThreshold":1,"timeoutSeconds":1}`))
 
-		g.By("check prometheus-adapter pod logs, should not see crashlooping logs")
+		exutil.By("check prometheus-adapter pod logs, should not see crashlooping logs")
 		// % oc -n openshift-monitoring logs -l app.kubernetes.io/name=prometheus-adapter -c prometheus-adapter --tail=-1
 		output, logsErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=prometheus-adapter", "-c", "prometheus-adapter", "--tail=-1", "-n", "openshift-monitoring").Output()
 		o.Expect(logsErr).NotTo(o.HaveOccurred())
@@ -491,20 +491,20 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Low-67008-node-exporter: disable btrfs collector", func() {
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("should not see btrfs collector related metrics")
+		exutil.By("should not see btrfs collector related metrics")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="btrfs"}'`, token, "\"result\":[]", uwmLoadTime)
 
-		g.By("check btrfs collector is disabled by default")
+		exutil.By("check btrfs collector is disabled by default")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("no-collector.btrfs"))
 	})
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Medium-68292-Limit the value of GOMAXPROCS on node-exporter to 4", func() {
-		g.By("check the gomaxprocs value in logs")
+		exutil.By("check the gomaxprocs value in logs")
 		// % oc -n openshift-monitoring logs -l app.kubernetes.io/name=node-exporter --tail=-1 -c node-exporter | grep -o 'gomaxprocs=[0-9]*' | uniq | cut -d= -f2
 		nodeExporterLogs, errLogs := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=node-exporter", "--tail=-1", "-c", "node-exporter", "-n", "openshift-monitoring").OutputToFile("OCP-68292_nodeExporter.log")
 		o.Expect(errLogs).NotTo(o.HaveOccurred())
@@ -518,13 +518,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Low-68401-prometheus-adapter removed --logtostderr", func() {
-		g.By("check prometheus-adapter deployment under openshift-monitoring")
+		exutil.By("check prometheus-adapter deployment under openshift-monitoring")
 		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].args}"
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", cmd, "-n", "openshift-monitoring").Output()
 		o.Expect(output).NotTo(o.ContainSubstring("--logtostderr"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check the same config in pod")
+		exutil.By("check the same config in pod")
 		prometheusAdapterPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range prometheusAdapterPodNames {
@@ -535,21 +535,21 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Low-68958-node_exporter shouldn't collect metrics for Calico Virtual NICs", func() {
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("should not see metrics for Calico Virtual NICs")
+		exutil.By("should not see metrics for Calico Virtual NICs")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_network_info{device=~"cali.*"}'`, token, "\"result\":[]", uwmLoadTime)
 	})
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Medium-69087-Replace OAuth-proxy container with kube-rbac-proxy in Thanos-Querier pod", func() {
-		g.By("check role added")
+		exutil.By("check role added")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("role", "cluster-monitoring-metrics-api", "-n", "openshift-monitoring").Output()
 		o.Expect(output).NotTo(o.ContainSubstring("NotFound"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check cluster role added")
+		exutil.By("check cluster role added")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterRole", "cluster-monitoring-view", "-ojsonpath={.rules}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("monitoring.coreos.com"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -557,12 +557,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("monitoring.coreos.com"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check thanos-querier deployment")
+		exutil.By("check thanos-querier deployment")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "thanos-querier", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-rbac-proxy-web\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("kube-rbac-proxy/config.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check thanos-querier secret")
+		exutil.By("check thanos-querier secret")
 		// should see `thanos-querier-kube-rbac-proxy-web` is added, and `thanos-querier-oauth-cookie` is removed
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-kube-rbac-proxy-web", "-n", "openshift-monitoring").Output()
 		o.Expect(output).NotTo(o.ContainSubstring("NotFound"))
@@ -570,22 +570,22 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-oauth-cookie", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("NotFound"))
 
-		g.By("Get token of current user")
+		exutil.By("Get token of current user")
 		token := oc.UserConfig().BearerToken
 
-		g.By("Get route of thanos-querier")
+		exutil.By("Get route of thanos-querier")
 		host, hostErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "thanos-querier", "-ojsonpath={.spec.host}", "-n", "openshift-monitoring").Output()
 		o.Expect(hostErr).NotTo(o.HaveOccurred())
 
-		g.By("test role can NOT access to ThanosQuerier")
+		exutil.By("test role can NOT access to ThanosQuerier")
 		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
 		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "Forbidden", 2*platformLoadTime)
 
-		g.By("add role access to ThanosQuerier")
+		exutil.By("add role access to ThanosQuerier")
 		admErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "cluster-monitoring-metrics-api", oc.Username()).Execute()
 		o.Expect(admErr).NotTo(o.HaveOccurred())
 
-		g.By("test role access to ThanosQuerier")
+		exutil.By("test role access to ThanosQuerier")
 		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
 		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "up", 2*platformLoadTime)
 	})
@@ -607,11 +607,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Medium-70051-Adjust NodeClock alerting rules to be inactive when the PTP operator is installed", func() {
-		g.By("check NodeClockSkewDetected alert expr")
+		exutil.By("check NodeClockSkewDetected alert expr")
 		cmd := "-ojsonpath={.spec.groups[*].rules[?(@.alert==\"NodeClockSkewDetected\")].expr}"
 		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "node-exporter-rules", cmd, `absent(up{job="ptp-monitor-service"})`, true)
 
-		g.By("check NodeClockNotSynchronising alert expr")
+		exutil.By("check NodeClockNotSynchronising alert expr")
 		cmd = "-ojsonpath={.spec.groups[*].rules[?(@.alert==\"NodeClockNotSynchronising\")].expr}"
 		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "node-exporter-rules", cmd, `absent(up{job="ptp-monitor-service"})`, true)
 	})
@@ -636,10 +636,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			assertPodToBeReady(oc, pod, "openshift-monitoring")
 		}
 
-		g.By("get user API token")
+		exutil.By("get user API token")
 		token, _ := oc.Run("whoami").Args("-t").Output()
 
-		g.By("Run port-forward command")
+		exutil.By("Run port-forward command")
 		cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("-n", "openshift-monitoring", "service/thanos-querier", "9093:9093").Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer cmd.Process.Kill()
@@ -647,7 +647,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		e2e.Logf("output is: %s", output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("curl without namespace parameter should return Bad Request")
+		exutil.By("curl without namespace parameter should return Bad Request")
 		curlcmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + "https://127.0.0.1:9093/api/v1/alerts"
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(context.Context) (bool, error) {
 			output, err := exec.Command("bash", "-c", curlcmd).Output()
@@ -664,7 +664,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to curl without namespace parameter"))
 
-		g.By("curl with namespace parameter should return alerts")
+		exutil.By("curl with namespace parameter should return alerts")
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(context.Context) (bool, error) {
 			output, err := exec.Command("bash", "-c", curlcmd+"?namespace=openshift-monitoring").Output()
 			e2e.Logf("output is: %s", output)
@@ -683,15 +683,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Medium-69195-Replace OAuth-proxy container with Kube-RBAC-proxy in Prometheus pod", func() {
-		g.By("check prometheus-k8s-kube-rbac-proxy-web added")
+		exutil.By("check prometheus-k8s-kube-rbac-proxy-web added")
 		checkSecret, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "prometheus-k8s-kube-rbac-proxy-web", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSecret).NotTo(o.ContainSubstring("not found"))
 
-		g.By("check secret prometheus-k8s-proxy removed")
+		exutil.By("check secret prometheus-k8s-proxy removed")
 		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "prometheus-k8s-proxy", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSecret).To(o.ContainSubstring("not found"))
 
-		g.By("check prometheus k8s configs, kube-rbac-proxy-web related configs should exist")
+		exutil.By("check prometheus k8s configs, kube-rbac-proxy-web related configs should exist")
 		checkPrometheusK8s, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-web\")].ports}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkPrometheusK8s).To(o.ContainSubstring("9091"))
 		o.Expect(checkPrometheusK8s).To(o.ContainSubstring("web"))
@@ -700,59 +700,59 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkPrometheusK8s, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", "-ojsonpath={.spec.secrets}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkPrometheusK8s).To(o.ContainSubstring("prometheus-k8s-kube-rbac-proxy-web"))
 
-		g.By("check prometheus k8s pods, prometheus-proxy container is removed")
+		exutil.By("check prometheus k8s pods, prometheus-proxy container is removed")
 		checkPO, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "prometheus-k8s-0", "-ojsonpath={.spec.containers[*].name}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkPO).NotTo(o.ContainSubstring("prometheus-proxy"))
 
-		g.By("check prometheus-k8s sa, annotations should be removed")
+		exutil.By("check prometheus-k8s sa, annotations should be removed")
 		checkSA, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceAccount", "prometheus-k8s", "-ojsonpath={.metadata.annotations}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSA).To(o.Equal(""))
 
-		g.By("check prometheus-k8s servicemonitor, port should be keep at metrics")
+		exutil.By("check prometheus-k8s servicemonitor, port should be keep at metrics")
 		checkSM, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceMonitor", "prometheus-k8s", "-ojsonpath={.spec.endpoints[]}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSM).To(o.ContainSubstring(`"port":"metrics"`))
 
-		g.By("check telemeter-client deploy")
+		exutil.By("check telemeter-client deploy")
 		checkTL, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "telemeter-client", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"telemeter-client\")].env[?(@.name==\"FROM\")]}", "-n", "openshift-monitoring").Output()
 		if !strings.Contains(checkTL, `"telemeter-client" not found`) {
 			o.Expect(checkTL).To(o.ContainSubstring(`"value":"https://prometheus-k8s.openshift-monitoring.svc:9091"`))
 		}
 
-		g.By("check secret thanos-querier-kube-rbac-proxy-metrics")
+		exutil.By("check secret thanos-querier-kube-rbac-proxy-metrics")
 		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-kube-rbac-proxy-metrics", "-ojsonpath={.metadata.labels}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/component":"query-layer"`))
 		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/instance":"thanos-querier"`))
 
-		g.By("check secret thanos-querier-kube-rbac-proxy-web")
+		exutil.By("check secret thanos-querier-kube-rbac-proxy-web")
 		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "thanos-querier-kube-rbac-proxy-web", "-ojsonpath={.metadata.labels}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/component":"query-layer"`))
 		o.Expect(checkSecret).To(o.ContainSubstring(`"app.kubernetes.io/instance":"thanos-querier"`))
 
-		g.By("test role access to prometheus-k8s")
-		g.By("Get token of current user")
+		exutil.By("test role access to prometheus-k8s")
+		exutil.By("Get token of current user")
 		token := oc.UserConfig().BearerToken
 
-		g.By("Get route of prometheus-k8s")
+		exutil.By("Get route of prometheus-k8s")
 		host, hostErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-ojsonpath={.spec.host}", "-n", "openshift-monitoring").Output()
 		o.Expect(hostErr).NotTo(o.HaveOccurred())
 
-		g.By("test role can NOT access to prometheus-k8s")
+		exutil.By("test role can NOT access to prometheus-k8s")
 		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
 		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "Forbidden", 2*platformLoadTime)
 
-		g.By("add role access to prometheus-k8s")
+		exutil.By("add role access to prometheus-k8s")
 		admErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "cluster-monitoring-metrics-api", oc.Username()).Execute()
 		o.Expect(admErr).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "cluster-monitoring-metrics-api", oc.Username()).Execute()
 
-		g.By("test role access to prometheus-k8s")
+		exutil.By("test role access to prometheus-k8s")
 		// % curl -H "Authorization: Bearer $token" -k "https://$host/api/v1/query?" --data-urlencode 'query=up{namespace="openshift-monitoring"}'
 		checkMetric(oc, "https://"+host+"/api/v1/query? --data-urlencode 'query=up{namespace=\"openshift-monitoring\"}'", token, "up", 2*platformLoadTime)
 	})
 
 	// author: tagao@redhat.com
 	g.It("Author:tagao-Medium-72560-Replace oauth-proxy container with kube-rbac-proxy in Alertmanager pods", func() {
-		g.By("check new configs added to alertmanager main")
+		exutil.By("check new configs added to alertmanager main")
 		checkAlertmanager, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager", "main", "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-web\")]}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"--secure-listen-address=0.0.0.0:9095"`))
 		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"--upstream=http://127.0.0.1:9093"`))
@@ -761,44 +761,44 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"mountPath":"/etc/kube-rbac-proxy"`))
 		o.Expect(checkAlertmanager).To(o.ContainSubstring(`"name":"secret-alertmanager-kube-rbac-proxy-web"`))
 
-		g.By("check new secret added and old one removed")
+		exutil.By("check new secret added and old one removed")
 		checkSecret, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "alertmanager-kube-rbac-proxy-web", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSecret).NotTo(o.ContainSubstring("not found"))
 		checkSecret, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "alertmanager-main-proxy", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSecret).To(o.ContainSubstring("not found"))
 
-		g.By("check alertmanager pods, alertmanager-proxy container is removed")
+		exutil.By("check alertmanager pods, alertmanager-proxy container is removed")
 		checkPO, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "alertmanager-main-0", "-ojsonpath={.spec.containers[*].name}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkPO).NotTo(o.ContainSubstring("alertmanager-proxy"))
 
-		g.By("check alertmanager-main sa, annotations should be removed")
+		exutil.By("check alertmanager-main sa, annotations should be removed")
 		checkSA, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceAccount", "alertmanager-main", "-ojsonpath={.metadata.annotations}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSA).To(o.Equal(""))
 
-		g.By("check role, monitoring-alertmanager-edit add new resourceNames")
+		exutil.By("check role, monitoring-alertmanager-edit add new resourceNames")
 		checkRole, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("role", "monitoring-alertmanager-edit", "-ojsonpath={.rules}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkRole).To(o.ContainSubstring(`"resourceNames":["main"]`))
 		o.Expect(checkRole).To(o.ContainSubstring(`"resources":["alertmanagers/api"]`))
 		o.Expect(checkRole).To(o.ContainSubstring(`"verbs":["*"]`))
 
-		g.By("test user access to alertmanager")
-		g.By("Get token of current user")
+		exutil.By("test user access to alertmanager")
+		exutil.By("Get token of current user")
 		token := oc.UserConfig().BearerToken
 
-		g.By("Get route of alertmanager-main")
+		exutil.By("Get route of alertmanager-main")
 		host, hostErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "alertmanager-main", "-ojsonpath={.spec.host}", "-n", "openshift-monitoring").Output()
 		o.Expect(hostErr).NotTo(o.HaveOccurred())
 
-		g.By("test role can NOT access to alertmanager")
+		exutil.By("test role can NOT access to alertmanager")
 		// % curl -H "Authorization: Bearer $TOKEN" -k "https://$HOST/api/v2/receivers"
 		checkMetric(oc, "https://"+host+"/api/v2/receivers", token, "Forbidden", 2*platformLoadTime)
 
-		g.By("add role access to alertmanager")
+		exutil.By("add role access to alertmanager")
 		admErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "monitoring-alertmanager-edit", oc.Username()).Execute()
 		o.Expect(admErr).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "monitoring-alertmanager-edit", oc.Username()).Execute()
 
-		g.By("test role access to alertmanager")
+		exutil.By("test role access to alertmanager")
 		// % curl -H "Authorization: Bearer $TOKEN" -k "https://$HOST/api/v2/receivers"
 		checkMetric(oc, "https://"+host+"/api/v2/receivers", token, `"name":"Watchdog"`, 2*platformLoadTime)
 	})
@@ -824,7 +824,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				oc.SetupProject()
 				ns = oc.Namespace()
 				//create example app and alert rule under the project
-				g.By("Create example app!")
+				exutil.By("Create example app!")
 				createResourceFromYaml(oc, ns, exampleApp)
 				exutil.AssertAllPodsToBeReady(oc, ns)
 			})
@@ -835,47 +835,47 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 					exampleAppRule = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
 				)
 
-				g.By("label project not being monitored")
+				exutil.By("label project not being monitored")
 				labelNameSpace(oc, ns, "openshift.io/user-monitoring=false")
 
 				//create example app and alert rule under the project
-				g.By("Create example alert rule!")
+				exutil.By("Create example alert rule!")
 				createResourceFromYaml(oc, ns, exampleAppRule)
 
-				g.By("Get token of SA prometheus-k8s")
+				exutil.By("Get token of SA prometheus-k8s")
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-				g.By("check metrics")
+				exutil.By("check metrics")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", 2*uwmLoadTime)
-				g.By("check alerts")
+				exutil.By("check alerts")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{namespace=\""+ns+"\"}'", token, "\"result\":[]", uwmLoadTime)
 
-				g.By("label project being monitored")
+				exutil.By("label project being monitored")
 				labelNameSpace(oc, ns, "openshift.io/user-monitoring=true")
 
-				g.By("check metrics")
+				exutil.By("check metrics")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", 2*uwmLoadTime)
 
-				g.By("check alerts")
+				exutil.By("check alerts")
 				checkMetric(oc, "https://thanos-ruler.openshift-user-workload-monitoring.svc:9091/api/v1/alerts", token, "TestAlert", uwmLoadTime)
 			})
 
 			// author: hongyli@redhat.com
 			g.It("Author:hongyli-High-50024-High-49515-Check federate route and service of user workload Prometheus", func() {
 				var err error
-				g.By("Bind cluster-monitoring-view RBAC to default service account")
+				exutil.By("Bind cluster-monitoring-view RBAC to default service account")
 				uwmFederateRBACViewName := "uwm-federate-rbac-" + ns
 				defer deleteBindMonitoringViewRoleToDefaultSA(oc, uwmFederateRBACViewName)
 				clusterRoleBinding, err := bindMonitoringViewRoleToDefaultSA(oc, ns, uwmFederateRBACViewName)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf("Created: %v %v", "ClusterRoleBinding", clusterRoleBinding.Name)
-				g.By("Get token of default service account")
+				exutil.By("Get token of default service account")
 				token := getSAToken(oc, "default", ns)
 
-				g.By("check uwm federate endpoint service")
+				exutil.By("check uwm federate endpoint service")
 				checkMetric(oc, "https://prometheus-user-workload.openshift-user-workload-monitoring.svc:9092/federate --data-urlencode 'match[]=version'", token, "prometheus-example-app", uwmLoadTime)
 
-				g.By("check uwm federate route")
+				exutil.By("check uwm federate route")
 				checkRoute(oc, "openshift-user-workload-monitoring", "federate", token, "match[]=version", "prometheus-example-app", 20)
 
 			})
@@ -885,26 +885,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				var (
 					exampleAppRule = filepath.Join(monitoringBaseDir, "in-cluster_query_alert_rule.yaml")
 				)
-				g.By("Create alert rule with expression about data provided by in-cluster prometheus")
+				exutil.By("Create alert rule with expression about data provided by in-cluster prometheus")
 				createResourceFromYaml(oc, ns, exampleAppRule)
 
-				g.By("Get token of SA prometheus-k8s")
+				exutil.By("Get token of SA prometheus-k8s")
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-				g.By("Check labelmy is in the alert")
+				exutil.By("Check labelmy is in the alert")
 				checkMetric(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts", token, "labelmy", 2*uwmLoadTime)
 			})
 
 			// author: tagao@redhat.com
 			g.It("Author:tagao-Medium-42825-Expose EnforcedTargetLimit in the CMO configuration for UWM", func() {
-				g.By("check user metrics")
+				exutil.By("check user metrics")
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", 2*uwmLoadTime)
 
-				g.By("scale deployment replicas to 2")
+				exutil.By("scale deployment replicas to 2")
 				oc.WithoutNamespace().Run("scale").Args("deployment", "prometheus-example-app", "--replicas=2", "-n", ns).Execute()
 
-				g.By("check user metrics again, the user metrics can't be found from thanos-querier")
+				exutil.By("check user metrics again, the user metrics can't be found from thanos-querier")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", 2*uwmLoadTime)
 			})
 
@@ -913,41 +913,41 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				var (
 					invalidUWM = filepath.Join(monitoringBaseDir, "invalid-uwm.yaml")
 				)
-				g.By("delete uwm-config/cm-config at the end of a serial case")
+				exutil.By("delete uwm-config/cm-config at the end of a serial case")
 				defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 				defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-				g.By("Get token of SA prometheus-k8s")
+				exutil.By("Get token of SA prometheus-k8s")
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-				g.By("query metrics from thanos-querier")
+				exutil.By("query metrics from thanos-querier")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version'", token, "prometheus-example-app", uwmLoadTime)
 
-				g.By("trigger label_limit exceed")
+				exutil.By("trigger label_limit exceed")
 				createResourceFromYaml(oc, "openshift-user-workload-monitoring", invalidUWM)
 
-				g.By("check in thanos-querier /targets api, it should complains the label_limit exceeded")
+				exutil.By("check in thanos-querier /targets api, it should complains the label_limit exceeded")
 				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, `label_limit exceeded`, 2*uwmLoadTime)
 
-				g.By("trigger label_name_length_limit exceed")
+				exutil.By("trigger label_name_length_limit exceed")
 				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "prometheus:\n enforcedLabelLimit: 8\n enforcedLabelNameLengthLimit: 1\n enforcedLabelValueLengthLimit: 1\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 
-				g.By("check in thanos-querier /targets api, it should complains the label_name_length_limit exceeded")
+				exutil.By("check in thanos-querier /targets api, it should complains the label_name_length_limit exceeded")
 				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, `label_name_length_limit exceeded`, 2*uwmLoadTime)
 
-				g.By("trigger label_value_length_limit exceed")
+				exutil.By("trigger label_value_length_limit exceed")
 				err2 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "prometheus:\n enforcedLabelLimit: 8\n enforcedLabelNameLengthLimit: 8\n enforcedLabelValueLengthLimit: 1\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
 				o.Expect(err2).NotTo(o.HaveOccurred())
 
-				g.By("check in thanos-querier /targets api, it should complains the label_value_length_limit exceeded")
+				exutil.By("check in thanos-querier /targets api, it should complains the label_value_length_limit exceeded")
 				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, `label_value_length_limit exceeded`, 2*uwmLoadTime)
 
-				g.By("relax restrictions")
+				exutil.By("relax restrictions")
 				err3 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "prometheus:\n enforcedLabelLimit: 10\n enforcedLabelNameLengthLimit: 10\n enforcedLabelValueLengthLimit: 50\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
 				o.Expect(err3).NotTo(o.HaveOccurred())
 
-				g.By("able to see the metrics")
+				exutil.By("able to see the metrics")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version'", token, "prometheus-example-app", 2*uwmLoadTime)
 			})
 
@@ -956,50 +956,50 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				var (
 					rolebinding = filepath.Join(monitoringBaseDir, "rolebinding.yaml")
 				)
-				g.By("add RoleBinding to specific user")
+				exutil.By("add RoleBinding to specific user")
 				createResourceFromYaml(oc, ns, rolebinding)
 				//oc -n ns1 patch RoleBinding view -p '{"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"User","name":"${user}"}]}'
 				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("RoleBinding", "view", "-p", `{"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"User","name":"`+oc.Username()+`"}]}`, "--type=merge", "-n", ns).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 
-				g.By("get user API token")
+				exutil.By("get user API token")
 				token := oc.UserConfig().BearerToken
 
-				g.By("check namespace labels") //There are many labels, only check the few ones
+				exutil.By("check namespace labels") //There are many labels, only check the few ones
 				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/labels?namespace="+oc.Namespace()+"\"", token, `"__name__"`, 2*uwmLoadTime)
 				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/labels?namespace="+oc.Namespace()+"\"", token, `"version"`, 2*uwmLoadTime)
 				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/labels?namespace="+oc.Namespace()+"\"", token, `"cluster_ip"`, 2*uwmLoadTime)
 
-				g.By("show label value")
+				exutil.By("show label value")
 				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/label/version/values?namespace="+oc.Namespace()+"\"", token, `"v0.4.1"`, 2*uwmLoadTime)
 
-				g.By("check with a specific series")
+				exutil.By("check with a specific series")
 				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/series?match[]=version&namespace="+oc.Namespace()+"\"", token, `"service":"prometheus-example-app"`, 2*uwmLoadTime)
 			})
 		})
 
 		// author: hongyli@redhat.com
 		g.It("Author:hongyli-High-49745-High-50519-Retention for UWM Prometheus and thanos ruler", func() {
-			g.By("Check retention size of prometheus user workload")
+			exutil.By("Check retention size of prometheus user workload")
 			checkRetention(oc, "openshift-user-workload-monitoring", "prometheus-user-workload", "storage.tsdb.retention.size=5GiB", uwmLoadTime)
-			g.By("Check retention of prometheus user workload")
+			exutil.By("Check retention of prometheus user workload")
 			checkRetention(oc, "openshift-user-workload-monitoring", "prometheus-user-workload", "storage.tsdb.retention.time=15d", 20)
-			g.By("Check retention of thanos ruler")
+			exutil.By("Check retention of thanos ruler")
 			checkRetention(oc, "openshift-user-workload-monitoring", "thanos-ruler-user-workload", "retention=15d", uwmLoadTime)
 		})
 
 		// author: juzhao@redhat.com
 		g.It("Author:juzhao-Medium-42956-Should not have PrometheusNotIngestingSamples alert if enabled user workload monitoring only", func() {
-			g.By("Get token of SA prometheus-k8s")
+			exutil.By("Get token of SA prometheus-k8s")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-			g.By("check alerts, Should not have PrometheusNotIngestingSamples alert fired")
+			exutil.By("check alerts, Should not have PrometheusNotIngestingSamples alert fired")
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusNotIngestingSamples"}'`, token, `"result":[]`, uwmLoadTime)
 		})
 
 		// author: juzhao@redhat.com
 		g.It("Author:juzhao-Medium-70998-PrometheusRestrictedConfig supports enabling sendExemplars", func() {
-			g.By("check exemplar-storage is enabled")
+			exutil.By("check exemplar-storage is enabled")
 			cmd := "-ojsonpath={.spec.enableFeatures[*]}"
 			checkYamlconfig(oc, "openshift-user-workload-monitoring", "prometheus", "user-workload", cmd, "exemplar-storage", true)
 
@@ -1010,23 +1010,23 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				cmd = "-ojsonpath={.spec.containers[?(@.name==\"prometheus\")].args}"
 				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, `--enable-feature=exemplar-storage`, true)
 			}
-			g.By("check sendExemplars is true in UWM prometheus CRD")
+			exutil.By("check sendExemplars is true in UWM prometheus CRD")
 			cmd = "-ojsonpath={.spec.remoteWrite}"
 			checkYamlconfig(oc, "openshift-user-workload-monitoring", "prometheus", "user-workload", cmd, `"sendExemplars":true`, true)
 		})
 
 		// author: tagao@redhat.com
 		g.It("Author:tagao-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
-			g.By("make sure all pods in openshift-monitoring/openshift-user-workload-monitoring are ready")
+			exutil.By("make sure all pods in openshift-monitoring/openshift-user-workload-monitoring are ready")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
-			g.By("check query log file for prometheus in openshift-monitoring")
+			exutil.By("check query log file for prometheus in openshift-monitoring")
 			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "http://localhost:9090/api/v1/query?query=prometheus_build_info").Execute()
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "bash", "-c", "cat /tmp/promethues_query.log | grep prometheus_build_info").Output()
 			o.Expect(output).To(o.ContainSubstring("prometheus_build_info"))
 
-			g.By("check query log file for prometheus in openshift-user-workload-monitoring")
+			exutil.By("check query log file for prometheus in openshift-user-workload-monitoring")
 			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "curl", "http://localhost:9090/api/v1/query?query=up").Execute()
 			output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "bash", "-c", "cat /tmp/uwm_query.log | grep up").Output()
 			o.Expect(output2).To(o.ContainSubstring("up"))
@@ -1040,19 +1040,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				sigv4Secret    = filepath.Join(monitoringBaseDir, "sigv4-secret.yaml")
 				sigv4SecretUWM = filepath.Join(monitoringBaseDir, "sigv4-secret-uwm.yaml")
 			)
-			g.By("delete secret/cm at the end of case")
+			exutil.By("delete secret/cm at the end of case")
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "sigv4-credentials-uwm", "-n", "openshift-user-workload-monitoring").Execute()
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "sigv4-credentials", "-n", "openshift-monitoring").Execute()
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("Create sigv4 secret under openshift-monitoring")
+			exutil.By("Create sigv4 secret under openshift-monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", sigv4Secret)
 
-			g.By("Configure remote write sigv4 and enable user workload monitoring")
+			exutil.By("Configure remote write sigv4 and enable user workload monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", sigv4ClusterCM)
 
-			g.By("Check sig4 config under openshift-monitoring")
+			exutil.By("Check sig4 config under openshift-monitoring")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://authorization.remotewrite.com/api/write")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "sigv4:")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "region: us-central1")
@@ -1061,13 +1061,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "profile: SomeProfile")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "role_arn: SomeRoleArn")
 
-			g.By("Create sigv4 secret under openshift-user-workload-monitoring")
+			exutil.By("Create sigv4 secret under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", sigv4SecretUWM)
 
-			g.By("Configure remote write sigv4 setting for user workload monitoring")
+			exutil.By("Configure remote write sigv4 setting for user workload monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", sigv4UwmCM)
 
-			g.By("Check sig4 config under openshift-user-workload-monitoring")
+			exutil.By("Check sig4 config under openshift-user-workload-monitoring")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://authorization.remotewrite.com/api/write")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "sigv4:")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "region: us-east2")
@@ -1085,19 +1085,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				oauth2Secret    = filepath.Join(monitoringBaseDir, "oauth2-secret.yaml")
 				oauth2SecretUWM = filepath.Join(monitoringBaseDir, "oauth2-secret-uwm.yaml")
 			)
-			g.By("delete secret/cm at the end of case")
+			exutil.By("delete secret/cm at the end of case")
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "oauth2-credentials", "-n", "openshift-user-workload-monitoring").Execute()
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "oauth2-credentials", "-n", "openshift-monitoring").Execute()
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("Create oauth2 secret under openshift-monitoring")
+			exutil.By("Create oauth2 secret under openshift-monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", oauth2Secret)
 
-			g.By("Configure remote write oauth2 and enable user workload monitoring")
+			exutil.By("Configure remote write oauth2 and enable user workload monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", oauth2ClusterCM)
 
-			g.By("Check oauth2 config under openshift-monitoring")
+			exutil.By("Check oauth2 config under openshift-monitoring")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://test.remotewrite.com/api/write")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "remote_timeout: 30s")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "client_id: basic_user")
@@ -1108,13 +1108,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "param1: value1")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "param2: value2")
 
-			g.By("Create oauth2 secret under openshift-user-workload-monitoring")
+			exutil.By("Create oauth2 secret under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", oauth2SecretUWM)
 
-			g.By("Configure remote write oauth2 setting for user workload monitoring")
+			exutil.By("Configure remote write oauth2 setting for user workload monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", oauth2UwmCM)
 
-			g.By("Check oauth2 config under openshift-user-workload-monitoring")
+			exutil.By("Check oauth2 config under openshift-user-workload-monitoring")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://test.remotewrite.com/api/write")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "remote_timeout: 30s")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "client_id: basic_user")
@@ -1132,54 +1132,54 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				enableAltmgrConfig = filepath.Join(monitoringBaseDir, "enableUserAlertmanagerConfig.yaml")
 				wechatConfig       = filepath.Join(monitoringBaseDir, "exampleAlertConfigAndSecret.yaml")
 			)
-			g.By("delete uwm-config/cm-config at the end of a serial case")
+			exutil.By("delete uwm-config/cm-config at the end of a serial case")
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("enable alert manager config")
+			exutil.By("enable alert manager config")
 			createResourceFromYaml(oc, "openshift-monitoring", enableAltmgrConfig)
 			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 
-			g.By("check the initial alertmanager configuration")
+			exutil.By("check the initial alertmanager configuration")
 			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "alertname = Watchdog", true)
 
-			g.By("create&check alertmanagerconfig under openshift-monitoring")
+			exutil.By("create&check alertmanagerconfig under openshift-monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", wechatConfig)
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanagerconfig/config-example", "secret/wechat-config", "-n", "openshift-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("config-example"))
 			o.Expect(output).To(o.ContainSubstring("wechat-config"))
 
-			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
+			exutil.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
 			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
 
-			g.By("delete the alertmanagerconfig/secret created under openshift-monitoring")
+			exutil.By("delete the alertmanagerconfig/secret created under openshift-monitoring")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanagerconfig/config-example", "secret/wechat-config", "-n", "openshift-monitoring").Execute()
 
-			g.By("create one new project, label the namespace and create the same AlertmanagerConfig")
+			exutil.By("create one new project, label the namespace and create the same AlertmanagerConfig")
 			oc.SetupProject()
 			ns := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/user-monitoring=false").Execute()
 
-			g.By("create&check alertmanagerconfig under the namespace")
+			exutil.By("create&check alertmanagerconfig under the namespace")
 			createResourceFromYaml(oc, ns, wechatConfig)
 			output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanagerconfig/config-example", "secret/wechat-config", "-n", ns).Output()
 			o.Expect(output2).To(o.ContainSubstring("config-example"))
 			o.Expect(output2).To(o.ContainSubstring("wechat-config"))
 
-			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
+			exutil.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
 			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
 
-			g.By("update the label to true")
+			exutil.By("update the label to true")
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/user-monitoring=true", "--overwrite").Execute()
 
-			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration")
+			exutil.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration")
 			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", true)
 
-			g.By("set enableUserAlertmanagerConfig to false")
+			exutil.By("set enableUserAlertmanagerConfig to false")
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "cluster-monitoring-config", "-p", `{"data": {"config.yaml": "alertmanagerMain:\n enableUserAlertmanagerConfig: false\n"}}`, "--type=merge", "-n", "openshift-monitoring").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("the AlertmanagerConfig from user project is removed")
+			exutil.By("the AlertmanagerConfig from user project is removed")
 			checkAlertmanagerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
 		})
 
@@ -1190,19 +1190,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				authSecret    = filepath.Join(monitoringBaseDir, "auth-secret.yaml")
 				authSecretUWM = filepath.Join(monitoringBaseDir, "auth-secret-uwm.yaml")
 			)
-			g.By("delete secret/cm at the end of case")
+			exutil.By("delete secret/cm at the end of case")
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "rw-auth", "-n", "openshift-user-workload-monitoring").Execute()
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "rw-auth", "-n", "openshift-monitoring").Execute()
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("Create auth secret under openshift-monitoring")
+			exutil.By("Create auth secret under openshift-monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", authSecret)
 
-			g.By("Configure remote write auth and enable user workload monitoring")
+			exutil.By("Configure remote write auth and enable user workload monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", authClusterCM)
 
-			g.By("Check auth config under openshift-monitoring")
+			exutil.By("Check auth config under openshift-monitoring")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://remote-write.endpoint")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "target_label: __tmp_openshift_cluster_id__")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://basicAuth.remotewrite.com/api/write")
@@ -1212,13 +1212,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "__tmp_openshift_cluster_id__")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "target_label: cluster_id")
 
-			g.By("Create auth secret under openshift-user-workload-monitoring")
+			exutil.By("Create auth secret under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", authSecretUWM)
 
-			g.By("Configure remote write auth setting for user workload monitoring")
+			exutil.By("Configure remote write auth setting for user workload monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", authUwmCM)
 
-			g.By("Check auth config under openshift-user-workload-monitoring")
+			exutil.By("Check auth config under openshift-user-workload-monitoring")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://remote-write.endpoint")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "target_label: __tmp_openshift_cluster_id__")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://basicAuth.remotewrite.com/api/write")
@@ -1232,10 +1232,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		// author: tagao@redhat.com
 		g.It("Author:tagao-Low-43037-Should not have error for oc adm inspect clusteroperator monitoring command", func() {
-			g.By("delete must-gather file at the end of case")
+			exutil.By("delete must-gather file at the end of case")
 			defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-43037").Output()
 
-			g.By("oc adm inspect clusteroperator monitoring")
+			exutil.By("oc adm inspect clusteroperator monitoring")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "clusteroperator", "monitoring", "--dest-dir=/tmp/must-gather-43037").Output()
 			o.Expect(output).NotTo(o.ContainSubstring("error"))
@@ -1246,7 +1246,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			var (
 				separateUwmConf = filepath.Join(monitoringBaseDir, "separate-uwm-config.yaml")
 			)
-			g.By("delete uwm-config/cm-config and bound pvc at the end of a serial case")
+			exutil.By("delete uwm-config/cm-config and bound pvc at the end of a serial case")
 			defer func() {
 				PvcNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/instance=user-workload", "-n", "openshift-user-workload-monitoring").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -1257,32 +1257,32 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("this case should execute on cluster which have storage class")
+			exutil.By("this case should execute on cluster which have storage class")
 			checkSc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc").Output()
 			if checkSc == "{}" || !strings.Contains(checkSc, "default") {
 				g.Skip("This case should execute on cluster which have default storage class!")
 			}
 
-			g.By("get master node names with label")
+			exutil.By("get master node names with label")
 			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "-ojsonpath={.items[*].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodeNameList := strings.Fields(NodeNames)
 
-			g.By("add labels to master nodes, and delete them at the end of case")
+			exutil.By("add labels to master nodes, and delete them at the end of case")
 			for _, name := range nodeNameList {
 				defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm-").Execute()
 				err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm=deploy").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 
-			g.By("create the separate user workload configuration")
+			exutil.By("create the separate user workload configuration")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", separateUwmConf)
 
-			g.By("check remoteWrite metrics")
+			exutil.By("check remoteWrite metrics")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=prometheus_remote_storage_shards'`, token, `"url":"http://localhost:1234/receive"`, 3*uwmLoadTime)
 
-			g.By("check prometheus-user-workload pods are bound to PVCs, check cpu and memory")
+			exutil.By("check prometheus-user-workload pods are bound to PVCs, check cpu and memory")
 			PodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/name=prometheus", "-n", "openshift-user-workload-monitoring").Output()
 			PodNameList := strings.Fields(PodNames)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1293,7 +1293,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				o.Expect(output).To(o.ContainSubstring(`"cpu":"200m","memory":"1Gi"`))
 			}
 
-			g.By("check thanos-ruler-user-workload pods are bound to PVCs, check cpu and memory")
+			exutil.By("check thanos-ruler-user-workload pods are bound to PVCs, check cpu and memory")
 			PodNames, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/name=thanos-ruler", "-n", "openshift-user-workload-monitoring").Output()
 			PodNameList = strings.Fields(PodNames)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1304,7 +1304,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				o.Expect(output).To(o.ContainSubstring(`"cpu":"20m","memory":"50Mi"`))
 			}
 
-			g.By("toleration settings check")
+			exutil.By("toleration settings check")
 			PodNames, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-n", "openshift-user-workload-monitoring").Output()
 			PodNameList = strings.Fields(PodNames)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1313,11 +1313,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				o.Expect(output).To(o.ContainSubstring("node-role.kubernetes.io/master"))
 				o.Expect(output).To(o.ContainSubstring(`"operator":"Exists"`))
 			}
-			g.By("prometheus.enforcedSampleLimit check")
+			exutil.By("prometheus.enforcedSampleLimit check")
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-ojsonpath={.spec.enforcedSampleLimit}", "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("2"))
 
-			g.By("prometheus.retention check")
+			exutil.By("prometheus.retention check")
 			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-ojsonpath={.spec.retention}", "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("48h"))
 		})
@@ -1329,7 +1329,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				exampleAlert             = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
 				AlertmanagerConfig       = filepath.Join(monitoringBaseDir, "exampleAlertConfigAndSecret.yaml")
 			)
-			g.By("delete uwm-config/cm-config and bound pvc at the end of a serial case")
+			exutil.By("delete uwm-config/cm-config and bound pvc at the end of a serial case")
 			defer func() {
 				PvcNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-ojsonpath={.items[*].metadata.name}", "-l", "alertmanager=user-workload", "-n", "openshift-user-workload-monitoring").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -1340,37 +1340,37 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("this case should execute on cluster which have storage class")
+			exutil.By("this case should execute on cluster which have storage class")
 			checkSc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc").Output()
 			if checkSc == "{}" || !strings.Contains(checkSc, "default") {
 				g.Skip("This case should execute on cluster which have default storage class!")
 			}
 
-			g.By("get master node names with label")
+			exutil.By("get master node names with label")
 			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "-ojsonpath={.items[*].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodeNameList := strings.Fields(NodeNames)
 
-			g.By("add labels to master nodes, and delete them at the end of case")
+			exutil.By("add labels to master nodes, and delete them at the end of case")
 			for _, name := range nodeNameList {
 				defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm-").Execute()
 				err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", name, "uwm=alertmanager").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 
-			g.By("create the dedicated UWM Alertmanager configuration")
+			exutil.By("create the dedicated UWM Alertmanager configuration")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", dedicatedUWMalertmanager)
 
-			g.By("deploy prometheusrule and alertmanagerconfig to user project")
+			exutil.By("deploy prometheusrule and alertmanagerconfig to user project")
 			oc.SetupProject()
 			ns := oc.Namespace()
 			createResourceFromYaml(oc, ns, exampleAlert)
 			createResourceFromYaml(oc, ns, AlertmanagerConfig)
 
-			g.By("check all pods are created")
+			exutil.By("check all pods are created")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
-			g.By("confirm thanos-ruler is ready")
+			exutil.By("confirm thanos-ruler is ready")
 			exutil.AssertPodToBeReady(oc, "thanos-ruler-user-workload-0", "openshift-user-workload-monitoring")
 			thanosPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", " app.kubernetes.io/name=thanos-ruler", "-n", "openshift-user-workload-monitoring").Output()
 			e2e.Logf("thanos-ruler pods: \n%v", thanosPod)
@@ -1383,19 +1383,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			})
 			exutil.AssertWaitPollNoErr(thanosSaErr, "sa not created")
 
-			g.By("check the alerts could be found in alertmanager under openshift-user-workload-monitoring project")
+			exutil.By("check the alerts could be found in alertmanager under openshift-user-workload-monitoring project")
 			token := getSAToken(oc, "thanos-ruler", "openshift-user-workload-monitoring")
 			checkMetric(oc, `https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts`, token, "TestAlert1", 3*uwmLoadTime)
 
-			g.By("check the alerts could not be found in openshift-monitoring project")
+			exutil.By("check the alerts could not be found in openshift-monitoring project")
 			//same as: checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?&filter={alertname="TestAlert1"}`, token, "[]", 3*uwmLoadTime)
 			checkAlertNotExist(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts", token, "TestAlert1", 3*uwmLoadTime)
 
-			g.By("get alertmanager pod names")
+			exutil.By("get alertmanager pod names")
 			PodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-ojsonpath={.items[*].metadata.name}", "-l", "app.kubernetes.io/name=alertmanager", "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("check alertmanager pod resources limits and requests")
+			exutil.By("check alertmanager pod resources limits and requests")
 			for _, pod := range strings.Fields(PodNames) {
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, `-ojsonpath={.spec.containers[?(@.name=="alertmanager")].resources.limits}`, "-n", "openshift-user-workload-monitoring").Output()
 				o.Expect(output).To(o.ContainSubstring(`"cpu":"100m","memory":"250Mi"`))
@@ -1405,24 +1405,24 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 
-			g.By("check alertmanager pod are bound pvcs")
+			exutil.By("check alertmanager pod are bound pvcs")
 			for _, pod := range strings.Fields(PodNames) {
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-ojsonpath={.spec.volumes[]}", "-n", "openshift-user-workload-monitoring").Output()
 				o.Expect(output).To(o.ContainSubstring("uwm-alertmanager"))
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 
-			g.By("check AlertmanagerConfigs are take effect")
+			exutil.By("check AlertmanagerConfigs are take effect")
 			for _, pod := range strings.Fields(PodNames) {
 				checkAlertmanagerConfig(oc, "openshift-user-workload-monitoring", pod, "api_url: http://wechatserver:8080/", true)
 			}
 
-			g.By("check logLevel is correctly set")
+			exutil.By("check logLevel is correctly set")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager/user-workload", "-ojsonpath={.spec.logLevel}", "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("debug"))
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("check logLevel is take effect")
+			exutil.By("check logLevel is take effect")
 			for _, pod := range strings.Fields(PodNames) {
 				output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-c", "alertmanager", pod, "-n", "openshift-user-workload-monitoring").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -1431,15 +1431,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				}
 			}
 
-			g.By("disable alertmanager in user-workload-monitoring-config")
+			exutil.By("disable alertmanager in user-workload-monitoring-config")
 			//oc patch cm user-workload-monitoring-config -p '{"data": {"config.yaml": "alertmanager:\n  enabled: false\n"}}' --type=merge -n openshift-user-workload-monitoring
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "alertmanager:\n  enabled: false\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("should found user project alerts in platform alertmanager")
+			exutil.By("should found user project alerts in platform alertmanager")
 			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts`, token, "TestAlert1", 3*uwmLoadTime)
 
-			g.By("UWM alertmanager pod should disappear") //need time to wait pod fully terminated, put this step after the checkMetric
+			exutil.By("UWM alertmanager pod should disappear") //need time to wait pod fully terminated, put this step after the checkMetric
 			checkPodDeleted(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=alertmanager", "alertmanager")
 		})
 
@@ -1450,11 +1450,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				exampleAlert     = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
 				exampleAlert2    = filepath.Join(monitoringBaseDir, "leaf-prometheus-rule.yaml")
 			)
-			g.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
+			exutil.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring").Execute()
 
-			g.By("check alertmanager pod is created")
+			exutil.By("check alertmanager pod is created")
 			err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
 				podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
 				if err != nil || strings.Contains(podStats, "not found") {
@@ -1467,7 +1467,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			})
 			exutil.AssertWaitPollNoErr(err, "pod not created")
 
-			g.By("skip case on disconnected cluster")
+			exutil.By("skip case on disconnected cluster")
 			output, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("the pod condition: %s", output)
@@ -1475,26 +1475,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.Skip("This case can not execute on a disconnected cluster!")
 			}
 
-			g.By("create example PrometheusRule under user namespace")
+			exutil.By("create example PrometheusRule under user namespace")
 			oc.SetupProject()
 			ns1 := oc.Namespace()
 			createResourceFromYaml(oc, ns1, exampleAlert)
 
-			g.By("create another user namespace then create PrometheusRule with leaf-prometheus label")
+			exutil.By("create another user namespace then create PrometheusRule with leaf-prometheus label")
 			oc.SetupProject()
 			ns2 := oc.Namespace()
 			createResourceFromYaml(oc, ns2, exampleAlert2)
 
-			g.By("Get token of SA prometheus-k8s")
+			exutil.By("Get token of SA prometheus-k8s")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-			g.By("check the user alerts TestAlert1 and TestAlert2 are shown in \"in-cluster alertmanager\" API")
+			exutil.By("check the user alerts TestAlert1 and TestAlert2 are shown in \"in-cluster alertmanager\" API")
 			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "TestAlert1", 3*uwmLoadTime)
 			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, `"generatorURL":"https://thanos-querier-openshift-monitoring`, 3*uwmLoadTime)
 			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "TestAlert2", 3*uwmLoadTime)
 			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, `"generatorURL":"http://prometheus-user-workload-`, 3*uwmLoadTime)
 
-			g.By("check the alerts are also sent to external alertmanager")
+			exutil.By("check the alerts are also sent to external alertmanager")
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", 3*uwmLoadTime)
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", `"generatorURL":"https://thanos-querier-openshift-monitoring`, 3*uwmLoadTime)
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert2", 3*uwmLoadTime)
@@ -1508,40 +1508,40 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				testAlertmanager      = filepath.Join(monitoringBaseDir, "example-alertmanager.yaml")
 				exampleAlert          = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
 			)
-			g.By("Restore cluster monitoring stack default configuration")
+			exutil.By("Restore cluster monitoring stack default configuration")
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring", "--ignore-not-found").Execute()
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("disable local alertmanager and set external manager for prometheus")
+			exutil.By("disable local alertmanager and set external manager for prometheus")
 			createResourceFromYaml(oc, "openshift-monitoring", InClusterMonitoringCM)
 
-			g.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
+			exutil.By("create alertmanager and set external alertmanager for prometheus/thanosRuler under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
 
-			g.By("check alertmanager pod is created")
+			exutil.By("check alertmanager pod is created")
 			exutil.AssertPodToBeReady(oc, "alertmanager-test-alertmanager-0", "openshift-user-workload-monitoring")
 
-			g.By("create example PrometheusRule under user namespace")
+			exutil.By("create example PrometheusRule under user namespace")
 			oc.SetupProject()
 			ns1 := oc.Namespace()
 			createResourceFromYaml(oc, ns1, exampleAlert)
 
-			g.By("Get token of SA prometheus-k8s")
+			exutil.By("Get token of SA prometheus-k8s")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-			g.By("check the user alerts TestAlert1 and in-cluster Watchdog alerts are shown in \"thanos-querier\" API")
+			exutil.By("check the user alerts TestAlert1 and in-cluster Watchdog alerts are shown in \"thanos-querier\" API")
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="TestAlert1"}'`, token, `TestAlert1`, 3*platformLoadTime)
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="Watchdog"}'`, token, `Watchdog`, 3*platformLoadTime)
 
-			g.By("check the alerts are also sent to external alertmanager, include the in-cluster and user project alerts")
+			exutil.By("check the alerts are also sent to external alertmanager, include the in-cluster and user project alerts")
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", 3*uwmLoadTime)
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="Watchdog"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "Watchdog", 3*uwmLoadTime)
 		})
 
 		// author: tagao@redhat.com
 		g.It("Author:tagao-ConnectedOnly-Medium-44815-Configure containers to honor the global tlsSecurityProfile", func() {
-			g.By("get global tlsSecurityProfile")
+			exutil.By("get global tlsSecurityProfile")
 			// % oc get kubeapiservers.operator.openshift.io cluster -o jsonpath='{.spec.observedConfig.servingInfo.cipherSuites}'
 			cipherSuites, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiservers.operator.openshift.io", "cluster", "-ojsonpath={.spec.observedConfig.servingInfo.cipherSuites}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1553,7 +1553,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			minTLSVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiservers.operator.openshift.io", "cluster", "-ojsonpath={.spec.observedConfig.servingInfo.minTLSVersion}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("check tls-cipher-suites and tls-min-version for prometheus-adapter under openshift-monitoring")
+			exutil.By("check tls-cipher-suites and tls-min-version for prometheus-adapter under openshift-monitoring")
 			// % oc -n openshift-monitoring get deploy prometheus-adapter -ojsonpath='{.spec.template.spec.containers[?(@tls-cipher-suites=)].args}'
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@tls-cipher-suites=)].args}", "-n", "openshift-monitoring").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1564,7 +1564,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				e2e.Failf("tls-min-version is different from global setting! %s", output)
 			}
 
-			g.By("check tls-cipher-suites and tls-min-version for all pods which use kube-rbac-proxy container under openshift-monitoring/openshift-user-workload-monitoring")
+			exutil.By("check tls-cipher-suites and tls-min-version for all pods which use kube-rbac-proxy container under openshift-monitoring/openshift-user-workload-monitoring")
 			//oc get pod -l app.kubernetes.io/name=alertmanager -n openshift-monitoring
 			alertmanagerPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=alertmanager")
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1668,15 +1668,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		// author: tagao@redhat.com
 		g.It("Author:tagao-Medium-68237-Add the trusted CA bundle in the Prometheus user workload monitoring pods", func() {
-			g.By("confirm UWM pod is ready")
+			exutil.By("confirm UWM pod is ready")
 			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
 
-			g.By("check configmap under namespace: openshift-user-workload-monitoring")
+			exutil.By("check configmap under namespace: openshift-user-workload-monitoring")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("prometheus-user-workload-trusted-ca-bundle"))
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("check the trusted CA bundle is applied to the pod")
+			exutil.By("check the trusted CA bundle is applied to the pod")
 			PodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=prometheus")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for _, pod := range PodNames {
@@ -1692,14 +1692,14 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			var (
 				UserWorkloadTasksFailed = filepath.Join(monitoringBaseDir, "UserWorkloadTasksFailed.yaml")
 			)
-			g.By("delete uwm-config/cm-config at the end of a serial case")
+			exutil.By("delete uwm-config/cm-config at the end of a serial case")
 			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-			g.By("trigger UserWorkloadTasksFailed")
+			exutil.By("trigger UserWorkloadTasksFailed")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", UserWorkloadTasksFailed)
 
-			g.By("check logs in CMO should see UserWorkloadTasksFailed")
+			exutil.By("check logs in CMO should see UserWorkloadTasksFailed")
 			CMOPodName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=cluster-monitoring-operator", "-ojsonpath={.items[].metadata.name}").Output()
 			exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "cluster-monitoring-operator", CMOPodName, "UserWorkloadTasksFailed")
 		})
@@ -1707,15 +1707,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Low-30088-User can not deploy ThanosRuler CRs in user namespaces [Serial]", func() {
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("create namespace as a common user (non-admin)")
+		exutil.By("create namespace as a common user (non-admin)")
 		oc.SetupProject()
 		ns := oc.Namespace()
 
-		g.By("check ThanosRuler can not be created")
+		exutil.By("check ThanosRuler can not be created")
 		currentUser, _ := oc.Run("whoami").Args("").Output()
 		output, _ := oc.WithoutNamespace().Run("auth").Args("can-i", "create", "thanosrulers", "-n", ns).Output()
 		e2e.Logf("current user is: %v", currentUser)
@@ -1725,33 +1725,33 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	//author: tagao@redhat.com
 	g.It("Author:tagao-NonPreRelease-Longduration-Medium-49191-Enforce body_size_limit [Serial]", func() {
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("set `enforcedBodySizeLimit` to 0, and check from the k8s pod")
+		exutil.By("set `enforcedBodySizeLimit` to 0, and check from the k8s pod")
 		patchAndCheckBodySizeLimit(oc, "0", "0")
 
-		g.By("set `enforcedBodySizeLimit` to a invalid value, and check from the k8s pod")
+		exutil.By("set `enforcedBodySizeLimit` to a invalid value, and check from the k8s pod")
 		patchAndCheckBodySizeLimit(oc, "20MiBPS", "")
 
-		g.By("set `enforcedBodySizeLimit` to 1MB to trigger PrometheusScrapeBodySizeLimitHit alert, and check from the k8s pod")
+		exutil.By("set `enforcedBodySizeLimit` to 1MB to trigger PrometheusScrapeBodySizeLimitHit alert, and check from the k8s pod")
 		patchAndCheckBodySizeLimit(oc, "1MB", "1MB")
 
-		g.By("check PrometheusScrapeBodySizeLimitHit alert is triggered")
+		exutil.By("check PrometheusScrapeBodySizeLimitHit alert is triggered")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusScrapeBodySizeLimitHit"}'`, token, "PrometheusScrapeBodySizeLimitHit", 5*uwmLoadTime)
 
-		g.By("set `enforcedBodySizeLimit` to 40MB, and check from the k8s pod")
+		exutil.By("set `enforcedBodySizeLimit` to 40MB, and check from the k8s pod")
 		patchAndCheckBodySizeLimit(oc, "40MB", "40MB")
 
-		g.By("check from alert, should not have enforcedBodySizeLimit")
+		exutil.By("check from alert, should not have enforcedBodySizeLimit")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusScrapeBodySizeLimitHit"}'`, token, `"result":[]`, 5*uwmLoadTime)
 
-		g.By("set `enforcedBodySizeLimit` to automatic, and check from the k8s pod")
+		exutil.By("set `enforcedBodySizeLimit` to automatic, and check from the k8s pod")
 		patchAndCheckBodySizeLimit(oc, "automatic", "body_size_limit")
 
-		g.By("check from alert, should not have enforcedBodySizeLimit")
+		exutil.By("check from alert, should not have enforcedBodySizeLimit")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusScrapeBodySizeLimitHit"}'`, token, `"result":[]`, 5*uwmLoadTime)
 	})
 
@@ -1760,26 +1760,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			disableNetdev = filepath.Join(monitoringBaseDir, "disableNetdev.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check netdev Collector is enabled by default")
+		exutil.By("check netdev Collector is enabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.netdev"))
 
-		g.By("check netdev metrics in prometheus k8s pod")
+		exutil.By("check netdev metrics in prometheus k8s pod")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netdev"}'`, token, `"collector":"netdev"`, uwmLoadTime)
 
-		g.By("disable netdev in CMO")
+		exutil.By("disable netdev in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", disableNetdev)
 
-		g.By("check netdev metrics in prometheus k8s pod again, should not have related metrics")
+		exutil.By("check netdev metrics in prometheus k8s pod again, should not have related metrics")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netdev"}'`, token, `"result":[]`, 3*uwmLoadTime)
 
-		g.By("check netdev in daemonset")
+		exutil.By("check netdev in daemonset")
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--no-collector.netdev"))
 	})
@@ -1789,26 +1789,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			enableCpufreq = filepath.Join(monitoringBaseDir, "enableCpufreq.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check cpufreq Collector is disabled by default")
+		exutil.By("check cpufreq Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.cpufreq"))
 
-		g.By("check cpufreq metrics in prometheus k8s pod, should not have related metrics")
+		exutil.By("check cpufreq metrics in prometheus k8s pod, should not have related metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="cpufreq"}'`, token, `"result":[]`, uwmLoadTime)
 
-		g.By("enable cpufreq in CMO")
+		exutil.By("enable cpufreq in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", enableCpufreq)
 
-		g.By("check cpufreq metrics in prometheus k8s pod again")
+		exutil.By("check cpufreq metrics in prometheus k8s pod again")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="cpufreq"}'`, token, `"collector":"cpufreq"`, 3*uwmLoadTime)
 
-		g.By("check cpufreq in daemonset")
+		exutil.By("check cpufreq in daemonset")
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--collector.cpufreq"))
 	})
@@ -1818,26 +1818,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			enableTcpstat = filepath.Join(monitoringBaseDir, "enableTcpstat.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check tcpstat Collector is disabled by default")
+		exutil.By("check tcpstat Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.tcpstat"))
 
-		g.By("check tcpstat metrics in prometheus k8s pod, should not have related metrics")
+		exutil.By("check tcpstat metrics in prometheus k8s pod, should not have related metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="tcpstat"}'`, token, `"result":[]`, uwmLoadTime)
 
-		g.By("enable tcpstat in CMO")
+		exutil.By("enable tcpstat in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", enableTcpstat)
 
-		g.By("check tcpstat metrics in prometheus k8s pod again")
+		exutil.By("check tcpstat metrics in prometheus k8s pod again")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="tcpstat"}'`, token, `"collector":"tcpstat"`, 3*uwmLoadTime)
 
-		g.By("check tcpstat in daemonset")
+		exutil.By("check tcpstat in daemonset")
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--collector.tcpstat"))
 	})
@@ -1847,26 +1847,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			enableBuddyinfo = filepath.Join(monitoringBaseDir, "enableBuddyinfo.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check buddyinfo Collector is disabled by default")
+		exutil.By("check buddyinfo Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.buddyinfo"))
 
-		g.By("check buddyinfo metrics in prometheus k8s pod, should not have related metrics")
+		exutil.By("check buddyinfo metrics in prometheus k8s pod, should not have related metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="buddyinfo"}'`, token, `"result":[]`, uwmLoadTime)
 
-		g.By("enable buddyinfo in CMO")
+		exutil.By("enable buddyinfo in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", enableBuddyinfo)
 
-		g.By("check buddyinfo metrics in prometheus k8s pod again")
+		exutil.By("check buddyinfo metrics in prometheus k8s pod again")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="buddyinfo"}'`, token, `"collector":"buddyinfo"`, 3*uwmLoadTime)
 
-		g.By("check buddyinfo in daemonset")
+		exutil.By("check buddyinfo in daemonset")
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output2).To(o.ContainSubstring("--collector.buddyinfo"))
 	})
@@ -1878,7 +1878,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			alertmanagerSecretCM    = filepath.Join(monitoringBaseDir, "alertmanager-secret-cm.yaml")
 			alertmanagerSecretUwmCM = filepath.Join(monitoringBaseDir, "alertmanager-secret-uwm-cm.yaml")
 		)
-		g.By("delete secrets/user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
+		exutil.By("delete secrets/user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "test-secret", "-n", "openshift-monitoring").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "slack-api-token", "-n", "openshift-monitoring").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "test-secret", "-n", "openshift-user-workload-monitoring").Execute()
@@ -1886,24 +1886,24 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("create alertmanager secret in openshift-monitoring")
+		exutil.By("create alertmanager secret in openshift-monitoring")
 		createResourceFromYaml(oc, "openshift-monitoring", alertmanagerSecret)
 
-		g.By("enabled UWM and configure alertmanager secret setting in cluster-monitoring-config configmap")
+		exutil.By("enabled UWM and configure alertmanager secret setting in cluster-monitoring-config configmap")
 		createResourceFromYaml(oc, "openshift-monitoring", alertmanagerSecretCM)
 
-		g.By("check if the secrets are mounted to alertmanager pod")
+		exutil.By("check if the secrets are mounted to alertmanager pod")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		checkConfigInPod(oc, "openshift-monitoring", "alertmanager-main-0", "alertmanager", "ls /etc/alertmanager/secrets/", "test-secret")
 		checkConfigInPod(oc, "openshift-monitoring", "alertmanager-main-0", "alertmanager", "ls /etc/alertmanager/secrets/", "slack-api-token")
 
-		g.By("create the same alertmanager secret in openshift-user-workload-monitoring")
+		exutil.By("create the same alertmanager secret in openshift-user-workload-monitoring")
 		createResourceFromYaml(oc, "openshift-user-workload-monitoring", alertmanagerSecret)
 
-		g.By("configure alertmanager secret setting in user-workload-monitoring-config configmap")
+		exutil.By("configure alertmanager secret setting in user-workload-monitoring-config configmap")
 		createResourceFromYaml(oc, "openshift-user-workload-monitoring", alertmanagerSecretUwmCM)
 
-		g.By("check if the secrets are mounted to UWM alertmanager pod")
+		exutil.By("check if the secrets are mounted to UWM alertmanager pod")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 		checkConfigInPod(oc, "openshift-user-workload-monitoring", "alertmanager-user-workload-0", "alertmanager", "ls /etc/alertmanager/secrets/", "test-secret")
 		checkConfigInPod(oc, "openshift-user-workload-monitoring", "alertmanager-user-workload-0", "alertmanager", "ls /etc/alertmanager/secrets/", "slack-api-token")
@@ -1914,11 +1914,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			collectionProfileminimal = filepath.Join(monitoringBaseDir, "collectionProfile_minimal.yaml")
 		)
-		g.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
+		exutil.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("skip the case in TechPreview feature enabled cluster")
+		exutil.By("skip the case in TechPreview feature enabled cluster")
 		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("FeatureGate/cluster", "-ojsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("featureSet is: %s", featureSet)
@@ -1926,10 +1926,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.Skip("This case is not suitable for TechPreview enabled cluster!")
 		}
 
-		g.By("set collectionProfile to minimal in cluster-monitoring-config configmap")
+		exutil.By("set collectionProfile to minimal in cluster-monitoring-config configmap")
 		createResourceFromYaml(oc, "openshift-monitoring", collectionProfileminimal)
 
-		g.By("should see error in CMO logs which indicate collectionProfiles is a TechPreview feature")
+		exutil.By("should see error in CMO logs which indicate collectionProfiles is a TechPreview feature")
 		CMOPodName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=cluster-monitoring-operator", "-ojsonpath={.items[].metadata.name}").Output()
 		checkLogsInContainer(oc, "openshift-monitoring", CMOPodName, "cluster-monitoring-operator", "collectionProfiles is a TechPreview feature")
 	})
@@ -1939,19 +1939,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			setGomaxprocsTo1 = filepath.Join(monitoringBaseDir, "setGomaxprocsTo1.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check default gomaxprocs value is 0")
+		exutil.By("check default gomaxprocs value is 0")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", "node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--runtime.gomaxprocs=0"))
 
-		g.By("set gomaxprocs value to 1")
+		exutil.By("set gomaxprocs value to 1")
 		createResourceFromYaml(oc, "openshift-monitoring", setGomaxprocsTo1)
 
-		g.By("check gomaxprocs value in daemonset")
+		exutil.By("check gomaxprocs value in daemonset")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}"
 		checkYamlconfig(oc, "openshift-monitoring", "daemonset", "node-exporter", cmd, "--runtime.gomaxprocs=1", true)
@@ -1962,28 +1962,28 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			disableNetclass = filepath.Join(monitoringBaseDir, "disableNetclass.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check netclass Collector is enabled by default, so as netlink")
+		exutil.By("check netclass Collector is enabled by default, so as netlink")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		//oc -n openshift-monitoring get daemonset.apps/node-exporter -ojsonpath='{.spec.template.spec.containers[?(@.name=="node-exporter")].args}'
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.netclass"))
 		o.Expect(output).To(o.ContainSubstring("--collector.netclass.netlink"))
 
-		g.By("check netclass metrics in prometheus k8s pod")
+		exutil.By("check netclass metrics in prometheus k8s pod")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netclass"}'`, token, `"collector":"netclass"`, uwmLoadTime)
 
-		g.By("disable netclass in CMO")
+		exutil.By("disable netclass in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", disableNetclass)
 
-		g.By("check netclass metrics in prometheus k8s pod again, should not have related metrics")
+		exutil.By("check netclass metrics in prometheus k8s pod again, should not have related metrics")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="netclass"}'`, token, `"result":[]`, 3*uwmLoadTime)
 
-		g.By("check netclass/netlink in daemonset")
+		exutil.By("check netclass/netlink in daemonset")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.netclass"))
 		o.Expect(output).NotTo(o.ContainSubstring("--collector.netclass.netlink"))
@@ -1994,26 +1994,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			enableKsmd = filepath.Join(monitoringBaseDir, "enableKsmd.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check ksmd Collector is disabled by default")
+		exutil.By("check ksmd Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.ksmd"))
 
-		g.By("check ksmd metrics in prometheus k8s pod, should not have related metrics")
+		exutil.By("check ksmd metrics in prometheus k8s pod, should not have related metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="ksmd"}'`, token, `"result":[]`, uwmLoadTime)
 
-		g.By("enable ksmd in CMO")
+		exutil.By("enable ksmd in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", enableKsmd)
 
-		g.By("check ksmd metrics in prometheus k8s pod again")
+		exutil.By("check ksmd metrics in prometheus k8s pod again")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="ksmd"}'`, token, `"collector":"ksmd"`, 3*uwmLoadTime)
 
-		g.By("check ksmd in daemonset")
+		exutil.By("check ksmd in daemonset")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.ksmd"))
 	})
@@ -2023,24 +2023,24 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			monitoringPluginConfig = filepath.Join(monitoringBaseDir, "monitoringPlugin-config.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("skip the case if console CO is absent")
+		exutil.By("skip the case if console CO is absent")
 		checkCO, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(checkCO, "console") {
 			g.Skip("This case is not executable when console CO is absent")
 		}
 
-		g.By("apply monitoringPlugin config and check config applied")
+		exutil.By("apply monitoringPlugin config and check config applied")
 		createResourceFromYaml(oc, "openshift-monitoring", monitoringPluginConfig)
 		//check new config takes effect
 		cmd := "-ojsonpath={.spec.template.spec.containers[].resources}"
 		checkYamlconfig(oc, "openshift-monitoring", "deployment", "monitoring-plugin", cmd, `{"limits":{"cpu":"30m","memory":"120Mi"},"requests":{"cpu":"15m","memory":"60Mi"}}`, true)
 
-		g.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service are exist")
+		exutil.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service are exist")
 		resourceNames := []string{"ConfigMap", "ConsolePlugin", "ServiceAccount", "Service"}
 		for _, resource := range resourceNames {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "monitoring-plugin", "-n", "openshift-monitoring").Output()
@@ -2049,22 +2049,22 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 		//SNO cluster do not have PDB under openshift-monitoring
 		if !exutil.IsSNOCluster(oc) {
-			g.By("check PodDisruptionBudget")
+			exutil.By("check PodDisruptionBudget")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", "monitoring-plugin", "-n", "openshift-monitoring").Output()
 			o.Expect(output).NotTo(o.ContainSubstring("not found"))
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		// this step is aim to give time to monitoring-plugin pods loading
-		g.By("check monitoring-plugin container usage")
+		exutil.By("check monitoring-plugin container usage")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=sum(rate(container_cpu_usage_seconds_total{container="monitoring-plugin",namespace="openshift-monitoring"}[5m]))'`, token, `"value"`, uwmLoadTime)
 
-		g.By("get monitoring-plugin pod name")
+		exutil.By("get monitoring-plugin pod name")
 		monitoringPluginPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check monitoring-plugin pod config")
+		exutil.By("check monitoring-plugin pod config")
 		e2e.Logf("monitoringPluginPodNames: %v", monitoringPluginPodNames)
 		e2e.Logf(oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=monitoring-plugin", "--no-headers").Output())
 		for _, pod := range monitoringPluginPodNames {
@@ -2086,23 +2086,23 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			enableSystemdUnits = filepath.Join(monitoringBaseDir, "enableSystemdUnits.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check systemd Collector is disabled by default")
+		exutil.By("check systemd Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.systemd"))
 
-		g.By("check systemd metrics in prometheus k8s pod, should not have related metrics")
+		exutil.By("check systemd metrics in prometheus k8s pod, should not have related metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="systemd"}'`, token, `"result":[]`, uwmLoadTime)
 
-		g.By("enable systemd and units in CMO")
+		exutil.By("enable systemd and units in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", enableSystemdUnits)
 
-		g.By("check systemd related metrics in prometheus k8s pod again")
+		exutil.By("check systemd related metrics in prometheus k8s pod again")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="systemd"}'`, token, `"collector":"systemd"`, 3*uwmLoadTime)
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_system_running'`, token, `"node_systemd_system_running"`, 3*uwmLoadTime)
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_timer_last_trigger_seconds'`, token, `"node_systemd_timer_last_trigger_seconds"`, 3*uwmLoadTime)
@@ -2110,7 +2110,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_version'`, token, `"node_systemd_version"`, 3*uwmLoadTime)
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_systemd_unit_state'`, token, `"node_systemd_unit_state"`, 3*uwmLoadTime)
 
-		g.By("check systemd in daemonset")
+		exutil.By("check systemd in daemonset")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.systemd"))
 		o.Expect(output).To(o.ContainSubstring("--collector.systemd.unit-include=^(network.+|nss.+|logrotate.timer)$"))
@@ -2122,31 +2122,31 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			enableMountstats    = filepath.Join(monitoringBaseDir, "enableMountstats.yaml")
 			enableMountstatsNFS = filepath.Join(monitoringBaseDir, "enableMountstats_nfs.yaml")
 		)
-		g.By("delete uwm-config/cm-config and pvcs at the end of the case")
+		exutil.By("delete uwm-config/cm-config and pvcs at the end of the case")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", "-l", "app.kubernetes.io/name=prometheus", "-n", "openshift-monitoring").Execute()
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check mountstats collector is disabled by default")
+		exutil.By("check mountstats collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.mountstats"))
 
-		g.By("check mountstats metrics in prometheus k8s pod, should not have related metrics")
+		exutil.By("check mountstats metrics in prometheus k8s pod, should not have related metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="mountstats"}'`, token, `"result":[]`, uwmLoadTime)
 
-		g.By("enable mountstats in CMO")
+		exutil.By("enable mountstats in CMO")
 		createResourceFromYaml(oc, "openshift-monitoring", enableMountstats)
 
-		g.By("check mountstats metrics in prometheus k8s pod again")
+		exutil.By("check mountstats metrics in prometheus k8s pod again")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="mountstats"}'`, token, `"collector":"mountstats"`, 3*uwmLoadTime)
 
-		g.By("check mountstats in daemonset")
+		exutil.By("check mountstats in daemonset")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.mountstats"))
 
-		g.By("check nfs metrics if need")
+		exutil.By("check nfs metrics if need")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sc").Output()
 		if strings.Contains(output, "nfs") {
 			createResourceFromYaml(oc, "openshift-monitoring", enableMountstatsNFS)
@@ -2164,42 +2164,42 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			ignoredNetworkDevices = filepath.Join(monitoringBaseDir, "ignoredNetworkDevices-lo.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check netclass/netdev device configuration")
+		exutil.By("check netclass/netdev device configuration")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.netclass.ignored-devices=^(veth.*|[a-f0-9]{15}|enP.*|ovn-k8s-mp[0-9]*|br-ex|br-int|br-ext|br[0-9]*|tun[0-9]*|cali[a-f0-9]*)$"))
 		o.Expect(output).To(o.ContainSubstring("--collector.netdev.device-exclude=^(veth.*|[a-f0-9]{15}|enP.*|ovn-k8s-mp[0-9]*|br-ex|br-int|br-ext|br[0-9]*|tun[0-9]*|cali[a-f0-9]*)$"))
 
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check lo devices exist, and able to see related metrics")
+		exutil.By("check lo devices exist, and able to see related metrics")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=group by(device) (node_network_info)'`, token, `"device":"lo"`, uwmLoadTime)
 
-		g.By("modify cm to ignore lo devices")
+		exutil.By("modify cm to ignore lo devices")
 		createResourceFromYaml(oc, "openshift-monitoring", ignoredNetworkDevices)
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 
-		g.By("check metrics again, should not see lo device metrics")
+		exutil.By("check metrics again, should not see lo device metrics")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_network_info{device="lo"}'`, token, `"result":[]`, 3*uwmLoadTime)
 
-		g.By("check netclass/netdev device configuration, no lo devices")
+		exutil.By("check netclass/netdev device configuration, no lo devices")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.netclass.ignored-devices=^(lo)$"))
 		o.Expect(output).To(o.ContainSubstring("--collector.netdev.device-exclude=^(lo)$"))
 
-		g.By("modify cm to ignore all devices")
+		exutil.By("modify cm to ignore all devices")
 		// % oc -n openshift-monitoring patch cm cluster-monitoring-config -p '{"data": {"config.yaml": "nodeExporter:\n ignoredNetworkDevices: [.*]"}}' --type=merge
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "cluster-monitoring-config", "-p", `{"data": {"config.yaml": "nodeExporter:\n ignoredNetworkDevices: [.*]"}}`, "--type=merge", "-n", "openshift-monitoring").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check metrics again, should not see all device metrics")
+		exutil.By("check metrics again, should not see all device metrics")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=group by(device) (node_network_info)'`, token, `"result":[]`, 3*uwmLoadTime)
 
-		g.By("check netclass/netdev device configuration again")
+		exutil.By("check netclass/netdev device configuration again")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.netclass.ignored-devices=^(.*)$"))
 		o.Expect(output).To(o.ContainSubstring("--collector.netdev.device-exclude=^(.*)$"))
@@ -2210,21 +2210,21 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			enableCORS = filepath.Join(monitoringBaseDir, "enableCORS.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check the default enableCORS value is false")
+		exutil.By("check the default enableCORS value is false")
 		// oc -n openshift-monitoring get deployments.apps thanos-querier -o jsonpath='{.spec.template.spec.containers[?(@.name=="thanos-query")].args}' |jq
 		thanosQueryArgs, getArgsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployments/thanos-querier", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"thanos-query\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(getArgsErr).NotTo(o.HaveOccurred(), "Failed to get thanos-query container args definition")
 		o.Expect(thanosQueryArgs).To(o.ContainSubstring("--web.disable-cors"))
 
-		g.By("set enableCORS as true")
+		exutil.By("set enableCORS as true")
 		createResourceFromYaml(oc, "openshift-monitoring", enableCORS)
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 
-		g.By("check the config again")
+		exutil.By("check the config again")
 		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"thanos-query\")].args}"
 		checkYamlconfig(oc, "openshift-monitoring", "deployments", "thanos-querier", cmd, `--web.disable-cors`, false)
 	})
@@ -2234,19 +2234,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			disableAlertmanager = filepath.Join(monitoringBaseDir, "disableAlertmanager.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("disable alertmanager in CMO config")
+		exutil.By("disable alertmanager in CMO config")
 		createResourceFromYaml(oc, "openshift-monitoring", disableAlertmanager)
 		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
 		// this step is aim to give time let CMO removing alertmanager resources
-		g.By("confirm alertmanager is down")
+		exutil.By("confirm alertmanager is down")
 		checkPodDeleted(oc, "openshift-monitoring", "alertmanager=main", "alertmanager")
 
-		g.By("check alertmanager resources are removed")
+		exutil.By("check alertmanager resources are removed")
 		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 90*time.Second, false, func(context.Context) (bool, error) {
 			resourceNames := []string{"route", "servicemonitor", "serviceaccounts", "statefulset", "services", "endpoints", "alertmanagers", "prometheusrules", "clusterrolebindings", "roles"}
 			for _, resource := range resourceNames {
@@ -2259,12 +2259,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 		exutil.AssertWaitPollNoErr(err, "one or more alertmanager resources not removed yet")
 
-		g.By("check on clusterroles")
+		exutil.By("check on clusterroles")
 		clusterroles, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterroles", "-l", "app.kubernetes.io/part-of=openshift-monitoring").Output()
 		o.Expect(clusterroles).NotTo(o.ContainSubstring("alertmanager"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check on configmaps")
+		exutil.By("check on configmaps")
 		checkCM, _ := exec.Command("bash", "-c", `oc -n openshift-monitoring get cm -l app.kubernetes.io/managed-by=cluster-monitoring-operator | grep alertmanager`).Output()
 		e2e.Logf("check result is: %v", checkCM)
 		o.Expect(checkCM).NotTo(o.ContainSubstring("alertmanager-trusted-ca-bundle"))
@@ -2272,15 +2272,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("alertmanager-trusted-ca-bundle-"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("check on rolebindings")
+		exutil.By("check on rolebindings")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebindings", "-n", "openshift-monitoring").Output()
 		o.Expect(output).NotTo(o.ContainSubstring("alertmanager-prometheusk8s"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Get token of SA prometheus-k8s")
+		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
-		g.By("check Watchdog alert exist")
+		exutil.By("check Watchdog alert exist")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertstate="firing",alertname="Watchdog"}'`, token, `"alertname":"Watchdog"`, uwmLoadTime)
 	})
 
@@ -2290,18 +2290,18 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			clusterResources = filepath.Join(monitoringBaseDir, "cluster_resources.yaml")
 			uwmResources     = filepath.Join(monitoringBaseDir, "uwm_resources.yaml")
 		)
-		g.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
+		exutil.By("delete user-workload-monitoring-config/cluster-monitoring-config configmap at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
 		createResourceFromYaml(oc, "openshift-monitoring", clusterResources)
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 
-		g.By("by default there is not resources.limits setting for the components, check the result for kube_pod_container_resource_limits of node-exporter pod to see if the setting loaded to components, same for other components")
+		exutil.By("by default there is not resources.limits setting for the components, check the result for kube_pod_container_resource_limits of node-exporter pod to see if the setting loaded to components, same for other components")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="node-exporter",namespace="openshift-monitoring"}'`, token, `"pod":"node-exporter-`, 3*uwmLoadTime)
 
-		g.By("check the resources.requests and resources.limits setting loaded to node-exporter daemonset")
+		exutil.By("check the resources.requests and resources.limits setting loaded to node-exporter daemonset")
 		// oc -n openshift-monitoring get daemonset node-exporter -o jsonpath='{.spec.template.spec.containers[?(@.name=="node-exporter")].resources.requests}'
 		result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].resources.requests}", "-n", "openshift-monitoring").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get node-exporter container resources.requests setting")
@@ -2312,7 +2312,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get node-exporter container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
 
-		g.By("check the resources.requests and resources.limits take effect for kube-state-metrics")
+		exutil.By("check the resources.requests and resources.limits take effect for kube-state-metrics")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="kube-state-metrics",namespace="openshift-monitoring"}'`, token, `"pod":"kube-state-metrics-`, 3*uwmLoadTime)
 		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/kube-state-metrics", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-state-metrics\")].resources.requests}", "-n", "openshift-monitoring").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get kube-state-metrics container resources.requests setting")
@@ -2322,7 +2322,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get kube-state-metrics container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"200Mi"`))
 
-		g.By("check the resources.requests and resources.limits take effect for openshift-state-metrics")
+		exutil.By("check the resources.requests and resources.limits take effect for openshift-state-metrics")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="openshift-state-metrics",namespace="openshift-monitoring"}'`, token, `"pod":"openshift-state-metrics-`, 3*uwmLoadTime)
 		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/openshift-state-metrics", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"openshift-state-metrics\")].resources.requests}", "-n", "openshift-monitoring").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get openshift-state-metrics container resources.requests setting")
@@ -2332,7 +2332,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get openshift-state-metrics container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
 
-		g.By("check the resources.requests and resources.limits take effect for prometheus-adapter")
+		exutil.By("check the resources.requests and resources.limits take effect for prometheus-adapter")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-adapter",namespace="openshift-monitoring"}'`, token, `"pod":"prometheus-adapter-`, 3*uwmLoadTime)
 		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].resources.requests}", "-n", "openshift-monitoring").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-adapter container resources.requests setting")
@@ -2342,7 +2342,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-adapter container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"100Mi"`))
 
-		g.By("check the resources.requests and resources.limits take effect for prometheus-operator")
+		exutil.By("check the resources.requests and resources.limits take effect for prometheus-operator")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-operator",namespace="openshift-monitoring"}'`, token, `"pod":"prometheus-operator-`, 3*uwmLoadTime)
 		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].resources.requests}", "-n", "openshift-monitoring").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator container resources.requests setting")
@@ -2352,7 +2352,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"300Mi"`))
 
-		g.By("check the resources.requests and resources.limits take effect for prometheus-operator-admission-webhook")
+		exutil.By("check the resources.requests and resources.limits take effect for prometheus-operator-admission-webhook")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-operator-admission-webhook",namespace="openshift-monitoring"}'`, token, `"pod":"prometheus-operator-admission-webhook-`, 3*uwmLoadTime)
 		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator-admission-webhook", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator-admission-webhook\")].resources.requests}", "-n", "openshift-monitoring").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator-admission-webhook container resources.requests setting")
@@ -2362,7 +2362,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-operator-admission-webhook container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
 
-		g.By("check the resources.requests and resources.limits take effect for telemeter-client")
+		exutil.By("check the resources.requests and resources.limits take effect for telemeter-client")
 		telemeterPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app.kubernetes.io/name=telemeter-client", "-n", "openshift-monitoring").Output()
 		if strings.Contains(telemeterPod, "telemeter-client") {
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="telemeter-client",namespace="openshift-monitoring"}'`, token, `"pod":"telemeter-client-`, 3*uwmLoadTime)
@@ -2378,7 +2378,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		createResourceFromYaml(oc, "openshift-user-workload-monitoring", uwmResources)
 		exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
-		g.By("check the resources.requests and resources.limits for uwm prometheus-operator")
+		exutil.By("check the resources.requests and resources.limits for uwm prometheus-operator")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-operator",namespace="openshift-user-workload-monitoring"}'`, token, `"pod":"prometheus-operator-`, 3*uwmLoadTime)
 		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-operator", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].resources.requests}", "-n", "openshift-user-workload-monitoring").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get UWM prometheus-operator container resources.requests setting")
@@ -2393,23 +2393,23 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			enableProcesses = filepath.Join(monitoringBaseDir, "enableProcesses.yaml")
 		)
-		g.By("delete uwm-config/cm-config at the end of a serial case")
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		g.By("check processes Collector is disabled by default")
+		exutil.By("check processes Collector is disabled by default")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--no-collector.processes"))
 
-		g.By("check processes metrics in prometheus k8s pod, should not have related metrics")
+		exutil.By("check processes metrics in prometheus k8s pod, should not have related metrics")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="processes"}'`, token, `"result":[]`, uwmLoadTime)
 
-		g.By("enable processes in CMO config")
+		exutil.By("enable processes in CMO config")
 		createResourceFromYaml(oc, "openshift-monitoring", enableProcesses)
 
-		g.By("check processes metrics in prometheus k8s pod again")
+		exutil.By("check processes metrics in prometheus k8s pod again")
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_scrape_collector_success{collector="processes"}'`, token, `"collector":"processes"`, 3*uwmLoadTime)
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_processes_max_processes'`, token, `"__name__":"node_processes_max_processes"`, 3*uwmLoadTime)
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_processes_pids'`, token, `"__name__":"node_processes_pids"`, 3*uwmLoadTime)
@@ -2417,7 +2417,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_processes_threads'`, token, `"__name__":"node_processes_threads"`, 3*uwmLoadTime)
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=node_processes_threads_state'`, token, `"__name__":"node_processes_threads_state"`, 3*uwmLoadTime)
 
-		g.By("check processes in daemonset")
+		exutil.By("check processes in daemonset")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset.apps/node-exporter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"node-exporter\")].args}", "-n", "openshift-monitoring").Output()
 		o.Expect(output).To(o.ContainSubstring("--collector.processes"))
 	})
@@ -2425,10 +2425,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
-		g.By("Delete config map user-workload--monitoring-config")
+		exutil.By("Delete config map user-workload--monitoring-config")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
-		g.By("Delete config map cluster-monitoring-config")
+		exutil.By("Delete config map cluster-monitoring-config")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring", "--ignore-not-found").Execute()
-		g.By("Delete alertmanager under openshift-user-workload-monitoring")
+		exutil.By("Delete alertmanager under openshift-user-workload-monitoring")
 	})
 })
