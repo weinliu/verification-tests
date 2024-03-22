@@ -56,6 +56,7 @@ var _ = g.Describe("[sig-rosacli] Cluster_Management_Service Decribe resources",
 		o.Expect(CD.APIURL).To(o.Equal(jsonData.DigString("api", "url")))
 		o.Expect(CD.ConsoleURL).To(o.Equal(jsonData.DigString("console", "url")))
 		o.Expect(CD.Region).To(o.Equal(jsonData.DigString("region", "id")))
+		o.Expect(CD.Ec2MetadataHttpTokens).To(o.Equal(jsonData.DigString("ec2_metadata_http_tokens")))
 
 		o.Expect(CD.State).To(o.Equal(jsonData.DigString("status", "state")))
 		o.Expect(CD.Created).NotTo(o.BeEmpty())
