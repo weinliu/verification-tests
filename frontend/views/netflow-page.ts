@@ -71,8 +71,6 @@ export namespace genSelectors {
     export const refreshBtn = 'refresh-button'
     export const moreOpts = 'more-options-button'
     export const FullScreen = 'fullscreen-button'
-    export const CSVExport = 'export-button'
-    export const exportCsv = '[index="1"] > ul > li > .pf-c-dropdown__menu-item'
     export const expand = '[index="2"] > ul > li > .pf-c-dropdown__menu-item'
 }
 
@@ -104,6 +102,15 @@ export namespace colSelectors {
     export const SrcZone = '[data-test=th-SrcZone] > .pf-c-table__button'
     export const DstZone = '[data-test=th-DstZone] > .pf-c-table__button'
     export const ClusterName = '[data-test=th-ClusterName] > .pf-c-table__button'
+}
+
+export namespace exportSelectors {
+    export const overviewExport = '#view-options-dropdown > ul > section:nth-child(2) > ul > li > a'
+    export const avgBytesRatesDropdown = '#top_avg_byte_rates div:nth-child(3) button'
+    export const tableExport = '#view-options-dropdown > ul > section:nth-child(2) > ul > li > a'
+    export const exportButton = '[data-test=export-button]'
+    export const closeButton = '[data-test=export-close-button]'
+    export const topologyExport = '#view-options-dropdown > ul > section:nth-child(1) > ul > li > a'
 }
 
 export namespace filterSelectors {
