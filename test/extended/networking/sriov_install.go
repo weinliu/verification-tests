@@ -30,6 +30,7 @@ var _ = g.Describe("[sig-networking] SDN sriov installation", func() {
 			namespaceTemplate     = filepath.Join(buildPruningBaseDir, "namespace-template.yaml")
 			operatorGroupTemplate = filepath.Join(buildPruningBaseDir, "operatorgroup-template.yaml")
 			subscriptionTemplate  = filepath.Join(buildPruningBaseDir, "subscription-template.yaml")
+			sriovOperatorconfig   = filepath.Join(buildPruningBaseDir, "sriovoperatorconfig.yaml")
 			opNamespace           = "openshift-sriov-network-operator"
 			opName                = "sriov-network-operators"
 		)
@@ -61,6 +62,8 @@ var _ = g.Describe("[sig-networking] SDN sriov installation", func() {
 		ocpversion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(operatorVersion).Should(o.MatchRegexp(ocpversion))
+		exutil.By("create the default sriovoperatorconfig")
+		createResourceFromFile(oc, opNamespace, sriovOperatorconfig)
 		exutil.By("Check all pods in sriov namespace are running")
 		chkSriovOperatorStatus(oc, sub.namespace)
 	})
