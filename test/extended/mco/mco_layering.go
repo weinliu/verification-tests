@@ -410,7 +410,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 	})
 
-	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Longduration-Medium-54049-Verify base images in the release image", func() {
+	g.It("Author:sregidor-NonPreRelease-Medium-54049-Verify base images in the release image", func() {
 		var (
 			oldMachineConfigOsImage = "machine-os-content"
 			coreExtensions          = "rhel-coreos-extensions"
@@ -446,10 +446,8 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that old machine config os content is not present in the release info")
-		mcOsIMage, mcErr := getImageFromReleaseInfo(oc.AsAdmin(), oldMachineConfigOsImage, dockerConfigFile)
-		o.Expect(mcErr).NotTo(o.HaveOccurred(),
-			"Error getting the old machine config os content image")
-		o.Expect(mcOsIMage).To(o.BeEmpty(),
+		mcOsIMage, _ := getImageFromReleaseInfo(oc.AsAdmin(), oldMachineConfigOsImage, dockerConfigFile)
+		o.Expect(mcOsIMage).To(o.ContainSubstring(`no image tag "`+oldMachineConfigOsImage+`" exists`),
 			"%s image should not be present in the release image, but we can find it with value %s", oldMachineConfigOsImage, mcOsIMage)
 		logger.Infof("OK!\n")
 

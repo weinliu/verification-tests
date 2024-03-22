@@ -314,7 +314,7 @@ func getImageFromReleaseInfo(oc *exutil.CLI, imageName, dockerConfigFile string)
 	if err != nil {
 		logger.Errorf("STDOUT: %s", stdout)
 		logger.Errorf("STDERR: %s", stderr)
-		return "", err
+		return stdout + stderr, err
 	}
 
 	return stdout, nil
