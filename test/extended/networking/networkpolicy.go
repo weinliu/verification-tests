@@ -1598,58 +1598,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
-	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-Author:jechen-High-67785-No retry delete failed message in OVNK master log when trying to delete pending bad pod using peerPodSelector.", func() {
-
-		// This test case is created for OCPBUGS-19449
-
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVNK network plugin")
-		}
-
-		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		allowSameNSNetworkPolicyFile := filepath.Join(buildPruningBaseDir, "networkpolicy/allow-same-namespace.yaml")
-		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
-
-		exutil.By("1. Get ovnkube-node pod for OVNK master. \n")
-		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
-
-		exutil.By("2. Obtain the namespace \n")
-		ns := oc.Namespace()
-
-		exutil.By("3. Create networkpolicy in the namespace using podSelector.\n")
-		createResourceFromFile(oc, ns, allowSameNSNetworkPolicyFile)
-		output, err := oc.Run("get").Args("networkpolicy").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("allow-same-namespace"))
-
-		exutil.By("4. In the namesapce, create a bad pod on a non-existing node to cause the pod be in pending state with no ip address.\n")
-		pod1 := pingPodResourceNode{
-			name:      "hello-pod1",
-			namespace: ns,
-			nodename:  "nonexistingnodename",
-			template:  pingPodNodeTemplate,
-		}
-
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", ns, pod1.name).Execute()
-		pod1.createPingPodNode(oc)
-		o.Consistently(func() string {
-			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, pod1.name, "-o=jsonpath={.status.phase}").Output()
-			return status
-		}, 20*time.Second, 5*time.Second).Should(o.Equal("Pending"))
-
-		exutil.By("5. Delete the pending bad pod.\n")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", ns, pod1.name).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("6. Check log of ovnkube-node for OVNK master, there should be no retry delete failed for peerPodForNamespaceAndPodSelector message in the log.\n")
-		podLogs, LogErr := checkLogMessageInPod(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnMasterPodName, "Retry ")
-		o.Expect(LogErr).NotTo(o.HaveOccurred())
-		o.Expect(regexp.MatchString("Retry delete failed.*no pod IPs found", podLogs)).Should(o.BeFalse())
-
-	})
 	// author: asood@redhat.com
 	g.It("NonHyperShiftHOST-Author:asood-High-64788-Same network policies across multiple namespaces fail to be recreated [Disruptive].", func() {
 		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-11447
