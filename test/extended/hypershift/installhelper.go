@@ -366,9 +366,9 @@ func (receiver *installHelper) hyperShiftUninstall() {
 	// Delete resources before crds to avoid unrecognized resource failure.
 	e2e.Logf("Uninstalling the Hypershift operator and relevant resources")
 	var bashClient = NewCmdClient().WithShowInfo(true)
-	_, err := bashClient.Run("hypershift install render --format=yaml --outputs resources | oc delete -f -").Output()
+	_, err := bashClient.Run("hypershift install render --enable-defaulting-webhook=true --format=yaml --outputs resources | oc delete -f -").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	_, err = bashClient.Run("hypershift install render --format=yaml --outputs crds | oc delete -f -").Output()
+	_, err = bashClient.Run("hypershift install render --enable-defaulting-webhook=true --format=yaml --outputs crds | oc delete -f -").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 
 	e2e.Logf("Waiting until the Hypershift operator and relevant resources is uninstalled")
