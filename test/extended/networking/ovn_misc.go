@@ -686,7 +686,20 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer checkNodeStatus(oc, workerNode, "Ready")
-		rebootNode(oc, workerNode)
+		defaultInt := "br-ex"
+		fileContent := fmt.Sprintf("ifconfig %s down; sleep 120; ifconfig %s up;", defaultInt, defaultInt)
+		createFileCmd := `echo -e "` + fileContent + `" > /tmp/test.sh`
+		_, err1 := exutil.DebugNodeWithChroot(oc, workerNode, "bash", "-c", createFileCmd)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		delFileCmd := "rm -rf /tmp/test.sh"
+		defer exutil.DebugNodeWithChroot(oc, workerNode, "bash", "-c", delFileCmd)
+		chmodCmd := "chmod +x /tmp/test.sh"
+		_, err2 := exutil.DebugNodeWithChroot(oc, workerNode, "bash", "-c", chmodCmd)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		testCmd := "/tmp/test.sh"
+		runCmd, _, _, runCmdErr := oc.AsAdmin().Run("debug").Args("node/"+workerNode, "--to-namespace", "default", "--", "chroot", "/host", "bash", "-c", testCmd).Background()
+		defer runCmd.Process.Kill()
+		o.Expect(runCmdErr).NotTo(o.HaveOccurred())
 		checkNodeStatus(oc, workerNode, "NotReady")
 
 		exutil.By("2. Create Admin Policy Based External route object with static gateway when the worker node in NotReady status")
