@@ -1826,4 +1826,29 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		checkUserCertificatesOnWindowsWorkers(oc, bastionHost, userSelfSignedCommonName, privateKey, 0, iaasPlatform)
 	})
+
+	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-43832-[upgrade]-Seamless upgrade with BYOH Windows instances [Serial][Disruptive]", func() {
+		upgrade_index_to := getConfigMapData(oc, wincTestCM, "wmco_upgrade_index_image", defaultNamespace)
+		if upgrade_index_to == "" {
+			g.Skip("Upgrade index image hasn't been configured")
+		}
+		source := "wmco1"
+		g.By("installing new upgrade operator with new index image")
+		installNewCatalogSource(oc, source, "catalogsource.yaml", upgrade_index_to, wmcoNamespace)
+		g.By("uninstalling old operator")
+		// True to skip namespace deletion
+		uninstallWMCO(oc, wmcoNamespace, true)
+		g.By("installing new operator with new catalogsource")
+		installWMCO(oc, wmcoNamespace, source, privateKey)
+		windowsHosts := getWindowsHostNames(oc)
+		numberOfWindowsNodes := len(windowsHosts)
+		e2e.Logf("Number of Windows nodes to upgrade %v", numberOfWindowsNodes)
+		for _, node := range windowsHosts {
+			e2e.Logf("Waiting for node to be configured as worker node %s", node)
+			waitUntilWMCOStatusChanged(oc, "instance has been configured as a worker node")
+
+		}
+		waitWindowsNodesReady(oc, numberOfWindowsNodes, 20*time.Minute)
+	})
+
 })

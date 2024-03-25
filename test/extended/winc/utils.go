@@ -51,6 +51,7 @@ var (
 	nutanix_proxy_host = "10.0.77.69"
 	vsphere_bastion    = "10.0.76.163"
 	wincTestCM         = "winc-test-config"
+	//	defaultSource      = "wmco"
 	// Bastion user used for Nutanix and vSphere IBMC
 	sshProxyUser = "root"
 	svcs         = map[int]string{
@@ -986,14 +987,19 @@ func getMetricsFromCluster(oc *exutil.CLI, metric string) string {
 	return strconv.Itoa(retValue)
 }
 
-func uninstallWMCO(oc *exutil.CLI, namespace string) {
-	defer func() {
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
-		// do not assert the above deletions, and depends on the finally getting deployment to assert the result.
-		// check that the deployment does not exist anymore
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-n", namespace).Execute()
-		o.Expect(err).To(o.HaveOccurred())
-	}()
+func uninstallWMCO(oc *exutil.CLI, namespace string, withoutNamespace ...bool) {
+	// Default behavior is to delete the namespace unless a true value is provided as the first argument of withoutNamespace
+	skipNamespaceDeletion := len(withoutNamespace) > 0 && withoutNamespace[0]
+
+	if !skipNamespaceDeletion {
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
+			// do not assert the above deletions, and depends on the finally getting deployment to assert the result.
+			// check that the deployment does not exist anymore
+			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-n", namespace).Execute()
+			o.Expect(err).To(o.HaveOccurred())
+		}()
+	}
 	// Make sure CSV exists
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", wmcoDeployment, "-n", namespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1004,29 +1010,51 @@ func uninstallWMCO(oc *exutil.CLI, namespace string) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
 }
 
+func installNewCatalogSource(oc *exutil.CLI, source string, catalogsource_file string, newIndex string, namespace string) {
+	manifestFile, err := exutil.GenerateManifestFile(oc, "winc", catalogsource_file, map[string]string{"<new_source>": source, "<index_image>": newIndex})
+	o.Expect(err).NotTo(o.HaveOccurred(), "Could not determine mew catalogsource")
+
+	defer os.Remove(manifestFile)
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Could not install new catalogsource:", source)
+	poolErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsources.operators.coreos.com", source, "-o=jsonpath={.status.connectionState.lastObservedState}", "-n", "openshift-marketplace").Output()
+		if err != nil {
+			e2e.Logf("Command failed with error: %s .Retrying...", err)
+			return false, nil
+		}
+		if msg == "READY" {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(poolErr, "WMCO deployment did not start up after waiting up to 5 minutes ...")
+}
+
 func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey string) {
 	// create new namespace
 	manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "namespace.yaml", map[string]string{"<namespace>": namespace})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.Remove(manifestFile)
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// add private key to new namespace
-	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", namespace).Output()
+	cmd := fmt.Sprintf(("oc create secret generic cloud-private-key --from-file=private-key.pem=%s -n %s  --dry-run=client -o yaml | oc replace -f -"), privateKey, namespace)
+	_, err = exec.Command("bash", "-c", cmd).CombinedOutput()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// create new operatorgroup
 	manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "operatorgroup.yaml", map[string]string{"<namespace>": namespace})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.Remove(manifestFile)
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// create subscription
 	manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "subscription.yaml", map[string]string{"<namespace>": namespace, "<source>": source})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.Remove(manifestFile)
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	poolErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
