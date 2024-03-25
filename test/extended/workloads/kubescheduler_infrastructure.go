@@ -590,13 +590,11 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 				return false, nil
 			}
 			if nominatedNodeName != nodeNames[0] {
-				e2e.Failf("NominatedNode is not equal to node1, trying")
-				return false, nil
+				return false, fmt.Errorf("NominatedNode is not equal to node1, trying")
 			}
 			return true, nil
 		})
-		checkPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", oc.Namespace()).Output()
 		e2e.Logf("Displaying all the pods inside the namespace \n%s", checkPodStatus)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No nominated node even after 180 seconds"))
 

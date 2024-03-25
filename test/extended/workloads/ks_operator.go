@@ -639,4 +639,248 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(strings.Contains(kubeSchedulerMetadata, `"include.release.openshift.io/hypershift":"true"`)).To(o.BeTrue())
 	})
 
+	// author: knarra@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-High-71998-Validate DynamicResourceAllocation is set to true when TechPreviewNoUpgrade is enabled", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skipping the test as cluster is not a TechPreviewNoUpgrade Cluster")
+		}
+
+		// Get kubescheduler pod name & check if the DynamicResources feature gate is enabled
+		ksPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-scheduler", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ksPodOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", ksPodName, "-n", "openshift-kube-scheduler", "-o=jsonpath={.spec.containers[0].args}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ksPodOut, "DynamicResourceAllocation=true")).To(o.BeTrue())
+	})
+
+	// author: knarra@redhat.com
+	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-71999-Verify user is able to enable DRA Scheduling plugin with LowNodeUtilization [Disruptive][Slow]", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skipping the test as cluster is not a TechPreviewNoUpgrade Cluster")
+		}
+
+		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profileCustomizations"}]`
+
+		g.By("Set profileCustomization to DynamicResourceAllocation")
+		patchYamlTraceAll := `[{"op": "add", "path": "/spec/profileCustomizations", "value":{"dynamicResourceAllocation":"Enabled"}}]`
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Restoring the scheduler's profile customizations")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+			e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		}()
+
+		g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		//Get the kube-scheduler pod name & check logs
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-scheduler", "pods", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", "openshift-kube-scheduler").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("DynamicResources.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling DRA Scheduling plugin with LowNodeUtilization Profile failed: %v", err)
+		}
+	})
+
+	// author: knarra@redhat.com
+	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-72171-High-72005-Verify user is able to enable DRA Scheduling plugin with HighNodeUtilization and schedule a pod [Disruptive][Slow]", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skipping the test as cluster is not a TechPreviewNoUpgrade Cluster")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		resourceClass72005 := filepath.Join(buildPruningBaseDir, "resourceclass72005.yaml")
+		customCrd72005 := filepath.Join(buildPruningBaseDir, "customcrd72005.yaml")
+		claimParams72005 := filepath.Join(buildPruningBaseDir, "claimParams72005.yaml")
+		resourceClaimTemplate72005 := filepath.Join(buildPruningBaseDir, "resourceclaimtemplate72005.yaml")
+		pod72005 := filepath.Join(buildPruningBaseDir, "pod72005.yaml")
+		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profileCustomizations"}]`
+		patchYamlToRestoreProfile := `[{"op": "remove", "path": "/spec/profile"}]`
+
+		g.By("Set profileCustomization to DynamicResourceAllocation")
+		patchYamlTraceAll := `[{"op": "add", "path": "/spec/profileCustomizations", "value":{"dynamicResourceAllocation":"Enabled"}}]`
+		errPatchProfileCustomization := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(errPatchProfileCustomization).NotTo(o.HaveOccurred())
+
+		g.By("Set profile to HighNodeUtilization")
+		patchYamlTraceAllProfile := `[{"op": "add", "path": "/spec/profile", "value":"HighNodeUtilization"}]`
+		errPatchProfile := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlTraceAllProfile).Execute()
+		o.Expect(errPatchProfile).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Restoring the scheduler's profile customizations")
+			errRestoreCustomization := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(errRestoreCustomization).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Restoring the scheduler cluster's logLevel")
+			errRestoreProfile := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlToRestoreProfile).Execute()
+			o.Expect(errRestoreProfile).NotTo(o.HaveOccurred())
+
+			g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+			e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err := waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		}()
+
+		g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err := waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		//Get the kube-scheduler pod name & check logs
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-scheduler", "pods", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", "openshift-kube-scheduler").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("score.*\n.*disabled.*\n.*NodeResourcesBalancedAllocation.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling HighNodeUtilization Profile failed: %v", err)
+		}
+
+		if match, _ := regexp.MatchString("DynamicResources.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling DRA Scheduling plugin with HighNodeUtilization Profile failed: %v", err)
+		}
+
+		// Validate scheduling pod using DRA
+		g.By("Create Resource Class")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("resourceclass", "resource.example.com").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", resourceClass72005, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Create custom CRD
+		g.By("Create custom CRD")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "claimparameters.cats.resource.example.com").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", customCrd72005, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Create Claim Parameters
+		g.By("Create Claim Parameters")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClaimParameters", "large-black-cat-claim-parameters", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", claimParams72005, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Create Resource Claim Template
+		g.By("Create Resource Claim Template")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ResourceClaimTemplate", "large-black-cat-claim-template", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", resourceClaimTemplate72005, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Create scheduling pod
+		g.By("Set namespace privileged and Create scheduling pod")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", pod72005, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Describe the pod and verify for the pending message")
+		draPodOutput, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "pod72005", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(draPodOutput, "1 waiting for resource driver to provide information")).To(o.BeTrue())
+
+	})
+
+	// author: knarra@redhat.com
+	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-72172-Verify user is able to enable DRA Scheduling plugin with NoScoring [Disruptive][Slow]", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skipping the test as cluster is not a TechPreviewNoUpgrade Cluster")
+		}
+
+		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profileCustomizations"}]`
+		patchYamlToRestoreProfile := `[{"op": "remove", "path": "/spec/profile"}]`
+
+		g.By("Set profileCustomization to DynamicResourceAllocation")
+		patchYamlTraceAll := `[{"op": "add", "path": "/spec/profileCustomizations", "value":{"dynamicResourceAllocation":"Enabled"}}]`
+		errPatchProfileCustomization := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(errPatchProfileCustomization).NotTo(o.HaveOccurred())
+
+		g.By("Set profile to NoScoring")
+		patchYamlTraceAllProfile := `[{"op": "add", "path": "/spec/profile", "value":"NoScoring"}]`
+		errPatchProfile := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlTraceAllProfile).Execute()
+		o.Expect(errPatchProfile).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Restoring the scheduler's profile customizations")
+			errRestoreCustomization := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(errRestoreCustomization).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Restoring the scheduler cluster's logLevel")
+			errRestoreProfile := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlToRestoreProfile).Execute()
+			o.Expect(errRestoreProfile).NotTo(o.HaveOccurred())
+
+			g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+			e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err := waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		}()
+
+		g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err := waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		//Get the kube-scheduler pod name & check logs
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-scheduler", "pods", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", "openshift-kube-scheduler").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("score.*\n.*disabled.*\n.*name:.'*'.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling NoScoring Profile failed: %v", err)
+		}
+
+		if match, _ := regexp.MatchString("DynamicResources.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling DRA Scheduling plugin with NoScoring Profile failed: %v", err)
+		}
+	})
+
 })
