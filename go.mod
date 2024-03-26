@@ -8,6 +8,9 @@ require (
 	cloud.google.com/go/storage v1.30.1
 	github.com/3th1nk/cidr v0.2.0
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.4.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
 	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/Azure/go-autorest/autorest v0.11.29
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.11
@@ -39,7 +42,7 @@ require (
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-github/v57 v57.0.0
 	github.com/google/goexpect v0.0.0-20210430020637-ab937bf7fd6f
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/gophercloud/gophercloud v1.0.0
 	github.com/hashicorp/hc-install v0.4.0
 	github.com/hashicorp/terraform-exec v0.17.3
@@ -91,6 +94,7 @@ require (
 	cloud.google.com/go/iam v1.1.1 // indirect
 	cloud.google.com/go/longrunning v0.5.1 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.23 // indirect
@@ -101,6 +105,7 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.1.1 // indirect
 	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/GoogleCloudPlatform/k8s-cloud-provider v1.18.1-0.20220218231025-f11817397a1b // indirect
 	github.com/JeffAshton/win_pdh v0.0.0-20161109143554-76bb4ee9f0ab // indirect
@@ -170,6 +175,7 @@ require (
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
@@ -209,6 +215,7 @@ require (
 	github.com/kevinburke/ssh_config v1.1.0 // indirect
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.2.3 // indirect
 	github.com/libopenstorage/openstorage v1.0.0 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
@@ -242,6 +249,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.1.0-rc.3 // indirect
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
+	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/profile v1.3.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

@@ -90,6 +90,14 @@ func (h *hostedCluster) getInfraID() (string, error) {
 	return value, nil
 }
 
+func (h *hostedCluster) getResourceGroupName() (string, error) {
+	infraId, err := h.getInfraID()
+	if err != nil {
+		return "", err
+	}
+	return h.name + "-" + infraId, nil
+}
+
 func (h *hostedCluster) getClustersDeletionTimestamp() (string, error) {
 	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("clusters", "-n", h.namespace+"-"+h.name, "--ignore-not-found", `-ojsonpath={.items[].metadata.deletionTimestamp}`).Output()
 	if er != nil {

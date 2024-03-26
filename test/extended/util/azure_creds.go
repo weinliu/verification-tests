@@ -1,0 +1,119 @@
+package util
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"reflect"
+	"strings"
+)
+
+type AzureCredentials struct {
+	AzureClientID       string `json:"azure_client_id,omitempty"`
+	AzureClientSecret   string `json:"azure_client_secret,omitempty" sensitive:"true"`
+	AzureSubscriptionID string `json:"azure_subscription_id,omitempty"`
+	AzureTenantID       string `json:"azure_tenant_id,omitempty"`
+	AzureResourceGroup  string `json:"azure_resourcegroup,omitempty"`
+	AzureResourcePrefix string `json:"azure_resource_prefix,omitempty"`
+	AzureRegion         string `json:"azure_region"`
+
+	decoded bool
+}
+
+func NewEmptyAzureCredentials() *AzureCredentials {
+	return &AzureCredentials{}
+}
+
+func (ac *AzureCredentials) String() string {
+	var sb strings.Builder
+	v := reflect.ValueOf(*ac)
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		fieldType := t.Field(i)
+		if !fieldType.IsExported() {
+			continue
+		}
+		// Censorship
+		if tag, ok := fieldType.Tag.Lookup("sensitive"); ok && tag == "true" {
+			continue
+		}
+
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("%s: %v", fieldType.Name, v.Field(i)))
+	}
+	return sb.String()
+}
+
+func (ac *AzureCredentials) GetFromClusterAndDecode(oc *CLI) error {
+	if err := ac.getFromCluster(oc); err != nil {
+		return fmt.Errorf("error getting credentials from the cluster: %v", err)
+	}
+	if err := ac.decodeLazy(); err != nil {
+		return fmt.Errorf("error decoding the credentials: %v", err)
+	}
+	return nil
+}
+
+// SetSdkEnvVars sets some environment variables used by azure-sdk-for-go.
+// See https://github.com/Azure/azure-sdk-for-go/blob/main/sdk/azidentity/README.md#environment-variables.
+func (ac *AzureCredentials) SetSdkEnvVars() error {
+	if err := ac.decodeLazy(); err != nil {
+		return fmt.Errorf("error setting environment variables used by azure-sdk-for-go: %v", err)
+	}
+	return errors.Join(
+		os.Setenv("AZURE_CLIENT_ID", ac.AzureClientID),
+		os.Setenv("AZURE_CLIENT_SECRET", ac.AzureClientSecret),
+		os.Setenv("AZURE_TENANT_ID", ac.AzureTenantID),
+	)
+}
+
+func (ac *AzureCredentials) getFromCluster(oc *CLI) error {
+	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").
+		Args("secret/azure-credentials", "-n", "kube-system", "-o=jsonpath={.data}").Outputs()
+	if err != nil {
+		return fmt.Errorf("error getting in-cluster root credentials: %v", err)
+	}
+
+	if err = json.Unmarshal([]byte(stdout), ac); err != nil {
+		return fmt.Errorf("error unmarshaling in-cluster root credentials: %v", err)
+	}
+	ac.decoded = false
+	return nil
+}
+
+func (ac *AzureCredentials) decodeLazy() error {
+	if ac.decoded {
+		return nil
+	}
+	return ac.decode()
+}
+
+func (ac *AzureCredentials) decode() error {
+	v := reflect.ValueOf(ac).Elem()
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		if !t.Field(i).IsExported() {
+			continue
+		}
+
+		field := v.Field(i)
+		for field.Kind() == reflect.Ptr {
+			field = field.Elem()
+		}
+		if field.Kind() != reflect.String {
+			continue
+		}
+
+		decoded, err := base64.StdEncoding.DecodeString(field.String())
+		if err != nil {
+			return fmt.Errorf("error performing base64 decoding: %v", err)
+		}
+		field.SetString(string(decoded))
+	}
+	ac.decoded = true
+	return nil
+}

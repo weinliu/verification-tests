@@ -48,6 +48,7 @@ type createCluster struct {
 	EndpointAccess                 AWSEndpointAccessType `param:"endpoint-access"`
 	ExternalDnsDomain              string                `param:"external-dns-domain"`
 	ReleaseImage                   string                `param:"release-image"`
+	ResourceGroupTags              string                `param:"resource-group-tags"`
 }
 
 type infra struct {
@@ -192,6 +193,11 @@ func (c *createCluster) withExternalDnsDomain(externalDnsDomain string) *createC
 
 func (c *createCluster) withBaseDomain(baseDomain string) *createCluster {
 	c.BaseDomain = baseDomain
+	return c
+}
+
+func (c *createCluster) withResourceGroupTags(rgTags string) *createCluster {
+	c.ResourceGroupTags = rgTags
 	return c
 }
 

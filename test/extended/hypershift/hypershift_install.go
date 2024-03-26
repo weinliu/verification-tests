@@ -587,7 +587,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(3), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
 
-	// author: liangli@redhat.com
+	// author: liangli@redhat.com, fxie@redhat.com (for HOSTEDCP-1411)
+	// Also include a part of https://issues.redhat.com/browse/HOSTEDCP-1411
 	g.It("Longduration-NonPreRelease-Author:liangli-Critical-49174-[HyperShiftINSTALL] Create Azure infrastructure and nodepools via CLI [Serial]", func() {
 		if iaasPlatform != "azure" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 49174 is for azure - skipping test ...")
@@ -604,9 +605,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.hyperShiftInstall()
 
 		exutil.By("create HostedClusters")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		createCluster := installHelper.createClusterAzureCommonBuilder().
 			withName("hypershift-" + caseID).
-			withNodePoolReplicas(1)
+			withNodePoolReplicas(1).
+			withResourceGroupTags("foo=bar,baz=quux").
+			withReleaseImage(release)
 		defer installHelper.destroyAzureHostedClusters(createCluster)
 		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
 
@@ -614,6 +619,23 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		doOcpReq(oc, OcpScale, false, "nodepool", hostedCluster.name, "--namespace", hostedCluster.namespace, "--replicas=2")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+
+		// A part of https://issues.redhat.com/browse/HOSTEDCP-1411
+		_, err = oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "azure-credentials", metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			e2e.Logf("Root creds not found on the management cluster, skip the Azure resource group check")
+			return
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Checking tags on the Azure resource group")
+		rgName, err := hostedCluster.getResourceGroupName()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Found resource group name = %s", rgName)
+		azClientSet := exutil.NewAzureClientSetWithRootCreds(oc)
+		resourceGroupsClientGetResponse, err := azClientSet.GetResourceGroupClient(nil).Get(context.Background(), rgName, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(*resourceGroupsClientGetResponse.Tags["foo"]).To(o.Equal("bar"))
+		o.Expect(*resourceGroupsClientGetResponse.Tags["baz"]).To(o.Equal("quux"))
 	})
 
 	// author: heli@redhat.com
