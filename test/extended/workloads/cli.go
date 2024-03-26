@@ -553,8 +553,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
 		networkType := checkNetworkType(oc)
-		if strings.Contains(networkType, "ovn") {
-			g.Skip("Skip for ovn cluster !!!")
+		e2e.Logf("Network type is :%s", networkType)
+
+		if strings.Contains(networkType, "ovn") || strings.Contains(networkType, "other") {
+			g.Skip("Skip for ovn cluster Or the third party network setting !!!")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		egressnetworkP := filepath.Join(buildPruningBaseDir, "egressnetworkpolicy.yaml")
