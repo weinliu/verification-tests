@@ -259,6 +259,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
+		arch, err := architecture.GetArchitectureFromMachineSet(oc, machinesetName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if arch != architecture.AMD64 {
+			g.Skip("The selected machine set's arch is not amd64, skip this case!")
+		}
 		//check supported zone for gpu
 		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
