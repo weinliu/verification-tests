@@ -70,7 +70,8 @@ type Flowlog struct {
 	DstK8S_HostName  string
 	Proto            int
 	DstAddr          string
-	Interface        string
+	IfDirections     []int
+	Interfaces       []string
 	SrcAddr          string
 	TimeFlowEndMs    int
 	DstK8S_OwnerType string

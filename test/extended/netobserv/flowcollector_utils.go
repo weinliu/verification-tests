@@ -33,7 +33,6 @@ func verifyFlowRecordFromLogs(podLog string) {
 	for _, flow := range flowRecords {
 		o.Expect(flow).Should(o.And(
 			o.MatchRegexp("Bytes.:[0-9]+"),
-			o.MatchRegexp("Duplicate.:(true|false)"),
 			o.MatchRegexp("TimeFlowEndMs.:[1-9][0-9]+"),
 			o.MatchRegexp("TimeFlowStartMs.:[1-9][0-9]+"),
 			o.MatchRegexp("TimeReceived.:[1-9][0-9]+")), flow)
@@ -64,8 +63,6 @@ func (flowlog *Flowlog) verifyFlowRecord() {
 	flow := fmt.Sprintf("Flow log is: %+v\n", flowlog)
 	o.Expect(flowlog.AgentIP).To(o.Equal(flowlog.DstK8S_HostIP), flow)
 	o.Expect(flowlog.Bytes).Should(o.BeNumerically(">", 0), flow)
-	var testDuplicate bool
-	o.Expect(flowlog.Duplicate).To(o.BeAssignableToTypeOf(testDuplicate), flow)
 	now := time.Now()
 	compareTime := now.Add(time.Duration(-2) * time.Hour)
 	compareTimeMs := compareTime.UnixMilli()

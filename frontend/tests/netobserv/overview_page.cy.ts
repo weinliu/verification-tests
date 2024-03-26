@@ -38,12 +38,6 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
             cy.checkPanelsNum();
         })
 
-        it("(OCP-54839, aramesha, Network_Observability) should verify show duplicates checkbox is disabled", function () {
-            cy.get('#filter-toolbar-search-filters').contains('Query options').click();
-            cy.get('#query-options-dropdown').click();
-            cy.get('#show-duplicates').should('be.disabled')
-        })
-
         it("(OCP-54839, aramesha, Network_Observability) should validate overview page features", { tags: ['e2e', 'admin', '@smoke'] }, function () {
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist

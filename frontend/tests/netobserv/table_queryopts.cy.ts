@@ -6,10 +6,6 @@ function getTableLimitURL(limit: string): string {
     return `**/netflow-traffic**limit=${limit}`
 }
 
-function getTableDuplicatesURL(duplicates: string): string {
-    return `**/netflow-traffic**showDup=${duplicates}`
-}
-
 describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Netflow Table Query Options', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
@@ -61,15 +57,6 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         cy.intercept('GET', getTableLimitURL('50'), {
             fixture: 'netobserv/netflow_table_50.json'
         }).as('matchedUrl')
-
-        // check to show duplicate flows
-        cy.changeQueryOption('Show duplicates')
-        cy.intercept('GET', getTableDuplicatesURL('true'), {
-            fixture: 'netobserv/netflow_table_duplicates.json'
-        }).as('matchedUrl')
-
-        // uncheck duplicate flows
-        cy.changeQueryOption('Show duplicates')
     })
 
     it("(OCP-50532, memodi, Network_Observability) should validate query summary panel", { tags: ['e2e', 'admin', '@smoke'] }, function () {

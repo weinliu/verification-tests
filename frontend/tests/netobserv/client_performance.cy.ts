@@ -6,7 +6,7 @@ function getTopologyScopeURL(scope: string): string {
     return `**/flow/metrics?filters=&limit=50&recordType=flowLog&dedup=true&packetLoss=all&timeRange=300&rateInterval=30s&step=15s&type=bytes&aggregateBy=${scope}`
 }
 
-describe("(OCP-67725, memodi) Network_Observability Client Performances", { browser: 'chrome', tags: ['Network_Observability'] }, function () {
+describe("(OCP-67725, memodi) Network_Observability Client Performances", { browser: 'chrome', tags: ['Performance'] }, function () {
     before("tests", function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
