@@ -66,7 +66,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: juzhao@redhat.com
-	g.It("Author:juzhao-Medium-49172-Enable validating webhook for AlertmanagerConfig customer resource", func() {
+	g.It("Author:juzhao-LEVEL0-Medium-49172-Enable validating webhook for AlertmanagerConfig customer resource", func() {
 		var (
 			err                       error
 			output                    string
@@ -247,7 +247,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	//author: tagao@redhat.com
-	g.It("Author:tagao-Medium-55767-Missing metrics in kube-state-metrics", func() {
+	g.It("Author:tagao-LEVEL0-Medium-55767-Missing metrics in kube-state-metrics", func() {
 		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
@@ -303,7 +303,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: tagao@redhat.com
-	g.It("Author:tagao-Medium-57254-oc adm top node/pod output should not give negative numbers", func() {
+	g.It("Author:tagao-LEVEL0-Medium-57254-oc adm top node/pod output should not give negative numbers", func() {
 		exutil.By("check on node")
 		checkNode, err := exec.Command("bash", "-c", `oc adm top node | awk '{print $2,$3,$4,$5}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -316,7 +316,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: tagao@redhat.com
-	g.It("ConnectedOnly-Author:tagao-Medium-55696-add telemeter alert TelemeterClientFailures", func() {
+	g.It("ConnectedOnly-Author:tagao-LEVEL0-Medium-55696-add telemeter alert TelemeterClientFailures", func() {
 		exutil.By("check telemetry prometheusrule exists")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-n", "openshift-monitoring").Output()
 		// Error from server (NotFound): prometheusrules.monitoring.coreos.com "telemetry" not found
@@ -503,7 +503,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: tagao@redhat.com
-	g.It("Author:tagao-Medium-68292-Limit the value of GOMAXPROCS on node-exporter to 4", func() {
+	g.It("Author:tagao-LEVEL0-Medium-68292-Limit the value of GOMAXPROCS on node-exporter to 4", func() {
 		exutil.By("check the gomaxprocs value in logs")
 		// % oc -n openshift-monitoring logs -l app.kubernetes.io/name=node-exporter --tail=-1 -c node-exporter | grep -o 'gomaxprocs=[0-9]*' | uniq | cut -d= -f2
 		nodeExporterLogs, errLogs := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=node-exporter", "--tail=-1", "-c", "node-exporter", "-n", "openshift-monitoring").OutputToFile("OCP-68292_nodeExporter.log")
@@ -989,7 +989,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: juzhao@redhat.com
-		g.It("Author:juzhao-Medium-42956-Should not have PrometheusNotIngestingSamples alert if enabled user workload monitoring only", func() {
+		g.It("Author:juzhao-LEVEL0-Medium-42956-Should not have PrometheusNotIngestingSamples alert if enabled user workload monitoring only", func() {
 			exutil.By("Get token of SA prometheus-k8s")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
@@ -1016,7 +1016,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: tagao@redhat.com
-		g.It("Author:tagao-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
+		g.It("Author:tagao-LEVEL0-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
 			exutil.By("make sure all pods in openshift-monitoring/openshift-user-workload-monitoring are ready")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
@@ -1323,7 +1323,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: tagao@redhat.com
-		g.It("Author:tagao-Medium-50954-Allow the deployment of a dedicated UWM Alertmanager [Serial]", func() {
+		g.It("Author:tagao-LEVEL0-Medium-50954-Allow the deployment of a dedicated UWM Alertmanager [Serial]", func() {
 			var (
 				dedicatedUWMalertmanager = filepath.Join(monitoringBaseDir, "dedicated-uwm-alertmanager.yaml")
 				exampleAlert             = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
@@ -1667,7 +1667,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: tagao@redhat.com
-		g.It("Author:tagao-Medium-68237-Add the trusted CA bundle in the Prometheus user workload monitoring pods", func() {
+		g.It("Author:tagao-LEVEL0-Medium-68237-Add the trusted CA bundle in the Prometheus user workload monitoring pods", func() {
 			exutil.By("confirm UWM pod is ready")
 			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
 
@@ -2019,7 +2019,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: tagao@redhat.com
-	g.It("Author:tagao-High-64537-CMO deploys monitoring console-plugin [Serial]", func() {
+	g.It("Author:tagao-LEVEL0-High-64537-CMO deploys monitoring console-plugin [Serial]", func() {
 		var (
 			monitoringPluginConfig = filepath.Join(monitoringBaseDir, "monitoringPlugin-config.yaml")
 		)
@@ -2206,7 +2206,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: tagao@redhat.com
-	g.It("Author:tagao-Medium-64296-disable CORS headers on Thanos querier [Serial]", func() {
+	g.It("Author:tagao-LEVEL0-Medium-64296-disable CORS headers on Thanos querier [Serial]", func() {
 		var (
 			enableCORS = filepath.Join(monitoringBaseDir, "enableCORS.yaml")
 		)
