@@ -52,13 +52,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-43764-MachineHealthCheckUnterminatedShortCircuit alert should be fired when a MHC has been in a short circuit state [Serial][Slow][Disruptive]", func() {
 		g.By("Create a new machineset")
 		exutil.SkipConditionally(oc)
-		ms := exutil.MachineSetDescription{"machineset-43764", 1}
-		defer exutil.WaitForMachinesDisapper(oc, "machineset-43764")
+		machinesetName := "machineset-43764"
+		ms := exutil.MachineSetDescription{machinesetName, 1}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Create a MachineHealthCheck")
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		msMachineRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-o=jsonpath={.spec.template.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machine-type}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		mhcBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "mhc")
 		mhcTemplate := filepath.Join(mhcBaseDir, "mhc.yaml")
@@ -66,6 +69,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			clusterid:      clusterID,
 			maxunhealthy:   "0%",
 			machinesetName: "machineset-43764",
+			machineRole:    msMachineRole,
 			name:           "mhc-43764",
 			template:       mhcTemplate,
 			namespace:      "openshift-machine-api",

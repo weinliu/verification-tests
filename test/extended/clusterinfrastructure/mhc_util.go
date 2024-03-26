@@ -9,6 +9,7 @@ import (
 
 type mhcDescription struct {
 	machinesetName string
+	machineRole    string
 	clusterid      string
 	namespace      string
 	maxunhealthy   string
@@ -18,7 +19,7 @@ type mhcDescription struct {
 
 func (mhc *mhcDescription) createMhc(oc *exutil.CLI) {
 	e2e.Logf("Creating machine health check ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", mhc.template, "-p", "NAME="+mhc.name, "MAXUNHEALTHY="+mhc.maxunhealthy, "MACHINESET_NAME="+mhc.machinesetName, "CLUSTERID="+mhc.clusterid, "NAMESPACE="+machineAPINamespace)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", mhc.template, "-p", "NAME="+mhc.name, "MAXUNHEALTHY="+mhc.maxunhealthy, "MACHINESET_NAME="+mhc.machinesetName, "MACHINE_ROLE="+mhc.machineRole, "CLUSTERID="+mhc.clusterid, "NAMESPACE="+machineAPINamespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if err != nil {
 		e2e.Logf("Please check mhc creation, it has failed")

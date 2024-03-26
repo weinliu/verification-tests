@@ -12,8 +12,8 @@ objects:
       selector:
         matchLabels:
           machine.openshift.io/cluster-api-cluster: ${CLUSTERID}
-          machine.openshift.io/cluster-api-machine-role: worker
-          machine.openshift.io/cluster-api-machine-type: worker
+          machine.openshift.io/cluster-api-machine-role: ${MACHINE_ROLE}
+          machine.openshift.io/cluster-api-machine-type: ${MACHINE_ROLE}
           machine.openshift.io/cluster-api-machineset: ${MACHINESET_NAME}
       unhealthyConditions:
       - type: Ready
@@ -25,6 +25,7 @@ objects:
       maxUnhealthy: ${MAXUNHEALTHY}
 parameters:
 - name: MACHINESET_NAME
+- name: MACHINE_ROLE
 - name: NAMESPACE
 - name: CLUSTERID
 - name: MAXUNHEALTHY
