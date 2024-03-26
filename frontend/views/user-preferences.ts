@@ -70,5 +70,11 @@ export const userPreferences = {
           }
       }
     })
+  },
+  getLanguageOptions: () => {
+    cy.get('ul > li > a[data-test="tab language"]').click({force: true});
+    cy.get('input#default-language-checkbox').uncheck();
+    cy.get('button[id="console.preferredLanguage"]').click();
+    return cy.get('button[role="option"]');
   }
 }

@@ -7,8 +7,6 @@ import { listPage } from '../../upstream/views/list-page';
 describe('user preferences related features', () => {
   const projectName = 'testproject-64002';
   before(() => {
-    cy.adminCLI(`oc new-project ${projectName}`);
-    cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${projectName}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
     cy.switchPerspective('Administrator');
@@ -31,6 +29,8 @@ describe('user preferences related features', () => {
   });
 
   it('(OCP-64002,yapei,UserInterface) Implement strict search in console', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+    cy.cliLogin();
+    cy.exec(`oc new-project ${projectName}`);
     const checkAllItemsExactMatch = (word: string) => {
       cy.get('a.co-resource-item__resource-name').each(($el) => {
         const text = $el.text();
@@ -62,9 +62,9 @@ describe('user preferences related features', () => {
     cy.get(`[data-test="${projectName}"]`).should('exist');
 
     // do more fuzzy match testings with cluster-admin user
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     userPreferences.navToGeneralUserPreferences();
     userPreferences.toggleExactMatch('disable');
-    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     Pages.gotoProjectsList();
     listPage.filter.byName('apiver');
     atLeastOneResourceShown();
@@ -146,5 +146,15 @@ describe('user preferences related features', () => {
     searchPage.searchBy('APIServer');
     cy.wait(3000);
     checkAllItemsExactMatch('APIServer');
+  });
+
+  it('(OCP-72562,yapei,UserInterface)Add French and Spanish language support', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+    const expectedLanguages = ['English', 'Español', 'Français', '한국어', '日本語', '中文'];
+    userPreferences.navToGeneralUserPreferences();
+    userPreferences.getLanguageOptions()
+      .then(($els) => {
+        const language_list = Cypress._.map(Cypress.$.makeArray($els), 'innerText');
+        expect(language_list).to.have.members(expectedLanguages);
+    })
   });
 })
