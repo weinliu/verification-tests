@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-StagerunBoth-Author:xiyuan-High-56704-Create a SelinuxProfile and apply it to pod", func() {
+	g.It("ConnectedOnly-StagerunBoth-Author:xiyuan-LEVEL0-High-56704-Create a SelinuxProfile and apply it to pod", func() {
 		ns := "nginx-deploy" + getRandomString()
 		selinuxProfileName := "nginx-secure"
 
