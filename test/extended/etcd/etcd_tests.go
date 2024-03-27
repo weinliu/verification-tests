@@ -111,6 +111,30 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		}
 
 	})
+	// author: skundu@redhat.com
+	g.It("NonHyperShiftHOST-Author:skundu-LEVEL0-Critical-24280-Etcd basic verification", func() {
+		g.By("Test for case OCP-52418-Etcd basic verification")
+		e2e.Logf("check cluster Etcd operator status")
+		checkOperator(oc, "etcd")
+		e2e.Logf("verify cluster Etcd operator pod is Running")
+		podOprtAllRunning := checkEtcdOperatorPodStatus(oc)
+		if podOprtAllRunning != true {
+			e2e.Failf("etcd operator pod is not in running state")
+		}
+
+		e2e.Logf("retrieve all the master node")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		e2e.Logf("Discover all the etcd pods")
+		etcdPodList := getPodListByLabel(oc, "etcd=true")
+		if len(masterNodeList) != len(etcdPodList) {
+			e2e.Failf("mismatch in the number of etcd pods and master nodes.")
+		}
+		e2e.Logf("Ensure all the etcd pods are running")
+		podAllRunning := checkEtcdPodStatus(oc)
+		if podAllRunning != true {
+			e2e.Failf("etcd pods are not in running state")
+		}
+	})
 	// author: geliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:geliu-Critical-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.", func() {
 		g.By("Test for case OCP-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.")

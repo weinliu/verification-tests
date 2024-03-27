@@ -347,6 +347,20 @@ func checkEtcdPodStatus(oc *exutil.CLI) bool {
 	return true
 }
 
+// make sure all the ectd operator pods are running
+func checkEtcdOperatorPodStatus(oc *exutil.CLI) bool {
+	output, err := oc.AsAdmin().Run("get").Args("pods", "-n", "openshift-etcd-operator", "-o=jsonpath='{.items[*].status.phase}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	statusList := strings.Fields(output)
+	for _, podStatus := range statusList {
+		if match, _ := regexp.MatchString("Running", podStatus); !match {
+			e2e.Logf("etcd operator pod is not running")
+			return false
+		}
+	}
+	return true
+}
+
 // get the proxies
 func getGlobalProxy(oc *exutil.CLI) (string, string) {
 	httpProxy, httperr := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
