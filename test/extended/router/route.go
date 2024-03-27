@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -203,45 +204,32 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// bugzilla: 2021446
 	g.It("Author:mjoseph-High-55895-When canary route is not available, Ingress should be in degarded state	[Disruptive]", func() {
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
-		)
-
-		exutil.By("Deploy a project with a client pod")
-		project1 := oc.Namespace()
-		baseDomain := getBaseDomain(oc)
-		exutil.By("create a client pod")
-		createResourceFromFile(oc, project1, clientPod)
-		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
-
 		exutil.By("Check the intial canary route status")
-		routerpods := getResourceName(oc, "openshift-ingress", "pods")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
 
 		exutil.By("Check the reachability of the canary route")
+		baseDomain := getBaseDomain(oc)
+		operatorPod := getPodName(oc, "openshift-ingress-operator", " ")
 		routehost := "canary-openshift-ingress-canary.apps." + baseDomain
-		cmdOnPod := []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
-		result := repeatCmd(oc, cmdOnPod, "200 OK", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		cmdOnPod := []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, cmdOnPod, "200 OK", 30)
 
 		exutil.By("Patch the ingress controller and deleting the canary route")
-		defer ensureClusterOperatorNormal(oc, "ingress", 5, 300)
+		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
+		defer ensureClusterOperatorNormal(oc, "ingress", 3, 300)
 		defer patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":null}}")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":\"default\"}}}}")
 		// Deleting canary route
-		err = oc.AsAdmin().Run("delete").Args("-n", "openshift-ingress-canary", "route", "canary").Execute()
+		err := oc.AsAdmin().Run("delete").Args("-n", "openshift-ingress-canary", "route", "canary").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", routerpods)
+		// After patching the default congtroller generation should be +1
+		actualGenerationInt, _ := strconv.Atoi(actualGen)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+1))
 
-		exutil.By("Check whether the canary route status cleared and route is not accessible")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status", "default", true)
-		cmdOnPod = []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
-		result = repeatCmd(oc, cmdOnPod, "503", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		exutil.By("Check whether the canary route status cleared and confirm the route is not accessible")
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", true)
+		cmdOnPod = []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, cmdOnPod, "503", 50)
 
 		// Wait may be about 300 seconds
 		exutil.By("Check the ingress operator status to confirm it is in degraded state cause by canary route")

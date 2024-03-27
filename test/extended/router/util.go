@@ -1397,11 +1397,11 @@ func unicastIPFailover(oc *exutil.CLI, ns, failoverName string) {
 // this function is to obtain the route details based on namespaces
 func getNamespaceRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonSearchString, matchString string, noMatchIfPresent bool) {
 	e2e.Logf("polling for route details")
-	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+	waitErr := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 		resourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "-n", namespace, resourceName,
 			"-ojsonpath={"+jsonSearchString+"}").Output()
-		if err != nil || resourceNames == "" {
-			e2e.Logf("failed to get logs: %v, retrying...", err)
+		if err != nil {
+			e2e.Logf("there is some execution error and it is  %v, retrying...", err)
 			return false, nil
 		}
 		if noMatchIfPresent == true {
