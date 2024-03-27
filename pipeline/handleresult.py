@@ -3,6 +3,7 @@ import xml.dom.minidom
 import argparse
 import re
 import codecs
+import os
 
 class TestResult:
     subteam = [
@@ -53,6 +54,22 @@ class TestResult:
             "olm": "OLM",
             "platform-operators-aggregated": "OLM",
     }
+
+    def __init__(self):
+        self.isJenkinsEnv = "JENKINS_AGENT_NAME" in os.environ
+        print("isJenkinsEnv: {0}\\n".format(str(self.isJenkinsEnv)))
+        # it checks if the script is executed in jenkins to support potential sippy integration
+        # if it is executed in jenkins, it means the result is not in gcs and keep current logic
+        # if it is executed in others (prow), it means the result is in gcs and possible modify the
+        # the following to support sippy integration
+        # A: testsuite name is not subteam name. and change to certain nanem
+        #    for prow-test-results-classfier, when it uses testsuite name, it should get it from file name,
+        #    not junit xml. and when it imports result to reportportal, it should update testsuite name got
+        #    from file name.
+        #B: junit file name is possible changed to "junit-import-*xml" from "import-*xml"
+        #    for prow-test-results-classfier, need to support new file format
+        #    for prow golang step, need to support new file format
+        # NOW it only handle testsuite name firstly.
 
     def removeMonitor(self, input, output):
         noderoot = xml.dom.minidom.parse(input)
@@ -143,7 +160,11 @@ class TestResult:
     def generateRP(self, input, output, scenario):
         noderoot = xml.dom.minidom.parse(input)
         testsuites = noderoot.getElementsByTagName("testsuite")
-        testsuites[0].setAttribute("name", scenario)
+        if self.isJenkinsEnv:
+            newsuitename = scenario
+        else:
+            newsuitename = scenario # it will change to other after we get testsuite name rule for sippy.
+        testsuites[0].setAttribute("name", newsuitename)
 
         cases = noderoot.getElementsByTagName("testcase")
         toBeRemove = []
@@ -232,7 +253,11 @@ class TestResult:
             skippedcount = v["skipped"]
             errorcount = v["errors"]
             testsuite.setAttribute("time", origintestsuite.getAttribute("time")) #RP does not depend on it
-            testsuite.setAttribute("name", k)
+            if self.isJenkinsEnv:
+                newsuitename = k
+            else:
+                newsuitename = k # it will change to other after we get testsuite name rule for sippy.
+            testsuite.setAttribute("name", newsuitename)
 
             for case in v["cases"]:
                 testnum = 0
@@ -323,7 +348,11 @@ class TestResult:
 
         testsuite.setAttribute("errors", "0")
         testsuite.setAttribute("failures", "1")
-        testsuite.setAttribute("name", scenario)
+        if self.isJenkinsEnv:
+            newsuitename = scenario
+        else:
+            newsuitename = scenario # it will change to other after we get testsuite name rule for sippy.
+        testsuite.setAttribute("name", newsuitename)
         testsuite.setAttribute("skipped", "0")
         testsuite.setAttribute("tests", "1")
         testsuite.setAttribute("time", "1")
