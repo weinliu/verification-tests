@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
+	g.It("Author:qitang-LEVEL0-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
 		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
@@ -197,7 +197,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 	})
 
-	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial]", func() {
+	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-LEVEL0-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial]", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")
@@ -249,7 +249,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(cw.logsFound()).To(o.BeTrue())
 	})
 
-	g.It("CPaasrunBoth-ConnectedOnly-Author:ikanse-Critical-51974-Vector Forward logs to Cloudwatch by logtype", func() {
+	g.It("CPaasrunBoth-ConnectedOnly-Author:ikanse-LEVEL0-Critical-51974-Vector Forward logs to Cloudwatch by logtype", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")
@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunBoth-ConnectedOnly-Author:qitang-Critical-53691-Forward logs to Google Cloud Logging using Service Account authentication.", func() {
+	g.It("CPaasrunBoth-ConnectedOnly-Author:qitang-LEVEL0-Critical-53691-Forward logs to Google Cloud Logging using Service Account authentication.", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "gcp" {
 			g.Skip("Skip for the platform is not GCP!!!")
