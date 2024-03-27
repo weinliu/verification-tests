@@ -1502,3 +1502,11 @@ func getProxyURL() *url.URL {
 	}
 	return proxyURL
 }
+
+func getMicroshiftHostname(oc *exutil.CLI) string {
+	microShiftURL, err := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-ojsonpath={.clusters[0].cluster.server}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	fqdnName, err := url.Parse(microShiftURL)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return fqdnName.Hostname()
+}
