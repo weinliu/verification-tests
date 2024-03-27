@@ -1717,10 +1717,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		exutil.By("check ThanosRuler can not be created")
 		currentUser, _ := oc.Run("whoami").Args("").Output()
-		output, _ := oc.WithoutNamespace().Run("auth").Args("can-i", "create", "thanosrulers", "-n", ns).Output()
 		e2e.Logf("current user is: %v", currentUser)
-		e2e.Logf("Permission query results: %v", output)
-		o.Expect(output).To(o.ContainSubstring("no"))
+		queryErr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+			permissionCheck, _ := oc.WithoutNamespace().Run("auth").Args("can-i", "create", "thanosrulers", "--as="+currentUser, "-n", ns).Output()
+			if !strings.Contains(permissionCheck, "yes") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(queryErr, "permissionCheck failed to contain \"no\"")
 	})
 
 	//author: tagao@redhat.com
