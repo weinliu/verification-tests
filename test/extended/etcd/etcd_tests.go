@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(output).To(o.ContainSubstring("experimental-initial-corrupt-check=true"))
 	})
 	// author: skundu@redhat.com
-	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Longduration-Critical-52312-cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:skundu-LEVEL0-NonPreRelease-Longduration-Critical-52312-cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder [Serial]", func() {
 		g.By("Test for case OCP-52312 cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder.")
 		e2e.Logf("select all the master nodes")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
