@@ -846,7 +846,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ConnectedOnly-Author:yinzhou-Medium-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
+	g.It("ConnectedOnly-Author:yinzhou-LEVEL0-High-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		username := oc.Username()
@@ -941,7 +941,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: dmukherj@redhat.com
-	g.It("ConnectedOnly-Author:dmukherj-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
+	g.It("ConnectedOnly-Author:dmukherj-LEVEL0-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
 		g.By("1. Create a namespace as normal user")
 		oc.SetupProject()
 		testNamespace := oc.Namespace()
@@ -1012,7 +1012,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-22470-The basic challenge will be shown when user pass the X-CSRF-TOKEN http header", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-LEVEL0-High-22470-The basic challenge will be shown when user pass the X-CSRF-TOKEN http header", func() {
 		e2e.Logf("Using OpenShift cluster with a default identity provider that supports 'challenge: true'")
 
 		g.By("1. Get authentication url")
@@ -1070,7 +1070,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	//author: dmukherj@redhat.com
-	g.It("Author:dmukherj-Critical-52452-Payload namespaces do not respect pod security admission autolabel's opt-in/opt-out", func() {
+	g.It("Author:dmukherj-LEVEL0-Critical-52452-Payload namespaces do not respect pod security admission autolabel's opt-in/opt-out", func() {
 		g.By("1. Check the project labels for payload namespace openshift-monitoring")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", "openshift-monitoring", "-o=jsonpath={.metadata.labels}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
