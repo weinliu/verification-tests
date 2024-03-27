@@ -63,17 +63,14 @@ var _ = g.Describe("[sig-cco] Cluster_Operator CCO is enabled", func() {
 	// It is destructive case, will remove root credentials, so adding [Disruptive]. The case duration is greater than 5 minutes
 	// so adding [Slow]
 	g.It("NonHyperShiftHOST-Author:lwan-High-31768-Report the mode of cloud-credential operation as a metric [Slow][Disruptive]", func() {
-		exutil.By("Check if the current platform is a supported platform")
-		rootSecretName, err := getRootSecretName(oc)
+		exutil.By("Get cco mode from Cluster Resource")
+		modeInCR, err := getCloudCredentialMode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if rootSecretName == "" {
-			e2e.Logf("unsupported platform, there is no root credential in kube-system namespace,  will pass the test")
+		if modeInCR == "" {
+			e2e.Failf("Failed to get cco mode from Cluster Resource")
 		} else {
 			exutil.By("Check if cco mode in metric is the same as cco mode in cluster resources")
-			exutil.By("Get cco mode from Cluster Resource")
-			modeInCR, err := getCloudCredentialMode(oc)
 			e2e.Logf("cco mode in cluster CR is %v", modeInCR)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			exutil.By("Check if cco mode in Metric is correct")
 			token, err := exutil.GetSAToken(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -84,7 +81,8 @@ var _ = g.Describe("[sig-cco] Cluster_Operator CCO is enabled", func() {
 			}
 			if modeInCR == "mint" {
 				exutil.By("if cco is in mint mode currently, then run the below test")
-				exutil.By("Check cco mode when cco is in Passathrough mode")
+				exutil.By("Check cco mode when cco is in Passthrough mode")
+				//Force cco mode to Passthrough is NOT supported officially but is good for coverage on AWS/GCP Passthrough mode
 				e2e.Logf("Force cco mode to Passthrough")
 				originCCOMode, err := oc.AsAdmin().Run("get").Args("cloudcredential/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 				if originCCOMode == "" {
@@ -104,7 +102,7 @@ spec:
 				}()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				exutil.By("Get cco mode from cluster CR")
-				modeInCR, err := getCloudCredentialMode(oc)
+				modeInCR, err = getCloudCredentialMode(oc)
 				e2e.Logf("cco mode in cluster CR is %v", modeInCR)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				exutil.By("Check if cco mode in Metric is correct")

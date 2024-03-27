@@ -84,15 +84,20 @@ func getCloudCredentialMode(oc *exutil.CLI) (string, error) {
 		mode = "none" //mode none is for baremetal
 		return mode, nil
 	}
-	rootSecretName, err = getRootSecretName(oc)
-	if err != nil {
-		return "", err
+	//Check if the cloud providers which support Manual mode only
+	if iaasPlatform == "ibmcloud" || iaasPlatform == "alibabacloud" || iaasPlatform == "nutanix" {
+		mode = "manual"
+		return mode, nil
 	}
 	modeInCloudCredential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredential", "cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 	if err != nil {
 		return "", err
 	}
 	if modeInCloudCredential != "Manual" {
+		rootSecretName, err = getRootSecretName(oc)
+		if err != nil {
+			return "", err
+		}
 		modeInSecretAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", rootSecretName, "-n=kube-system", "-o=jsonpath={.metadata.annotations.cloudcredential\\.openshift\\.io/mode}").Output()
 		if err != nil {
 			if strings.Contains(modeInSecretAnnotation, "NotFound") {
