@@ -264,7 +264,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		}
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Critical-59426-ssh keys can be updated in new dir on RHCOS9 node[Disruptive]", func() {
+	g.It("Author:sregidor-LEVEL0-NonPreRelease-Longduration-Critical-59426-ssh keys can be updated in new dir on RHCOS9 node[Disruptive]", func() {
 
 		var (
 			mcName = "tc-59426-add-ssh-key"

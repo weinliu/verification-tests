@@ -136,7 +136,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(timecost).Should(o.BeNumerically("<", 10.0))
 	})
 
-	g.It("Author:mhanss-NonPreRelease-Longduration-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
+	g.It("Author:mhanss-LEVEL0-NonPreRelease-Longduration-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
 		exutil.By("get worker node to change the label")
 		nodeList := NewNodeList(oc)
 		workerNode := nodeList.GetAllLinuxWorkerNodesOrFail()[0]
@@ -254,7 +254,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		createMcAndVerifyMCValue(oc, "64k pages kernel", "set-64k-pages-kernel", node, textToVerify, "uname -r; getconf PAGESIZE")
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42364-add selinux kernel argument [Disruptive]", func() {
+	g.It("Author:mhanss-LEVEL0-Longduration-NonPreRelease-Critical-42364-add selinux kernel argument [Disruptive]", func() {
 		workerNode := skipTestIfOsIsNotCoreOs(oc)
 		textToVerify := TextToVerify{
 			textToVerifyForMC:   "enforcing=0",
@@ -281,7 +281,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		}
 		createMcAndVerifyMCValue(oc, "Usb Extension", "change-worker-extension-usbguard", workerNode, textToVerify, "rpm", "-q", "usbguard")
 	})
-	g.It("Author:sregidor-Longduration-NonPreRelease-Critical-56131-Install all extensions [Disruptive]", func() {
+	g.It("Author:sregidor-LEVEL0-Longduration-NonPreRelease-Critical-56131-Install all extensions [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 
 		var (
@@ -440,7 +440,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Container runtime config values are verified in the worker node!")
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42438-add journald systemd config [Disruptive]", func() {
+	g.It("Author:mhanss-LEVEL0-Longduration-NonPreRelease-Critical-42438-add journald systemd config [Disruptive]", func() {
 		exutil.By("Create journald systemd config")
 		encodedConf, err := exec.Command("bash", "-c", "cat "+generateTemplateAbsolutePath("journald.conf")+" | base64 | tr -d '\n'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
