@@ -215,4 +215,52 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		e2e.Logf("The output %v", imageMediaType)
 		o.Expect(strings.Contains(imageMediaType, "application/vnd.docker.distribution.manifest.list.v2+json")).To(o.BeTrue())
 	})
+
+	//yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-72307-High-72293-Should ignore certificate-authority checking when use insecure for oc image commands", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
+
+		exutil.By("Create temp dir and get pull secret")
+		extractTmpDirName := "/tmp/case72307"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = getRouteCAToFile(oc, extractTmpDirName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get desired image from ocp cluster")
+		pullSpec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(pullSpec).NotTo(o.BeEmpty())
+
+		exutil.By("Specify --insecure for `oc adm release info` command  without certificate-authority")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Specify --insecure for `oc adm release info` command  with certificate-authority at the same time")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Specify `oc adm release info` command with certificate-authority")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").NotShowInfo().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Specify --insecure for `oc image info` command  without certificate-authority")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Specify --insecure for `oc image info` command  with certificate-authority at the same time")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Specify `oc image info` command  with certificate-authority")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").NotShowInfo().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
