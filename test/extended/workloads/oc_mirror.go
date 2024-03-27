@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = os.Stat("/tmp/case46523/oc-mirror-workspace/mapping.txt")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-Medium-46770-Low-46520-Local backend support for oc-mirror", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-LEVEL0-Medium-46770-Low-46520-Local backend support for oc-mirror", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "ocmirror-localbackend.yaml")
 
@@ -240,7 +240,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("Can't see the stateless mode log")
 		}
 	})
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-Low-51093-oc-mirror init", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-LEVEL0-Low-51093-oc-mirror init", func() {
 		if !assertPullSecret(oc) {
 			g.Skip("the cluster do not has all pull-secret for public registry")
 		}

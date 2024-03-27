@@ -68,7 +68,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-43039-openshift-object-counts quota dynamically updating as the resource is deleted", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-LEVEL0-High-43039-openshift-object-counts quota dynamically updating as the resource is deleted", func() {
 		g.By("Test for case OCP-43039 openshift-object-counts quota dynamically updating as the resource is deleted")
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -383,7 +383,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-54195-Enable CronJobTimeZone feature and verify that it works fine", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-LEVEL0-Critical-54195-Enable CronJobTimeZone feature and verify that it works fine", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		createCronJob := filepath.Join(buildPruningBaseDir, "cronjob54195.yaml")
@@ -637,7 +637,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PodDisruptionBudgetLimit"}'`, token, "pdb26247", 600)
 	})
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-67765-Make sure rolling update logic to exclude unsetting nodes [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-LEVEL0-High-67765-Make sure rolling update logic to exclude unsetting nodes [Serial]", func() {
 		if exutil.IsSNOCluster(oc) {
 			g.Skip("It is sno cluster, so skip it")
 		}

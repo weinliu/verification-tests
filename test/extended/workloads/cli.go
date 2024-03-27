@@ -1121,7 +1121,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Critical-63002-oc new-app propagate containerPort information to the deployment if import-mode is PreserveOriginal", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-LEVEL0-Critical-63002-oc new-app propagate containerPort information to the deployment if import-mode is PreserveOriginal", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 		g.By("create new-app with import-mode as PreserveOrigin")
@@ -1261,7 +1261,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-64921-Critical-63854-Verify oc adm release info and oc image extract using --idms-file flag", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-LEVEL0-Critical-64921-Critical-63854-Verify oc adm release info and oc image extract using --idms-file flag", func() {
 		// Skip the case if cluster is C2S/SC2S disconnected as external network cannot be accessed
 		if strings.HasPrefix(getClusterRegion(oc), "us-iso") {
 			g.Skip("Skipped: AWS C2S/SC2S disconnected clusters are not satisfied for this test case")
@@ -1797,7 +1797,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(strings.Contains(warningOutDel, "DeploymentConfig is deprecated in v4.14")).To(o.BeTrue())
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-67387-oc new-app propagate containerPort information to the deployment if import-mode is default", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-LEVEL0-High-67387-oc new-app propagate containerPort information to the deployment if import-mode is default", func() {
 		// Skip case on multi-arch cluster
 		architecture.SkipArchitectures(oc, architecture.MULTI)
 		// Skip case on cluster without imageRegistry
