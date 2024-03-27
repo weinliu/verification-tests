@@ -40,6 +40,12 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 	})
 
+	g.AfterEach(func() {
+		if !healthyCheck(oc) {
+			e2e.Failf("Cluster healthy check failed after the test.")
+		}
+	})
+
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-NonPreRelease-Longduration-Critical-42183-backup and restore should perform consistency checks on etcd snapshots [Disruptive]", func() {
 		g.By("Test for case OCP-42183 backup and restore should perform consistency checks on etcd snapshots")

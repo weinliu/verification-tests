@@ -268,12 +268,24 @@ func updateMachineYmlFile(machineYmlFile string, oldMachineName string, newMaste
 
 // make sure operator is not processing and degraded
 func checkOperator(oc *exutil.CLI, operatorName string) {
-	err := wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()
+	var output string
+	var err error
+	var split []string
+	if operatorName == "" {
+		output, err = oc.AsAdmin().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
-			e2e.Logf("clusteroperator %s is abnormal, will try next time:\n", operatorName)
-			return false, nil
+		split = strings.Split(output, " ")
+	} else {
+		split = append(split, operatorName)
+	}
+	err = wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
+		for _, item := range split {
+			output, err = oc.AsAdmin().Run("get").Args("clusteroperator", item).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
+				e2e.Logf("clusteroperator %s is abnormal, will try next time:\n", item)
+				return false, nil
+			}
 		}
 		return true, nil
 	})
@@ -312,6 +324,32 @@ func IsCOHealthy(oc *exutil.CLI, operatorName string) bool {
 	if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
 		e2e.Logf("clusteroperator %s is abnormal", operatorName)
 		return false
+	}
+	return true
+}
+
+// Checks cluster operator is healthy
+func healthyCheck(oc *exutil.CLI) bool {
+	e2e.Logf("make sure all the etcd pods are running")
+	podAllRunning := checkEtcdPodStatus(oc)
+	if podAllRunning != true {
+		e2e.Logf("The ectd pods are not running")
+		return false
+	}
+	e2e.Logf("Check all oprators status")
+	checkOperator(oc, "")
+
+	e2e.Logf("Make sure all the nodes are normal")
+	out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+	checkMessage := []string{
+		"SchedulingDisabled",
+		"NotReady",
+	}
+	for _, v := range checkMessage {
+		if strings.Contains(out, v) {
+			e2e.Logf("The cluster nodes is abnormal.")
+			return false
+		}
 	}
 	return true
 }
