@@ -2336,6 +2336,71 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			e2e.Failf("File sum not matched")
 		}
 	})
+
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-71273-Medium-71275-Validate user is able to extract rhel8 and rhel9 oc from the ocp payload", func() {
+		extractTmpDirName := "/tmp/case71273"
+		defer os.RemoveAll(extractTmpDirName)
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get desired image from ocp cluster")
+		pullSpec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(pullSpec).NotTo(o.BeEmpty())
+
+		exutil.By("Extract oc.rhel8 from ocp payload")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc.rhel8", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if _, statErr := os.Stat(extractTmpDirName + "/oc"); os.IsNotExist(statErr) {
+			e2e.Failf("Get extracted oc failed")
+		}
+		removeErr := os.Remove(extractTmpDirName + "/oc")
+		o.Expect(removeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Extract oc.rhel9 from ocp payload")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc.rhel9", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if _, statErr := os.Stat(extractTmpDirName + "/oc"); os.IsNotExist(statErr) {
+			e2e.Failf("Get extracted oc failed")
+		}
+		removeErr = os.Remove(extractTmpDirName + "/oc")
+		o.Expect(removeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Extract oc from ocp payload")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if _, statErr := os.Stat(extractTmpDirName + "/oc"); os.IsNotExist(statErr) {
+			e2e.Failf("Get extracted oc failed")
+		}
+		removeErr = os.Remove(extractTmpDirName + "/oc")
+		o.Expect(removeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Get the oc-mirror image from ocp payload")
+		ocMirrorImage, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", `-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`).Outputs()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Extract oc-mirror.rhel8")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", ocMirrorImage, "-a", extractTmpDirName+"/.dockerconfigjson", "--path=/usr/bin/oc-mirror.rhel8:"+extractTmpDirName, "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if _, statErr := os.Stat(extractTmpDirName + "/oc-mirror.rhel8"); os.IsNotExist(statErr) {
+			e2e.Failf("Get extracted oc-mirror.rhel8 failed")
+		}
+		removeErr = os.Remove(extractTmpDirName + "/oc-mirror.rhel8")
+		o.Expect(removeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Extract oc-mirror.rhel9")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", ocMirrorImage, "-a", extractTmpDirName+"/.dockerconfigjson", "--path=/usr/bin/oc-mirror.rhel9:"+extractTmpDirName, "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if _, statErr := os.Stat(extractTmpDirName + "/oc-mirror.rhel9"); os.IsNotExist(statErr) {
+			e2e.Failf("Get extracted oc-mirror.rhel9 failed")
+		}
+		removeErr = os.Remove(extractTmpDirName + "/oc-mirror.rhel9")
+		o.Expect(removeErr).NotTo(o.HaveOccurred())
+	})
 })
 
 // ClientVersion ...
