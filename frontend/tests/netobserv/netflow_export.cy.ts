@@ -38,30 +38,36 @@ describe('(OCP-72610 Network_Observability) Export automation', { tags: ['Networ
             cy.get('li.overviewTabButton').should('exist').click()
             cy.byTestID("show-view-options-button").should('exist').click()
             netflowPage.stopAutoRefresh()
-            cy.byTestID('view-options-button').click()
-            cy.get(exportSelectors.overviewExport).click()
+            cy.byTestID('view-options-button').should('exist').click()
+            cy.get(exportSelectors.overviewExport).should('exist').click()
             cy.readFile('cypress/downloads/overview_page.png')
 
             // Export only Top 5 average bytes rates panel
-            cy.get(exportSelectors.avgBytesRatesDropdown).click()
-            cy.contains("Export panel").click()
+            cy.get(exportSelectors.avgBytesRatesDropdown).should('exist').click()
+            cy.contains("Export panel").should('exist').click()
             cy.readFile('cypress/downloads/overview_panel_top_avg_byte_rates.png')
         })
 
-        // WIP: Table view export
-        // it("(OCP-72610, aramesha, Network_Observability) should validate exporting table view", function () {
-        //     cy.get('li.tableTabButton').should('exist').click()
-        //     cy.byTestID("show-view-options-button").should('exist').click()
-        //     cy.byTestID('view-options-button').click()
-        //     cy.get(exportSelectors.tableExport).click()
-        //     cy.get(exportSelectors.exportButton).click()
-        // })
+        it("(OCP-72610, aramesha, Network_Observability) should validate exporting table view", function () {
+            cy.get('li.tableTabButton').should('exist').click()
+            cy.byTestID("show-view-options-button").should('exist').click()
+            cy.byTestID('view-options-button').should('exist').click()
+            cy.get(exportSelectors.tableExport).should('exist').click()
+            cy.get(exportSelectors.exportButton).should('exist').click()
+
+            // get the CSV file name
+            cy.exec("ls cypress/downloads | grep -E '\.csv$'").then((response) => {
+                // rename CSV file to export_table.csv
+                cy.exec(`mv cypress/downloads/${response.stdout} cypress/downloads/export_table.csv`)
+            })
+            cy.readFile('cypress/downloads/export_table.csv')
+        })
 
         it("(OCP-72610, aramesha, Network_Observability) should validate exporting topology view", function () {
             cy.get('li.topologyTabButton').should('exist').click()
             cy.byTestID("show-view-options-button").should('exist').click()
-            cy.byTestID('view-options-button').click()
-            cy.get(exportSelectors.topologyExport).click()
+            cy.byTestID('view-options-button').should('exist').click()
+            cy.get(exportSelectors.topologyExport).should('exist').click()
             cy.readFile('cypress/downloads/topology.png')
         })
     })
@@ -75,6 +81,7 @@ describe('(OCP-72610 Network_Observability) Export automation', { tags: ['Networ
         // Delete all export files
         cy.exec('rm cypress/downloads/overview_page.png')
         cy.exec('rm cypress/downloads/overview_panel_top_avg_byte_rates.png')
+        cy.exec('rm cypress/downloads/export_table.csv')
         cy.exec('rm cypress/downloads/topology.png')
     })
 })
