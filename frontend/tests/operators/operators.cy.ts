@@ -1,5 +1,6 @@
 import { operatorHubPage } from "../../views/operator-hub-page";
 import { listPage } from '../../upstream/views/list-page';
+import { Pages } from "views/pages";
 
 describe('Operators related features', () => {
   before(() => {
@@ -17,8 +18,51 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI(`oc delete project test-ocp40457`);
+    cy.adminCLI(`oc delete project test1-ocp68675`);
+    cy.adminCLI(`oc delete project test2-ocp68675`);
   });
-
+  it('(OCP-68675,xiyuzhao,UserInterface) Check Managed Namespaces field when OperatorGourp is set up', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+    const params = {
+      ns1: "test1-ocp68675",
+      ns2: "test2-ocp68675",
+      operatorName: "AMQ Streams"
+    }
+    // Prepare data - install Operator AMQ into ns2 operator
+    cy.adminCLI(`oc new-project ${params.ns1}`);
+    cy.adminCLI(`oc new-project ${params.ns2}`);
+    operatorHubPage.installOperator('amq-streams','redhat-operators',params.ns2);
+    cy.get('[aria-valuetext="Loading..."]').should('exist');
+    Pages.gotoInstalledOperatorPage();
+    operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeed');
+    // Operator did not exist in ns1 until the namespace was added to ns2's OperatorGroup
+    Pages.gotoInstalledOperatorPage(params.ns1);
+    cy.get(`[data-test-operator-row="${params.operatorName}"]`).should('not.exist');
+    // Check 1. Install the Operator when ns1 is added to ns2's OperatorGroup automatically 2. the mute message in ns1
+    cy.adminCLI(`oc get operatorgroup -n ${params.ns2} --no-headers -o custom-columns=OPERATORGROUP:.metadata.name`).then((result) => {
+      const operatorgorup = result.stdout;
+      cy.adminCLI(`oc patch operatorgroup ${operatorgorup} -n ${params.ns2} --type=merge -p '{"spec":{"targetNamespaces":["${params.ns1}","${params.ns2}"]}}'`);
+    });
+    cy.reload();
+    operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeed');
+    cy.get(`a[data-test="${params.ns1}"]`)
+      .should('exist')
+      .parents('td')
+      .contains(`operator is running in ${params.ns2} but is managing this namespace`);
+    cy.get(`[data-test-operator-row="${params.operatorName}"]`).click();
+    cy.get('[data-test-section-heading="ClusterServiceVersion details"]')
+      .should('exist')
+      .parents('div')
+      .contains(`operator is running in ${params.ns2} but is managing this namespace`);
+    // Check Managed Namespaces column for ns2, '2 Namespaces' would be shown
+    Pages.gotoInstalledOperatorPage(params.ns2);
+    cy.contains('button', '2 Namespaces')
+      .should('be.visible')
+      .click()
+      .then(() => {
+        cy.get(`[data-test-id="${params.ns1}"]`).should('exist');
+        cy.get(`[data-test-id="${params.ns2}"]`).should('exist');
+      })
+  });
   it('(OCP-40457,yanpzhan,UserInterface) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
     operatorHubPage.installOperator('etcd', 'community-operators', 'test-ocp40457');
     cy.wait(20000);

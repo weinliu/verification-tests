@@ -93,5 +93,11 @@ export const Pages = {
   },
   gotoMCPDetailsPage: (mcpname: string) => {
     cy.visit(`/k8s/cluster/machineconfiguration.openshift.io~v1~MachineConfigPool/${mcpname}`)
+  },
+  gotoInstalledOperatorPage: (namespace: string = 'all-namespaces') => {
+    const url = namespace === 'all-namespaces' ?
+      '/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion':
+      `/k8s/ns/${namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`;
+    cy.visit(url);
   }
 }
