@@ -2,7 +2,7 @@
     "apiVersion": "template.openshift.io/v1",
     "kind": "Template",
     "metadata": {
-        "name": "iperf-clusterip-service-template"
+        "name": "iperf-service-template"
     },
     "objects": [     
         {           
