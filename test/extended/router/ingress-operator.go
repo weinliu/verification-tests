@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-High-52837-switching of AWS CLB to NLB without deletion of ingresscontroller", func() {
+	g.It("Author:hongli-LEVEL0-High-52837-switching of AWS CLB to NLB without deletion of ingresscontroller", func() {
 		// skip if platform is not AWS
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
@@ -340,7 +340,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-55223-Configuring list of IP address ranges using allowedSourceRanges in LoadBalancerService", func() {
+	g.It("Author:mjoseph-LEVEL0-Critical-55223-Configuring list of IP address ranges using allowedSourceRanges in LoadBalancerService", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
@@ -894,7 +894,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(checkoutput1).To(o.ContainSubstring(`hard-stop-after 45m`))
 	})
 
-	g.It("Author:mjoseph-Critical-51255-cluster-ingress-operator can set AWS ELB idle Timeout on per controller basis", func() {
+	g.It("Author:mjoseph-LEVEL0-Critical-51255-cluster-ingress-operator can set AWS ELB idle Timeout on per controller basis", func() {
 		exutil.By("Pre-flight check for the platform type")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 

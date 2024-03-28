@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	var oc = exutil.NewCLI("router-tls", exutil.KubeConfigPath())
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-Critical-43300-enable client certificate with optional policy", func() {
+	g.It("Author:hongli-LEVEL0-Critical-43300-enable client certificate with optional policy", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		cmFile := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")

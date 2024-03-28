@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-Critical-41110-The threadCount ingresscontroller parameter controls the nbthread option for the haproxy router", func() {
+	g.It("Author:shudili-LEVEL0-Critical-41110-The threadCount ingresscontroller parameter controls the nbthread option for the haproxy router", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
@@ -465,7 +465,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-High-55367-Default HAProxy maxconn value to 50000 for OCP 4.12", func() {
+	g.It("Author:shudili-LEVEL0-High-55367-Default HAProxy maxconn value to 50000 for OCP 4.12 and later", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")

@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-Critical-43112-timeout tunnel parameter for the haproxy pods an be modified with TuningOptions option in the ingresscontroller", func() {
+	g.It("Author:aiyengar-LEVEL0-Critical-43112-timeout tunnel parameter for the haproxy pods an be modified with TuningOptions option in the ingresscontroller", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
@@ -517,7 +517,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-Low-47344-check haproxy router v4v6 mode", func() {
+	g.It("Author:hongli-LEVEL0-Critical-47344-check haproxy router v4v6 mode", func() {
 		exutil.By("Get ROUTER_IP_V4_V6_MODE env, if NotFound then v4 is using by default")
 		defaultRouterPod := getNewRouterPod(oc, "default")
 		checkEnv := readRouterPodEnv(oc, defaultRouterPod, "ROUTER_IP_V4_V6_MODE")
@@ -997,7 +997,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
-	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-High-41042-The Power-of-two balancing features defaults to random LB algorithm instead of leastconn for REEN/Edge/insecure routes", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-LEVEL0-High-41042-The Power-of-two balancing features defaults to random LB algorithm instead of leastconn for REEN/Edge/insecure routes", func() {
 		var (
 			baseDomain = getBaseDomain(oc)
 			defaultPod = getNewRouterPod(oc, "default")
