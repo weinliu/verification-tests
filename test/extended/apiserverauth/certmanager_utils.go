@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -24,29 +23,11 @@ import (
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"github.com/tidwall/gjson"
 
-	"gopkg.in/yaml.v3"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-)
-
-type subscription struct {
-	Spec subscriptionSpec `yaml:"spec"`
-}
-
-type subscriptionSpec struct {
-	Channel         string `yaml:"channel"`
-	Name            string `yaml:"name"`
-	Source          string `yaml:"source"`
-	SourceNamespace string `yaml:"sourceNamespace"`
-}
-
-const (
-	// MinMultiArchSupportedVersion is the minimum version to support multi-arch
-	MinMultiArchSupportedVersion = "1.13.0"
 )
 
 // Get the cloud provider type of the test environment
@@ -179,27 +160,25 @@ func getAzureCloudName(oc *exutil.CLI) string {
 
 // create cert manager
 func createCertManagerOperator(oc *exutil.CLI) {
-	e2e.Logf("Prepare cert manager operator.\n")
-	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
-	operatorNamespace := "cert-manager-operator"
-	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
+	const (
+		subscriptionName       = "openshift-cert-manager-operator"
+		subscriptionNamespace  = "cert-manager-operator"
+		catalogSourceNamespace = "openshift-marketplace"
+		channelName            = "stable-v1"
 
-	operatorGroupFile := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroupFile).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
+		// MinMultiArchSupportedVersion is the minimum version to support multi-arch
+		MinMultiArchSupportedVersion = "1.13.0"
+	)
 
-	subscriptionFile := filepath.Join(buildPruningBaseDir, "subscription.yaml")
-	f, err := ioutil.ReadFile(subscriptionFile)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	var sub subscription
-	err = yaml.Unmarshal(f, &sub)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// switch to an available catalogsource
+	catalogSourceName, err := getAvailableCatalogSourceName(oc, catalogSourceNamespace)
+	if len(catalogSourceName) == 0 || err != nil {
+		g.Skip("skip since no available catalogsource was found")
+	}
+	e2e.Logf("will use catalogsource: %s", catalogSourceName)
 
 	// skip non-amd64 arch for unsupported version
-	currentVersion, _ := semver.Parse(getCurrentCSVDescVersion(oc, sub.Spec.SourceNamespace, sub.Spec.Source, sub.Spec.Name, sub.Spec.Channel))
+	currentVersion, _ := semver.Parse(getCurrentCSVDescVersion(oc, catalogSourceNamespace, catalogSourceName, subscriptionName, channelName))
 	e2e.Logf("current csv desc version: %s", currentVersion)
 	minVersion, _ := semver.Parse(MinMultiArchSupportedVersion)
 	if currentVersion.Compare(minVersion) == -1 {
@@ -207,26 +186,41 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		architecture.SkipNonAmd64SingleArch(oc)
 	}
 
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscriptionFile).Output()
+	e2e.Logf("Prepare cert manager operator.\n")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+
+	// create namspace
+	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
+
+	// create operatorgroup
+	operatorGroupFile := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroupFile).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	// create subscription
+	subscriptionTemplate := filepath.Join(buildPruningBaseDir, "subscription.yaml")
+	params := []string{"-f", subscriptionTemplate, "-p", "NAME=" + subscriptionName, "SOURCE=" + catalogSourceName, "SOURCE_NAMESPACE=" + catalogSourceNamespace, "CHANNEL=" + channelName}
+	exutil.ApplyNsResourceFromTemplate(oc, subscriptionNamespace, params...)
 
 	// checking subscription status
 	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
+		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.state}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(subState, "AtLatestKnown") == 0 {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription openshift-cert-manager-operator is not correct status"))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status", subscriptionName))
 
 	// checking csv status
-	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
 	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
+		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", subscriptionNamespace, "-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(csvState, "Succeeded") == 0 {
 			e2e.Logf("CSV check complete!!!")
@@ -236,7 +230,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 
 	})
 	if errCheck != nil {
-		tmpCsvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status}").Output()
+		tmpCsvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", subscriptionNamespace, "-o=jsonpath={.status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("csv %s is:%s", csvName, tmpCsvState)
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
@@ -369,6 +363,24 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 	} else if !httpReachable && httpsReachable {
 		e2e.Failf("HTTPS reachable but HTTP unreachable. Marking case failed to signal router or installer problem. HTTP response error: %s", httpErr)
 	}
+}
+
+// Get the available CatalogSource's name from specific namespace
+func getAvailableCatalogSourceName(oc *exutil.CLI, namespace string) (string, error) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", "-o=jsonpath={.items[*].metadata.name}").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get catalogsource from namespace: %s", namespace)
+	}
+
+	// will first check if output contains "qe-app-registry", then "redhat-operators"
+	targetCatalogSources := []string{"qe-app-registry", "redhat-operators"}
+	for _, name := range targetCatalogSources {
+		if strings.Contains(output, name) {
+			return name, nil
+		}
+	}
+	// if no target CatalogSource was found, return ""
+	return "", nil
 }
 
 // Get current CSV described version from PackageManifest before creating Subscription

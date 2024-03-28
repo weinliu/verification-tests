@@ -24,7 +24,6 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		oc = exutil.NewCLI("default-"+getRandomString(8), exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
-		exutil.SkipMissingQECatalogsource(oc)
 		createCertManagerOperator(oc)
 	})
 
