@@ -913,4 +913,79 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(arpIpv6MacOutput).To(o.ContainSubstring(newPodMac))
 
 	})
+
+	g.It("Author:zzhao-NonPreRelease-Longduration-Critical-49860-pods numbers same with VF numbers can be still working after worker reboot [Disruptive]", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNeworkTemplate    = filepath.Join(buildPruningBaseDir, "sriovnetwork-whereabouts-template.yaml")
+			sriovTestPodRCTemplate = filepath.Join(buildPruningBaseDir, "sriov-netdevice-rc-template.yaml")
+			sriovOpNs              = "openshift-sriov-network-operator"
+			policyName             = "e810c"
+			deviceID               = "1593"
+			interfaceName          = "ens2f2"
+			vendorID               = "8086"
+			vfNum                  = 2
+			caseID                 = "49860-test"
+			networkName            = caseID + "net"
+		)
+
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		exutil.By("Create snnp to create VF")
+		// Create VF on with given device
+		defer rmSriovNetworkPolicy(oc, policyName, sriovOpNs)
+		result := initVF(oc, policyName, deviceID, interfaceName, vendorID, sriovOpNs, vfNum)
+		// if the deviceid is not exist on the worker, skip this
+		if !result {
+			g.Skip(fmt.Sprintf("This nic which has deviceID %s is not found on this cluster!!!", deviceID))
+		}
+		exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+		sriovnetwork := sriovNetwork{
+			name:             networkName,
+			resourceName:     policyName,
+			networkNamespace: ns1,
+			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
+			spoolchk:         "off",
+			trust:            "on",
+		}
+
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+
+		exutil.By("Create 2 test pods with rc to consume the whereabouts ip")
+		//create full number pods which use all of the VFs
+
+		sriovTestPod := sriovTestPod{
+			name:        caseID,
+			namespace:   ns1,
+			networkName: sriovnetwork.name,
+			template:    sriovTestPodRCTemplate,
+		}
+		sriovTestPod.createSriovTestPod(oc)
+		err := waitForPodWithLabelReady(oc, ns1, "name="+caseID)
+		exutil.AssertWaitPollNoErr(err, "pods with label name="+caseID+"sriov-netdevice not ready")
+
+		exutil.By("ping from one pod to another with ipv4 and ipv6")
+		podName := getPodName(oc, ns1, "name="+caseID)
+		pingPassWithNet1(oc, ns1, podName[0], podName[1])
+
+		exutil.By("Get node name of the pod")
+		nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns1, podName[0])
+		o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Reboot node.")
+		defer checkNodeStatus(oc, nodeName, "Ready")
+		rebootNode(oc, nodeName)
+		checkNodeStatus(oc, nodeName, "NotReady")
+		checkNodeStatus(oc, nodeName, "Ready")
+
+		exutil.By("ping from one pod to another with ipv4 and ipv6 after worker reboot")
+		err = waitForPodWithLabelReady(oc, ns1, "name="+caseID)
+		exutil.AssertWaitPollNoErr(err, "pods with label name="+caseID+"sriov-netdevice not ready")
+		podName = getPodName(oc, ns1, "name="+caseID)
+		pingPassWithNet1(oc, ns1, podName[0], podName[1])
+
+	})
 })
