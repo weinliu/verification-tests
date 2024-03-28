@@ -248,7 +248,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("StagerunBoth-NonHyperShiftHOST-ARO-Author:xiyuan-LEVEL0-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
+	g.It("StagerunBoth-NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without gracePeriod")

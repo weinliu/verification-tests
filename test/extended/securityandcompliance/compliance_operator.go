@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-LEVEL0-Critical-27649-The ComplianceSuite reports the scan result as Compliant or Non-Compliant [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Critical-27649-The ComplianceSuite reports the scan result as Compliant or Non-Compliant [Slow]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		var (
