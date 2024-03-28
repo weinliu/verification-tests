@@ -110,7 +110,6 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
             })
             cy.get('#query-summary-toggle').should('exist').click()
             cy.get('#summaryPanel').should('be.visible')
-
             cy.contains('Results').should('exist')
             cy.contains('Cardinality').should('exist')
             cy.contains('Configuration').should('exist')
