@@ -591,11 +591,14 @@ func checkDBFilesUpdated(oc *exutil.CLI, fi1 fileintegrity, oldDbBackupfiles []s
 func (fi1 *fileintegrity) assertNodeConditionNotEmpty(oc *exutil.CLI, nodeName string) {
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		fileintegrityName := fi1.name + "-" + nodeName
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
 			"-o=jsonpath={.lastResult.condition}").Output()
+		if err != nil {
+			return false, nil
+		}
 		return output != "", nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fileintegritynodestatuses %s is not Succeeded", fi1.name+"-"+nodeName))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fileintegritynodestatuses %s is empty", fi1.name+"-"+nodeName))
 }
 
 func (fi1 *fileintegrity) assertNodesConditionNotEmpty(oc *exutil.CLI) {
@@ -605,4 +608,10 @@ func (fi1 *fileintegrity) assertNodesConditionNotEmpty(oc *exutil.CLI) {
 	for _, node := range nodes {
 		fi1.assertNodeConditionNotEmpty(oc, node)
 	}
+}
+
+func (fi1 *fileintegrity) getNodeName(oc *exutil.CLI) string {
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fi1.namespace, "-l app=aide-"+fi1.name, "-o=jsonpath={.items[0].spec.nodeName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return nodeName
 }

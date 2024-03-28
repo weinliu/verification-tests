@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.assertNodesConditionNotEmpty(oc)
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
 			"-o=jsonpath={.lastResult.condition}").Output()
@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Longduration-NonPreRelease-CPaasrunOnly-Author:xiyuan-Critical-27599-check operator file-integrity-operator could run file integrity checks on the cluster nodes and shows relevant fileintegritynodestatuses [Slow][Serial]", func() {
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test27599"
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		createCmd := fmt.Sprintf(`mkdir %s; touch %s/test`, filePath, filePath)
 		delCmd := fmt.Sprintf(`if [ -d "%s" ]; then rm -rf %s; fi`, filePath, filePath)
 		defer exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", delCmd)
@@ -293,7 +293,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -347,7 +347,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.assertNodesConditionNotEmpty(oc)
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
 			"-o=jsonpath={.lastResult.condition}").Output()
@@ -415,7 +415,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Check Data Details in CM and Fileintegritynodestatus Equal or not")
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fi1.name+"-"+nodeName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
@@ -437,7 +437,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.nodeselectorvalue = ""
 
 		g.By("Create taint")
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		defer func() {
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.taints}").Output()
 			if strings.Contains(output, "value1") {
@@ -497,7 +497,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.nodeselectorvalue = ""
 
 		g.By("Create taint")
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		defer taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule-", "key2=value2:NoExecute-")
 		taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule", "key2=value2:NoExecute")
 
@@ -573,7 +573,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.assertNodesConditionNotEmpty(oc)
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		var filePath = "/root/test" + getRandomString()
 		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
 		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
@@ -603,7 +603,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 		g.By("Check DB backup results")
 		dbReinit := true
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		dbInitialBackupList, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
 
 		g.By("trigger reinit by applying aide config")
@@ -662,7 +662,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, md5configFile, "created")
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 
 		fipsOut := checkFipsStatus(oc, fi1.namespace)
 		if strings.Contains(fipsOut, "FIPS mode is enabled.") {
@@ -798,7 +798,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		nodeName := getOneRhcosWorkerNodeName(oc)
+		nodeName := fi1.getNodeName(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 
 		g.By("trigger fileintegrity failure on node")
