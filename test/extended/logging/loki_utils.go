@@ -172,11 +172,12 @@ func emptyS3Bucket(client *s3.Client, bucketName string) error {
 			objectIdentifiers[i] = types.ObjectIdentifier{Key: object.Key}
 		}
 
+		quiet := true
 		_, err = client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{
 			Bucket: &bucketName,
 			Delete: &types.Delete{
 				Objects: objectIdentifiers,
-				Quiet:   true,
+				Quiet:   &quiet,
 			},
 		})
 		if err != nil {
@@ -185,7 +186,7 @@ func emptyS3Bucket(client *s3.Client, bucketName string) error {
 	}
 
 	// Check if there are more objects to delete and handle pagination
-	if objects.IsTruncated {
+	if *objects.IsTruncated {
 		return emptyS3Bucket(client, bucketName)
 	}
 
