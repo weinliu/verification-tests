@@ -883,4 +883,76 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 
+	// author: knarra@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-LEVEL0-Medium-70878-Add annotation in the kube-scheduler-guard static pod for workload partitioning", func() {
+		// Skip for SNO cluster as there is no gurad pod present
+		exutil.SkipForSNOCluster(oc)
+
+		exutil.By("Retreive guard pods from kube-scheduler namespace")
+		ksGuardPodName, ksGuardPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-scheduler", "-l=app=guard", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+		o.Expect(ksGuardPodError).NotTo(o.HaveOccurred())
+		ksGuardPodNames := strings.Fields(ksGuardPodName)
+		// Check if workload partioning annotation is added
+		wpAnnotation, wpAnnotationError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-scheduler", ksGuardPodNames[0], `-ojsonpath={.metadata.annotations}`).Output()
+		o.Expect(wpAnnotationError).NotTo(o.HaveOccurred())
+		o.Expect(wpAnnotation).To(o.ContainSubstring(`"target.workload.openshift.io/management":"{\"effect\": \"PreferredDuringScheduling\"}"`))
+	})
+
+	// author: knarra@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-LEVEL0-High-67822-Update staticpod file permissions to conform with CIS benchmarks", func() {
+		// Reterive all kube-scheduler pod names from openshift-kube-scheduler namespace
+		g.By("Retreive kube-scheduler pods and check static pod file permissions")
+		ksPodNames, ksPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-n", "openshift-kube-scheduler", "-l=app=openshift-kube-scheduler", "-o", "name").Output()
+		o.Expect(ksPodError).NotTo(o.HaveOccurred())
+
+		for _, kspod := range strings.Fields(ksPodNames) {
+			permStatusKS, notExistError := oc.WithoutNamespace().AsAdmin().Run("exec").Args("-n", "openshift-kube-scheduler", kspod, "--", "stat", "-c", "%a", "/etc/kubernetes/static-pod-resources/kube-scheduler-pod.yaml").Output()
+			o.Expect(notExistError).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(permStatusKS, "600")).To(o.BeTrue())
+		}
+
+		g.By("Retreive kube-controller-manager pods and check static pod file permissions")
+		kcPodNames, kcPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-n", "openshift-kube-controller-manager", "-l=app=kube-controller-manager", "-o", "name").Output()
+		o.Expect(kcPodError).NotTo(o.HaveOccurred())
+
+		for _, kcpod := range strings.Fields(kcPodNames) {
+			permStatusKC, notExistError := oc.WithoutNamespace().AsAdmin().Run("exec").Args("-n", "openshift-kube-controller-manager", kcpod, "--", "stat", "-c", "%a", "/etc/kubernetes/static-pod-resources/kube-controller-manager-pod.yaml").Output()
+			o.Expect(notExistError).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(permStatusKC, "600")).To(o.BeTrue())
+		}
+
+		g.By("Retreive kube-api-server pods and check static pod file permissions")
+		kaPodNames, kaPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-n", "openshift-kube-apiserver", "-l=app=openshift-kube-apiserver", "-o", "name").Output()
+		o.Expect(kaPodError).NotTo(o.HaveOccurred())
+
+		for _, kapod := range strings.Fields(kaPodNames) {
+			permStatusKA, notExistError := oc.WithoutNamespace().AsAdmin().Run("exec").Args("-n", "openshift-kube-apiserver", kapod, "--", "stat", "-c", "%a", "/etc/kubernetes/static-pod-resources/kube-apiserver-pod.yaml").Output()
+			o.Expect(notExistError).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(permStatusKA, "600")).To(o.BeTrue())
+		}
+
+		g.By("Retreive kube-openshift-etcd pods and check static pod file permissions")
+		etcdPodNames, etcdPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-n", "openshift-etcd", "-l=app=etcd", "-o", "name").Output()
+		o.Expect(etcdPodError).NotTo(o.HaveOccurred())
+
+		for _, etcdpod := range strings.Fields(etcdPodNames) {
+			permStatusEtcd, notExistError := oc.WithoutNamespace().AsAdmin().Run("exec").Args("-n", "openshift-etcd", etcdpod, "--", "stat", "-c", "%a", "/etc/kubernetes/static-pod-resources/etcd-pod.yaml").Output()
+			o.Expect(notExistError).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(permStatusEtcd, "600")).To(o.BeTrue())
+		}
+
+		g.By("Login to one of the master node and check for the permissions of static pod inside the host")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+		staticPodOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+masterNodes[0], "-n", "openshift-kube-scheduler", "--", "chroot", "/host", "ls", "-l", "/etc/kubernetes/manifests").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		staticPodFileList := []string{"-rw-------.*etcd-pod.yaml.*", "-rw-------.*kube-apiserver-pod.yaml.*", "-rw-------.*kube-controller-manager-pod.yaml.*", "-rw-------.*kube-scheduler-pod.yaml.*"}
+		for _, staticPodFile := range staticPodFileList {
+			if match, _ := regexp.MatchString(staticPodFile, staticPodOutput); !match {
+				e2e.Failf("Static file permissions with in the host is incorrect")
+			}
+		}
+	})
+
 })

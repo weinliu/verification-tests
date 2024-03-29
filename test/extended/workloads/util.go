@@ -1161,65 +1161,29 @@ func (cj *cronJobCreationTZ) createCronJobWithTimeZone(oc *exutil.CLI) {
 }
 
 func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
-	var schedule, timeZoneName = "None", "None"
-	t := time.Now()
-	zoneName, _ := t.Zone()
-	if zoneName == "IST" {
-		timeZoneName = "Asia/Calcutta"
-		ist, err := time.LoadLocation("Asia/Calcutta")
-		if err != nil {
-			e2e.Failf("Error is %v", err)
-		}
-		e2e.Logf("location:", ist, "Time:", t.In(ist))
-		localTimeInHours := t.In(ist).Hour()
-		localTimeInMinutes := t.In(ist).Minute()
-		if localTimeInHours == 23 && localTimeInMinutes == 59 {
-			schedule = "01 0 * * *"
-		} else if localTimeInMinutes == 59 && localTimeInHours != 23 {
-			localTimeInHours = localTimeInHours + 1
-			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-		} else if localTimeInMinutes == 59 && localTimeInHours == 23 {
-			localTimeInHours = 00
-			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-		} else {
-			localTimeInMinutes = localTimeInMinutes + 2
-			if localTimeInMinutes == 60 {
-				localTimeInHours = localTimeInHours + 1
-				schedule = "00 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-			} else {
-				schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-			}
-		}
-	} else if zoneName == "UTC" || zoneName == "EST" {
-		timeZoneName = "America/New_York"
-		utc, err := time.LoadLocation("America/New_York")
-		if err != nil {
-			e2e.Failf("Error is: ", err.Error())
-		}
-		e2e.Logf("location:", utc, "Time:", t.In(utc))
-		localTimeInHours := t.In(utc).Hour()
-		localTimeInMinutes := t.In(utc).Minute()
-		if localTimeInHours == 23 && localTimeInMinutes == 59 {
-			schedule = "01 0 * * *"
-		} else if localTimeInMinutes == 59 && localTimeInHours != 23 {
-			localTimeInHours = localTimeInHours + 1
-			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-		} else if localTimeInMinutes == 59 && localTimeInHours == 23 {
-			localTimeInHours = 00
-			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-		} else {
-			localTimeInMinutes = localTimeInMinutes + 2
-			if localTimeInMinutes == 60 {
-				localTimeInHours = localTimeInHours + 1
-				schedule = "00 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-			} else {
-				schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
-			}
-		}
-	} else {
-		e2e.Failf("Given zone name is %s", zoneName)
+	// Get the local timezone
+	localZone, err := time.LoadLocation("")
+	e2e.Logf("localzone is %s", localZone)
+	if err != nil {
+		e2e.Failf("Could not get local timezone", err)
 	}
-	return schedule, timeZoneName
+
+	// Get the current time in the local timezone
+	currentTime := time.Now().In(localZone)
+	e2e.Logf("Local Timezone:", localZone, "Current Time:", currentTime.Format(time.RFC3339))
+
+	// Caluclate the cron schedule based on the local timezone
+	hour, minu, _ := currentTime.Clock()
+
+	// Adjust the hour and minute components
+	if minu == 59 {
+		hour = (hour + 1) % 24
+		minu = 0
+	} else {
+		minu += 1
+	}
+	cronSchedule := fmt.Sprintf("%d %d * * *", minu, hour)
+	return cronSchedule, localZone.String()
 }
 
 func getOauthAudit(mustgatherDir string) []string {
