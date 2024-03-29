@@ -264,6 +264,45 @@ export const Operand = {
           cy.get('input').clear().type(value)
         })
     }
+  },
+  sortAndVerifyColumn(columnName) {
+    const columnSelectors = {
+      Name: {
+        header: '[data-label="Name"]',
+        rowsinfo: '[data-test-rows="resource-row"] td span a',
+      },
+      Status: {
+        header: '[data-label="Status"]',
+        rowsinfo: '[data-test="status-text"]',
+      },
+      Created: {
+        header: '[data-label="Created"]',
+        rowsinfo: '[data-test="timestamp"]'
+      },
+      Kind: {
+        header: '[data-label="Kind"]',
+        rowsinfo: '[data-test-rows="resource-row"] [class*="-screen-reader"]'
+      }
+    };
+
+    const { header, rowsinfo } = columnSelectors[columnName] || {};
+    if (!header || ! rowsinfo) {
+      throw new Error(`Invalid column name: ${columnName}, it is not define in columnSelectors`);
+    }
+
+    cy.get(header)
+      .click()
+      .then(($el) => {
+        if ($el.attr('aria-sort') !== 'descending') {
+          cy.get(header).click().should('have.attr', 'aria-sort', 'descending');
+        }
+      });
+    cy.get(rowsinfo)
+      .then($names => {
+        const namesArray = $names.toArray().map(name => name.innerText.trim());
+        const sortedNames = [...namesArray].sort((a, b) => b.localeCompare(a));
+        cy.wrap(namesArray).should('deep.equal', sortedNames);
+      });
   }
 }
 
