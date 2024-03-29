@@ -25,7 +25,9 @@ describe('Operators Installed page test', () => {
     cy.visit('/k8s/ns/openshift-marketplace/operators.coreos.com~v1alpha1~CatalogSource/custom-catalogsource');
     cy.get('[data-test-selector="details-item-value__Status"]').should('contain.text', 'READY');
     operatorHubPage.installOperator(params.sonarqube, params.csName, params.specialNs);
+    cy.get('[aria-valuetext="Loading..."]').should('exist');
     operatorHubPage.installOperator(params.infinispan, params.csName);
+    cy.get('[aria-valuetext="Loading..."]').should('exist');
     });
 
   after(() => {
@@ -60,25 +62,6 @@ describe('Operators Installed page test', () => {
     cy.adminCLI(`oc get csv -n openshift-console`)
       .then(result => { expect(result.stdout).contain("infinispan")})
 
-    const MAX_RETRIES = 5;
-    const RETRY_INTERVAL = 15000; // milliseconds
-    let retries = 0;
-
-    function checkCondition() {
-      return cy.adminCLI(`oc get olmconfigs cluster -o jsonpath='{.status.conditions[0]}'`)
-          .then(result => {
-            if (result.stdout.includes("True")) {
-              return true;
-            } else {
-              retries++;
-              if (retries < MAX_RETRIES) {
-                return cy.wait(RETRY_INTERVAL).then(checkCondition);
-              } else {
-                throw new Error("Failed to set para disableCopiedCSV to True.");
-              }
-            }
-          });
-    }
     /*
     Check for normal user
     1. The Flag can take affect after OLMConfig being updated
@@ -86,22 +69,23 @@ describe('Operators Installed page test', () => {
     3. When Flag = true, the golbal installed operator's CSV ns will update to 'openshit'
          And new lable 'olm.copiedFrom' is added for the Operator
     */
+    const command = "oc get olmconfigs cluster -o jsonpath='{.status.conditions[0].status}'"
+    const expectedOutput = "True"
     cy.adminCLI(`oc patch olmconfigs cluster --type=merge -p 'spec: {features: {disableCopiedCSVs: True}}'`);
-    checkCondition().then(conditionMet => {
-        if (conditionMet) {
-          cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-          cy.visit(`/k8s/cluster/user.openshift.io~v1~User/${Cypress.env('LOGIN_USERNAME')}/roles`)
-          cy.get('[data-test="msg-box-title"]').should('contain.text','Restricted Access');
-          cy.visit(`/k8s/ns/${params.ns54975}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-          cy.get(`[data-test-id="resource-title"]`, { timeout: 15000 }).should('contain.text',"Installed Operators");
-          listPage.filter.byName('sonarqube');
-          listPage.rows.shouldNotExist(`Sonarqube Operator`);
-          listPage.filter.byName('infinispan');
-          listPage.rows.shouldExist('Infinispan Operator').click();
-          cy.get('[data-test-id="openshift"]').should("exist");
-          cy.get('[data-test="label-key"]').should("contain.text","olm.copiedFrom");
-        }
-    });
+    cy.checkCommandResult(command,expectedOutput, {retries: 5, interval: 15000})
+      .then(() => {
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+        cy.visit(`/k8s/cluster/user.openshift.io~v1~User/${Cypress.env('LOGIN_USERNAME')}/roles`)
+        cy.get('[data-test="msg-box-title"]').should('contain.text','Restricted Access');
+        cy.visit(`/k8s/ns/${params.ns54975}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+        cy.get(`[data-test-id="resource-title"]`, { timeout: 15000 }).should('contain.text',"Installed Operators");
+        listPage.filter.byName('sonarqube');
+        listPage.rows.shouldNotExist(`Sonarqube Operator`);
+        listPage.filter.byName('infinispan');
+        listPage.rows.shouldExist('Infinispan Operator').click();
+        cy.get('[data-test-id="openshift"]').should("exist");
+        cy.get('[data-test="label-key"]').should("contain.text","olm.copiedFrom");
+      })
   });
 
   it('(OCP-65876,xiyuzhao,UserInterface) Non cluster-admin user should able to update the operator in Console	',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {

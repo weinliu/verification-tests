@@ -4,11 +4,13 @@ declare global {
     namespace Cypress {
         interface Chainable<Subject> {
             switchPerspective(perspective: string);
-	    uiLogin();
+	          uiLogin(provider: string, username: string, password: string);
             uiLogout();
             cliLogin();
             cliLogout();
             adminCLI(command: string);
+            retryTask(condition, expectedoutput, options);
+            checkCommandResult(condition, expectedoutput, options);
             hasWindowsNode();
             isEdgeCluster();
             isAWSSTSCluster();
@@ -18,7 +20,9 @@ declare global {
     }
 }
 
-const kubeconfig = Cypress.env('KUBECONFIG_PATH')
+const kubeconfig = Cypress.env('KUBECONFIG_PATH');
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_RETRY_INTERVAL = 10000; // milliseconds
 
 Cypress.Commands.add("switchPerspective", (perspective: string) => {
 
@@ -58,7 +62,7 @@ Cypress.Commands.add('uiLogin', (provider: string, username: string, password: s
     .should('be.visible');
   })
   cy.visit('/');
-}); 
+});
 
 Cypress.Commands.add('uiLogout', () => {
   cy.window().then((win: any) => {
@@ -90,6 +94,35 @@ Cypress.Commands.add("cliLogout", () => {
 Cypress.Commands.add("adminCLI", (command: string) => {
   cy.log(`Run admin command: ${command}`)
   cy.exec(`${command} --kubeconfig ${kubeconfig}`, { failOnNonZeroExit: false })
+});
+
+Cypress.Commands.add('retryTask', (command, expectedOutput, options) => {
+  const { retries = DEFAULT_MAX_RETRIES, interval = DEFAULT_RETRY_INTERVAL } = options || {};
+
+  const retryTaskFn = (currentRetries) => {
+    return cy.adminCLI(command)
+      .then(result => {
+        if (result.stdout.includes(expectedOutput)) {
+          return cy.wrap(true);
+        } else if (currentRetries < retries) {
+          return cy.wait(interval).then(() => retryTaskFn(currentRetries + 1));
+        } else {
+          return cy.wrap(false);
+        }
+      });
+  };
+  return retryTaskFn(0);
+});
+
+Cypress.Commands.add("checkCommandResult", (command, expectedoutput, options) => {
+  return cy.retryTask(command, expectedoutput, options)
+    .then(conditionMet =>{
+      if (conditionMet) {
+        return;
+      } else {
+        throw new Error(`"${command}" failed to meet expectedoutput ${expectedoutput} within ${options.retries} retries`);
+      }
+    })
 });
 
 const hasWindowsNode = () :boolean => {
