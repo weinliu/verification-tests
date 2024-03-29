@@ -3388,6 +3388,166 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		egressErr = verifyEgressIPinTCPDump(oc, pod2.name, pod2.namespace, freeIPs[1], dstHost, ns, tcpdumpDS.name, true)
 		o.Expect(egressErr).NotTo(o.HaveOccurred())
 	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-Medium-72336-Intra cluster traffic does not take egressIP path to reach ingressVIP when egressIP and ingressVIP located on same node. [Serial]", func() {
+
+		// This is for customer bug: https://issues.redhat.com/browse/OCPBUGS-29851
+		// IngressVIP is only for Baremetal or vSphere platform
+		// Since for a dualstack egressIP object, its v6 egressIP and v6 egressIP would be assigned to two separate nodes by design, therefore
+		// it is not possible to meet the test condition that the two egress nodes for a dualstack egressIP object co-locate with ingressVIP node at same time
+		// Dualstack scenario will be skipped for this reason stated in last two lines
+		// IP4v or IPv6 is tested in its singlestack mode.
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		platform := exutil.CheckPlatform(oc)
+		networkType := checkNetworkType(oc)
+		ingressVIPs := GetIngressVIPOnPlatform(oc, platform)
+		ipStackType := checkIPStackType(oc)
+		e2e.Logf("\n\nThe platform is %v,  networkType is %v, ingressVIP: %s\n\n", platform, networkType, ingressVIPs)
+		acceptedPlatform := strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")
+		if !acceptedPlatform || !strings.Contains(networkType, "ovn") || len(ingressVIPs) == 0 || ipStackType == "dualstack" {
+			g.Skip("Test case should be run Vsphere/Baremetalcluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		}
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Does not have enough nodes for the test, skip the case")
+		}
+
+		exutil.By("1. Find the node that has ingressVIP address(es), get another node that is not egressIP/ingressVIP node.\n")
+		ingressVIPNode := FindIngressVIPNode(oc, ingressVIPs[0])
+		o.Expect(ingressVIPNode).NotTo(o.Equal(""))
+
+		_, ingressVIPNodeIP := getNodeIP(oc, ingressVIPNode)
+		e2e.Logf("\nCluster's IPStack Type: %s, IngressVIP is on node %s, ingressVIP Node's IP address is: %v\n", ipStackType, ingressVIPNode, ingressVIPNodeIP)
+
+		//  Get another node that is not egressIP/ingressVIP node
+		var nonEgressNode string
+		for _, node := range nodeList.Items {
+			if node.Name != ingressVIPNode {
+				nonEgressNode = node.Name
+				break
+			}
+		}
+		o.Expect(nonEgressNode).NotTo(o.Equal(""))
+		_, nonEgressNodeIP := getNodeIP(oc, nonEgressNode)
+		e2e.Logf("\n Cluster's IPStack Type: %s, use %s as nonEgressNode, its nodeIP address is: %v\n", ipStackType, nonEgressNode, nonEgressNodeIP)
+
+		exutil.By("2 Apply EgressLabel Key to ingressVIP node to make ingressVIP and egressIP co-exist on the same node. \n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, ingressVIPNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, ingressVIPNode, egressNodeLabel, "true")
+
+		exutil.By("3. Create an egressip object")
+		var freeIPs []string
+		var tcpdumpCmd, pingCurlCmds string
+		if ipStackType == "ipv4single" {
+			freeIPs = findFreeIPs(oc, ingressVIPNode, 1)
+			tcpdumpCmd = "timeout 90s tcpdump -n -i any -nneep \"(src port 443 and  dst port 31459) or (src port 31459 and dst port 443)\""
+			pingCurlCmds = fmt.Sprintf(" curl -4 --local-port 31459 %s:443 --connect-timeout  5", ingressVIPs[0])
+		}
+		if ipStackType == "ipv6single" {
+			freeIPs = findFreeIPv6s(oc, ingressVIPNode, 1)
+			tcpdumpCmd = "timeout 90s tcpdump -n -i any -nneep \"ip6 and (src port 443 and  dst port 31459) or (src port 31459 and dst port 443)\""
+			pingCurlCmds = fmt.Sprintf(" curl -6 --local-port 31459 [%s]:443 --connect-timeout  5", ingressVIPs[0])
+		}
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		egressip := egressIPResource1{
+			name:          "egressip-72336",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip.createEgressIPObject2(oc)
+		defer egressip.deleteEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip.name, 1)
+
+		exutil.By("4.1. Obtain the namespace, create two test pods on egressIP/ingressVIP node, one on egressIP/ingressVIP node, the other one a non-egressIP Node\n")
+		ns1 := oc.Namespace()
+
+		// Pod1 is a remote pod because it is not on egressIP/ingressVIP node
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		// Pods is a local pod because it is on egressIP/ingressVIP node
+		pod2 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns1,
+			nodename:  ingressVIPNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		exutil.By("4.2 Apply label to test pods and namespace to match the label in egressIP object.\n")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer exutil.LabelPod(oc, ns1, pod2.name, "color-")
+		err = exutil.LabelPod(oc, ns1, pod2.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4.3 Enable tcpdump on egressIP/ingressVIP node.\n")
+		cmdTcpdump, tcpdumpOutput, _, err := oc.WithoutNamespace().AsAdmin().Run("debug").Args("-n", "default", "node/"+ingressVIPNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// wait a little for tcpdump command to start
+		time.Sleep(5 * time.Second)
+
+		exutil.By("4.4 curl ingressVIP from test pod1 in ns1 namespace \n")
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, pingCurlCmds)
+		o.Expect(fmt.Sprint(err)).To(o.ContainSubstring("Empty reply from server"))
+
+		exutil.By("4.5 Check tcpdump, ingressVIP node's IP address should be captured instead of egressIP address \n")
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdumpOutput captured on EIP/VIP node: \n%s\n", tcpdumpOutput.String())
+
+		// Remote pod uses its nodeIP to reach ingressVIP
+		o.Expect(strings.Contains(tcpdumpOutput.String(), nonEgressNodeIP)).Should(o.BeTrue())
+
+		// Does not take EIP path, so there should be no egressIP address in the tcpdump
+		o.Expect(strings.Contains(tcpdumpOutput.String(), egressip.egressIP1)).Should(o.BeFalse())
+
+		pod2IP, _ := getPodIP(oc, ns1, pod2.name)
+
+		exutil.By("5.1 Enable tcpdump on egressIP/ingressVIP node again.\n")
+		cmdTcpdump2, tcpdumpOutput2, _, err := oc.WithoutNamespace().AsAdmin().Run("debug").Args("-n", "default", "node/"+ingressVIPNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump2.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		time.Sleep(5 * time.Second)
+
+		exutil.By("5.2 curl ingressVIP from test pod1 in ns1 namespace \n")
+		_, err = e2eoutput.RunHostCmd(pod2.namespace, pod2.name, pingCurlCmds)
+		o.Expect(fmt.Sprint(err)).To(o.ContainSubstring("Empty reply from server"))
+
+		exutil.By("5.3 Check tcpdump, pod2's IP address should be captured instead of egressIP address \n")
+		cmdTcpdump2.Wait()
+		e2e.Logf("tcpdumpOutput captured on EIP/VIP node: \n%s\n", tcpdumpOutput2.String())
+
+		// local pod uses its podIP to reach ingressVIP because there is no need to go through nodeIP
+		o.Expect(strings.Contains(tcpdumpOutput2.String(), pod2IP)).Should(o.BeTrue())
+		o.Expect(strings.Contains(tcpdumpOutput2.String(), egressip.egressIP1)).Should(o.BeFalse())
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {

@@ -3643,3 +3643,50 @@ func verifySctpConnPod2IP(oc *exutil.CLI, namespace, sctpServerPodIP, sctpServer
 	}
 
 }
+
+// Get ingessVIP on the platform (vSphere or BM)
+func GetIngressVIPOnPlatform(oc *exutil.CLI, platform string) []string {
+	var cmdOutput string
+	var err error
+	var ingressVIPs []string
+
+	if !strings.Contains(platform, "baremetal") && !strings.Contains(platform, "vsphere") {
+		g.Skip("Skip for non-vSphere/non-Baremetal cluster")
+	}
+	jsonpathstr := "-o=jsonpath={.status.platformStatus." + platform + ".ingressIPs}"
+	checkErr := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		cmdOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", jsonpathstr).Output()
+		if cmdOutput == "" || err != nil {
+			e2e.Logf("Did not ingressIP, errors: %v, try again", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Failed to get ingressVIP on this platform %v, err: %v", platform, checkErr))
+
+	// match out all IP (v4 or v6) addresses under " "
+	re := regexp.MustCompile(`"[^",]+"`)
+	ipStrs := re.FindAllString(cmdOutput, -1)
+	for _, eachIpString := range ipStrs {
+		ip := strings.TrimRight(strings.TrimLeft(eachIpString, "\""), "\"") //trim left " and right " from the string to get IP address
+		ingressVIPs = append(ingressVIPs, ip)
+	}
+
+	return ingressVIPs
+}
+
+// Find ingressVIP node on vSphere or BM
+func FindIngressVIPNode(oc *exutil.CLI, ingressVIP string) string {
+	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	for _, node := range nodeList.Items {
+		output, err := exutil.DebugNode(oc, node.Name, "bash", "-c", "ip add show br-ex")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, ingressVIP) {
+			e2e.Logf("Node %s is ingressVIP node", node.Name)
+			return node.Name
+		}
+	}
+	return ""
+}
