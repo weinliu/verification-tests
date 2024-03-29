@@ -958,6 +958,13 @@ func (dep *deployment) getReplicasNum(oc *exutil.CLI) string {
 	return replicasNum
 }
 
+// Get names of PVC used by the Deployment
+func (dep *deployment) getPVCNames(oc *exutil.CLI) []string {
+	pvcNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", dep.name, "-n", dep.namespace, "-o", "jsonpath={.spec.template.spec.volumes.*.persistentVolumeClaim.claimName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Fields(pvcNames)
+}
+
 // Get the Deployments in mentioned ns
 func getSpecifiedNamespaceDeployments(oc *exutil.CLI, ns string) []string {
 	depNames, err := oc.WithoutNamespace().Run("get").Args("deployments", "-n", ns, "-o=jsonpath={range.items[*]}{.metadata.name}{\" \"}").Output()

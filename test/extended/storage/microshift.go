@@ -1413,6 +1413,87 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		checkResourcesNotExist(oc, "pvc", pvcName, pod.namespace)
 		checkResourcesNotExist(oc, "pv", pvName, "")
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-68580-[MicroShift] Perform persistent volume update operations with 'oc set volume' commands
+	g.It("MicroShiftOnly-Author:rdeore-High-68580-[MicroShift] Perform persistent volume update operations with 'oc set volume' commands", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID             = "68580"
+			e2eTestNamespace   = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			pvcTemplate        = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			deploymentTemplate = filepath.Join(storageMicroshiftBaseDir, "dep-template.yaml")
+		)
+
+		exutil.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		exutil.By("#. Define storage resources")
+		presetStorageClass := newStorageClass(setStorageClassName("topolvm-provisioner"), setStorageClassProvisioner(topolvmProvisioner))
+		pvc1 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName(presetStorageClass.name), setPersistentVolumeClaimCapacity("1Gi"))
+		pvc2 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(e2eTestNamespace),
+			setPersistentVolumeClaimStorageClassName(presetStorageClass.name), setPersistentVolumeClaimCapacity("1Gi"))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentNamespace(e2eTestNamespace), setDeploymentPVCName(pvc1.name))
+
+		exutil.By("#. Create a pvc-1")
+		pvc1.create(oc)
+		defer pvc1.deleteAsAdmin(oc)
+
+		exutil.By("#. Create deployment with the pvc-1 and wait for the deployment to become ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		exutil.By("#. Create a pvc-2")
+		pvc2.create(oc)
+		defer pvc2.deleteAsAdmin(oc)
+
+		exutil.By("#. Check 'set volume' cmd lists all mounted volumes on available deployment resource")
+		result, err := oc.AsAdmin().Run("set").Args("volume", "deployment", "--all", "-n", e2eTestNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).Should(o.ContainSubstring(dep.name))
+		o.Expect(result).Should(o.ContainSubstring(pvc1.name))
+
+		exutil.By("#. Execute cmd to overwrite deployment's existing volume with pvc-2")
+		result, err = oc.AsAdmin().Run("set").Args("volumes", "deployment", dep.name, "--add", "--name=local", "-t", "pvc", "--claim-name="+pvc2.name, "--overwrite", "-n", e2eTestNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).Should(o.ContainSubstring(dep.name + " volume updated"))
+		dep.waitReady(oc)
+		o.Expect(dep.getPVCNames(oc)[0]).Should(o.Equal(pvc2.name))
+		dep.checkPodMountedVolumeCouldRW(oc)
+		deleteSpecifiedResource(oc, "pvc", pvc1.name, e2eTestNamespace)
+
+		exutil.By("#. Execute cmd to overwrite deployment's existing volume by creating a new volume")
+		newPVSize := "2Gi"
+		result, err = oc.AsAdmin().Run("set").Args("volumes", "deployment", dep.name, "--add", "--name=local", "-t", "pvc", "--claim-size="+newPVSize, "--overwrite", "-n", e2eTestNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).Should(o.ContainSubstring(dep.name + " volume updated"))
+		dep.waitReady(oc)
+		o.Expect(dep.getPVCNames(oc)[0]).ShouldNot(o.Equal(pvc2.name))
+		dep.checkPodMountedVolumeCouldRW(oc)
+		deleteSpecifiedResource(oc, "pvc", pvc2.name, e2eTestNamespace)
+
+		exutil.By("#. Execute cmd to overwrite mount point for deployment's existing volume to new mount path")
+		newMountPath := "/data/storage"
+		result, err = oc.AsAdmin().Run("set").Args("volumes", "deployment", dep.name, "--add", "--name=local", "-m", newMountPath, "--overwrite", "-n", e2eTestNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).Should(o.ContainSubstring(dep.name + " volume updated"))
+		dep.waitReady(oc)
+		dep.mpath = newMountPath
+		dep.checkPodMountedVolumeDataExist(oc, true)
+
+		exutil.By("#. Execute cmd to remove deployment's existing volume")
+		pvcName := dep.getPVCNames(oc)[0]
+		result, err = oc.AsAdmin().Run("set").Args("volumes", "deployment", dep.name, "--remove", "--name=local", "-n", e2eTestNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).Should(o.ContainSubstring(dep.name + " volume updated"))
+		dep.waitReady(oc)
+		dep.checkPodMountedVolumeDataExist(oc, false)
+		deleteSpecifiedResource(oc, "deployment", dep.name, e2eTestNamespace)
+		deleteSpecifiedResource(oc, "pvc", pvcName, e2eTestNamespace)
+	})
 })
 
 // Delete the logicalVolume created by lvms/topoLVM provisioner
