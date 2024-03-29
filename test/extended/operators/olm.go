@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"regexp"
 	"strconv"
 
@@ -26,7 +25,6 @@ import (
 	opm "github.com/openshift/openshift-tests-private/test/extended/opm"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
-	db "github.com/openshift/openshift-tests-private/test/extended/util/db"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -12380,20 +12378,22 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	// Test case: OCP-27672, author:xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-Medium-27672-Allow Operator Registry Update Polling with automatic ipApproval [Slow]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-		containerCLI := container.NewPodmanCLI()
-		containerTool := "podman"
-		quayCLI := container.NewQuayCLI()
-		sqlit := db.NewSqlit()
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		defer DeleteDir(buildPruningBaseDir, "fixture-testdata")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
-		bundleImageTag1 := "quay.io/olmqe/ditto-operator:0.1.0"
-		bundleImageTag2 := "quay.io/olmqe/ditto-operator:0.1.1"
-		indexTag := "quay.io/olmqe/ditto-index:" + getRandomString()
-		defer containerCLI.RemoveImage(indexTag)
-		catsrcName := "catsrc-27672-operator" + getRandomString()
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-opm.yaml")
+		catalogDataDir := filepath.Join(buildPruningBaseDir, "27672")
+		defer DeleteDir(buildPruningBaseDir, "fixture-testdata")
+
+		opmCLI := opm.NewOpmCLI()
+		opmCLI.ExecCommandPath = catalogDataDir
+		quayCLI := container.NewQuayCLI()
+		podmanCLI := container.NewPodmanCLI()
+		podmanCLI.ExecCommandPath = catalogDataDir
+
+		indexTag := "quay.io/olmqe/nginxolm-operator-index:27672-" + getRandomString()
+		defer podmanCLI.RemoveImage(indexTag)
+		catsrcName := "catsrc-27672-" + getRandomString()
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -12406,22 +12406,22 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			catsrc = catalogSourceDescription{
 				name:        catsrcName,
 				namespace:   namespaceName,
-				displayName: "Test-Catsrc-17672-Operators",
+				displayName: "Test-Catsrc-27672-auto",
 				publisher:   "Red-Hat",
 				sourceType:  "grpc",
 				address:     indexTag,
-				interval:    "2m0s",
+				interval:    "1m0s",
 				template:    catsrcImageTemplate,
 			}
 
 			sub = subscriptionDescription{
-				subName:                "ditto-27672-operator",
+				subName:                "27672-operator",
 				namespace:              namespaceName,
 				catalogSourceName:      catsrcName,
 				catalogSourceNamespace: namespaceName,
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "ditto-operator",
+				operatorPackage:        "nginx-operator",
 				singleNamespace:        true,
 				template:               subTemplate,
 			}
@@ -12432,95 +12432,90 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		og.createwithCheck(oc, itName, dr)
 
 		exutil.By("STEP 1: prepare CatalogSource index image")
-		_, err := containerCLI.Run("pull").Args(bundleImageTag1).Output()
+		catalogFileName := "catalog"
+		exutil.By("Generate the index docker file")
+		_, err := opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = containerCLI.Run("pull").Args(bundleImageTag2).Output()
+		dockerFileContent, err := os.ReadFile(filepath.Join(catalogDataDir, catalogFileName+".Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("catsrc image is %s", indexTag)
-		output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag1, "-t", indexTag, "-c", containerTool).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
+		o.Expect(dockerFileContent).To(o.ContainSubstring("--cache-dir=/tmp/cache"))
+
+		exutil.By("Build and push the image")
+		output, err := podmanCLI.Run("build").Args(".", "-f", catalogFileName+".Dockerfile", "-t", indexTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("push image")
-		output, err = containerCLI.Run("push").Args(indexTag).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully"))
+
 		defer quayCLI.DeleteTag(strings.Replace(indexTag, "quay.io/", "", 1))
-		e2e.Logf("check image")
-		indexdbPath := filepath.Join(buildPruningBaseDir, getRandomString())
-		err = os.Mkdir(indexdbPath, 0755)
+		output, err = podmanCLI.Run("push").Args(indexTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", indexTag, "--path", "/database/index.db:"+indexdbPath).Output()
-		e2e.Logf("get index.db SUCCESS, path is %s", path.Join(indexdbPath, "index.db"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		result, err := sqlit.CheckOperatorBundlePathExist(path.Join(indexdbPath, "index.db"), bundleImageTag2)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.BeFalse())
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
 
 		exutil.By("STEP 2: Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
+
 		exutil.By("STEP 3: install operator ")
 		sub.create(oc, itName, dr)
-		o.Expect(sub.getCSV().name).To(o.Equal("ditto-operator.v0.1.0"))
+		o.Expect(sub.getCSV().name).To(o.Equal("nginx-operator.v0.0.1"))
 
 		exutil.By("STEP 4: update CatalogSource index image")
-		output, err = opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexTag, "-t", indexTag, "-c", containerTool).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
+		catalogFileName = "catalog-new"
+		exutil.By("Generate the index docker file")
+		_, err = opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("push image")
-		output, err = containerCLI.Run("push").Args(indexTag).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("check index image")
-		indexdbPath = filepath.Join(buildPruningBaseDir, getRandomString())
-		err = os.Mkdir(indexdbPath, 0755)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", indexTag, "--path", "/database/index.db:"+indexdbPath).Output()
-		e2e.Logf("get index.db SUCCESS, path is %s", path.Join(indexdbPath, "index.db"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		result, err = sqlit.CheckOperatorBundlePathExist(path.Join(indexdbPath, "index.db"), bundleImageTag2)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.BeTrue())
 
-		exutil.By("STEP 5: check the operator has been updated")
+		exutil.By("Build and push the image")
+		output, err = podmanCLI.Run("build").Args(".", "-f", catalogFileName+".Dockerfile", "-t", indexTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully"))
+
+		output, err = podmanCLI.Run("push").Args(indexTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
+
+		exutil.By("check packagemanifests has been updated")
 		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
-			sub.findInstalledCSV(oc, itName, dr)
-			if strings.Compare(sub.installedCSV, "ditto-operator.v0.1.1") == 0 {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog="+catsrcName, "--field-selector", "metadata.name=nginx-operator", "-o", "yaml", "-n", catsrc.namespace).Output()
+			if strings.Contains(output, "nginx-operator.v1.0.1") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ditto-operator.v0.1.1 of sub %s fails", sub.subName))
+		if err != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog="+catsrcName, "--field-selector", "metadata.name=nginx-operator", "-o", "yaml", "-n", catsrc.namespace).Output()
+			e2e.Logf(output)
+		}
+		exutil.AssertWaitPollNoErr(err, "packagemanifests is not updated")
 
-		exutil.By("STEP 6: delete the catsrc sub csv")
-		catsrc.delete(itName, dr)
-		sub.delete(itName, dr)
-		sub.getCSV().delete(itName, dr)
+		exutil.By("STEP 5: check the operator has been updated")
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			sub.findInstalledCSV(oc, itName, dr)
+			if strings.Compare(sub.installedCSV, "nginx-operator.v1.0.1") == 0 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("nginx-operator.v1.0.1 of sub %s fails", sub.subName))
+
 	})
 
 	g.It("VMonly-ConnectedOnly-Author:xzha-Medium-27672-Allow Operator Registry Update Polling with manual ipApproval [Slow]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-		containerCLI := container.NewPodmanCLI()
-		containerTool := "podman"
-		quayCLI := container.NewQuayCLI()
-		sqlit := db.NewSqlit()
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		defer DeleteDir(buildPruningBaseDir, "fixture-testdata")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
-		bundleImageTag1 := "quay.io/olmqe/ditto-operator:0.1.0"
-		bundleImageTag2 := "quay.io/olmqe/ditto-operator:0.1.1"
-		indexTag := "quay.io/olmqe/ditto-index:" + getRandomString()
-		defer containerCLI.RemoveImage(indexTag)
-		catsrcName := "catsrc-27672-operator" + getRandomString()
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-opm.yaml")
+		catalogDataDir := filepath.Join(buildPruningBaseDir, "27672")
+		defer DeleteDir(buildPruningBaseDir, "fixture-testdata")
+
+		opmCLI := opm.NewOpmCLI()
+		opmCLI.ExecCommandPath = catalogDataDir
+		quayCLI := container.NewQuayCLI()
+		podmanCLI := container.NewPodmanCLI()
+		podmanCLI.ExecCommandPath = catalogDataDir
+
+		indexTag := "quay.io/olmqe/nginxolm-operator-index:27672-" + getRandomString()
+		defer podmanCLI.RemoveImage(indexTag)
+		catsrcName := "catsrc-27672-" + getRandomString()
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -12533,21 +12528,22 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			catsrc = catalogSourceDescription{
 				name:        catsrcName,
 				namespace:   namespaceName,
-				displayName: "Test-Catsrc-17672-Operators",
+				displayName: "Test-Catsrc-27672-manual",
 				publisher:   "Red-Hat",
 				sourceType:  "grpc",
 				address:     indexTag,
-				interval:    "2m0s",
+				interval:    "1m0s",
 				template:    catsrcImageTemplate,
 			}
-			subManual = subscriptionDescription{
-				subName:                "ditto-27672-operator",
+
+			sub = subscriptionDescription{
+				subName:                "27672-operator",
 				namespace:              namespaceName,
 				catalogSourceName:      catsrcName,
 				catalogSourceNamespace: namespaceName,
-				channel:                "alpha",
+				channel:                "channel-v0",
 				ipApproval:             "Manual",
-				operatorPackage:        "ditto-operator",
+				operatorPackage:        "nginx-operator",
 				singleNamespace:        true,
 				template:               subTemplate,
 			}
@@ -12557,81 +12553,85 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("STEP: create the OperatorGroup ")
 		og.createwithCheck(oc, itName, dr)
 
-		e2e.Logf("catsrc image is %s", indexTag)
 		exutil.By("STEP 1: prepare CatalogSource index image")
-		_, err := containerCLI.Run("pull").Args(bundleImageTag1).Output()
+		catalogFileName := "catalog"
+		exutil.By("Generate the index docker file")
+		_, err := opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = containerCLI.Run("pull").Args(bundleImageTag2).Output()
+		dockerFileContent, err := os.ReadFile(filepath.Join(catalogDataDir, catalogFileName+".Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag1, "-t", indexTag, "-c", containerTool).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
+		o.Expect(dockerFileContent).To(o.ContainSubstring("--cache-dir=/tmp/cache"))
+
+		exutil.By("Build and push the image")
+		output, err := podmanCLI.Run("build").Args(".", "-f", catalogFileName+".Dockerfile", "-t", indexTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = containerCLI.Run("push").Args(indexTag).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully"))
+
 		defer quayCLI.DeleteTag(strings.Replace(indexTag, "quay.io/", "", 1))
-		e2e.Logf("check image")
-		indexdbPath := filepath.Join(buildPruningBaseDir, getRandomString())
-		err = os.Mkdir(indexdbPath, 0755)
+		output, err = podmanCLI.Run("push").Args(indexTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", indexTag, "--path", "/database/index.db:"+indexdbPath).Output()
-		e2e.Logf("get index.db SUCCESS, path is %s", path.Join(indexdbPath, "index.db"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		result, err := sqlit.CheckOperatorBundlePathExist(path.Join(indexdbPath, "index.db"), bundleImageTag2)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.BeFalse())
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
 
 		exutil.By("STEP 2: Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
+
 		exutil.By("STEP 3: install operator ")
-		subManual.create(oc, itName, dr)
-		e2e.Logf("approve the install plan")
-		subManual.approve(oc, itName, dr)
-		subManual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.0")
+		sub.create(oc, itName, dr)
+		sub.approve(oc, itName, dr)
+		sub.expectCSV(oc, itName, dr, "nginx-operator.v0.0.1")
 
 		exutil.By("STEP 4: update CatalogSource index image")
-		output, err = opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexTag, "-t", indexTag, "-c", containerTool).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
+		catalogFileName = "catalog-new"
+		exutil.By("Generate the index docker file")
+		_, err = opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = containerCLI.Run("push").Args(indexTag).Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("check index image")
-		indexdbPath = filepath.Join(buildPruningBaseDir, getRandomString())
-		err = os.Mkdir(indexdbPath, 0755)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("get index.db")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", indexTag, "--path", "/database/index.db:"+indexdbPath).Output()
-		e2e.Logf("get index.db SUCCESS, path is %s", path.Join(indexdbPath, "index.db"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		result, err = sqlit.CheckOperatorBundlePathExist(path.Join(indexdbPath, "index.db"), bundleImageTag2)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.BeTrue())
 
-		exutil.By("STEP 5: approve the install plan")
+		exutil.By("Build and push the image")
+		output, err = podmanCLI.Run("build").Args(".", "-f", catalogFileName+".Dockerfile", "-t", indexTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully"))
+
+		output, err = podmanCLI.Run("push").Args(indexTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
+
+		exutil.By("check packagemanifests has been updated")
 		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
-			ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", subManual.subName, "-n", subManual.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
-			if strings.Contains(ipCsv, "ditto-operator.v0.1.1") {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog="+catsrcName, "--field-selector", "metadata.name=nginx-operator", "-o", "yaml", "-n", catsrc.namespace).Output()
+			if strings.Contains(output, "nginx-operator.v1.0.1") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ditto-operator.v0.1.1 of sub %s fails", subManual.subName))
-		subManual.approveSpecificIP(oc, itName, dr, "ditto-operator.v0.1.1", "Complete")
+		if err != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog="+catsrcName, "--field-selector", "metadata.name=nginx-operator", "-o", "yaml", "-n", catsrc.namespace).Output()
+			e2e.Logf(output)
+		}
+		exutil.AssertWaitPollNoErr(err, "packagemanifests is not updated")
+
+		exutil.By("STEP 5: check the operator has been updated")
+		sub.patch(oc, `{"spec": {"channel": "channel-v1"}}`)
+		exutil.By("approve the install plan")
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
+			if strings.Contains(ipCsv, "nginx-operator.v1.0.1") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("nginx-operator.v1.0.1 of sub %s fails", sub.subName))
+		sub.approveSpecificIP(oc, itName, dr, "nginx-operator.v1.0.1", "Complete")
+
 		exutil.By("STEP 6: check the csv")
-		subManual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.1")
-		e2e.Logf("delete the catsrc sub csv")
-		catsrc.delete(itName, dr)
-		subManual.delete(itName, dr)
-		subManual.getCSV().delete(itName, dr)
+		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			sub.findInstalledCSV(oc, itName, dr)
+			if strings.Compare(sub.installedCSV, "nginx-operator.v1.0.1") == 0 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("nginx-operator.v1.0.1 of sub %s fails", sub.subName))
+
 	})
 
 	// OCP-45359 author: jitli@redhat.com

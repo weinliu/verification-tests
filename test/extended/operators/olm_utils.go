@@ -524,8 +524,15 @@ func (catsrc *catalogSourceDescription) setSCCRestricted(oc *exutil.CLI) {
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", `{"spec":{"grpcPodConfig":{"securityContextConfig":"restricted"}}}`).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		} else {
-			e2e.Logf("spec.grpcPodConfig.securityContextConfig is not empty, skip setting")
+			if strings.Compare(originSCC, "restricted") != 0 && strings.Compare(catsrc.namespace, "openshift-marketplace") != 0 {
+				e2e.Logf("set spec.grpcPodConfig.securityContextConfig to be restricted")
+				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", `{"spec":{"grpcPodConfig":{"securityContextConfig":"restricted"}}}`).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				e2e.Logf("spec.grpcPodConfig.securityContextConfig is %s, skip setting", originSCC)
+			}
 		}
+
 	}
 }
 
