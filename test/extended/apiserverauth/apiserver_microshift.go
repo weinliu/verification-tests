@@ -2,6 +2,7 @@ package apiserverauth
 
 import (
 	"bufio"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -200,7 +201,7 @@ spec:
 		randomServicePort := int(getRandomNum(6000, 9000))
 		clusterIP, svcErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "default", "service", "kubernetes", `-o=jsonpath={.spec.clusterIP}`).Output()
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
-		err = wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 15*time.Second, false, func(cxt context.Context) (bool, error) {
 			serviceIP = getServiceIP(oc, clusterIP)
 			if serviceIP.String() == "172.30.0.0" {
 				return false, nil
@@ -221,7 +222,7 @@ spec:
 			serviceEndpoint = fmt.Sprintf("[%v]:%v", serviceIP.String(), randomServicePort)
 		}
 		// retry 3 times, sometimes, the endpoint is not ready for accessing.
-		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", "--connect-timeout", "2", serviceEndpoint).Output()
 			if err != nil {
 				return false, nil
@@ -248,7 +249,7 @@ spec:
 			serviceEndpoint = fmt.Sprintf("[%v]:%v", allottedServiceIP, randomServicePort)
 		}
 		// retry 3 times, sometimes, the endpoint is not ready for accessing.
-		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", "--connect-timeout", "2", serviceEndpoint).Output()
 			if err != nil {
 				return false, nil
@@ -402,7 +403,7 @@ roleRef:
 
 		// There are events in the openshift-kube-controller-manager that show the creation of these SCC labels
 		exutil.By("2.Check if the events in the ns openshift-kube-controller-manager show the creation of these SCC labels, e.g., tempocp53792")
-		scErr := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		scErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			eventsOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "events", "-n", "openshift-kube-controller-manager")
 			if strings.Contains(eventsOutput, "CreatedSCCRanges") {
 				return true, nil
@@ -719,7 +720,7 @@ spec:
 		o.Expect(routeErr).NotTo(o.HaveOccurred())
 		var routeJsonOutput string
 		var routeType string
-		routeTypeErr := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
+		routeTypeErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 90*time.Second, false, func(cxt context.Context) (bool, error) {
 			routeOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "-o", "json").Output()
 			routeJsonOutput = gjson.Parse(routeOutput).String()
 			routeType = gjson.Get(routeJsonOutput, `status.ingress.0.conditions.0.type`).String()
@@ -1039,7 +1040,7 @@ EOF'`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		o.Expect(chkContentErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 		e2e.Logf("Userdatadir %v be empty.", userDataDir)
-		getlogErr := wait.Poll(15*time.Second, 200*time.Second, func() (bool, error) {
+		getlogErr := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			chkContentOutput, chkContentErr = runSSHCommand(fqdnName, user, chkContentGlobalDatadirCmd)
 			if chkContentErr == nil && strings.TrimSpace(chkContentOutput) == "" {
 				e2e.Logf("Globaldatadir %v not empty, it is restored :: %v", globalDataDir, chkContentOutput)
@@ -1104,7 +1105,7 @@ EOF'`, etcConfigYaml, level)
 
 			exutil.By(fmt.Sprintf("%v.3 Check logLevel should change to %v", stepn+4, level))
 			chkConfigCmd := fmt.Sprintf(`sudo journalctl -u microshift -b -S @%vs | grep "logLevel: %v"|grep -iv journalctl|tail -1`, unixTimestamp, level)
-			getlogErr := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+			getlogErr := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 				mchkConfig, mchkConfigErr := runSSHCommand(fqdnName, user, chkConfigCmd)
 				if mchkConfigErr == nil && strings.Contains(mchkConfig, "logLevel: "+level) {
 					e2e.Logf("LogLevel changed to %v :: %v", level, mchkConfig)

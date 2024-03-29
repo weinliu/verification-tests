@@ -2,6 +2,8 @@ package apiserverauth
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -144,7 +146,7 @@ spec:
 		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
 
 		exutil.By("4. Check the new encryption key secrets appear")
-		errKey := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		errKey := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
 			if err != nil {
 				e2e.Logf("Fail to get new encryption key secrets, error: %s. Trying again", err)
@@ -211,7 +213,7 @@ spec:
 
 		uidsOldSlice := strings.Split(uidsOld, " ")
 		e2e.Logf("uidsOldSlice = %s", uidsOldSlice)
-		errSecret := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+		errSecret := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			uidsNew, err := oc.WithoutNamespace().Run("get").Args("secret", "encryption-config-openshift-apiserver", "encryption-config-openshift-kube-apiserver", "-n", "openshift-config-managed", `-o=jsonpath={.items[*].metadata.uid}`).Output()
 			if err != nil {
 				e2e.Logf("Fail to get new encryption-config-* secrets, error: %s. Trying again", err)
@@ -248,7 +250,7 @@ spec:
 		newOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber+1)
 		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
 		exutil.By("4.) Check the new encryption key secrets appear")
-		err = wait.Poll(6*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
 			if err != nil {
 				e2e.Logf("Fail to get new encryption-key-* secrets, error: %s. Trying again", err)
@@ -314,7 +316,7 @@ spec:
 		// But sometimes (not always, though) if race happens, it will hang forever. We need to handle this as below code
 		isKasNsNew, isOasNsNew := false, false
 		// In test, observed the max wait time can be 4m, so the parameter is larger
-		errKAS := wait.Poll(10*time.Second, 6*time.Minute, func() (bool, error) {
+		errKAS := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 6*time.Minute, false, func(cxt context.Context) (bool, error) {
 			if !isKasNsNew {
 				uidNewKasNs, err := oc.WithoutNamespace().Run("get").Args("ns", "openshift-kube-apiserver", `-o=jsonpath={.metadata.uid}`).Output()
 				if err == nil {
@@ -357,7 +359,7 @@ spec:
 		exutil.AssertWaitPollNoErr(errKAS, "new openshift-apiserver and openshift-kube-apiserver namespaces are not both seen")
 
 		// After new namespaces are seen, it goes to self recovery
-		errCOKas := wait.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+		errCOKas := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 2*time.Minute, false, func(cxt context.Context) (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("co/kube-apiserver").Output()
 			if err == nil {
 				matched, _ := regexp.MatchString("True.*True.*(True|False)", output)
@@ -516,7 +518,7 @@ spec:
 			if strings.Contains(string(output), "Unauthorized") {
 				err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("--kubeconfig", newKubeconfig, "-f", configmapBkp).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 100*time.Second, false, func(cxt context.Context) (bool, error) {
 					output, _ := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("").Output()
 					if output == "system:admin" {
 						e2e.Logf("Old kubeconfig is restored : %s", output)
@@ -646,7 +648,7 @@ spec:
 		e2e.Logf("Testing old kubeconfig")
 		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 100*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("").Output()
 			if strings.Contains(string(output), "Unauthorized") {
 				e2e.Logf("Test pass: Old kubeconfig not working!")
@@ -764,7 +766,7 @@ spec:
 
 		exutil.By("Check the abnormal pods")
 		var podLogs []byte
-		errPod := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
+		errPod := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 900*time.Second, false, func(cxt context.Context) (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cmd := fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' | grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
@@ -843,7 +845,7 @@ spec:
 		exutil.By("Check the all master nodes workload are normal")
 		var cpuAvgVal int
 		var memAvgVal int
-		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+		errLoad := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "master", "OCP-40667/nodes_new.log")
 			if cpuAvgVal > 70 || memAvgVal > 75 {
 				return false, nil
@@ -1045,7 +1047,7 @@ spec:
 
 		exutil.By("Check the abnormal pods")
 		var podLogs []byte
-		errPod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
+		errPod := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 600*time.Second, false, func(cxt context.Context) (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile(podLogFile)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cmd := fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' | grep -ivE 'Running|Completed|namespace|pending' || true`, podLogFile)
@@ -1119,7 +1121,7 @@ spec:
 		exutil.By("Check the all master nodes workload are normal")
 		var cpuAvgVal int
 		var memAvgVal int
-		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+		errLoad := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "master", caseID+"/nodes_new.log")
 			if cpuAvgVal > 75 || memAvgVal > 85 {
 				return false, nil
@@ -1263,7 +1265,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--import-mode=PreserveOriginal").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
-		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("pods", "--no-headers").Output()
 			if err != nil {
 				e2e.Logf("Failed to get pods' status of project %s, error: %s. Trying again", project2, err)
@@ -1295,7 +1297,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--selector", "app=hello-openshift").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Wait for deletion of application to complete
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, _ := oc.WithoutNamespace().Run("get").Args("all").Output()
 			if matched, _ := regexp.MatchString("No resources found.*", output); matched {
 				e2e.Logf("All resource objects for created application have been completely deleted\n%s", output)
@@ -1317,7 +1319,7 @@ spec:
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
 		exutil.By("1) Check if port 6080 is available")
-		err := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
 			// no need to check error since some system output stderr for valid result
 			if len(checkOutput) == 0 {
@@ -1342,7 +1344,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer exec.Command("bash", "-c", "kill -HUP $(lsof -t -i:6080)").Output()
-		err1 := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		err1 := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
 			// no need to check error since some system output stderr for valid result
 			if len(checkOutput) != 0 {
@@ -1413,7 +1415,7 @@ spec:
 				if removeRelease == nxtReleases {
 					e2e.Logf("Api %v and release %v", removeReleaseAPI, removeRelease)
 					// Checking alerts, Wait for max 10 min to generate all the alert.
-					err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+					err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(cxt context.Context) (bool, error) {
 						// Generating Alert for removed apis
 						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
@@ -1455,7 +1457,7 @@ spec:
 					exutil.By("6) Checking the alert for APIRemovedInNextEUSReleaseInUse")
 					e2e.Logf("Api %v and release %v", removeReleaseAPI, removeRelease)
 					// Checking alerts, Wait for max 10 min to generate all the alert.
-					err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+					err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(cxt context.Context) (bool, error) {
 						// Generating Alert for removed apis
 						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
@@ -1713,7 +1715,7 @@ spec:
 			o.Expect(rollOutError).NotTo(o.HaveOccurred())
 
 			exutil.By("7) Check Kube-apiserver operator Roll Out with new revision count")
-			rollOutError = wait.Poll(100*time.Second, 900*time.Second, func() (bool, error) {
+			rollOutError = wait.PollUntilContextTimeout(context.Background(), 100*time.Second, 900*time.Second, false, func(cxt context.Context) (bool, error) {
 				Output, operatorChkError := oc.WithoutNamespace().Run("get").Args("co/kube-apiserver").Output()
 				if operatorChkError == nil {
 					matched, _ := regexp.MatchString("True.*False.*False", Output)
@@ -1738,7 +1740,7 @@ spec:
 		o.Expect(configError).NotTo(o.HaveOccurred())
 
 		exutil.By("2) Check new startup-monitor pod created & running under openshift-kube-apiserver project")
-		podChkError := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+		podChkError := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, false, func(cxt context.Context) (bool, error) {
 			out, runError := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=app=installer", "-o", `jsonpath='{.items[?(@.status.phase=="Running")].status.phase}'`).Output()
 			if runError == nil {
 				if matched, _ := regexp.MatchString("Running", out); matched {
@@ -1751,7 +1753,7 @@ spec:
 		exutil.AssertWaitPollNoErr(podChkError, "Step 2, Test Failed: Failed to Create startup-monitor pod")
 
 		exutil.By("3) Check kube-apiserver to fall back to previous good revision")
-		fallbackError := wait.Poll(100*time.Second, 900*time.Second, func() (bool, error) {
+		fallbackError := wait.PollUntilContextTimeout(context.Background(), 100*time.Second, 900*time.Second, false, func(cxt context.Context) (bool, error) {
 			annotations, fallbackErr := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=apiserver", "-o", `jsonpath={.items[*].metadata.annotations.startup-monitor\.static-pods\.openshift\.io/fallback-for-revision}`).Output()
 			if fallbackErr == nil {
 				failedRevision, _ := strconv.Atoi(annotations)
@@ -1990,7 +1992,7 @@ spec:
 		o.Expect(execPodErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Check alert ExtremelyHighIndividualControlPlaneCPU firing")
-		errWatcher := wait.Poll(60*time.Second, 500*time.Second, func() (bool, error) {
+		errWatcher := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 500*time.Second, false, func(cxt context.Context) (bool, error) {
 			alertOutput, alertErr := GetAlertsByName(oc, "ExtremelyHighIndividualControlPlaneCPU")
 			o.Expect(alertErr).NotTo(o.HaveOccurred())
 			alertName := gjson.Parse(alertOutput).String()
@@ -2486,7 +2488,7 @@ spec:
 		exutil.By(fmt.Sprintf("3) Get one pod with label %s", label))
 		var pods []string
 		var err error
-		err = wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 10*time.Minute, false, func(cxt context.Context) (bool, error) {
 			pods, err = exutil.GetAllPodsWithLabel(oc, oc.Namespace(), label)
 			if err != nil {
 				e2e.Logf("get err: %v, try next round", err)
@@ -2504,7 +2506,7 @@ spec:
 
 		exutil.By("3) Get pod info json as file")
 		var podJSON string
-		err = wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 10*time.Minute, false, func(cxt context.Context) (bool, error) {
 			podJSON, err = oc.Run("get").Args("pod", pod, "--output=json", "-n", oc.Namespace()).Output()
 			if err != nil {
 				e2e.Logf("get err: %v, try next round", err)
@@ -2981,7 +2983,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("8) Check if pod is properly running with expected status.")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			podOutput, err := oc.Run("get").Args("pod").Output()
 			if err == nil {
 				matched, _ := regexp.MatchString("frontend-1-.*(ImagePullBackOff|ErrImagePull)", podOutput)
@@ -3018,7 +3020,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("11) Check if pod is properly running with expected status.")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			podOutput, err := oc.Run("get").Args("pod").Output()
 			if err == nil {
 				matched, _ := regexp.MatchString(buildName+"-1-.*(ImagePullBackOff|ErrImagePull)", podOutput)
@@ -3050,7 +3052,7 @@ spec:
 			o.Expect(patchForceRedploymentError).NotTo(o.HaveOccurred())
 
 			exutil.By("6) Check latestAvailableRevision > targetRevision")
-			rollOutError = wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+			rollOutError = wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 				targetRevisionOut, revisionGetErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath={.status.nodeStatuses[*].targetRevision}").Output()
 				o.Expect(revisionGetErr).NotTo(o.HaveOccurred())
 				targetRevision, _ := strconv.Atoi(targetRevisionOut)
@@ -3068,7 +3070,7 @@ spec:
 			exutil.AssertWaitPollNoErr(rollOutError, "Step 6, Test Failed: latestAvailableRevision > targetRevision and rollout is not affected")
 
 			exutil.By("7) Check Kube-apiserver operator Roll Out Successfully & rollout is not affected")
-			rollOutError = wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
+			rollOutError = wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 900*time.Second, false, func(cxt context.Context) (bool, error) {
 				operatorOutput, operatorChkError := oc.WithoutNamespace().Run("get").Args("co/kube-apiserver").Output()
 				if operatorChkError == nil {
 					matched, _ := regexp.MatchString("True.*False.*False", operatorOutput)
@@ -3094,7 +3096,7 @@ spec:
 		o.Expect(patchForceRedploymentError).NotTo(o.HaveOccurred())
 
 		exutil.By("3) Check apiserver created retry installer pods with error and retrying backoff")
-		fallbackError := wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
+		fallbackError := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 600*time.Second, false, func(cxt context.Context) (bool, error) {
 			targetRevision, revisionGetErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath={.status.nodeStatuses[*].targetRevision}").Output()
 			o.Expect(revisionGetErr).NotTo(o.HaveOccurred())
 
@@ -3222,7 +3224,7 @@ EOF`, serverconf)
 		e2e.Logf("namespace/test-ns%v labeled", randomStr)
 
 		var deployerr error
-		deployconfigerr := wait.Poll(30*time.Second, 200*time.Second, func() (bool, error) {
+		deployconfigerr := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			deployOutput, deployerr := oc.WithoutNamespace().AsAdmin().Run("create").Args("deploymentconfig", "mydc", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "test-ns"+randomStr).Output()
 			if deployerr != nil {
 				return false, nil
@@ -3233,7 +3235,7 @@ EOF`, serverconf)
 		})
 		exutil.AssertWaitPollNoErr(deployconfigerr, fmt.Sprintf("Not able to create mydc deploymentconfig :: %v", deployerr))
 
-		waiterrRollout := wait.Poll(30*time.Second, 200*time.Second, func() (bool, error) {
+		waiterrRollout := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			rollOutput, _ := oc.WithoutNamespace().AsAdmin().Run("rollout").Args("latest", "dc/mydc", "-n", "test-ns"+randomStr).Output()
 			if strings.Contains(rollOutput, "rolled out") {
 				o.Expect(rollOutput).Should(o.ContainSubstring("deploymentconfig.apps.openshift.io/mydc rolled out"))
@@ -3258,7 +3260,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(dcpolicyerr).NotTo(o.HaveOccurred())
 		o.Expect(decpolicyOutput).Should(o.ContainSubstring(`configmap/dc-policy created`), `configmap/dc-policy not created`)
 		e2e.Logf("configmap/dc-policy created")
-		waiterrRollout = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		waiterrRollout = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			rollOutput, _ := oc.WithoutNamespace().AsAdmin().Run("rollout").Args("latest", "dc/mydc", "-n", "test-ns"+randomStr).Output()
 			if strings.Contains(rollOutput, "No entry for you") {
 				e2e.Logf("6. Test case passed :: oc rollout works well for deploymentconfig ,and the output is expected as the policy :: %v", rollOutput)
@@ -3327,7 +3329,7 @@ EOF`, dcpolicyrepo)
 		}
 		exutil.By(fmt.Sprintf("6.3) Accessing the endpoint %s with curl command line", url))
 		// retry 3 times, sometimes, the endpoint is not ready for accessing.
-		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 6*time.Second, false, func(cxt context.Context) (bool, error) {
 			curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
 			if err != nil {
 				return false, nil
@@ -3356,7 +3358,7 @@ EOF`, dcpolicyrepo)
 			url = fmt.Sprintf("%s:%d", hostIP, generatedNodePort)
 		}
 		exutil.By(fmt.Sprintf("8) Check network access again to %s", url))
-		err = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 6*time.Second, false, func(cxt context.Context) (bool, error) {
 			curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
 			if err != nil {
 				return false, nil
@@ -3419,7 +3421,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("4) Wait for quota to show up in command describe")
-		quotaDescribeErr := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		quotaDescribeErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 20*time.Second, false, func(cxt context.Context) (bool, error) {
 			describeOutput, err := oc.Run("describe").Args("quota", quotaName, "-n", namespace).Output()
 			if isMatched, matchErr := regexp.Match("secrets.*[0-9]", []byte(describeOutput)); isMatched && matchErr == nil && err == nil {
 				return true, nil
@@ -3624,7 +3626,7 @@ EOF`, dcpolicyrepo)
 		// setup role for user and post to API
 		testUserAccess := func(role string, step string, expectStatus string) {
 			exutil.By(fmt.Sprintf("%s>>) Remove default role [admin] from the current user [%s]", step, username))
-			errAdmRole := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			errAdmRole := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 				rolebindingOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebinding/admin", "-n", namespace, "--no-headers", "-oname").Output()
 				if rolebindingOutput == "rolebinding.rbac.authorization.k8s.io/admin" {
 					policyerr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "admin", username, "-n", namespace).Execute()
@@ -3666,7 +3668,7 @@ EOF`, dcpolicyrepo)
 		)
 
 		exutil.By(fmt.Sprintf("1) Wait for a pod with the label %s to show up", label))
-		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			pods, err := exutil.GetAllPodsWithLabel(oc, namespace, label)
 			if err != nil || len(pods) == 0 {
 				e2e.Logf("Fail to get pod, error: %s. Trying again", err)
@@ -3908,7 +3910,7 @@ EOF`, dcpolicyrepo)
 		for i := 0; i < 15; i++ {
 			var namespaceErr error
 			projectSuccTime := time.Now()
-			err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 				namespaceOutput, namespaceErr := oc.WithoutNamespace().Run("create").Args("ns", tmpnamespace).Output()
 				if namespaceErr == nil {
 					e2e.Logf("oc create ns %v created successfully", tmpnamespace)
@@ -3922,7 +3924,7 @@ EOF`, dcpolicyrepo)
 
 			exutil.By("2.) Create new app")
 			var apperr error
-			errApp := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+			errApp := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 				apperr := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", tmpnamespace, "--import-mode=PreserveOriginal").Execute()
 				if apperr != nil {
 					return false, nil
@@ -3933,7 +3935,7 @@ EOF`, dcpolicyrepo)
 			exutil.AssertWaitPollNoErr(errApp, fmt.Sprintf("oc new app failed :: %v", apperr))
 
 			var poderr error
-			errPod := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+			errPod := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 				podOutput, poderr := oc.WithoutNamespace().Run("get").Args("pod", "-n", tmpnamespace, "--no-headers").Output()
 				if poderr == nil && strings.Contains(podOutput, "Running") {
 					e2e.Logf("Pod %v succesfully", podOutput)
@@ -3945,7 +3947,7 @@ EOF`, dcpolicyrepo)
 
 			exutil.By("3.) Delete new namespace")
 			var delerr error
-			projectdelerr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+			projectdelerr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 				delerr = oc.Run("delete").Args("namespace", tmpnamespace).Execute()
 				if delerr != nil {
 					return false, nil
@@ -3956,7 +3958,7 @@ EOF`, dcpolicyrepo)
 			exutil.AssertWaitPollNoErr(projectdelerr, fmt.Sprintf("oc delete namespace failed :: %v", delerr))
 
 			var chkNamespaceErr error
-			errDel := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+			errDel := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 				chkNamespaceOutput, chkNamespaceErr := oc.WithoutNamespace().Run("get").Args("namespace", tmpnamespace, "--ignore-not-found").Output()
 				if chkNamespaceErr == nil && strings.Contains(chkNamespaceOutput, "") {
 					e2e.Logf("Namespace deleted %v successfully", tmpnamespace)
@@ -4139,7 +4141,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(epGetErr).NotTo(o.HaveOccurred())
 
 		exutil.By("2. Check openshift-apiserver https api metrics endpoint URL")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 			metricsUrl := fmt.Sprintf(`https://%v:8443/metrics`, string(endpointIP))
 			metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", "--connect-timeout", "5", "--retry", "2", "-N", "-s", metricsUrl).Output()
 			if metricsErr == nil {
@@ -4175,7 +4177,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(podErr).NotTo(o.HaveOccurred())
 		o.Expect(podStatus).ShouldNot(o.ContainSubstring("Running"))
 
-		err := wait.Poll(2*time.Second, 2*time.Minute, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 2*time.Minute, false, func(cxt context.Context) (bool, error) {
 			podEvent, podEventErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", namespace, "-f", nefariousPodTemplate).Output()
 			o.Expect(podEventErr).NotTo(o.HaveOccurred())
 			matched, _ := regexp.MatchString("error adding pod.*to CNI network.*invalid plugin name: ../../../../usr/sbin/reboot", podEvent)
@@ -4415,7 +4417,7 @@ spec:
 		o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:0"), "openshift-object-counts")
 
 		checkImageStreamQuota := func(buildName string, step string) {
-			buildErr := wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
+			buildErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 90*time.Second, false, func(cxt context.Context) (bool, error) {
 				bs := getResourceToBeReady(oc, asAdmin, withoutNamespace, "builds", buildName, "-ojsonpath={.status.phase}", "-n", namespace)
 				if strings.Contains(bs, "Complete") {
 					e2e.Logf("Building of %s status:%v", buildName, bs)
@@ -4507,7 +4509,7 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		exutil.By("4. Check audit events should be greater than zero after login operation")
-		err := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[1].Username, users[1].Password)
 			if auditEventCount > 0 {
 				return true, nil
@@ -4521,7 +4523,7 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		exutil.By("6. Check audit events should be greater than zero after login operation")
-		err = wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[2].Username, users[2].Password)
 			if auditEventCount > 0 {
 				return true, nil
@@ -4535,7 +4537,7 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		exutil.By("8. Check audit events should be greater than zero after login operation")
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[3].Username, users[3].Password)
 			if auditEventCount > 0 {
 				return true, nil
@@ -4591,7 +4593,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5.1) Check project is deleted")
-		err = wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", projectName).Output()
 			if matched, _ := regexp.MatchString("namespaces .* not found", out); matched {
 				e2e.Logf("Step 5.1. Test Passed, project is deleted")
@@ -4660,7 +4662,7 @@ spec:
 		exutil.By("5.) Check the new encryption key secrets appear")
 		newOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber+1)
 		newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
-		err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
 			if err != nil {
 				e2e.Logf("Fail to get new encryption-key-* secrets, error: %s. Trying again", err)
@@ -4832,7 +4834,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("10) Check if pod is running with the expected status.")
-		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			podOutput, err := oc.Run("get").Args("pod").Output()
 			if err == nil {
 				matched, _ := regexp.MatchString("frontend-1-.*(ImagePullBackOff|ErrImagePull)", podOutput)
@@ -5141,7 +5143,7 @@ spec:
 		exutil.By(`3.1) Try copying multiple layers image to the default internal registry of the cluster`)
 		publicImageUrl := "docker://" + "quay.io/openshifttest/mysql:1.2.0"
 		var output string
-		errPoll := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		errPoll := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
 			if err != nil {
 				if strings.Contains(output, "denied") {
@@ -5158,7 +5160,7 @@ spec:
 
 		exutil.By(`3.2) Try copying  single layer image to the default internal registry of the cluster`)
 		publicImageUrl = "docker://" + "quay.io/openshifttest/singlelayer:latest"
-		errPoll = wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		errPoll = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
 			if err != nil {
 				if strings.Contains(output, "denied") {
@@ -5236,7 +5238,7 @@ spec:
 			exutil.By(fmt.Sprintf(`%d.3) Try copying image to the default internal registry of the cluster`, i+1))
 			publicImageUrl := "docker://quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c"
 			var output string
-			errPoll := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			errPoll := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
 				output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
 				if err != nil {
 					if strings.Contains(output, "denied") {
@@ -5392,7 +5394,7 @@ spec:
 		o.Expect(tagErr).NotTo(o.HaveOccurred())
 
 		// Inline steps will wait for tag 1 to get it imported successfully before adding tag 2 and this helps to avoid race-caused failure.Ref:OCPQE-7679.
-		errImage := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		errImage := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			imageStreamOutput, imageStreamErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestream", "mystream", "-n", namespace).Output()
 			if imageStreamErr == nil {
 				if strings.Contains(imageStreamOutput, imageName1) {
@@ -5409,7 +5411,7 @@ spec:
 		o.Expect(tagErr).NotTo(o.HaveOccurred())
 
 		var imageStreamv2Err error
-		errImageV2 := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		errImageV2 := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			imageStreamv2Output, imageStreamv2Err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestream", "mystream", "-n", namespace).Output()
 			if imageStreamv2Err == nil {
 				if strings.Contains(imageStreamv2Output, "Import failed") {
@@ -5425,7 +5427,7 @@ spec:
 		destRegistry := "docker://" + defaultRegistryServiceURL + "/" + namespace + "/mystream:latest"
 		publicImageUrl := "docker://" + imageName3
 		var output string
-		errPoll := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		errPoll := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
 			if err != nil {
 				if strings.Contains(output, "denied") {
@@ -5573,7 +5575,7 @@ spec:
 		o.Expect(tagErr).NotTo(o.HaveOccurred())
 
 		// Inline steps will wait for tag 1 to get it imported successfully before adding tag 2 and this helps to avoid race-caused failure.Ref:OCPQE-7679.
-		errImage := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		errImage := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			imageStreamOutput, imageStreamErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestream", "mystream", "-n", namespace).Output()
 			if imageStreamErr == nil {
 				if strings.Contains(imageStreamOutput, imageName1) {
@@ -5592,7 +5594,7 @@ spec:
 		exutil.By(`5.) Copying an image to the default internal registry of the cluster should be denied due to the max imagestream limit for images`)
 		destRegistry := "docker://" + defaultRegistryServiceURL + "/" + namespace + "/mystream3"
 		publicImageUrl := "docker://" + imageName3
-		errPoll := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		errPoll := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
 			output, err = copyImageToInternelRegistry(oc, namespace, publicImageUrl, destRegistry)
 			if err != nil {
 				if strings.Contains(output, "denied") {
@@ -5920,5 +5922,105 @@ EOF`, serverconf, fqdnName)
 		} else {
 			e2e.Failf("Test case failed: Upgrade disruption detected::\n %v", failures)
 		}
+	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-ConnectedOnly-Author:kewang-Critical-10873-Access app througth secure service and regenerate service serving certs if it about to expire [Disruptive] [Slow]", func() {
+
+		var (
+			filename     = "aosqe-pod-for-ping.json"
+			podName      = "hello-pod"
+			stepExecTime time.Time
+		)
+
+		exutil.By("1) Create new project for the test case.")
+		oc.SetupProject()
+		testNamespace := oc.Namespace()
+
+		exutil.By("2) The appropriate pod security labels are applied to the new project.")
+		applyLabel(oc, asAdmin, withoutNamespace, "ns", testNamespace, "security.openshift.io/scc.podSecurityLabelSync=false", "--overwrite")
+		applyLabel(oc, asAdmin, withoutNamespace, "ns", testNamespace, "pod-security.kubernetes.io/warn=privileged", "--overwrite")
+		applyLabel(oc, asAdmin, withoutNamespace, "ns", testNamespace, "pod-security.kubernetes.io/audit=privileged", "--overwrite")
+		applyLabel(oc, asAdmin, withoutNamespace, "ns", testNamespace, "pod-security.kubernetes.io/enforce=privileged", "--overwrite")
+
+		exutil.By("3) Add SCC privileged to the project.")
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-group", "privileged", "system:serviceaccounts:"+testNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4) Create a service.")
+		template := getTestDataFilePath("ocp10873-svc.json")
+		svcErr := oc.Run("create").Args("-f", template).Execute()
+		o.Expect(svcErr).NotTo(o.HaveOccurred())
+
+		stepExecTime = time.Now()
+
+		exutil.By("5) Create a nginx webserver app with deploymnet.")
+		template = getTestDataFilePath("ocp10873-dc.yaml")
+		dcErr := oc.Run("create").Args("-f", template).Execute()
+		o.Expect(dcErr).NotTo(o.HaveOccurred())
+
+		appPodName := getPodsListByLabel(oc.AsAdmin(), testNamespace, "name=web-server-rc")[0]
+		exutil.AssertPodToBeReady(oc, appPodName, testNamespace)
+		cmName, err := getResource(oc, asAdmin, withoutNamespace, "configmaps", "nginx-config", "-n", testNamespace, "-o=jsonpath={.metadata.name}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cmName).ShouldNot(o.BeEmpty(), "The ConfigMap 'nginx-config' name should not be empty")
+
+		exutil.By(fmt.Sprintf("6.1) Create pod with resource file %s.", filename))
+		template = getTestDataFilePath(filename)
+		err = oc.Run("create").Args("-f", template).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("6.2) Wait for pod with name %s to be ready.", podName))
+		exutil.AssertPodToBeReady(oc, podName, testNamespace)
+
+		url := fmt.Sprintf("https://hello.%s.svc:443", testNamespace)
+		execCmd := fmt.Sprintf("curl --cacert /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt %s", url)
+		curlCmdOutput := ExecCommandOnPod(oc, podName, testNamespace, execCmd)
+		o.Expect(curlCmdOutput).Should(o.ContainSubstring("Hello-OpenShift"))
+
+		exutil.By("7) Extract the cert and key from secret ssl-key.")
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", testNamespace, "secret/ssl-key", "--to", tmpdir).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tlsCrtFile := filepath.Join(tmpdir, "tls.crt")
+		tlsCrt, err := os.ReadFile(tlsCrtFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tlsCrt).ShouldNot(o.BeEmpty())
+
+		// Set the new expiry(1 hour + 1 minute) after the time of the secret ssl-key was created
+		exutil.By("8) Set the new expiry annotations to the secret ssl-key.")
+		tlsCrtCreation, err := getResource(oc, asAdmin, withoutNamespace, "secret", "ssl-key", "-n", testNamespace, "-o=jsonpath={.metadata.creationTimestamp}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tlsCrtCreation).ShouldNot(o.BeEmpty())
+		e2e.Logf("created time:%s", tlsCrtCreation)
+		tlsCrtCreationTime, err := time.Parse(time.RFC3339, tlsCrtCreation)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newExpiry := tlsCrtCreationTime.Add(time.Since(stepExecTime) + 1*time.Hour + 60*time.Second)
+		newExpiryStr := fmt.Sprintf(`"%s"`, newExpiry.Format(time.RFC3339))
+		logger.Debugf("The new expiry of the secret ssl-key is %s", newExpiryStr)
+
+		annotationPatch := fmt.Sprintf(`{"metadata":{"annotations": {"service.alpha.openshift.io/expiry": %s, "service.beta.openshift.io/expiry": %s}}}`, newExpiryStr, newExpiryStr)
+		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "ssl-key", "-n", testNamespace, "--type=merge", "-p", annotationPatch).Execute()
+		o.Expect(errPatch).NotTo(o.HaveOccurred())
+
+		exutil.By("9) Check secret ssl-key again and shouldn't change When the expiry time is great than 1h.")
+		o.Eventually(func() bool {
+			err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", testNamespace, "secret/ssl-key", "--to", tmpdir, "--confirm=true").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			tlsCrt1, err := os.ReadFile(tlsCrtFile)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(tlsCrt1).ShouldNot(o.BeEmpty())
+			if !bytes.Equal(tlsCrt, tlsCrt1) {
+				logger.Infof("When the expiry time has less than 1h left, the cert has been regenerated")
+				return true
+			}
+			logger.Infof("When the expiry time has more than 1h left, the cert will not regenerate")
+			return false
+		}, "25m", "60s").Should(o.Equal(true),
+			"Failed to regenerate the new secret ssl-key When the expiry time is greater than 1h")
+
+		exutil.By(fmt.Sprintf("10) Using the regenerated secret ssl-key to access web app in pod %s without error.", podName))
+		exutil.AssertPodToBeReady(oc, podName, testNamespace)
+		curlCmdOutput = ExecCommandOnPod(oc, podName, testNamespace, execCmd)
+		o.Expect(curlCmdOutput).Should(o.ContainSubstring("Hello-OpenShift"))
 	})
 })

@@ -1,6 +1,7 @@
 package apiserverauth
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -148,7 +149,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	// author: kewang@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-High-64000-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
 		exutil.By("1) Check if port 6081 is available")
-		err := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6081").Output()
 			// no need to check error since some system output stderr for valid result
 			if len(checkOutput) == 0 {
@@ -174,7 +175,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer exec.Command("bash", "-c", "kill -HUP $(lsof -t -i:6081)").Output()
 
-		err1 := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		err1 := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6081").Output()
 			// no need to check error since some system output stderr for valid result
 			if len(checkOutput) != 0 {

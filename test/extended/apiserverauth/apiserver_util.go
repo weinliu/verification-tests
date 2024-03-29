@@ -92,7 +92,7 @@ func (service *service) createServiceFromTemplate(oc *exutil.CLI) {
 func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason interface{}, conditionStatus string, conditionTypes []string) {
 	for _, webHookErrorConditionType := range conditionTypes {
 		// increase wait time for prow ci failures
-		err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			webhookError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			//Inline conditional statement for evaluating 1) reason and status together,2) only status.
@@ -126,7 +126,7 @@ func GetEncryptionPrefix(oc *exutil.CLI, key string) (string, error) {
 	if encryptionType != "aesabc" && encryptionType != "aesgcm" {
 		e2e.Logf("The etcd is not encrypted on!")
 	}
-	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 		podName, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-etcd", "-l=etcd", "-o=jsonpath={.items[0].metadata.name}").Output()
 		if err != nil {
 			e2e.Logf("Fail to get etcd pod, error: %s. Trying again", err)
@@ -139,7 +139,7 @@ func GetEncryptionPrefix(oc *exutil.CLI, key string) (string, error) {
 		return "", err
 	}
 	var encryptionPrefix string
-	err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 		prefix, err := oc.WithoutNamespace().Run("rsh").Args("-n", "openshift-etcd", "-c", "etcd", etcdPodName, "bash", "-c", `etcdctl get `+key+` --prefix -w fields | grep -e "Value" | grep -o k8s:enc:`+encryptionType+`:v1:[^:]*: | head -n 1`).Output()
 		if err != nil {
 			e2e.Logf("Fail to rsh into etcd pod, error: %s. Trying again", err)
@@ -192,7 +192,7 @@ func WaitEncryptionKeyMigration(oc *exutil.CLI, secret string) (bool, error) {
 	rePattern := regexp.MustCompile(pattern)
 	// In observation, the waiting time in max can take 25 mins if it is kube-apiserver,
 	// and 12 mins if it is openshift-apiserver, so the Poll parameters are long.
-	err := wait.Poll(1*time.Minute, waitTime, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 1*time.Minute, waitTime, false, func(cxt context.Context) (bool, error) {
 		output, err := oc.WithoutNamespace().Run("get").Args("secrets", secret, "-n", "openshift-config-managed", "-o=yaml").Output()
 		if err != nil {
 			e2e.Logf("Fail to get the encryption key secret %s, error: %s. Trying again", secret, err)
@@ -226,7 +226,7 @@ func CheckIfResourceAvailable(oc *exutil.CLI, resource string, resourceNames []s
 }
 
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
-	errCo := wait.Poll(20*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errCo := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)
 		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
 		if eq {
@@ -266,7 +266,7 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 
 // Check ciphers for authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io:
 func verifyCiphers(oc *exutil.CLI, expectedCipher string, operator string) error {
-	return wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 		switch operator {
 		case "openshift-authentication":
 			e2e.Logf("Get the ciphers for openshift-authentication:")
@@ -327,7 +327,7 @@ func restoreClusterOcp41899(oc *exutil.CLI) {
 func checkClusterLoad(oc *exutil.CLI, nodeType, dirname string) (int, int) {
 	var tmpPath string
 	var errAdm error
-	errAdmNode := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+	errAdmNode := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 		tmpPath, errAdm = oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "nodes", "-l", "node-role.kubernetes.io/"+nodeType, "--no-headers").OutputToFile(dirname)
 		if errAdm != nil {
 			return false, nil
@@ -707,7 +707,7 @@ func CopyToFile(fromPath string, toFilename string) string {
 func ExecCommandOnPod(oc *exutil.CLI, podname string, namespace string, command string) string {
 	var podOutput string
 	var execpodErr error
-	errExec := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+	errExec := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 		podOutput, execpodErr = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, podname, "--", "/bin/sh", "-c", command).Output()
 		podOutput = strings.TrimSpace(podOutput)
 		if execpodErr != nil {
@@ -742,7 +742,7 @@ func clusterHealthcheck(oc *exutil.CLI, dirname string) error {
 // clusterOperatorHealthcheck check abnormal operators
 func clusterOperatorHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
 	e2e.Logf("Check the abnormal operators")
-	errCo := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errCo := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		coLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(dirname)
 		if err == nil {
 			cmd := fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
@@ -770,7 +770,7 @@ func clusterOperatorHealthcheck(oc *exutil.CLI, waitTime int, dirname string) er
 func clusterPodsHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
 	e2e.Logf("Check the abnormal pods")
 	var podLogs []byte
-	errPod := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errPod := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		podLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile(dirname)
 		if err == nil {
 			cmd := fmt.Sprintf(`cat %v | grep -ivE 'Running|Completed|namespace|installer' || true`, podLogFile)
@@ -793,7 +793,7 @@ func clusterPodsHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error 
 
 // clusterNodesHealthcheck check abnormal nodes
 func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
-	errNode := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errNode := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
 		if err == nil {
 			if strings.Contains(output, "NotReady") || strings.Contains(output, "SchedulingDisabled") {
@@ -857,7 +857,7 @@ func apiserverReadinessProbe(tokenValue string, apiserverName string) string {
 // Get one available service IP, retry 3 times
 func getServiceIP(oc *exutil.CLI, clusterIP string) net.IP {
 	var serviceIP net.IP
-	err := wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 3*time.Second, false, func(cxt context.Context) (bool, error) {
 		randomServiceIP := net.ParseIP(clusterIP).To4()
 		if randomServiceIP != nil {
 			randomServiceIP[3] += byte(rand.Intn(254 - 1))
@@ -904,7 +904,7 @@ func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters
 func getResourceToBeReady(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
-	errPoll := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
+	errPoll := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil || len(result) == 0 {
 			e2e.Logf("Unable to retrieve the expected resource, retrying...")
@@ -1095,7 +1095,7 @@ func isConnectedInternet(oc *exutil.CLI) bool {
 func restartMicroshift(oc *exutil.CLI, nodename string) {
 	_, restartErr := runSSHCommand(nodename, "redhat", "sudo systemctl restart microshift")
 	o.Expect(restartErr).NotTo(o.HaveOccurred())
-	mstatusErr := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
+	mstatusErr := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 		output, err := runSSHCommand(nodename, "redhat", "sudo systemctl is-active microshift")
 		if err == nil && strings.TrimSpace(output) == "active" {
 			e2e.Logf("microshift status is: %v ", output)
@@ -1208,7 +1208,7 @@ func verifyHypershiftCiphers(oc *exutil.CLI, expectedCipher string, ns string) e
 func waitApiserverRestartOfHypershift(oc *exutil.CLI, appLabel string, ns string, waitTime int) error {
 	re, err := regexp.Compile(`(0/[0-9]|Pending|Terminating|Init)`)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	errKas := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errKas := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		out, _ := getResource(oc, asAdmin, withoutNamespace, "pods", "-l", "app="+appLabel, "--no-headers", "-n", ns)
 		if matched := re.MatchString(out); matched {
 			e2e.Logf("#### %s was restarting ...", appLabel)
@@ -1394,7 +1394,7 @@ func checkURLEndpointAccess(oc *exutil.CLI, hostIP, nodePort, podName, portComma
 	e2e.Logf("Command: %v", fullCommand)
 	e2e.Logf("Checking if the specified URL endpoint %s  is accessible", url)
 
-	err := wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 6*time.Second, false, func(cxt context.Context) (bool, error) {
 		curlOutput, curlErr = oc.Run("exec").Args(podName, "-i", "--", "sh", "-c", fullCommand).Output()
 		if curlErr != nil {
 			return false, nil
@@ -1509,4 +1509,9 @@ func getMicroshiftHostname(oc *exutil.CLI) string {
 	fqdnName, err := url.Parse(microShiftURL)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return fqdnName.Hostname()
+}
+
+func applyLabel(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) {
+	_, err := doAction(oc, "label", asAdmin, withoutNamespace, parameters...)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Adding label to the namespace failed")
 }
