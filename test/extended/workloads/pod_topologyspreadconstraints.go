@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Critical-33836-Critical-33845-High-33767-Check Validate Pod with only one TopologySpreadConstraint topologyKey node [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Critical-33836-Critical-33845-High-33767-Check Validate Pod with only one TopologySpreadConstraint topologyKey node", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podSelectorT := filepath.Join(buildPruningBaseDir, "pod_nodeselect.yaml")
 		podSinglePtsT := filepath.Join(buildPruningBaseDir, "pod_singlepts.yaml")
@@ -305,7 +305,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-33824-Check Validate TopologySpreadConstraint with podAffinity and podAntiAffinity [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-33824-Check Validate TopologySpreadConstraint with podAffinity and podAntiAffinity", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podSelectorT := filepath.Join(buildPruningBaseDir, "pod_nodeselect.yaml")
 		podAffinityPreferredPtsT := filepath.Join(buildPruningBaseDir, "pod_singlepts_prefer.yaml")
@@ -439,7 +439,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-34017-TopologySpreadConstraints do not work on cross namespaced pods [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-34017-TopologySpreadConstraints do not work on cross namespaced pods", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podSelectorT := filepath.Join(buildPruningBaseDir, "pod_nodeselect.yaml")
 		podNodeAffinityRequiredPtsT := filepath.Join(buildPruningBaseDir, "pod_pts_nodeaffinity_required.yaml")
@@ -535,7 +535,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-34014-Validate TopologySpreadConstraints with NodeAffinity [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-34014-Validate TopologySpreadConstraints with NodeAffinity", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podSingleNodeAffinityRequiredPtsT := filepath.Join(buildPruningBaseDir, "pod_single_nodeaffinity_required.yaml")
 
