@@ -1102,6 +1102,62 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		exutil.AssertWaitPollNoErr(err, "Did not find Type IPFIX in ipfix-collector pod logs")
 	})
 
+	g.It("NonPreRelease-Author:aramesha-Medium-72875-Verify nodeSelector with netobserv components [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Get master node of the cluster")
+		masterNode, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Add netobserv label to a particular master node")
+		defer exutil.DeleteLabelFromNode(oc, masterNode, "test")
+		exutil.AddLabelToNode(oc, masterNode, "test", "netobserv")
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		g.By("Patch flowcollector with nodeSelector for eBPF pods")
+		patchValue := `{"nodeSelector":{"test": "netobserv"}}`
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/advanced", "value": `+patchValue+`}]`, "--type=json").Output()
+
+		g.By("Ensure flowcollector is ready")
+		flow.waitForFlowcollectorReady(oc)
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("Get flowlogs from loki")
+		token := getSAToken(oc, "netobserv-plugin", namespace)
+		err = verifyLokilogsTime(token, ls.Route)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Verify eBPF pods are deployed on the specified master node")
+		eBPFpods, err := exutil.GetAllPodsWithLabel(oc, "netobserv-privileged", "app=netobserv-ebpf-agent")
+		for _, pod := range eBPFpods {
+			nodeName, err := exutil.GetPodNodeName(oc, "netobserv-privileged", pod)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(nodeName).To(o.Equal(masterNode))
+		}
+	})
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {
