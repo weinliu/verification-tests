@@ -212,7 +212,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Critical-70618-[CCM] The new created nodes should be added to load balancer [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-LEVEL0-Critical-70618-[CCM] The new created nodes should be added to load balancer [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
 		var newNodeNames []string
@@ -324,7 +324,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Critical-70627-[CCM] Service of type LoadBalancer can be created successful [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-LEVEL0-Critical-70627-[CCM] Service of type LoadBalancer can be created successful [Disruptive]", func() {
 		exutil.SkipForAwsOutpostCluster(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")

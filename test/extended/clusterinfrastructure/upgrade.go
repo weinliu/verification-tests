@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Critical-22612-[Upgrade] Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-LEVEL0-Critical-22612-[Upgrade] Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "ibmcloud", "alibabacloud", "nutanix", "openstack")
 		g.By("Create a new machineset")
@@ -118,7 +118,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-LEVEL0-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade [Disruptive][Slow]", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
 		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
