@@ -1999,7 +1999,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		helloPod2Node, err := exutil.GetPodNodeName(oc, ns1, pod2.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(helloPod2Node).NotTo(o.Equal(""))
-		_, helloPod2NodeIP := getNodeIP(oc, helloPod2Node)
+		helloPod2NodeIP := getNodeIPv4(oc, ns1, helloPod2Node)
 
 		exutil.By("8. Check SNAT in northdb of egress node, there should be only 1 entry that contains hello-pod1's pod IP. \n")
 		snatIP, natErr := getSNATofEgressIP(oc, egressNode, freeIPs[0])
