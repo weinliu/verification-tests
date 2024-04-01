@@ -729,7 +729,7 @@ spec:
 	// It is destructive case, probably cause the system OOM, so adding [Disruptive].Workload loading costs more than 15mins, so adding [Slow]
 	// For the Jira issue https://issues.redhat.com/browse/OCPQE-9541, we need provide a good solution for the provision of adequate stress for the load of the environment
 	// Sometimes case takes more than 15mins to avoid this failure adding -Longduration- tag
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-Longduration-NonPreRelease-ConnectedOnly-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-Longduration-NonPreRelease-ConnectedOnly-Author:rgangwar-High-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
@@ -876,7 +876,7 @@ spec:
 
 	// Sometimes case takes more than 15mins to avoid this failure adding -Longduration- tag
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-Longduration-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-Longduration-NonPreRelease-Author:rgangwar-High-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
@@ -1003,7 +1003,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("LEVEL0-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			exceptions   = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
 			caseID       = "ocp-40861"
@@ -3119,7 +3119,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
+	g.It("LEVEL0-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -5925,7 +5925,7 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-ConnectedOnly-Author:kewang-Critical-10873-Access app througth secure service and regenerate service serving certs if it about to expire [Disruptive] [Slow]", func() {
+	g.It("LEVEL0-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-ConnectedOnly-Author:kewang-Critical-10873-Access app througth secure service and regenerate service serving certs if it about to expire [Disruptive] [Slow]", func() {
 
 		var (
 			filename     = "aosqe-pod-for-ping.json"
