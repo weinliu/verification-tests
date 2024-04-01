@@ -135,7 +135,7 @@ spec:
 		}
 	})
 
-	g.It("NonHyperShiftHOST-Author:mihuang-Medium-33204-[cco-passthrough]IPI on azure with cco passthrough mode", func() {
+	g.It("NonHyperShiftHOST-Author:mihuang-LEVEL0-Critical-33204-[cco-passthrough]IPI on azure with cco passthrough mode", func() {
 		exutil.By("Check if it's an azure cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "azure")
 
@@ -239,7 +239,7 @@ data:
 		o.Expect(credsTXT).To(o.ContainSubstring("cacert: /etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"))
 	})
 
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:jshu-High-36498-CCO credentials secret change to STS-style", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:jshu-LEVEL0-Critical-36498-CCO credentials secret change to STS-style", func() {
 		//Check IAAS platform type
 		iaasPlatform := exutil.CheckPlatform(oc)
 		if iaasPlatform != "aws" {
@@ -439,7 +439,7 @@ data:
 		o.Expect(imagePullPolicy).To(o.Equal("IfNotPresent"))
 	})
 
-	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:mihuang-Critical-66538-Azure workload identity cluster healthy check.", func() {
+	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:mihuang-LEVEL0-Critical-66538-Azure workload identity cluster healthy check.", func() {
 		mode, _ := getCloudCredentialMode(oc)
 		if !(exutil.CheckPlatform(oc) == "azure" && mode == "manualpodidentity") {
 			g.Skip("The cluster is not Azure Workload Identity Cluster - skipping test ...")
