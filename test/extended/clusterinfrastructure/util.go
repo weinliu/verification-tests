@@ -64,3 +64,20 @@ func getClusterHistoryVersions(oc *exutil.CLI) string {
 	e2e.Logf("Cluster history versions are %s", historyVersions)
 	return historyVersions
 }
+
+// To be used if sensitive data is present in template
+func applyResourceFromTemplateWithoutInfo(oc *exutil.CLI, parameters ...string) error {
+	var jsonCfg string
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().NotShowInfo().Run("process").Args(parameters...).OutputToFile(getRandomString() + "cloud.json")
+		if err != nil {
+			e2e.Failf("the result of ReadFile:%v", err)
+			return false, nil
+		}
+		jsonCfg = output
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Applying resources from template is failed")
+	e2e.Logf("The resource is %s", jsonCfg)
+	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", jsonCfg).Execute()
+}
