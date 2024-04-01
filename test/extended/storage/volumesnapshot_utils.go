@@ -120,8 +120,7 @@ func (vs *volumeSnapshot) waitReadyToUse(oc *exutil.CLI) {
 	})
 
 	if err != nil {
-		vsDescribe := getOcDescribeInfo(oc, vs.namespace, "volumesnapshot", vs.name)
-		e2e.Logf("oc describe volumesnapshot %s:\n%s", vs.name, vsDescribe)
+		getOcDescribeInfo(oc, vs.namespace, "volumesnapshot", vs.name)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Volumeshapshot %s is not ready_to_use", vs.name))
 }

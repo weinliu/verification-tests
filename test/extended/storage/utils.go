@@ -632,10 +632,8 @@ func getZonesFromWorker(oc *exutil.CLI) []string {
 	return workerZones
 }
 
-// Common oc CLI
-//
-//	Get the oc describe info, set namespace as "" for cluster-wide resource
-func getOcDescribeInfo(oc *exutil.CLI, namespace string, resourceKind string, resourceName string) string {
+// Get and print the oc describe info, set namespace as "" for cluster-wide resource
+func getOcDescribeInfo(oc *exutil.CLI, namespace string, resourceKind string, resourceName string) {
 	var ocDescribeInfo string
 	var err error
 	if namespace != "" {
@@ -644,7 +642,8 @@ func getOcDescribeInfo(oc *exutil.CLI, namespace string, resourceKind string, re
 		ocDescribeInfo, err = oc.WithoutNamespace().Run("describe").Args(resourceKind, resourceName).Output()
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return ocDescribeInfo
+	e2e.Logf("***$ oc describe %s %s\n%s", resourceKind, resourceName, ocDescribeInfo)
+	e2e.Logf("**************************************************************************")
 }
 
 // Get a random number of int64 type [m,n], n > m

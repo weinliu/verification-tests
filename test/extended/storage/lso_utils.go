@@ -183,7 +183,8 @@ func (lso *localStorageOperator) waitInstallSucceed(oc *exutil.CLI) {
 		return lso.checkInstallSucceed(oc)
 	})
 	if err != nil {
-		e2e.Logf("LSO *%s* install failed caused by:\n%s", lso.currentCSV, getOcDescribeInfo(oc, lso.namespace, "csv", lso.currentCSV))
+		e2e.Logf("LSO *%s* install failed", lso.currentCSV)
+		getOcDescribeInfo(oc, lso.namespace, "csv", lso.currentCSV)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for local storage operator:\"%s\" install succeed in ns/%s timeout", lso.currentCSV, lso.namespace))
 }

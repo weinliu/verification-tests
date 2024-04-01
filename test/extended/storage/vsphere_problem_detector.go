@@ -379,6 +379,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			servingSecretName        = "vsphere-problem-detector-serving-cert"
 		)
 
+		// check CSO status before test
+		csohealthy, err := checkCSOhealthy(oc)
+		if !csohealthy || err != nil {
+			g.Skip("Skipping because cannot get the CSO status or CSO is not healthy!")
+		}
+
 		exutil.By("# Get the origin vsphere-problem-detector-operator pod name")
 		vSphereDetectorOperator.replicasno = vSphereDetectorOperator.getReplicasNum(oc.AsAdmin())
 		originPodList := vSphereDetectorOperator.getPodList(oc.AsAdmin())
