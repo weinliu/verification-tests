@@ -892,10 +892,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "pod", pod1Name[0]).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.AssertPodToBeReady(oc, sriovTestNewPod.name, ns1)
-		newPodMac, err := e2eoutput.RunHostCmdWithRetries(ns1, sriovTestNewPod.name, "ip link show net1 | awk '/link\\/ether/ {print $2}'", 3*time.Second, 30*time.Second)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		newPodMac = strings.TrimSpace(newPodMac)
-		e2e.Logf("new pod mac is: %v", newPodMac)
+		newPodMac := getInterfaceMac(oc, ns1, sriovTestNewPod.name, "net1")
 
 		exutil.By("check the entry of arp table for ipv4 is updated")
 		commandv4 := fmt.Sprintf("ip neigh show %s | awk '{print $5}'", pod1IPv4)
@@ -913,7 +910,6 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(arpIpv6MacOutput).To(o.ContainSubstring(newPodMac))
 
 	})
-
 	g.It("Author:zzhao-NonPreRelease-Longduration-Critical-49860-pods numbers same with VF numbers can be still working after worker reboot [Disruptive]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking/sriov")
@@ -987,5 +983,67 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		podName = getPodName(oc, ns1, "name="+caseID)
 		pingPassWithNet1(oc, ns1, podName[0], podName[1])
 
+	})
+
+	g.It("Author:zzhao-Medium-55181-pci-address should be contained in networks-status annotation when using the tuning metaPlugin on SR-IOV Networks [Disruptive]", func() {
+		var (
+			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNeworkTemplate  = filepath.Join(buildPruningBaseDir, "sriovnetwork-whereabouts-template.yaml")
+			sriovTestPodTemplate = filepath.Join(buildPruningBaseDir, "sriov-netdevice-template.yaml")
+			sriovOpNs            = "openshift-sriov-network-operator"
+			policyName           = "e810c"
+			deviceID             = "1593"
+			interfaceName        = "ens2f2"
+			vendorID             = "8086"
+			vfNum                = 4
+			caseID               = "55181-"
+			networkName          = caseID + "net"
+		)
+
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		exutil.By("Create snnp to create VF")
+		// Create VF on with given device
+		defer rmSriovNetworkPolicy(oc, policyName, sriovOpNs)
+		result := initVF(oc, policyName, deviceID, interfaceName, vendorID, sriovOpNs, vfNum)
+		// if the deviceid is not exist on the worker, skip this
+		if !result {
+			g.Skip(fmt.Sprintf("This nic which has deviceID %s is not found on this cluster!!!", deviceID))
+		}
+		exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+		sriovnetwork := sriovNetwork{
+			name:             networkName,
+			resourceName:     policyName,
+			networkNamespace: ns1,
+			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
+			spoolchk:         "off",
+			trust:            "on",
+		}
+
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+
+		exutil.By("Create test pod with the VF")
+		sriovTestPod := sriovTestPod{
+			name:        "testpod",
+			namespace:   ns1,
+			networkName: sriovnetwork.name,
+			template:    sriovTestPodTemplate,
+		}
+		sriovTestPod.createSriovTestPod(oc)
+		err := waitForPodWithLabelReady(oc, ns1, "app=testpod")
+		exutil.AssertWaitPollNoErr(err, "pods with label app=testpod not ready")
+
+		exutil.By("get the pci-address of the sriov interface")
+
+		pciAddress := getPciAddress(ns1, sriovTestPod.name, policyName)
+
+		exutil.By("check the pod info should contain pci-address")
+		command := fmt.Sprintf("cat /etc/podnetinfo/annotations")
+		podNetinfo, err := e2eoutput.RunHostCmdWithRetries(ns1, sriovTestPod.name, command, 3*time.Second, 12*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(podNetinfo, pciAddress)).Should(o.BeTrue())
 	})
 })

@@ -497,10 +497,7 @@ func chkVFStatusWithPassTraffic(oc *exutil.CLI, nadName, nicName, ns, expectVaul
 		} else {
 			nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns, sriovTestPod.name)
 			o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
-			podMac, err := e2eoutput.RunHostCmdWithRetries(ns, sriovTestPod.name, "ip link show net1 | awk '/link\\/ether/ {print $2}'", 3*time.Second, 30*time.Second)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			podMac = strings.TrimSpace(podMac)
-			e2e.Logf("nodename %v", nodeName)
+			podMac := getInterfaceMac(oc, ns, sriovTestPod.name, "net1")
 			chkVFStatusMatch(oc, nodeName, nicName, podMac, expectVaule)
 		}
 	}
@@ -732,6 +729,7 @@ func chkSriovInjectorResource(oc *exutil.CLI, status bool) {
 	}
 
 }
+
 func pingPassWithNet1(oc *exutil.CLI, ns1, pod1, pod2 string) {
 	pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns1, pod1)
 	e2e.Logf("The second interface v4 address of pod1 is: %v", pod1IPv4)
@@ -741,4 +739,13 @@ func pingPassWithNet1(oc *exutil.CLI, ns1, pod1, pod2 string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("ping output: %v", pingOutput)
 	o.Expect(strings.Count(pingOutput, "3 received")).To(o.Equal(2))
+}
+
+// get the Mac address from one pod interface
+func getInterfaceMac(oc *exutil.CLI, namespace, podName, interfaceName string) string {
+	command := fmt.Sprintf("ip link show %s | awk '/link\\/ether/ {print $2}'", interfaceName)
+	podInterfaceMac, err := e2eoutput.RunHostCmdWithRetries(namespace, podName, command, 3*time.Second, 30*time.Second)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podInterfaceMac = strings.TrimSpace(podInterfaceMac)
+	return podInterfaceMac
 }
