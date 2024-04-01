@@ -10,4 +10,5 @@ spec:
     solvers:
     - http01:
         ingress:
-          class: openshift-default
+          # "ingressClassName" was added in v1.12.0. Poior to it, use "class" instead. (See OCPBUGS-31533)
+          ingressClassName: openshift-default
