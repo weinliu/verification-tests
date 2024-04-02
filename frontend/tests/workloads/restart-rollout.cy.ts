@@ -4,7 +4,7 @@ import { listPage } from "upstream/views/list-page"
 describe('Check rollout restart and retry in Deployment/DC', () => {
   const params = {
     namespace: 'ocp52579-project',
-    deploymentName: 'ocp50657-example-deployment',
+    deploymentName: 'example-deployment',
     dcName: 'hooks',
     deploymentFile: 'deployments.yaml',
     dcFileName: 'deploymentconfig.yaml',

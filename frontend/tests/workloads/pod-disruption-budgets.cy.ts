@@ -3,7 +3,7 @@ import { button  } from '../../views/button';
 
 describe('PDB List Page and Detail Page Test', () => {
   const deploymentParams = {
-    name: 'ocp50657-example-deployment'
+    name: 'example-deployment'
   }
 
   const testParams = {

@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ocp50657-example-deployment
+  name: example-deployment
 spec:
   selector:
     matchLabels:
       app: hello-openshift
-  replicas: 1 
+  replicas: 1
   template:
     metadata:
       labels:

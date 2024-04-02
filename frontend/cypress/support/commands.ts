@@ -1,28 +1,28 @@
 import { nav } from '../../upstream/views/nav';
+import { guidedTour } from 'upstream/views/guided-tour';
 
 declare global {
     namespace Cypress {
         interface Chainable<Subject> {
             switchPerspective(perspective: string);
-	          uiLogin(provider: string, username: string, password: string);
+            uiLogin(provider: string, username: string, password: string);
             uiLogout();
             cliLogin();
             cliLogout();
-            adminCLI(command: string);
-            retryTask(condition, expectedoutput, options);
-            checkCommandResult(condition, expectedoutput, options);
+            adminCLI(command: string, options?);
+            retryTask(condition, expectedoutput, options?);
+            checkCommandResult(condition, expectedoutput, options?);
             hasWindowsNode();
             isEdgeCluster();
             isAWSSTSCluster();
             isPlatformSuitableForNMState();
-	    isManagedCluster();
+            isManagedCluster();
         }
     }
 }
 
 const kubeconfig = Cypress.env('KUBECONFIG_PATH');
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_RETRY_INTERVAL = 10000; // milliseconds
+const DEFAULT_RETRY_OPTIONS = { retries: 3, interval: 10000 };
 
 Cypress.Commands.add("switchPerspective", (perspective: string) => {
 
@@ -60,8 +60,9 @@ Cypress.Commands.add('uiLogin', (provider: string, username: string, password: s
   cy.get('button[type=submit]').click();
   cy.byTestID("username")
     .should('be.visible');
-  })
-  cy.visit('/');
+  });
+  guidedTour.close();
+  cy.switchPerspective('Administrator');
 });
 
 Cypress.Commands.add('uiLogout', () => {
@@ -91,13 +92,13 @@ Cypress.Commands.add("cliLogout", () => {
   });
 });
 
-Cypress.Commands.add("adminCLI", (command: string) => {
+Cypress.Commands.add("adminCLI", (command: string, options?: {}) => {
   cy.log(`Run admin command: ${command}`)
-  cy.exec(`${command} --kubeconfig ${kubeconfig}`, { failOnNonZeroExit: false })
+  cy.exec(`${command} --kubeconfig ${kubeconfig}`, options)
 });
 
-Cypress.Commands.add('retryTask', (command, expectedOutput, options) => {
-  const { retries = DEFAULT_MAX_RETRIES, interval = DEFAULT_RETRY_INTERVAL } = options || {};
+Cypress.Commands.add('retryTask', (command, expectedOutput, options?) => {
+  const { retries, interval } = options || DEFAULT_RETRY_OPTIONS;
 
   const retryTaskFn = (currentRetries) => {
     return cy.adminCLI(command)
@@ -114,7 +115,7 @@ Cypress.Commands.add('retryTask', (command, expectedOutput, options) => {
   return retryTaskFn(0);
 });
 
-Cypress.Commands.add("checkCommandResult", (command, expectedoutput, options) => {
+Cypress.Commands.add("checkCommandResult", (command, expectedoutput, options?) => {
   return cy.retryTask(command, expectedoutput, options)
     .then(conditionMet =>{
       if (conditionMet) {
@@ -208,3 +209,4 @@ Cypress.Commands.add("isIPICluster", () => {
     }
   });
 });
+

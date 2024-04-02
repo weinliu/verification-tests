@@ -17,6 +17,15 @@ export const Pages = {
     guidedTour.close();
     cy.get('a[data-test-id="horizontal-link-Project access"]').should('be.visible');
   },
+  gotoPVCCreationPage: (namespace: string) => {
+    cy.visit(`/k8s/ns/${namespace}/core~v1~PersistentVolumeClaim`);
+    cy.get('button[data-test="item-create"]').click();
+    cy.get('form').should('be.visible');
+  },
+  gotoPVCDetailsPage: (namespace: string, pvc_name: string) => {
+    cy.visit(`/k8s/ns/${namespace}/persistentvolumeclaims/${pvc_name}`);
+    cy.get('[data-test-section-heading="PersistentVolumeClaim details"]').should('exist');
+  },
   gotoNamespacesList: () => {
     cy.visit('/k8s/cluster/core~v1~Namespace');
     listPage.rows.shouldBeLoaded();
@@ -99,5 +108,12 @@ export const Pages = {
       '/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion':
       `/k8s/ns/${namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`;
     cy.visit(url);
+  },
+  gotoVolumeSnapshotListPage: (namespace: string) => {
+    cy.visit(`/k8s/ns/${namespace}/snapshot.storage.k8s.io~v1~VolumeSnapshot`);
+  },
+  gotoVolumeSnapshotDetailPage: (namespace ,vs_name) => {
+    cy.visit(`/k8s/ns/${namespace}/snapshot.storage.k8s.io~v1~VolumeSnapshot/${vs_name}`);
+    cy.get('[data-test-section-heading="VolumeSnapshot details"]').should('exist');
   }
 }

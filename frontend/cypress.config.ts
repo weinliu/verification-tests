@@ -19,8 +19,7 @@ export default defineConfig({
     'LOGIN_PASSWORD': process.env.CYPRESS_LOGIN_USERS.split(',')[0].split(':')[1]
   },
   fixturesFolder: 'fixtures',
-  defaultCommandTimeout: 120000,
-  pageLoadTimeout: 120000,
+  defaultCommandTimeout: 30000,
   retries: {
     runMode: 0,
     openMode: 0,
