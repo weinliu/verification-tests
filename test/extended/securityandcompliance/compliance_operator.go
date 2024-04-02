@@ -34,6 +34,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscantaintTemplate               string
 		cscantaintsTemplate              string
 		cscanSCTemplate                  string
+		tprofileManualRuleTemplate       string
 		tprofileTemplate                 string
 		tprofileWithoutVarTemplate       string
 		scansettingTemplate              string
@@ -80,6 +81,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		cscantaintTemplate = filepath.Join(buildPruningBaseDir, "compliancescantaint.yaml")
 		cscantaintsTemplate = filepath.Join(buildPruningBaseDir, "compliancescantaints.yaml")
 		cscanSCTemplate = filepath.Join(buildPruningBaseDir, "compliancescanStorageClass.yaml")
+		tprofileManualRuleTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-manual-rule.yaml")
 		tprofileTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile.yaml")
 		tprofileHypershfitTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-hypershift.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
@@ -298,6 +300,47 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("ocp-33398 The Compliance Operator supported variables in tailored profile... !!!\n")
 
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-61342-Verify the rule ocp4-cis-scc-limit-container-allowed-capabilities could be set to MANUAL [Serial]", func() {
+		g.By("Create tailoredprofile !!!\n")
+		var (
+			tpName = "manual-" + getRandomString()
+			ssb    = scanSettingBindingDescription{
+				name:            "manual-rule-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "TailoredProfile",
+				profilename1:    tpName,
+				profilename2:    "ocp4-cis",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+		)
+
+		g.By("Create tp... !!!\n")
+		defer cleanupObjects(oc,
+			objectTableRef{"tailoredprofile", subD.namespace, tpName},
+			objectTableRef{"ssb", subD.namespace, ssb.name})
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileManualRuleTemplate, "-p", "NAME="+tpName, "NAMESPACE="+subD.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, tpName, ok, []string{"tailoredprofile", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", tpName, "-n", subD.namespace, "-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Create scansettingbinding... !!!\n")
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check test results !!!\n")
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancesuite",
+			ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "MANUAL", ok, []string{"ccr", tpName + "-scc-limit-container-allowed-capabilities", "-n", subD.namespace,
+			"-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", ssb.profilename2 + "-scc-limit-container-allowed-capabilities", "-n", subD.namespace,
+			"-o=jsonpath={.status}"}).check(oc)
+		g.By("ocp-61342 Verify the rule ocp4-cis-scc-limit-container-allowed-capabilities could be set to MANUAL... !!!\n")
 	})
 
 	// author: pdhamdhe@redhat.com
