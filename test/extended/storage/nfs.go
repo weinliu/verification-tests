@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-51424 [NFS] [Daemonset] could provide RWX access mode volume
-	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-51424-[NFS] [Daemonset] could provide RWX access mode volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-LEVEL0-High-51424-[NFS] [Daemonset] could provide RWX access mode volume", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			scName = "nfs-sc-" + getRandomString()

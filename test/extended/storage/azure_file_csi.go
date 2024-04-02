@@ -384,7 +384,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50919 - [Azure-File-CSI-Driver] support smb file share protocol
-	g.It("ARO-Author:wduan-High-50919-[Azure-File-CSI-Driver] support smb file share protocol", func() {
+	g.It("ARO-Author:wduan-LEVEL0-High-50919-[Azure-File-CSI-Driver] support smb file share protocol", func() {
 		// Skip case in FIPS enabled cluster with smb protocol
 		if checkFips(oc) {
 			g.Skip("Azure-file CSI Driver with smb protocol don't support FIPS enabled env, skip!!!")
@@ -434,7 +434,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50918 - [Azure-File-CSI-Driver] support nfs file share protocol
-	g.It("ARO-Author:wduan-High-50918-[Azure-File-CSI-Driver] support nfs file share protocol", func() {
+	g.It("ARO-Author:wduan-LEVEL0-High-50918-[Azure-File-CSI-Driver] support nfs file share protocol", func() {
 		// Set up a specified project share for all the phases
 		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project

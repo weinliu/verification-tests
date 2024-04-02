@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-52743 - [Storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present
-	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-52743-[Storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-LEVEL0-Critical-52743-[Storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present", func() {
 
 		// Get pre-defined storageclass
 		preDefinedStorageclassCheck(cloudProvider)

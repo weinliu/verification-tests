@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-56080-[Local-ephemeral-storage] [emptyDir] with sizeLimit should work on Pod level", func() {
+	g.It("ROSA-OSD_CCS-Author:pewang-LEVEL0-High-56080-[Local-ephemeral-storage] [emptyDir] with sizeLimit should work on Pod level", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			podTemplate = filepath.Join(storageTeamBaseDir, "pod-with-multiple-containers-using-emptydir-template.yaml")

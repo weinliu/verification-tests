@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-24523-[LSO] [block volume] LocalVolume CR related pv could be used by Pod", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-LEVEL0-Critical-24523-[LSO] [block volume] LocalVolume CR related pv could be used by Pod", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -157,7 +157,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-24524-[LSO] [Filesystem xfs] LocalVolume CR related pv could be used by Pod", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-LEVEL0-Critical-24524-[LSO] [Filesystem xfs] LocalVolume CR related pv could be used by Pod", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -222,7 +222,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-24525-[LSO] [Filesystem ext4] LocalVolume CR related pv could be used by Pod", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-LEVEL0-Critical-24525-[LSO] [Filesystem ext4] LocalVolume CR related pv could be used by Pod", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
