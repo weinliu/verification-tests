@@ -782,11 +782,15 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		exutil.By("Get new kube-apiserver certificate")
 		logger.Infof("Wait for certificate rotation")
-		o.Eventually(certSecret.GetDataValueOrFail).WithArguments("tls.crt").
+		o.Eventually(certSecret.GetDataValueOrFail, "3m", "20s").WithArguments("tls.crt").
 			ShouldNot(o.Equal(initialCert),
 				"The certificate was not rotated")
 
-		newCert := certSecret.GetDataValueOrFail("tls.crt")
+		logger.Infof("Wait for the new certificate to be stable (avoid double rotations: OCPQE-20323)")
+		newCert, err := waitUntilSecretHasStableValue(certSecret, "tls.crt", 5*time.Minute, 5*time.Second, 3)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"We cannot get a new stable certificate after the certificate rotation in %s", certSecret)
+
 		logger.Infof("New certificate length: %d", len(newCert))
 
 		o.Expect(initialCert == newCert).NotTo(o.BeTrue(),

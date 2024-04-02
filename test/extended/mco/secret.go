@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -93,4 +95,37 @@ func (s Secret) SetDataValue(key, value string) error {
 // GetPullSecret returns the cluster's pull secret
 func GetPullSecret(oc *exutil.CLI) *Secret {
 	return NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
+}
+
+// waitUntilSecretHasStableValue polls a data in a secret and returns its value once it has been retrieved "numTries" times with the same value
+func waitUntilSecretHasStableValue(secret *Secret, data string, timeout, poll time.Duration, numTries int) (string, error) {
+	var (
+		count  = 0
+		oldVal string
+	)
+
+	immediate := true
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), poll, timeout, immediate,
+		func(ctx context.Context) (bool, error) {
+			val, err := secret.GetDataValue(data)
+
+			if val == oldVal && err == nil {
+				count++
+			} else {
+				count = 0
+				oldVal = val
+			}
+
+			if count == numTries {
+				return true, nil
+			}
+			return false, nil
+
+		})
+
+	if waitErr == nil {
+		return oldVal, nil
+	}
+
+	return "", waitErr
 }
