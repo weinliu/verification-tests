@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ConnectedOnly-Author:geliu-LEVEL0-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate", func() {
-		g.By("Check proxy env.")
+		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, "httpsProxy") {
@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
-		g.By("Check if the cluster is STS or not")
+		exutil.By("Check if the cluster is STS or not")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
 		if err != nil && strings.Contains(output, "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
@@ -59,7 +59,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create clusterissuer with route53 as dns01 solver.")
+		exutil.By("Create clusterissuer with route53 as dns01 solver.")
 		defer func() {
 			e2e.Logf("Delete clusterissuers.cert-manager.io letsencrypt-dns01")
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer timeout")
-		g.By("create certificate which references previous clusterissuer")
+		exutil.By("create certificate which references previous clusterissuer")
 		defer func() {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("certificate").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -323,7 +323,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ConnectedOnly-Author:geliu-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Disruptive]", func() {
-		g.By("Check proxy env.")
+		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, "httpsProxy") {
@@ -332,7 +332,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
-		g.By("Skip test when the cluster is with STS credential")
+		exutil.By("Skip test when the cluster is with STS credential")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
 		if err != nil && strings.Contains(output, "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
@@ -352,7 +352,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create clusterissuer with route53 as dns01 solver.")
+		exutil.By("Create clusterissuer with route53 as dns01 solver.")
 		baseDomain := getBaseDomain(oc)
 		e2e.Logf("baseDomain=%s", baseDomain)
 		dnsZone, err := getParentDomain(baseDomain)
@@ -385,7 +385,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer timeout")
 
-		g.By("create certificate which references previous clusterissuer")
+		exutil.By("create certificate which references previous clusterissuer")
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
@@ -407,7 +407,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "challenge/certificate is wrong.")
 
-		g.By("Apply dns args by patch.")
+		exutil.By("Apply dns args by patch.")
 		certManagerPod0, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 		if len(string(certManagerPod0)) == 0 || err != nil {
 			e2e.Failf("Fail to get name of cert_manager_pod0.")
@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed.")
 
-		g.By("Check the certificate content AGAIN.")
+		exutil.By("Check the certificate content AGAIN.")
 		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			output, err = oc.Run("get").Args("certificate", "certificate-hosted-zone-overlapped").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -463,14 +463,14 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	// author: geliu@redhat.com
 	// This case contains two Polarion cases: 63555 and 69798. The root case is 63555.
 	g.It("ROSA-Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
-		g.By("Check proxy env.")
+		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "httpsProxy") {
 			g.Skip("Fail to check httpsProxy, ocp-63555 skipped.")
 		}
 
-		g.By("Skip test when the cluster is with STS credential")
+		exutil.By("Skip test when the cluster is with STS credential")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
 		if err != nil && strings.Contains(output, "not found") {
@@ -491,7 +491,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Login with normal user and create issuers.\n")
+		exutil.By("Login with normal user and create issuers.\n")
 		oc.SetupProject()
 		baseDomain := getBaseDomain(oc)
 		e2e.Logf("baseDomain=%s", baseDomain)
@@ -525,7 +525,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer ready timeout.")
 
-		g.By("Create the certificate.")
+		exutil.By("Create the certificate.")
 		randomStr := getRandomString(4)
 		dnsName := randomStr + "." + dnsZone
 		if len(dnsName) > 63 {
@@ -536,7 +536,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
-		g.By("Check the certificate and its challenge")
+		exutil.By("Check the certificate and its challenge")
 		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
 			output, err := oc.Run("get").Args("challenge").Output()
 			if !strings.Contains(output, "pending") || err != nil {
@@ -557,7 +557,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Failure: challenge has not output as expected.")
-		g.By("patch certmanager/cluster.")
+		exutil.By("patch certmanager/cluster.")
 		certManagerPod1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 		patchPath := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\"]}}}"
 		defer func() {
@@ -589,7 +589,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed after patch.")
-		g.By("Checke challenge and certificate again.")
+		exutil.By("Checke challenge and certificate again.")
 		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			output, err = oc.Run("get").Args("certificate", "certificate-from-dns01").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -613,13 +613,13 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if currentVersion.Compare(minDoHSupportedVersion) > -1 {
 			e2e.Logf("Start to execute test case OCP-69798\n")
 
-			g.By("Configure with an invalid server as negative test.")
+			exutil.By("Configure with an invalid server as negative test.")
 			patchPath = "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\", \"--dns01-recursive-nameservers=https://1.1.1.1/negative-test-dummy-dns-query\"]}}}"
 			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, "cert-manager", 10*time.Second, 120*time.Second)
 
-			g.By("Create a new certificate.")
+			exutil.By("Create a new certificate.")
 			randomStr = getRandomString(4)
 			dnsName = randomStr + "." + dnsZone
 			if len(dnsName) > 63 {
@@ -630,7 +630,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
-			g.By("Check if challenge will be pending and show HTTP 403 error")
+			exutil.By("Check if challenge will be pending and show HTTP 403 error")
 			statusErr = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
 				output, err = oc.Run("get").Args("challenge", "-o", "wide").Output()
 				if !strings.Contains(output, "403 Forbidden") || !strings.Contains(output, "pending") || err != nil {
@@ -642,13 +642,13 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			})
 			exutil.AssertWaitPollNoErr(statusErr, "timed out after 90s waiting challenge to be pending state and show HTTP 403 error")
 
-			g.By("Configure with a valid server.")
+			exutil.By("Configure with a valid server.")
 			patchPath = "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\", \"--dns01-recursive-nameservers=https://1.1.1.1/dns-query\"]}}}"
 			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, "cert-manager", 10*time.Second, 120*time.Second)
 
-			g.By("Check if certificate will be True.")
+			exutil.By("Check if certificate will be True.")
 			statusErr = wait.Poll(10*time.Second, 150*time.Second, func() (bool, error) {
 				output, err = oc.Run("get").Args("certificate", "certificate-from-dns01").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -660,7 +660,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			})
 			exutil.AssertWaitPollNoErr(statusErr, "timed out after 150s waiting certificate to be True")
 
-			g.By("Check and verify issued certificate content")
+			exutil.By("Check and verify issued certificate content")
 			verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
 		} else {
 			e2e.Logf("currentVersion(%s) < minDoHSupportedVersion(%s), therefore skipping the DoH checkpoint test (case 69798)", currentVersion, minDoHSupportedVersion)
@@ -669,7 +669,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:geliu-Low-63500-Multiple solvers mixed with http01 and dns01 in ACME issuer should work well", func() {
-		g.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01.")
+		exutil.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01.")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-multiple-solvers.yaml")
 		defer func() {
@@ -693,7 +693,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
 
-		g.By("As normal user, create below 3 certificates in later steps with above clusterissuer.")
+		exutil.By("As normal user, create below 3 certificates in later steps with above clusterissuer.")
 		e2e.Logf("Create cert, cert-match-test-1.")
 		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certFile1 := filepath.Join(buildPruningBaseDir, "cert-match-test-1.yaml")
@@ -770,7 +770,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 
-		g.By("Check if the cluster-monitoring ConfigMap exists")
+		exutil.By("Check if the cluster-monitoring ConfigMap exists")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", clusterMonitoringConfigMapName, "-n", clusterMonitoringNamespace).Output()
 		if err != nil {
 			e2e.Logf("Got error(%v) when trying to get 'configmap/%s', command output: %s", err, clusterMonitoringConfigMapName, output)
@@ -790,7 +790,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			}()
 		}
 
-		g.By("Enable monitoring for user-defined projects")
+		exutil.By("Enable monitoring for user-defined projects")
 		configFile := filepath.Join(buildPruningBaseDir, "cluster-monitoring-config.yaml")
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -801,7 +801,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}()
 		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, userWorkloadMonitoringNamespace, 10*time.Second, 120*time.Second)
 
-		g.By("Create Service Monitor to collect metrics")
+		exutil.By("Create Service Monitor to collect metrics")
 		serviceMonitorFile := filepath.Join(buildPruningBaseDir, "servicemonitor.yaml")
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-n", operandNamespace, "-f", serviceMonitorFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -811,12 +811,12 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
-		g.By("Prepare Prometheus SA token for making queries")
+		exutil.By("Prepare Prometheus SA token for making queries")
 		token, err := getSAToken(oc, "prometheus-k8s", clusterMonitoringNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 
-		g.By("Query metrics from HTTP API")
+		exutil.By("Query metrics from HTTP API")
 		queryString := `query={endpoint="tcp-prometheus-servicemonitor"}`
 		cmd := fmt.Sprintf(`curl -s -S -k -H "Authorization: Bearer %s" %s --data-urlencode '%s'`, token, metricsQueryURL, queryString)
 		oc.NotShowInfo()
@@ -842,14 +842,14 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			operatorNamespace = "cert-manager-operator"
 		)
 
-		g.By("Set operands log level to an invalid value")
+		exutil.By("Set operands log level to an invalid value")
 		patchPath := `{"spec":{"logLevel":"xxx"}}`
 		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("certmanager.operator", "cluster", "--type=merge", "-p", patchPath).Output()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Unsupported value: "xxx"`))
 
 		// The valid values can be "Normal", "Debug", "Trace", and "TraceAll", default is "Normal".
-		g.By("Set operands log level to a valid value")
+		exutil.By("Set operands log level to a valid value")
 		patchPath = `{"spec":{"logLevel":"Trace"}}`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("certmanager.operator", "cluster", "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -862,7 +862,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}()
 		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
 
-		g.By("Validate the operands log level")
+		exutil.By("Validate the operands log level")
 		podList, err := exutil.GetAllPodsWithLabel(oc, operandNamespace, "app.kubernetes.io/instance=cert-manager")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range podList {
@@ -880,7 +880,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		// No meaningful negative test for OPERATOR_LOG_LEVEL. Therefore no automation for negative test.
 
 		// The valid values range from 1 to 10, default is 2.
-		g.By("Set operator log level to a valid value")
+		exutil.By("Set operator log level to a valid value")
 		patchPath = `{"spec":{"config":{"env":[{"name":"OPERATOR_LOG_LEVEL","value":"6"}]}}}`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "openshift-cert-manager-operator", "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -893,7 +893,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}()
 		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operatorNamespace, 10*time.Second, 120*time.Second)
 
-		g.By("Validate the operator log level")
+		exutil.By("Validate the operator log level")
 		podList, err = exutil.GetAllPodsWithLabel(oc, operatorNamespace, "name=cert-manager-operator")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range podList {
