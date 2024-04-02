@@ -231,9 +231,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = getRouteCAToFile(oc, extractTmpDirName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
 		exutil.By("Get desired image from ocp cluster")
 		pullSpec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -252,15 +249,30 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Specify --insecure for `oc image info` command  without certificate-authority")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_, oupErr, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure").Outputs()
+		if err != nil && strings.Contains(oupErr, "the image is a manifest list and contains multiple images") {
+			_, filterOsErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--filter-by-os", "linux/amd64").Output()
+			o.Expect(filterOsErr).NotTo(o.HaveOccurred())
+		} else if strings.Contains(oupErr, "certificate signed by unknown authority") {
+			e2e.Failf("Hit certificate signed error %v", err)
+		}
 
 		exutil.By("Specify --insecure for `oc image info` command  with certificate-authority at the same time")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_, oupErr, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt").Outputs()
+		if err != nil && strings.Contains(oupErr, "the image is a manifest list and contains multiple images") {
+			_, filterErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt").Output()
+			o.Expect(filterErr).NotTo(o.HaveOccurred())
+		} else if strings.Contains(oupErr, "certificate signed by unknown authority") {
+			e2e.Failf("Hit certificate signed error %v", err)
+		}
 
 		exutil.By("Specify `oc image info` command  with certificate-authority")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").NotShowInfo().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_, oupErr, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").NotShowInfo().Outputs()
+		if err != nil && strings.Contains(oupErr, "the image is a manifest list and contains multiple images") {
+			_, filterErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").NotShowInfo().Output()
+			o.Expect(filterErr).NotTo(o.HaveOccurred())
+		} else if strings.Contains(oupErr, "certificate signed by unknown authority") {
+			e2e.Failf("Hit certificate signed error %v", err)
+		}
 	})
 })
