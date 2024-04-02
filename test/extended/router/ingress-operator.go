@@ -1180,8 +1180,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrl1.create(oc)
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
-		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "1")
-		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
+		err1 := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
+		err2 := waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
+		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
 
 		exutil.By("8. Check the custom DNS management status")
 		dnsManagementPolicy1 := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/ocp64611external-wildcard", ".spec.dnsManagementPolicy")
