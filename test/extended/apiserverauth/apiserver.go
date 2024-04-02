@@ -5925,11 +5925,12 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: kewang@redhat.com
-	g.It("LEVEL0-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-ConnectedOnly-Author:kewang-Critical-10873-Access app througth secure service and regenerate service serving certs if it about to expire [Disruptive] [Slow]", func() {
+	g.It("LEVEL0-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-ConnectedOnly-Author:kewang-Critical-10873-Access app througth secure service and regenerate service serving certs if it about to expire [Slow]", func() {
 
 		var (
 			filename     = "aosqe-pod-for-ping.json"
 			podName      = "hello-pod"
+			caseID       = "ocp10873"
 			stepExecTime time.Time
 		)
 
@@ -5948,14 +5949,14 @@ EOF`, serverconf, fqdnName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("4) Create a service.")
-		template := getTestDataFilePath("ocp10873-svc.json")
+		template := getTestDataFilePath(caseID + "-svc.json")
 		svcErr := oc.Run("create").Args("-f", template).Execute()
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
 
 		stepExecTime = time.Now()
 
 		exutil.By("5) Create a nginx webserver app with deploymnet.")
-		template = getTestDataFilePath("ocp10873-dc.yaml")
+		template = getTestDataFilePath(caseID + "-dc.yaml")
 		dcErr := oc.Run("create").Args("-f", template).Execute()
 		o.Expect(dcErr).NotTo(o.HaveOccurred())
 
