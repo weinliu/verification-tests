@@ -3124,7 +3124,7 @@ func delIPFromInferface(oc *exutil.CLI, nodeName, IP, nicName string) {
 
 func removeDummyInterface(oc *exutil.CLI, nodeName, nicName string) {
 	e2e.Logf("Remove a dummy interface %s on node %s \n", nicName, nodeName)
-	cmd := fmt.Sprintf("ip a show %s && ip link del %s ", nicName, nicName)
+	cmd := fmt.Sprintf("ip a show %s && ip link del %s type dummy", nicName, nicName)
 	output, debugNodeErr := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
 	nicNotExistStr := fmt.Sprintf("Device \"%s\" does not exist", nicName)
 	if debugNodeErr != nil && strings.Contains(output, nicNotExistStr) {
@@ -3682,4 +3682,23 @@ func FindIngressVIPNode(oc *exutil.CLI, ingressVIP string) string {
 		}
 	}
 	return ""
+}
+
+// Return IPv4 address and IPv4 address with prefix
+func getIPv4AndIPWithPrefixForNICOnNode(oc *exutil.CLI, node, nic string) (string, string) {
+	cmd := fmt.Sprintf("ip -4 -brief a show %s | awk '{print $3}' ", nic)
+	output, debugNodeErr := exutil.DebugNode(oc, node, "bash", "-c", cmd)
+	o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+	pattern := `(\d+\.\d+\.\d+\.\d+/\d+)`
+	re := regexp.MustCompile(pattern)
+	matches := re.FindStringSubmatch(output)
+	o.Expect(len(matches) > 1).Should(o.BeTrue())
+	ipAddressWithPrefix := matches[1]
+	e2e.Logf("IP address with prefix:", ipAddressWithPrefix)
+
+	ipParts := strings.Split(ipAddressWithPrefix, "/")
+	ipAddress := ipParts[0]
+
+	e2e.Logf("The IPv4 of interface %s on node %s is %s and ipAddressWithPrefix is %s", nic, node, ipAddress, ipAddressWithPrefix)
+	return ipAddress, ipAddressWithPrefix
 }

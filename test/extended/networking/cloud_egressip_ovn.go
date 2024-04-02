@@ -4264,6 +4264,263 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 		})
 		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s,%s in tcpdump", freeIPs[0], freeIPs[1]))
 	})
+
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-High-68542-[Multi-NIC] EgressIP works for bonding interface as secondary NIC. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		exutil.By("create new namespace\n")
+		ns1 := oc.Namespace()
+
+		exutil.By("Prepare bonding interface for egress node\n")
+		e2e.Logf("Using node %s as egress node", workers[0])
+		egressNode := workers[0]
+		dummyNICName := "test-68542"
+		exutil.By("Create one dummy interface on egress node\n")
+		defer removeDummyInterface(oc, egressNode, dummyNICName)
+		addDummyInferface(oc, egressNode, "120.10.0.100", dummyNICName)
+
+		exutil.By("Get secondary NIC IP\n")
+		secondNICIP, _ := getIPv4AndIPWithPrefixForNICOnNode(oc, egressNode, secondaryInf)
+
+		exutil.By("Install nmstate operator and create nmstate CR")
+		installNMstateOperator(oc)
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		exutil.By("Creating bonding interface by nmstate.\n")
+		policyName := "bond-policy-68542"
+		bondInfName := "bond01"
+		bondPolicyTemplate := generateTemplateAbsolutePath("bonding-policy-template.yaml")
+		bondPolicy := bondPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: egressNode,
+			ifacename:  bondInfName,
+			descr:      "create bond",
+			port1:      secondaryInf,
+			port2:      dummyNICName,
+			state:      "up",
+			ipaddrv4:   secondNICIP,
+			template:   bondPolicyTemplate,
+		}
+		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, egressNode, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, bondPolicy.ifacename) {
+				exutil.DebugNodeWithChroot(oc, egressNode, "nmcli", "con", "delete", bondPolicy.ifacename)
+			}
+		}()
+
+		configErr1 := configBondWithIP(oc, bondPolicy)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify the policy is applied")
+		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		exutil.By("Apply EgressLabel Key to egress nodes.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel)
+
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("Create one egressip object\n")
+		freeIPs := findFreeIPsForCIDRs(oc, egressNode, dstCIDR, 1)
+		egressip1 := egressIPResource1{
+			name:          "egressip-68542",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		exutil.By("Apply a label to test namespace.\n")
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Apply label to one pod in test namespace\n")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
+		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check only one EgressIP assigned in the object.\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("Enabled secondary NIC IP forwarding on egress node.\n")
+		defer disableIPForwardingOnSpecNodeNIC(oc, egressNode, secondaryInf)
+		defer disableIPForwardingOnSpecNodeNIC(oc, egressNode, bondInfName)
+		enableIPForwardingOnSpecNodeNIC(oc, egressNode, secondaryInf)
+		enableIPForwardingOnSpecNodeNIC(oc, egressNode, bondInfName)
+
+		exutil.By("Start tcpdump on egress node\n")
+		exutil.SetNamespacePrivileged(oc, ns1)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", bondInfName, dstHost)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+egressNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Access exteranl IP from pod")
+		//Wait 5 seconds to let the tcpdump ready for capturing traffic
+		time.Sleep(5 * time.Second)
+		pingCmd := fmt.Sprintf("ping -c4 %s", dstHost)
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Check captured packets including egressIP")
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The captured packet is %s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), freeIPs[0])).To(o.BeTrue())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-High-68541-[Multi-NIC] EgressIP works for vlan interface as secondary NIC. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		exutil.By("get temp namespace\n")
+		ns1 := oc.Namespace()
+		e2e.Logf("Using node %s as egress node", workers[0])
+		egressNode := workers[0]
+
+		exutil.By("Install nmstate operator and create nmstate CR")
+		installNMstateOperator(oc)
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		exutil.By("Creating vlan interface by nmstate.\n")
+		policyName := "vlan-policy-68541"
+		vlanInfIP := "192.168.225.25"
+		vlanInf := "enp1s0.101"
+		vlanPolicyTemplate := generateTemplateAbsolutePath("vlan-policy-base-eth-template.yaml")
+		vlanPolicy := vlanPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: egressNode,
+			ifacename:  vlanInf,
+			descr:      "create vlan",
+			baseiface:  "enp1s0",
+			vlanid:     101,
+			state:      "up",
+			ipaddrv4:   vlanInfIP,
+			template:   vlanPolicyTemplate,
+		}
+		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, egressNode, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, vlanPolicy.ifacename) {
+				exutil.DebugNodeWithChroot(oc, egressNode, "nmcli", "con", "delete", vlanPolicy.ifacename)
+			}
+		}()
+		configErr1 := vlanPolicy.configNNCPWithIP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		exutil.By("Apply EgressLabel Key to egress nodes.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel)
+
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("Create one egressip object\n")
+		egressIP := "192.168.225.100"
+		egressip1 := egressIPResource1{
+			name:          "egressip-68541",
+			template:      egressIP2Template,
+			egressIP1:     egressIP,
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		exutil.By("Apply a label to test namespace.\n")
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Apply label to one pod in test namespace\n")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
+		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check only one EgressIP assigned in the object.\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("Enabled secondary NIC IP forwarding on egress node.\n")
+		vlanInterfaceInForwading := fmt.Sprintf("%s/101", secondaryInf)
+		defer disableIPForwardingOnSpecNodeNIC(oc, egressNode, vlanInterfaceInForwading)
+		enableIPForwardingOnSpecNodeNIC(oc, egressNode, vlanInterfaceInForwading)
+
+		exutil.By("Create vlan interface on external host\n")
+		defer func() {
+			vlanCmd := "ip link show sriovpr.101"
+			err = sshRunCmd("10.8.1.181", "root", vlanCmd)
+			if err == nil {
+				vlanDelCmd := "ip link del sriovpr.101"
+				errDel := sshRunCmd("10.8.1.181", "root", vlanDelCmd)
+				o.Expect(errDel).NotTo(o.HaveOccurred())
+			}
+		}()
+		ipVlanExternalHost := "192.168.225.1"
+		vlanCmd := "ip link add link sriovpr name sriovpr.101 type vlan id 101 && ip addr add 192.168.225.1/24 dev sriovpr.101 && ip link set sriovpr.101 up"
+		err = sshRunCmd("10.8.1.181", "root", vlanCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Start tcpdump on egress node\n")
+		exutil.SetNamespacePrivileged(oc, ns1)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", secondaryInf, ipVlanExternalHost)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+egressNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Access external vlan IP from pod")
+		//Wait 5 seconds to let the tcpdump ready for capturing traffic
+		time.Sleep(5 * time.Second)
+		pingCmd := fmt.Sprintf("ping -c4 %s", ipVlanExternalHost)
+		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Check capured packets including egressIP")
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The captured packet is %s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), egressIP)).To(o.BeTrue())
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {

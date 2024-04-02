@@ -42,6 +42,7 @@ type bondPolicyResource struct {
 	state      string
 	port1      string
 	port2      string
+	ipaddrv4   string
 	template   string
 }
 
@@ -54,6 +55,7 @@ type vlanPolicyResource struct {
 	state      string
 	baseiface  string
 	vlanid     int
+	ipaddrv4   string
 	template   string
 }
 
@@ -170,9 +172,26 @@ func configBond(oc *exutil.CLI, bondpolicy bondPolicyResource) error {
 	}
 	return nil
 }
+func configBondWithIP(oc *exutil.CLI, bondpolicy bondPolicyResource) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bondpolicy.template, "-p", "NAME="+bondpolicy.name, "NODELABEL="+bondpolicy.nodelabel, "LABELVALUE="+bondpolicy.labelvalue, "IFACENAME="+bondpolicy.ifacename, "DESCR="+bondpolicy.descr, "STATE="+bondpolicy.state, "PORT1="+bondpolicy.port1, "PORT2="+bondpolicy.port2, "IPADDRV4="+bondpolicy.ipaddrv4)
+	if err != nil {
+		e2e.Logf("Error configure bond %v", err)
+		return err
+	}
+	return nil
+}
 
 func (vpr *vlanPolicyResource) configNNCP(oc *exutil.CLI) error {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", vpr.template, "-p", "NAME="+vpr.name, "NODELABEL="+vpr.nodelabel, "LABELVALUE="+vpr.labelvalue, "IFACENAME="+vpr.ifacename, "DESCR="+vpr.descr, "STATE="+vpr.state, "BASEIFACE="+vpr.baseiface, "VLANID="+strconv.Itoa(vpr.vlanid))
+	if err != nil {
+		e2e.Logf("Error configure vlan %v", err)
+		return err
+	}
+	return nil
+}
+
+func (vpr *vlanPolicyResource) configNNCPWithIP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", vpr.template, "-p", "NAME="+vpr.name, "NODELABEL="+vpr.nodelabel, "LABELVALUE="+vpr.labelvalue, "IFACENAME="+vpr.ifacename, "DESCR="+vpr.descr, "STATE="+vpr.state, "BASEIFACE="+vpr.baseiface, "VLANID="+strconv.Itoa(vpr.vlanid), "IPADDRV4="+vpr.ipaddrv4)
 	if err != nil {
 		e2e.Logf("Error configure vlan %v", err)
 		return err
