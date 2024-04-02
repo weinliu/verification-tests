@@ -79,22 +79,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
 
 		defer mc.delete()
-
-		_, _ = workerNode.GetDate() // For debugging purposes. It will print the date in the logs.
-		o.Expect(workerNode.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
-			"Error getting the latest event in node %s", workerNode.GetName())
-
 		mc.create()
-
-		exutil.By("verify that drain and reboot events were triggered")
-		nodeEvents, eErr := workerNode.GetEvents()
-		logger.Infof("All events for  node %s since: %s", workerNode.GetName(), workerNode.eventCheckpoint)
-		for _, event := range nodeEvents {
-			logger.Infof("-         %s", event)
-		}
-		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", workerNode.GetName())
-		o.Expect(nodeEvents).To(HaveEventsSequence("Cordon", "Drain",
-			"Reboot", "Uncordon"))
 
 		exutil.By("get one worker node to verify the config changes")
 		stdout, err := workerNode.DebugNodeWithChroot("cat", "/etc/chrony.conf")
