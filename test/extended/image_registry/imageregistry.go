@@ -115,7 +115,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Critical-24262-Image registry operator can read/overlap global proxy setting [Disruptive]", func() {
+	g.It("Author:wewang-LEVEL0-Critical-24262-Image registry operator can read/overlap global proxy setting [Disruptive]", func() {
 		var (
 			buildFile = filepath.Join(imageRegistryBaseDir, "inputimage.yaml")
 			buildsrc  = bcSource{
@@ -1475,7 +1475,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:jitli-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:jitli-LEVEL0-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials", func() {
 
 		g.By("Create route to expose the registry")
 		routeName := getRandomString()
