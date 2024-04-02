@@ -599,8 +599,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		)
 		isarr := [2]string{"ociapp", "dockerapp"}
 		imagearr := [2]string{"quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"}
-		amdid := [2]string{"fc875386057e8d1f478f11b00cfdad723ec49845b4aacd8c4b2588aba4ef715f", "b97242f89c8a29d13aea12843a08441a4bbfc33528f55b60366c1d8f6923d0d4"}
-		armid := [2]string{"9a37fcf4311d4028ef67d425ed29f2996e3e1666d3d45c6e258b3e023ce9c5c9", "bffe63f0059eb501c7705ef086bb4fed44620c9a6ac80e1bf25a6d831c8a1cdb"}
+		amdid := [2]string{"sha256:97923994fdc1c968eed6bdcb64be8e70d5356b88cfab0481cb6b73a4849361b7", "0415f56ccc05526f2af5a7ae8654baec97d4a614f24736e8eef41a4591f08019"}
+		armid := [2]string{"sha256:bd0be70569d8b18321d7d3648d51925e22865df760c5379b69762f302cacd30d", "sha256:bf920ca7f146b802e1c9a8aab1fba3a3fe601c56b075ecef90834c13b90bb5bb"}
 		isimportsrc.namespace = oc.Namespace()
 		isimportsrc.mode = "PreserveOriginal"
 
