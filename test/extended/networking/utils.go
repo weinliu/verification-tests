@@ -2753,19 +2753,12 @@ func getOVNMetricsInSpecificContainer(oc *exutil.CLI, containerName string, podN
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		if strings.Contains(metricName, "ovnkube_controller_pod") {
-			metricOutput, getMetricErr := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==1{print $2}'").Output()
-			o.Expect(getMetricErr).NotTo(o.HaveOccurred())
-			metricValue = strings.TrimSpace(string(metricOutput))
-			e2e.Logf("The output of the %s is : %v", metricName, metricValue)
-			return true, nil
-		} else {
-			metricOutput, getMetricErr := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
-			o.Expect(getMetricErr).NotTo(o.HaveOccurred())
-			metricValue = strings.TrimSpace(string(metricOutput))
-			e2e.Logf("The output of the %s is : %v", metricName, metricValue)
-			return true, nil
-		}
+		metricOutput, getMetricErr := exec.Command("bash", "-c", "cat "+output+" | grep -e '^"+metricName+" ' | awk 'END {print $2}'").Output()
+		o.Expect(getMetricErr).NotTo(o.HaveOccurred())
+		metricValue = strings.TrimSpace(string(metricOutput))
+		o.Expect(metricValue).ShouldNot(o.BeEmpty())
+		e2e.Logf("The output of the %s is : %v", metricName, metricValue)
+		return true, nil
 
 	})
 	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
