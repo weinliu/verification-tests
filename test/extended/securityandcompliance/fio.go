@@ -355,6 +355,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
 			fi1.checkFileintegrityStatus(oc, "running")
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			fi1.assertNodesConditionNotEmpty(oc)
 			fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 		}
 
@@ -381,6 +382,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
 		aidpodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l app=aide-example-fileintegrity", "-n", fi1.namespace,
 			"-o=jsonpath={.items[*].metadata.name}").Output()
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("aidepodNames is %s ", aidpodNames))
@@ -388,11 +390,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		for _, v := range aidpodName {
 			newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", v, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		}
-		fionodeNames, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", fi1.namespace, "-l node.openshift.io/os_id=rhcos",
-			"-o=jsonpath={.items[*].metadata.name}").Output()
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("fionodeNames is %s ", fionodeNames))
-		fionodeName := strings.Fields(fionodeNames)
-		for _, node := range fionodeName {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fi1.namespace, "-l app=aide-"+fi1.name, "-o=jsonpath={.items[*].spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodes := strings.Fields(output)
+		for _, node := range nodes {
 			fi1.checkFileintegritynodestatus(oc, node, "Succeeded")
 			fi1.checkDBBackupResult(oc, node)
 		}
@@ -437,7 +438,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.nodeselectorvalue = ""
 
 		g.By("Create taint")
-		nodeName := fi1.getNodeName(oc)
+		nodeName := getOneWorkerNodeName(oc)
 		defer func() {
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.taints}").Output()
 			if strings.Contains(output, "value1") {
@@ -497,7 +498,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.nodeselectorvalue = ""
 
 		g.By("Create taint")
-		nodeName := fi1.getNodeName(oc)
+		nodeName := getOneWorkerNodeName(oc)
 		defer taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule-", "key2=value2:NoExecute-")
 		taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule", "key2=value2:NoExecute")
 
