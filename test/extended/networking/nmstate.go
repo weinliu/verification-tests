@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-StagerunBoth-Author:qiowang-High-47088-NMState Operator installation ", func() {
+	g.It("LEVEL0-NonHyperShiftHOST-StagerunBoth-Author:qiowang-Critical-47088-NMState Operator installation ", func() {
 		g.By("Checking nmstate operator installation")
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		e2e.Logf("SUCCESS - NMState operator installed")
@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - interface is removed from the node")
 	})
 
-	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46329-Configure bond on node [Disruptive]", func() {
+	g.It("LEVEL0-NonHyperShiftHOST-Author:qiowang-Critical-46329-Configure bond on node [Disruptive]", func() {
 		g.By("Check the platform if it is suitable for running the test")
 		if !(isPlatformSuitableForNMState(oc)) {
 			g.Skip("Skipping for unsupported platform!")

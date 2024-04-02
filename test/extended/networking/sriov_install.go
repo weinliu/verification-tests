@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-networking] SDN sriov installation", func() {
 		}
 
 	})
-	g.It("Author:zzhao-High-55957-Sriov operator can be setup ", func() {
+	g.It("LEVEL0-Author:zzhao-High-55957-Sriov operator can be setup ", func() {
 		var (
 			buildPruningBaseDir   = exutil.FixturePath("testdata", "networking/sriov")
 			namespaceTemplate     = filepath.Join(buildPruningBaseDir, "namespace-template.yaml")

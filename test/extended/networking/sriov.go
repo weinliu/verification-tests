@@ -910,7 +910,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(arpIpv6MacOutput).To(o.ContainSubstring(newPodMac))
 
 	})
-	g.It("Author:zzhao-NonPreRelease-Longduration-Critical-49860-pods numbers same with VF numbers can be still working after worker reboot [Disruptive]", func() {
+	g.It("LEVEL0-Author:zzhao-NonPreRelease-Longduration-Critical-49860-pods numbers same with VF numbers can be still working after worker reboot [Disruptive]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking/sriov")
 			sriovNeworkTemplate    = filepath.Join(buildPruningBaseDir, "sriovnetwork-whereabouts-template.yaml")
