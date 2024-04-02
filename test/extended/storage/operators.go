@@ -310,6 +310,41 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: pewang@redhat.com
+	// OCP-72117-[Cluster-CSI-Snapshot-Controller-Operator] should enable the VolumeGroupSnapshot
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:pewang-High-72117-[Cluster-CSI-Snapshot-Controller-Operator] should enable the VolumeGroupSnapshot", func() {
+
+		// TODO: Remove the skip condition when VolumeGroupSnapshot feature graduate to GA
+		// Skip if TechPreviewNoUpgrade is not enabled
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skipping because the TechPreviewNoUpgrade is not enabled on the test cluster.")
+		}
+
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
+
+		var (
+			ccscOperatorNs        = "openshift-cluster-storage-operator"
+			csiSnapshotWebhook    = newDeployment(setDeploymentName("csi-snapshot-webhook"), setDeploymentNamespace(ccscOperatorNs), setDeploymentApplabel("app=csi-snapshot-webhook"))
+			csiSnapshotController = newDeployment(setDeploymentName("csi-snapshot-controller"), setDeploymentNamespace(ccscOperatorNs), setDeploymentApplabel("app=csi-snapshot-webhook"))
+		)
+
+		exutil.By("Check the snapshot controller and snapshot webhook deployment VolumeGroupSnapshot args added")
+		csiSnapshotControllerArgs := csiSnapshotController.getSpecifiedJSONPathValue(oc, "{.spec.template.spec.containers[?(@.name==\"snapshot-controller\")].args}")
+		o.Expect(csiSnapshotControllerArgs).Should(o.ContainSubstring("--enable-volume-group-snapshots"), "The snapshot controller VolumeGroupSnapshot args is not enabled")
+
+		csiSnapshotWebhookArgs := csiSnapshotWebhook.getSpecifiedJSONPathValue(oc, "{.spec.template.spec.containers[?(@.name==\"webhook\")].args}")
+		o.Expect(csiSnapshotWebhookArgs).Should(o.ContainSubstring("--enable-volume-group-snapshot-webhook"), "The snapshot webhook VolumeGroupSnapshot args is not enabled")
+
+		exutil.By("Check the VolumeGroupSnapshot CRDs created")
+		o.Expect(isCRDSpecificFieldExist(oc, "volumegroupsnapshotclasses.kind")).Should(o.BeTrue())
+		o.Expect(isCRDSpecificFieldExist(oc, "volumegroupsnapshots.kind")).Should(o.BeTrue())
+		o.Expect(isCRDSpecificFieldExist(oc, "volumegroupsnapshotcontents.kind")).Should(o.BeTrue())
+
+	})
+
 	// author: wduan@redhat.com
 	// OCP-70338-[CSI-Driver-Operator] TLSSecurityProfile setting for Kube RBAC cipher suites
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:wduan-Medium-70338-[CSI-Driver-Operator] TLSSecurityProfile setting for Kube RBAC cipher suites. [Disruptive]", func() {
