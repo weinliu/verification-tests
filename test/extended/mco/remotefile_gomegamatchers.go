@@ -32,6 +32,15 @@ func (matcher *remoteFileMethodMatcher) Match(actual interface{}) (success bool,
 		remoteFilePtr = &remoteFileObj
 	}
 
+	// If the info was not already gathered, we gather it
+	if !remoteFilePtr.HasInfo() {
+		err = remoteFilePtr.Fetch()
+		logger.Infof("Gathering info for %s", remoteFilePtr)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	// Get a reflect.Value representing the instance
 	value := reflect.ValueOf(remoteFilePtr)
 

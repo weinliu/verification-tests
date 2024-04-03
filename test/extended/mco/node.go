@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,7 +87,7 @@ func (n *Node) DebugNodeWithChrootStd(cmd ...string) (string, string, error) {
 		if i > 0 {
 			logger.Infof("Error happened: %s.\nRetrying command. Num retries: %d", err, i)
 		}
-		stdout, stderr, err := n.oc.Run("debug").Args(cargs...).Outputs()
+		stdout, stderr, err = n.oc.Run("debug").Args(cargs...).Outputs()
 		if err == nil {
 			return stdout, stderr, nil
 		}
@@ -200,8 +201,85 @@ func (n *Node) UnmaskService(svcName string) (string, error) {
 }
 
 // GetUnitProperties executes `systemctl show $unitname`, can be used to checkout service dependency
-func (n *Node) GetUnitProperties(unitName string) (string, error) {
-	return n.DebugNodeWithChroot("systemctl", "show", unitName)
+func (n *Node) GetUnitProperties(unitName string, args ...string) (string, error) {
+	cmd := append([]string{"systemctl", "show", unitName}, args...)
+	stdout, _, err := n.DebugNodeWithChrootStd(cmd...)
+	return stdout, err
+}
+
+// GetUnitActiveEnterTime returns the last time when the unit entered in active status
+func (n *Node) GetUnitActiveEnterTime(unitName string) (time.Time, error) {
+	cmdOut, err := n.GetUnitProperties(unitName, "--timestamp=unix", "-P", "ActiveEnterTimestamp")
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	logger.Infof("Active enter time output: [%s]", cmdOut)
+
+	// The output should have this format
+	// sh-5.1# systemctl show crio.service --timestamp=unix -P ActiveEnterTimestamp
+	// @1709918801
+	r := regexp.MustCompile(`^\@(?P<unix_timestamp>[0-9]+)$`)
+	match := r.FindStringSubmatch(cmdOut)
+	if len(match) == 0 {
+		msg := fmt.Sprintf("Wrong property format. Expected a format like '@1709918801', but got '%s'", cmdOut)
+		logger.Infof(msg)
+		return time.Time{}, fmt.Errorf(msg)
+	}
+	unixTimeIndex := r.SubexpIndex("unix_timestamp")
+	unixTime := match[unixTimeIndex]
+
+	iUnixTime, err := strconv.ParseInt(unixTime, 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	activeEnterTime := time.Unix(iUnixTime, 0)
+
+	logger.Infof("Unit %s ActiveEnterTimestamp %s", unitName, activeEnterTime)
+
+	return activeEnterTime, nil
+}
+
+// GetUnitActiveEnterTime returns the last time when the unit entered in active status
+// Parse ExecReload={ path=/bin/kill ; argv[]=/bin/kill -s HUP $MAINPID ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }
+// If the service was never reloaded, then we return an empty time.Time{} and no error.
+func (n *Node) GetUnitExecReloadStartTime(unitName string) (time.Time, error) {
+	cmdOut, err := n.GetUnitProperties(unitName, "--timestamp=unix", "-P", "ExecReload")
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	logger.Infof("Reload start time output: [%s]", cmdOut)
+
+	// The output should have this format
+	// sh-5.1# systemctl show crio.service --timestamp=unix -P ExecReload
+	// @1709918801
+	r := regexp.MustCompile(`start_time=\[(?P<unix_timestamp>@[0-9]+|n\/a)\]`)
+	match := r.FindStringSubmatch(cmdOut)
+	if len(match) == 0 {
+		msg := fmt.Sprintf("Wrong property format. Expected a format like 'start_time=[@1709918801]', but got '%s'", cmdOut)
+		logger.Infof(msg)
+		return time.Time{}, fmt.Errorf(msg)
+	}
+	unixTimeIndex := r.SubexpIndex("unix_timestamp")
+	unixTime := match[unixTimeIndex]
+
+	if unixTime == "n/a" {
+		logger.Infof("Crio was never reloaded.  Reload Start Time = %s", unixTime)
+		return time.Time{}, nil
+	}
+
+	iUnixTime, err := strconv.ParseInt(unixTime, 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	activeEnterTime := time.Unix(iUnixTime, 0)
+
+	logger.Infof("Unit %s ExecReload start time %s", unitName, activeEnterTime)
+
+	return activeEnterTime, nil
 }
 
 // GetUnitDependencies executes `systemctl list-dependencies` with arguments like --before --after

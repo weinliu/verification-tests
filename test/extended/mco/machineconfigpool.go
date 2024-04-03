@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -888,6 +890,70 @@ func (mcp *MachineConfigPool) AllNodesUseArch(arch architecture.Architecture) bo
 		}
 	}
 	return true
+}
+
+// CaptureAllNodeLogsBeforeRestart will poll the logs of every node in the pool until thy are restarted and will return them once all nodes have been restarted
+func (mcp *MachineConfigPool) CaptureAllNodeLogsBeforeRestart() (map[string]string, error) {
+
+	type nodeLogs struct {
+		nodeName string
+		nodeLogs string
+		err      error
+	}
+
+	returnMap := map[string]string{}
+	c := make(chan nodeLogs)
+	var wg sync.WaitGroup
+
+	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+
+	logger.Infof("Waiting %s until all nodes nodes %s MCP are restarted and their logs are captured before restart", timeToWait.String(), mcp.GetName())
+
+	nodes, err := mcp.GetNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range nodes {
+		node := item
+		wg.Add(1)
+		go func() {
+			defer g.GinkgoRecover()
+			defer wg.Done()
+
+			logger.Infof("Capturing node %s logs until restart", node.GetName())
+			logs, err := node.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())
+			if err != nil {
+				logger.Errorf("Error while tring to capture the MCD lgos in node %s before restart", node.GetName())
+			} else {
+				logger.Infof("Captured MCD logs before node %s was rebooted", node.GetName())
+			}
+
+			c <- nodeLogs{nodeName: node.GetName(), nodeLogs: logs, err: err}
+		}()
+	}
+
+	// We are using a 0 size channel, so every previous channel call will be locked on "c <- nodeLogs" if we directly call wg.Wait because noone is already reading
+	// One solution is to wait inside a goroutine and close the channel once every node has reported his log
+	// Another solution could be to use a channel with a size = len(nodes) like `c := make(chan nodeLogs, len(nodes))` so that all tasks can write in the channel without being locked
+	go func() {
+		defer g.GinkgoRecover()
+
+		logger.Infof("Waiting for all pre-reboot logs to be collected")
+		wg.Wait()
+		logger.Infof("All logs collected. Closing the channel")
+		close(c)
+	}()
+
+	// Here we read from the channel and unlock the "c <- nodeLogs" instruction. If we call wg.Wait before this point, tasks will be locked there forever
+	for nl := range c {
+		if nl.err != nil {
+			return nil, err
+		}
+		returnMap[nl.nodeName] = nl.nodeLogs
+	}
+
+	return returnMap, nil
 }
 
 // GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time

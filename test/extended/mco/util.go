@@ -811,7 +811,18 @@ func PtrTo[T any](v T) *T {
 
 // RemoveAllMCOPods removes all MCO pods in openshift-machine-config-operator namespace
 func RemoveAllMCOPods(oc *exutil.CLI) error {
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", MachineConfigNamespace, "--all").Execute()
+	return removeMCOPods(oc, "--all")
+}
+
+// RemoveAllMCDPods removes all MCD pods in openshift-machine-config-operator namespace
+func RemoveAllMCDPods(oc *exutil.CLI) error {
+	return removeMCOPods(oc, "-l", "k8s-app=machine-config-daemon")
+}
+
+// removeAllMCOPods removes all MCO pods in openshift-machine-config-operator namespace matching the given selector args
+func removeMCOPods(oc *exutil.CLI, argsSelector ...string) error {
+	args := append([]string{"pods", "-n", MachineConfigNamespace}, argsSelector...)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(args...).Execute()
 
 	if err != nil {
 		logger.Errorf("Cannot delete the pods in %s namespace", MachineConfigNamespace)

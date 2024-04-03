@@ -349,3 +349,8 @@ func (rf RemoteFile) Read() (RemoteFile, error) {
 func (rf RemoteFile) String() string {
 	return fmt.Sprintf("file %s in node %s", rf.fullPath, rf.node.GetName())
 }
+
+// HasInfo returns true if the remote file has been already fetched/read
+func (rf RemoteFile) HasInfo() bool {
+	return len(rf.statData) > 0
+}

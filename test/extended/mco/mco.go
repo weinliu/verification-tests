@@ -4360,6 +4360,9 @@ func checkDegraded(mcp *MachineConfigPool, expectedMessage, expectedReason, degr
 	o.EventuallyWithOffset(offset, mco, "5m", "10s").Should(HaveConditionField("Upgradeable", "message", o.ContainSubstring(expectedCOMessage)),
 		"co/machine-config Upgradeable condition message is not the expected one: %s", mco.GetConditionByType("Upgradeable"))
 
+	o.ConsistentlyWithOffset(offset, mco, "1m", "10s").Should(HaveConditionField("Available", "status", o.Equal("True")),
+		"co/machine-config should never have condition Available=false")
+
 	logger.Infof("OK!\n")
 }
 
