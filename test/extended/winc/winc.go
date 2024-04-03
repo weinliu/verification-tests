@@ -87,7 +87,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}{
 			{
 				folder:   "/payload",
-				expected: "azure-cloud-node-manager.exe cni containerd csi-proxy generated hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe",
+				expected: "azure-cloud-node-manager.exe cni containerd csi-proxy ecr-credential-provider.exe generated hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe",
 			},
 			{
 				folder:   "/payload/containerd",
@@ -1252,7 +1252,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Longduration-Author:rrasouli-NonPreRelease-High-35707-Re-create Windows nodes not matching wmco version annotation [Slow][Serial][Disruptive]", func() {
 		if iaasPlatform == "none" {
 			g.Skip(fmt.Sprintf("%s does not support LB nor machineset, skipping", iaasPlatform))
-		}		
+		}
 		// go routine parameters
 		var ctx context.Context
 		var cancel context.CancelFunc

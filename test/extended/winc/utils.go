@@ -251,7 +251,6 @@ func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
 		return nutanix_proxy_host
 	case "none":
 		sshBastion := os.Getenv("QE_BASTION_PUBLIC_ADDRESS")
-		e2e.Logf("sshBastion: %v", sshBastion)
 		return sshBastion
 	default:
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
@@ -275,7 +274,6 @@ func getBastionSSHUser(iaasPlatform string) (user string) {
 		return sshProxyUser
 	} else {
 		sshUser := os.Getenv("QE_BASTION_SSH_USER")
-		e2e.Logf("sshUser: %v", sshUser)
 		if sshUser != "" {
 			return sshUser
 		}
