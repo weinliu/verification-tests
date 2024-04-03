@@ -1,6 +1,7 @@
 package imageregistry
 
 import (
+	"encoding/base64"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -75,4 +76,35 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		imagePruneLog(oc, "", "the server could not find the requested resource (get deploymentconfigs.apps.openshift.io)")
 	})
 
+	g.It("NonHyperShiftHOST-Author:wewang-High-66667-Install Image Registry operator after cluster install successfully", func() {
+		g.By("Check image registry operator installed optionally")
+		if !checkOptionalOperatorInstalled(oc, "ImageRegistry") {
+			g.Skip("Skip for the test due to image registry not installed")
+		} else {
+			baseCapSet, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].spec.capabilities.baselineCapabilitySet}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if baseCapSet != "None" {
+				g.Skip("Skip for the test when registry is installed in default")
+			}
+		}
+
+		g.By("Check serviceaccount and pull secret created after the project created")
+		oc.SetupProject()
+		secretName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("sa/builder", "-o=jsonpath={.imagePullSecrets[0].name}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		dockerCfg, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret/"+secretName, "-o=jsonpath={.data.\\.dockercfg}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		credsTXT, err := base64.StdEncoding.DecodeString(dockerCfg)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(credsTXT), "image-registry.openshift-image-registry.svc:5000")).To(o.BeTrue())
+
+		g.By("Create a imagestream with pullthrough")
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("registry.redhat.io/ubi8/httpd-24:latest", "httpd:latest", "--reference-policy=local", "--insecure", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "httpd", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("deployment", "pull-test", "--image", "image-registry.openshift-image-registry.svc:5000/"+oc.Namespace()+"/httpd:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=pull-test", 1)
+	})
 })
