@@ -1037,4 +1037,126 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - default routes are removed from the node")
 	})
 
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-71145-configure bond interface and 70 vlans based on the bond then reboot node, check the boot time [Disruptive] [Slow]", func() {
+		e2e.Logf("It is for OCPBUGS-22771, OCPBUGS-25753, OCPBUGS-26026")
+		exutil.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
+
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		var ifacesAdded []string
+		for i := 101; i <= 170; i++ {
+			ifacesAdded = append(ifacesAdded, "bond12."+strconv.Itoa(i))
+		}
+		ifacesAdded = append(ifacesAdded, "bond12", "dummy1", "dummy2")
+
+		exutil.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		exutil.By("2. Create bond interface and 70 vlans based on the bond")
+		exutil.By("2.1 Configure NNCP for bond and vlans")
+		policyName := "ocpbug-22771-25753-26026-bond-70vlans"
+		bondPolicyTemplate := generateTemplateAbsolutePath("ocpbug-22771-25753-26026.yaml")
+		bondPolicy := bondPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "bond12",
+			descr:      "test bond-vlans",
+			port1:      "dummy1",
+			port2:      "dummy2",
+			state:      "up",
+			template:   bondPolicyTemplate,
+		}
+		defer deleteNNCP(oc, policyName)
+		defer func() {
+			allIfaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			var deferCmd string
+			for _, ifaceAdded := range ifacesAdded {
+				if strings.Contains(allIfaces, ifaceAdded) {
+					deferCmd = deferCmd + " nmcli con delete " + ifaceAdded + ";"
+				}
+			}
+			if deferCmd != "" {
+				exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", deferCmd)
+			}
+		}()
+		configErr := configBond(oc, bondPolicy)
+		o.Expect(configErr).NotTo(o.HaveOccurred())
+
+		exutil.By("2.2 Verify the policy is applied")
+		nncpErr := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		exutil.By("2.3 Verify the status of enactments is updated")
+		nnceName := nodeName + "." + policyName
+		nnceErr := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		exutil.By("2.4 Verify the bond and vlans found in node network state")
+		iface, nnsIfaceErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[*].name}`).Output()
+		o.Expect(nnsIfaceErr).NotTo(o.HaveOccurred())
+		for _, ifaceAdded := range ifacesAdded {
+			o.Expect(strings.Contains(iface, ifaceAdded)).Should(o.BeTrue())
+		}
+		e2e.Logf("SUCCESS - the bond and vlans found in node network state")
+
+		exutil.By("2.5 Verify the bond and vlans are shown on the node")
+		ifaceInfo, ifaceErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr).NotTo(o.HaveOccurred())
+		for _, ifaceAdded := range ifacesAdded {
+			o.Expect(strings.Contains(ifaceInfo, ifaceAdded)).Should(o.BeTrue())
+		}
+		e2e.Logf("SUCCESS - bond and vlans are shown on the node")
+
+		exutil.By("3. Reboot the node")
+		defer checkNodeStatus(oc, nodeName, "Ready")
+		rebootNode(oc, nodeName)
+		checkNodeStatus(oc, nodeName, "NotReady")
+		checkNodeStatus(oc, nodeName, "Ready")
+
+		exutil.By("4. Check the boot time")
+		cmd := `systemd-analyze | head -1`
+		analyzeOutput, analyzeErr := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmd)
+		o.Expect(analyzeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Expected boot time should be less than 3 minutes(180s)")
+		reTime := regexp.MustCompile(`(\(initrd\) \+ ?)([\s\S]+)( \(userspace\)?)`)
+		bootTime := reTime.FindStringSubmatch(analyzeOutput)[2]
+		e2e.Logf("boot time(userspace) is: %v", bootTime)
+		var totalSec int
+		if strings.Contains(bootTime, "min") {
+			reMin := regexp.MustCompile(`(\d+)min`)
+			getMin := reMin.FindStringSubmatch(bootTime)[1]
+			bootMin, _ := strconv.Atoi(getMin)
+			totalSec = totalSec + bootMin*60
+		}
+		reSec := regexp.MustCompile(`(\d+)(\.\d+)?s`)
+		getSec := reSec.FindStringSubmatch(bootTime)[1]
+		bootSec, _ := strconv.Atoi(getSec)
+		totalSec = totalSec + bootSec
+		e2e.Logf("boot total seconds(userspace) is: %v", totalSec)
+		o.Expect(totalSec < 180).To(o.BeTrue())
+
+		exutil.By("5. Check the node logs")
+		journalCmd := `journalctl -u ovs-configuration -b`
+		logs, logsErr := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", journalCmd)
+		o.Expect(logsErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(logs, "Cannot bring up connection br-ex after 10 attempts")).ShouldNot(o.BeTrue())
+		o.Expect(strings.Contains(logs, "configure-ovs exited with error")).ShouldNot(o.BeTrue())
+	})
+
 })
