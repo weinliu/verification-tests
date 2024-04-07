@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-59668 [MicroShift] [Dynamic PV] [xfs] volumes should store data and allow exec of files on the volume
-	g.It("MicroShiftOnly-Author:pewang-High-59668-[MicroShift] [Default Storageclass] [Dynamic Provision] [xfs] volume should be stored data and allowed exec of files", func() {
+	g.It("MicroShiftOnly-Author:pewang-LEVEL0-High-59668-[MicroShift] [Default Storageclass] [Dynamic Provision] [xfs] volume should be stored data and allowed exec of files", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID             = "59668"
@@ -98,7 +98,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59667-[MicroShift] Cluster should have no more than one default storageclass defined, PVC provisioning without specifying storagclass should succeed while multiple storageclass present
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59667-[MicroShift] Cluster should have no more than one default storageclass defined, PVC provisioning without specifying storagclass should succeed while multiple storageclass present", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59667-[MicroShift] Cluster should have no more than one default storageclass defined, PVC provisioning without specifying storagclass should succeed while multiple storageclass present", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID               = "59667"
@@ -246,7 +246,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59657-[MicroShift] Dynamic provision using storage class with option volumeBindingMode set to Immediate
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59657-[MicroShift] Dynamic provision using storage class with option volumeBindingMode set to Immediate", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59657-[MicroShift] Dynamic provision using storage class with option volumeBindingMode set to Immediate", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID               = "59657"
@@ -291,7 +291,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59659-[MicroShift] User can create PVC with Filesystem VolumeMode
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59659-[MicroShift] User can create PVC with Filesystem VolumeMode", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59659-[MicroShift] User can create PVC with Filesystem VolumeMode", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID               = "59659"
@@ -330,7 +330,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59658-[MicroShift] User can create PVC with Block VolumeMode
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59658-[MicroShift] User can create PVC with Block VolumeMode", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59658-[MicroShift] User can create PVC with Block VolumeMode", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID               = "59658"
@@ -369,7 +369,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59660-[MicroShift] Volumes resize on-line
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59660-[MicroShift] Volumes resize on-line [Serial]", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59660-[MicroShift] Volumes resize on-line [Serial]", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID             = "59660"
@@ -393,7 +393,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59661-[MicroShift] Volumes should store data and allow exec of files on the volume
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59661-[MicroShift] [Statefulset] Volumes should store data and allow exec of files on the volume", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59661-[MicroShift] [Statefulset] Volumes should store data and allow exec of files on the volume", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID           = "59661"
@@ -495,7 +495,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59664-[MicroShift] Can not exceed storage and pvc quota in specific namespace
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59664-[MicroShift] Can not exceed storage and pvc quota in specific namespace", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59664-[MicroShift] Can not exceed storage and pvc quota in specific namespace", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID           = "59664"
@@ -671,7 +671,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59666-[MicroShift] Delete pvc which is in active use by pod should postpone deletion and new pods consume such pvc should stuck at FailedScheduling
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59666-[MicroShift] Delete pvc which is in active use by pod should postpone deletion and new pods consume such pvc should stuck at FailedScheduling", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59666-[MicroShift] Delete pvc which is in active use by pod should postpone deletion and new pods consume such pvc should stuck at FailedScheduling", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID             = "59666"
@@ -830,7 +830,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-59669-[MicroShift] Run pod with specific SELinux by using securityContext
-	g.It("MicroShiftOnly-Author:rdeore-Critical-59669-[MicroShift] Run pod with specific SELinux by using securityContext", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-59669-[MicroShift] Run pod with specific SELinux by using securityContext", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID           = "59669"
@@ -869,7 +869,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-64839-[MicroShift] [Snapshot] [Filesystem] Should provision storage with snapshot datasource and restore successfully
-	g.It("MicroShiftOnly-Author:rdeore-Critical-64839-[MicroShift] [Snapshot] [Filesystem] Should provision storage with snapshot datasource and restore successfully", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-64839-[MicroShift] [Snapshot] [Filesystem] Should provision storage with snapshot datasource and restore successfully", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID                      = "64839"
@@ -1021,7 +1021,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-64842-[MicroShift] [Snapshot] volumeSnapshotContent should get removed after the corresponding snapshot deletion with deletionPolicy: 'Delete'
-	g.It("MicroShiftOnly-Author:rdeore-Critical-64842-[MicroShift] [Snapshot] volumeSnapshotContent should get removed after the corresponding snapshot deletion with deletionPolicy: 'Delete'", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-64842-[MicroShift] [Snapshot] volumeSnapshotContent should get removed after the corresponding snapshot deletion with deletionPolicy: 'Delete'", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID                      = "64842"
@@ -1081,7 +1081,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-64843-[MicroShift] [Snapshot] volumeSnapshotContent should NOT be removed after the corresponding snapshot deletion with deletionPolicy: 'Retain'
-	g.It("MicroShiftOnly-Author:rdeore-Critical-64843-[MicroShift] [Snapshot] volumeSnapshotContent should NOT be removed after the corresponding snapshot deletion with deletionPolicy: 'Retain'", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-64843-[MicroShift] [Snapshot] volumeSnapshotContent should NOT be removed after the corresponding snapshot deletion with deletionPolicy: 'Retain'", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID                      = "64843"
@@ -1234,7 +1234,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-64857-[MicroShift] [Clone] [Filesystem] clone a pvc with filesystem VolumeMode
-	g.It("MicroShiftOnly-Author:rdeore-Critical-64857-[MicroShift] [Clone] [Filesystem] clone a pvc with filesystem VolumeMode", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-64857-[MicroShift] [Clone] [Filesystem] clone a pvc with filesystem VolumeMode", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID           = "64857"
@@ -1300,7 +1300,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-64858-[MicroShift] [Clone] [Block] clone a pvc with block VolumeMode
-	g.It("MicroShiftOnly-Author:rdeore-Critical-64858-[MicroShift] [Clone] [Block] clone a pvc with block VolumeMode", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-64858-[MicroShift] [Clone] [Block] clone a pvc with block VolumeMode", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID           = "64858"
@@ -1367,7 +1367,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-64231-[MicroShift] Pod creation with generic ephemeral volume
-	g.It("MicroShiftOnly-Author:rdeore-Critical-64231-[MicroShift] Pod creation with generic ephemeral volume", func() {
+	g.It("MicroShiftOnly-Author:rdeore-LEVEL0-Critical-64231-[MicroShift] Pod creation with generic ephemeral volume", func() {
 		// Set the resource template for the scenario
 		var (
 			caseID           = "64231"

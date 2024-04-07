@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61425-[LVMS] [Filesystem] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit
-	g.It("Author:rdeore-Critical-61425-[LVMS] [Filesystem] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit", func() {
+	g.It("Author:rdeore-LEVEL0-Critical-61425-[LVMS] [Filesystem] [WaitForFirstConsumer] PVC resize on LVM cluster beyond thinpool size, but within over-provisioning limit", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -101,7 +101,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-61585-[LVMS] [Filesystem] [Clone] a pvc with the same capacity should be successful
-	g.It("Author:rdeore-Critical-61585-[LVMS] [Filesystem] [Clone] a pvc with the same capacity should be successful", func() {
+	g.It("Author:rdeore-LEVEL0-Critical-61585-[LVMS] [Filesystem] [Clone] a pvc with the same capacity should be successful", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -211,7 +211,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-61863-[LVMS] [Filesystem] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written
-	g.It("Author:rdeore-Critical-61863-[LVMS] [Filesystem] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
+	g.It("Author:rdeore-LEVEL0-Critical-61863-[LVMS] [Filesystem] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate             = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -277,7 +277,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-61894-[LVMS] [Block] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written
-	g.It("Author:rdeore-Critical-61894-[LVMS] [Block] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
+	g.It("Author:rdeore-LEVEL0-Critical-61894-[LVMS] [Block] [Snapshot] should restore volume with snapshot dataSource successfully and the volume could be read and written", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate             = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -406,7 +406,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//       as it supports over-provisioning, unlike other CSI drivers
 	// author: rdeore@redhat.com
 	// OCP-61828-[LVMS] [Block] [Clone] a pvc larger than disk size should be successful
-	g.It("Author:rdeore-Critical-61828-[LVMS] [Block] [Clone] a pvc larger than disk size should be successful", func() {
+	g.It("Author:rdeore-LEVEL0-Critical-61828-[LVMS] [Block] [Clone] a pvc larger than disk size should be successful", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate      = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -615,7 +615,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'
-	g.It("Author:rdeore-High-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'", func() {
+	g.It("Author:rdeore-LEVEL0-High-66321-[LVMS] [Filesystem] [ext4] provision a PVC with fsType:'ext4'", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -673,7 +673,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting
-	g.It("Author:rdeore-High-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting [Disruptive]", func() {
+	g.It("Author:rdeore-LEVEL0-High-66320-[LVMS] Pre-defined CSI Storageclass should get re-created automatically after deleting [Disruptive]", func() {
 		//Set the resource template for the scenario
 		var (
 			volumeGroup      = "vg1"
@@ -791,7 +791,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-67001-[LVMS] Check deviceSelector logic works with combination of one valid device Path and two optionalPaths
-	g.It("Author:rdeore-High-67001-[LVMS] Check deviceSelector logic works with combination of one valid device Path and two optionalPaths [Disruptive]", func() {
+	g.It("Author:rdeore-LEVEL0-High-67001-[LVMS] Check deviceSelector logic works with combination of one valid device Path and two optionalPaths [Disruptive]", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -1084,7 +1084,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// OCP-69191-[LVMS] [Filesystem] Support provisioning less than 1Gi size PV and re-size
-	g.It("Author:rdeore-Critical-69191-[LVMS] [Filesystem] Support provisioning less than 1Gi size PV and re-size", func() {
+	g.It("Author:rdeore-LEVEL0-Critical-69191-[LVMS] [Filesystem] Support provisioning less than 1Gi size PV and re-size", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -1126,7 +1126,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// OCP-69753-[LVMS] [Block] Support provisioning less than 1Gi size PV and re-size
-	g.It("Author:rdeore-Critical-69753-[LVMS] [Block] Support provisioning less than 1Gi size PV and re-size", func() {
+	g.It("Author:rdeore-LEVEL0-Critical-69753-[LVMS] [Block] Support provisioning less than 1Gi size PV and re-size", func() {
 		//Set the resource template for the scenario
 		var (
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
