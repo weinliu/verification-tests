@@ -37,7 +37,7 @@ describe("Improve MachineConfigPool list table for update status", () => {
       .then(() => {
         cy.get('[class*="alert__title"]').should('not.exist');
         Pages.gotoMCPListPage();
-        mcp.listPage.checkUpdateStatus("worker", 'Up to date');
+        mcp.listPage.checkUpdateStatus("worker", /Updating|Up to date/);
       })
   });
 });

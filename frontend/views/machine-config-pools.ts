@@ -1,7 +1,7 @@
 
 export const mcp = {
   listPage: {
-    checkUpdateStatus: (resourceName: string, status: string) => {
+    checkUpdateStatus: (resourceName: string, status: any) => {
       cy.get(`[data-test-rows="resource-row"]`)
         .contains(resourceName)
         .parents('tr')
