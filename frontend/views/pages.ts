@@ -93,6 +93,14 @@ export const Pages = {
   gotoUsers: () => {
     cy.visit('/k8s/cluster/user.openshift.io~v1~User');
   },
+  gotoGroupListPage: () => {
+    cy.visit('/k8s/cluster/user.openshift.io~v1~Group');
+    listPage.rows.shouldBeLoaded();
+  },
+  gotoOneGroupPage: (groupName: string) => {
+    cy.visit(`/k8s/cluster/user.openshift.io~v1~Group/${groupName}`);
+    cy.get('[data-test-section-heading="Group details"]').should('be.visible');
+  },
   gotoNodeOverviewPage: (nodeName: string) => {
     cy.visit(`/k8s/cluster/nodes/${nodeName}/`);
     cy.get('[data-test-id="dashboard"]').should('be.visible');
