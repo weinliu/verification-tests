@@ -97,7 +97,7 @@ type NodeEventsChecker struct {
 }
 
 func (ec NodeEventsChecker) Check(nodes ...Node) {
-	if ec.EventsAreNotTriggered {
+	if !ec.EventsAreNotTriggered {
 		ec.checkEventsAreTriggeredSequentially(nodes...)
 	} else {
 		ec.checkEventsAreNotTriggered(nodes...)
@@ -164,6 +164,7 @@ func (rfc RemoteFileChecker) Check(checkedNodes ...Node) {
 
 type UpdateBehaviourValidator struct {
 	mcp          *MachineConfigPool
+	controller   *Controller
 	checkedNodes []Node
 	startTime    time.Time
 
@@ -180,7 +181,7 @@ type UpdateBehaviourValidator struct {
 	RestartCrioShouldBeSkipped bool
 
 	SkipReloadCrioValidation bool
-	ShouldRestartCrio        bool
+	ShouldReloadCrio         bool
 }
 
 func (v *UpdateBehaviourValidator) Initialize(mcp *MachineConfigPool, nodes []Node) {
@@ -188,7 +189,7 @@ func (v *UpdateBehaviourValidator) Initialize(mcp *MachineConfigPool, nodes []No
 	v.mcp = mcp
 	// If no node is provided we test only the first node to be updated in the pool
 	if len(nodes) == 0 {
-		v.checkedNodes = []Node{mcp.GetSortedNodesOrFail()[0]}
+		v.checkedNodes = []Node{v.mcp.GetSortedNodesOrFail()[0]}
 	}
 
 	logger.Infof("Start capturing events in nodes")
@@ -196,6 +197,10 @@ func (v *UpdateBehaviourValidator) Initialize(mcp *MachineConfigPool, nodes []No
 		o.Expect(v.checkedNodes[i].IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
 			"Error getting the latest event in node %s", v.checkedNodes[i].GetName())
 	}
+
+	logger.Infof("Start recording controller logs")
+	v.controller = NewController(mcp.oc.AsAdmin())
+	v.controller.IgnoreLogsBeforeNow()
 
 	logger.Infof("Getting starting date")
 	// TODO: maybe we should not assume that all nodes are synced
@@ -248,7 +253,7 @@ func (v *UpdateBehaviourValidator) Validate() {
 
 // checkCrioReloaded checks if crio was reloaded or not.
 func (v *UpdateBehaviourValidator) checkCrioReload() {
-	if v.ShouldRestartCrio {
+	if v.ShouldReloadCrio {
 		exutil.By("Checking that crio service was reloaded")
 	} else {
 		exutil.By("Checking that crio service were NOT reloaded")
@@ -260,7 +265,7 @@ func (v *UpdateBehaviourValidator) checkCrioReload() {
 		"The provided comparison time was EMPTY while trying to guess if the crio service was restarted")
 
 	for _, node := range v.checkedNodes {
-		if v.ShouldRestartCrio {
+		if v.ShouldReloadCrio {
 			o.Expect(node.GetUnitExecReloadStartTime("crio.service")).To(o.BeTemporally(">", v.startTime),
 				"Crio service was NOT restarted, but it should be")
 		} else {
@@ -304,7 +309,7 @@ func (v *UpdateBehaviourValidator) checkCrioRestart() {
 func (v *UpdateBehaviourValidator) checkDrainNodes() {
 	var (
 		skipDrainLogMsg = "Changes do not require drain, skipping"
-		execDrainLogMsg = "requesting cordon and drain via annotation to controller"
+		execDrainLogMsg = "initiating drain"
 	)
 	// We could check the "Drain" event in this function, but sometimes the events are not triggered and we don't know why
 	// Until events are not more stable we should not force even validation in ALL our tests, only in those that we want to expose to this instability
@@ -316,17 +321,24 @@ func (v *UpdateBehaviourValidator) checkDrainNodes() {
 	}
 
 	for _, node := range v.checkedNodes {
+		// We use MCD logs to check if drain is skipped, and we use the Controller logs to check if drain is executed
 		if v.DrainNodesShoulBeSkipped {
+			// When drain is skipped reboot is skipped always (since the reason why MCO executes a drain operation is to be able to execute a safe reboot).
+			// Hence, we can look for the "skipping" message in MCD logs after the configuration is applied.
 			logger.Infof("Checking that node %s was NOT drained", node.GetName())
 			o.Expect(
 				exutil.GetSpecificPodLogs(node.oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
 			).Should(o.ContainSubstring(skipDrainLogMsg),
 				"Error! The node %s was drained, but the drain operation should have been skipped", node.GetName())
 		} else {
+			// When drain is executed reboot is executed too always (since the reason why MCO executes a drain operation is to be able to execute a safe reboot).
+			// Hence, we cannot log for the "drain" message in the MCD logs because they have been removed in the reboot.
+			// There are two options, we can look for the message in the pre-reboot MCD logs or we can look for them in the MCController pod
+			// We decided to use the controller logs because it is way easier.
 			logger.Infof("Checking that node %s was drained", node.GetName())
 			o.Expect(
-				exutil.GetSpecificPodLogs(node.oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
-			).Should(o.ContainSubstring(execDrainLogMsg),
+				v.controller.GetLogs(),
+			).Should(o.ContainSubstring("node "+node.GetName()+": "+execDrainLogMsg),
 				"Error! The node %s was NOT drained, but it should be", node.GetName())
 		}
 	}
@@ -378,11 +390,12 @@ func (v *UpdateBehaviourValidator) checkRebootNodes() {
 }
 
 func (v *UpdateBehaviourValidator) checkPreRebootMCDLogs() {
+	logger.Infof("Capture pre-reboot MCD logs")
 	preRebootLogs, err := v.mcp.CaptureAllNodeLogsBeforeRestart()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error capturing get MCD logs before the nodes reboot")
+	logger.Infof("OK!\n")
 
 	for _, preRebootMCDLogsChecker := range v.PreRebootMCDLogsCheckers {
 		preRebootMCDLogsChecker.CheckLogs(preRebootLogs, v.checkedNodes...)
 	}
-	logger.Infof("OK!\n")
 }
