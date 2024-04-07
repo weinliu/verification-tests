@@ -109,6 +109,9 @@ export const Operator = {
                 if (parameters == "AllMetrics") {
                     Operator.enableAllFLPMetrics()
                 }
+                if (parameters == "subnetLabels") {
+                    Operator.enableSubnetLabels()
+                }
                 cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
                 cy.get("#root_spec_agent_ebpf_accordion-content div.pf-v5-c-expandable-section > button").should('exist').click()
                 cy.get("#root_spec_agent_ebpf_cacheActiveTimeout").should('exist').clear().type("15s")
@@ -197,6 +200,17 @@ export const Operator = {
             cy.contains("All").should('exist')
             cy.get('#All-link').click()
         })
+    },
+    enableSubnetLabels: () => {
+        cy.get('#root_spec_processor_accordion-toggle').click()
+        cy.get('#root_spec_processor_subnetLabels_accordion-toggle').click()
+        cy.get('#root_spec_processor_subnetLabels_customLabels_accordion-toggle').click()
+        cy.get('#root_spec_processor_subnetLabels_customLabels_add-btn').click()
+        cy.get('#root_spec_processor_subnetLabels_customLabels_0_cidrs_accordion-toggle').click()
+        cy.get('#root_spec_processor_subnetLabels_customLabels_0_cidrs_add-btn').click()
+        cy.get('#root_spec_processor_subnetLabels_customLabels_0_cidrs_0').clear().type(`52.200.142.0/24`)
+        cy.get('#root_spec_processor_subnetLabels_customLabels_0_name').clear().type(`testcustomlabel`)
+        cy.get('#root_spec_processor_subnetLabels_openShiftAutoDetect').check()
     },
     enableZonesAndMultiCluster: () => {
         cy.get('#root_spec_processor_accordion-toggle').click()
