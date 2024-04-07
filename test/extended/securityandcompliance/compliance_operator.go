@@ -637,6 +637,18 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"ccr", ccrNotExist, "-n", subD.namespace}).check(oc)
 		}
 
+		g.By("Check rule ocp4-kubeadmin-removed.. !!!\n")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kubeadmin", "-n", "kube-system").Output()
+		if err != nil && strings.Contains(output, "NotFound") {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", "ocp4-cis-kubeadmin-removed", "-n", ssb.namespace,
+				"-o=jsonpath={.status}"}).check(oc)
+		} else if err == nil && strings.Contains(output, "Opaque") {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"ccr", "ocp4-cis-kubeadmin-removed", "-n", ssb.namespace,
+				"-o=jsonpath={.status}"}).check(oc)
+		} else {
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
 		g.By("ocp-37121-61422 The ComplianceSuite generated successfully using scansetting CR and cis profile and default scansetting... !!!\n")
 	})
 
