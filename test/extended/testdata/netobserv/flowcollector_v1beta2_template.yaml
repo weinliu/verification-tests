@@ -31,6 +31,12 @@ objects:
           excludeInterfaces: ["lo"]
           logLevel: info
           privileged: "${{EBPFPrivileged}}"
+          metrics:
+            enable: "${{EBPFMetrics}}"
+            server:
+              port: 9102
+              tls:
+                type: "${MetricServerTLSType}"
           resources:
             requests:
               memory: 50Mi
@@ -160,6 +166,8 @@ parameters:
   - name: EBPFCacheActiveTimeout
     value: 15s
   - name: EBPFPrivileged
+    value: "false"
+  - name: EBPFMetrics
     value: "false"
   - name: MetricServerTLSType
     value: "Auto"

@@ -167,12 +167,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.Context("FLP, Console metrics:", func() {
+	g.Context("FLP, eBPF and Console metrics:", func() {
 		g.When("process.metrics.TLS == Disabled", func() {
-			g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
+			g.It("Author:aramesha-High-50504-High-72959-Verify flowlogs-pipeline and eBPF agent metrics and health [Serial]", func() {
 				var (
-					flpPromSM = "flowlogs-pipeline-monitor"
-					namespace = oc.Namespace()
+					flpPromSM  = "flowlogs-pipeline-monitor"
+					eBPFPromSM = "ebpf-agent-svc-monitor"
+					namespace  = oc.Namespace()
 				)
 
 				g.By("Deploy flowcollector")
@@ -183,12 +184,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 					LokiNamespace:       namespace,
 					LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 					MetricServerTLSType: "Disabled",
+					EBPFMetrics:         "true",
 				}
 
 				defer flow.deleteFlowcollector(oc)
 				flow.createFlowcollector(oc)
 				flow.waitForFlowcollectorReady(oc)
 
+				g.By("Verify flowlogs-pipeline metrics")
 				FLPpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=flowlogs-pipeline")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				// Liveliness URL
@@ -211,15 +214,36 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				g.By("Verify prometheus is able to scrape FLP metrics")
 				verifyFLPMetrics(oc)
+
+				g.By("Verify eBPF agent metrics")
+				eBPFpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-ebpf-agent")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				for _, pod := range eBPFpods {
+					command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", curlLive}
+					output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(output).To(o.Equal("{}"))
+				}
+
+				tlsScheme, err = getMetricsScheme(oc, eBPFPromSM, flow.Namespace+"-privileged")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				tlsScheme = strings.Trim(tlsScheme, "'")
+				o.Expect(tlsScheme).To(o.Equal("http"))
+
+				g.By("Verify prometheus is able to scrape eBPF metrics")
+				verifyEBPFMetrics(oc)
 			})
 		})
 
 		g.When("processor metrics.TLS == Auto", func() {
-			g.It("Author:aramesha-High-54043-High-66031-Verify flowlogs-pipeline, Console metrics [Serial]", func() {
+			g.It("Author:aramesha-High-54043-High-66031-High-72959-Verify flowlogs-pipeline, eBPF agent and Console metrics [Serial]", func() {
 				var (
-					flpPromSM = "flowlogs-pipeline-monitor"
-					flpPromSA = "flowlogs-pipeline-prom"
-					namespace = oc.Namespace()
+					flpPromSM  = "flowlogs-pipeline-monitor"
+					flpPromSA  = "flowlogs-pipeline-prom"
+					eBPFPromSM = "ebpf-agent-svc-monitor"
+					eBPFPromSA = "ebpf-agent-svc-prom"
+					namespace  = oc.Namespace()
 				)
 
 				flow := Flowcollector{
@@ -228,6 +252,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 					LokiURL:         lokiURL,
 					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 					LokiNamespace:   namespace,
+					EBPFMetrics:     "true",
 				}
 
 				defer flow.deleteFlowcollector(oc)
@@ -235,6 +260,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				g.By("Ensure flowcollector pods are ready")
 				flow.waitForFlowcollectorReady(oc)
 
+				g.By("Verify flowlogs-pipeline metrics")
 				tlsScheme, err := getMetricsScheme(oc, flpPromSM, flow.Namespace)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				tlsScheme = strings.Trim(tlsScheme, "'")
@@ -255,6 +281,21 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				metrics, err := getMetric(oc, query)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0))
+
+				g.By("Verify eBPF metrics")
+				tlsScheme, err = getMetricsScheme(oc, eBPFPromSM, flow.Namespace+"-privileged")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				tlsScheme = strings.Trim(tlsScheme, "'")
+				o.Expect(tlsScheme).To(o.Equal("https"))
+
+				serverName, err = getMetricsServerName(oc, eBPFPromSM, flow.Namespace+"-privileged")
+				serverName = strings.Trim(serverName, "'")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				expectedServerName = fmt.Sprintf("%s.%s.svc", eBPFPromSA, namespace+"-privileged")
+				o.Expect(serverName).To(o.Equal(expectedServerName))
+
+				g.By("Verify prometheus is able to scrape eBPF agent metrics")
+				verifyEBPFMetrics(oc)
 			})
 		})
 	})

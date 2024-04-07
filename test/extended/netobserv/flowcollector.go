@@ -40,6 +40,7 @@ type Flowcollector struct {
 	MetricServerTLSType       string
 	EBPFCacheActiveTimeout    string
 	EBPFPrivileged            string
+	EBPFMetrics               string
 	PacketDropEnable          string
 	DNStrackingEnable         string
 	PluginEnable              string
