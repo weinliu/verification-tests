@@ -2427,6 +2427,49 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("--collector.processes"))
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-73009-CMO is correctly forwarding current proxy config to the prometheus operator in remote write configs [Serial]", func() {
+		var (
+			remotewriteCM = filepath.Join(monitoringBaseDir, "example-remotewrite-cm.yaml")
+		)
+		exutil.By("check cluster proxy")
+		checkProxy, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-ojsonpath={.spec}").Output()
+		if checkProxy == "{}" || !strings.Contains(checkProxy, `http`) {
+			g.Skip("This case should execute on a proxy cluster!")
+		}
+
+		exutil.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		exutil.By("Create example remotewrite cm under openshift-monitoring")
+		createResourceFromYaml(oc, "openshift-monitoring", remotewriteCM)
+
+		exutil.By("get http and https proxy URL")
+		httpProxy, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-ojsonpath={.spec.httpProxy}").Output()
+		httpsProxy, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-ojsonpath={.spec.httpsProxy}").Output()
+		e2e.Logf("httpProxy:\n%s", httpProxy)
+		e2e.Logf("httpsProxy:\n%s", httpsProxy)
+
+		exutil.By("check prometheus remoteWrite configs applied")
+		cmd := "-ojsonpath={.spec.remoteWrite[]}"
+		checkValue := `"url":"https://test.remotewrite.com/api/write"`
+		checkYamlconfig(oc, "openshift-monitoring", "prometheuses", "k8s", cmd, checkValue, true)
+		proxyUrl, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheuses", "k8s", "-ojsonpath={.spec.remoteWrite[].proxyUrl}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("proxyUrl:\n%s", proxyUrl)
+
+		exutil.By("check remoteWrite proxyUrl should be same as cluster proxy")
+		if strings.Contains(proxyUrl, httpsProxy) {
+			o.Expect(proxyUrl).NotTo(o.Equal(""))
+			o.Expect(proxyUrl).To(o.Equal(httpsProxy))
+		}
+		if !strings.Contains(proxyUrl, httpsProxy) {
+			o.Expect(proxyUrl).NotTo(o.Equal(""))
+			o.Expect(proxyUrl).To(o.Equal(httpProxy))
+		}
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
