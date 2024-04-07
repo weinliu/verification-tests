@@ -9071,6 +9071,85 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	})
 
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-73061-Support envfrom on Operator Lifecycle Manager", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		subTemplate := filepath.Join(buildPruningBaseDir, "envfrom-subscription.yaml")
+		cmTemplate := filepath.Join(buildPruningBaseDir, "cm-template.yaml")
+		secretTemplate := filepath.Join(buildPruningBaseDir, "secret_opaque.yaml")
+		oc.SetupProject()
+		namespaceName := oc.Namespace()
+		var (
+			og = operatorGroupDescription{
+				name:      "test-og",
+				namespace: namespaceName,
+				template:  ogSingleTemplate,
+			}
+
+			cm = configMapDescription{
+				name:      "special-config-73061",
+				namespace: namespaceName,
+				template:  cmTemplate,
+			}
+			secret = secretDescription{
+				name:      "special-secret-73061",
+				namespace: namespaceName,
+				template:  secretTemplate,
+			}
+
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-73061",
+				namespace:   namespaceName,
+				displayName: "Test Catsrc 73061 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginxolm-operator-index:v1",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "nginx-73061-operator",
+				namespace:              namespaceName,
+				catalogSourceName:      "catsrc-73061",
+				catalogSourceNamespace: namespaceName,
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "nginx-operator",
+				configMapRef:           "special-config-73061",
+				secretRef:              "special-secret-73061",
+				singleNamespace:        true,
+				template:               subTemplate,
+			}
+		)
+		itName := g.CurrentSpecReport().FullText()
+		exutil.By("STEP 1: create the OperatorGroup, catalog source, secret, configmap")
+		og.createwithCheck(oc, itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+		cm.create(oc, itName, dr)
+		secret.create(oc)
+
+		exutil.By("STEP 2: create sub")
+		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator", ok, []string{"deployment", "-n", sub.namespace}).check(oc)
+
+		exutil.By("STEP 3: check OPERATOR_CONDITION_NAME")
+		envFromDeployment := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, `-o=jsonpath='{..spec.containers[*].envFrom}'`)
+		o.Expect(envFromDeployment).To(o.ContainSubstring(cm.name))
+		o.Expect(envFromDeployment).To(o.ContainSubstring(secret.name))
+
+		envFromPod := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=control-plane=controller-manager", "-n", sub.namespace, `-o=jsonpath='{..spec.containers[*].envFrom}'`)
+		o.Expect(envFromPod).To(o.ContainSubstring(cm.name))
+		o.Expect(envFromPod).To(o.ContainSubstring(secret.name))
+
+		podName := getResource(oc, asAdmin, withoutNamespace, "pods", "--selector=control-plane=controller-manager", "-n", sub.namespace, "-o=jsonpath={..metadata.name}")
+		envPod, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", sub.namespace, "--", "env").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(envPod, "mykey")).To(o.BeTrue())
+		o.Expect(strings.Contains(envPod, "special.how")).To(o.BeTrue())
+		o.Expect(strings.Contains(envPod, "special.type")).To(o.BeTrue())
+
+	})
+
 	// author: xzha@redhat.com, test case OCP-72018
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-72018-Do not sync namespaces that have no subscriptions", func() {
 		oc.SetupProject()

@@ -63,6 +63,8 @@ type subscriptionDescription struct {
 	catalogSourceName      string `json:"source"`
 	catalogSourceNamespace string `json:"sourceNamespace"`
 	startingCSV            string `json:"startingCSV,omitempty"`
+	configMapRef           string `json:"configMapRef,omitempty"`
+	secretRef              string `json:"secretRef,omitempty"`
 	currentCSV             string
 	installedCSV           string
 	template               string
@@ -197,7 +199,8 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 		applyFn = applyResourceFromTemplateOnMicroshift
 	}
 	err = applyFn(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
-		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace, "STARTINGCSV="+sub.startingCSV)
+		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace,
+		"STARTINGCSV="+sub.startingCSV, "CONFIGMAPREF="+sub.configMapRef, "SECRETREF="+sub.secretRef)
 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	dr.getIr(itName).add(newResource(oc, "sub", sub.subName, requireNS, sub.namespace))
