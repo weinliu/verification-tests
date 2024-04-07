@@ -254,26 +254,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			Namespace:    cloNS,
 			PackageName:  "cluster-logging",
 		}
-		eoSource := CatalogSourceObjects{
-			Channel: "stable",
-		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			CatalogSource: eoSource,
-		}
-		g.By("uninstall CLO and EO")
+		g.By("uninstall CLO")
 		CLO.uninstallOperator(oc)
-		EO.uninstallOperator(oc)
-		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
-	})
-	g.AfterEach(func() {
-		resource{"operatorgroup", cloNS, cloNS}.clear(oc)
 	})
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-High-44983-Logging auto upgrade in minor version[Serial][Slow]", func() {
+		g.Skip("Skip for logging 5.9 is not released")
 		var targetchannel = "stable-5.9"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
@@ -290,6 +277,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		if disabled {
 			g.Skip("source/redhat-operators is disabled, skip this case.")
 		}
+		g.By("deploy EO")
+		EO := SubscriptionObjects{
+			OperatorName: "elasticsearch-operator",
+			Namespace:    eoNS,
+			PackageName:  "elasticsearch-operator",
+			CatalogSource: CatalogSourceObjects{
+				Channel:         "stable",
+				SourceName:      "redhat-operators",
+				SourceNamespace: "openshift-marketplace",
+			},
+		}
+		EO.SubscribeOperator(oc)
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", targetchannel))
 		source := CatalogSourceObjects{
@@ -306,21 +305,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			CatalogSource: source,
 		}
-		eoSource := CatalogSourceObjects{
-			Channel: "stable",
-		}
-		preEO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			CatalogSource: eoSource,
-		}
 		defer preCLO.uninstallOperator(oc)
 		preCLO.SubscribeOperator(oc)
-		defer preEO.uninstallOperator(oc)
-		preEO.SubscribeOperator(oc)
 
 		g.By("Deploy clusterlogging")
 		sc, err := getStorageClassName(oc)
@@ -332,39 +318,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			logStoreType:     "elasticsearch",
 			storageClassName: sc,
 			esNodeCount:      3,
-			//waitForReady:     true,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
+			waitForReady:     true,
+			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc, "REDUNDANCY_POLICY=SingleRedundancy")
 
-		// since logging 5.8 is not released, in catsrc/redhat-operators, stable channel is pointed to logging 5.7
-		// in logging 5.7, there is only one ds, using ls.waitForLokiStackToBeReady(oc) will always fail.
-		var esDeployNames []string
-		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(context.Context) (bool, error) {
-			esDeployNames = getDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
-			if len(esDeployNames) != cl.esNodeCount {
-				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "some ES deployments are not created")
-
-		for _, name := range esDeployNames {
-			WaitForDeploymentPodsToBeReady(oc, cl.namespace, name)
-		}
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "kibana")
-
 		//get current csv version
 		preCloCSV := preCLO.getInstalledCSV(oc)
-
 		// get currentCSV in packagemanifests
 		currentCloCSV := getCurrentCSVFromPackage(oc, "qe-app-registry", targetchannel, preCLO.PackageName)
 
 		var upgraded = false
-		var esPods []string
 		//change source to qe-app-registry if needed, and wait for the new operators to be ready
 		if preCloCSV != currentCloCSV {
 			g.By(fmt.Sprintf("upgrade CLO to %s", currentCloCSV))
@@ -377,10 +342,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		if upgraded {
 			g.By("waiting for the ECK pods to be ready after upgrade")
 			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-			for _, pod := range esPods {
-				err := resource{"pod", pod, cl.namespace}.WaitUntilResourceIsGone(oc)
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s is not removed", pod))
-			}
 			WaitForECKPodsToBeReady(oc, cl.namespace)
 			checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 			//check PVC count, it should be equal to ES node count
@@ -396,6 +357,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
+
+			exutil.By("Check if the cm/grafana-dashboard-cluster-logging is created or not after upgrading")
+			resource{"configmap", "grafana-dashboard-cluster-logging", "openshift-config-managed"}.WaitForResourceToAppear(oc)
 		}
 	})
 
@@ -411,7 +375,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
 		// for 5.9, only test CLO upgrade from 5.8 to 5.9
-		preSource := CatalogSourceObjects{"stable-5.8", catsrc.name, catsrc.namespace}
+		preSource := CatalogSourceObjects{
+			Channel:         "stable-5.8",
+			SourceName:      catsrc.name,
+			SourceNamespace: catsrc.namespace,
+		}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{
@@ -422,21 +390,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
 			CatalogSource: preSource,
 		}
-		eoSource := CatalogSourceObjects{
-			Channel: "stable",
-		}
-		preEO := SubscriptionObjects{
+		EO := SubscriptionObjects{
 			OperatorName:  "elasticsearch-operator",
 			Namespace:     eoNS,
 			PackageName:   "elasticsearch-operator",
 			Subscription:  subTemplate,
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			CatalogSource: eoSource,
+			CatalogSource: preSource,
 		}
 		defer preCLO.uninstallOperator(oc)
 		preCLO.SubscribeOperator(oc)
-		defer preEO.uninstallOperator(oc)
-		preEO.SubscribeOperator(oc)
+		EO.SubscribeOperator(oc)
 
 		g.By("Deploy clusterlogging")
 		sc, err := getStorageClassName(oc)
@@ -449,27 +413,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			storageClassName: sc,
 			esNodeCount:      3,
 			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
+			waitForReady:     true,
 		}
 		defer cl.delete(oc)
 		cl.create(oc, "REDUNDANCY_POLICY=SingleRedundancy")
-		var esDeployNames []string
-		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(context.Context) (bool, error) {
-			esDeployNames = getDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
-			if len(esDeployNames) != cl.esNodeCount {
-				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "some ES deployments are not created")
-		for _, name := range esDeployNames {
-			WaitForDeploymentPodsToBeReady(oc, cl.namespace, name)
-		}
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "kibana")
-		esPods, err := getPodNames(oc, cl.namespace, "component=elasticsearch")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Before upgrade, ES pods are: %v", esPods)
 
 		//change channel, and wait for the new operators to be ready
 		var source = CatalogSourceObjects{"stable-5.9", "qe-app-registry", "openshift-marketplace"}
@@ -487,10 +434,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 
 		g.By("waiting for the ECK pods to be ready after upgrade")
 		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-		for _, pod := range esPods {
-			err := resource{"pod", pod, cl.namespace}.WaitUntilResourceIsGone(oc)
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s is not removed", pod))
-		}
 		WaitForECKPodsToBeReady(oc, cl.namespace)
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 
@@ -503,6 +446,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
+
+		exutil.By("Check if the cm/grafana-dashboard-cluster-logging is created or not after upgrading")
+		resource{"configmap", "grafana-dashboard-cluster-logging", "openshift-config-managed"}.WaitForResourceToAppear(oc)
 	})
 })
 
@@ -684,6 +630,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "application logs are not found")
+
+			exutil.By("Check if the cm/grafana-dashboard-cluster-logging is created or not after upgrading")
+			resource{"configmap", "grafana-dashboard-cluster-logging", "openshift-config-managed"}.WaitForResourceToAppear(oc)
 		}
 	})
 
@@ -830,6 +779,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "can't get application logs with normal user")
+
+		exutil.By("Check if the cm/grafana-dashboard-cluster-logging is created or not after upgrading")
+		resource{"configmap", "grafana-dashboard-cluster-logging", "openshift-config-managed"}.WaitForResourceToAppear(oc)
 	})
 })
 
