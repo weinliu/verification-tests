@@ -1,9 +1,11 @@
 import { testName } from "upstream/support";
 import { nodesPage } from "views/nodes";
+import { Pages } from "views/pages";
 import { podsMetricsTab, podsPage } from "views/pods";
 
 describe('pod page', () => {
   before(() => {
+    cy.cliLogin();
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     cy.createProject(testName);
@@ -28,10 +30,31 @@ describe('pod page', () => {
   });
 
   after(() => {
+    cy.cliLogout();
     cy.adminCLI(`oc delete project ${testName}`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
-
+  it('(OCP-72714,yanpzhan,UserInterface) Show last state for container', {tags: ['e2e','@rosa','@osd-ccs']}, () => {
+    cy.exec(`oc create -f ./fixtures/pod-72714.yaml -n ${testName}`);
+    cy.wait(20000);
+    let containerName, lastState;
+    for(let i=0;i<3;i++){
+      cy.exec(`oc get pod example-72714 -n ${testName} -ojsonpath='{.status.containerStatuses[${i}].name}{"\t"}{.status.containerStatuses[${i}].lastState}'`).then((result) => {
+        containerName = result.stdout.split('\t')[0];
+        lastState = result.stdout.split('\t')[1];
+        podsPage.goToPodDetails(`${testName}`,'example-72714');
+        if (lastState == '{}'){
+          podsPage.checkContainerLastStateOnPodPage(`${containerName}`,'-');
+	  Pages.gotoOneContainerPage(`${testName}`,'example-72714',`${containerName}`);
+          podsPage.checkContainerLastStateOnContainerPage('-');
+        }else {
+          podsPage.checkContainerLastStateOnPodPage(`${containerName}`,'Terminated');
+	  Pages.gotoOneContainerPage(`${testName}`,'example-72714',`${containerName}`);
+          podsPage.checkContainerLastStateOnContainerPage('Terminated');
+        }
+      })
+    }
+  });
   it('(OCP-53357,xiyuzhao,UserInterface) Pod host IP is visible on Pod details page', {tags: ['e2e','admin','@rosa']}, () => {
     const podname = "limitpod-withnetworks"
     podsPage.goToPodDetails(testName,podname)

@@ -68,6 +68,9 @@ export const Pages = {
   gotoDeploymentConfigDetailsTab: (namespace: string, dcname: string)=> {
     cy.visit(`/k8s/ns/${namespace}/deploymentconfigs/${dcname}`);
   },
+  gotoOneContainerPage: (namespace, podname, containername) => {
+    cy.visit(`/k8s/ns/${namespace}/pods/${podname}/containers/${containername}`);
+  },
   gotoClusterOperatorsList: () => {
     cy.visit('/settings/cluster/clusteroperators');
     listPage.rows.shouldBeLoaded();

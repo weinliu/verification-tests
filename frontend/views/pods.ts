@@ -48,6 +48,12 @@ export namespace podsPageUtils {
     },
     goToPodsLogTab: (namespace:string, podname: string) => {
       cy.visit(`/k8s/ns/${namespace}/pods/${podname}/logs`)
+    },
+    checkContainerLastStateOnPodPage: (containerName, lastState) => {
+      cy.get(`div.row div:contains("${containerName}")`).siblings(`div:contains('${lastState}')`).should('exist');
+    },
+    checkContainerLastStateOnContainerPage: (lastState) => {
+      cy.get('dt:contains("Last State")').next('dd').should('contain',`${lastState}`);
     }
   }
   export const podsMetricsTab ={
