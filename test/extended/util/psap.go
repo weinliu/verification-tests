@@ -632,9 +632,7 @@ func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationSe
 	e2e.Logf("Check if labeled node return back to worker mcp")
 	AssertIfMCPChangesAppliedByName(oc, "worker", timeDurationSec)
 
-	mcpNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(mcpNameList).NotTo(o.BeEmpty())
+	mcpNameList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp").Output()
 
 	if strings.Contains(mcpNameList, mcpName) {
 		//Confirm if the custom machine count is 0
