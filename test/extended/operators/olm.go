@@ -12508,6 +12508,8 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		itName := g.CurrentSpecReport().FullText()
 		exutil.By("STEP: create the OperatorGroup ")
+		defer exutil.RecoverNamespaceRestricted(oc, namespaceName)
+		exutil.SetNamespacePrivileged(oc, namespaceName)
 		og.createwithCheck(oc, itName, dr)
 
 		exutil.By("STEP 1: prepare CatalogSource index image")
@@ -12630,6 +12632,8 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		itName := g.CurrentSpecReport().FullText()
 		exutil.By("STEP: create the OperatorGroup ")
+		defer exutil.RecoverNamespaceRestricted(oc, namespaceName)
+		exutil.SetNamespacePrivileged(oc, namespaceName)
 		og.createwithCheck(oc, itName, dr)
 
 		exutil.By("STEP 1: prepare CatalogSource index image")
