@@ -289,6 +289,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 				autoupdateremediations: false,
 				name:                   "master-scansetting" + getRandomString(),
 				namespace:              "",
+				priorityclassname:      "",
 				roles1:                 "master",
 				rotation:               10,
 				schedule:               "0 1 * * *",
@@ -302,7 +303,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 				title:        "new profile from scratch",
 				description:  "new profile with specific rules",
 				enrulename1:  "ocp4-scc-limit-root-containers",
-				enrulename2:  "ocp4-scheduler-no-bind-address",
+				enrulename2:  "ocp4-api-server-insecure-bind-address",
 				disrulename1: "ocp4-api-server-encryption-provider-cipher",
 				disrulename2: "ocp4-scc-drop-container-capabilities",
 				template:     tprofileWithoutVarTemplate,
@@ -342,6 +343,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		ss.create(oc)
 		tp.namespace = subD.namespace
 		tp.create(oc)
+		subD.getTailoredProfileNameandStatus(oc, tp.name)
 		_, err1 := OcComplianceCLI().Run("bind").Args("-N", ssbName, "-S", ss.name, "tailoredprofile/ocp4-cis-custom", "-n", subD.namespace).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 

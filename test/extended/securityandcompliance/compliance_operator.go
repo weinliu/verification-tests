@@ -2032,7 +2032,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				description:  "cis profile rules",
 				enrulename1:  "ocp4-scc-limit-root-containers",
 				rationale1:   "None",
-				enrulename2:  "ocp4-scheduler-no-bind-address",
+				enrulename2:  "ocp4-api-server-insecure-bind-address",
 				rationale2:   "Platform",
 				disrulename1: "ocp4-api-server-encryption-provider-cipher",
 				drationale1:  "Platform",
