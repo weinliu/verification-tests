@@ -226,4 +226,134 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ingress-on-microshift")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_http:" + e2eTestNamespace + ":" + routeNames[0]))
 	})
+
+	g.It("MicroShiftOnly-Author:shudili-High-72802-make router namespace ownership check configurable for the default microshift configuration", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure"
+			secSvcName          = "service-secure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			e2eTestNamespace1   = "e2e-ne-ocp72802-" + getRandomString()
+			e2eTestNamespace2   = "e2e-ne-ocp72802-" + getRandomString()
+		)
+
+		exutil.By("1. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be true for the default configuration")
+		routerPodName := getNewRouterPod(oc, "default")
+		defaultVal := readRouterPodEnv(oc, routerPodName, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(defaultVal).To(o.ContainSubstring("true"))
+
+		exutil.By("2. prepare two namespaces for the following testing")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace1)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace2)
+		path1 := "/path"
+		path2 := "/path/second"
+		httpRoutehost := unSecSvcName + "-" + "ocp72802." + "apps.example.com"
+		edgeRoute := "route-edge" + "-" + "ocp72802." + "apps.example.com"
+		reenRoute := "route-reen" + "-" + "ocp72802." + "apps.example.com"
+
+		exutil.By("3. create a client pod, a server pod and two services in one ns")
+		createResourceFromFile(oc, e2eTestNamespace1, clientPod)
+		err := waitForPodWithLabelReady(oc, e2eTestNamespace1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time in the first ns!")
+
+		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+
+		exutil.By("4. create a server pod and two services in the other ns")
+		createResourceFromFile(oc, e2eTestNamespace2, clientPod)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time in the second ns!")
+
+		createResourceFromFile(oc, e2eTestNamespace2, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+
+		exutil.By("5. expose an insecure/edge/REEN type routes with path " + path1 + " in the first ns")
+		err = oc.Run("expose").Args("service", unSecSvcName, "--hostname="+httpRoutehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", unSecSvcName)
+
+		_, err = oc.WithoutNamespace().Run("create").Args("route", "edge", "route-edge", "--service="+unSecSvcName, "--hostname="+edgeRoute, "--path="+path1, "-n", e2eTestNamespace1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := oc.WithoutNamespace().Run("get").Args("route", "-n", e2eTestNamespace1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-edge"))
+
+		_, err = oc.WithoutNamespace().Run("create").Args("route", "reencrypt", "route-reen", "--service="+secSvcName, "--hostname="+reenRoute, "--path="+path1, "-n", e2eTestNamespace1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.WithoutNamespace().Run("get").Args("route", "-n", e2eTestNamespace1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-reen"))
+
+		exutil.By("6. expose an insecure/edge/REEN type routes with path " + path2 + " in the second ns")
+		err = oc.Run("expose").Args("service", unSecSvcName, "--hostname="+httpRoutehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", unSecSvcName)
+
+		_, err = oc.WithoutNamespace().Run("create").Args("route", "edge", "route-edge", "--service="+unSecSvcName, "--hostname="+edgeRoute, "--path="+path2, "-n", e2eTestNamespace2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.WithoutNamespace().Run("get").Args("route", "-n", e2eTestNamespace2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-edge"))
+
+		_, err = oc.WithoutNamespace().Run("create").Args("route", "reencrypt", "route-reen", "--service="+secSvcName, "--hostname="+reenRoute, "--path="+path2, "-n", e2eTestNamespace2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.WithoutNamespace().Run("get").Args("route", "-n", e2eTestNamespace2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-reen"))
+
+		exutil.By("7.1. check the http route in the first ns should be adimitted")
+		jpath := ".status.ingress[0].conditions[0].status"
+		adtInfo := fetchJSONPathValue(oc, e2eTestNamespace1, "route/"+unSecSvcName, jpath)
+		o.Expect(adtInfo).To(o.Equal("True"))
+
+		exutil.By("7.2. check the edge route in the first ns should be adimitted")
+		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace1, "route/route-edge", jpath)
+		o.Expect(adtInfo).To(o.Equal("True"))
+
+		exutil.By("7.3. check the REEN route in the first ns should be adimitted")
+		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace1, "route/route-reen", jpath)
+		o.Expect(adtInfo).To(o.Equal("True"))
+
+		exutil.By("8.1. check the http route in the second ns with the same hostname but with different path should be adimitted too")
+		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/"+unSecSvcName, jpath)
+		o.Expect(adtInfo).To(o.Equal("True"))
+
+		exutil.By("8.2. check the edge route in the second ns with the same hostname but with different path should be adimitted too")
+		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/route-edge", jpath)
+		o.Expect(adtInfo).To(o.Equal("True"))
+
+		exutil.By("8.3. check the REEN route in the second ns with the same hostname but with different path should be adimitted too")
+		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/route-reen", jpath)
+		o.Expect(adtInfo).To(o.Equal("True"))
+
+		exutil.By("9. curl the first HTTP route and check the result")
+		srvPodName := getPodName(oc, e2eTestNamespace1, "name=web-server-rc")
+		routerPodIP := getPodv4Address(oc, routerPodName, "openshift-ingress")
+		toDst := httpRoutehost + ":80:" + routerPodIP
+		cmdOnPod := []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/index.html", "--resolve", toDst, "--connect-timeout", "10"}
+		result := repeatCmd(oc, cmdOnPod, "http-8080", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
+		output, err = oc.Run("exec").Args(cmdOnPod...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("ocp-test " + srvPodName[0] + " http-8080"))
+
+		exutil.By("10. curl the second HTTP route and check the result")
+		srvPodName = getPodName(oc, e2eTestNamespace2, "name=web-server-rc")
+		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/second/index.html", "--resolve", toDst, "--connect-timeout", "10"}
+		result = repeatCmd(oc, cmdOnPod, "http-8080", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
+		output, err = oc.Run("exec").Args(cmdOnPod...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("second-test " + srvPodName[0] + " http-8080"))
+	})
 })
