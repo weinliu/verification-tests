@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/tidwall/gjson"
 	"github.com/vmware/govmomi"
+	"gopkg.in/ini.v1"
 
 	o "github.com/onsi/gomega"
 
@@ -21,24 +21,25 @@ import (
 
 type vsphereInstance struct {
 	instance
-	vspObj    *exutil.Vmware
-	vspClient *govmomi.Client
+	vspObj         *exutil.Vmware
+	vspClient      *govmomi.Client
+	vmRelativePath string
 }
 
 // Get nodes and load clouds cred with the specified label.
 func GetVsphereNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
 	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	vspObj, vspClient := VsphereCloudClient(oc)
+	vspObj, vspClient, vmRelativePath := VsphereCloudClient(oc)
 	var results []ComputeNode
 	for _, nodeName := range nodeNames {
-		results = append(results, newVsphereInstance(oc, vspObj, vspClient, nodeName))
+		results = append(results, newVsphereInstance(oc, vspObj, vspClient, nodeName, vmRelativePath))
 	}
 	return results, nil
 }
 
 // VsphereCloudClient pass env details to login function, and used to login
-func VsphereCloudClient(oc *exutil.CLI) (*exutil.Vmware, *govmomi.Client) {
+func VsphereCloudClient(oc *exutil.CLI) (*exutil.Vmware, *govmomi.Client, string) {
 	randomStr := exutil.GetRandomString()
 	dirname := fmt.Sprintf("/tmp/-dr_vsphere_login_%s/", randomStr)
 	defer os.RemoveAll(dirname)
@@ -59,29 +60,28 @@ func VsphereCloudClient(oc *exutil.CLI) (*exutil.Vmware, *govmomi.Client) {
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	secureKey, err2 := base64.StdEncoding.DecodeString(secureKeyBase64)
 	o.Expect(err2).NotTo(o.HaveOccurred())
-	cloudConfig, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/cloud-provider-config", "-n", "openshift-config", "-o", `jsonpath={.data.config}`).OutputToFile("dr_vsphere_login_" + randomStr + "/server.ini")
+	vSphereConfigFile, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/cloud-provider-config", "-n", "openshift-config", "-o", `jsonpath={.data.config}`).OutputToFile("dr_vsphere_login_" + randomStr + "/server.ini")
 	o.Expect(err3).NotTo(o.HaveOccurred())
-	cmd := fmt.Sprintf(`grep -i server "%v" | awk -F '"' '{print $2}'`, cloudConfig)
-	serverURL, err4 := exec.Command("bash", "-c", cmd).Output()
+	envURL, vmRelativePath, err4 := getvSphereServerConfig(vSphereConfigFile)
 	o.Expect(err4).NotTo(o.HaveOccurred())
 	envUsername := string(accessKeyID)
 	envPassword := string(secureKey)
-	envURL := string(serverURL)
-	envURL = strings.TrimSuffix(envURL, "\n")
 	encodedPassword := url.QueryEscape(envPassword)
 	govmomiURL := fmt.Sprintf("https://%s:%s@%s/sdk", envUsername, encodedPassword, envURL)
 	vmware := exutil.Vmware{GovmomiURL: govmomiURL}
-	return vmware.Login()
+	vm, client := vmware.Login()
+	return vm, client, vmRelativePath
 }
 
-func newVsphereInstance(oc *exutil.CLI, vspObj *exutil.Vmware, vspClient *govmomi.Client, nodeName string) *vsphereInstance {
+func newVsphereInstance(oc *exutil.CLI, vspObj *exutil.Vmware, vspClient *govmomi.Client, nodeName string, vmRelativePath string) *vsphereInstance {
 	return &vsphereInstance{
 		instance: instance{
 			nodeName: nodeName,
 			oc:       oc,
 		},
-		vspObj:    vspObj,
-		vspClient: vspClient,
+		vspObj:         vspObj,
+		vspClient:      vspClient,
+		vmRelativePath: vmRelativePath,
 	}
 }
 
@@ -89,7 +89,7 @@ func (vs *vsphereInstance) GetInstanceID() (string, error) {
 	var instanceID string
 	var err error
 	errVmId := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-		instanceID, err = vs.vspObj.GetVspheresInstance(vs.vspClient, vs.nodeName)
+		instanceID, err = vs.vspObj.GetVspheresInstance(vs.vspClient, vs.vmRelativePath+vs.nodeName)
 		if err == nil {
 			e2e.Logf("VM instance name: %s", instanceID)
 			return true, nil
@@ -104,7 +104,7 @@ func (vs *vsphereInstance) Start() error {
 	instanceState, err := vs.State()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if _, ok := stopStates[instanceState]; ok {
-		err = vs.vspObj.StartVsphereInstance(vs.vspClient, vs.nodeName)
+		err = vs.vspObj.StartVsphereInstance(vs.vspClient, vs.vmRelativePath+vs.nodeName)
 		if err != nil {
 			return fmt.Errorf("start instance failed with error :: %v", err)
 		}
@@ -118,7 +118,7 @@ func (vs *vsphereInstance) Stop() error {
 	instanceState, err := vs.State()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if _, ok := startStates[instanceState]; ok {
-		err = vs.vspObj.StopVsphereInstance(vs.vspClient, vs.nodeName)
+		err = vs.vspObj.StopVsphereInstance(vs.vspClient, vs.vmRelativePath+vs.nodeName)
 		if err != nil {
 			return fmt.Errorf("stop instance failed with error :: %v", err)
 		}
@@ -129,6 +129,21 @@ func (vs *vsphereInstance) Stop() error {
 }
 
 func (vs *vsphereInstance) State() (string, error) {
-	instanceState, statusErr := vs.vspObj.GetVspheresInstanceState(vs.vspClient, vs.nodeName)
+	instanceState, statusErr := vs.vspObj.GetVspheresInstanceState(vs.vspClient, vs.vmRelativePath+vs.nodeName)
 	return strings.ToLower(instanceState), statusErr
+}
+
+func getvSphereServerConfig(vSphereConfigFile string) (string, string, error) {
+	// Load the INI configuration file
+	cfg, err := ini.Load(vSphereConfigFile)
+	if err != nil {
+		return "", "", fmt.Errorf("Error loading configuration: %s", err)
+	}
+
+	// Retrieve the server URL from the [Workspace] section
+	serverURL := cfg.Section("Workspace").Key("server").String()
+
+	// Retrieve the folder from the [Workspace] section
+	vmRelativePath := cfg.Section("Workspace").Key("folder").String()
+	return serverURL, vmRelativePath + "/", nil
 }
