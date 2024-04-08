@@ -228,6 +228,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(extractTmpDirName)
 
+		err = getRouteCAToFile(oc, extractTmpDirName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
