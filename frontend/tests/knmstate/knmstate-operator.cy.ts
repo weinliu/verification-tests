@@ -74,7 +74,7 @@ describe('knmstate operator console plugin related features', () => {
       });
       cy.get('div[role="dialog"]').contains(nncpTest.intName).should('exist');
       cy.get('div[role="dialog"]').contains(nncpTest.ip).should('exist');
-      cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+      cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
     };
     
     cy.log("4. Edit NNCP");
@@ -97,7 +97,7 @@ describe('knmstate operator console plugin related features', () => {
             cy.get('td[id="network-interface"]').contains("linux-bridge").click();
           });
           cy.get('div[role="dialog"]').contains(nncpTest.intName).should('not.exist');
-          cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+          cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
         } else {
           cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
             cy.get('td[id="network-interface"]').contains("linux-bridge").should('not.exist');
@@ -117,7 +117,7 @@ describe('knmstate operator console plugin related features', () => {
     let nncpTest: intPolicy = {
         intName: "bond001",
         intState: "Up",
-        intType: "Bond",
+        intType: "Bonding",
         ipv4Enable: true,
         ip: "",
         prefixLen: "",
@@ -147,7 +147,7 @@ describe('knmstate operator console plugin related features', () => {
         cy.get('td[id="network-interface"]').contains("bond").click();
       });
       cy.get('div[role="dialog"]').contains(nncpTest.intName).should('exist');
-      cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+      cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
     };
 
     cy.log("4. Edit NNCP");
@@ -170,7 +170,7 @@ describe('knmstate operator console plugin related features', () => {
             cy.get('td[id="network-interface"]').contains("bond").click();
           });
           cy.get('div[role="dialog"]').contains(nncpTest.intName).should('not.exist');
-          cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+          cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
         } else {
           cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
             cy.get('td[id="network-interface"]').contains("bond").should('not.exist');
@@ -228,7 +228,7 @@ describe('knmstate operator console plugin related features', () => {
           cy.get('td[id="network-interface"]').contains("linux-bridge").click();
         });
         cy.get('div[role="dialog"]').contains(nncpTest.intName).should('exist');
-        cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+        cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
       } else {
         cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
           cy.get('td[id="network-interface"]').contains("linux-bridge").should('not.exist');
@@ -256,7 +256,7 @@ describe('knmstate operator console plugin related features', () => {
             cy.get('td[id="network-interface"]').contains("linux-bridge").click();
           });
           cy.get('div[role="dialog"]').contains(nncpTest.intName).should('not.exist');
-          cy.get('div[role="dialog"]').get('[aria-label="Close"]').click();
+          cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
         } else {
           cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
             cy.get('td[id="network-interface"]').contains("linux-bridge").should('not.exist');

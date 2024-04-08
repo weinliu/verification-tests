@@ -22,10 +22,8 @@ export const nncpPage = {
     },
     addPolicy:(policy) => {
         cy.get('#policy-interface-name-0').clear().type(policy.intName);
-        cy.get('button#policy-interface-network-state-0').click();
-        cy.contains('button', policy.intState).click();
-        cy.get('button#policy-interface-type-0').click();
-        cy.contains('button', policy.intType).click();
+        cy.get('#policy-interface-network-state-0').select(policy.intState);
+        cy.get('#policy-interface-type-0').select(policy.intType);
         if (policy.ipv4Enable) {
             cy.get('#policy-interface-ip-0').check();
             if (policy.ip) {
@@ -45,16 +43,13 @@ export const nncpPage = {
         if (policy.intType == "Bridge") {
             if (policy.br_stpEnable) { cy.get('#policy-interface-stp-0').check(); }
         };
-        if (policy.intType == "Bond") {
+        if (policy.intType == "Bonding") {
             if (policy.bond_cpMacFrom) {
                 cy.byLegacyTestID('copy-mac-0').within(() => { cy.byButtonText('Copy MAC address').click(); })
                 cy.get('#policy-interface-copy-mac-from-0').clear().type(policy.bond_cpMacFrom);
             };
             if (policy.bond_aggrMode) {
-                cy.get('label[for="policy-interface-aggregation-0"]').parent('div').parent('div').within(() => {
-                    cy.get('button[aria-label="Options menu"]').click();
-                });
-                cy.get('ul[id="policy-interface-aggregation-0"]').within(() => { cy.byButtonText(policy.bond_aggrMode).click(); })
+                cy.get('#policy-interface-aggregation-0').select(policy.bond_aggrMode);
             };
         };
     },
@@ -89,9 +84,9 @@ export const nncpPage = {
     editNNCPFromForm: (policyName, desc, intPolicyList:Array<intPolicy>) => {
         nncpPage.goToNNCP();
         cy.get(`[data-test-rows="resource-row"]`).contains(policyName).parents('tr').within(() => {
-            cy.get(`[class='pf-c-dropdown__toggle pf-m-plain']`).click(); 
+            cy.get(`[class='pf-v5-c-menu-toggle pf-m-plain']`).click();
         });
-        cy.get(':nth-child(1) > .pf-c-dropdown__menu-item').click();
+        cy.get(':nth-child(1) > .pf-v5-c-menu__item').click();
 
         cy.get('#policy-description').clear().type(desc);
         //if there is new interface policies, add them at first
@@ -109,8 +104,7 @@ export const nncpPage = {
             let policy = intPolicyList[i];
             if (policy.action == "editOld") {
                 let j = intPolicyList.length - i - 1;
-                cy.get('button#policy-interface-network-state-'+j).click();
-                cy.contains('button', policy.intState).click();
+                cy.get('#policy-interface-network-state-'+j).select(policy.intState);
                 if (policy.ipv4Enable) {
                     cy.get('#policy-interface-ip-'+j).check();
                     if (policy.ip) {
@@ -141,16 +135,13 @@ export const nncpPage = {
                     cy.get('#policy-interface-ip-'+j).uncheck();
                 };
                 if (policy.port) { cy.get('#policy-interface-port-'+j).clear().type(policy.port); }
-                if (policy.intType == "Bond") {
+                if (policy.intType == "Bonding") {
                     if (policy.bond_cpMacFrom) {
                         cy.byLegacyTestID('copy-mac-'+j).within(() => { cy.byButtonText('Copy MAC address').click(); })
                         cy.get('#policy-interface-copy-mac-from-'+j).clear().type(policy.bond_cpMacFrom);
                     };
                     if (policy.bond_aggrMode) {
-                        cy.get('label[for="policy-interface-aggregation-'+j+'"]').parent('div').parent('div').within(() => {
-                            cy.get('button[aria-label="Options menu"]').click();
-                        });
-                        cy.get('ul[id="policy-interface-aggregation-'+j+'"]').within(() => { cy.byButtonText(policy.bond_aggrMode).click(); })
+                        cy.get('#policy-interface-aggregation-'+j).select(policy.bond_aggrMode);
                     };
                 };
                 policy.action = "";
@@ -161,9 +152,9 @@ export const nncpPage = {
     deleteNNCP: (policyName) => {
         nncpPage.goToNNCP();
         cy.get(`[data-test-rows="resource-row"]`).contains(policyName).parents('tr').within(() => {
-            cy.get(`[class='pf-c-dropdown__toggle pf-m-plain']`).click();
+            cy.get(`[class='pf-v5-c-menu-toggle pf-m-plain']`).click();
         });
-        cy.get(':nth-child(2) > .pf-c-dropdown__menu-item').click();
+        cy.get(':nth-child(2) > .pf-v5-c-menu__item').click();
         cy.get('body').then($body => {
             cy.get('#text-confirmation').clear().type(policyName)
             cy.get('button[type="submit"]').click()

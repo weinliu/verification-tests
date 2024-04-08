@@ -11,7 +11,7 @@ export const knmstateUtils = {
     let csName = "qe-app-registry";
     cy.visit(`/operatorhub/subscribe?pkg=${knmstate.operatorName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=${knmstate.namespace}`);
     cy.byTestID('install-operator').click();
-    cy.contains('View Operator').should('be.visible');
+    cy.contains('View Operator', { timeout: 60000 }).should('be.visible');
     cy.visit(`/k8s/ns/${knmstate.namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
     operatorHubPage.checkOperatorStatus(knmstate.packageName, 'Succeeded');
   },
