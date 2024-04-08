@@ -723,27 +723,33 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 func verifyCaps(oc *exutil.CLI, caps []string) (err error) {
 	// Important! this map should be updated each version with new capabilities, as they added to openshift.
 	capability_operators := map[string]string{
-		"Build":                    "build",
-		"CSISnapshot":              "csi-snapshot-controller",
+		"baremetal":                "baremetal",
 		"Console":                  "console",
+		"Insights":                 "insights",
+		"marketplace":              "marketplace",
+		"Storage":                  "storage",
+		"openshift-samples":        "openshift-samples",
+		"CSISnapshot":              "csi-snapshot-controller",
+		"NodeTuning":               "node-tuning",
+		"MachineAPI":               "machine-api",
+		"Build":                    "build",
 		"DeploymentConfig":         "dc",
 		"ImageRegistry":            "image-registry",
-		"Insights":                 "insights",
-		"MachineAPI":               "machine-api",
-		"NodeTuning":               "node-tuning",
-		"Storage":                  "storage",
-		"baremetal":                "baremetal",
-		"marketplace":              "marketplace",
-		"openshift-samples":        "openshift-samples",
 		"OperatorLifecycleManager": "operator-lifecycle-manager",
 		"CloudCredential":          "cloud-credential",
+		"Ingress":                  "ingress",
+		"CloudControllerManager":   "cloud-controller-manager",
 	}
-	for _, op := range caps {
+	for _, cap := range caps {
 		prefix := "co"
-		if op == "Build" || op == "DeploymentConfig" {
+		if cap == "Build" || cap == "DeploymentConfig" {
 			prefix = "-A" // special case for caps that isn't co but a resource
 		}
-		if _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(prefix, capability_operators[op]).Output(); err != nil {
+		// if there's a new cap missing in capability_operators - return error
+		if capability_operators[cap] == "" {
+			return fmt.Errorf("new unknown capability '%v'. please update automation: capability_operators in utils.go", cap)
+		}
+		if _, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(prefix, capability_operators[cap]).Output(); err != nil {
 			return
 		}
 	}

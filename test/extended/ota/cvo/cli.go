@@ -112,7 +112,7 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 		cmd := fmt.Sprintf("grep -rh 'release.openshift.io/feature-set\\|capability.openshift.io/name' %s|awk -F\":\" '{print $NF}'|sort -u", extractedManifest)
 		out, _ := exec.Command("bash", "-c", cmd).CombinedOutput()
 		extractedCAP := strings.Fields(string(out))
-		o.Expect(len(extractedCAP)).To(o.Equal(3))
+		o.Expect(len(extractedCAP)).To(o.Equal(4), "unexpected extracted cap lengh in: %v", extractedCAP) // in 4.16 we also have "CustomNoUpgrade,TechPreviewNoUpgrade"
 		o.Expect(string(out)).To(o.ContainSubstring("TechPreviewNoUpgrade"))
 		for _, cap := range caps {
 			o.Expect(string(out)).To(o.ContainSubstring(cap))

@@ -173,15 +173,16 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			}()
 		}
 
+		// Important! this two should be updated each version with new capabilities, as they added to openshift.
 		exutil.By("Set invalid baselineCapabilitySet")
 		cmdOut, err := changeCap(oc, true, "Invalid")
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"v4.13\", \"v4.14\", \"v4.15\", \"vCurrent\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"v4.13\", \"v4.14\", \"v4.15\", \"v4.16\", \"vCurrent\""))
 
 		exutil.By("Set invalid additionalEnabledCapabilities")
 		cmdOut, err = changeCap(oc, false, []string{"Invalid"})
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\", \"Build\", \"DeploymentConfig\", \"ImageRegistry\", \"OperatorLifecycleManager\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\", \"Build\", \"DeploymentConfig\", \"ImageRegistry\", \"OperatorLifecycleManager\", \"CloudCredential\", \"Ingress\", \"CloudControllerManager\""))
 	})
 
 	//author: yanyang@redhat.com
@@ -1134,7 +1135,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		for i := 0; i < len(tpOperator); i++ {
 			for k, v := range tpOperator[i] {
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(k, v).Output()
-				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(err).To(o.HaveOccurred(), "techpreview operator '%s %s' absence check failed: expecting an error, received: '%s'", k, v, output)
 				o.Expect(output).To(o.ContainSubstring("NotFound"))
 				e2e.Logf("Expected: Resource %s/%v not found!", k, v)
 			}
@@ -1375,7 +1376,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}()
 
 		defer func() {
-			exutil.AssertWaitPollNoErr(wait.PollImmediate(10*time.Second, 30*time.Second, func() (bool, error) {
+			exutil.AssertWaitPollNoErr(wait.PollImmediate(10*time.Second, 60*time.Second, func() (bool, error) {
 				depArgs, _, err := getCVOcontArg(oc, "enable-auto-update")
 				if err != nil {
 					return false, fmt.Errorf("get CVO container args returned error: %v", err)
@@ -1406,15 +1407,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}), "Failed to check cvo can not get available update")
 
 		exutil.By("Check availableUpdates is null")
-		availableUpdates, err := getCVObyJP(oc, ".status.availableUpdates")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(availableUpdates).To(o.Equal("<nil>"))
+		o.Expect(getCVObyJP(oc, ".status.availableUpdates")).To(o.Equal("null"), "unexpected availableUpdates") // changed from <nil> to null in 4.16
 
 		exutil.By("Check desired version haven't changed")
-		desiredVersion, err := getCVObyJP(oc, ".status.desired.version")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(desiredVersion).To(o.Equal(origVersion))
-
+		o.Expect(getCVObyJP(oc, ".status.desired.version")).To(o.Equal(origVersion), "unexpected desired version change")
 	})
 
 	//author: evakhoni@redhat.com
