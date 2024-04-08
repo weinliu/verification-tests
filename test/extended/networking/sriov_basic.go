@@ -433,6 +433,7 @@ var _ = g.Describe("[sig-networking] SDN sriov-legacy", func() {
 				exutil.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 				e2e.Logf("device ID is %v", data.DeviceID)
 				e2e.Logf("device Name is %v", data.Name)
+				sriovNeworkTemplate = filepath.Join(buildPruningBaseDir, "sriovnetwork-template.yaml")
 				sriovnetwork := sriovNetwork{
 					name:             networkName,
 					resourceName:     policyName,
