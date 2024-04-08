@@ -998,7 +998,7 @@ func replaceCoreDnsImage(oc *exutil.CLI, file string) {
 	} else {
 		// use "|" as delimiter here since the image looks like
 		// "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:xxxxx"
-		sedCmd := fmt.Sprintf(`sed -i 's|replaced-at-runtime|%s|g' %s`, coreDnsImage, file)
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|replaced-at-runtime|%s|g' %s`, coreDnsImage, file)
 		_, err := exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
@@ -1316,7 +1316,7 @@ func nslookupsAndWaitForDNSlog(oc *exutil.CLI, podName, searchLog string, dnsPod
 
 // this function will get the route detail
 func getRoutes(oc *exutil.CLI, ns string) string {
-	output, err := oc.Run("get").Args("route", "-n", ns).Output()
+	output, err := oc.AsAdmin().Run("get").Args("route", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("oc get route: %v", output)
 	return output

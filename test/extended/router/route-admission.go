@@ -1,0 +1,210 @@
+package router
+
+import (
+	"fmt"
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"os/exec"
+	"path/filepath"
+)
+
+var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("router-admission", exutil.KubeConfigPath())
+
+	// Test case creater: hongli@redhat.com
+	g.It("Author:mjoseph-Critical-27594-Set namespaceOwnership of routeAdmission to InterNamespaceAllowed", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np-ra.yaml")
+			srvrcInfo           = "web-server-rc"
+			srvName             = "service-unsecure"
+			e2eTestNamespace2   = "e2e-ne-ocp27594-" + getRandomString()
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp27594",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create an additional namespace for this scenario")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		e2eTestNamespace1 := oc.Namespace()
+		path1 := "/path/first"
+		path2 := "/path/second"
+		routehost := srvName + "-" + "ocp27594." + "apps.example.com"
+
+		exutil.By("2. Create a custom ingresscontroller")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		custContPod := getNewRouterPod(oc, ingctrl.name)
+
+		exutil.By("3. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be true")
+		namespaceOwnershipEnv := readRouterPodEnv(oc, custContPod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=true"))
+
+		exutil.By("4. Create a server pod and an unsecure service in one ns")
+		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+
+		exutil.By("5. Create a server pod and an unsecure service in the other ns")
+		operateResourceFromFile(oc, "create", e2eTestNamespace2, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+
+		exutil.By("6. Expose a http route with path " + path1 + " in the first ns")
+		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getRoutes(oc, e2eTestNamespace1)
+		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", srvName)
+
+		exutil.By("7. Create a edge route with the same hostname, but with different path " + path2 + " in the second ns")
+		err = oc.AsAdmin().Run("create").Args("route", "edge", "route-edge", "--service="+srvName, "--hostname="+routehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getRoutes(oc, e2eTestNamespace2)
+		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", "route-edge")
+
+		exutil.By("8 Check the custom router pod and ensure " + e2eTestNamespace1 + " http route is loaded in haproxy.config")
+		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace1)
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_http:" + e2eTestNamespace1 + ":service-unsecure"))
+
+		exutil.By("9. Check the custom router pod and ensure " + e2eTestNamespace2 + " edge route is loaded in haproxy.config")
+		searchOutput = readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace2)
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_edge_http:" + e2eTestNamespace2 + ":route-edge"))
+	})
+
+	// Test case creater: hongli@redhat.com
+	g.It("Author:mjoseph-Critical-27595-Set namespaceOwnership of routeAdmission to Strict", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np-ra.yaml")
+			srvrcInfo           = "web-server-rc"
+			srvName             = "service-unsecure"
+			e2eTestNamespace2   = "e2e-ne-ocp27595-" + getRandomString()
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp27595",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create an additional namespace for this scenario")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		e2eTestNamespace1 := oc.Namespace()
+		path1 := "/path/first"
+		path2 := "/path/second"
+		routehost := srvName + "-" + "ocp27595." + "apps.example.com"
+
+		exutil.By("2. Create a custom ingresscontroller")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		// Updating namespaceOwnership as 'Strict' in the yaml file
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|InterNamespaceAllowed|%s|g' %s`, "Strict", customTemp)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		custContPod := getNewRouterPod(oc, ingctrl.name)
+
+		exutil.By("3. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		namespaceOwnershipEnv := readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
+
+		exutil.By("4. Create a server pod and an unsecure service in one ns")
+		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+
+		exutil.By("5. Create a server pod and an unsecure service in the other ns")
+		operateResourceFromFile(oc, "create", e2eTestNamespace2, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+
+		exutil.By("6. Create a reen route with path " + path1 + " in the first ns")
+		err = oc.AsAdmin().Run("create").Args("route", "reencrypt", "route-reen", "--service="+srvName, "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getRoutes(oc, e2eTestNamespace1)
+		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", "route-reen")
+
+		exutil.By("7. Create a http route with the same hostname, but with different path " + path2 + " in the second ns")
+		err = oc.AsAdmin().Run("expose").Args("service", srvName, "--hostname="+routehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getRoutes(oc, e2eTestNamespace2)
+		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", srvName)
+
+		exutil.By("8 Check the custom router pod and ensure " + e2eTestNamespace1 + " route is loaded in haproxy.config")
+		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace1)
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace1 + ":route-reen"))
+
+		exutil.By("9. Confirm the route in the second ns is shown as HostAlreadyClaimed")
+		waitForOutput(oc, e2eTestNamespace2, "route", ".items[*].status.ingress[?(@.routerName==\"ocp27595\")].conditions[*].reason", "HostAlreadyClaimed")
+	})
+
+	// Test case creater: hongli@redhat.com
+	// For OCP-27596 and OCP-27605
+	g.It("Author:mjoseph-Critical-27596-Update the namespaceOwnership of routeAdmission", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp27596",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create a custom ingresscontroller")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+
+		exutil.By("2. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		namespaceOwnershipEnv := readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
+
+		exutil.By("3. Patch the custom ingress controller and set namespaceOwnership to Strict")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "{\"spec\":{\"routeAdmission\":{\"namespaceOwnership\":\"Strict\"}}}")
+
+		exutil.By("4. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
+		namespaceOwnershipEnv = readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
+
+		exutil.By("5. Patch the custom ingress controller and set namespaceOwnership to InterNamespaceAllowed")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "{\"spec\":{\"routeAdmission\":{\"namespaceOwnership\":\"InterNamespaceAllowed\"}}}")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+
+		exutil.By("6. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be true")
+		newRouterpod := getNewRouterPod(oc, ingctrl.name)
+		namespaceOwnershipEnv = readRouterPodEnv(oc, newRouterpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=true"))
+
+		exutil.By("7. Patch the custom ingress controller and set namespaceOwnership to Null")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontrollers/"+ingctrl.name, "{\"spec\":{\"routeAdmission\":{\"namespaceOwnership\":null}}}")
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
+
+		exutil.By("8. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
+		newRouterpod = getNewRouterPod(oc, ingctrl.name)
+		namespaceOwnershipEnv = readRouterPodEnv(oc, newRouterpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
+
+		// Incorporating the negative case OCP-27605 here
+		exutil.By("9. Patch the custom ingress controller and set namespaceOwnership to a invalid string like 'InvalidTest'")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/"+ingctrl.name, "-p", "{\"spec\":{\"routeAdmission\":{\"namespaceOwnership\":\"InvalidTest\"}}}", "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(output).To(o.ContainSubstring("spec.routeAdmission.namespaceOwnership: Unsupported value: \"InvalidTest\": supported values: \"InterNamespaceAllowed\", \"Strict\""))
+	})
+})
