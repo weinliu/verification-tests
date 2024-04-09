@@ -592,18 +592,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags":"testqe"`))
 
 		exutil.By("Verify from the ingresscontroller status the operand is not upgradeable")
-		// wait for seconds for ingress operator to reconsile and update the status
-		time.Sleep(3 * time.Second)
-		status := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].status}")
-		o.Expect(status).To(o.ContainSubstring("False"))
-		status1 := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].reason}")
-		o.Expect(status1).To(o.ContainSubstring("OperandsNotUpgradeable"))
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].status", "False")
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].reason", "OperandsNotUpgradeable")
 
 		exutil.By("Verify from the ingress operator status the controller is not upgradeable")
-		status3 := fetchJSONPathValue(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].status}")
-		o.Expect(status3).To(o.ContainSubstring("False"))
-		status4 := fetchJSONPathValue(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].reason}")
-		o.Expect(status4).To(o.ContainSubstring("IngressControllersNotUpgradeable"))
+		waitForOutput(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].status", "False")
+		waitForOutput(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].reason", "IngressControllersNotUpgradeable")
 	})
 
 	// author: shudili@redhat.com
