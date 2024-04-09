@@ -767,5 +767,59 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in splunk")
 			o.Expect(sp.auditLogFound()).To(o.BeTrue())
 		})
+
+		g.It("CPaasrunOnly-Author:qitang-Medium-71051-ClusterLogForwarder input validation testing.", func() {
+			splunkProject := oc.Namespace()
+			sp := splunkPodServer{
+				namespace: splunkProject,
+				name:      "default-http",
+				authType:  "http",
+				version:   "9.0",
+			}
+			sp.init()
+
+			exutil.By("Deploy splunk")
+			defer sp.destroy(oc)
+			sp.deploy(oc)
+
+			clfSecret := toSplunkSecret{
+				name:      "splunk-secret-71051",
+				namespace: splunkProject,
+				hecToken:  sp.hecToken,
+			}
+			clf := clusterlogforwarder{
+				name:                      "clf-71051",
+				namespace:                 splunkProject,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexKey.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
+			}
+
+			exutil.By("create clusterlogforwarder")
+			defer clfSecret.delete(oc)
+			clfSecret.create(oc)
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=kubernetes.non_existing.key")
+
+			exutil.By("update CLF to set invalid glob for namespace")
+			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace":"invalid-name@"}],"includes": [{"namespace":"tes*t"}]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, "invalid glob for namespace excludes", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputs.new-app[0].message}"})
+
+			exutil.By("update CLF to set invalid sources for infrastructure logs")
+			patch = `[{"op": "replace", "path": "/spec/inputs", "value": [{"name": "selected-infra", "infrastructure": {"sources": ["nodesd","containersf"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-infra"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, "infrastructure inputs must define at least one valid source: container,node", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputs.selected-infra[0].message}"})
+
+			exutil.By("update CLF to set invalid sources for audit logs")
+			patch = `[{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-audit"]},{"op": "replace", "path": "/spec/inputs", "value": [{"name": "selected-audit", "audit": {"sources": ["nodess","containersf"]}}]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, "infrastructure inputs must define at least one valid source: auditd,kubeAPI,openshiftAPI,ovn", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputs.selected-audit[0].message}"})
+
+		})
+
 	})
 })

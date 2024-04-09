@@ -646,7 +646,7 @@ func newLokiClient(routeAddress string) *lokiClient {
 	client := &lokiClient{}
 	client.address = routeAddress
 	client.retries = 5
-	client.quiet = false
+	client.quiet = true
 	return client
 }
 
@@ -746,7 +746,7 @@ func (c *lokiClient) doQuery(path string, query string) (*lokiQueryResponse, err
 
 // query uses the /api/v1/query endpoint to execute an instant query
 // lc.query("application", "sum by(kubernetes_namespace_name)(count_over_time({kubernetes_namespace_name=\"multiple-containers\"}[5m]))", 30, false, time.Now())
-func (c *lokiClient) query(logType string, queryStr string, limit int, forward bool, time time.Time) (*lokiQueryResponse, error) {
+func (c *lokiClient) query(tenant string, queryStr string, limit int, forward bool, time time.Time) (*lokiQueryResponse, error) {
 	direction := func() string {
 		if forward {
 			return "FORWARD"
@@ -759,8 +759,8 @@ func (c *lokiClient) query(logType string, queryStr string, limit int, forward b
 	qsb.setInt("time", time.UnixNano())
 	qsb.setString("direction", direction())
 	var logPath string
-	if len(logType) > 0 {
-		logPath = apiPath + logType + queryRangePath
+	if len(tenant) > 0 {
+		logPath = apiPath + tenant + queryRangePath
 	} else {
 		logPath = queryRangePath
 	}
@@ -768,13 +768,13 @@ func (c *lokiClient) query(logType string, queryStr string, limit int, forward b
 }
 
 // queryRange uses the /api/v1/query_range endpoint to execute a range query
-// logType: application, infrastructure, audit
+// tenant: application, infrastructure, audit
 // queryStr: string to filter logs, for example: "{kubernetes_namespace_name="test"}"
 // limit: max log count
 // start: Start looking for logs at this absolute time(inclusive), e.g.: time.Now().Add(time.Duration(-1)*time.Hour) means 1 hour ago
 // end: Stop looking for logs at this absolute time (exclusive)
 // forward: true means scan forwards through logs, false means scan backwards through logs
-func (c *lokiClient) queryRange(logType string, queryStr string, limit int, start, end time.Time, forward bool) (*lokiQueryResponse, error) {
+func (c *lokiClient) queryRange(tenant string, queryStr string, limit int, start, end time.Time, forward bool) (*lokiQueryResponse, error) {
 	direction := func() string {
 		if forward {
 			return "FORWARD"
@@ -788,8 +788,8 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 	params.setInt("end", end.UnixNano())
 	params.setString("direction", direction())
 	var logPath string
-	if len(logType) > 0 {
-		logPath = apiPath + logType + queryRangePath
+	if len(tenant) > 0 {
+		logPath = apiPath + tenant + queryRangePath
 	} else {
 		logPath = queryRangePath
 	}
@@ -797,19 +797,34 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 	return c.doQuery(logPath, params.encode())
 }
 
-func (c *lokiClient) searchLogsInLoki(logType, query string) (*lokiQueryResponse, error) {
-	res, err := c.queryRange(logType, query, 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+func (c *lokiClient) searchLogsInLoki(tenant, query string) (*lokiQueryResponse, error) {
+	res, err := c.queryRange(tenant, query, 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 	return res, err
 }
 
-func (c *lokiClient) searchByKey(logType, key, value string) (*lokiQueryResponse, error) {
-	res, err := c.searchLogsInLoki(logType, "{"+key+"=\""+value+"\"}")
+func (c *lokiClient) waitForLogsAppearByQuery(tenant, query string) error {
+	return wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
+		logs, err := c.searchLogsInLoki(tenant, query)
+		if err != nil {
+			e2e.Logf("\ngot err when searching logs: %v, retrying...\n", err)
+			return false, nil
+		}
+		if len(logs.Data.Result) > 0 {
+			e2e.Logf(`find logs by %s`, query)
+			return true, nil
+		}
+		return false, nil
+	})
+}
+
+func (c *lokiClient) searchByKey(tenant, key, value string) (*lokiQueryResponse, error) {
+	res, err := c.searchLogsInLoki(tenant, "{"+key+"=\""+value+"\"}")
 	return res, err
 }
 
-func (c *lokiClient) waitForLogsAppearByKey(logType, key, value string) {
+func (c *lokiClient) waitForLogsAppearByKey(tenant, key, value string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-		logs, err := c.searchByKey(logType, key, value)
+		logs, err := c.searchByKey(tenant, key, value)
 		if err != nil {
 			e2e.Logf("\ngot err when searching logs: %v, retrying...\n", err)
 			return false, nil
@@ -823,14 +838,14 @@ func (c *lokiClient) waitForLogsAppearByKey(logType, key, value string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf(`can't find logs by {%s="%s"} in last 5 minutes`, key, value))
 }
 
-func (c *lokiClient) searchByNamespace(logType, projectName string) (*lokiQueryResponse, error) {
-	res, err := c.searchLogsInLoki(logType, "{kubernetes_namespace_name=\""+projectName+"\"}")
+func (c *lokiClient) searchByNamespace(tenant, projectName string) (*lokiQueryResponse, error) {
+	res, err := c.searchLogsInLoki(tenant, "{kubernetes_namespace_name=\""+projectName+"\"}")
 	return res, err
 }
 
-func (c *lokiClient) waitForLogsAppearByProject(logType, projectName string) {
+func (c *lokiClient) waitForLogsAppearByProject(tenant, projectName string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-		logs, err := c.searchByNamespace(logType, projectName)
+		logs, err := c.searchByNamespace(tenant, projectName)
 		if err != nil {
 			e2e.Logf("\ngot err when searching logs: %v, retrying...\n", err)
 			return false, nil
@@ -859,7 +874,7 @@ func extractLogEntities(lokiQueryResult *lokiQueryResponse) []LogEntity {
 }
 
 // listLabelValues uses the /api/v1/label endpoint to list label values
-func (c *lokiClient) listLabelValues(logType, name string, start, end time.Time) (*labelResponse, error) {
+func (c *lokiClient) listLabelValues(tenant, name string, start, end time.Time) (*labelResponse, error) {
 	lpath := fmt.Sprintf(labelValuesPath, url.PathEscape(name))
 	var labelResponse labelResponse
 	params := newQueryStringBuilder()
@@ -867,8 +882,8 @@ func (c *lokiClient) listLabelValues(logType, name string, start, end time.Time)
 	params.setInt("end", end.UnixNano())
 
 	path := ""
-	if len(logType) > 0 {
-		path = apiPath + logType + lpath
+	if len(tenant) > 0 {
+		path = apiPath + tenant + lpath
 	} else {
 		path = lpath
 	}
@@ -880,14 +895,14 @@ func (c *lokiClient) listLabelValues(logType, name string, start, end time.Time)
 }
 
 // listLabelNames uses the /api/v1/label endpoint to list label names
-func (c *lokiClient) listLabelNames(logType string, start, end time.Time) (*labelResponse, error) {
+func (c *lokiClient) listLabelNames(tenant string, start, end time.Time) (*labelResponse, error) {
 	var labelResponse labelResponse
 	params := newQueryStringBuilder()
 	params.setInt("start", start.UnixNano())
 	params.setInt("end", end.UnixNano())
 	path := ""
-	if len(logType) > 0 {
-		path = apiPath + logType + labelsPath
+	if len(tenant) > 0 {
+		path = apiPath + tenant + labelsPath
 	} else {
 		path = labelsPath
 	}
@@ -899,15 +914,15 @@ func (c *lokiClient) listLabelNames(logType string, start, end time.Time) (*labe
 }
 
 // listLabels gets the label names or values
-func (c *lokiClient) listLabels(logType, labelName string) ([]string, error) {
+func (c *lokiClient) listLabels(tenant, labelName string) ([]string, error) {
 	var labelResponse *labelResponse
 	var err error
 	start := time.Now().Add(time.Duration(-2) * time.Hour)
 	end := time.Now()
 	if len(labelName) > 0 {
-		labelResponse, err = c.listLabelValues(logType, labelName, start, end)
+		labelResponse, err = c.listLabelValues(tenant, labelName, start, end)
 	} else {
-		labelResponse, err = c.listLabelNames(logType, start, end)
+		labelResponse, err = c.listLabelNames(tenant, start, end)
 	}
 	return labelResponse.Data, err
 }

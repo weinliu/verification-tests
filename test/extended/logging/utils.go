@@ -2194,12 +2194,14 @@ func (cw cloudwatchSpec) applicationLogsFoundLogType() bool {
 	}
 	e2e.Logf("find logGroup %v", appLogGroupNames[0])
 
+	logStreams := cw.getCloudwatchLogStreamNames(appLogGroupNames[0], "")
+	e2e.Logf("The log Streams are: %v", logStreams)
+
 	//Return true if no selNamespaces is pre-defined, else search the defined namespaces
 	if len(cw.selAppNamespaces) == 0 {
 		return true
 	}
 
-	logStreams := cw.getCloudwatchLogStreamNames(appLogGroupNames[0], "")
 	var projects []string
 	for i := 0; i < len(logStreams); i++ {
 		// kubernetes.var.log.pods.e2e-test-vector-cloudwatch-9vvg5_logging-centos-logtest-xwzb5_b437565e-e60b-471a-a5f8-0d1bf72d6206.logging-centos-logtest.0.log
@@ -2658,18 +2660,6 @@ func (gcl googleCloudLogging) listLogEntries(queryString string) ([]*logging.Ent
 	return entries, nil
 }
 
-// searchLogs search log entries match the queries
-// example queries: map[string]string{"kubernetes.container_name": "xxxx", "kubernetes.namespace_name": "xxxx"}
-// operator: the operator among these queries, example: and, or
-func (gcl googleCloudLogging) searchLogs(queries map[string]string, operator string) ([]*logging.Entry, error) {
-	op := strings.ToUpper(operator)
-	var searchString string
-	for key, value := range queries {
-		searchString += " " + op + " jsonPayload." + key + " = \"" + value + "\""
-	}
-	return gcl.listLogEntries(searchString)
-}
-
 func (gcl googleCloudLogging) getLogByType(logType string) ([]*logging.Entry, error) {
 	searchString := " AND jsonPayload.log_type = \"" + logType + "\""
 	return gcl.listLogEntries(searchString)
@@ -2690,6 +2680,26 @@ func (gcl googleCloudLogging) removeLogs() error {
 	defer adminClient.Close()
 
 	return adminClient.DeleteLog(ctx, gcl.logName)
+}
+
+func (gcl googleCloudLogging) waitForLogsAppearByType(logType string) error {
+	return wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		logs, err := gcl.getLogByType(logType)
+		if err != nil {
+			return false, err
+		}
+		return len(logs) > 0, nil
+	})
+}
+
+func (gcl googleCloudLogging) waitForLogsAppearByNamespace(namespace string) error {
+	return wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		logs, err := gcl.getLogByNamespace(namespace)
+		if err != nil {
+			return false, err
+		}
+		return len(logs) > 0, nil
+	})
 }
 
 // getIndexImageTag retruns a tag of index image

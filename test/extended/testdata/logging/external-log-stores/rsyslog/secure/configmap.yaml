@@ -33,6 +33,9 @@ objects:
       :msg, contains, "_STREAM_ID" /var/log/clf/infra.log
       :msg, contains, "auditID" /var/log/clf/audit.log
       :msg, contains, "audit.linux" /var/log/clf/audit-linux.log
+      :msg, contains, "k8s_audit_level" /var/log/clf/audit-kubeAPI.log
+      :msg, contains, "openshift_audit_level" /var/log/clf/audit-openshiftAPI.log
+      :msg, contains, "/var/log/ovn/acl-audit-log.log" /var/log/clf/audit-ovn.log
 parameters:
 - name: NAME
   value: "rsyslogserver"

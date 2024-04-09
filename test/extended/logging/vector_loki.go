@@ -263,6 +263,109 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Application Logs Query using kubernetes.container_name as tenantKey is a success")
 		})
 
+		g.It("CPaasrunOnly-Author:qitang-High-71001-Collect or exclude logs by container[Slow]", func() {
+			exutil.By("Create Loki project and deploy Loki Server")
+			lokiNS := oc.Namespace()
+			loki := externalLoki{
+				name:      "loki-server",
+				namespace: lokiNS,
+			}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
+
+			exutil.By("Create ClusterLogForwarder")
+			clf := clusterlogforwarder{
+				name:                   "clf-71001",
+				namespace:              lokiNS,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml"),
+				waitForPodReady:        true,
+				collectApplicationLogs: true,
+				serviceAccountName:     "clf-" + getRandomString(),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "TENANTKEY=kubernetes.namespace_name", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
+			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"container":"exclude*"}]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+			exutil.By("Create projects for app logs and deploy the log generators")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
+			oc.SetupProject()
+			ns := oc.Namespace()
+			containerNames := []string{
+				"logging-71001-include",
+				"exclude-logging-logs",
+				"fake-kube-proxy",
+			}
+			for _, name := range containerNames {
+				err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", ns, "-p", "CONTAINER="+name, "-p", "CONFIGMAP="+name, "-p", "REPLICATIONCONTROLLER="+name).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", ns, "-p", "CONTAINER=multiple-containers").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Check logs in Loki, logs from containers/excludes* shouldn't be collected")
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
+			lc.waitForLogsAppearByProject("", ns)
+			for _, container := range []string{"logging-71001-include", "fake-kube-proxy", "multiple-containers-0", "multiple-containers-1", "multiple-containers-2"} {
+				lc.waitForLogsAppearByKey("", "kubernetes_container_name", container)
+			}
+			for _, q := range []string{`{kubernetes_container_name=~"exclude.+"}`, `{kubernetes_namespace_name=~"openshift.+"}`} {
+				log, err := lc.searchLogsInLoki("", q)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue(), "find logs with query "+q+", this is not expected")
+			}
+
+			exutil.By("Update CLF to exclude all containers")
+			patch = `[{"op": "replace", "path": "/spec/inputs/0/application/excludes", "value": [{"container":"*"}]}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+			// sleep 10 seconds for collector pods to send the cached records
+			time.Sleep(10 * time.Second)
+			exutil.By("Check logs in Loki, no logs collected")
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", loki.namespace, "-l", "component=loki,appname=loki-server").Execute()
+			WaitForDeploymentPodsToBeReady(oc, loki.namespace, loki.name)
+			err = lc.waitForLogsAppearByQuery("", `{kubernetes_namespace_name=~".+"}`)
+			exutil.AssertWaitPollWithErr(err, "no container logs should be collected")
+
+			exutil.By("Update CLF to include/exclude containers")
+			patch = `[{"op": "replace", "path": "/spec/inputs/0/application/excludes", "value": [{"container":"exclude*"}]},{"op": "add", "path": "/spec/inputs/0/application/includes", "value": [{"container":"multiple-containers-0"},{"container":"*oxy"},{"container":"*log*"}]}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+			// sleep 10 seconds for collector pods to send the cached records
+			time.Sleep(10 * time.Second)
+			exutil.By("Check logs in Loki, only logs from containers multiple-containers-0, logging-71001-include and fake-kube-proxy should be collected")
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", loki.namespace, "-l", "component=loki,appname=loki-server").Execute()
+			WaitForDeploymentPodsToBeReady(oc, loki.namespace, loki.name)
+			lc.waitForLogsAppearByProject("", ns)
+			for _, container := range []string{"logging-71001-include", "fake-kube-proxy", "multiple-containers-0"} {
+				lc.waitForLogsAppearByKey("", "kubernetes_container_name", container)
+			}
+			for _, q := range []string{`{kubernetes_container_name=~"exclude.+"}`, `{kubernetes_namespace_name=~"openshift.+"}`, `{kubernetes_container_name=~"multiple-containers-1|multiple-containers-2"}`} {
+				log, err := lc.searchLogsInLoki("", q)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue(), "find logs with query "+q+", this is not expected")
+			}
+
+			exutil.By("Update CLF to include all application containers")
+			patch = `[{"op": "remove", "path": "/spec/inputs/0/application/excludes"},{"op": "replace", "path": "/spec/inputs/0/application/includes", "value": [{"container":"*"}]}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+			// sleep 10 seconds for collector pods to send the cached records
+			time.Sleep(10 * time.Second)
+			exutil.By("Check logs in Loki, only logs application projects should be collected")
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", loki.namespace, "-l", "component=loki,appname=loki-server").Execute()
+			WaitForDeploymentPodsToBeReady(oc, loki.namespace, loki.name)
+			lc.waitForLogsAppearByProject("", ns)
+			for _, container := range []string{"logging-71001-include", "fake-kube-proxy", "exclude-logging-logs", "multiple-containers-0", "multiple-containers-1", "multiple-containers-2"} {
+				lc.waitForLogsAppearByKey("", "kubernetes_container_name", container)
+			}
+			err = lc.waitForLogsAppearByQuery("", `{kubernetes_namespace_name=~"openshift.+"}`)
+			exutil.AssertWaitPollWithErr(err, "container logs from infra projects should not be collected")
+		})
+
 	})
 
 })
@@ -734,6 +837,88 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				e2e.Logf("\nfound %s logs in Loki\n", k)
 			}
+		})
+
+		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-71144-Collect or exclude infrastructure logs.[Serial][Slow]", func() {
+			exutil.By("Deploying LokiStack CR for 1x.demo tshirt size")
+
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-71144",
+				namespace:     loggingNS,
+				tSize:         "1x.demo",
+				storageType:   s,
+				storageSecret: "storage-secret-71144",
+				storageClass:  sc,
+				bucketName:    "logging-loki-71144-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+
+			defer ls.removeObjectStorage(oc)
+			err := ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			exutil.By("Create ClusterLogForwarder with Loki as default logstore")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "INPUTS=[\"infrastructure\"]")
+
+			exutil.By("Create ClusterLogging instance with Loki as logstore")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+
+			exutil.By("checking infra logs in loki")
+			defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			bearerToken := getSAToken(oc, "default", oc.Namespace())
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			lc.waitForLogsAppearByQuery("infrastructure", `{log_type="infrastructure",kubernetes_namespace_name=~".+"}`)
+			lc.waitForLogsAppearByQuery("infrastructure", `{log_type="infrastructure",kubernetes_namespace_name!~".+"}`)
+
+			exutil.By("update CLF to only collect journal logs")
+			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "selected-infra", "infrastructure": {"sources":["node"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-infra"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, "collector")
+			// sleep 3 minutes for collector pods to send the cached records
+			time.Sleep(3 * time.Minute)
+			exutil.By("check data in lokistack, only journal logs are collected")
+			re, _ := lc.queryRange("infrastructure", `{ log_type="infrastructure", kubernetes_namespace_name!~".+" }`, 30, time.Now().Add(time.Duration(-2)*time.Minute), time.Now(), true)
+			o.Expect(len(re.Data.Result) > 0).Should(o.BeTrue())
+			re, _ = lc.queryRange("infrastructure", `{ log_type="infrastructure", kubernetes_namespace_name=~".+" }`, 30, time.Now().Add(time.Duration(-2)*time.Minute), time.Now(), true)
+			o.Expect(len(re.Data.Result) == 0).Should(o.BeTrue())
+
+			exutil.By("Update CLF to collect infra container logs")
+			patch = `[{"op": "replace", "path": "/spec/inputs/0/infrastructure/sources", "value": ["container"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, "collector")
+			// sleep 3 minutes for collector pods to send the cached records
+			time.Sleep(3 * time.Minute)
+			exutil.By("check data in lokistack, only infra container logs are collected")
+			//TODO: logs from logging components should be execluded
+			re, _ = lc.queryRange("infrastructure", `{ log_type="infrastructure", kubernetes_namespace_name=~".+" }`, 30, time.Now().Add(time.Duration(-2)*time.Minute), time.Now(), true)
+			o.Expect(len(re.Data.Result) > 0).Should(o.BeTrue())
+			re, _ = lc.queryRange("infrastructure", `{ log_type="infrastructure", kubernetes_namespace_name!~".+" }`, 30, time.Now().Add(time.Duration(-2)*time.Minute), time.Now(), true)
+			o.Expect(len(re.Data.Result) == 0).Should(o.BeTrue())
 		})
 
 	})
@@ -2561,7 +2746,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level="RequestResponse", objectRef_subresource!~".+"`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
-		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="RequestResponse", objectRef_subresource!~".+"`)
+		log, err = lc.searchLogsInLoki("audit", `{log_type="audit"} | json | objectRef_resource="pods", level!="RequestResponse", objectRef_subresource!~".+", objectRef_apiGroup!~".+"`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
 

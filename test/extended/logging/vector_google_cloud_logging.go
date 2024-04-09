@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -104,116 +105,101 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-High-53903-Forward logs to Google Cloud Logging using namespace selector.", func() {
-		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		g.By("Create log producer")
-		appProj1 := oc.Namespace()
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		oc.SetupProject()
-		appProj2 := oc.Namespace()
-		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		oc.SetupProject()
+	g.It("CPaasrunOnly-Author:qitang-High-71003-Collect or exclude logs by matching pod expressions[Slow]", func() {
 		clfNS := oc.Namespace()
 		projectID, err := exutil.GetGcpProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
 			projectID: projectID,
-			logName:   getInfrastructureName(oc) + "-53903",
+			logName:   getInfrastructureName(oc) + "-71003",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53903", clfNS}
+		gcpSecret := resource{"secret", "gcp-secret-71003", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:                   "clf-53903",
+			name:                   "clf-71003",
 			namespace:              clfNS,
 			secretName:             gcpSecret.name,
-			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
 			waitForPodReady:        true,
 			collectApplicationLogs: true,
 			serviceAccountName:     "clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUTREFS=[\"application\"]")
+		patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"selector": {"matchExpressions": [{"key": "test.logging.io/logging.qe-test-label", "operator": "In", "values": ["logging-71003-test-0", "logging-71003-test-1", "logging-71003-test-2"]},{"key":"test", "operator":"Exists"}]}}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
-		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-			logs, err := gcl.getLogByType("application")
-			if err != nil {
-				return false, err
-			}
-			return len(logs) > 0, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "application logs are not found")
-
-		appLogs1, err := gcl.getLogByNamespace(appProj1)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(appLogs1) > 0).Should(o.BeTrue())
-
-		appLogs2, err := gcl.getLogByNamespace(appProj2)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(appLogs2) == 0).Should(o.BeTrue())
-	})
-
-	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-High-53904-Forward logs to Google Cloud Logging using label selector.", func() {
+		exutil.By("Create project for app logs and deploy the log generator")
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		testLabel := "{\"run\":\"test-53904\",\"test\":\"test-53904\"}"
-		g.By("Create log producer")
-		appProj := oc.Namespace()
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "LABELS="+testLabel, "-p", "REPLICATIONCONTROLLER=centos-logtest-53904", "-p", "CONFIGMAP=centos-logtest-53904").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		oc.SetupProject()
-		clfNS := oc.Namespace()
-		projectID, err := exutil.GetGcpProjectID(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		gcl := googleCloudLogging{
-			projectID: projectID,
-			logName:   getInfrastructureName(oc) + "-53904",
+		var namespaces []string
+		for i := 0; i < 4; i++ {
+			ns := "logging-project-71003-" + strconv.Itoa(i)
+			defer oc.DeleteSpecifiedNamespaceAsAdmin(ns)
+			oc.CreateSpecifiedNamespaceAsAdmin(ns)
+			namespaces = append(namespaces, ns)
 		}
-		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53904", clfNS}
-		defer gcpSecret.clear(oc)
-		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", namespaces[0], "-p", "LABELS={\"test\": \"logging-71003-0\", \"test.logging.io/logging.qe-test-label\": \"logging-71003-test-0\"}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", namespaces[1], "-p", "LABELS={\"test.logging-71003\": \"logging-71003-1\", \"test.logging.io/logging.qe-test-label\": \"logging-71003-test-1\"}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", namespaces[2], "-p", "LABELS={\"test.logging.io/logging.qe-test-label\": \"logging-71003-test-2\"}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", namespaces[3], "-p", "LABELS={\"test\": \"logging-71003-3\"}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		clf := clusterlogforwarder{
-			name:                   "clf-53904",
-			namespace:              clfNS,
-			secretName:             gcpSecret.name,
-			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-label-selector.yaml"),
-			waitForPodReady:        true,
-			collectApplicationLogs: true,
-			serviceAccountName:     "clf-" + getRandomString(),
-		}
-		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "LABELS="+string(testLabel))
-
-		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-			logs, err := gcl.getLogByType("application")
-			if err != nil {
-				return false, err
-			}
-			return len(logs) > 0, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "application logs are not found")
-
-		appLogs1, err := gcl.searchLogs(map[string]string{"kubernetes.labels.run": "test-53904", "kubernetes.labels.test": "test-53904"}, "and")
+		exutil.By("Check data in google cloud logging, only logs from project namespaces[0] should be collected")
+		err = gcl.waitForLogsAppearByType("application")
+		exutil.AssertWaitPollNoErr(err, "application logs are not collected")
+		appLogs1, err := gcl.getLogByNamespace(namespaces[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(appLogs1) > 0).Should(o.BeTrue())
+		for i := 1; i < 4; i++ {
+			appLogs, err := gcl.getLogByNamespace(namespaces[i])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLogs) == 0).Should(o.BeTrue())
+		}
 
-		appLogs2, err := gcl.searchLogs(map[string]string{"kubernetes.labels.run": "centos-logtest", "kubernetes.labels.test": "centos-logtest"}, "and")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(appLogs2) == 0).Should(o.BeTrue())
+		exutil.By("Update CLF, change the matchExpressions")
+		patch = `[{"op": "replace", "path": "/spec/inputs/0/application/selector/matchExpressions", "value": [{"key": "test.logging.io/logging.qe-test-label", "operator": "In", "values": ["logging-71003-test-0", "logging-71003-test-1", "logging-71003-test-2"]},{"key":"test", "operator":"DoesNotExist"}]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, logs from project namespaces[1] and namespaces[2] should be collected")
+		err = gcl.waitForLogsAppearByNamespace(namespaces[1])
+		exutil.AssertWaitPollNoErr(err, "can't find logs from project "+namespaces[1])
+		err = gcl.waitForLogsAppearByNamespace(namespaces[2])
+		exutil.AssertWaitPollNoErr(err, "can't find logs from project "+namespaces[2])
+
+		for _, ns := range []string{namespaces[0], namespaces[3]} {
+			appLogs, err := gcl.getLogByNamespace(ns)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLogs) == 0).Should(o.BeTrue(), "find logs from project"+ns+", this is not expected")
+		}
+
+		exutil.By("Update CLF, change the matchExpressions")
+		patch = `[{"op": "replace", "path": "/spec/inputs/0/application/selector/matchExpressions", "value": [{"key": "test.logging.io/logging.qe-test-label", "operator": "NotIn", "values": ["logging-71003-test-0", "logging-71003-test-1", "logging-71003-test-2"]},{"key":"test", "operator":"Exists"}]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, logs from project namespaces[3] should be collected")
+		err = gcl.waitForLogsAppearByNamespace(namespaces[3])
+		exutil.AssertWaitPollNoErr(err, "can't find logs from project "+namespaces[3])
+		for i := 0; i < 3; i++ {
+			appLogs, err := gcl.getLogByNamespace(namespaces[i])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLogs) == 0).Should(o.BeTrue(), "find logs from project"+namespaces[i]+", this is not expected")
+		}
 	})
 
 	g.It("CPaasrunOnly-Author:ikanse-High-61602-Collector external Google Cloud logging complies with the tlsSecurityProfile configuration. [Slow][Disruptive]", func() {
@@ -319,5 +305,179 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		appLogs1, err = gcl.getLogByNamespace(appProj1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(appLogs1) > 0).Should(o.BeTrue())
+	})
+
+	//author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Medium-71777-Include or exclude logs by combining namespace and container selectors.[Slow]", func() {
+		clfNS := oc.Namespace()
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		gcl := googleCloudLogging{
+			projectID: projectID,
+			logName:   getInfrastructureName(oc) + "-71777",
+		}
+		defer gcl.removeLogs()
+		gcpSecret := resource{"secret", "gcp-secret-71777", clfNS}
+		defer gcpSecret.clear(oc)
+		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		clf := clusterlogforwarder{
+			name:                   "clf-71777",
+			namespace:              clfNS,
+			secretName:             gcpSecret.name,
+			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			waitForPodReady:        true,
+			collectApplicationLogs: true,
+			serviceAccountName:     "clf-" + getRandomString(),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUTREFS=[\"application\"]")
+		exutil.By("exclude logs from specific container in specific namespace")
+		patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace": "logging-log-71777", "container": "exclude-log-71777"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+		exutil.By("Create project for app logs and deploy the log generator")
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		namespaces := []string{"logging-log-71777", "logging-data-71777", "e2e-test-log-71777"}
+		containerNames := []string{"log-71777-include", "exclude-log-71777"}
+		for _, ns := range namespaces {
+			defer oc.DeleteSpecifiedNamespaceAsAdmin(ns)
+			oc.CreateSpecifiedNamespaceAsAdmin(ns)
+			for _, container := range containerNames {
+				err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", ns, "-p", "CONTAINER="+container, "-p", "CONFIGMAP="+container, "-p", "REPLICATIONCONTROLLER="+container).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+
+		generateQuery := func(ns, container string) string {
+			return fmt.Sprintf(` AND jsonPayload.kubernetes.namespace_name="%s" AND jsonPayload.kubernetes.container_name="%s"`, ns, container)
+		}
+		exutil.By("Check data in google cloud logging, logs from container/exclude-log-71777 in project/logging-log-71777 shouldn't be collected")
+		err = gcl.waitForLogsAppearByType("application")
+		exutil.AssertWaitPollNoErr(err, "application logs are not collected")
+		for _, ns := range []string{"logging-data-71777", "e2e-test-log-71777"} {
+			for _, container := range containerNames {
+				appLogs, err := gcl.listLogEntries(generateQuery(ns, container))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(appLogs) > 0).Should(o.BeTrue(), "can't find logs from container "+container+" in project"+ns+", this is not expected")
+			}
+		}
+		appLogs, err := gcl.listLogEntries(generateQuery("logging-log-71777", "log-71777-include"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(appLogs) > 0).Should(o.BeTrue(), "can't find logs from container/log-71777-include in project/logging-log-71777, this is not expected")
+		appLogs, err = gcl.listLogEntries(generateQuery("logging-log-71777", "exclude-log-71777"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(appLogs) == 0).Should(o.BeTrue(), "find logs from container/exclude-log-71777 in project/logging-log-71777, this is not expected")
+
+		exutil.By("exclude logs from specific containers in all namespaces")
+		patch = `[{"op": "replace", "path": "/spec/inputs/0/application/excludes", "value": [{"namespace": "*", "container": "exclude-log-71777"}]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, no logs from container/exclude-log-71777")
+		err = gcl.waitForLogsAppearByType("application")
+		exutil.AssertWaitPollNoErr(err, "application logs are not collected")
+		for _, ns := range namespaces {
+			err = gcl.waitForLogsAppearByNamespace(ns)
+			exutil.AssertWaitPollNoErr(err, "can't find logs from project "+ns)
+		}
+		logs, err := gcl.listLogEntries(` AND jsonPayload.kubernetes.container_name="exclude-log-71777"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) == 0).Should(o.BeTrue(), "find logs from container exclude-log-71777, this is not expected")
+
+		exutil.By("exclude logs from all containers in specific namespaces")
+		patch = `[{"op": "replace", "path": "/spec/inputs/0/application/excludes", "value": [{"namespace": "e2e-test-log-71777", "container": "*"}]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, no logs from project/e2e-test-log-71777")
+		err = gcl.waitForLogsAppearByType("application")
+		exutil.AssertWaitPollNoErr(err, "application logs are not collected")
+		for _, ns := range []string{"logging-log-71777", "logging-data-71777"} {
+			for _, container := range containerNames {
+				appLogs, err := gcl.listLogEntries(generateQuery(ns, container))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(appLogs) > 0).Should(o.BeTrue(), "can't find logs from container "+container+" in project"+ns+", this is not expected")
+			}
+		}
+		logs, err = gcl.getLogByNamespace("e2e-test-log-71777")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) == 0).Should(o.BeTrue(), "find logs from project e2e-test-log-71777, this is not expected")
+
+		exutil.By("Update CLF to collect logs from specific containers in specific namespaces")
+		patch = `[{"op": "remove", "path": "/spec/inputs/0/application/excludes"}, {"op": "add", "path": "/spec/inputs/0/application", "value": {"includes": [{"namespace": "logging-log-71777", "container": "log-71777-include"}]}}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, only logs from container log-71777-include in project logging-log-71777 should be collected")
+		err = gcl.waitForLogsAppearByNamespace("logging-log-71777")
+		exutil.AssertWaitPollNoErr(err, "logs from project logging-log-71777 are not collected")
+		includeLogs, err := gcl.listLogEntries(generateQuery("logging-log-71777", "log-71777-include"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(includeLogs) > 0).Should(o.BeTrue(), "can't find logs from container log-71777-include in project logging-log-71777, this is not expected")
+		excludeLogs, err := gcl.listLogEntries(` AND jsonPayload.kubernetes.namespace_name!="logging-log-71777" OR jsonPayload.kubernetes.container_name!="log-71777-include"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(excludeLogs) == 0).Should(o.BeTrue(), "find logs from other containers, this is not expected")
+
+		exutil.By("collect logs from specific containers in all namespaces")
+		patch = `[{"op": "replace", "path": "/spec/inputs/0/application/includes", "value": [{"namespace": "*", "container": "log-71777-include"}]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, only logs from container/log-71777-include should be collected")
+		err = gcl.waitForLogsAppearByType("application")
+		exutil.AssertWaitPollNoErr(err, "application logs are not collected")
+		for _, ns := range namespaces {
+			err = gcl.waitForLogsAppearByNamespace(ns)
+			exutil.AssertWaitPollNoErr(err, "can't find logs from project "+ns)
+		}
+		logs, err = gcl.listLogEntries(` AND jsonPayload.kubernetes.container_name != "log-71777-include"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) == 0).Should(o.BeTrue(), "find logs from other containers, this is not expected")
+		// no logs from openshift* projects
+
+		exutil.By("collect logs from all containers in specific namespaces")
+		patch = `[{"op": "replace", "path": "/spec/inputs/0/application/includes", "value": [{"namespace": "logging-data-71777", "container": "*"}]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, only logs from project/logging-data-71777 should be collected")
+		err = gcl.waitForLogsAppearByType("application")
+		exutil.AssertWaitPollNoErr(err, "application logs are not collected")
+		logs, err = gcl.listLogEntries(` AND jsonPayload.kubernetes.namespace_name != "logging-data-71777"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) == 0).Should(o.BeTrue(), "find logs from other projects, this is not expected")
+		logs, err = gcl.getLogByNamespace("logging-data-71777")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) > 0).Should(o.BeTrue(), "can't find logs from project logging-data-71777, this is not expected")
+
+		exutil.By("combine includes and excludes")
+		patch = `[{"op": "replace", "path": "/spec/inputs/0/application", "value": {"includes": [{"namespace": "*log*", "container": "log-71777*"}], "excludes": [{"namespace": "logging*71777", "container": "log-71777-include"}]}}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 10 seconds for collector pods to send the cached records
+		time.Sleep(10 * time.Second)
+		gcl.removeLogs()
+		exutil.By("Check data in google cloud logging, only logs from container/log-71777-include in project/e2e-test-log-71777 should be collected")
+		err = gcl.waitForLogsAppearByType("application")
+		exutil.AssertWaitPollNoErr(err, "application logs are not collected")
+		logs, err = gcl.listLogEntries(generateQuery("e2e-test-log-71777", "log-71777-include"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) > 0).Should(o.BeTrue(), "can't find logs from container log-71777-include in project e2e-test-log-71777, this is not expected")
+		logs, err = gcl.listLogEntries(` AND jsonPayload.kubernetes.namespace_name!="e2e-test-log-71777" OR jsonPayload.kubernetes.container_name!="log-71777-include"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) == 0).Should(o.BeTrue(), "find logs from other containers, this is not expected")
 	})
 })

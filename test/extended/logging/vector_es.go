@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1204,6 +1205,135 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			ees.waitForIndexAppear(oc, "app")
 			ees.waitForIndexAppear(oc, "infra")
 			ees.waitForIndexAppear(oc, "audit")
+
+		})
+
+		g.It("CPaasrunOnly-Author:qitang-High-71000-Collect or exclude logs by namespace[Slow]", func() {
+			exutil.By("Deploy Elasticsearch")
+			esProj := oc.Namespace()
+			ees := externalES{
+				namespace:  esProj,
+				version:    "7",
+				serverName: "elasticsearch-server-71000",
+				httpSSL:    true,
+				clientAuth: true,
+				secretName: "ees-https-71000",
+				loggingNS:  esProj,
+			}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			exutil.By("Deploy CLF to exclude some logs by setting excludeNamespaces")
+			clf := clusterlogforwarder{
+				name:                   "clf-71000",
+				namespace:              esProj,
+				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				secretName:             ees.secretName,
+				collectApplicationLogs: true,
+				serviceAccountName:     "test-clf-" + getRandomString(),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "INPUTREFS=[\"application\"]", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
+			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace":"logging-project-71000-2"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+			exutil.By("Create project for app logs and deploy the log generator")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			for i := 0; i < 3; i++ {
+				ns := "logging-project-71000-" + strconv.Itoa(i)
+				defer oc.DeleteSpecifiedNamespaceAsAdmin(ns)
+				oc.CreateSpecifiedNamespaceAsAdmin(ns)
+				err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", ns).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			appNS := "logging-71000-test-1"
+			defer oc.DeleteSpecifiedNamespaceAsAdmin(appNS)
+			oc.CreateSpecifiedNamespaceAsAdmin(appNS)
+			err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", appNS).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Check data in ES, logs from project/logging-project-71000-2 shouldn't be collected")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForProjectLogsAppear(oc, "logging-project-71000-0", "app")
+			ees.waitForProjectLogsAppear(oc, "logging-project-71000-1", "app")
+			ees.waitForProjectLogsAppear(oc, appNS, "app")
+			count, err := ees.getDocCount(oc, "app", "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"logging-project-71000-2\"}}}")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(count == 0).Should(o.BeTrue())
+
+			exutil.By("Update CLF to exclude all namespaces")
+			patch = `[{"op": "replace", "path": "/spec/inputs/0/application/excludes/0/namespace", "value": "*"}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+			exutil.By("Check data in ES, no logs should be collected")
+			// sleep 10 seconds for collector pods to send the cached records
+			time.Sleep(10 * time.Second)
+			ees.removeIndices(oc, "*-write")
+			// sleep 10 seconds for collector pods to work with new configurations
+			time.Sleep(10 * time.Second)
+			indices, err := ees.getIndices(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if len(indices) > 0 {
+				for _, i := range indices {
+					o.Expect(strings.Contains(i.Index, "app")).ShouldNot(o.BeTrue())
+				}
+			}
+
+			exutil.By("Update CLF to set include namespaces")
+			patch = `[{"op": "add", "path": "/spec/inputs/0/application/includes", "value": [{"namespace": "logging-project-71000*"}]}, {"op": "replace", "path": "/spec/inputs/0/application/excludes/0/namespace", "value": "logging-project-71000-2"}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+			// sleep 10 seconds for collector pods to send the cached records
+			time.Sleep(10 * time.Second)
+			ees.removeIndices(oc, "*-write")
+
+			exutil.By("Check data in ES, logs from project/logging-project-71000-2 and " + appNS + "shouldn't be collected")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForProjectLogsAppear(oc, "logging-project-71000-0", "app")
+			ees.waitForProjectLogsAppear(oc, "logging-project-71000-1", "app")
+			for _, ns := range []string{appNS, "logging-project-71000-2"} {
+				count, err = ees.getDocCount(oc, "app", "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \""+ns+"\"}}}")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(count == 0).Should(o.BeTrue(), "find logs from project "+ns+", this is not expected")
+			}
+
+			exutil.By("Remove excludes from CLF")
+			patch = `[{"op": "remove", "path": "/spec/inputs/0/application/excludes"}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+			// sleep 10 seconds for collector pods to send the cached records
+			time.Sleep(10 * time.Second)
+			ees.removeIndices(oc, "*-write")
+
+			exutil.By("Check data in ES, logs from logging-project-71000*, other logs shouldn't be collected")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForProjectLogsAppear(oc, "logging-project-71000-0", "app")
+			ees.waitForProjectLogsAppear(oc, "logging-project-71000-1", "app")
+			ees.waitForProjectLogsAppear(oc, "logging-project-71000-2", "app")
+			count, err = ees.getDocCount(oc, "app", "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \""+appNS+"\"}}}")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(count == 0).Should(o.BeTrue(), "find logs from project "+appNS+", this is not expected")
+
+			exutil.By("Update CLF to include all namespaces")
+			patch = `[{"op": "replace", "path": "/spec/inputs/0/application/includes/0/namespace", "value": "*"}]`
+			clf.update(oc, "", patch, "--type=json")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+			exutil.By("Check data in ES, all application logs should be collected, but no logs from infra projects")
+			// sleep 10 seconds for collector pods to send the cached records
+			time.Sleep(10 * time.Second)
+			ees.removeIndices(oc, "*-write")
+			for _, ns := range []string{appNS, "logging-project-71000-0", "logging-project-71000-1", "logging-project-71000-2"} {
+				ees.waitForProjectLogsAppear(oc, ns, "app")
+			}
+			count, err = ees.getDocCount(oc, "app", "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"openshift@\"}}}")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(count == 0).Should(o.BeTrue(), "find logs from project openshift*, this is not expected")
 
 		})
 

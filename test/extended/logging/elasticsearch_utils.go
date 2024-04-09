@@ -404,3 +404,9 @@ func (es externalES) searchDocByQuery(oc *exutil.CLI, indexName string, queryStr
 	json.Unmarshal([]byte(stdout), &res)
 	return res
 }
+
+func (es externalES) removeIndices(oc *exutil.CLI, indexName string) {
+	cmd := es.baseCurlString() + indexName + " -X DELETE"
+	_, err := e2eoutput.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 3*time.Second, 30*time.Second)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
