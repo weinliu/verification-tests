@@ -12,6 +12,7 @@ function go_mod_tidy {
         echo "========try next to get lib========"
         ((count++))
     done
+    sed -i'' -e '/^toolchain go/d' go.mod
 
     if [ $count -eq 100 ]; then
         echo "can not download lib"
