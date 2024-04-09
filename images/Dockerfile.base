@@ -8,7 +8,7 @@ RUN sh -c 'echo -e "[google-cloud-sdk]\nname=Google Cloud SDK\nbaseurl=https://p
     git config --system user.email test-private@test.com && \
     chmod g+w /etc/passwd && \
     rm -rf /root/.config/gcloud
-RUN pip3 install --upgrade setuptools pip && pip3 install dotmap minio pyyaml requests python-openstackclient && \
+RUN pip3 uninstall PyYAML -y && pip3 install --upgrade setuptools pip && pip3 install dotmap minio pyyaml requests python-openstackclient && \
     sh -c 'echo -e "[rhel8.7-baseos]\nname=rhel8.7-baseos\nbaseurl=http://download.eng.rdu.redhat.com/rhel-8/rel-eng/RHEL-8/latest-RHEL-8.7/compose/BaseOS/x86_64/os\nenabled=0\ngpgcheck=1" >/etc/yum.repos.d/rhel8.7-baseos.repo' && \
     yum -y --enablerepo=rhel8.7-baseos install sos
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
