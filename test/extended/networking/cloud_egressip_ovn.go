@@ -1918,7 +1918,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-Author:jechen-High-70667-After pods are deleted, SNAT and lr-policy-list for egressIP should be deleted correctly when egressIP uses podSelector with NotIn operator. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-70667-After pods are deleted, SNAT and lr-policy-list for egressIP should be deleted correctly when egressIP uses podSelector with NotIn operator. [Disruptive]", func() {
 
 		// This is for https://issues.redhat.com/browse/OCPBUGS-24055
 

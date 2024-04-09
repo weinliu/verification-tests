@@ -1345,14 +1345,12 @@ func checkDisconnect(oc *exutil.CLI) bool {
 	workNode, err := exutil.GetFirstWorkerNode(oc)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	curlCMD := "curl -I ifconfig.me --connect-timeout 5"
-	output, debugNodeErr := exutil.DebugNode(oc, workNode, "bash", "-c", curlCMD)
-	o.Expect(debugNodeErr).ShouldNot(o.HaveOccurred())
-	if strings.Contains(output, "HTTP") {
-		e2e.Logf("Be able to access the public Internet from the cluster.")
-		return false
+	output, err := exutil.DebugNode(oc, workNode, "bash", "-c", curlCMD)
+	if !strings.Contains(output, "HTTP") || err != nil {
+		e2e.Logf("Unable to access the public Internet from the cluster.")
+		return true
 	}
 
-	e2e.Logf("Not able to access the public Internet from the cluster.")
-	return true
-
+	e2e.Logf("Successfully connected to the public Internet from the cluster.")
+	return false
 }
