@@ -258,13 +258,39 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42367-add extension to RHCOS [Disruptive]", func() {
-		workerNode := skipTestIfOsIsNotCoreOs(oc)
-		textToVerify := TextToVerify{
-			textToVerifyForMC:   "usbguard",
-			textToVerifyForNode: "usbguard",
-			needChroot:          true,
-		}
-		createMcAndVerifyMCValue(oc, "Usb Extension", "change-worker-extension-usbguard", workerNode, textToVerify, "rpm", "-q", "usbguard")
+		var (
+			mcp                = GetCoreOsCompatiblePool(oc.AsAdmin())
+			mcName             = "change-worker-extension-usbguard"
+			mcTemplate         = "change-worker-extension-usbguard.yaml"
+			behaviourValidator = UpdateBehaviourValidator{
+				PreRebootMCDLogsCheckers: []PreRebootMCDLogChecker{
+					{
+						Desc:     "Check that extensions are extracted using podman",
+						ErrorMsg: "Extensions are not extracted using podman",
+						Matcher:  o.MatchRegexp(regexp.QuoteMeta(`Running: nice -- ionice -c 3 podman cp `) + `.*/run/mco-extensions/os-extensions-content`),
+					},
+				},
+				Checkers: []Checker{
+					CommandOutputChecker{
+						Desc:     "Check that usbguard rpm is installed",
+						ErrorMsg: "usbguard has not been installed",
+						Command:  []string{"rpm", "-q", "usbguard"},
+						Matcher:  o.ContainSubstring("usbguard"),
+					},
+				},
+			}
+		)
+
+		behaviourValidator.Initialize(mcp, nil)
+
+		exutil.By("Create a MC to deploy a usbguard extension")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate(mcTemplate)
+		mc.skipWaitForMcp = true
+		defer mc.delete()
+		mc.create()
+		logger.Infof("OK!\n")
+
+		behaviourValidator.Validate()
 	})
 	g.It("Author:sregidor-LEVEL0-Longduration-NonPreRelease-Critical-56131-Install all extensions [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
