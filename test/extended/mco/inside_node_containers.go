@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
@@ -15,8 +13,7 @@ import (
 
 // OsImageBuilderInNode encapsulates the functionality to build custom osImages inside a cluster node
 type OsImageBuilderInNode struct {
-	node         Node
-	architecture architecture.Architecture
+	node Node
 	baseImage,
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
@@ -47,9 +44,6 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 		b.dockerConfig = filepath.Join(tokenDir, ".dockerconfigjson")
 	}
 	logger.Infof("Using docker config file: %s\n", b.dockerConfig)
-
-	b.architecture = architecture.ClusterArchitecture(b.node.oc)
-	logger.Infof("Building using architecture: %s", b.architecture)
 
 	b.remoteTmpDir = filepath.Join("/root", e2e.TestContext.OutputDir, fmt.Sprintf("mco-test-%s", exutil.GetRandomString()))
 	_, err = b.node.DebugNodeWithChroot("mkdir", "-p", b.remoteTmpDir)
@@ -202,24 +196,17 @@ func (b *OsImageBuilderInNode) buildImage() error {
 	podmanCLI := container.NewPodmanCLI()
 	buildPath := filepath.Dir(b.remoteDockerfile)
 	podmanCLI.ExecCommandPath = buildPath
-	switch b.architecture {
-	case architecture.AMD64, architecture.ARM64, architecture.PPC64LE, architecture.S390X:
-		buildCommand := "NO_PROXY=" + b.noProxy + " HTTPS_PROXY=" + b.httpsProxy + " HTTP_PROXY=" + b.httpProxy + " podman build " + buildPath + " --arch " + b.architecture.String() + " --tag " + b.osImage + " --authfile " + b.remoteDockerConfig
-		logger.Infof("Executing build command: %s", buildCommand)
+	buildCommand := "NO_PROXY=" + b.noProxy + " HTTPS_PROXY=" + b.httpsProxy + " HTTP_PROXY=" + b.httpProxy + " podman build " + buildPath + " --tag " + b.osImage + " --authfile " + b.remoteDockerConfig
+	logger.Infof("Executing build command: %s", buildCommand)
 
-		output, err := b.node.DebugNodeWithChroot("bash", "-c", buildCommand)
-		if err != nil {
-			msg := fmt.Sprintf("Podman failed building image %s with architecture %s:\n%s\n%s", b.osImage, b.architecture, output, err)
-			logger.Errorf(msg)
-			return fmt.Errorf(msg)
-		}
-
-		logger.Debugf(output)
-	default:
-		msg := fmt.Sprintf("Architecture '%s' is not supported. Oly 'arm64' and 'amd64' architectures are supported", b.architecture.String())
+	output, err := b.node.DebugNodeWithChroot("bash", "-c", buildCommand)
+	if err != nil {
+		msg := fmt.Sprintf("Podman failed building image %s:\n%s\n%s", b.osImage, output, err)
 		logger.Errorf(msg)
 		return fmt.Errorf(msg)
 	}
+
+	logger.Debugf(output)
 	logger.Infof("OK!\n")
 
 	return nil
@@ -281,7 +268,7 @@ func (b *OsImageBuilderInNode) digestImage() (string, error) {
 	inspectJSON := JSON(inspectInfo)
 	digestedImage := inspectJSON.Get("Name").ToString() + "@" + inspectJSON.Get("Digest").ToString()
 
-	logger.Infof("Image %s was built with architecture %s and pushed properly", b.osImage, b.architecture)
+	logger.Infof("Image %s was built and pushed properly", b.osImage)
 	logger.Infof("Image %s was digested as %s", b.osImage, digestedImage)
 
 	logger.Infof("OK!\n")
