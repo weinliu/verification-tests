@@ -1852,6 +1852,26 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		}
 		waitWindowsNodesReady(oc, numberOfWindowsNodes, 20*time.Minute)
+		exutil.By("Check there's only one configmap of windows-services-")
+		o.Expect(len(getWmcoConfigMaps(oc))).To(o.BeNumerically("==", 1), "The old windows-services configmap is not cleaned up")
+		exutil.By("Check service configmap got created with a names with the new version ")
+		wmcoLogVersion := getWMCOVersionFromLogs(oc)
+		cmVersionFromLog := "windows-services-" + wmcoLogVersion
+		windowsServicesCM, err := popItemFromList(oc, "configmap", wicdConfigMap, wmcoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if cmVersionFromLog != windowsServicesCM {
+			e2e.Failf("Configmap of windows services mismatch with Logs version")
+		}
+		exutil.By("Check windowsmachineconfig/desired-version annotation")
+		for _, winHostName := range getWindowsHostNames(oc) {
+			desiredVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Trim(desiredVersion, `'`) != wmcoLogVersion {
+				e2e.Failf("desired-version annotation missmatch, expected %v and got %v for host %v", wmcoLogVersion, desiredVersion, winHostName)
+			}
+		}
+		exutil.By("Set wmco_upgrade_index_image to empty")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", "winc-test-config", "-n", "winc-test", "-p", `{"data":{"wmco_upgrade_index_image": ""}}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to reset configmap winc-test-config")
 	})
-
 })

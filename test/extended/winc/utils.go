@@ -1445,3 +1445,18 @@ func getProxySpec(oc *exutil.CLI) map[string]interface{} {
 	proxySepc["NO_PROXY"] = getClusterProxy(oc, "spec.noProxy")
 	return proxySepc
 }
+
+func getWmcoConfigMaps(oc *exutil.CLI) []string {
+	// func getWmcoConfigMaps(oc *exutil.CLI) ([]string, error) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", wmcoNamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get ConfigMap")
+	// Split the output by newlines to get each ConfigMap name
+	lines := strings.Split(string(output), "\n")
+	var configMaps []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "windows-services-") {
+			configMaps = append(configMaps, line)
+		}
+	}
+	return configMaps
+}
