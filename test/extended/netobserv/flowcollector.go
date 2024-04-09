@@ -37,7 +37,8 @@ type Flowcollector struct {
 	KafkaTopic                string
 	KafkaUser                 string
 	KafkaNamespace            string
-	MetricServerTLSType       string
+	FLPMetricServerTLSType    string
+	EBPFMetricServerTLSType   string
 	EBPFCacheActiveTimeout    string
 	EBPFPrivileged            string
 	EBPFMetrics               string

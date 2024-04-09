@@ -178,13 +178,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				g.By("Deploy flowcollector")
 				flow := Flowcollector{
-					Namespace:           namespace,
-					Template:            flowFixturePath,
-					LokiURL:             lokiURL,
-					LokiNamespace:       namespace,
-					LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					MetricServerTLSType: "Disabled",
-					EBPFMetrics:         "true",
+					Namespace:               namespace,
+					Template:                flowFixturePath,
+					LokiURL:                 lokiURL,
+					LokiNamespace:           namespace,
+					LokiTLSCertName:         fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					FLPMetricServerTLSType:  "Disabled",
+					EBPFMetricServerTLSType: "Disabled",
+					EBPFMetrics:             "true",
 				}
 
 				defer flow.deleteFlowcollector(oc)
@@ -247,12 +248,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				)
 
 				flow := Flowcollector{
-					Namespace:       namespace,
-					Template:        flowFixturePath,
-					LokiURL:         lokiURL,
-					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					LokiNamespace:   namespace,
-					EBPFMetrics:     "true",
+					Namespace:               namespace,
+					Template:                flowFixturePath,
+					LokiURL:                 lokiURL,
+					LokiTLSCertName:         fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					LokiNamespace:           namespace,
+					EBPFMetrics:             "true",
+					EBPFMetricServerTLSType: "Auto",
 				}
 
 				defer flow.deleteFlowcollector(oc)

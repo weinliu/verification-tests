@@ -36,7 +36,7 @@ objects:
             server:
               port: 9102
               tls:
-                type: "${MetricServerTLSType}"
+                type: "${EBPFMetricServerTLSType}"
           resources:
             requests:
               memory: 50Mi
@@ -53,7 +53,7 @@ objects:
           server:
             port: 9102
             tls:
-              type: "${MetricServerTLSType}"
+              type: "${FLPMetricServerTLSType}"
           disableAlerts: []
         resources:
           requests:
@@ -169,8 +169,10 @@ parameters:
     value: "false"
   - name: EBPFMetrics
     value: "false"
-  - name: MetricServerTLSType
+  - name: FLPMetricServerTLSType
     value: "Auto"
+  - name: EBPFMetricServerTLSType
+    value: "Disabled"
   - name: MultiClusterDeployment
     value: "false"
   - name: AddZone
