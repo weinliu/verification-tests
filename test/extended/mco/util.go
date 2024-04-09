@@ -679,11 +679,8 @@ func skipTestIfExtensionsAreUsed(oc *exutil.CLI) {
 
 // skipTestIfCloudImagesCannotBeModified skips the current test if the machinesets cannot be modified to use other cloud images. Currently we can only do that in AWS and east-2 zone.
 func skipTestIfCloudImagesCannotBeModified(oc *exutil.CLI) {
-	// Skip if not AWS
-	platform := exutil.CheckPlatform(oc)
-	if platform != AWSPlatform {
-		g.Skip(fmt.Sprintf("Current platform is %s. AWS platform is required to execute this test case!.", platform))
-	}
+	// Skip if not AWS or GCP
+	skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
 
 	// Skip if not east-2 zone
 	infra := NewResource(oc.AsAdmin(), "infrastructure", "cluster")
@@ -716,7 +713,7 @@ func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 	}
 
 	// In some UPI/SNO/Compact clusters machineset resources exist, but they are all configured with 0 replicas
-	// If all machinesets have 0 replicas, then it means that we need to the test case
+	// If all machinesets have 0 replicas, then it means that we need to skip the test case
 	if totalworkers == 0 {
 		g.Skip("There are machinesets in this cluster, but they are not available to scale workers. This test cannot be execute if workers cannot be scaled via machineset")
 	}
@@ -1149,39 +1146,69 @@ func SkipIfNotOnPremPlatform(oc *exutil.CLI) {
 	}
 }
 
-// CloneResource will clone the given resource with the new name and the new namespace. If new namespace is an empty strng, it is ignored and the namespace will not be changed.
-func CloneResource(res *Resource, newName, newNamespace string) (*Resource, error) {
-	logger.Infof("Cloning resource %s with name %s and namespace %s", res, newName, newNamespace)
-
-	jsonRes, err := res.Get(`{}`)
+// GetClonedResourceJSONString takes the json data of a given resource and clone it using a new name and namespace, removing unnecessary fields
+// Sometimes we need to apply extra changes, in order to do so we can provide an function using the extraModifications parameter
+func GetClonedResourceJSONString(res ResourceInterface, newName, newNamespace string, extraModifications func(string) (string, error)) (string, error) {
+	jsonRes, err := res.GetCleanJSON()
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+
+	jsonRes, err = sjson.Delete(jsonRes, "status")
+	if err != nil {
+		return "", err
 	}
 
 	jsonRes, err = sjson.Delete(jsonRes, "metadata.creationTimestamp")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	jsonRes, err = sjson.Delete(jsonRes, "metadata.resourceVersion")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	jsonRes, err = sjson.Delete(jsonRes, "metadata.uid")
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+
+	jsonRes, err = sjson.Delete(jsonRes, "metadata.generation")
+	if err != nil {
+		return "", err
 	}
 
 	jsonRes, err = sjson.Set(jsonRes, "metadata.name", newName)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if newNamespace != "" {
 		jsonRes, err = sjson.Set(jsonRes, "metadata.namespace", newNamespace)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-	} else {
+	}
+
+	if extraModifications != nil {
+		logger.Infof("Executing extra modifications")
+		return extraModifications(jsonRes)
+	}
+
+	return jsonRes, nil
+
+}
+
+// CloneResource will clone the given resource with the new name and the new namespace. If new namespace is an empty strng, it is ignored and the namespace will not be changed.
+// Sometimes we need to apply extra changes to the cloned resource before it is created, in order to do so we can provide an function using the extraModifications parameter
+func CloneResource(res ResourceInterface, newName, newNamespace string, extraModifications func(string) (string, error)) (*Resource, error) {
+	logger.Infof("Cloning resource %s with name %s and namespace %s", res, newName, newNamespace)
+
+	jsonRes, err := GetClonedResourceJSONString(res, newName, newNamespace, extraModifications)
+	if err != nil {
+		return nil, err
+	}
+
+	if newNamespace == "" {
 		newNamespace = res.GetNamespace()
 	}
 
@@ -1191,7 +1218,7 @@ func CloneResource(res *Resource, newName, newNamespace string) (*Resource, erro
 	}
 	filename += ".json"
 
-	tmpFile := generateTmpFile(res.oc, filename)
+	tmpFile := generateTmpFile(res.GetOC(), filename)
 
 	wErr := os.WriteFile(tmpFile, []byte(jsonRes), 0o644)
 	if wErr != nil {
@@ -1200,13 +1227,13 @@ func CloneResource(res *Resource, newName, newNamespace string) (*Resource, erro
 
 	logger.Infof("New resource created using definition file %s", tmpFile)
 
-	_, cErr := res.oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tmpFile).Output()
+	_, cErr := res.GetOC().AsAdmin().WithoutNamespace().Run("create").Args("-f", tmpFile).Output()
 
 	if cErr != nil {
 		return nil, cErr
 	}
 
-	return NewNamespacedResource(res.oc, res.GetKind(), newNamespace, newName), nil
+	return NewNamespacedResource(res.GetOC(), res.GetKind(), newNamespace, newName), nil
 }
 
 func skipIfNoTechPreview(oc *exutil.CLI) {

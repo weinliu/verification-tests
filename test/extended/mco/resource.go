@@ -48,6 +48,8 @@ type ResourceInterface interface {
 	Describe() (string, error)
 	ExportToFile(fileName string) error
 	PrettyString() string
+	GetOC() *exutil.CLI
+	GetCleanJSON() (string, error)
 }
 
 // Resource will provide the functionality to hanlde general openshift resources
@@ -91,6 +93,18 @@ func (r ocGetter) PrintDebugCommand() error {
 	err := r.oc.WithoutNamespace().Run("get").Args(params...).Execute()
 
 	return err
+}
+
+// GetCleanJSON return -o json output representation of the resource instead of -o jsonpath='{}'. It filters several fileds like managedFields. It is cleaner.
+func (r ocGetter) GetCleanJSON() (string, error) {
+	params := r.getCommonParams()
+
+	params = append(params, []string{"-o", "json"}...)
+
+	result, err := r.oc.WithoutNamespace().Run("get").Args(params...).Output()
+
+	return result, err
+
 }
 
 // Get uses the CLI to retrieve the return value for this jsonpath
@@ -143,6 +157,11 @@ func NewResource(oc *exutil.CLI, kind, name string) *Resource {
 // NewNamespacedResource constructs a Resource struct for a namespaced resource
 func NewNamespacedResource(oc *exutil.CLI, kind, namespace, name string) *Resource {
 	return &Resource{ocGetter: ocGetter{oc, kind, namespace, name}}
+}
+
+// GetOC retunrs the oc CLI used to execute commands in the resource
+func (r Resource) GetOC() *exutil.CLI {
+	return r.oc
 }
 
 // Delete removes the resource from openshift cluster

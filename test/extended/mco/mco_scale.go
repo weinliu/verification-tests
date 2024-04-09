@@ -2,6 +2,9 @@ package mco
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
@@ -13,7 +16,7 @@ import (
 )
 
 const (
-	secretPrefix = "cloned-for-"
+	clonedPrefix = "user-data-"
 )
 
 var _ = g.Describe("[sig-mco] MCO scale", func() {
@@ -35,54 +38,14 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-LongDuration-High-63894-Scaleup using 4.1 cloud image[Disruptive]", func() {
 		var (
-			newMsName     = "mco-tc-63894-cloned"
-			amiVersion    = "ami-0649fd5d42859bdfc" // OCP4.1 ami for AWS and use-east2 zone: https://github.com/openshift/installer/blob/release-4.1/data/data/rhcos.json
-			useIgnitionV2 = true                    // 4.1 version uses ignition V2
-			numNewNodes   = 1                       // the number of nodes scaled up in the new Machineset
+			imageVersion = "4.1" // OCP4.1 ami for AWS and use-east2 zone: https://github.com/openshift/installer/blob/release-4.1/data/data/rhcos.json
+			numNewNodes  = 1     // the number of nodes scaled up in the new Machineset
 		)
+
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.1 is only supported in AWS. GCP is only supported in versions 4.6+
 		skipTestIfCloudImagesCannotBeModified(oc.AsAdmin())
 
-		initialNumWorkers := len(wMcp.GetNodesOrFail())
-
-		defer func() {
-			logger.Infof("Start TC defer block")
-			newMs := NewMachineSet(oc.AsAdmin(), MachineAPINamespace, newMsName)
-			errors := o.InterceptGomegaFailures(func() { removeClonedMachineSet(newMs, wMcp, initialNumWorkers) }) // We don't want gomega to fail and stop the deferred cleanup process
-			if len(errors) != 0 {
-				logger.Infof("There were errors restoring the original MachineSet resources in the cluster")
-				for _, e := range errors {
-					logger.Errorf(e)
-				}
-			}
-
-			// We don't want the test to pass if there were errors while restoring the initial state
-			o.Expect(len(errors)).To(o.BeZero(),
-				"There were %d errors while recovering the cluster's initial state", len(errors))
-
-			logger.Infof("End TC defer block")
-		}()
-
-		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, amiVersion, useIgnitionV2)
-
-		exutil.By("Scale MachineSet up")
-		logger.Infof("Scaling up machineset %s", newMs.GetName())
-		scaleErr := newMs.ScaleTo(numNewNodes)
-		o.Expect(scaleErr).NotTo(o.HaveOccurred(), "Error scaling up MachineSet %s", newMs.GetName())
-
-		logger.Infof("Waiting %s machineset for being ready", newMsName)
-		o.Eventually(newMs.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
-		logger.Infof("OK!\n")
-
-		exutil.By("Check that worker pool is increased and updated")
-		o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
-			"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
-		wMcp.waitForComplete()
-		logger.Infof("OK!\n")
-
-		exutil.By("Scale down and remove the cloned Machineset")
-		removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
-		logger.Infof("OK!\n")
-
+		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
@@ -96,11 +59,11 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			mcpWorker  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			// Set the 4.5 boot image ami for east-2 zone.
 			// the right ami should be selected from here https://github.com/openshift/installer/blob/release-4.5/data/data/rhcos.json
-			amiVersion    = "ami-0ba8d5168e13bbcce"
-			useIgnitionV2 = true // 4.5 version uses ignition V2
-			numNewNodes   = 1    // the number of nodes scaled up in the new Machineset
+			imageVersion = "4.5"
+			numNewNodes  = 1 // the number of nodes scaled up in the new Machineset
 		)
 
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.5 is only supported for AWS. GCP is only supported in versions 4.6+
 		skipTestIfCloudImagesCannotBeModified(oc.AsAdmin())
 
 		initialNumWorkers := len(wMcp.GetNodesOrFail())
@@ -148,7 +111,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		}()
 
 		// Duplicate an existing MachineSet
-		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, amiVersion, useIgnitionV2)
+		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion))
 
 		// KubeletConfig
 		exutil.By("Create KubeletConfig")
@@ -420,42 +383,45 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 	})
 })
 
-func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2 bool) *MachineSet {
+func cloneMachineSet(oc *exutil.CLI, newMsName, imageVersion, ignitionVersion string) *MachineSet {
 	var (
-		newSecretName = secretPrefix + newMsName
+		newSecretName = getClonedSecretName(newMsName)
+		platform      = exutil.CheckPlatform(oc.AsAdmin())
 	)
 
 	// Duplicate an existing MachineSet
 	exutil.By("Duplicate a MachineSet resource")
+	logger.Infof("Create a new machineset that will use base image %s and ignition version %s", imageVersion, ignitionVersion)
 	allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
 	ms := allMs[0]
 	newMs, dErr := ms.Duplicate(newMsName)
 	o.Expect(dErr).NotTo(o.HaveOccurred(), "Error duplicating MachineSet %s -n %s", ms.GetName(), ms.GetNamespace())
-
-	// Get current secret used by the MachineSet
-	currentSecret := ms.GetOrFail(`{.spec.template.spec.providerSpec.value.userDataSecret.name}`)
-	logger.Infof("Currently used secret: %s", currentSecret)
 	logger.Infof("OK!\n")
 
-	// Create a new secret using "append" and "2.2.0" Ignition version
-	exutil.By("Create a new secret with 2.2.0 ignition version and 'append' configuration")
+	// Create a new secret using the given ignition version
+	exutil.By(fmt.Sprintf("Create a new secret with %s ignition version", ignitionVersion))
+	currentSecret := ms.GetOrFail(`{.spec.template.spec.providerSpec.value.userDataSecret.name}`)
 	logger.Infof("Duplicating secret %s with new name %s", currentSecret, newSecretName)
-	var changes msDuplicatedSecretChanges
-	if useIgnitionV2 {
-		changes = msDuplicatedSecretChanges{Name: newSecretName, IgnitionVersion: "2.2.0", IgnitionConfigAction: "append"}
-	} else {
-		changes = msDuplicatedSecretChanges{Name: newSecretName}
-	}
-	clonedSecret, sErr := duplicateMachinesetSecret(oc, currentSecret, changes)
+	clonedSecret, sErr := duplicateMachinesetSecret(oc, currentSecret, newSecretName, ignitionVersion)
 	o.Expect(sErr).NotTo(o.HaveOccurred(), "Error duplicating machine-api secret")
 	o.Expect(clonedSecret).To(Exist(), "The secret was not duplicated for machineset %s", newMs)
 	logger.Infof("OK!\n")
 
-	// Set the new boot image ami.
-	exutil.By(fmt.Sprintf("Configure the duplicated MachineSet to use the %s boot image", amiVersion))
-	err = newMs.Patch("json", fmt.Sprintf(`[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/ami/id", "value": "%s" }]`, amiVersion))
-	o.Expect(err).NotTo(o.HaveOccurred(), "Error patching MachineSet %s to use the new %s boot image", newMs.GetName(), amiVersion)
+	// Get the right base image name from the rhcos json info stored in the github repositories
+	exutil.By(fmt.Sprintf("Get the base image for version %s", imageVersion))
+	rhcosHandler, err := GetRHCOSHandler(platform)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the rhcos handler")
+
+	baseImage, err := rhcosHandler.GetBaseImageFromRHCOSImageInfo(imageVersion, *newMs.GetArchitectureOrFail(), getCurrentRegionOrFail(oc.AsAdmin()))
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the base image")
+	logger.Infof("Using base image %s", baseImage)
+	logger.Infof("OK!\n")
+
+	// Set the new boot base image
+	exutil.By(fmt.Sprintf("Configure the duplicated MachineSet to use the %s boot image", baseImage))
+	o.Expect(rhcosHandler.SetNewBootImageInMachineSet(newMs, baseImage)).To(o.Succeed(),
+		"There was an error while patching the new base image in %s", newMs)
 	logger.Infof("OK!\n")
 
 	// Use new secret
@@ -467,7 +433,7 @@ func cloneMachineSet(oc *exutil.CLI, newMsName, amiVersion string, useIgnitionV2
 	return newMs
 }
 
-func removeClonedMachineSet(ms *MachineSet, wMcp *MachineConfigPool, expectedNumWorkers int) {
+func removeClonedMachineSet(ms *MachineSet, mcp *MachineConfigPool, expectedNumWorkers int) {
 	if ms.Exists() {
 		logger.Infof("Scaling %s machineset to zero", ms.GetName())
 		o.Expect(ms.ScaleTo(0)).To(o.Succeed(),
@@ -482,12 +448,15 @@ func removeClonedMachineSet(ms *MachineSet, wMcp *MachineConfigPool, expectedNum
 
 		if expectedNumWorkers >= 0 {
 			exutil.By("Check that worker pool is increased and updated")
-			o.Eventually(wMcp.GetNodes, "5m", "30s").Should(o.HaveLen(expectedNumWorkers),
-				"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
+			// Before calling mcp.GetNodes we wait for the MachineCount number to settle, to avoid a panic due to nodes disappearing while we calculate the number of nodes
+			o.Eventually(mcp.getMachineCount, "5m", "30s").Should(o.Equal(expectedNumWorkers),
+				"The MachineCount has not the expected value in pool:\n%s", mcp.PrettyString())
+			o.Eventually(mcp.GetNodes, "5m", "30s").Should(o.HaveLen(expectedNumWorkers),
+				"The number of nodes is not the expected one in pool:\n%s", mcp.PrettyString())
 		}
 	}
 
-	clonedSecret := NewSecret(ms.oc, MachineAPINamespace, secretPrefix+ms.GetName())
+	clonedSecret := NewSecret(ms.oc, MachineAPINamespace, getClonedSecretName(ms.GetName()))
 	if clonedSecret.Exists() {
 		logger.Infof("Removing %s secret", clonedSecret)
 		o.Expect(clonedSecret.Delete()).To(o.Succeed(),
@@ -497,13 +466,8 @@ func removeClonedMachineSet(ms *MachineSet, wMcp *MachineConfigPool, expectedNum
 
 // getCoreOsBootImageFromConfigMap look for the configured coreOs boot image in given configmap
 func getCoreOsBootImageFromConfigMap(platform string, arch architecture.Architecture, coreosBootimagesCM *ConfigMap) (string, error) {
-	stringArch := ""
-	switch arch {
-	case architecture.AMD64:
-		stringArch = "x86_64"
-	case architecture.ARM64:
-		stringArch = "aarch64"
-	}
+	// transform amd64 naming to x86_64 naming
+	stringArch := convertArch(arch)
 
 	logger.Infof("Looking for coreos boot image for architecture %s in %s", stringArch, coreosBootimagesCM)
 
@@ -519,4 +483,228 @@ func getCoreOsBootImageFromConfigMap(platform string, arch architecture.Architec
 	}
 
 	return currentCoreOsBootImage, nil
+}
+
+// getRHCOSImagesInfo returns a string with the info about all the base images used by rhcos in the given version
+func getRHCOSImagesInfo(version string) (string, error) {
+	var (
+		err        error
+		resp       *http.Response
+		numRetries = 3
+		retryDelay = time.Minute
+		rhcosURL   = fmt.Sprintf("https://raw.githubusercontent.com/openshift/installer/release-%s/data/data/rhcos.json", version)
+	)
+
+	if CompareVersions(version, ">=", "4.10") {
+		rhcosURL = fmt.Sprintf("https://raw.githubusercontent.com/openshift/installer/release-%s/data/data/coreos/rhcos.json", version)
+	}
+
+	// To mitigate network errors we will retry in case of failure
+	logger.Infof("Getting rhcos image info from: %s", rhcosURL)
+	for i := 0; i < numRetries; i++ {
+		if i > 0 {
+			logger.Infof("Error while getting the rhcos mages json data: %s.\nWaiting %s and retrying. Num retries: %d", err, retryDelay, i)
+			time.Sleep(retryDelay)
+		}
+		resp, err = http.Get(rhcosURL)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// We Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+// convertArch transform amd64 naming into x86_64 naming
+func convertArch(arch architecture.Architecture) string {
+	stringArch := ""
+	switch arch {
+	case architecture.AMD64:
+		stringArch = "x86_64"
+	case architecture.ARM64:
+		stringArch = "aarch64"
+	default:
+		stringArch = arch.String()
+	}
+	return stringArch
+}
+
+// getCurrentRegionOrFail returns the current region if we are in AWS or an empty string if any other platform
+func getCurrentRegionOrFail(oc *exutil.CLI) string {
+	infra := NewResource(oc.AsAdmin(), "infrastructure", "cluster")
+	return infra.GetOrFail(`{.status.platformStatus.aws.region}`)
+}
+
+// SimpleScaleUPTest is a generic function that tests scaling up and down worker nodes using the base image corresponding to the given version
+func SimpleScaleUPTest(oc *exutil.CLI, mcp *MachineConfigPool, imageVersion, ignitionVergsion string, numNewNodes int) {
+
+	var (
+		newMsName         = fmt.Sprintf("mco-tc-%s-cloned", GetCurrentTestPolarionIDNumber())
+		initialNumWorkers = len(mcp.GetNodesOrFail())
+	)
+
+	defer func() {
+		logger.Infof("Start TC defer block")
+		newMs := NewMachineSet(oc.AsAdmin(), MachineAPINamespace, newMsName)
+		errors := o.InterceptGomegaFailures(func() { removeClonedMachineSet(newMs, mcp, initialNumWorkers) }) // We don't want gomega to fail and stop the deferred cleanup process
+		if len(errors) != 0 {
+			logger.Infof("There were errors restoring the original MachineSet resources in the cluster")
+			for _, e := range errors {
+				logger.Errorf(e)
+			}
+		}
+
+		// We don't want the test to pass if there were errors while restoring the initial state
+		o.Expect(len(errors)).To(o.BeZero(),
+			"There were %d errors while recovering the cluster's initial state", len(errors))
+
+		logger.Infof("End TC defer block")
+	}()
+
+	logger.Infof("Create a new MachineSet using the right base image")
+	newMs := cloneMachineSet(oc.AsAdmin(), newMsName, imageVersion, ignitionVergsion)
+
+	exutil.By("Scale MachineSet up")
+	logger.Infof("Scaling up machineset %s", newMs.GetName())
+	scaleErr := newMs.ScaleTo(numNewNodes)
+	o.Expect(scaleErr).NotTo(o.HaveOccurred(), "Error scaling up MachineSet %s", newMs.GetName())
+
+	logger.Infof("Waiting %s machineset for being ready", newMsName)
+	o.Eventually(newMs.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that worker pool is increased and updated")
+	o.Eventually(mcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
+		"The worker pool has not added the new nodes created by the new Machineset.\n%s", mcp.PrettyString())
+	mcp.waitForComplete()
+	logger.Infof("OK!\n")
+
+	exutil.By("Scale down and remove the cloned Machineset")
+	removeClonedMachineSet(newMs, mcp, initialNumWorkers)
+	logger.Infof("OK!\n")
+
+}
+
+func getClonedSecretName(msName string) string {
+	return clonedPrefix + msName
+}
+
+func GetRHCOSHandler(platform string) (RHCOSHandler, error) {
+	switch platform {
+	case AWSPlatform:
+		return AWSRHCOSHandler{}, nil
+	case GCPPlatform:
+		return GCPRHCOSHandler{}, nil
+	default:
+		return nil, fmt.Errorf("Platform %s is not supported and cannot get RHCOSHandler", platform)
+	}
+}
+
+type RHCOSHandler interface {
+	GetBaseImageFromRHCOSImageInfo(version string, arch architecture.Architecture, region string) (string, error)
+	SetNewBootImageInMachineSet(newMs *MachineSet, baseImage string) error
+}
+
+type AWSRHCOSHandler struct{}
+
+func (aws AWSRHCOSHandler) SetNewBootImageInMachineSet(newMs *MachineSet, baseImage string) error {
+	return newMs.SetCoreOsBootImage(baseImage)
+}
+
+func (aws AWSRHCOSHandler) GetBaseImageFromRHCOSImageInfo(version string, arch architecture.Architecture, region string) (string, error) {
+	var (
+		path       string
+		stringArch = convertArch(arch)
+		platform   = AWSPlatform
+	)
+
+	rhcosImageInfo, err := getRHCOSImagesInfo(version)
+	if err != nil {
+		return "", err
+	}
+
+	if region == "" {
+		return "", fmt.Errorf("Region cannot have an empty value when we try to get the base image in platform %s", platform)
+	}
+	if CompareVersions(version, "<", "4.10") {
+		path = `amis.` + region + `.hvm`
+	} else {
+		path = fmt.Sprintf("architectures.%s.images.%s.regions.%s.image", stringArch, platform, region)
+
+	}
+
+	logger.Infof("Looking for rhcos base image info in path %s", path)
+	baseImage := gjson.Get(rhcosImageInfo, path)
+	if !baseImage.Exists() {
+		logger.Infof("rhcos info:\n%s", rhcosImageInfo)
+		return "", fmt.Errorf("Could not find the base image for version <%s> in platform <%s> architecture <%s> and region <%s> with path %s",
+			version, platform, arch, region, path)
+	}
+	return baseImage.String(), nil
+}
+
+type GCPRHCOSHandler struct{}
+
+func (gcp GCPRHCOSHandler) GetBaseImageFromRHCOSImageInfo(version string, arch architecture.Architecture, region string) (string, error) {
+	var (
+		imagePath   string
+		projectPath string
+		stringArch  = convertArch(arch)
+		platform    = GCPPlatform
+	)
+
+	if CompareVersions(version, "==", "4.1") {
+		return "", fmt.Errorf("There is no image base image supported for platform %s in version %s", platform, version)
+	}
+
+	rhcosImageInfo, err := getRHCOSImagesInfo(version)
+	if err != nil {
+		return "", err
+	}
+
+	if CompareVersions(version, "<", "4.10") {
+		imagePath = "gcp.image"
+		projectPath = "gcp.project"
+	} else {
+		imagePath = fmt.Sprintf("architectures.%s.images.%s.name", stringArch, platform)
+		projectPath = fmt.Sprintf("architectures.%s.images.%s.project", stringArch, platform)
+	}
+
+	logger.Infof("Looking for rhcos base image name in path %s", imagePath)
+	baseImage := gjson.Get(rhcosImageInfo, imagePath)
+	if !baseImage.Exists() {
+		logger.Infof("rhcos info:\n%s", rhcosImageInfo)
+		return "", fmt.Errorf("Could not find the base image for version <%s> in platform <%s> architecture <%s> and region <%s> with path %s",
+			version, platform, arch, region, imagePath)
+	}
+
+	logger.Infof("Looking for rhcos base image project in path %s", projectPath)
+	project := gjson.Get(rhcosImageInfo, projectPath)
+	if !project.Exists() {
+		logger.Infof("rhcos info:\n%s", rhcosImageInfo)
+		return "", fmt.Errorf("Could not find the project where the base image is stored with version <%s> in platform <%s> architecture <%s> and region <%s> with path %s",
+			version, platform, arch, region, projectPath)
+	}
+
+	return fmt.Sprintf("projects/%s/global/images/%s", project.String(), baseImage.String()), nil
+}
+
+func (gcp GCPRHCOSHandler) SetNewBootImageInMachineSet(newMs *MachineSet, baseImage string) error {
+	logger.Infof("Patch the cluster-autoscaler annotation so that our base image is not overridden by the coreos-images configmap values in clusters with texpreview")
+	err := newMs.Patch("json", `[{ "op": "replace", "path": "/metadata/annotations/capacity.cluster-autoscaler.kubernetes.io~1labels", "value": "kubernetes.io/arch=fake" }]`)
+	if err != nil {
+		return err
+	}
+	logger.Infof("Actually patching the base image now")
+	return newMs.SetCoreOsBootImage(baseImage)
 }

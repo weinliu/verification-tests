@@ -3,7 +3,6 @@ package mco
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +11,8 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -205,86 +206,38 @@ func (ms MachineSet) WaitUntilReady(duration string) error {
 // err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "newSecretName" }]`)
 // newMs.ScaleTo(1)
 func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
-	jMachineset := JSON(ms.GetOrFail(`{}`))
 
-	jAPIVersion := jMachineset.Get(`apiVersion`)
-	if !jAPIVersion.Exists() {
-		return nil, fmt.Errorf(".apiVersion does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
+	res, err := CloneResource(&ms, newName, ms.GetNamespace(),
+		// Extra modifications to
+		// 1. Create the resource with 0 replicas
+		// 2. modify the selector matchLabels
+		// 3. modify the selector template metadata labels
+		func(resString string) (string, error) {
+			newResString, err := sjson.Set(resString, "spec.replicas", 0)
+			if err != nil {
+				return "", err
+			}
+
+			newResString, err = sjson.Set(newResString, `spec.selector.matchLabels.machine\.openshift\.io/cluster-api-machineset`, newName)
+			if err != nil {
+				return "", err
+			}
+
+			newResString, err = sjson.Set(newResString, `spec.template.metadata.labels.machine\.openshift\.io/cluster-api-machineset`, newName)
+			if err != nil {
+				return "", err
+			}
+
+			return newResString, nil
+		},
+	)
+
+	if err != nil {
+		return nil, err
 	}
 
-	jKind := jMachineset.Get(`kind`)
-	if !jKind.Exists() {
-		return nil, fmt.Errorf(".kind does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
-	}
-
-	jSpec := jMachineset.Get(`spec`)
-	if !jSpec.Exists() {
-		return nil, fmt.Errorf(".spec does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
-	}
-
-	rErr := jSpec.PutSafe("replicas", 0)
-	if rErr != nil {
-		return nil, rErr
-	}
-
-	jMatchLabels := jSpec.Get("selector").Get("matchLabels")
-	if !jMatchLabels.Exists() {
-		return nil, fmt.Errorf(".spec.selector.matchLabels does not exist in  machineset %s spec: %s", ms.GetName(), jSpec)
-	}
-
-	// Remove old matchlabel
-	dErr := jMatchLabels.DeleteSafe("machine.openshift.io/cluster-api-machineset")
-	if dErr != nil {
-		return nil, dErr
-	}
-
-	// Add new matchlabel
-	pErr := jMatchLabels.PutSafe("machine.openshift.io/cluster-api-machineset", newName)
-	if pErr != nil {
-		return nil, pErr
-	}
-
-	tplLabels := jSpec.Get("template").Get("metadata").Get("labels")
-	if !tplLabels.Exists() {
-		return nil, fmt.Errorf(".template.metadata.labels does not exist in  machineset %s spec: %s", ms.GetName(), jSpec)
-	}
-
-	// Remove old machine label
-	tdErr := tplLabels.DeleteSafe("machine.openshift.io/cluster-api-machineset")
-	if tdErr != nil {
-		return nil, tdErr
-	}
-
-	// Add new machine label
-	tpErr := tplLabels.PutSafe("machine.openshift.io/cluster-api-machineset", newName)
-	if tpErr != nil {
-		return nil, tpErr
-	}
-
-	specAsJSONString, jsErr := jSpec.AsJSONString()
-	if jsErr != nil {
-		return nil, jsErr
-	}
-
-	newMsAsJSONString := fmt.Sprintf(`{"kind": "%s", "apiVersion": "%s", "metadata": {"name":"%s", "namespace": "%s"}, "spec": %s}`,
-		jKind.ToString(), jAPIVersion.ToString(), newName, ms.GetNamespace(), specAsJSONString)
-
-	tmpFile := generateTmpFile(ms.oc, "machineset-"+newName+".yml")
-
-	wErr := os.WriteFile(tmpFile, []byte(newMsAsJSONString), 0o644)
-	if wErr != nil {
-		return nil, wErr
-	}
-
-	logger.Infof("New machinset created using definition file %s", tmpFile)
-
-	_, cErr := ms.oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tmpFile).Output()
-
-	if cErr != nil {
-		return nil, cErr
-	}
-
-	return NewMachineSet(ms.oc, ms.GetNamespace(), newName), nil
+	logger.Infof("A new machineset %s has been created by cloning %s", res.GetName(), ms.GetName())
+	return NewMachineSet(ms.oc, res.GetNamespace(), res.GetName()), nil
 }
 
 // SetCoreOsBootImage sets the value of the configured coreos boot image
@@ -293,10 +246,12 @@ func (ms MachineSet) SetCoreOsBootImage(coreosBootImage string) error {
 	// currently we only support testing the coresOs boot image in GCP platform.
 	patchCoreOsBootImagePath := ""
 	switch p := exutil.CheckPlatform(ms.oc); p {
-	case "gcp":
+	case AWSPlatform:
+		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/ami/id"
+	case GCPPlatform:
 		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/disks/0/image"
 	default:
-		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP infrastructure")
+		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP and AWS platforms")
 	}
 
 	return ms.Patch("json", fmt.Sprintf(`[{"op": "add", "path": "%s", "value": "%s"}]`,
@@ -363,81 +318,95 @@ func (msl *MachineSetList) GetAllOrFail() []MachineSet {
 	return allMs
 }
 
-// msDuplicatedSecretChanges struct with all values that will be changed in a duplicated machinset secret
-type msDuplicatedSecretChanges struct {
-	Name                 string
-	IgnitionVersion      string
-	IgnitionConfigAction string
-}
-
-func duplicateMachinesetSecret(oc *exutil.CLI, secretName string, changes msDuplicatedSecretChanges) (*Secret, error) {
-
-	userData, udErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", MachineAPINamespace,
-		"--template", `{{index .data "userData" | base64decode}}`).Output()
-
+// duplicateMachinesetSecret duplicates a userData secret and prepares the new duplicated secret to use the given ignition version
+func duplicateMachinesetSecret(oc *exutil.CLI, secretName, newName, newIgnitionVersion string) (*Secret, error) {
+	var (
+		currentSecret = NewSecret(oc, MachineAPINamespace, secretName)
+		err           error
+	)
+	userData, udErr := currentSecret.GetDataValue("userData")
 	if udErr != nil {
 		logger.Errorf("Error getting userData info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, udErr)
 		return nil, udErr
 	}
 
-	disableTemplating, dtErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", MachineAPINamespace, "--template", `{{index .data "disableTemplating" | base64decode}}`).Output()
-
+	disableTemplating, dtErr := currentSecret.GetDataValue("disableTemplating")
 	if dtErr != nil {
 		logger.Errorf("Error getting disableTemplating info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, dtErr)
 		return nil, dtErr
 	}
 
-	// if necessary, replace the ignition config action and the ignition version
-	if changes.IgnitionVersion != "" || changes.IgnitionConfigAction != "" {
+	currentIgnitionVersionResult := gjson.Get(userData, "ignition.version")
+	if !currentIgnitionVersionResult.Exists() || currentIgnitionVersionResult.String() == "" {
+		logger.Debugf("Could not get ignition version from ignition userData: %s", userData)
+		return nil, fmt.Errorf("Could not get ignition version from ignition userData. Enable debug GINKGO_TEST_ENABLE_DEBUG_LOG to get more info")
+	}
+	currentIgnitionVersion := currentIgnitionVersionResult.String()
 
-		jUserData := JSON(userData)
+	if CompareVersions(currentIgnitionVersion, "==", newIgnitionVersion) {
+		logger.Infof("Current ignition version %s is the same as the new ignition version %s. No need to manipulate the userData info",
+			currentIgnitionVersion, newIgnitionVersion)
+	} else {
+		if CompareVersions(newIgnitionVersion, "<", "3.0.0") {
+			logger.Infof("New ignition version is %s, we need to adapt the userData ignition config to 2.0 config", newIgnitionVersion)
+			logger.Infof("Replace the 'merge' action with the 'append' action")
+			merge := gjson.Get(userData, "ignition.config.merge")
+			if !merge.Exists() {
+				logger.Debugf("Could not find the 'merge' information in the userData ignition config: %s", userData)
+				return nil, fmt.Errorf("Could not find the 'merge' information in the userData ignition config. Enable debug GINKGO_TEST_ENABLE_DEBUG_LOG to get more info")
+			}
+			userData, err = sjson.SetRaw(userData, "ignition.config.append", merge.String())
+			if err != nil {
+				return nil, err
+			}
 
-		jIgnition := jUserData.Get("ignition")
-		if !jIgnition.Exists() {
-			return nil, fmt.Errorf("No 'ignition' key in userData: %s", userData)
-		}
-
-		if changes.IgnitionVersion != "" {
-
-			jpErr := jIgnition.PutSafe("version", changes.IgnitionVersion)
-			if jpErr != nil {
-				return nil, jpErr
+			userData, err = sjson.Delete(userData, "ignition.config.merge")
+			if err != nil {
+				return nil, err
 			}
 		}
-
-		if changes.IgnitionConfigAction != "" {
-			jConfig := jIgnition.Get("config")
-			if !jConfig.Exists() {
-				return nil, fmt.Errorf("No 'config' key in userData.ignition: %s", userData)
-			}
-
-			jMerge := jConfig.Get("merge")
-			if !jMerge.Exists() {
-				return nil, fmt.Errorf("No 'merge' key in userData.ignition.config: %s", userData)
-			}
-
-			cpErr := jConfig.PutSafe("append", jMerge.ToInterface())
-			if cpErr != nil {
-				return nil, cpErr
-			}
-
-			dErr := jConfig.DeleteSafe("merge")
-			if dErr != nil {
-				return nil, dErr
-			}
-		}
-		var mErr error
-		userData, mErr = jUserData.AsJSONString()
-		if mErr != nil {
-			logger.Errorf("Error marshaling userData info from secret %s -n %s.UserData: %s \n \n%s", secretName, MachineAPINamespace, jUserData, mErr)
-			return nil, mErr
+		logger.Infof("Replace ignition version '%s' with  version '%s'", currentIgnitionVersion, newIgnitionVersion)
+		userData, err = sjson.Set(userData, "ignition.version", newIgnitionVersion)
+		if err != nil {
+			return nil, err
 		}
 
 	}
 
-	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", changes.Name, "-n", MachineAPINamespace,
+	logger.Debugf("New userData info:\n%s", userData)
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", newName, "-n", MachineAPINamespace,
 		"--from-literal", fmt.Sprintf("userData=%s", userData),
 		"--from-literal", fmt.Sprintf("disableTemplating=%s", disableTemplating)).Output()
 
-	return NewSecret(oc.AsAdmin(), MachineAPINamespace, changes.Name), err
+	return NewSecret(oc.AsAdmin(), MachineAPINamespace, newName), err
+}
+
+// getUserDataIgnitionVersionFromOCPVersion returns that right ignition version for a given base image version
+func getUserDataIgnitionVersionFromOCPVersion(baseImageVersion string) string {
+	/* UserData ignition version is defined in https://github.com/openshift/installer/blob/release-4.16/pkg/asset/ignition/machine/node.go#L52
+	   4.16: 3.2.0
+	   4.15: 3.2.0
+	   4.14: 3.2.0
+	   4.13: 3.2.0
+	   4.12: 3.2.0
+	   4.11: 3.2.0
+	   4.10: 3.1.0
+	   4.9: 3.1.0
+	   4.8: 3.1.0
+	   4.7: 3.1.0
+	   4.6: 3.1.0
+	   4.5: 2.2.0
+	   4.4: 2.2.0
+	   4.3: 2.2.0
+	   4.2: 2.2.0
+	   4.1: 2.2.0
+	*/
+	if CompareVersions(baseImageVersion, "<", "4.6") {
+		return "2.2.0"
+	} else if CompareVersions(baseImageVersion, "<", "4.10") {
+		return "3.1.0"
+	} else {
+		return "3.2.0"
+	}
 }
