@@ -86,6 +86,7 @@ func newS3Client(cred s3Credential) *s3.Client {
 				PartitionID:       "aws",
 				URL:               cred.Endpoint,
 				HostnameImmutable: true,
+				Source:            aws.EndpointSourceCustom,
 			}, nil
 		})
 		// For ODF and Minio, they're deployed in OCP clusters
