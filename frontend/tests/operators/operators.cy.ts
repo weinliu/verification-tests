@@ -21,7 +21,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc delete project test1-ocp68675`);
     cy.adminCLI(`oc delete project test2-ocp68675`);
   });
-  it('(OCP-68675,xiyuzhao,UserInterface) Check Managed Namespaces field when OperatorGourp is set up', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-68675,xiyuzhao,UserInterface) Check Managed Namespaces field when OperatorGourp is set up', {tags: ['e2e','admin','@osd-ccs','@rosa', '@level0']}, () => {
     const params = {
       ns1: "test1-ocp68675",
       ns2: "test2-ocp68675",
