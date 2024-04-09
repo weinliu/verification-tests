@@ -13,10 +13,12 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
+		oc           = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
+		iaasPlatform string
 	)
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
 	// author: zhsun@redhat.com
@@ -120,6 +122,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-LEVEL0-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade [Disruptive][Slow]", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
+		if strings.Contains(iaasPlatform, "aws") && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+			g.Skip("Skipped: There is no public subnet on AWS C2S/SC2S disconnected clusters!")
+		}
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
 		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
 		loadBalancerService := loadBalancerServiceDescription{

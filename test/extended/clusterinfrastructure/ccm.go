@@ -327,6 +327,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Author:zhsun-LEVEL0-Critical-70627-[CCM] Service of type LoadBalancer can be created successful [Disruptive]", func() {
 		exutil.SkipForAwsOutpostCluster(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
+		if strings.Contains(iaasPlatform, "aws") && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+			g.Skip("Skipped: There is no public subnet on AWS C2S/SC2S disconnected clusters!")
+		}
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
 		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
 		loadBalancerService := loadBalancerServiceDescription{

@@ -81,3 +81,9 @@ func applyResourceFromTemplateWithoutInfo(oc *exutil.CLI, parameters ...string) 
 	e2e.Logf("The resource is %s", jsonCfg)
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", jsonCfg).Execute()
 }
+
+func getClusterRegion(oc *exutil.CLI) string {
+	region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", `-ojsonpath={.items[].metadata.labels.topology\.kubernetes\.io/region}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return region
+}
