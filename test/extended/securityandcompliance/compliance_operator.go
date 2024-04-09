@@ -2829,14 +2829,31 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42960-Low-43098-Check that TokenMaxAge and TokenInactivityTimeout are configurable for oauthclient objects [Disruptive][Slow]", func() {
-		var ssb = scanSettingBindingDescription{
-			name:            "moderate-test" + getRandomString(),
-			namespace:       "",
-			profilekind1:    "Profile",
-			profilename1:    "ocp4-moderate",
-			scansettingname: "default",
-			template:        scansettingbindingSingleTemplate,
-		}
+		var (
+			tp = tailoredProfileDescription{
+				name:         "tp-moderate-" + getRandomString(),
+				namespace:    subD.namespace,
+				extends:      "ocp4-moderate",
+				enrulename1:  "ocp4-oauth-or-oauthclient-token-maxage",
+				disrulename1: "ocp4-ocp-no-ldap-insecure",
+				disrulename2: "ocp4-openshift-motd-exists",
+				varname:      "ocp4-var-oauth-token-maxage",
+				value:        "28800",
+				template:     tprofileTemplate,
+			}
+			ssb = scanSettingBindingDescription{
+				name:            "moderate-test" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "TailoredProfile",
+				profilename1:    tp.name,
+				scansettingname: "default",
+				template:        scansettingbindingSingleTemplate,
+			}
+		)
+
+		defer cleanupObjects(oc,
+			objectTableRef{"scansettingbinding", subD.namespace, ssb.name},
+			objectTableRef{"tp", subD.namespace, tp.name})
 
 		defer func() {
 			g.By("Remove TokenMaxAge parameter by patching oauthclient objects.. !!!\n")
@@ -2853,14 +2870,17 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"oauthclient", v,
 					"-o=jsonpath={.accessTokenInactivityTimeoutSeconds}"}).check(oc)
 			}
-			cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
 		}()
 
 		g.By("Check default profiles name ocp4-moderate .. !!!\n")
 		subD.getProfileName(oc, "ocp4-moderate")
 
+		g.By("Create tailoredprofile !!!\n")
+		tp.namespace = subD.namespace
+		tp.create(oc)
+		subD.getTailoredProfileNameandStatus(oc, tp.name)
+
 		g.By("Create scansettingbinding !!!\n")
-		ssb.namespace = subD.namespace
 		ssb.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
@@ -2868,13 +2888,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
-		g.By("Verify 'ocp4-moderate-oauth-or-oauthclient-token-maxage' rule status through compliancecheck result.. !!!\n")
-		ruleOauthMaxageRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, "ocp4-moderate-oauth-or-oauthclient-token-maxage", "-o=jsonpath={.status}").Output()
+		g.By("Verify 'ocp4-oauth-or-oauthclient-token-maxage' rule status through compliancecheck result.. !!!\n")
+		ruleOauthMaxageRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, tp.name+"-oauth-or-oauthclient-token-maxage", "-o=jsonpath={.status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ruleOauthInactivateTimeoutRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, "ocp4-moderate-oauth-or-oauthclient-inactivity-timeout", "-o=jsonpath={.status}").Output()
+		ruleOauthInactivateTimeoutRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, tp.name+"-oauth-or-oauthclient-inactivity-timeout", "-o=jsonpath={.status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if ruleOauthMaxageRes != "FAIL" || ruleOauthInactivateTimeoutRes != "FAIL" {
-			g.Skip(fmt.Sprintf("The precondition not matched! The scan result for rule ocp4-moderate-oauth-or-oauthclient-token-maxage is: %s! And scan result for rule ocp4-moderate-oauth-or-oauthclient-inactivity-timeout is: %s", ruleOauthMaxageRes, ruleOauthInactivateTimeoutRes))
+			g.Skip(fmt.Sprintf("The precondition not matched! The scan result for rule ocp4-oauth-or-oauthclient-token-maxage is: %s! And scan result for rule ocp4-moderate-oauth-or-oauthclient-inactivity-timeout is: %s", ruleOauthMaxageRes, ruleOauthInactivateTimeoutRes))
 		}
 
 		g.By("Set TokenMaxAge parameter to console oauthclient object by patching.. !!!\n")
@@ -2888,9 +2908,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Check ComplianceSuite status.. !!!\n")
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
-		g.By("Verify 'ocp4-moderate-oauth-or-oauthclient-token-maxage' rule status again through compliancecheck result.. !!!\n")
+		g.By("Verify 'ocp4-oauth-or-oauthclient-token-maxage' rule status again through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-oauth-or-oauthclient-token-maxage", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			tp.name + "-oauth-or-oauthclient-token-maxage", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Set TokenMaxAge & TokenInactivityTimeout parameters to all remaining oauthclient objects by patching.. !!!\n")
 		oauthclients, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("oauthclient", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -2912,9 +2932,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Verify TokenMaxAge & TokenInactivityTimeout rules status through compliancecheck result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-oauth-or-oauthclient-token-maxage", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			tp.name + "-oauth-or-oauthclient-token-maxage", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-oauth-or-oauthclient-inactivity-timeout", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+			tp.name + "-oauth-or-oauthclient-inactivity-timeout", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("ocp-42960-43098 The TokenMaxAge & TokenInactivityTimeout parameters are configured for oauthclient objects successfully... !!!!\n ")
 	})
