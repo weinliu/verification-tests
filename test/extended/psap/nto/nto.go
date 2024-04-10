@@ -1,6 +1,7 @@
 package nto
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -47,6 +48,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		cloudProviderFile            = exutil.FixturePath("testdata", "psap", "nto", "cloud-provider-profile.yaml")
 		nodeDiffCPUsTunedBootFile    = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-tuned-bootloader.yaml")
 		nodeDiffCPUsMCPFile          = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-mcp.yaml")
+		tuningMaxPidFile             = exutil.FixturePath("testdata", "psap", "nto", "tuning-maxpid.yaml")
 
 		isNTO              bool
 		isPAOInstalled     bool
@@ -3061,6 +3063,66 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The value of /proc/cmdline on node %v is: \n%v\n", tunedNodeName, debugNodeStdout)
 		o.Expect(debugNodeStdout).To(o.ContainSubstring("hugepagesz=2M hugepages=50"))
+	})
+
+	g.It("ROSA-NonHyperShiftHOST-Author:sahshah-Medium-64908-NTO Expose tuned socket interface.[Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		exutil.By("Pick one worker node to label")
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Clean up resources
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "-n", ntoNamespace, "tuning-maxpid").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning-").Execute()
+
+		//Label the node with node-role.kubernetes.io/worker-tuning
+		exutil.By("Label the node with node-role.kubernetes.io/worker-tuning=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		//Apply new profile that match label node-role.kubernetes.io/worker-tuning=
+		exutil.By("Create tuning-maxpid profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, tuningMaxPidFile)
+
+		//NTO will provides two default tuned, one is default, another is renderd
+		exutil.By("Check the default tuned list, expected tuning-maxpid")
+		allTuneds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(allTuneds).To(o.ContainSubstring("tuning-maxpid"))
+
+		exutil.By("Check if new profile tuning-maxpid is rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("tuning-maxpid"))
+
+		exutil.By("Check if new profile tuning-maxpid applied to labeled node")
+		//Verify if the new profile is applied
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "tuning-maxpid")
+		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(profileCheck).To(o.Equal("tuning-maxpid"))
+
+		exutil.By("Get current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Check the custom profile as expected by debugging the node ")
+		printfString := fmt.Sprintf(`printf '{"jsonrpc": "2.0", "method": "active_profile", "id": 1}' | nc -U /run/tuned/tuned.sock`)
+		printfStringStdOut, err := exutil.RemoteShPodWithBash(oc, ntoNamespace, tunedPodName, printfString)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(printfStringStdOut).NotTo(o.BeEmpty())
+		o.Expect(printfStringStdOut).To(o.ContainSubstring("tuning-maxpid"))
+		e2e.Logf("printfStringStdOut is :\n%v", printfStringStdOut)
+
 	})
 
 	g.It("ROSA-NonHyperShiftHOST-Author:liqcui-Medium-65371-NTO TuneD prevent from reverting node level profiles on termination [Disruptive]", func() {
