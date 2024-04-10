@@ -1963,3 +1963,25 @@ func checkInspectLogTime(inspectDir string, podName string, timestamp string) {
 		}
 	}
 }
+
+func waitCRDAvailable(oc *exutil.CLI, crdName string) error {
+	return wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", crdName).Execute()
+		if err != nil {
+			e2e.Logf("The crd with name %v still not ready, please try again", crdName)
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func waitCreateCr(oc *exutil.CLI, crFileName string, namespace string) error {
+	return wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crFileName, "-n", namespace).Execute()
+		if err != nil {
+			e2e.Logf("The cr with file %v created failed, please try again", crFileName)
+			return false, nil
+		}
+		return true, nil
+	})
+}
