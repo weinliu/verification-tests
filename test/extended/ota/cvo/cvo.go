@@ -1013,7 +1013,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(runningPodName).NotTo(o.Equal("''"))
 		runningPodList := strings.Fields(runningPodName)
 		if len(runningPodList) != 1 {
-			g.Fail("Unexpected running cvo pods detected:" + runningPodName)
+			e2e.Failf("Unexpected running cvo pods detected:" + runningPodName)
 		}
 		scc, err := oc.AsAdmin().WithoutNamespace().Run("get").
 			Args("pod", "-n", "openshift-cluster-version", strings.Trim(runningPodList[0], "'"),
@@ -1090,16 +1090,24 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: jiajliu@redhat.com
 	g.It("Author:jiajliu-Medium-47198-Techpreview operator will not be installed on a fresh installed", func() {
-		tpOperatorNames := []string{"cluster-api", "platform-operators-aggregated"}
+		tpOperatorNames := []string{"cluster-api", "platform-operators-aggregated", "olm"}
 		tpOperator := []map[string]string{
 			{"ns": "openshift-cluster-api", "co": tpOperatorNames[0]},
-			{"ns": "openshift-platform-operators", "co": tpOperatorNames[1]}}
+			{"ns": "openshift-platform-operators", "co": tpOperatorNames[1]},
+			{"ns": "openshift-cluster-olm-operator", "co": tpOperatorNames[2]}}
 
 		featuregate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Featuregate: %s", featuregate)
-		if featuregate != "{}" && strings.Contains(featuregate, "TechPreviewNoUpgrade") {
-			g.Skip("This case is only suitable for non-techpreview cluster!")
+		if featuregate != "{}" {
+			if strings.Contains(featuregate, "TechPreviewNoUpgrade") {
+				g.Skip("This case is only suitable for non-techpreview cluster!")
+			} else if strings.Contains(featuregate, "CustomNoUpgrade") {
+				e2e.Logf("Drop openshift-cluster-api ns due to CustomNoUpgrade fs enabled!")
+				delete(tpOperator[0], "ns")
+			} else {
+				e2e.Failf("Neither TechPreviewNoUpgrade fs nor CustomNoUpgrade fs enabled, stop here to confirm expected behavior first!")
+			}
 		}
 
 		exutil.By("Check annotation release.openshift.io/feature-set=TechPreviewNoUpgrade in manifests are correct.")
@@ -1107,7 +1115,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer func() { o.Expect(os.RemoveAll(tempDataDir)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
-		cmd := fmt.Sprintf("grep -rl 'release.openshift.io/feature-set: .*TechPreviewNoUpgrade.*' %s|grep 'clusteroperator.yaml'", manifestDir)
+		cmd := fmt.Sprintf("grep -rl 'release.openshift.io/feature-set: .*TechPreviewNoUpgrade.*' %s|grep 'cluster.*operator.yaml'", manifestDir)
 		featuresetTechPreviewManifest, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Command: \"%s\" returned error: %s", cmd, string(featuresetTechPreviewManifest))
 		tpOperatorFilePaths := strings.Split(strings.TrimSpace(string(featuresetTechPreviewManifest)), "\n")
