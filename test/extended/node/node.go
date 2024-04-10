@@ -669,7 +669,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: minmli@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-46313-set overlaySize in containerRuntimeConfig should take effect in container [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-LEVEL0-High-46313-set overlaySize in containerRuntimeConfig should take effect in container [Disruptive][Slow]", func() {
 		oc.SetupProject()
 		g.By("Test for case OCP-46313")
 		ctrcfgOverlay.name = "ctrcfg-46313"
@@ -752,7 +752,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: asahay@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:asahay-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:asahay-LEVEL0-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive][Slow]", func() {
 
 		oc.SetupProject()
 		runtimeTimeout.name = "kubeletconfig-52472"
