@@ -266,7 +266,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		patchResourceAsAdmin(oc, oc.Namespace(), "secret/"+sec.name, patchSecretInvalidPwd, "merge")
 		expectedMsg := "Login failed to authenticate with target"
 		dep.scaleReplicas(oc, "1")
-		checkMsgExistsInPodDescription(oc, dep.getPodListWithoutFilterStatus(oc)[0], expectedMsg)
+		// Waiting for the deployment's pod scheduled
+		var podsList []string
+		o.Eventually(func() int {
+			podsList = dep.getPodListWithoutFilterStatus(oc)
+			return len(podsList)
+		}).WithTimeout(120 * time.Second).WithPolling(5 * time.Second).Should(o.Equal(1))
+		checkMsgExistsInPodDescription(oc, podsList[0], expectedMsg)
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 
