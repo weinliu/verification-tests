@@ -356,6 +356,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Verify the machineset is deleted
 		ms.DeleteMachineSet(oc)
+
+		// 960s total wait.poll time may not be enough for some type of clusters, add some sleep time before WaitForMachinesRunning
+		time.Sleep(180 * time.Second)
 		exutil.WaitForMachinesRunning(oc, 0, machinesetName)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "kubelet-killer-68418", "-n", kkPod.namespace, "--ignore-not-found=true").Execute()
