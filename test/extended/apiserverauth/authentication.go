@@ -353,7 +353,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
-	g.It("ConnectedOnly-Author:rugong-Medium-20052-New field forbiddenSysctls for SCC", func() {
+	g.It("WRS-ConnectedOnly-Author:rugong-Medium-20052-New field forbiddenSysctls for SCC", func() {
 		oc.SetupProject()
 		username := oc.Username()
 		scc := "scc-test-20052"
@@ -423,7 +423,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
-	g.It("ConnectedOnly-Author:rugong-Medium-20050-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
+	g.It("WRS-ConnectedOnly-Author:rugong-Medium-20050-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
 		// In 4.11 and above, we should use SCC "restricted-v2"
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -656,7 +656,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// Adding the NonHyperShiftHOST label because developers appear to not fix the known bug https://issues.redhat.com/browse/OCPBUGS-3873
-	g.It("NonHyperShiftHOST-Author:rugong-Low-37697-Allow Users To Manage Their Own Tokens", func() {
+	g.It("WRS-NonHyperShiftHOST-Author:rugong-Low-37697-Allow Users To Manage Their Own Tokens", func() {
 		oc.SetupProject()
 		user1Name := oc.Username()
 		userOauthAccessTokenYamlPath, err := os.MkdirTemp("/tmp/", "tmp_37697")
@@ -846,7 +846,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ConnectedOnly-Author:yinzhou-LEVEL0-High-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
+	g.It("WRS-ConnectedOnly-Author:yinzhou-LEVEL0-High-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		username := oc.Username()
@@ -904,7 +904,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-Medium-55675-Group member should not lose rights after other members join the group", func() {
+	g.It("WRS-Author:yinzhou-Medium-55675-Group member should not lose rights after other members join the group", func() {
 		g.By("Creat new namespace")
 		oc.SetupProject()
 		user1Name := oc.Username()
@@ -941,7 +941,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: dmukherj@redhat.com
-	g.It("ConnectedOnly-Author:dmukherj-LEVEL0-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
+	g.It("WRS-ConnectedOnly-Author:dmukherj-LEVEL0-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
 		g.By("1. Create a namespace as normal user")
 		oc.SetupProject()
 		testNamespace := oc.Namespace()
