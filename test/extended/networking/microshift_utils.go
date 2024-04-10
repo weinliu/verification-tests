@@ -153,3 +153,33 @@ func getSecondaryNICip(oc *exutil.CLI) string {
 	e2e.Logf("Secondary Interface IP is : %s", sec_int)
 	return sec_int
 }
+
+// get generic multus NAD with host local yaml file, replace varibles as per requirements in ushift and create NAD
+func createMultusNADHostlocalforUshift(oc *exutil.CLI, pod_pmtrs map[string]string) (err error) {
+	MultusNADGenericYaml := getFileContentforUshift("microshift", "multus-NAD-hostlocal.yaml")
+	//replace all variables as per createMultusNADforUshift() arguements
+	for rep, value := range pod_pmtrs {
+		MultusNADGenericYaml = strings.ReplaceAll(MultusNADGenericYaml, rep, value)
+	}
+	MultusNADFileName := "MultusNAD-" + getRandomString() + ".yaml"
+	defer os.Remove(MultusNADFileName)
+	os.WriteFile(MultusNADFileName, []byte(MultusNADGenericYaml), 0644)
+	// create multus NAD for Microshift
+	_, err = oc.WithoutNamespace().Run("create").Args("-f", MultusNADFileName).Output()
+	return err
+}
+
+// get generic MultusPod yaml file, replace varibles as per requirements in ushift and create Multus Pod
+func createMultusPodforUshift(oc *exutil.CLI, pod_pmtrs map[string]string) (err error) {
+	MultusPodGenericYaml := getFileContentforUshift("microshift", "multus-pod-generic.yaml")
+	//replace all variables as per createMultusPodforUshift() arguements
+	for rep, value := range pod_pmtrs {
+		MultusPodGenericYaml = strings.ReplaceAll(MultusPodGenericYaml, rep, value)
+	}
+	MultusPodFileName := "MultusPod-" + getRandomString() + ".yaml"
+	defer os.Remove(MultusPodFileName)
+	os.WriteFile(MultusPodFileName, []byte(MultusPodGenericYaml), 0644)
+	// create MultusPod for Microshift
+	_, err = oc.WithoutNamespace().Run("create").Args("-f", MultusPodFileName).Output()
+	return err
+}
