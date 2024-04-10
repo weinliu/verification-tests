@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.By("Specify --insecure for `oc image info` command  with certificate-authority at the same time")
 		_, oupErr, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt").Outputs()
 		if err != nil && strings.Contains(oupErr, "the image is a manifest list and contains multiple images") {
-			_, filterErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt").Output()
+			_, filterErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--insecure", "--certificate-authority", extractTmpDirName+"/tls.crt", "--filter-by-os", "linux/amd64").Output()
 			o.Expect(filterErr).NotTo(o.HaveOccurred())
 		} else if strings.Contains(oupErr, "certificate signed by unknown authority") {
 			e2e.Failf("Hit certificate signed error %v", err)
@@ -272,7 +272,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.By("Specify `oc image info` command  with certificate-authority")
 		_, oupErr, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").NotShowInfo().Outputs()
 		if err != nil && strings.Contains(oupErr, "the image is a manifest list and contains multiple images") {
-			_, filterErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").NotShowInfo().Output()
+			_, filterErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", "--filter-by-os", "linux/amd64").NotShowInfo().Output()
 			o.Expect(filterErr).NotTo(o.HaveOccurred())
 		} else if strings.Contains(oupErr, "certificate signed by unknown authority") {
 			e2e.Failf("Hit certificate signed error %v", err)
