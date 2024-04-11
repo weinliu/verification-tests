@@ -3,6 +3,8 @@ package networking
 import (
 	"context"
 	"fmt"
+	"net"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -1027,6 +1029,100 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				}
 			}
 		}
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-37033-ExternalVM access cluster through externalIP. [Disruptive]", func() {
+
+		// This is for https://bugzilla.redhat.com/show_bug.cgi?id=1900118 and https://bugzilla.redhat.com/show_bug.cgi?id=1890270
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		externalIPServiceTemplate := filepath.Join(buildPruningBaseDir, "externalip_service1-template.yaml")
+		externalIPPodTemplate := filepath.Join(buildPruningBaseDir, "externalip_pod-template.yaml")
+		var workers, nonExternalIPNodes []string
+		var proxyHost, RDUHost, intf string
+
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU clusters, skip for other envrionment!!!")
+		}
+		workers = excludeSriovNodes(oc)
+		if len(workers) < 2 {
+			g.Skip("Not enough nodes, need minimal 2 nodes on RDU for the test, skip the case!!")
+		}
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		if err != nil || strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
+			proxyHost = "10.8.1.181"
+			RDUHost = "openshift-qe-028.lab.eng.rdu2.redhat.com"
+			intf = "sriovbm"
+		}
+		if err != nil || strings.Contains(msg, "offload.openshift-qe.sdn.com") {
+			proxyHost = "10.8.1.179"
+			RDUHost = "openshift-qe-026.lab.eng.rdu2.redhat.com"
+			intf = "offloadbm"
+		}
+
+		exutil.By("1. Get namespace, create an externalIP pod in it\n")
+		ns := oc.Namespace()
+		pod1 := externalIPPod{
+			name:      "externalip-pod",
+			namespace: ns,
+			template:  externalIPPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", pod1.name, "-n", pod1.namespace)
+		pod1.createExternalIPPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("2.Find another node, get its host CIDR, and one unused IP in its subnet \n")
+		externalIPPodNode, err := exutil.GetPodNodeName(oc, pod1.namespace, pod1.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(externalIPPodNode).NotTo(o.Equal(""))
+		e2e.Logf("ExternalIP pod is on node: %s", externalIPPodNode)
+
+		for _, node := range workers {
+			if node != externalIPPodNode {
+				nonExternalIPNodes = append(nonExternalIPNodes, node)
+			}
+		}
+		e2e.Logf("\n nonExternalIPNodes are: %v\n", nonExternalIPNodes)
+
+		sub := getEgressCIDRsForNode(oc, nonExternalIPNodes[0])
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, nonExternalIPNodes[0], sub, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+
+		exutil.By("4.Patch update network.config with the host CIDR to enable externalIP \n")
+		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
+		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[]}}}}")
+		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+sub+"\"]}}}}")
+
+		exutil.By("5.Create an externalIP service with the unused IP address obtained above as externalIP\n")
+		svc := externalIPService{
+			name:       "service-unsecure",
+			namespace:  ns,
+			externalIP: freeIPs[0],
+			template:   externalIPServiceTemplate,
+		}
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", svc.template, "-p", "NAME=" + svc.name, "EXTERNALIP=" + svc.externalIP}
+		exutil.ApplyNsResourceFromTemplate(oc, svc.namespace, parameters...)
+		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.name).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).Should(o.ContainSubstring(svc.name))
+
+		g.By("Get the Node IP from any node, add a static route on the test runner host to assist the test")
+		nodeIP := getNodeIPv4(oc, ns, nonExternalIPNodes[0])
+		ipRouteDeleteCmd := "ip route delete " + svc.externalIP
+		defer sshRunCmd(RDUHost, "root", ipRouteDeleteCmd)
+		ipRouteAddCmd := "ip route add " + svc.externalIP + " via " + nodeIP + " dev " + intf
+		err = sshRunCmd(proxyHost, "root", ipRouteAddCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6.Validate the externalIP service from external of the cluster (from test runner)\n")
+		svc4URL := net.JoinHostPort(svc.externalIP, "27017")
+		svcChkCmd := fmt.Sprintf("curl -H 'Cache-Control: no-cache' -x 'http://%s:8888' %s --connect-timeout 5", proxyHost, svc4URL)
+		e2e.Logf("\n svcChkCmd: %v\n", svcChkCmd)
+		output, curlErr := exec.Command("bash", "-c", svcChkCmd).Output()
+		o.Expect(curlErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
 	})
 
 })
