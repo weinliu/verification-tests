@@ -11,6 +11,9 @@ objects:
     replicas: 1
     endpointPublishingStrategy:
       type: NodePortService
+    routeAdmission:
+      namespaceOwnership: Strict
+      wildcardPolicy: WildcardsDisallowed
 parameters:
 - name: NAME
 - name: NAMESPACE
