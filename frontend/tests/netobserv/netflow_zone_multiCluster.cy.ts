@@ -32,89 +32,86 @@ describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiClu
         Operator.createFlowcollector(project, "ZonesAndMultiCluster")
     })
 
-    describe("netflow zone and multiCluster features", function () {
-        beforeEach('any netflow zone and multiCluster test', function () {
-            netflowPage.visit()
+    beforeEach('any netflow zone and multiCluster test', function () {
+        netflowPage.visit()
+    })
+
+    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should validate zone and multiCluster related columns", { tags: ['e2e', 'admin'] }, function () {
+        cy.get('#tabs-container li:nth-child(2)').click()
+        cy.byTestID("table-composable").should('exist')
+
+        cy.byTestID("show-view-options-button").should('exist').click()
+        cy.byTestID('view-options-button').click()
+        cy.get(colSelectors.mColumns).click().then(col => {
+            cy.get(colSelectors.columnsModal).should('be.visible')
+            // Check zone columns
+            cy.get('#SrcZone').check()
+            cy.get('#DstZone').check()
+
+            // Check multiCluster column
+            cy.get('#ClusterName').check()
+            cy.byTestID(colSelectors.save).click()
         })
 
-        it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should validate zone and multiCluster related columns", { tags: ['e2e', 'admin'] }, function () {
-            cy.get('#tabs-container li:nth-child(2)').click()
-            cy.byTestID("table-composable").should('exist')
+        cy.byTestID('table-composable').should('exist').within(() => {
+            // Verify zone column
+            cy.get(colSelectors.SrcZone).should('exist')
+            cy.get(colSelectors.DstZone).should('exist')
 
-            cy.byTestID("show-view-options-button").should('exist').click()
-            cy.byTestID('view-options-button').click()
-            cy.get(colSelectors.mColumns).click().then(col => {
-                cy.get(colSelectors.columnsModal).should('be.visible')
-                // Check zone columns
-                cy.get('#SrcZone').check()
-                cy.get('#DstZone').check()
+            // Verify multiCluster column
+            cy.get(colSelectors.ClusterName).should('exist')
+        })
+    })
 
-                // Check multiCluster column
-                cy.get('#ClusterName').check()
-                cy.byTestID(colSelectors.save).click()
-            })
-            cy.reload()
+    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should verify zone and cluster scope in topology view", { tags: ['e2e', 'admin'] }, function () {
+        cy.get('#tabs-container li:nth-child(3)').click()
+        // check if topology view exists, if not clear filters.
+        // this can be removed when multiple page loads are fixed.
+        if (Cypress.$('[data-surface=true][transform="translate(0, 0) scale(1)]').length > 0) {
+            cy.log("need to clear all filters")
+            cy.get('[data-test="filters"] > [data-test="clear-all-filters-button"]').should('exist').click()
+        }
+        cy.get('#drawer').should('not.be.empty')
 
-            cy.byTestID('table-composable').should('exist').within(() => {
-                // Verify zone column
-                cy.get(colSelectors.SrcZone).should('exist')
-                cy.get(colSelectors.DstZone).should('exist')
-
-                // Verify multiCluster column
-                cy.get(colSelectors.ClusterName).should('exist')
-            })
+        cy.byTestID("show-view-options-button").should('exist').click().then(views => {
+            cy.contains('Display options').should('exist').click()
+            // set one display to test with
+            cy.byTestID('layout-dropdown').click()
+            cy.byTestID('Grid').click()
+            cy.contains('Display options').should('exist').click()
         })
 
-        it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should verify zone and cluster scope in topology view", { tags: ['e2e', 'admin'] }, function () {
-            cy.get('#tabs-container li:nth-child(3)').click()
-            // check if topology view exists, if not clear filters.
-            // this can be removed when multiple page loads are fixed.
-            if (Cypress.$('[data-surface=true][transform="translate(0, 0) scale(1)]').length > 0) {
-                cy.log("need to clear all filters")
-                cy.get('[data-test="filters"] > [data-test="clear-all-filters-button"]').should('exist').click()
-            }
-            cy.get('#drawer').should('not.be.empty')
+        // Verify Zone scope
+        var scope = "zone"
+        cy.intercept('GET', getTopologyScopeURL(scope), {
+            fixture: 'netobserv/flow_metrics_zone.json'
+        }).as('matchedUrl')
 
-            cy.byTestID("show-view-options-button").should('exist').click().then(views => {
-                cy.contains('Display options').should('exist').click()
-                // set one display to test with
-                cy.byTestID('layout-dropdown').click()
-                cy.byTestID('Grid').click()
-                cy.contains('Display options').should('exist').click()
-            })
-            
-            // Verify Zone scope
-            var scope = "zone"
-            cy.intercept('GET', getTopologyScopeURL(scope), {
-                fixture: 'netobserv/flow_metrics_zone.json'
-            }).as('matchedUrl')
-
-            topologyPage.selectScopeGroup(scope, null)
-            cy.wait('@matchedUrl').then(({ response }) => {
-                expect(response.statusCode).to.eq(200)
-            })
-            topologyPage.isViewRendered()
-
-            // verify number of edges and nodes.
-            cy.get('#drawer ' + topologySelectors.edge).should('have.length', 6)
-            cy.get('#drawer ' + topologySelectors.node).should('have.length', 4)
-
-            // Verify Cluster scope
-            scope = "cluster"
-            cy.intercept('GET', getTopologyScopeURL(scope), {
-                fixture: 'netobserv/flow_metrics_cluster.json'
-            }).as('matchedUrl')
-
-            topologyPage.selectScopeGroup(scope, null)
-            cy.wait('@matchedUrl').then(({ response }) => {
-                expect(response.statusCode).to.eq(200)
-            })
-            topologyPage.isViewRendered()
-
-            // verify number of edges and nodes.
-            cy.get('#drawer ' + topologySelectors.edge).should('have.length', 0)
-            cy.get('#drawer ' + topologySelectors.node).should('have.length', 1)
+        topologyPage.selectScopeGroup(scope, null)
+        cy.wait('@matchedUrl').then(({ response }) => {
+            expect(response.statusCode).to.eq(200)
         })
+        topologyPage.isViewRendered()
+
+        // verify number of edges and nodes.
+        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 6)
+        cy.get('#drawer ' + topologySelectors.node).should('have.length', 4)
+
+        // Verify Cluster scope
+        scope = "cluster"
+        cy.intercept('GET', getTopologyScopeURL(scope), {
+            fixture: 'netobserv/flow_metrics_cluster.json'
+        }).as('matchedUrl')
+
+        topologyPage.selectScopeGroup(scope, null)
+        cy.wait('@matchedUrl').then(({ response }) => {
+            expect(response.statusCode).to.eq(200)
+        })
+        topologyPage.isViewRendered()
+
+        // verify number of edges and nodes.
+        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 0)
+        cy.get('#drawer ' + topologySelectors.node).should('have.length', 1)
     })
 
     afterEach("test", function () {

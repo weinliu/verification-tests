@@ -94,7 +94,6 @@ describe('(OCP-67615, OCP-72874 Network_Observability) Return external traffic a
 
     after("all tests", function () {
         cy.adminCLI('oc delete -f ./fixtures/netobserv/test-pod.yaml')
-        Operator.deleteFlowCollector()
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
     })
 })

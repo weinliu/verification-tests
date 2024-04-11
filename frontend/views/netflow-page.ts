@@ -125,9 +125,9 @@ export namespace querySumSelectors {
     export const bpsCount = "#bytesPerSecondsCount"
     export const avgRTT = "#rttAvg"
     export const dnsAvg = "#dnsAvg"
-    export const droppedBytesCount = "#droppedBytesCount"
-    export const droppedBpsCount = "#droppedBytesPerSecondsCount"
-    export const droppedPacketsCount = "#droppedPacketsCount"
+    export const droppedBytesCount = "#pktDropBytesCount"
+    export const droppedBpsCount = "#pktDropBytesPerSecondsCount"
+    export const droppedPacketsCount = "#pktDropPacketsCount"
     export const expandedQuerySummaryPanel = '.pf-c-drawer__panel-main'
 }
 

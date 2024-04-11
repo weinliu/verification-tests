@@ -68,7 +68,7 @@ export const Operator = {
     createFlowcollector: (namespace, parameters?: string) => {
         Operator.visitFlowcollector()
         cy.get('div.loading-box__loaded:nth-child(2)').should('exist')
-        cy.wait(5000)
+        cy.wait(3000)
         cy.get("#yaml-create").should('exist').then(() => {
             if ((Cypress.$('td[role="gridcell"]').length > 0) && (parameters != null)) {
                 Operator.deleteFlowCollector()
@@ -222,7 +222,7 @@ export const Operator = {
     },
     deleteFlowCollector: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')
-        // cy.byLegacyTestID('resource-title').should('exist')
+        cy.contains(Operator.name()).should('be.visible')
         cy.contains('Flow Collector').should('exist').invoke('attr', 'href').then(href => {
             cy.visit(href)
         })
@@ -232,8 +232,6 @@ export const Operator = {
         cy.byLegacyTestID('actions-menu-button').should('exist').click()
         cy.byTestActionID('Delete FlowCollector').should('exist').click()
         cy.byTestID('confirm-action').should('exist').click()
-        cy.adminCLI(`oc delete -f ./fixtures/netobserv/loki.yaml -n ${project}`)
-        cy.adminCLI(`oc delete project ${project}`)
         cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
         // for OCP < 4.12 refresh-web-console element doesn't exist, use toast-action instead.
         // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')

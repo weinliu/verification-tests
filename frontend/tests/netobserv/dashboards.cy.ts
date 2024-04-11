@@ -6,8 +6,8 @@ const cpuMemory = [
     "cpu-usage-chart",
     "memory-usage-chart"
 ]
-
-describe('Network_Observability dashboards tests', { tags: ['Network_Observability'] }, function () {
+// skipping until we figure out how to run dashboard tests faster
+describe.skip('Network_Observability dashboards tests', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)

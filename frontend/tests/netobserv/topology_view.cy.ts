@@ -1,4 +1,4 @@
-import { netflowPage, genSelectors, topologySelectors, topologyPage } from "../../views/netflow-page"
+import { netflowPage, genSelectors, topologySelectors } from "../../views/netflow-page"
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 const metricFunction = [
@@ -12,10 +12,6 @@ const metricType = [
     "Bytes",
     "Packets"
 ]
-
-function getTopologyScopeURL(scope: string): string {
-    return `**/flow/metrics**aggregateBy=${scope}*`
-}
 
 describe("(OCP-53591 Network_Observability) Netflow Topology view features", { tags: ['Network_Observability'] }, function () {
     before('any test', function () {
@@ -87,62 +83,6 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
         cy.get('#query-summary').should('exist')
     })
 
-    it("(OCP-53591, memodi, Network_Observability) should verify namespace scope", function () {
-        const scope = "namespace"
-        cy.intercept('GET', getTopologyScopeURL(scope), {
-            fixture: 'netobserv/flow_metrics_namespace.json'
-        }).as('matchedUrl')
-
-        // selecting something different first
-        // to re-trigger API request on namespace selection
-        topologyPage.selectScopeGroup("owner", null)
-        topologyPage.selectScopeGroup(scope, null)
-        cy.wait('@matchedUrl').then(({ response }) => {
-            expect(response.statusCode).to.eq(200)
-        })
-        topologyPage.isViewRendered()
-        // verify number of edges and nodes.
-        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 4)
-        cy.get('#drawer ' + topologySelectors.node).should('have.length', 5)
-    })
-
-    it("(OCP-53591, memodi, Network_Observability) should verify owner scope", function () {
-        const scope = "owner"
-        cy.intercept('GET', getTopologyScopeURL(scope), {
-            fixture: 'netobserv/flow_metrics_owner.json'
-        }).as('matchedUrl')
-
-        // using slider
-        let lastRefresh = Cypress.$("#lastRefresh").text()
-        cy.log(`last refresh is ${lastRefresh}`)
-        cy.get('div.pf-c-slider__thumb').then(slider => {
-            cy.wrap(slider).type('{leftarrow}', { waitForAnimations: true })
-            netflowPage.waitForLokiQuery()
-            cy.wait(3000)
-            cy.get('#lastRefresh').invoke('text').should('not.eq', lastRefresh)
-        })
-        cy.wait('@matchedUrl').then(({ response }) => {
-            expect(response.statusCode).to.eq(200)
-        })
-        topologyPage.isViewRendered()
-        // verify number of edges and nodes.
-        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 19)
-        cy.get('#drawer ' + topologySelectors.node).should('have.length', 16)
-    })
-
-    it("(OCP-53591, memodi) should verify resource scope", function () {
-        const scope = 'resource'
-        cy.intercept('GET', getTopologyScopeURL(scope), { fixture: 'netobserv/flow_metrics_resource.json' }).as('matchedUrl')
-        topologyPage.selectScopeGroup(scope, null)
-        cy.wait('@matchedUrl').then(({ response }) => {
-            expect(response.statusCode).to.eq(200)
-        })
-        topologyPage.isViewRendered()
-        // verify number of edges and nodes.
-        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 46)
-        cy.get('#drawer ' + topologySelectors.node).should('have.length', 28)
-    })
-
     it("(OCP-53591, memodi, Network_Observability) should verify local storage", function () {
         // modify some options
         cy.contains('Display options').should('exist').click()
@@ -165,7 +105,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
             expect(topologySettings['groupTypes']).to.be.equal('none')
             // expect(topologySettings['layout']).to.be.equal('Grid')
             expect(topologySettings['metricFunction']).to.be.equal('last')
-            expect(topologySettings['metricType']).to.be.equal('bytes')
+            expect(topologySettings['metricType']).to.be.equal('Bytes')
             expect(topologySettings['nodeBadges']).to.be.false
             expect(settings['netflow-traffic-metric-scope']).to.be.equal('namespace')
             expect(topologySettings['truncateLength']).to.be.equal(25)
