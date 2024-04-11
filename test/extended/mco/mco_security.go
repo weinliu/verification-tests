@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -269,6 +270,104 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		logger.Infof("OK!\n")
 
+	})
+
+	g.It("Author:rioliu-NonHyperShiftHOST-NonPreRelease-Longduration-High-71991-post action of user-ca-bundle change will skip drain,reboot and restart crio service [Disruptive]", func() {
+		var (
+			mcName                 = "mco-tc-71991"
+			filePath               = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
+			mode                   = 420 // decimal 0644
+			objsignCABundlePemPath = "/etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem"
+			node                   = mcp.GetSortedNodesOrFail()[0]
+			behaviourValidator     = UpdateBehaviourValidator{
+				RebootNodesShouldBeSkipped: true,
+				DrainNodesShoulBeSkipped:   true,
+				Checkers: []Checker{
+					NodeEventsChecker{
+						EventsSequence:        []string{"Reboot", "Drain"},
+						EventsAreNotTriggered: true,
+					},
+				},
+			}
+		)
+
+		behaviourValidator.Initialize(mcp, nil)
+
+		exutil.By("Removing all MCD pods to clean the logs")
+		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		exutil.By("Create a new certificate")
+		_, caPath, err := createCA(createTmpDir(), "newcert.pem")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new random certificate")
+
+		cert, err := os.ReadFile(caPath)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error reading the new random certificate")
+		logger.Infof("OK!\n")
+
+		exutil.By("Create the MachineConfig with the new certificate")
+		file := ign32File{
+			Path: filePath,
+			Contents: ign32Contents{
+				Source: GetBase64EncodedFileSourceContent(string(cert)),
+			},
+			Mode: PtrTo(mode),
+		}
+
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
+		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", string(MarshalOrFail(file)))}
+		mc.skipWaitForMcp = true
+		defer mc.delete()
+
+		mc.create()
+		logger.Infof("OK!\n")
+
+		// Check that the MC is applied according to the expected behaviour
+		behaviourValidator.Validate()
+
+		exutil.By("Check that the certificate was created and updated in the cluster by using update-ca-trust command")
+		certRemote := NewRemoteFile(node, filePath)
+		objsignCABundleRemote := NewRemoteFile(node, objsignCABundlePemPath)
+
+		o.Eventually(certRemote, "5m", "20s").Should(Exist(),
+			"The file %s does not exist in the node %s after applying the configuration", certRemote.fullPath, node.GetName())
+
+		o.Eventually(objsignCABundleRemote, "5m", "20s").Should(Exist(),
+			"The file %s does not exist in the node %s after applying the configuration", certRemote.fullPath, node.GetName())
+
+		o.Expect(certRemote.Fetch()).To(o.Succeed(),
+			"There was an error trying to the the content of file %s in node %s", certRemote.fullPath, node.GetName())
+
+		// diff /etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem /etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt | less
+		// The new certificate should be included in the /etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem file when we execute the update-ca-trust command
+		o.Expect(objsignCABundleRemote.Read()).To(exutil.Secure(HaveContent(o.ContainSubstring(certRemote.GetTextContent()))),
+			"In node %s: The the content of the file %s should have been added to the file %s. Command 'update-ca-trust' was not executed by MCD",
+			node.GetName(), certRemote.fullPath, objsignCABundleRemote.fullPath)
+		logger.Infof("OK!\n")
+
+		exutil.By("Removing all MCD pods to clean the logs before the MC deletion")
+		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		exutil.By("Delete the MachineConfig")
+		behaviourValidator.Initialize(mcp, nil) // re-initialize the validator to ignore previous events
+		mc.deleteNoWait()
+		logger.Infof("OK!\n")
+
+		// Check that the MC is removed according to the expected behaviour
+		behaviourValidator.Validate()
+
+		exutil.By("Check that the certificate file is now empty and the cluster was updated with update-ca-trust")
+		// The file is not removed, it is always present but with empty content
+		o.Eventually(certRemote.Read, "5m", "20s").Should(exutil.Secure(HaveContent(o.BeEmpty())),
+			"The file %s does not exist in the node %s after applying the configuration", certRemote.fullPath, node.GetName())
+		o.Eventually(objsignCABundleRemote, "5m", "20s").Should(Exist(),
+			"The file %s does not exist in the node %s but it should exist after removing the configuration", certRemote.fullPath, node.GetName())
+
+		o.Expect(objsignCABundleRemote.Read()).NotTo(exutil.Secure(HaveContent(o.ContainSubstring(certRemote.GetTextContent()))),
+			"In node %s: The the content of the file %s should have been removed from the file %s. Command 'update-ca-trust' was not executed by MCD after removing the MC",
+			node.GetName(), certRemote.fullPath, objsignCABundleRemote.fullPath)
+		logger.Infof("OK!\n")
 	})
 })
 
