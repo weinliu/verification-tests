@@ -2634,7 +2634,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Check the instructions exists for cis manual rules.. !!!\n")
-		checkCisRulesInstruction(oc)
+		checkInstructionsForManualRules(oc, ssb.name)
 
 		g.By("Verify the nodeName shows in target & fact:identifier elements of complianceScan XCCDF format result.. !!!\n")
 		extractResultFromConfigMap(oc, "worker", ssb.namespace)
@@ -2642,39 +2642,55 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("All CIS rules has instructions & nodeName is available in target & identifier elements of complianceScan XCCDF format result..!!!\n")
 	})
 
-	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-47044-Verify the ocp4 moderate profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
-		var ssb = scanSettingBindingDescription{
-			name:            "moderate-test" + getRandomString(),
-			namespace:       "",
-			profilekind1:    "Profile",
-			profilename1:    "ocp4-moderate",
-			profilename2:    "ocp4-moderate-node",
-			scansettingname: "default",
-			template:        scansettingbindingTemplate,
-		}
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-47044-Verify the moderate profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
+		ssbModerate := "ssb-moderate-" + getRandomString()
 
-		g.By("Check default profiles name ocp4-moderate .. !!!\n")
+		g.By("Check moderate profiles .. !!!\n")
 		subD.getProfileName(oc, "ocp4-moderate")
-		g.By("Check default profiles name ocp4-moderate-node .. !!!\n")
 		subD.getProfileName(oc, "ocp4-moderate-node")
+		subD.getProfileName(oc, "rhcos4-moderate")
 
-		g.By("Create scansettingbinding !!!\n")
-		ssb.namespace = subD.namespace
-		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
-		ssb.create(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+		g.By("Create scansettingbinding... !!!\n")
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbModerate})
+		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbModerate, "profile/ocp4-moderate", "profile/ocp4-moderate-node", "profile/rhcos4-moderate", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbModerate, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
 
-		g.By("Check complianceSuite name and result.. !!!\n")
-		subD.complianceSuiteName(oc, ssb.name)
-		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
-		g.By("Check complianceSuite result through exit-code.. !!!\n")
-		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+		g.By("Check ComplianceSuite status !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbModerate, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbModerate, "2")
 
 		g.By("ocp-47044 The ocp4 moderate profiles perform scan as expected with default scanSettings... !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-50524-The instructions should be available for all rules in high profiles [Serial][Slow]", func() {
+		ssbHigh := "ssb-high-" + getRandomString()
+
+		g.By("Check moderate profiles .. !!!\n")
+		subD.getProfileName(oc, "ocp4-high")
+		subD.getProfileName(oc, "ocp4-high-node")
+		subD.getProfileName(oc, "rhcos4-high")
+
+		g.By("Create scansettingbinding... !!!\n")
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbHigh})
+		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbHigh, "profile/ocp4-high", "profile/ocp4-high-node", "profile/rhcos4-high", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbHigh, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbHigh, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbHigh, "2")
+
+		g.By("Check the instructions exists for cis manual rules.. !!!\n")
+		checkInstructionsForManualRules(oc, ssbHigh)
+
+		g.By("ocp-50524 The instructions should be available for all rules in high profiles..!!!\n")
 	})
 
 	// author: pdhamdhe@redhat.com

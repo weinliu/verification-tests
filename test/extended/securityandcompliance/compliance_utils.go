@@ -683,18 +683,18 @@ func checkFipsStatus(oc *exutil.CLI, namespace string) string {
 	return efips
 }
 
-func checkCisRulesInstruction(oc *exutil.CLI) {
-	cisrule, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", oc.Namespace(), "--selector=compliance.openshift.io/check-status=MANUAL",
-		"-o=jsonpath={.items[*].metadata.name}").Output()
+func checkInstructionsForManualRules(oc *exutil.CLI, compliancesuite string) {
+	label := fmt.Sprintf("compliance.openshift.io/check-status=MANUAL,compliance.openshift.io/suite=%s", compliancesuite)
+	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", oc.Namespace(), "-l", label, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	cisrules := strings.Fields(cisrule)
-	for _, cisrule := range cisrules {
-		ruleinst, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", cisrule, "-n", oc.Namespace(), "-o=jsonpath={.instructions}").Output()
+	list := strings.Fields(out)
+	for _, rule := range list {
+		ruleinst, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", rule, "-n", oc.Namespace(), "-o=jsonpath={.instructions}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if ruleinst == "" {
-			e2e.Failf("This CIS rule '%v' do not have any instruction", cisrule)
+			e2e.Failf("This CIS rule '%v' do not have any instruction", rule)
 		} else {
-			e2e.Logf("This CIS rule '%v' has instruction", cisrule)
+			e2e.Logf("This CIS rule '%v' has instruction", rule)
 		}
 	}
 }
