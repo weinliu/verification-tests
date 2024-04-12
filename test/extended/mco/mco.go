@@ -4318,6 +4318,42 @@ desiredState:
 			"The applied configuration file %s does not exist after restarting the nmstate service, but it should exist", nmstateConfigAppliedRemote.GetFullPath())
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-72008-recreate currentconfig missing on the filesystem [Disruptive]", func() {
+		var (
+			mcp               = GetCompactCompatiblePool(oc.AsAdmin())
+			mcName            = "mco-tc-72008"
+			node              = mcp.GetSortedNodesOrFail()[0]
+			currentConfigFile = "/etc/machine-config-daemon/currentconfig"
+			filePath          = "/etc/mco-test-case-72008"
+			fileMode          = "420"
+			fileContent       = "test"
+			fileConfig        = getURLEncodedFileConfig(filePath, fileContent, fileMode)
+		)
+
+		exutil.By("Remove the file /etc/machine-config-daemon/currentconfig") //remove the currentconfig file
+		rmCurrentConfig := NewRemoteFile(node, currentConfigFile)
+		o.Expect(rmCurrentConfig.Rm()).To(o.Succeed(), "Not able to remove %s", rmCurrentConfig.GetFullPath())
+		o.Expect(rmCurrentConfig).NotTo(Exist(), "%s removed but still exist", rmCurrentConfig)
+		logger.Infof("OK \n")
+
+		exutil.By("Create new Machine config") //new Machineconfig file
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
+		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", fileConfig)}
+		defer mc.delete() //clean
+		mc.create()
+		logger.Infof("OK \n")
+
+		exutil.By("Check that the file /etc/machine-config-daemon/currentconfig is recreated") //After update currentconfig exist
+		o.Expect(rmCurrentConfig).To(Exist(), "%s Not exist", rmCurrentConfig)
+		o.Expect(rmCurrentConfig.Read()).NotTo(HaveContent(o.BeEmpty()), "%s should not be empty file", rmCurrentConfig)
+		logger.Infof("OK \n")
+
+		exutil.By("Check Machine-config is applied") //  machine-config is applied
+		newFile := NewRemoteFile(node, filePath)
+		o.Expect(newFile.Read()).To(o.And(HaveContent(fileContent), HaveOctalPermissions("0644")), "%s Does not have expected content or permissions", newFile)
+		logger.Infof("OK\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
