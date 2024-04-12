@@ -270,6 +270,85 @@ describe('knmstate operator console plugin related features', () => {
     cy.byTestID(pName).should('not.exist');
   });
 
+  it('(OCP-64987,qiowang,SDN) Create NNCP for adding multiple interfaces on web console(from form)', {tags: ['e2e','admin']}, function () {
+    cy.log("1. Create NNCP");
+    let pName = "pname-64987";
+    let nncpTest1: intPolicy = {
+        intName: "bridge02",
+        intState: "Up",
+        intType: "Bridge",
+        ipv4Enable: true,
+        ip: "112.9.9.9",
+        prefixLen: "30",
+        disAutoDNS: false,
+        disAutoRoutes: false,
+        disAutoGW: false,
+        port: "",
+        br_stpEnable: true,
+        bond_cpMacFrom: "",
+        bond_aggrMode: "",
+        action: "",
+    };
+    let nncpTest2: intPolicy = {
+        intName: "bond002",
+        intState: "Up",
+        intType: "Bonding",
+        ipv4Enable: true,
+        ip: "",
+        prefixLen: "",
+        disAutoDNS: false,
+        disAutoRoutes: false,
+        disAutoGW: false,
+        port: "",
+        br_stpEnable: false,
+        bond_cpMacFrom: "",
+        bond_aggrMode: "active-backup",
+        action: "",
+    };
+    let nncps: intPolicy[] = [];
+    nncps.push(nncpTest1);
+    nncps.push(nncpTest2);
+    nncpPage.creatNNCPFromForm(pName, 'testMulti123', nncps);
+
+    cy.log("2. Check NNCP status");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 600000});
+    });
+
+    cy.log("3. Check NNS");
+    nnsPage.goToNNS();
+    for (let i = 0; i < this.nodeList.length; i++) {
+      cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+        cy.get('td[id="network-interface"]').contains("linux-bridge").click();
+      });
+      cy.get('div[role="dialog"]').contains(nncpTest1.intName).should('exist');
+      cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
+      cy.byTestID(this.nodeList[i]).parents('tbody').within(() => {
+        cy.get('td[id="network-interface"]').contains("bond").click();
+      });
+      cy.get('div[role="dialog"]').contains(nncpTest2.intName).should('exist');
+      cy.get('div[role="dialog"]').get('[aria-label="Close"]').last().click();
+    };
+
+    cy.log("4. Edit NNCP");
+    nncpTest1.action = "editOld";
+    nncpTest1.intState = "Absent";
+    nncpTest2.action = "editOld";
+    nncpTest2.intState = "Absent";
+    nncpPage.editNNCPFromForm(pName, 'testMulti123', nncps);
+
+    cy.log("5. Check NNCP status again");
+    cy.visit('k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/');
+    cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 600000});
+    });
+
+    cy.log("6. Delete NNCP");
+    nncpPage.deleteNNCP(pName);
+    cy.byTestID(pName).should('not.exist');
+  });
+
   after(() => {
     knmstateUtils.deleteNMStateInstace();
     knmstateUtils.uninstall();
