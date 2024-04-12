@@ -306,7 +306,7 @@ func getMinIOCreds(oc *exutil.CLI, ns string) S3Credential {
 
 // initialize an aws s3 client with aws credential
 // TODO: add an option to initialize a new client with STS
-func newAWSS3Client(oc *exutil.CLI, cred S3Credential) *s3.Client {
+func newAWSS3Client(cred S3Credential) *s3.Client {
 	var err error
 	var cfg aws.Config
 	if len(cred.Endpoint) > 0 {
@@ -391,7 +391,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "s3":
 		{
 			cred := getAWSCredentialFromCluster(oc)
-			client := newAWSS3Client(oc, cred)
+			client := newAWSS3Client(cred)
 			err = createS3Bucket(client, l.BucketName, cred)
 			if err != nil {
 				return err
@@ -438,7 +438,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "odf":
 		{
 			cred := getODFCreds(oc)
-			client := newAWSS3Client(oc, cred)
+			client := newAWSS3Client(cred)
 			err = createS3Bucket(client, l.BucketName, cred)
 			if err != nil {
 				return err
@@ -448,7 +448,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newAWSS3Client(oc, cred)
+			client := newAWSS3Client(cred)
 			err = createS3Bucket(client, l.BucketName, cred)
 			if err != nil {
 				return err
@@ -466,7 +466,7 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	case "s3":
 		{
 			cred := getAWSCredentialFromCluster(oc)
-			client := newAWSS3Client(oc, cred)
+			client := newAWSS3Client(cred)
 			err = deleteS3Bucket(client, l.BucketName)
 		}
 	case "azure":
@@ -491,13 +491,13 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	case "odf":
 		{
 			cred := getODFCreds(oc)
-			client := newAWSS3Client(oc, cred)
+			client := newAWSS3Client(cred)
 			err = deleteS3Bucket(client, l.BucketName)
 		}
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newAWSS3Client(oc, cred)
+			client := newAWSS3Client(cred)
 			err = deleteS3Bucket(client, l.BucketName)
 		}
 	}

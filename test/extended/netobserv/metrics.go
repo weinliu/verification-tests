@@ -47,14 +47,14 @@ type metric struct {
 func getMetric(oc *exutil.CLI, query string) ([]metric, error) {
 	bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	promRoute := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s")
-	res, err := queryPrometheus(oc, promRoute, query, bearerToken)
+	res, err := queryPrometheus(promRoute, query, bearerToken)
 	attempts := 10
 	for len(res.Data.Result) == 0 && attempts > 0 {
 		if err != nil {
 			return []metric{}, err
 		}
 		time.Sleep(5 * time.Second)
-		res, err = queryPrometheus(oc, promRoute, query, bearerToken)
+		res, err = queryPrometheus(promRoute, query, bearerToken)
 		attempts--
 	}
 	errMsg := fmt.Sprintf("0 results returned for query %s", query)
@@ -66,7 +66,7 @@ func getMetric(oc *exutil.CLI, query string) ([]metric, error) {
 // path: the api path, for example: /api/v1/query?
 // query: the metric or alert you want to search
 // action: it can be "GET", "get", "Get", "POST", "post", "Post"
-func queryPrometheus(oc *exutil.CLI, promRoute string, query string, bearerToken string) (*prometheusQueryResult, error) {
+func queryPrometheus(promRoute string, query string, bearerToken string) (*prometheusQueryResult, error) {
 	path := "/api/v1/query"
 	action := "GET"
 

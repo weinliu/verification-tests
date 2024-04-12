@@ -3,6 +3,8 @@ package netobserv
 import (
 	"fmt"
 	"math"
+	"os"
+	"os/exec"
 	"strconv"
 
 	filePath "path/filepath"
@@ -1200,6 +1202,45 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(nodeName).To(o.Equal(masterNode))
 		}
+	})
+
+	g.It("Author:memodi-Medium-63185-Verify NetOberv must-gather plugin [Serial]", func() {
+		namespace := oc.Namespace()
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+		}
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+		mustGatherDir := "/tmp/must-gather-63185"
+		defer exec.Command("bash", "-c", "rm -rf "+mustGatherDir).Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--image", "quay.io/netobserv/must-gather", "--dest-dir="+mustGatherDir).Output()
+		o.Expect(output).NotTo(o.ContainSubstring("error"))
+		mustGatherDir = mustGatherDir + "/quay-io-netobserv-must-gather-*"
+		operatorlogs, err := filePath.Glob(fmt.Sprintf("%s/namespaces/openshift-netobserv-operator/pods/netobserv-controller-manager-*/manager/manager/logs/current.log", mustGatherDir))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = os.Stat(operatorlogs[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		pods, err := exutil.GetAllPods(oc, namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podlogs, err := filePath.Glob(fmt.Sprintf("%s/namespaces/%s/pods/%s/flowlogs-pipeline/flowlogs-pipeline/logs/current.log", mustGatherDir, namespace, pods[0]))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = os.Stat(podlogs[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ebpfPods, err := exutil.GetAllPods(oc, namespace+"-privileged")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ebpflogs, err := filePath.Glob(fmt.Sprintf("%s/namespaces/%s/pods/%s/netobserv-ebpf-agent/netobserv-ebpf-agent/logs/current.log", mustGatherDir, namespace+"-privileged", ebpfPods[0]))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = os.Stat(ebpflogs[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// TODO: once supported add a check for flowcollector dumped file.
 	})
 	//Add future NetObserv + Loki test-cases here
 
