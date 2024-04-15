@@ -163,6 +163,8 @@ class SummaryClient:
             return True
         if "the server was unable to return a response" in message:
             return True
+        if "client connection lost" in message:
+            return True
         return False
 
     def get_prow_case_result(self):
