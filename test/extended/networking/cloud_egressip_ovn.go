@@ -1918,7 +1918,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-70667-After pods are deleted, SNAT and lr-policy-list for egressIP should be deleted correctly when egressIP uses podSelector with NotIn operator. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Longduration-NonPreRelease-Author:jechen-High-70667-After pods are deleted, SNAT and lr-policy-list for egressIP should be deleted correctly when egressIP uses podSelector with NotIn operator. [Disruptive]", func() {
 
 		// This is for https://issues.redhat.com/browse/OCPBUGS-24055
 
@@ -2009,7 +2009,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(snatIP[0]).To(o.ContainSubstring(helloPod1IP))
 
 		exutil.By("9. Check lr-policy-list in 100 table of northdb on the node where hello-pod1 resides on, there should be an entry that contains hello-pod1's pod IP. \n")
-		lrPolicyList, lrpErr := getlrPolicyList(oc, helloPod1Node, "100 ")
+		lrPolicyList, lrpErr := getlrPolicyList(oc, helloPod1Node, "100 ", true)
 		o.Expect(lrpErr).NotTo(o.HaveOccurred())
 		e2e.Logf("\n Before hello-pod1 is deleted, lrPolicyList found: %v\n", lrPolicyList)
 		o.Expect(len(lrPolicyList)).Should(o.Equal(1))
@@ -2062,7 +2062,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}, "300s", "10s").Should(o.BeTrue(), "SNAT for the egressip is not deleted!!")
 
 		o.Eventually(func() bool {
-			lrPolicyList, _ = getlrPolicyList(oc, helloPod1Node, "100 ")
+			lrPolicyList, _ = getlrPolicyList(oc, helloPod1Node, "100 ", false)
 			e2e.Logf("\n After hello-pod1 is deleted, lrPolicyList found: %v\n", lrPolicyList)
 			return !isValueInList(helloPod1IP, lrPolicyList)
 		}, "300s", "10s").Should(o.BeTrue(), "lr-policy-list for the egressip is not deleted!!")

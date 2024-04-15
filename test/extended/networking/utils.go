@@ -2209,7 +2209,7 @@ func getSNATofEgressIP(oc *exutil.CLI, nodeName, egressIP string) ([]string, err
 			return true, nil
 		}
 
-		e2e.Logf("%v,Waiting for expected result to be synced, try again ...")
+		e2e.Logf("Waiting for expected result to be synced, try again ...")
 		return false, nil
 	})
 	if checkOVNDbErr != nil {
@@ -3290,7 +3290,7 @@ func disableNodeIdentityWebhook(oc *exutil.CLI, namespace string, cmName string)
 }
 
 // get lr-policy-list from logical_router_policy table
-func getlrPolicyList(oc *exutil.CLI, nodeName, tableID string) ([]string, error) {
+func getlrPolicyList(oc *exutil.CLI, nodeName, tableID string, expected bool) ([]string, error) {
 	// get the ovnkube-node pod on the node
 	ovnKubeNodePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
 	o.Expect(podErr).NotTo(o.HaveOccurred())
@@ -3299,15 +3299,10 @@ func getlrPolicyList(oc *exutil.CLI, nodeName, tableID string) ([]string, error)
 	var lspErr error
 	var lrPolicyList []string
 
-	lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep '100 '"
+	lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep '" + tableID + " '"
 	checkLspErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
 		lspOutput, lspErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, "northd", lspCmd)
-		if lspErr != nil {
-			e2e.Logf("%v,Waiting for lr-policy-list to be synced, try next ...,", lspErr)
-			return false, nil
-		}
-
-		if lspOutput != "" {
+		if lspErr == nil && lspOutput != "" && expected {
 			cmdOutputLines := strings.Split(lspOutput, "\n")
 			for i := 0; i < len(cmdOutputLines); i++ {
 				lrPolicyList = append(lrPolicyList, cmdOutputLines[i])
@@ -3315,7 +3310,13 @@ func getlrPolicyList(oc *exutil.CLI, nodeName, tableID string) ([]string, error)
 			return true, nil
 		}
 
-		e2e.Logf("%v,Waiting for expected result to be synced, try again ...")
+		// check lr-policy-list grep with tableID returned empty, usually there is "command terminated with exit code 1" to lspErr returned, so lspErr is not checked here
+		if lspOutput != "ip4.src ==" && !expected {
+			e2e.Logf("lr-policy-list of table %s is cleared up as expected", tableID)
+			return true, nil
+		}
+
+		e2e.Logf("Waiting for expected result to be synced, try again ...")
 		return false, nil
 	})
 	if checkLspErr != nil {
