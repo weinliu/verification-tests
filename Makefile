@@ -4,7 +4,7 @@ OUT_DIR=bin
 
 build:
 	mkdir -p "${OUT_DIR}"
-	export GO111MODULE="on" && export GOFLAGS="" && export GOWORK=off && { go build  -ldflags="-s -w" -mod=mod -o "${OUT_DIR}" "./cmd/extended-platform-tests";sed -i'' -e '/^toolchain go/d' go.mod; }
+	export GO111MODULE="on" && export GOFLAGS="" && export GOWORK=off && { go build  -ldflags="-s -w" -mod=mod -o "${OUT_DIR}" "./cmd/extended-platform-tests";sed -i'' -e '/^toolchain go/d' go.mod; rm -f go.mod-e; }
 
 go-mod-tidy:
 	./hack/go-mod-tidy.sh
