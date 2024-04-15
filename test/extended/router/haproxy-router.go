@@ -2077,6 +2077,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("patch the ingresscontroller to enable client certificate with required policy")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"clientTLS\":{\"clientCA\":{\"name\":\"client-ca-"+ingctrl.name+"\"},\"clientCertificatePolicy\":\"Required\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
@@ -2093,8 +2095,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, project1, secsvc)
 
 		exutil.By("create a reen route")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
-		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		reenRouteHost := "r2-reen66662." + ingctrl.domain
 		lowHostReen := strings.ToLower(reenRouteHost)
 		base64HostReen := base64.StdEncoding.EncodeToString([]byte(reenRouteHost))
@@ -2134,7 +2134,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		exutil.By("check backend reen route in haproxy that headers to be set or deleted")
-		routerpod = getNewRouterPod(oc, "ocp66662")
 		readHaproxyConfig(oc, routerpod, "be_secure:"+project1+":r2-reen", "-A43", "X-SSL-Client-Cert")
 		routeBackendCfg := getBlockConfig(oc, routerpod, "be_secure:"+project1+":r2-reen")
 		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-SSL-Client-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
