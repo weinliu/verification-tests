@@ -258,6 +258,14 @@ func SkipMissingQECatalogsource(oc *CLI) {
 	}
 }
 
+// Skip the test if default catsrc is disable
+func SkipIfDisableDefaultCatalogsource(oc *CLI) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhubs", "cluster", "-o=jsonpath={.spec.disableAllDefaultSources}").Output()
+	if output == "true" {
+		g.Skip("Skip the test, the default catsrc is disable")
+	}
+}
+
 // IsInfrastructuresHighlyAvailable check if it is HighlyAvailable for infrastructures. Available for both classic OCP and the hosted cluster.
 func IsInfrastructuresHighlyAvailable(oc *CLI) bool {
 	topology, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures.config.openshift.io", "cluster", `-o=jsonpath={.status.infrastructureTopology}`).Output()

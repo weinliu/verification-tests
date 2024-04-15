@@ -293,6 +293,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-Medium-68681-pods with no 'controller: true' ownerReferences", func() {
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		exutil.By("1) check default catalog sources' pods if labeled with controller: true")
 		for _, cs := range defaultCatalogSources {
@@ -390,6 +391,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jiazha-High-59413-Default CatalogSource aren't created in restricted mode [Serial]", func() {
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		exutil.By("step 1 -> check if the SCC is restricted")
 		for _, cs := range defaultCatalogSources {
@@ -2270,6 +2272,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-31693-Check CSV information on the PackageManifest", func() {
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.By("1) The relatedImages should exist")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "prometheus", "-o=jsonpath={.status.channels[?(.name=='beta')].currentCSVDesc.relatedImages}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2288,6 +2291,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-54038-Comply with Operator Anti-Affinity definition", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -2357,6 +2361,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-54036-Comply with Operator NodeAffinity definition", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "olm")
@@ -3078,6 +3083,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-30765-Operator-version based dependencies metadata", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
@@ -3136,6 +3142,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-27680-OLM Bundle support for Prometheus Types [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
@@ -3246,6 +3253,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-47149-Conjunctive constraint of one packages and one GVK", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -3372,6 +3380,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-47179-Disjunctive constraint of one package and one GVK", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -3425,8 +3434,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-Medium-49130-Default CatalogSources deployed by marketplace do not have toleration for tainted nodes", func() {
-
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		podNameCertifiedOP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-marketplace", "-l", "olm.catalogSource=certified-operators", "-o", "name").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -3568,6 +3577,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-32613-Operators won't install if the CSV dependency is already installed", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
@@ -4254,6 +4264,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: scolange@redhat.com
 	g.It("ConnectedOnly-Author:scolange-Medium-41565-Resolution fails to sort channel if inner entry does not satisfy predicate", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		var og1 = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -4362,8 +4373,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: scolange@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:scolange-Medium-23395-Deleted catalog registry pods and verify if them are recreated automatically [Disruptive]", func() {
-
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.By("get pod of marketplace")
 		podName := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=olm.catalogSource=redhat-operators", "-n", "openshift-marketplace", "-o=jsonpath={...metadata.name}")
 		o.Expect(podName).NotTo(o.BeEmpty())
@@ -4698,6 +4709,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the catalogsource status of catalogsource", func() {
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.By("1) Create a CatalogSource in the openshift-marketplace project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
@@ -4800,6 +4812,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:xzha-High-22618-Post check the catalogsource status of catalogsource", func() {
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		ns := "olm-upgrade-22618"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns).Output()
 
@@ -5166,6 +5179,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	// It will cover test case: OCP-21825, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-21825-Certs for packageserver can be rotated successfully", func() {
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		var (
 			packageserverName = "packageserver"
 		)
@@ -7716,6 +7730,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-25644, author: tbuskey@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-Medium-25644-OLM collect CSV health per version", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var err error
 		var (
@@ -8923,6 +8938,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// author: xzha@redhat.com, test case OCP-40529
 	g.It("ConnectedOnly-Author:xzha-Medium-40529-OPERATOR_CONDITION_NAME should have correct value", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -9663,6 +9679,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-41174-Periodically retry InstallPlan execution until a timeout expires", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		roletemplate := filepath.Join(buildPruningBaseDir, "role.yaml")
@@ -11805,6 +11822,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-43642-Alerts should be raised if the catalogsources are missing [Disruptive]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		catalogs := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -11912,6 +11930,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipNoCapabilities(oc, "marketplace")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
@@ -12134,6 +12153,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipNoCapabilities(oc, "marketplace")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
@@ -12382,6 +12402,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	// It will cover test case: OCP-40531, author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-40531-High-41051-High-23172-the value of lastUpdateTime of csv and Components of Operator should be correct [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -12719,8 +12740,8 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// OCP-45359 author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-Author:jitli-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags [Flaky]", func() {
-
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.By("step: get version")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
