@@ -1877,4 +1877,82 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-High-70294-Stale acls with empty name should be cleared [Disruptive]", func() {
+		//https://issues.redhat.com/browse/OCPBUGS-23334
+		exutil.By("Check cluster network type")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network backend")
+		}
+
+		exutil.By("Get one ovnKNodePod for one worker node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName := nodeList.Items[0].Name
+		ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, nodeName)
+
+		exutil.By("Create ACL with empty name, set its priority to 1013")
+		aclCmd1 := "ovn-nbctl --no-leader acl-add clusterRtrPortGroup from-lport 1013 \"inport == @clusterRtrPortGroup && (ip4.mcast || mldv1 || mldv2 || (ip6.dst[120..127] == 0xff && ip6.dst[116] == 1))\" allow"
+		aclCmd2 := "ovn-nbctl --no-leader acl-add clusterRtrPortGroup to-lport 1013 \"outport == @clusterRtrPortGroup && (ip4.mcast || mldv1 || mldv2 || (ip6.dst[120..127] == 0xff && ip6.dst[116] == 1))\" allow"
+		defer func() {
+			ovnKNodePod, ovnkNodePodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+			o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+			o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+			aclList := "ovn-nbctl --format=table --no-heading  --columns=_uuid,priority,match find acl | grep 1013"
+			output, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovn-controller", aclList)
+			if listErr == nil && strings.Contains(output, "ip4.mcast || mldv1 || mldv2 || (ip6.dst[120..127] == 0xff && ip6.dst[116] == 1)") {
+				//Restart ovn pod to recover.
+				err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", ovnKNodePod, "-n", "openshift-ovn-kubernetes").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+				exutil.AssertWaitPollNoErr(err, "ovnkube-node pods are not ready")
+			}
+		}()
+		_, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, aclCmd1)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		_, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, aclCmd2)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Get uuid of newly added acls")
+		uuidCmd1 := "ovn-nbctl --format=table --no-heading  --columns=_uuid,priority,match find acl | grep 1013 | grep 'outport == @clusterRtrPortGroup' | awk '{print $1}'"
+		uuidCmd2 := "ovn-nbctl --format=table --no-heading  --columns=_uuid,priority,match find acl | grep 1013 | grep 'inport == @clusterRtrPortGroup' | awk '{print $1}'"
+		ingressUUID, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovn-controller", uuidCmd1)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The newly added acls ingress UUID is %s", ingressUUID)
+		egressUUID, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovn-controller", uuidCmd2)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The newly added acls egress UUID is %s", egressUUID)
+
+		exutil.By("Update above acls, add external id")
+		setExternalIDCmd1 := fmt.Sprintf("ovn-nbctl set acl %s external_ids:default-deny-policy-type=Ingress", ingressUUID)
+		_, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovn-controller", setExternalIDCmd1)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		setExternalIDCmd2 := fmt.Sprintf("ovn-nbctl set acl %s external_ids:default-deny-policy-type=Egress", egressUUID)
+		_, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovn-controller", setExternalIDCmd2)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Restart ovnkube pod by deleting it.")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", ovnKNodePod, "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		exutil.AssertWaitPollNoErr(err, "ovnkube-node pods are not ready")
+
+		exutil.By("Verify newly added acls were cleaned.")
+		ovnKNodePod, ovnkNodePodErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+		o.Expect(ovnkNodePodErr).NotTo(o.HaveOccurred())
+		o.Expect(ovnKNodePod).ShouldNot(o.Equal(""))
+		e2e.Logf("ovnkube-node podname %s running on node %s", ovnKNodePod, nodeName)
+		aclCmd := "ovn-nbctl --format=table --no-heading  --columns=_uuid find acl"
+		output, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovn-controller", aclCmd)
+		e2e.Logf(output)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, ingressUUID)).To(o.BeFalse())
+		o.Expect(strings.Contains(output, egressUUID)).To(o.BeFalse())
+	})
+
 })
