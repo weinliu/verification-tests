@@ -594,31 +594,16 @@ func AssertIfMCPChangesAppliedByName(oc *CLI, mcpName string, timeDurationSec in
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(mcpUpdatedStatus).NotTo(o.BeEmpty())
 
-		//For master node, only make sure one of master is ready.
-		if strings.Contains(mcpName, "master") {
-			mcpMachineCount = "1"
-			//Do not check master err due to sometimes SNO can not accesss api server when server rebooted
-			mcpReadyMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
-			mcpUpdatedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
-			mcpDegradedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
-			if mcpMachineCount == mcpReadyMachineCount && mcpMachineCount == mcpUpdatedMachineCount && mcpDegradedMachineCount == "0" {
-				e2e.Logf("MachineConfigPool [%v] checks succeeded!", mcpName)
-				return true, nil
-			}
-		} else {
-			mcpMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.machineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			mcpReadyMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			mcpUpdatedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			mcpDegradedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(mcpUpdatingStatus, "False") && strings.Contains(mcpUpdatedStatus, "True") && mcpMachineCount == mcpReadyMachineCount && mcpMachineCount == mcpUpdatedMachineCount && mcpDegradedMachineCount == "0" {
-				e2e.Logf("MachineConfigPool [%v] checks succeeded!", mcpName)
-				return true, nil
-			}
+		//Do not check master err due to sometimes SNO can not accesss api server when server rebooted
+		mcpMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.machineCount}").Output()
+		mcpReadyMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
+		mcpUpdatedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
+		mcpDegradedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
+		if strings.Contains(mcpUpdatingStatus, "False") && strings.Contains(mcpUpdatedStatus, "True") && mcpMachineCount == mcpReadyMachineCount && mcpMachineCount == mcpUpdatedMachineCount && mcpDegradedMachineCount == "0" {
+			e2e.Logf("MachineConfigPool [%v] checks succeeded!", mcpName)
+			return true, nil
 		}
+
 		e2e.Logf("MachineConfigPool [%v] checks failed, the following values were found (all should be '%v'):\nmachineCount: %v\nmcpUpdatingStatus: %v\nmcpUpdatedStatus: %v\nreadyMachineCount: %v\nupdatedMachineCount: %v\nmcpDegradedMachine:%v\nRetrying...", mcpName, mcpMachineCount, mcpMachineCount, mcpUpdatingStatus, mcpUpdatedStatus, mcpReadyMachineCount, mcpUpdatedMachineCount, mcpDegradedMachineCount)
 		return false, nil
 	})

@@ -181,7 +181,7 @@ func getKernelPidMaxValue(kernel string) string {
 	return pidMaxValue
 }
 
-// compareSpecifiedValueByNameOnLabelNode Compare if the sysctl parameter is equal to specified value on all the node
+// compareSpecifiedValueByNameOnLabelNode Compare if the sysctl parameter is equal to specified value on labeled node
 func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysctlparm, specifiedvalue string) {
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
@@ -298,7 +298,7 @@ func (ntoRes *ntoResource) delete(oc *exutil.CLI) {
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoRes.namespace, "tuned", ntoRes.name, "--ignore-not-found").Execute()
 }
 
-func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI, workerNodeName string) {
+func (ntoRes *ntoResource) assertTunedProfileApplied(oc *exutil.CLI, workerNodeName string) {
 
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 
@@ -314,11 +314,8 @@ func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI, workerNodeNa
 	exutil.AssertWaitPollNoErr(err, "New tuned profile isn't applied correctly, please check")
 }
 
-// assertNTOOperatorLogs
-func assertNTOOperatorLogs(oc *exutil.CLI, namespace string, ntoOperatorPod string, profileName string) {
-	ntoOperatorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, ntoOperatorPod, "--tail=3").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(ntoOperatorLogs).To(o.ContainSubstring(profileName))
+func (ntoRes *ntoResource) applyNTOTunedProfile(oc *exutil.CLI) {
+	exutil.ApplyNsResourceFromTemplate(oc, ntoRes.namespace, "--ignore-unknown-parameters=true", "-f", ntoRes.template, "-p", "TUNED_PROFILE="+ntoRes.name, "-p", "SYSCTL_NAME="+ntoRes.sysctlparm, "-p", "SYSCTL_VALUE="+ntoRes.sysctlvalue)
 }
 
 // assertDebugSettings
@@ -773,12 +770,13 @@ func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespac
 
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
-		sysctlOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeName, []string{"-q"}, "sysctl", sysctlparm)
+		sysctlOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeName, []string{"--quiet=true", "--to-namespace=" + ntoNamespace}, "sysctl", sysctlparm)
+		e2e.Logf("The actual value is [ %v ] on %v", sysctlOutput, nodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		regexpstr, _ := regexp.Compile(sysctlparm + " = " + specifiedvalue)
 		matchStr := regexpstr.FindString(sysctlOutput)
-		e2e.Logf("The value is %v on %v", matchStr, nodeName)
+		e2e.Logf("The match value is [ %v ] on %v", matchStr, nodeName)
 
 		isMatch := regexpstr.MatchString(sysctlOutput)
 		if isMatch {
@@ -1021,28 +1019,34 @@ func isROSAHostedCluster(oc *exutil.CLI) bool {
 	return strings.Contains(clusterType, "rosa")
 }
 
-func getFirstWorkerMachinesetName(oc *exutil.CLI) string {
+// func getFirstWorkerMachinesetName(oc *exutil.CLI) string {
+func getWorkerMachinesetName(oc *exutil.CLI, machineseetSN int) string {
 
 	var (
-		machinesetName    string
-		machinesetNameStr string
+		machinesetName  string
+		linuxMachineset = make([]string, 0, 3)
 	)
-	machinesetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-machine-api", "machineset", "-oname").Output()
+	machinesetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-machine-api", "machineset", "-ojsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	workerMachineSetReg := regexp.MustCompile(".*worker.*")
-	workerMachineSets := workerMachineSetReg.FindAllString(machinesetList, -1)
+
+	//workerMachineSets := strings.ReplaceAll(machinesetList, " ", "\n")
+	workerMachineSets := strings.Split(machinesetList, " ")
+	e2e.Logf("workerMachineSets is %v in getWorkerMachinesetName", workerMachineSets)
+
 	if len(workerMachineSets) > 0 {
 		for i := 0; i < len(workerMachineSets); i++ {
 			//Skip windows worker node
-			if !strings.Contains(workerMachineSets[i], "windows") {
-				machinesetNameStr = workerMachineSets[i]
-				break
+			if !strings.Contains(workerMachineSets[i], "windows") && strings.Contains(workerMachineSets[i], "worker") {
+				linuxMachineset = append(linuxMachineset, workerMachineSets[i])
 			}
 		}
-		machinesetNameArr := strings.Split(machinesetNameStr, "/")
-		machinesetName = machinesetNameArr[1]
+		e2e.Logf("linuxMachineset is %v in getWorkerMachinesetName", linuxMachineset)
+		if machineseetSN < len(linuxMachineset) {
+			machinesetName = linuxMachineset[machineseetSN]
+		}
 	}
-	e2e.Logf("machinesetName is %v in getFirstWorkerMachinesetName", machinesetName)
+
+	e2e.Logf("machinesetName is %v in getWorkerMachinesetName", machinesetName)
 	return machinesetName
 }
 

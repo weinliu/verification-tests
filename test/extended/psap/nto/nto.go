@@ -60,7 +60,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoTunedPidMax     string
 		customTunedProfile string
 		tunedNodeName      string
-		err                error
+		ntoSysctlTemplate  string
+
+		err error
 	)
 
 	g.BeforeEach(func() {
@@ -75,6 +77,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		podSysctlFile = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-pod.yaml")
 		ntoTunedPidMax = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-pidmax.yaml")
 		customTunedProfile = exutil.FixturePath("testdata", "psap", "nto", "custom-tuned-profiles.yaml")
+		ntoSysctlTemplate = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-template.yaml")
 	})
 
 	// author: liqcui@redhat.com
@@ -475,7 +478,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		isSNO := exutil.IsSNOCluster(oc)
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -550,7 +553,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -613,7 +616,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -918,7 +921,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -1351,7 +1354,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Use the last worker node as labeled node
 		//Support 3 master/worker node, no dedicated worker nodes
 		if !is3Master && !isSNO && exutil.IsMachineSetExist(oc) {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -2065,7 +2068,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -2151,7 +2154,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -2265,7 +2268,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -2466,7 +2469,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		isSNO := exutil.IsSNOCluster(oc)
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -2756,7 +2759,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -3144,7 +3147,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 
 		if (edgeNodeName == "node/"+tunedNodeName || exutil.IsMachineSetExist(oc)) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -3272,7 +3275,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Prior to choose worker nodes with machineset
 		if exutil.IsMachineSetExist(oc) && !isSNO {
-			machinesetName := getFirstWorkerMachinesetName(oc)
+			machinesetName := getWorkerMachinesetName(oc, 0)
 			e2e.Logf("machinesetName is %v ", machinesetName)
 			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
 			if !strings.Contains(machinesetReplicas, "0") {
@@ -3287,6 +3290,18 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		//Get how many cpus on the specified worker node
+		exutil.By("Get the number of cpus cores on the labeled worker node")
+		nodeCPUCores, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.capacity.cpu}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeCPUCores).NotTo(o.BeEmpty())
+
+		nodeCPUCoresInt, err := strconv.Atoi(nodeCPUCores)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodeCPUCoresInt < 4 {
+			g.Skip("the worker node doesn't have enough cpus - skipping test ...")
 		}
 
 		//Get the tuned pod name in the same node that labeled node
@@ -3320,7 +3335,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Assert if machine config pool applied to worker nodes that label with worker-pao")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 1500)
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 300)
-		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 300)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 720)
 
 		exutil.By("Check if new profile openshift-node-performance-pao-baseprofile in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
@@ -3442,7 +3457,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(tunedPodName).NotTo(o.BeEmpty())
 
 		exutil.By("Assert if machine config pool applied for worker nodes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 720)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 1200)
 
 		exutil.By("Check if profile openshift-node-performance-pao-baseprofile in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
@@ -3495,7 +3510,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The settings of CPU Manager topologyManagerPolicy on labeled nodes: \n%v", topologyManagerConfOutput)
 
 		// currently test is only supported on AWS, GCP, and Azure
-
 		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
 			exutil.By("Check realTime kernel setting that created by PAO in labled node ")
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
@@ -3532,5 +3546,193 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Delete custom MC and MCP by following correct logic ...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao-").Execute()
 		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 480)
+	})
+
+	g.It("NonPreRelease-PreChkUpgrade-Author:liqcui-Medium-21995-Pre Check for basic NTO function to Upgrade OCP Cluster[Disruptive].", func() {
+
+		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
+		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
+
+		if !implStringArrayContains(supportPlatforms, iaasPlatform) || !isNTO {
+			g.Skip("NTO is not installed or IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		//Prior to choose worker nodes with machineset
+		if exutil.IsMachineSetExist(oc) {
+			machinesetName := getWorkerMachinesetName(oc, 1)
+			e2e.Logf("machinesetName is %v ", machinesetName)
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		} else {
+			tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		paoNodeName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker-pao", "-ojsonpath={.items[*].metadata.name}").Output()
+		if len(tunedNodeName) == 0 || tunedNodeName == paoNodeName {
+			g.Skip("No suitable worker node was found in : " + iaasPlatform + " - skipping test ...")
+		}
+
+		exutil.By("Label the node with node-role.kubernetes.io/worker-tuning=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		ntoRes := ntoResource{
+			name:        "tuning-pidmax",
+			namespace:   ntoNamespace,
+			template:    ntoSysctlTemplate,
+			sysctlparm:  "kernel.pid_max",
+			sysctlvalue: "282828",
+		}
+
+		exutil.By("Create tuning-pidmax profile")
+		ntoRes.applyNTOTunedProfile(oc)
+
+		exutil.By("Check if new profile is in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
+
+		exutil.By("Create tuning-pidmax profile tuning-pidmax applied to nodes")
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+
+		exutil.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Compare if the value kernel.pid_max in on labeled node, should be 282828")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.pid_max", "282828")
+
+		exutil.By("Get cloud provider name ...")
+		providerName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profiles.tuned.openshift.io", tunedNodeName, "-n", ntoNamespace, "-ojsonpath={.spec.config.providerName}").Output()
+		o.Expect(providerName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		providerID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.spec.providerID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(providerID).NotTo(o.BeEmpty())
+		o.Expect(providerID).To(o.ContainSubstring(providerName))
+
+		exutil.By("Apply cloud-provider profile ...")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cloudProviderFile, "-p", "PROVIDER_NAME="+providerName)
+
+		exutil.By("Check if new profile is in rendered tuned")
+		renderCheck, err = getTunedRender(oc, ntoNamespace)
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("provider-" + providerName))
+
+		exutil.By("Check provider + providerName profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).NotTo(o.BeEmpty())
+		o.Expect(tunedNames).To(o.ContainSubstring("provider-" + providerName))
+
+		exutil.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value is 16386")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "vm.admin_reserve_kbytes", "16386")
+	})
+	g.It("NonPreRelease-PstChkUpgrade-Author:liqcui-Medium-21995-Post Check for basic NTO function to Upgrade OCP Cluster[Disruptive]", func() {
+
+		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
+		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
+
+		if !implStringArrayContains(supportPlatforms, iaasPlatform) || !isNTO {
+			g.Skip("NTO is not installed or IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		tunedNodeName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker-tuning", "-ojsonpath={.items[*].metadata.name}").Output()
+		if len(tunedNodeName) == 0 {
+			g.Skip("No suitable worker node was found in : " + iaasPlatform + " - skipping test ...")
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "tuning-pidmax", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		exutil.By("Get cloud provider name ...")
+		providerName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profiles.tuned.openshift.io", tunedNodeName, "-n", ntoNamespace, "-ojsonpath={.spec.config.providerName}").Output()
+		o.Expect(providerName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "provider-"+providerName, "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		ntoRes := ntoResource{
+			name:        "tuning-pidmax",
+			namespace:   ntoNamespace,
+			template:    ntoSysctlTemplate,
+			sysctlparm:  "kernel.pid_max",
+			sysctlvalue: "282828",
+		}
+
+		exutil.By("Check if new profile is in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
+
+		exutil.By("Create tuning-pidmax profile and apply it to nodes")
+		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+
+		exutil.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Compare if the value kernel.pid_max in on labeled node, should be 282828")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.pid_max", "282828")
+
+		providerID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.spec.providerID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(providerID).NotTo(o.BeEmpty())
+		o.Expect(providerID).To(o.ContainSubstring(providerName))
+
+		exutil.By("Apply cloud-provider profile ...")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cloudProviderFile, "-p", "PROVIDER_NAME="+providerName)
+
+		exutil.By("Check if new profile is in rendered tuned")
+		renderCheck, err = getTunedRender(oc, ntoNamespace)
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("provider-" + providerName))
+
+		exutil.By("Check provider + providerName profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).NotTo(o.BeEmpty())
+		o.Expect(tunedNames).To(o.ContainSubstring("provider-" + providerName))
+
+		exutil.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value is 16386")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "vm.admin_reserve_kbytes", "16386")
+
+		//Clean nto resource after upgrade
+		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning-").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "tuning-pidmax", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "provider-"+providerName, "-n", ntoNamespace, "--ignore-not-found").Execute()
+
 	})
 })
