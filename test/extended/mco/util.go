@@ -719,15 +719,8 @@ func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 	}
 }
 
-// skipTestIfBaselineCapabilitySetIsNone skips the test cases if no enabledCapabilities found in resource clusterversion
-func skipTestIfBaselineCapabilitySetIsNone(oc *exutil.CLI) {
-	if isBaselineCapabilitySetNone(oc) {
-		// i.e. enabledCapabilities not found, skip the test
-		g.Skip("Skip this test because enabledCapabilities not found in resource clusterversion")
-	}
-}
-
 // isBaselineCapabilitySetNone check value of enabledCapabilities in clusterversion, return true if it is empty or does not exist
+// nolint:deadcode
 func isBaselineCapabilitySetNone(oc *exutil.CLI) bool {
 	return len(getEnabledCapabilities(oc)) == 0
 }
@@ -973,6 +966,7 @@ func GetDataFromConfigMap(oc *exutil.CLI, namespace, name string) (map[string]st
 }
 
 // createCertificate creates a CA and returns: (path to the key used to sign the CA, path to the CA, error)
+// nolint:unparam
 func createCA(tmpDir, caFileName string) (keyPath, caPath string, err error) {
 	var (
 		keyFileName = "privateKey.pem"
@@ -1240,4 +1234,8 @@ func skipIfNoTechPreview(oc *exutil.CLI) {
 	if !exutil.IsTechPreviewNoUpgrade(oc) {
 		g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
 	}
+}
+
+func IsTrue(s string) bool {
+	return strings.EqualFold(s, TrueString)
 }

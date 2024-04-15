@@ -73,7 +73,7 @@ func (mcp *MachineConfigPool) pause(enable bool) {
 
 // IsPaused return true is mcp is paused
 func (mcp *MachineConfigPool) IsPaused() bool {
-	return mcp.GetOrFail(`{.spec.paused}`) == "true"
+	return IsTrue(mcp.GetOrFail(`{.spec.paused}`))
 }
 
 // IsCustom returns true if the pool is not the master pool nor the worker pool

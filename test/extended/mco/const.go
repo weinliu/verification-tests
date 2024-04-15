@@ -162,6 +162,9 @@ const (
 	MachineSetFullName = "machineset.machine.openshift.io"
 	// Machine fully qualified name
 	MachineFullName = "machine.machine.openshift.io"
+
+	// TrueString string for true value
+	TrueString = "True"
 )
 
 var (

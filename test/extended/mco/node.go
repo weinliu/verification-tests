@@ -449,7 +449,7 @@ func (n *Node) IsSchedulable() (bool, error) {
 		return false, err
 	}
 
-	return unschedulable != "true", nil
+	return !IsTrue(unschedulable), nil
 }
 
 // Returns true if the node is schedulable and fails the test if there is an error

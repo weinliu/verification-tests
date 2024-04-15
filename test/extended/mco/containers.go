@@ -83,7 +83,7 @@ func (b *OsImageBuilder) preparePushToInternalRegistry() error {
 		return fmt.Errorf("Error getting internal registry configuration. Error: %s", expErr)
 	}
 
-	if exposed != "true" {
+	if !IsTrue(exposed) {
 		b.cleanupRegistryRoute = true
 		logger.Infof("The internal registry service is not exposed. Exposing internal registry service...")
 
