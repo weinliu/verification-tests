@@ -280,6 +280,85 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		checkFixedAlert(oc, coMcp, expectedAlertName)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-71871-MCCBootImageUpdateError alert [Disruptive]", func() {
+		// Skip if no machineset
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+		// Feature currently available in techpreview only
+		skipIfNoTechPreview(oc)
+		// Feature currently available in GCP only
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
+
+		var (
+			ms        = NewMachineSetList(oc, MachineAPINamespace).GetAllOrFail()[0]
+			newMsName = ms.GetName() + "-tc-71871"
+
+			alertFiredAfter                    = 30 * time.Minute
+			expectedAlertName                  = "MCCBootImageUpdateError"
+			expectedAlertSeverity              = "warning"
+			expectedAlertAnnotationDescription = fmt.Sprintf("The boot images of Machineset %s could not be updated. For more details check MachineConfigController pod logs: oc logs -n openshift-machine-config-operator -f $(oc get pod -o name -l='k8s-app=machine-config-controller' -n openshift-machine-config-operator) | grep machine_set", newMsName)
+			expectedAlertAnnotationSummary     = "Triggers when machineset boot images could not be updated"
+		)
+		exutil.By("Duplicate an existing machineset")
+		newMs, err := ms.Duplicate(newMsName)
+		defer newMs.Delete()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error duplicating %s", ms)
+		logger.Infof("OK!\n")
+
+		exutil.By("Patch the new machineset with fake values")
+		logger.Infof("Patch the machineset's architecture label with a fake value")
+		o.Expect(
+			newMs.SetArchitecture("fake"),
+		).To(o.Succeed(),
+			"Error patching %s with a fake architecture", newMs)
+
+		logger.Infof("Patch the machineset's bootimage value with a fake value")
+		o.Expect(
+			newMs.SetCoreOsBootImage("fake-image"),
+		).To(o.Succeed(),
+			"Error patching %s with a fake coreos image", newMs)
+		logger.Infof("OK!\n")
+
+		exutil.By(`Check that the right alert was triggered`)
+
+		expectedAlertLabels := expectedAlertValues{
+			"severity": o.Equal(expectedAlertSeverity),
+		}
+
+		expectedAlertAnnotations := expectedAlertValues{
+			"description": o.MatchRegexp(expectedAlertAnnotationDescription),
+			"summary":     o.Equal(expectedAlertAnnotationSummary),
+		}
+
+		params := checkFiredAlertParams{
+			expectedAlertName:        expectedAlertName,
+			expectedAlertLabels:      expectedAlertLabels,
+			expectedAlertAnnotations: expectedAlertAnnotations,
+			pendingDuration:          alertFiredAfter,
+			stillPresentDuration:     0, // We skip this validation to make the test faster
+		}
+		checkFiredAlert(oc, nil, params)
+		logger.Infof("OK!\n")
+
+		exutil.By("Patch the new machineset with the right values in order to fix the alert")
+		logger.Infof("Patch the machineset's architecture label with the original value")
+		o.Expect(
+			newMs.SetArchitecture(ms.GetArchitectureOrFail().String()),
+		).To(o.Succeed(),
+			"Error patching %s with the initial architecture", newMs)
+
+		logger.Infof("Patch the machineset's bootimage value with a fake value")
+		o.Expect(
+			newMs.SetCoreOsBootImage(ms.GetCoreOsBootImageOrFail()),
+		).To(o.Succeed(),
+			"Error patching %s with the initial coreos image", newMs)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the alert is not triggered anymore")
+		checkFixedAlert(oc, coMcp, expectedAlertName)
+		logger.Infof("OK!\n")
+	})
 })
 
 type expectedAlertValues map[string]types.GomegaMatcher

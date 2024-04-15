@@ -280,7 +280,13 @@ func (ms MachineSet) GetArchitectureOrFail() *architecture.Architecture {
 	return arch
 }
 
-// GetCoreOsBootImage returns
+func (ms MachineSet) SetArchitecture(arch string) error {
+	return ms.Patch("json",
+		fmt.Sprintf(`[{"op": "add", "path": "/metadata/annotations/capacity.cluster-autoscaler.kubernetes.io~1labels", "value": "kubernetes.io/arch=%s"}]`,
+			arch))
+}
+
+// GetCoreOsBootImage returns the configured coreOsBootImage in this machineset
 func (ms MachineSet) GetCoreOsBootImage() (string, error) {
 	// the coreOs boot image is stored differently in the machineset spec depending on the platform
 	// currently we only support testing the coresOs boot image in GCP platform.
@@ -293,6 +299,13 @@ func (ms MachineSet) GetCoreOsBootImage() (string, error) {
 	}
 
 	return ms.Get(coreOsBootImagePath)
+}
+
+// GetCoreOsBootImage returns the configured coreOsBootImage in this machineset and fails the test case if any error happened
+func (ms MachineSet) GetCoreOsBootImageOrFail() string {
+	img, err := ms.GetCoreOsBootImage()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting the coreos boot image value in %s", ms)
+	return img
 }
 
 // GetAll returns a []MachineSet list with all existing machinesets
