@@ -1702,6 +1702,35 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			CMOPodName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=cluster-monitoring-operator", "-ojsonpath={.items[].metadata.name}").Output()
 			exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "cluster-monitoring-operator", CMOPodName, "UserWorkloadTasksFailed")
 		})
+
+		//author: tagao@redhat.com
+		g.It("Author:tagao-Medium-73112-replace OAuth proxy for Thanos Ruler", func() {
+			exutil.By("check new secret thanos-user-workload-kube-rbac-proxy-web added")
+			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
+			checkSecret, err := oc.AsAdmin().Run("get").Args("secret", "thanos-user-workload-kube-rbac-proxy-web", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(checkSecret).NotTo(o.ContainSubstring("not found"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check old secret thanos-ruler-oauth-cookie removed")
+			checkSecret, _ = oc.AsAdmin().Run("get").Args("secret", "thanos-ruler-oauth-cookie", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(checkSecret).To(o.ContainSubstring("not found"))
+
+			exutil.By("check thanos-ruler sa, `annotations` should be removed")
+			checkSa, err := oc.AsAdmin().Run("get").Args("sa", "thanos-ruler", "-n", "openshift-user-workload-monitoring", "-ojsonpath={.metadata.annotations}").Output()
+			o.Expect(checkSa).NotTo(o.ContainSubstring("Route"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check thanos-ruler-user-workload pods, thanos-ruler-proxy container is removed")
+			checkPO, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "thanos-ruler-user-workload-0", "-ojsonpath={.spec.containers[*].name}", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(checkPO).NotTo(o.ContainSubstring("thanos-ruler-proxy"))
+			o.Expect(checkPO).To(o.ContainSubstring("kube-rbac-proxy-web"))
+
+			exutil.By("check ThanosRuler, new configs added")
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ThanosRuler", "user-workload", "-n", "openshift-user-workload-monitoring", "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy-web\")].args}").Output()
+			o.Expect(output).To(o.ContainSubstring("config-file=/etc/kube-rbac-proxy/config.yaml"))
+			o.Expect(output).To(o.ContainSubstring("tls-cert-file=/etc/tls/private/tls.crt"))
+			o.Expect(output).To(o.ContainSubstring("tls-private-key-file=/etc/tls/private/tls.key"))
+		})
 	})
 
 	//author: tagao@redhat.com
