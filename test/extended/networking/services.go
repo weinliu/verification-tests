@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
@@ -1123,6 +1125,135 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		output, curlErr := exec.Command("bash", "-c", svcChkCmd).Output()
 		o.Expect(curlErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-43492-ExternalIP for node that has secondary IP. [Disruptive]", func() {
+
+		// This is for bug https://bugzilla.redhat.com/show_bug.cgi?id=1959798
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		externalIPServiceTemplate := filepath.Join(buildPruningBaseDir, "externalip_service1-template.yaml")
+		externalIPPodTemplate := filepath.Join(buildPruningBaseDir, "externalip_pod-template.yaml")
+		intf := "br-ex"
+		var workers, nonExternalIPNodes []string
+		var proxyHost string
+
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Incompatible networkType, skipping test!!!")
+		}
+
+		platform := exutil.CheckPlatform(oc)
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		if err != nil || strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
+			platform = "rdu1"
+			proxyHost = "10.8.1.181"
+		}
+		if err != nil || strings.Contains(msg, "offload.openshift-qe.sdn.com") {
+			platform = "rdu2"
+			proxyHost = "10.8.1.179"
+		}
+
+		if strings.Contains(platform, "rdu1") || strings.Contains(platform, "rdu2") {
+			workers = excludeSriovNodes(oc)
+			if len(workers) < 2 {
+				g.Skip("Not enough nodes, need minimal 2 nodes on RDU for the test, skip the case!!")
+			}
+		} else {
+			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// for other non-RDU platforms, need minimal 3 nodes for the test
+			if len(nodeList.Items) < 3 {
+				g.Skip("Not enough worker nodes for this test, skip the case!!")
+			}
+			for _, node := range nodeList.Items {
+				workers = append(workers, node.Name)
+			}
+		}
+
+		exutil.By("1. Get namespace, create an externalIP pod in it\n")
+		ns := oc.Namespace()
+		pod1 := externalIPPod{
+			name:      "externalip-pod",
+			namespace: ns,
+			template:  externalIPPodTemplate,
+		}
+		pod1.createExternalIPPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("2.Find another node, get its host CIDR, and one unused IP in its subnet \n")
+		externalIPPodNode, err := exutil.GetPodNodeName(oc, pod1.namespace, pod1.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(externalIPPodNode).NotTo(o.Equal(""))
+		e2e.Logf("ExternalIP pod is on node: %s", externalIPPodNode)
+
+		for _, node := range workers {
+			if node != externalIPPodNode {
+				nonExternalIPNodes = append(nonExternalIPNodes, node)
+			}
+		}
+		e2e.Logf("\n nonExternalIPNodes are: %v\n", nonExternalIPNodes)
+
+		sub := getEgressCIDRsForNode(oc, nonExternalIPNodes[0])
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, nonExternalIPNodes[0], sub, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		_, hostIPwithPrefix := getIPv4AndIPWithPrefixForNICOnNode(oc, nonExternalIPNodes[0], intf)
+		prefix := strings.Split(hostIPwithPrefix, "/")[1]
+		e2e.Logf("\n On host %s, prefix of the host ip address: %v\n", nonExternalIPNodes[0], prefix)
+
+		exutil.By(fmt.Sprintf("3. Add secondary IP %s to br-ex on the node %s", freeIPs[0]+"/"+prefix, nonExternalIPNodes[0]))
+		defer delIPFromInferface(oc, nonExternalIPNodes[0], freeIPs[0], intf)
+		addIPtoInferface(oc, nonExternalIPNodes[0], freeIPs[0]+"/"+prefix, intf)
+
+		exutil.By("4.Patch update network.config with the host CIDR to enable externalIP \n")
+		original, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("network/cluster", "-ojsonpath={.spec.externalIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patch := `[{"op": "replace", "path": "/spec/externalIP", "value": ` + original + `}]`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("network/cluster", "-p", patch, "--type=json").Execute()
+		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+sub+"\"]}}}}")
+
+		exutil.By("5.Create an externalIP service with the unused IP address obtained above as externalIP\n")
+		svc := externalIPService{
+			name:       "service-unsecure",
+			namespace:  ns,
+			externalIP: freeIPs[0],
+			template:   externalIPServiceTemplate,
+		}
+		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", svc.template, "-p", "NAME=" + svc.name, "EXTERNALIP=" + svc.externalIP}
+		exutil.ApplyNsResourceFromTemplate(oc, svc.namespace, parameters...)
+		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.name).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).Should(o.ContainSubstring(svc.name))
+
+		// For RDU, curl the externalIP service from test runner through proxy
+		// For other platforms, since it is hard to get external host on same subnet of the secondary IP, we use another non-externalIP node as simulated test enviornment to validate
+		exutil.By("6.Validate the externalIP service\n")
+		svc4URL := net.JoinHostPort(svc.externalIP, "27017")
+		var host string
+		if platform == "rdu1" || platform == "rdu2" {
+			exutil.By(fmt.Sprintf("On %s,  use test runner to validate the externalIP service", platform))
+			host = proxyHost
+		} else {
+			exutil.By(fmt.Sprintf("On %s,  use another non-externalIP node to validate the externalIP service", platform))
+			host = nonExternalIPNodes[1]
+		}
+		checkSvcErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			if validateService(oc, host, svc4URL) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkSvcErr, "The externalIP service is not reachable as expected")
+
+		exutil.By("7.Check OVN-KUBE-EXTERNALIP iptables chain is updated correctly\n")
+		for _, node := range workers {
+			output, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "iptables -n -v -t nat -L OVN-KUBE-EXTERNALIP")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, svc.externalIP)).Should(o.BeTrue(), fmt.Sprintf("OVN-KUBE-EXTERNALIP iptables chain was not updated correctly on node %s", node))
+		}
 	})
 
 })
