@@ -1,0 +1,59 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: clusterlogforwarder-template
+objects:
+- apiVersion: "logging.openshift.io/v1"
+  kind: ClusterLogForwarder
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    filters:
+    - name: drop-logs-1
+      type: drop
+      drop:
+      - test:
+        - field: .log_type
+          matches: "application"
+        - field: .kubernetes.pod_name
+          notMatches: "logging-centos-logtest.+"
+      - test:
+        - field: .message
+          matches: (?i)\berror\b
+        - field: .level
+          matches: error
+      - test:
+        - field: .kubernetes.labels."test.logging.io/logging.qe-test-label"
+          matches: .+
+    - name: drop-logs-2
+      type: drop
+      drop:
+      - test:
+        - field: .kubernetes.namespace_name
+          matches: "openshift*"
+    - name: drop-logs-3
+      type: drop
+      drop:
+      - test:
+        - field: .log_type
+          matches: "infrastructure"
+        - field: .kubernetes.namespace_name
+          notMatches: "openshift-cluster*"
+    pipelines:
+    - name: forward-to-default
+      inputRefs:
+      - infrastructure
+      - application
+      - audit
+      outputRefs:
+      - default
+      filterRefs:
+      - drop-logs-3
+      - drop-logs-2
+      - drop-logs-1
+parameters:
+- name: NAME
+  value: "instance"
+- name: NAMESPACE
+  value: "openshift-logging"

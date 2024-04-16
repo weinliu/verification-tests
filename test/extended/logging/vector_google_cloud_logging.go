@@ -480,4 +480,115 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(logs) == 0).Should(o.BeTrue(), "find logs from other containers, this is not expected")
 	})
+
+	// author qitang@redhat.com
+	g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-71753-Prune fields from log messages", func() {
+		exutil.By("Create CLF")
+		clfNS := oc.Namespace()
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		gcl := googleCloudLogging{
+			projectID: projectID,
+			logName:   getInfrastructureName(oc) + "-71753",
+		}
+		defer gcl.removeLogs()
+		gcpSecret := resource{"secret", "gcp-secret-71753", clfNS}
+		defer gcpSecret.clear(oc)
+		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		clf := clusterlogforwarder{
+			name:                      "clf-71753",
+			namespace:                 clfNS,
+			secretName:                gcpSecret.name,
+			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			collectApplicationLogs:    true,
+			collectInfrastructureLogs: true,
+			collectAuditLogs:          true,
+			serviceAccountName:        "clf-" + getRandomString(),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName)
+		exutil.By("Add prune filters to CLF")
+		patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "prune-logs", "type": "prune", "prune": {"in": [".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}}]},
+		{"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["prune-logs"]}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+
+		exutil.By("Create project for app logs and deploy the log generator")
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", ns, "-p", "LABELS={\"test\": \"logging-71753-test\", \"test.logging.io/logging.qe-test-label\": \"logging-71753-test\"}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check logs in google cloud logging")
+		for _, logType := range []string{"application", "infrastructure", "audit"} {
+			err = gcl.waitForLogsAppearByType(logType)
+			exutil.AssertWaitPollNoErr(err, logType+" logs are not collected")
+		}
+		exutil.By("Fields kubernetes.namespace_name, kubernetes.labels.\"test.logging.io/logging.qe-test-label\", kubernetes.annotations and file should be pruned")
+		// sleep 10 seconds for collector pods to send new data to google cloud logging
+		time.Sleep(10 * time.Second)
+		logs, err := gcl.getLogByType("application")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) > 0).Should(o.BeTrue())
+		extractedLogs, err := extractGoogleCloudLoggingLogs(logs)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(extractedLogs) > 0).Should(o.BeTrue())
+		o.Expect(extractedLogs[0].File == "").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Annotations == nil).Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.NamespaceName == "").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Lables["test.logging.io_logging.qe-test-label"] == "").Should(o.BeTrue())
+
+		exutil.By("Prune .hostname, the CLF should be rejected")
+		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/in", "value": [".hostname",".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}]`
+		clf.update(oc, "", patch, "--type=json")
+		checkResource(oc, true, false, "googleCloudLogging cannot prune `.hostname` field.", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelines.test-google-cloud-logging[0].message}"})
+
+		exutil.By("Update CLF to only reserve several fields")
+		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift",".hostname"]}}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 10 seconds for collector pods to send new data to google cloud logging
+		time.Sleep(10 * time.Second)
+
+		exutil.By("Check logs in google cloud logging")
+		err = gcl.waitForLogsAppearByNamespace(ns)
+		exutil.AssertWaitPollNoErr(err, "logs from project/"+ns+" are not collected")
+		logs, err = gcl.getLogByNamespace(ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) > 0).Should(o.BeTrue())
+		extractedLogs, err = extractGoogleCloudLoggingLogs(logs)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(extractedLogs) > 0).Should(o.BeTrue())
+		o.Expect(extractedLogs[0].File == "").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Annotations != nil).Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Lables["test_logging_io_logging_qe-test-label"] == "logging-71753-test").Should(o.BeTrue())
+
+		exutil.By("Prune .hostname, the CLF should be rejected")
+		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/notIn", "value": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift"]}]`
+		clf.update(oc, "", patch, "--type=json")
+		checkResource(oc, true, false, "googleCloudLogging cannot prune `.hostname` field.", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelines.test-google-cloud-logging[0].message}"})
+
+		exutil.By("Combine in and notIn")
+		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".hostname"],
+		"in": [".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+		// sleep 30 seconds for collector pods to send new data to google cloud logging
+		time.Sleep(30 * time.Second)
+
+		logs, err = gcl.getLogByType("application")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(logs) > 0).Should(o.BeTrue())
+		extractedLogs, err = extractGoogleCloudLoggingLogs(logs)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(extractedLogs) > 0).Should(o.BeTrue())
+		o.Expect(extractedLogs[0].File == "").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].OpenShift.ClusterID == "").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Annotations == nil).Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.NamespaceName == "").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Lables["test_logging_io_logging_qe-test-label"] == "").Should(o.BeTrue())
+	})
 })

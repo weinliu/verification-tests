@@ -821,5 +821,62 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		g.It("CPaasrunOnly-Author:qitang-Medium-71751-CLF should be rejected and show error message if the filters are invalid", func() {
+			splunkProject := oc.Namespace()
+			sp := splunkPodServer{
+				namespace: splunkProject,
+				name:      "default-http",
+				authType:  "http",
+				version:   "9.0",
+			}
+			sp.init()
+
+			exutil.By("Deploy splunk")
+			defer sp.destroy(oc)
+			sp.deploy(oc)
+
+			clfSecret := toSplunkSecret{
+				name:      "splunk-secret-71051",
+				namespace: splunkProject,
+				hecToken:  sp.hecToken,
+			}
+			clf := clusterlogforwarder{
+				name:                      "clf-71051",
+				namespace:                 splunkProject,
+				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "clf-" + getRandomString(),
+			}
+
+			exutil.By("create clusterlogforwarder")
+			defer clfSecret.delete(oc)
+			clfSecret.create(oc)
+			defer clf.delete(oc)
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
+
+			exutil.By("Update CLF to set invalid filters")
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "prune-logs", "type": "prune", "prune": {"in": [".kubernetes.namespace_labels.pod-security.kubernetes.io/audit",".file",".kubernetes.annotations"]}}]},
+		{"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["prune-logs"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, `[".kubernetes.namespace_labels.pod-security.kubernetes.io/audit" must be a valid dot delimited path expression (.kubernetes.container_name or .kubernetes."test-foo")]`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+
+			exutil.By("Update CLF to prune fields .log_type and .message")
+			patch = `[{"op": "replace", "path": "/spec/filters/0/prune/in", "value": [".log_type",".message",".kubernetes.annotations"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, "[\".log_type\" \".message\"] is/are required fields and must be removed from the `in` list.", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+
+			patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".kubernetes",".hostname",."@timestamp"]}}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, "[[\".log_type\" \".message\"] is/are required fields and must be included in the `notIn` list.]", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+
+			exutil.By("Check filter validation for drop")
+			patch = `[{"op": "replace", "path": "/spec/filters", "value": [{"name": "drop-logs", "type": "drop", "drop": [{"test": [{"field": ".kubernetes.labels.test.logging.io/logging.qe-test-label", "matches": ".+"}]}]}]}, {"op": "replace", "path": "/spec/pipelines/0/filterRefs", "value": ["drop-logs"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, `[".kubernetes.labels.test.logging.io/logging.qe-test-label" must be a valid dot delimited path expression (.kubernetes.container_name or .kubernetes."test-foo")]`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, `-ojsonpath={.status.filters.drop-logs\:\ test\[0\][0].message}`})
+		})
+
 	})
 })

@@ -26,6 +26,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"google.golang.org/api/iterator"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2668,6 +2669,28 @@ func (gcl googleCloudLogging) getLogByType(logType string) ([]*logging.Entry, er
 func (gcl googleCloudLogging) getLogByNamespace(namespace string) ([]*logging.Entry, error) {
 	searchString := " AND jsonPayload.kubernetes.namespace_name = \"" + namespace + "\""
 	return gcl.listLogEntries(searchString)
+}
+
+func extractGoogleCloudLoggingLogs(gclLogs []*logging.Entry) ([]LogEntity, error) {
+	var (
+		logs []LogEntity
+		log  LogEntity
+	)
+	for _, item := range gclLogs {
+		if value, ok := item.Payload.(*structpb.Struct); ok {
+			v, err := value.MarshalJSON()
+			if err != nil {
+				return nil, err
+			}
+			//e2e.Logf("\noriginal log:\n%s\n\n", string(v))
+			err = json.Unmarshal(v, &log)
+			if err != nil {
+				return nil, err
+			}
+			logs = append(logs, log)
+		}
+	}
+	return logs, nil
 }
 
 func (gcl googleCloudLogging) removeLogs() error {

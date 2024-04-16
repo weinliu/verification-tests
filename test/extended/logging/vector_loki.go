@@ -921,6 +921,91 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(re.Data.Result) == 0).Should(o.BeTrue())
 		})
 
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-High-71749-Drop logs based on test of fields and their values[Serial][Slow]", func() {
+			exutil.By("Deploying LokiStack CR for 1x.demo tshirt size")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-71749",
+				namespace:     loggingNS,
+				tSize:         "1x.demo",
+				storageType:   s,
+				storageSecret: "storage-secret-71749",
+				storageClass:  sc,
+				bucketName:    "logging-loki-71749-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+
+			defer ls.removeObjectStorage(oc)
+			err := ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			exutil.By("Create ClusterLogForwarder to drop some logs")
+			clf := clusterlogforwarder{
+				name:         "instance",
+				namespace:    loggingNS,
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "71749.yaml"),
+			}
+			defer clf.delete(oc)
+			clf.create(oc)
+
+			exutil.By("Create ClusterLogging instance with Loki as logstore")
+			cl := clusterlogging{
+				name:          "instance",
+				namespace:     loggingNS,
+				collectorType: "vector",
+				logStoreType:  "lokistack",
+				lokistackName: ls.name,
+				waitForReady:  true,
+				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			}
+			defer cl.delete(oc)
+			cl.create(oc)
+
+			exutil.By("Create projects for app logs and deploy the log generators")
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			var namespaces []string
+			for i := 0; i < 3; i++ {
+				ns := "logging-project-71749-" + strconv.Itoa(i)
+				defer oc.DeleteSpecifiedNamespaceAsAdmin(ns)
+				oc.CreateSpecifiedNamespaceAsAdmin(ns)
+				namespaces = append(namespaces, ns)
+			}
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", namespaces[0], "-p", "LABELS={\"test\": \"logging-71749-test\"}", "-p", "REPLICATIONCONTROLLER=logging-71749-test").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", namespaces[1], "-p", "LABELS={\"test\": \"logging-71749-test\", \"test.logging.io/logging.qe-test-label\": \"logging-71749-test\"}").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", namespaces[2], "-p", "LABELS={\"test\": \"logging-71749-test\"}").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Check logs in loki")
+			defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			bearerToken := getSAToken(oc, "default", oc.Namespace())
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			lc.waitForLogsAppearByKey("application", "log_type", "application")
+			lc.waitForLogsAppearByKey("infrastructure", "log_type", "infrastructure")
+			lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+			// logs from openshift* projects are dropped
+			re, err := lc.searchLogsInLoki("infrastructure", `{ log_type="infrastructure", kubernetes_namespace_name=~"openshift.+" }`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(re.Data.Result) == 0).Should(o.BeTrue())
+			// only logs from namespaces[2] should be collected
+			app, err := lc.searchLogsInLoki("application", `{ log_type="application", kubernetes_namespace_name!~"`+namespaces[2]+`" }`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(app.Data.Result) == 0).Should(o.BeTrue())
+			//logs with a level of `error` and with a message that includes the word `error` are dropped
+			infra, err := lc.searchLogsInLoki("infrastructure", `{ log_type="infrastructure" } | level=~"error|err|eror", message=~".+error.+"`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(infra.Data.Result) == 0).Should(o.BeTrue())
+
+		})
 	})
 })
 
