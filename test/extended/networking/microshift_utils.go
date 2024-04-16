@@ -13,6 +13,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 // get file contents to be modified for Ushift
@@ -154,10 +155,8 @@ func getSecondaryNICip(oc *exutil.CLI) string {
 	return sec_int
 }
 
-// get generic multus NAD with host local yaml file, replace varibles as per requirements in ushift and create NAD
-func createMultusNADHostlocalforUshift(oc *exutil.CLI, pod_pmtrs map[string]string) (err error) {
-	MultusNADGenericYaml := getFileContentforUshift("microshift", "multus-NAD-hostlocal.yaml")
-	//replace all variables as per createMultusNADforUshift() arguements
+// get generic multus NAD yaml file, replace varibles as per requirements in ushift and create NAD with DHCP
+func createMultusNADforUshift(oc *exutil.CLI, pod_pmtrs map[string]string, MultusNADGenericYaml string) (err error) {
 	for rep, value := range pod_pmtrs {
 		MultusNADGenericYaml = strings.ReplaceAll(MultusNADGenericYaml, rep, value)
 	}
@@ -182,4 +181,100 @@ func createMultusPodforUshift(oc *exutil.CLI, pod_pmtrs map[string]string) (err 
 	// create MultusPod for Microshift
 	_, err = oc.WithoutNamespace().Run("create").Args("-f", MultusPodFileName).Output()
 	return err
+}
+
+// configure DHCP pool from dnsmasq for CNI IPAM DHCP testing
+func enableDHCPforCNI(oc *exutil.CLI, nodeName string) {
+	cmdAddlink := "ip link add testbr1 type bridge"
+	_, cmdAddlinkErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdAddlink)
+	o.Expect(cmdAddlinkErr).NotTo(o.HaveOccurred())
+
+	cmdAddIPv4 := "ip address add 88.8.8.2/24 dev testbr1"
+	_, cmdAddIPv4Err := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdAddIPv4)
+	o.Expect(cmdAddIPv4Err).NotTo(o.HaveOccurred())
+
+	cmdAddIPv6 := "ip address add fd00:dead:beef:10::2/64 dev testbr1"
+	_, cmdAddIPv6Err := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdAddIPv6)
+	o.Expect(cmdAddIPv6Err).NotTo(o.HaveOccurred())
+
+	cmdUplink := "ip link set up testbr1"
+	_, cmdUplinkErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdUplink)
+	o.Expect(cmdUplinkErr).NotTo(o.HaveOccurred())
+
+	cmdShowIP := "ip add show testbr1"
+	cmdShowIPOutput, cmdShowIPErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdShowIP)
+	o.Expect(cmdShowIPErr).NotTo(o.HaveOccurred())
+	o.Expect(cmdShowIPOutput).To(o.ContainSubstring("88.8.8.2"))
+
+	dnsmasqFile := "/etc/dnsmasq.conf"
+	cmdConfigdnsmasq := fmt.Sprintf(`cat > %v << EOF
+	   no-resolv
+	   expand-hosts
+	   bogus-priv
+	   domain=mydomain.net
+	   local=/mydomain.net/
+	   interface=testbr1
+	   dhcp-range=88.8.8.10,88.8.8.250,24h
+	   enable-ra
+	   dhcp-range=tag:testbr1,::1,constructor:testbr1,ra-names,12h
+	   bind-interfaces`, dnsmasqFile)
+	_, cmdConfigdnsmasqErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdConfigdnsmasq)
+	o.Expect(cmdConfigdnsmasqErr).NotTo(o.HaveOccurred())
+
+	cmdRestartdnsmasq := "systemctl restart dnsmasq --now"
+	_, cmdRestartdnsmasqErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdRestartdnsmasq)
+	o.Expect(cmdRestartdnsmasqErr).NotTo(o.HaveOccurred())
+
+	cmdCheckdnsmasq := "systemctl status dnsmasq"
+	cmdCheckdnsmasqOutput, cmdCheckdnsmasqErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdCheckdnsmasq)
+	o.Expect(cmdCheckdnsmasqErr).NotTo(o.HaveOccurred())
+	o.Expect(cmdCheckdnsmasqOutput).To(o.ContainSubstring("active (running)"))
+
+	addDHCPFirewall := "firewall-cmd --add-service=dhcp"
+	_, addDHCPFirewallErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", addDHCPFirewall)
+	o.Expect(addDHCPFirewallErr).NotTo(o.HaveOccurred())
+}
+
+// disable dnsmasq for CNI IPAM DHCP testing
+func disableDHCPforCNI(oc *exutil.CLI, nodeName string) {
+	cmdDelIP := "ip address del 88.8.8.2/24 dev testbr1"
+	_, cmdDelIPErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdDelIP)
+	o.Expect(cmdDelIPErr).NotTo(o.HaveOccurred())
+
+	cmdDelIPv6 := "ip address del fd00:dead:beef:10::2/64 dev testbr1"
+	_, cmdDelIPv6Err := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdDelIPv6)
+	o.Expect(cmdDelIPv6Err).NotTo(o.HaveOccurred())
+
+	cmdDownlink := "ip link set down testbr1"
+	_, cmdDownlinkErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdDownlink)
+	o.Expect(cmdDownlinkErr).NotTo(o.HaveOccurred())
+
+	cmdDellink := "ip link delete testbr1"
+	_, cmdDellinkErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdDellink)
+	o.Expect(cmdDellinkErr).NotTo(o.HaveOccurred())
+
+	cmdStopdnsmasq := "systemctl stop dnsmasq --now"
+	_, cmdStopdnsmasqErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdStopdnsmasq)
+	o.Expect(cmdStopdnsmasqErr).NotTo(o.HaveOccurred())
+
+	cmdDeldnsmasqFile := "rm /etc/dnsmasq.conf"
+	_, cmdDeldnsmasqFileErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmdDeldnsmasqFile)
+	o.Expect(cmdDeldnsmasqFileErr).NotTo(o.HaveOccurred())
+
+	remDHCPFirewall := "firewall-cmd --remove-service=dhcp"
+	_, remDHCPFirewallErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", remDHCPFirewall)
+	o.Expect(remDHCPFirewallErr).NotTo(o.HaveOccurred())
+}
+
+// Using getMicroshiftPodMultiNetworks for microshift pod when NAD using macvlan and ipvlan
+func getMicroshiftPodMultiNetworks(oc *exutil.CLI, namespace string, podName string, netName string) (string, string) {
+	cmd1 := "ip a sho " + netName + " | awk 'NR==3{print $2}' |grep -Eo '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
+	cmd2 := "ip a sho " + netName + " | awk 'NR==7{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
+	podv4Output, err := e2eoutput.RunHostCmd(namespace, podName, cmd1)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podIPv4 := strings.TrimSpace(podv4Output)
+	podv6Output, err1 := e2eoutput.RunHostCmd(namespace, podName, cmd2)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	podIPv6 := strings.TrimSpace(podv6Output)
+	return podIPv4, podIPv6
 }
