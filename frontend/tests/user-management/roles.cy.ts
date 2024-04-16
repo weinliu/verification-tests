@@ -13,7 +13,7 @@ describe('Roles and RoleBindings tests', () => {
     login_user_two = b.split(':')[0];
     login_passwd_two = b.split(':')[1];
     // the first user is normal user
-    cy.login(Cypress.env('LOGIN_IDP'), login_user_one, login_passwd_one);
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), login_user_one, login_passwd_one);
     guidedTour.close();
     cy.switchPerspective('Administrator');
     cy.createProject(testName);
@@ -65,7 +65,7 @@ describe('Roles and RoleBindings tests', () => {
 
     // grant second user cluster-admin and login
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${login_user_two}`);
-    cy.login(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two)
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two)
 
     // cluster admin check normal user rolebbindings on User Management -> Users -> xx -> RoleBindings
     cy.visit(`/k8s/cluster/user.openshift.io~v1~User/${login_user_one}/roles`)

@@ -13,12 +13,12 @@ describe('project list tests', () => {
     login_passwd_one = a.split(':')[1];
     login_user_two = b.split(':')[0];
     login_passwd_two = b.split(':')[1];
-    cy.login(Cypress.env('LOGIN_IDP'), login_user_one, login_passwd_one);
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), login_user_one, login_passwd_one);
     guidedTour.close();
     cy.createProject('testuserone-project');
     cy.uiLogout();
 
-    cy.login(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two);
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two);
     guidedTour.close();
     cy.switchPerspective('Administrator');
     cy.createProject('testusertwo-project');
@@ -26,9 +26,9 @@ describe('project list tests', () => {
   });
 
   after(() => {
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user_two}`);
     cy.adminCLI('oc delete project testuserone-project');
     cy.adminCLI('oc delete project testusertwo-project');
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user_two}`);
   });
 
   it('(OCP-43131,yapei,UserInterface) normal and admin user able to filter projects with Requester', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {

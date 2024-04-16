@@ -58,7 +58,7 @@ Cypress.Commands.add('uiLogin', (provider: string, username: string, password: s
   cy.get('#inputUsername').type(username);
   cy.get('#inputPassword').type(password);
   cy.get('button[type=submit]').click();
-  cy.byTestID("username")
+  cy.byTestID("username", {timeout: 120000})
     .should('be.visible');
   });
   guidedTour.close();
