@@ -3703,3 +3703,21 @@ func getIPv4AndIPWithPrefixForNICOnNode(oc *exutil.CLI, node, nic string) (strin
 	e2e.Logf("The IPv4 of interface %s on node %s is %s and ipAddressWithPrefix is %s", nic, node, ipAddress, ipAddressWithPrefix)
 	return ipAddress, ipAddressWithPrefix
 }
+
+// check respective config availability for IPsec NS on external host specific to Beijing BM host.
+// this func might be scaled up in future if we comes down to support net2net as well
+func applyConfigTypeExtHost(leftPublicIP, configType string) error {
+	switch configType {
+	case "host2host":
+		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2host.conf.bak /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		if err != nil {
+			return fmt.Errorf("Could not apply host2host config. Check External Host %v", err)
+		}
+	case "host2net":
+		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2net.conf.bak /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		if err != nil {
+			return fmt.Errorf("Could not apply host2net config. Check External Host %v", err)
+		}
+	}
+	return nil
+}

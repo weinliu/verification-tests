@@ -395,6 +395,31 @@ func configIPSecNMSatePolicy(oc *exutil.CLI, policyName, leftIP, nodeName, tunne
 	e2e.Logf("SUCCESS - ipsec policy is applied")
 }
 
+func configIPSecNMSatePolicyHost2net(oc *exutil.CLI, policyName, leftIP, nodeName, tunnelname, rightIP, rightNetworkAddress, rightNetworkCidr, leftcert, mode string) {
+	e2e.Logf("Configure NNCP for IPSEC")
+	ipsecPolicyTemplate := generateTemplateAbsolutePath("ipsec-host2host-policy-template.yaml")
+	ipsecPolicy := ipsecHost2hostPolicyResource{
+		name:        policyName,
+		nodelabel:   "kubernetes.io/hostname",
+		labelvalue:  nodeName,
+		tunnelname:  tunnelname,
+		left:        leftIP,
+		leftcert:    leftcert,
+		right:       rightIP,
+		mode:        mode,
+		rightsubnet: rightNetworkAddress + rightNetworkCidr,
+		template:    ipsecPolicyTemplate,
+	}
+	result, configErr1 := createIPSECPolicy(oc, ipsecPolicy)
+	o.Expect(configErr1).NotTo(o.HaveOccurred())
+	o.Expect(result).To(o.BeTrue())
+
+	e2e.Logf("Wait ipsec policy applied.")
+	nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+	exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+	e2e.Logf("SUCCESS - ipsec policy is applied")
+}
+
 func removeIPSecConfig(oc *exutil.CLI, policyName, ifname, nodeName string) {
 	policyTemplate := generateTemplateAbsolutePath("iface-policy-template.yaml")
 	ipsecPolicy := ifacePolicyResource{
@@ -429,4 +454,12 @@ func verifyIPSecTunnelDown(oc *exutil.CLI, nodeName, src, dst, mode string) {
 	cmd := fmt.Sprintf("ip xfrm policy get src %s/32 dst %s/32 dir out ; ip xfrm policy get src %s/32 dst %s/32 dir in  ", src, dst, dst, src)
 	_, ipsecErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmd)
 	o.Expect(ipsecErr).To(o.HaveOccurred())
+}
+
+// host2net tunnel will have network address in either src or dst from right side
+func verifyIPSecTunnelUphost2netTunnel(oc *exutil.CLI, nodeName, src, dst, mode string) {
+	cmd := fmt.Sprintf("ip xfrm policy get src %s/32 dst %s/24 dir out ; ip xfrm policy get src %s/24 dst %s/32 dir in  ", src, dst, dst, src)
+	ipXfrmPolicy, ipsecErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmd)
+	o.Expect(ipsecErr).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(ipXfrmPolicy, mode)).Should(o.BeTrue())
 }

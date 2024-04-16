@@ -12,6 +12,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
@@ -67,10 +68,14 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		oc           = exutil.NewCLI("networking-ipsec-ns", exutil.KubeConfigPath())
 		leftPublicIP string
 		rightIP      string
+		rightIP2     string
 		leftIP       string
 		nodeCert     string
+		nodeCert2    string
 		rightNode    string
+		rightNode2   string
 		ipsecTunnel  string
+		platformvar  string
 	)
 	g.BeforeEach(func() {
 		platform := exutil.CheckPlatform(oc)
@@ -95,8 +100,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			} else {
 				ipsecTunnel = "VM-128-2"
 				rightIP = "10.0.128.2"
+				rightIP2 = "10.0.128.3"
 				leftIP = "10.0.0.2"
 				nodeCert = "10_0_128_2"
+				nodeCert2 = "10_0_128_3"
 			}
 		case "none":
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
@@ -105,22 +112,36 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			}
 			ipsecTunnel = "pluto-62-VM"
 			rightIP = "10.73.116.62"
+			rightIP2 = "10.73.116.54"
 			leftIP = "10.1.98.217"
 			nodeCert = "left_server"
+			nodeCert2 = "left_server_54"
 			leftPublicIP = leftIP
+			platformvar = "bjbm"
 		}
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// As not the all gcp with int-svc have the ipsec NS enabled, still need to filter the ipsec NS enabled or not
 		rightNode = getNodeNameByIPv4(oc, rightIP)
+		rightNode2 = getNodeNameByIPv4(oc, rightIP2)
 		if rightNode == "" {
 			g.Skip(fmt.Sprintf("There is no worker node with IPSEC rightIP %v, skip the testing.", rightIP))
 		}
 
 		//With 4.15+, filter the cluster by checking if existing ipsec config on external host.
-		err := sshRunCmd(leftPublicIP, "core", "sudo cat /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		err = sshRunCmd(leftPublicIP, "core", "sudo cat /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
 		if err != nil {
 			g.Skip("No IPSEC configuration on external host, skip the test!!")
 		}
+
+		//check if IPsec packages are present on the cluster
+		rpm_output, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "bash", "-c", "rpm -qa | grep -i libreswan")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Confirm if required libreswan and NetworkManager-libreswan packagaes are present on node before validating IPsec usecases")
+		o.Expect(strings.Contains(rpm_output, "libreswan-")).To(o.BeTrue())
+		o.Expect(strings.Contains(rpm_output, "NetworkManager-libreswan")).To(o.BeTrue())
 
 		//With 4.15+, use nmstate to config ipsec
 		installNMstateOperator(oc)
@@ -379,32 +400,27 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		var (
 			policyName  = "ipsec-policy-tunnel-69178"
 			ipsecTunnel = "plutoTunnelVM"
-			rightIP     = "10.0.128.3"
-			nodeCert    = "10_0_128_3"
 		)
-		rightNode = getNodeNameByIPv4(oc, rightIP)
-		if rightNode == "" {
-			g.Skip(fmt.Sprintf("There is no worker node with IPSec rightIP %v, skip the testing.", rightIP))
-		}
-		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
-		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "tunnel")
+
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
+		configIPSecNMSatePolicy(oc, policyName, rightIP2, rightNode2, ipsecTunnel, leftIP, nodeCert2, "tunnel")
 
 		exutil.By("Checking ipsec session was established between worker node and external host")
-		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "tunnel")
+		verifyIPSecTunnelUp(oc, rightNode2, rightIP2, leftIP, "tunnel")
 
 		exutil.By("Start tcpdump on ipsec right node")
-		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
-		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode2)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode2)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
-		cmdTcpdump, cmdOutput, _, _ := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		cmdTcpdump, cmdOutput, _, _ := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
 
 		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 		time.Sleep(5 * time.Second)
 		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
-		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP2)
 		err := sshRunCmd(leftPublicIP, "core", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdTcpdump.Wait()
@@ -412,21 +428,188 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
 
 		exutil.By("Remove IPSec interface")
-		removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
 
 		exutil.By("Verify IPSec interface was removed from node")
-		ifaceList, ifaceErr := exutil.DebugNodeWithChroot(oc, rightNode, "nmcli", "con", "show")
+		ifaceList, ifaceErr := exutil.DebugNodeWithChroot(oc, rightNode2, "nmcli", "con", "show")
 		o.Expect(ifaceErr).NotTo(o.HaveOccurred())
 		e2e.Logf(ifaceList)
 		o.Expect(ifaceList).NotTo(o.ContainSubstring(ipsecTunnel))
 
 		exutil.By("Verify the tunnel was teared down")
-		verifyIPSecTunnelDown(oc, rightNode, rightIP, leftIP, "tunnel")
+		verifyIPSecTunnelDown(oc, rightNode2, rightIP2, leftIP, "tunnel")
 
 		exutil.By("Verify connection to exteranl host was not broken")
 		// workaorund for bug https://issues.redhat.com/browse/RHEL-24802
-		cmd := fmt.Sprintf("ip x p flush;ip x s flush; sleep 2; ping -c4 %s &", rightIP)
+		cmd := fmt.Sprintf("ip x p flush;ip x s flush; sleep 2; ping -c4 %s &", rightIP2)
 		err = sshRunCmd(leftPublicIP, "core", cmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
+	//author: anusaxen@redhat.com
+	g.It("Author:anusaxen-Longduration-NonPreRelease-High-71465-Multiplexing Tunnel and Transport type IPsec should work with external host. [Disruptive]", func() {
+		exutil.By("Configure nmstate ipsec policies for both Transport and Tunnel Type")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		var (
+			policyName  = "ipsec-policy-transport-71465"
+			ipsecTunnel = "plutoTransportVM"
+		)
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
+		exutil.By("Checking ipsec session for transport mode was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
+
+		var (
+			policyName2  = "ipsec-policy-tunnel-71465"
+			ipsecTunnel2 = "plutoTunnelVM"
+		)
+		defer removeIPSecConfig(oc, policyName2, ipsecTunnel2, rightNode2)
+		configIPSecNMSatePolicy(oc, policyName2, rightIP2, rightNode2, ipsecTunnel2, leftIP, nodeCert2, "tunnel")
+
+		exutil.By("Checking ipsec session for tunnel mode was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode2, rightIP2, leftIP, "tunnel")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//we just need to check traffic on any of rightIP/rightNode to make sure tunnel multiplexing didn't break the whole functionality as tunnel multiplexing has been already verified in above steps
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
+		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+
+	})
+
+	//author: anusaxen@redhat.com
+	g.It("Author:anusaxen-High-72829-Tunnel mode can be setup for IPSec NS - Host2Net [Disruptive]", func() {
+		if platformvar != "bjbm" {
+			g.Skip("This case is only applicable to local Beijing BareMetal cluster, skipping this testcase.")
+		}
+		exutil.By("Configure nmstate ipsec policy for host2net Tunnel Type")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		var (
+			policyName          = "ipsec-policy-tunnel-host2net-72829"
+			ipsecTunnel         = "plutoTunnelVM_host2net"
+			rightNetworkAddress = "10.1.98.0"
+			rightNetworkCidr    = "/24"
+		)
+
+		//need to populate host2net config on external host and defer to host2host
+		defer func() {
+			err := applyConfigTypeExtHost(leftPublicIP, "host2host")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := applyConfigTypeExtHost(leftPublicIP, "host2net")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
+		configIPSecNMSatePolicyHost2net(oc, policyName, rightIP2, rightNode2, ipsecTunnel, leftIP, rightNetworkAddress, rightNetworkCidr, nodeCert2, "tunnel")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUphost2netTunnel(oc, rightNode2, rightIP2, rightNetworkAddress, "tunnel")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode2)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode2)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP2)
+		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+
+	})
+
+	//author: anusaxen@redhat.com
+	g.It("Author:anusaxen-High-72830-Transport mode can be setup for IPSec NS - Host2Net [Disruptive]", func() {
+		if platformvar != "bjbm" {
+			g.Skip("This case is only applicable to local Beijing BareMetal cluster, skipping this testcase.")
+		}
+		exutil.By("Configure nmstate ipsec policies for both Transport and Tunnel Type")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		var (
+			policyName          = "ipsec-policy-transport-host2net-72830"
+			ipsecTunnel         = "plutoTransportVM_host2net"
+			rightNetworkAddress = "10.1.98.0"
+			rightNetworkCidr    = "/24"
+		)
+
+		//need to populate host2net config on external host and defer to host2host
+		defer func() {
+			err := applyConfigTypeExtHost(leftPublicIP, "host2host")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := applyConfigTypeExtHost(leftPublicIP, "host2net")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicyHost2net(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, rightNetworkAddress, rightNetworkCidr, nodeCert, "transport")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
+		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+
+	})
+
 })
