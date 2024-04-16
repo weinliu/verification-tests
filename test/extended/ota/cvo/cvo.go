@@ -31,8 +31,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	oc := exutil.NewCLIWithoutNamespace(projectName)
 
-	//author: yanyang@redhat.com
-	g.It("NonHyperShiftHOST-Author:yanyang-High-56072-CVO pod should not crash", func() {
+	//author: dis@redhat.com
+	g.It("NonHyperShiftHOST-Author:dis-High-56072-CVO pod should not crash", func() {
 		exutil.By("Get CVO container status")
 		CVOStatus, err := getCVOPod(oc, ".status.containerStatuses[]")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -62,8 +62,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 	})
 
-	//author: yanyang@redhat.com
-	g.It("NonHyperShiftHOST-Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
+	//author: dis@redhat.com
+	g.It("NonHyperShiftHOST-Author:dis-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
 		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if orgBaseCap == "None" {
@@ -124,8 +124,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"unexpected message dumping implicit %s", out)
 	})
 
-	//author: yanyang@redhat.com
-	g.It("NonHyperShiftHOST-Author:yanyang-Low-49670-change spec.capabilities to invalid value", func() {
+	//author: dis@redhat.com
+	g.It("NonHyperShiftHOST-Author:dis-Low-49670-change spec.capabilities to invalid value", func() {
 		orgCap, err := getCVObyJP(oc, ".spec.capabilities")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if orgCap == "" {
@@ -185,8 +185,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\", \"Build\", \"DeploymentConfig\", \"ImageRegistry\", \"OperatorLifecycleManager\", \"CloudCredential\", \"Ingress\", \"CloudControllerManager\""))
 	})
 
-	//author: yanyang@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:yanyang-Medium-45879-check update info with oc adm upgrade --include-not-recommended [Serial][Slow]", func() {
+	//author: jianl@redhat.com
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jianl-Medium-45879-check update info with oc adm upgrade --include-not-recommended [Serial][Slow]", func() {
 		exutil.By("Check if it's a GCP cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
@@ -275,8 +275,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		)).To(o.BeTrue(), "multiple reason conditional update present")
 	})
 
-	//author: yanyang@redhat.com
-	g.It("ConnectedOnly-Author:yanyang-Low-46422-cvo drops invalid conditional edges [Serial]", func() {
+	//author: jianl@redhat.com
+	g.It("ConnectedOnly-Author:jianl-Low-46422-cvo drops invalid conditional edges [Serial]", func() {
 		exutil.By("Check if it's a GCP cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
@@ -338,8 +338,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}), "Test on multiple invalid risks failed")
 	})
 
-	//author: yanyang@redhat.com
-	g.It("ConnectedOnly-Author:yanyang-Low-47175-upgrade cluster when current version is in the upstream but there are not update paths [Serial]", func() {
+	//author: jianl@redhat.com
+	g.It("ConnectedOnly-Author:jianl-Low-47175-upgrade cluster when current version is in the upstream but there are not update paths [Serial]", func() {
 		exutil.By("Check if it's a GCP cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
@@ -422,8 +422,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
-	//author: jialiu@redhat.com
-	g.It("NonHyperShiftHOST-Author:jialiu-Medium-41391-cvo serves metrics over only https not http", func() {
+	//author: dis@redhat.com
+	g.It("NonHyperShiftHOST-Author:dis-Medium-41391-cvo serves metrics over only https not http", func() {
 		exutil.By("Check cvo delopyment config file...")
 		cvoDeploymentYaml, err := GetDeploymentsYaml(oc, "cluster-version-operator", projectName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -502,8 +502,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 	})
 
-	//author: yanyang@redhat.com
-	g.It("Longduration-NonPreRelease-Author:yanyang-Medium-32138-cvo alert should not be fired when RetrievedUpdates failed due to nochannel [Serial][Slow]", func() {
+	//author: dis@redhat.com
+	g.It("Longduration-NonPreRelease-Author:dis-Medium-32138-cvo alert should not be fired when RetrievedUpdates failed due to nochannel [Serial][Slow]", func() {
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -532,8 +532,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 	})
 
-	//author: yanyang@redhat.com
-	g.It("ConnectedOnly-Author:yanyang-Medium-43178-manage channel by using oc adm upgrade channel [Serial]", func() {
+	//author: jianl@redhat.com
+	g.It("ConnectedOnly-Author:jianl-Medium-43178-manage channel by using oc adm upgrade channel [Serial]", func() {
 		exutil.By("Check if it's a GCP cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
@@ -690,8 +690,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(cmdOut).To(o.ContainSubstring("Channel: channel-b (available channels: channel-a, channel-b)"))
 	})
 
-	//author: yanyang@redhat.com
-	g.It("Author:yanyang-High-42543-the removed resources are not created in a fresh installed cluster", func() {
+	//author: jianl@redhat.com
+	g.It("Author:jianl-High-42543-the removed resources are not created in a fresh installed cluster", func() {
 		exutil.By("Check the annotation delete:true for imagestream/hello-openshift is set in manifest")
 		tempDataDir, err := extractManifest(oc)
 		defer func() { o.Expect(os.RemoveAll(tempDataDir)).NotTo(o.HaveOccurred()) }()
@@ -715,8 +715,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"Error from server (NotFound): imagestreams.image.openshift.io \"hello-openshift\" not found"))
 	})
 
-	//author: yanyang@redhat.com
-	g.It("ConnectedOnly-Author:yanyang-Medium-43172-get the upstream and channel info by using oc adm upgrade [Serial]", func() {
+	//author: jianl@redhat.com
+	g.It("ConnectedOnly-Author:jianl-Medium-43172-get the upstream and channel info by using oc adm upgrade [Serial]", func() {
 		exutil.By("Check if it's a GCP cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
@@ -1022,8 +1022,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(scc).To(o.Equal("hostaccess"))
 	})
 
-	//author: yanyang@redhat.com
-	g.It("Author:yanyang-Medium-46724-cvo defaults deployment replicas to one if it's unset in manifest [Flaky]", func() {
+	//author: dis@redhat.com
+	g.It("Author:dis-Medium-46724-cvo defaults deployment replicas to one if it's unset in manifest [Flaky]", func() {
 		exutil.SkipBaselineCaps(oc, "None, v4.11")
 		exutil.By("Check the replicas for openshift-insights/insights-operator is unset in manifest")
 		tempDataDir, err := extractManifest(oc)
@@ -1150,8 +1150,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 	})
 
-	//author: yanyang@redhat.com
-	g.It("Author:yanyang-Medium-47757-cvo respects the deployment strategy in manifests [Serial]", func() {
+	//author: dis@redhat.com
+	g.It("Author:dis-Medium-47757-cvo respects the deployment strategy in manifests [Serial]", func() {
 		exutil.SkipBaselineCaps(oc, "None, v4.11")
 		exutil.By("Get the strategy for openshift-insights/insights-operator in manifest")
 		tempDataDir, err := extractManifest(oc)
@@ -1295,8 +1295,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 	})
 
-	//author: evakhoni@redhat.com
-	g.It("ConnectedOnly-Author:evakhoni-Low-21771-Upgrade cluster when current version is not in the graph from upstream [Serial]", func() {
+	//author: jianl@redhat.com
+	g.It("ConnectedOnly-Author:jianl-Low-21771-Upgrade cluster when current version is not in the graph from upstream [Serial]", func() {
 		var graphURL, bucket, object, targetVersion, targetPayload string
 		origVersion, err := getCVObyJP(oc, ".status.desired.version")
 		o.Expect(err).NotTo(o.HaveOccurred())

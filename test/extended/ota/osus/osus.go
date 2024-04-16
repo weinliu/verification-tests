@@ -210,8 +210,8 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		installOSUSOperator(oc, "", "Automatic")
 	})
 
-	//author: yanyang@redhat.com
-	g.It("NonPreRelease-Longduration-DisconnectedOnly-Author:yanyang-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive]", func() {
+	//author: jianl@redhat.com
+	g.It("NonPreRelease-Longduration-DisconnectedOnly-Author:jianl-High-62641-install/uninstall updateservice instance using oc-mirror [Disruptive]", func() {
 		exutil.By("Mirror OCP release and graph data image by oc-mirror")
 		registry, err := exutil.GetMirrorRegistry(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -249,8 +249,8 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	//author: yanyang@redhat.com
-	g.It("DisconnectedOnly-VMonly-Author:yanyang-High-35944-install/uninstall updateservice instance and build graph image as non root [Disruptive]", func() {
+	//author: jianl@redhat.com
+	g.It("DisconnectedOnly-VMonly-Author:jianl-High-35944-install/uninstall updateservice instance and build graph image as non root [Disruptive]", func() {
 		exutil.By("Check if it's a AWS/GCP/Azure cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "gcp, aws, azure")
 
@@ -302,8 +302,8 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 
 	})
 
-	//author: yanyang@redhat.com
-	g.It("ConnectedOnly-Author:yanyang-High-52596-High-59687-install/uninstall updateservice instance on a connected/http/https proxy cluster", func() {
+	//author: jianl@redhat.com
+	g.It("ConnectedOnly-Author:jianl-High-52596-High-59687-install/uninstall updateservice instance on a connected/http/https proxy cluster", func() {
 		dirname := "/tmp/" + oc.Namespace() + "-osus"
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
