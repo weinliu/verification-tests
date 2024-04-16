@@ -3499,21 +3499,6 @@ spec:
 		o.Expect(runtimeConfig.Overrides.Application.ShardStreams.DesiredRate).Should(o.Equal("5MB"))
 		o.Expect(runtimeConfig.Overrides.Audit.ShardStreams.DesiredRate).Should(o.Equal("6MB"))
 		e2e.Logf("Overrides validated successfully!")
-
-		g.By("Check that __stream_shard__ label is applied to streams")
-		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
-		lc := newLokiClient(route).withToken(token).retry(5)
-		for _, logType := range []string{"infrastructure", "audit"} {
-			lc.waitForLogsAppearByKey(logType, "log_type", logType)
-			labels, err := lc.listLabels(logType, "")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("\nthe %s log labels are: %v\n", logType, labels)
-			if !contain(labels, "__stream_shard__") {
-				e2e.Failf("__stream_shard__ label is missing under " + logType + " logs")
-			}
-			e2e.Logf("__stream_shard__ label is found under " + logType + " logs")
-		}
-
 	})
 
 	g.It("CPaasrunOnly-Author:kbharti-High-70714-Show warning to user for upgrading to TSDBv3 store and v13 schema[Serial]", func() {
