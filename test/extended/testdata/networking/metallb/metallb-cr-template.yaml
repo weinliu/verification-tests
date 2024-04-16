@@ -10,11 +10,15 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     nodeSelector:
-      "${NODELABEL}": "${LABELVALUE}"
+      "${NODESELECTORKEY}": "${NODESELECTORVAL}"
+    controllerNodeSelector:
+      "${CONTROLLERSELECTORKEY}": "${CONTROLLERSELECTORVAL}"
+
 parameters:
 - name: NAME
 - name: NAMESPACE
-- name: NODELABEL
-  value: "node-role.kubernetes.io/worker"
-- name: LABELVALUE
-  value: ""
+- name: NODESELECTORKEY
+- name: NODESELECTORVAL
+- name: CONTROLLERSELECTORKEY
+- name: CONTROLLERSELECTORVAL
+

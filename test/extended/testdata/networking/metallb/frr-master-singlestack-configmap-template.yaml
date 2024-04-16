@@ -109,22 +109,26 @@ objects:
       no bgp network import-check
       neighbor ${NODE1_IP} remote-as 64500
       neighbor ${NODE1_IP} password ${PASSWORD}
-      neighbor ${NODE1_IP} bfd
       neighbor ${NODE2_IP} remote-as 64500
       neighbor ${NODE2_IP} password ${PASSWORD}
-      neighbor ${NODE2_IP} bfd
       neighbor ${NODE3_IP} remote-as 64500
       neighbor ${NODE3_IP} password ${PASSWORD}
-      neighbor ${NODE3_IP} bfd
       neighbor ${NODE4_IP} remote-as 64500
       neighbor ${NODE4_IP} password ${PASSWORD}
-      neighbor ${NODE4_IP} bfd
+      neighbor ${NODE5_IP} remote-as 64500
+      neighbor ${NODE5_IP} password ${PASSWORD}
       !
       address-family ipv4 unicast
         neighbor ${NODE1_IP} activate
+        neighbor ${NODE1_IP} bfd profile ${BFD_PROFILE}
         neighbor ${NODE2_IP} activate
+        neighbor ${NODE2_IP} bfd profile ${BFD_PROFILE}
         neighbor ${NODE3_IP} activate
+        neighbor ${NODE3_IP} bfd profile ${BFD_PROFILE}
         neighbor ${NODE4_IP} activate
+        neighbor ${NODE4_IP} bfd profile ${BFD_PROFILE}
+        neighbor ${NODE5_IP} activate
+        neighbor ${NODE5_IP} bfd profile ${BFD_PROFILE}
       exit-address-family
       !
       route-map RMAP permit 10
@@ -148,6 +152,8 @@ parameters:
 - name: NODE2_IP
 - name: NODE3_IP
 - name: NODE4_IP
+- name: NODE5_IP
+- name: BFD_PROFILE
 - name: NAME
 - name: NAMESPACE
 - name: PASSWORD

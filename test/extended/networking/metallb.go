@@ -36,6 +36,10 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		peerIPAddress             = "192.168.111.60"
 		bgpCommunties             = [1]string{"65001:65500"}
 		proxyHost                 = "10.8.1.181"
+		metalLBNodeSelKey         = "node-role.kubernetes.io/worker"
+		metalLBNodeSelVal         = ""
+		metalLBControllerSelKey   = "node-role.kubernetes.io/worker"
+		metalLBControllerSelVal   = ""
 	)
 
 	g.BeforeEach(func() {
@@ -94,9 +98,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("Creating metalLB CR on all the worker nodes in cluster")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
@@ -177,9 +185,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("1. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
@@ -320,9 +332,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("2. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
@@ -463,9 +479,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		g.By("1. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
@@ -619,7 +639,6 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			ipaddrpools          []string
 			bgpPeers             []string
 			bgpPassword          string
-			bfdEnabled           = "no"
 			expectedAddress1     = "10.10.10.1"
 			expectedAddress2     = "10.10.12.1"
 		)
@@ -647,15 +666,18 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		bgpRouterNamespaceWithSuffix := bgpRouterNamespace + "-" + suffix
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(bgpRouterNamespaceWithSuffix)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", bgpRouterPodName, "-n", bgpRouterNamespaceWithSuffix).Execute()
-		bgpPassword = ""
-		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix, bgpPassword, bfdEnabled)).To(o.BeTrue())
+		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
 
 		exutil.By("3. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		o.Expect(createMetalLBCR(oc, metallbCR, metallbCRTemplate)).To(o.BeTrue())
@@ -668,7 +690,6 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			namespace:     opNamespace,
 			holdTime:      "30s",
 			keepAliveTime: "10s",
-			bfdProfile:    "",
 			password:      bgpPassword,
 			myASN:         myASN,
 			peerASN:       peerASN,
@@ -848,7 +869,6 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			ipAddressList         = [3]string{"10.10.10.0-10.10.10.0", "10.10.10.255-10.10.10.255", "10.10.10.1-10.10.10.1"}
 			expectedIPAddressList = [3]string{"10.10.10.0", "10.10.10.255", "10.10.10.1"}
 			bgpPassword           string
-			bfdEnabled            = "no"
 		)
 		exutil.By("0. Check the platform if it is suitable for running the test")
 		if !(isPlatformSuitable(oc)) {
@@ -878,14 +898,18 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(bgpRouterNamespaceWithSuffix)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", bgpRouterPodName, "-n", bgpRouterNamespaceWithSuffix, "--ignore-not-found").Execute()
 		bgpPassword = "bgp-test"
-		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix, bgpPassword, bfdEnabled)).To(o.BeTrue())
+		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix, bgpPassword)).To(o.BeTrue())
 
 		exutil.By("3. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		o.Expect(createMetalLBCR(oc, metallbCR, metallbCRTemplate)).To(o.BeTrue())
@@ -898,7 +922,6 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			namespace:     opNamespace,
 			holdTime:      "30s",
 			keepAliveTime: "10s",
-			bfdProfile:    "",
 			password:      bgpPassword,
 			myASN:         myASN,
 			peerASN:       peerASN,
@@ -1069,9 +1092,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("3. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
@@ -1160,7 +1187,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
 		checkSvcErr := wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
 			result := validateService(oc, proxyHost, svcIP)
-			if result == true {
+			if result {
 				return true, nil
 			}
 			return false, nil
@@ -1183,7 +1210,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
 		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
 			result := validateService(oc, masterNodeList[0], svcIP)
-			if result == true {
+			if result {
 				return true, nil
 			}
 			return false, nil
@@ -1220,7 +1247,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		patchResourceAsAdmin(oc, "l2advertisements/"+l2advertisement.name, "{\"spec\":{\"interfaces\": [\"br-ex\"]}}", "metallb-system")
 		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
 			result := validateService(oc, proxyHost, svcIP)
-			if result == true {
+			if result {
 				return true, nil
 			}
 			return false, nil
@@ -1278,7 +1305,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("8.7 Verify the service is functional as the another L2 advertisement is used for the ip addresspool")
 		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
 			result := validateService(oc, proxyHost, svcIP)
-			if result == true {
+			if result {
 				return true, nil
 			}
 			return false, nil
@@ -1312,7 +1339,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
 			result := validateService(oc, proxyHost, svcIP)
-			if result == true {
+			if result {
 				return true, nil
 			}
 			return false, nil
@@ -1375,7 +1402,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		for i = 0; i < 2; i++ {
 			checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
 				result := validateService(oc, proxyHost, svcIPs[i])
-				if result == true {
+				if result {
 					return true, nil
 				}
 				return false, nil
@@ -1419,7 +1446,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		e2e.Logf("The service %s External IP is %s", svc.name, svcIP)
 		checkSvcErr = wait.Poll(10*time.Second, 4*time.Minute, func() (bool, error) {
 			result := validateService(oc, proxyHost, svcIP)
-			if result == true {
+			if result {
 				return true, nil
 			}
 			return false, nil
@@ -1466,9 +1493,13 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		exutil.By("3. Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
 		metallbCR := metalLBCRResource{
-			name:      "metallb",
-			namespace: opNamespace,
-			template:  metallbCRTemplate,
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
 		}
 		defer deleteMetalLBCR(oc, metallbCR)
 		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
@@ -1670,5 +1701,38 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		o.Expect(strings.Contains(cmdOutput.String(), "hello")).To(o.BeTrue())
 
 	})
+	g.It("Author:asood-High-54857-Validate controller and pod can be scheduled based on node selectors	[Serial]", func() {
+		var nodeSelKey = "kubernetes.io/hostname"
+		exutil.By("Obtain the worker nodes in cluster")
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("This test can only be run for cluster that has atleast two worker nodes.")
+		}
 
+		exutil.By("Creating metalLB CR on specific worker nodes in cluster")
+
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       nodeSelKey,
+			nodeSelectorVal:       workerList.Items[0].Name,
+			controllerSelectorKey: nodeSelKey,
+			controllerSelectorVal: workerList.Items[1].Name,
+			template:              metallbCRTemplate,
+		}
+		defer removeResource(oc, true, true, "metallb", metallbCR.name, "-n", metallbCR.namespace)
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By(fmt.Sprintf("Get the pod names for speaker and controller respectively scheduled on %s and %s", workerList.Items[0].Name, workerList.Items[1].Name))
+		components := []string{"speaker", "controller"}
+		for i, component := range components {
+			podName, err := exutil.GetPodName(oc, opNamespace, "component="+component, workerList.Items[i].Name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(podName).NotTo(o.BeEmpty())
+		}
+
+	})
 })

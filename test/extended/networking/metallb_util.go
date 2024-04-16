@@ -40,9 +40,13 @@ type operatorGroupResource struct {
 }
 
 type metalLBCRResource struct {
-	name      string
-	namespace string
-	template  string
+	name                  string
+	namespace             string
+	nodeSelectorKey       string
+	nodeSelectorVal       string
+	controllerSelectorKey string
+	controllerSelectorVal string
+	template              string
 }
 type loadBalancerServiceResource struct {
 	name                          string
@@ -115,7 +119,19 @@ type bgpAdvertisementResource struct {
 	peer                  []string
 	template              string
 }
-
+type bfdProfileResource struct {
+	name                 string
+	namespace            string
+	detectMultiplier     int
+	echoMode             bool
+	echoReceiveInterval  int
+	echoTransmitInterval int
+	minimumTtl           int
+	passiveMode          bool
+	receiveInterval      int
+	transmitInterval     int
+	template             string
+}
 type routerConfigMapResource struct {
 	name         string
 	namespace    string
@@ -126,7 +142,9 @@ type routerConfigMapResource struct {
 	node2IP      string
 	node3IP      string
 	node4IP      string
+	node5IP      string
 	password     string
+	bfdProfile   string
 	template     string
 }
 
@@ -216,7 +234,9 @@ func operatorInstall(oc *exutil.CLI, sub subscriptionResource, ns namespaceResou
 func createMetalLBCR(oc *exutil.CLI, metallbcr metalLBCRResource, metalLBCRTemplate string) (status bool) {
 	g.By("Creating MetalLB CR from template")
 
-	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", metallbcr.template, "-p", "NAME="+metallbcr.name, "NAMESPACE="+metallbcr.namespace)
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", metallbcr.template, "-p", "NAME="+metallbcr.name, "NAMESPACE="+metallbcr.namespace,
+		"NODESELECTORKEY="+metallbcr.nodeSelectorKey, "NODESELECTORVAL="+metallbcr.nodeSelectorVal,
+		"CONTROLLERSELECTORKEY="+metallbcr.controllerSelectorKey, "CONTROLLERSELECTORVAL="+metallbcr.controllerSelectorVal)
 	if err != nil {
 		e2e.Logf("Error creating MetalLB CR %v", err)
 		return false
@@ -342,7 +362,7 @@ func getLoadBalancerSvcIP(oc *exutil.CLI, namespace string, svcName string) stri
 }
 
 func validateService(oc *exutil.CLI, curlHost string, svcExternalIP string) bool {
-	e2e.Logf("Validating LoadBalancer service with IP %s", svcExternalIP)
+	e2e.Logf("Validating service with IP %s", svcExternalIP)
 	curlHostIP := net.ParseIP(curlHost)
 	var curlOutput string
 	var curlErr error
@@ -481,10 +501,24 @@ func getLoadBalancerSvcNodePort(oc *exutil.CLI, namespace string, svcName string
 	return nodePort
 }
 
-func createConfigMap(oc *exutil.CLI, testDataDir string, namespace string, bgpPassword string, bfdEnabled string) (status bool) {
+func createConfigMap(oc *exutil.CLI, testDataDir string, namespace string, cmdArgs ...string) (status bool) {
+	var bgpPassword string
+	var bfdEnabled string
+	var bfdProfile string
+
+	//parse cmd arguments
+	if len(cmdArgs) > 1 {
+		e2e.Logf("BGP Password %s, BFD Status %s, BFD Profile %s", cmdArgs[0], cmdArgs[1], cmdArgs[2])
+		bgpPassword = cmdArgs[0]
+		bfdEnabled = cmdArgs[1]
+		bfdProfile = cmdArgs[2]
+	} else if len(cmdArgs) == 1 {
+		bgpPassword = cmdArgs[0]
+	}
+
 	nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(len(nodeList.Items) >= 4).NotTo(o.BeFalse())
+	o.Expect(len(nodeList.Items) >= 5).NotTo(o.BeFalse())
 
 	var nodeIPs []string
 	var nodeIP string
@@ -505,13 +539,16 @@ func createConfigMap(oc *exutil.CLI, testDataDir string, namespace string, bgpPa
 		node2IP:      nodeIPs[1],
 		node3IP:      nodeIPs[2],
 		node4IP:      nodeIPs[3],
+		node5IP:      nodeIPs[4],
 		password:     bgpPassword,
+		bfdProfile:   bfdProfile,
 		template:     frrMasterSingleStackConfigMapTemplate,
 	}
 
 	errTemplate := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrMasterSingleStackConfigMap.template, "-p", "NAME="+frrMasterSingleStackConfigMap.name, "NAMESPACE="+frrMasterSingleStackConfigMap.namespace,
 		"BGPD_ENABLED="+frrMasterSingleStackConfigMap.bgpd_enabled, "BFDD_ENABLED="+frrMasterSingleStackConfigMap.bfdd_enabled, "ROUTER_IP="+frrMasterSingleStackConfigMap.routerIP, "NODE1_IP="+frrMasterSingleStackConfigMap.node1IP,
-		"NODE2_IP="+frrMasterSingleStackConfigMap.node2IP, "NODE3_IP="+frrMasterSingleStackConfigMap.node3IP, "NODE4_IP="+frrMasterSingleStackConfigMap.node4IP, "PASSWORD="+frrMasterSingleStackConfigMap.password)
+		"NODE2_IP="+frrMasterSingleStackConfigMap.node2IP, "NODE3_IP="+frrMasterSingleStackConfigMap.node3IP, "NODE4_IP="+frrMasterSingleStackConfigMap.node4IP,
+		"NODE5_IP="+frrMasterSingleStackConfigMap.node5IP, "BFD_PROFILE="+frrMasterSingleStackConfigMap.bfdProfile, "PASSWORD="+frrMasterSingleStackConfigMap.password)
 	if errTemplate != nil {
 		e2e.Logf("Error creating config map %v", errTemplate)
 		return false
@@ -568,15 +605,14 @@ func createRouterPod(oc *exutil.CLI, testDataDir string, namespace string) (stat
 	return true
 }
 
-func setUpExternalFRRRouter(oc *exutil.CLI, bgpRouterNamespace string, bgpPassword string, bfdEnabled string) (status bool) {
-
+func setUpExternalFRRRouter(oc *exutil.CLI, bgpRouterNamespace string, cmdArgs ...string) (status bool) {
 	testDataDir := exutil.FixturePath("testdata", "networking/metallb")
 	g.By(" Create namespace")
 	oc.CreateSpecifiedNamespaceAsAdmin(bgpRouterNamespace)
 	exutil.SetNamespacePrivileged(oc, bgpRouterNamespace)
 
 	g.By(" Create config map")
-	o.Expect(createConfigMap(oc, testDataDir, bgpRouterNamespace, bgpPassword, bfdEnabled)).To(o.BeTrue())
+	o.Expect(createConfigMap(oc, testDataDir, bgpRouterNamespace, cmdArgs...)).To(o.BeTrue())
 
 	g.By(" Create network attachment defiition")
 	o.Expect(createNAD(oc, testDataDir, bgpRouterNamespace)).To(o.BeTrue())
@@ -611,7 +647,7 @@ func checkBGPSessions(oc *exutil.CLI, bgpRouterNamespace string) (status bool) {
 
 func createBGPPeerCR(oc *exutil.CLI, bgppeer bgpPeerResource) (status bool) {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bgppeer.template, "-p", "NAME="+bgppeer.name, "NAMESPACE="+bgppeer.namespace,
-		"BFDPROFILE="+bgppeer.bfdProfile, "PASSWORD="+bgppeer.password, "KEEPALIVETIME="+bgppeer.keepAliveTime,
+		"PASSWORD="+bgppeer.password, "KEEPALIVETIME="+bgppeer.keepAliveTime,
 		"HOLDTIME="+bgppeer.holdTime, "MY_ASN="+strconv.Itoa(int(bgppeer.myASN)), "PEER_ASN="+strconv.Itoa(int(bgppeer.peerASN)), "PEER_IPADDRESS="+bgppeer.peerAddress)
 	if err != nil {
 		e2e.Logf("Error creating BGP Peer %v", err)
@@ -734,4 +770,17 @@ func checkPrometheusMetrics(oc *exutil.CLI, interval time.Duration, timeout time
 	})
 	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Failed to get metric status due to %v", metricsErr))
 	return true, nil
+}
+func createBFDProfileCR(oc *exutil.CLI, bfdProfile bfdProfileResource) (status bool) {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bfdProfile.template, "-p", "NAME="+bfdProfile.name, "NAMESPACE="+bfdProfile.namespace,
+		"DETECTMULTIPLIER="+strconv.Itoa(int(bfdProfile.detectMultiplier)), "ECHOMODE="+strconv.FormatBool(bfdProfile.echoMode),
+		"ECHORECEIVEINTERVAL="+strconv.Itoa(int(bfdProfile.echoReceiveInterval)), "ECHOTRANSMITINTERVAL="+strconv.Itoa(int(bfdProfile.transmitInterval)),
+		"MINIMUMTTL="+strconv.Itoa(int(bfdProfile.minimumTtl)), "PASSIVEMODE="+strconv.FormatBool(bfdProfile.passiveMode),
+		"RECEIVEINTERVAL="+strconv.Itoa(int(bfdProfile.receiveInterval)), "TRANSMITINTERVAL="+strconv.Itoa(int(bfdProfile.transmitInterval)))
+	if err != nil {
+		e2e.Logf(fmt.Sprintf("Error creating BGP advertisement %v", err))
+		return false
+	}
+	return true
+
 }

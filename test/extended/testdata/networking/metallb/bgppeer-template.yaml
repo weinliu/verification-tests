@@ -9,7 +9,6 @@ objects:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
   spec:
-    bfdProfile: "${BFDPROFILENAME}"
     holdTime: "${HOLDTIME}"
     keepaliveTime: "${KEEPALIVETIME}"
     password: "${PASSWORD}"
@@ -19,7 +18,6 @@ objects:
 parameters:
 - name: NAME
 - name: NAMESPACE
-- name: BFDPROFILENAME
 - name: HOLDTIME
 - name: KEEPALIVETIME
 - name: PASSWORD
