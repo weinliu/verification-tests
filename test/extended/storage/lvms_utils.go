@@ -17,13 +17,14 @@ import (
 
 // Define LVMCluster CR
 type lvmCluster struct {
-	name            string
-	template        string
-	deviceClassName string
-	fsType          string
-	paths           []string
-	optionalPaths   []string
-	namespace       string
+	name             string
+	template         string
+	deviceClassName  string
+	deviceClassName2 string
+	fsType           string
+	paths            []string
+	optionalPaths    []string
+	namespace        string
 }
 
 // function option mode to change the default value of lvmsClusterClass parameters, e.g. name, deviceClassName, fsType, optionalPaths
@@ -40,6 +41,13 @@ func setLvmClusterName(name string) lvmClusterOption {
 func setLvmClusterDeviceClassName(deviceClassName string) lvmClusterOption {
 	return func(lvm *lvmCluster) {
 		lvm.deviceClassName = deviceClassName
+	}
+}
+
+// Replace the default value of lvmsCluster deviceClassName2
+func setLvmClusterDeviceClassName2(deviceClassName2 string) lvmClusterOption {
+	return func(lvm *lvmCluster) {
+		lvm.deviceClassName2 = deviceClassName2
 	}
 }
 
@@ -81,13 +89,14 @@ func setLvmClustertemplate(template string) lvmClusterOption {
 // Create a new customized lvmCluster object
 func newLvmCluster(opts ...lvmClusterOption) lvmCluster {
 	defaultLvmCluster := lvmCluster{
-		name:            "test-lvmcluster" + getRandomString(),
-		deviceClassName: "vg1",
-		fsType:          "xfs",
-		paths:           make([]string, 5),
-		optionalPaths:   make([]string, 5),
-		template:        "/lvms/lvmcluster-with-paths-template.yaml",
-		namespace:       "openshift-storage",
+		name:             "test-lvmcluster" + getRandomString(),
+		deviceClassName:  "vg1",
+		deviceClassName2: "vg2",
+		fsType:           "xfs",
+		paths:            make([]string, 5),
+		optionalPaths:    make([]string, 5),
+		template:         "/lvms/lvmcluster-with-paths-template.yaml",
+		namespace:        "openshift-storage",
 	}
 	for _, o := range opts {
 		o(&defaultLvmCluster)
@@ -128,6 +137,13 @@ func (lvm *lvmCluster) createWithNodeSelector(oc *exutil.CLI, key string, operat
 	}
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
 		"FSTYPE="+lvm.fsType, "PATH="+lvm.paths[0], "OPTIONALPATH1="+lvm.optionalPaths[0], "OPTIONALPATH2="+lvm.optionalPaths[1])
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create a new customized LVMCluster with two device-classes
+func (lvm *lvmCluster) createWithMultiDeviceClasses(oc *exutil.CLI) {
+	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME1="+lvm.deviceClassName,
+		"DEVICECLASSNAME2="+lvm.deviceClassName2, "FSTYPE="+lvm.fsType, "PATH1="+lvm.paths[0], "PATH2="+lvm.paths[1])
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
