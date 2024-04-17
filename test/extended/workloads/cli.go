@@ -35,67 +35,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc = exutil.NewCLI("oc", exutil.KubeConfigPath())
 	)
 
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-28007-Checking oc version show clean as gitTreeState value", func() {
-		out, err := oc.Run("version").Args("-o", "json").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		versionInfo := &VersionInfo{}
-		if err := json.Unmarshal([]byte(out), &versionInfo); err != nil {
-			e2e.Failf("unable to decode version with error: %v", err)
-		}
-		if match, _ := regexp.MatchString("clean", versionInfo.ClientInfo.GitTreeState); !match {
-			e2e.Failf("varification GitTreeState with error: %v", err)
-		}
-
-	})
-
-	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-43030-oc get events always show the timestamp as LAST SEEN", func() {
-		g.By("Get all the namespace")
-		output, err := oc.AsAdmin().Run("get").Args("projects", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		projectList := strings.Fields(output)
-
-		g.By("check the events per project")
-		for _, projectN := range projectList {
-			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", projectN).Output()
-			if match, _ := regexp.MatchString("No resources found", string(output)); match {
-				e2e.Logf("No events in project: %v", projectN)
-			} else {
-				result, _ := exec.Command("bash", "-c", "cat "+output+" | awk '{print $1}'").Output()
-				if match, _ := regexp.MatchString("unknown", string(result)); match {
-					e2e.Failf("Does not show timestamp as expected: %v", result)
-				}
-			}
-		}
-
-	})
-	// author: yinzhou@redhat.com
-	g.It("VMonly-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-42983-always delete the debug pod when the oc debug node command exist [Flaky]", func() {
-		g.By("Get all the node name list")
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeList := strings.Fields(out)
-
-		g.By("Run debug node")
-		for _, nodeName := range nodeList {
-			err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "--", "chroot", "/host", "date").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		g.By("Make sure debug pods have been deleted")
-		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-			output, err := oc.Run("get").Args("pods", "-n", oc.Namespace()).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if matched, _ := regexp.MatchString("No resources found", output); !matched {
-				e2e.Logf("pods still not deleted :\n%s, try again ", output)
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "pods still not deleted")
-
-	})
-
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Longduration-ConnectedOnly-NonPreRelease-Author:yinzhou-High-43032-oc adm release mirror generating correct imageContentSources when using --to and --to-release-image [Slow]", func() {
 		if checkProxy(oc) {
@@ -309,48 +248,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--timeout="+"30s", "--dest-dir=/tmp/mustgatherlog", "--", "/etc/resolv.conf").Execute()
 	})
 
-	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-34155-oc get events sorted by lastTimestamp", func() {
-		g.By("Get events sorted by lastTimestamp")
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", "openshift-operator-lifecycle-manager", "--sort-by="+".lastTimestamp").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-47555-Should not update data when use oc set data with dry-run as server", func() {
-		g.By("create new namespace")
-		oc.SetupProject()
-		g.By("Create new configmap")
-		err := oc.Run("create").Args("configmap", "cm-47555", "--from-literal=name=abc").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Save the data for configmap")
-		beforeSetcm, err := oc.Run("get").Args("cm", "cm-47555", "-o=jsonpath={.data.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Run the set with server dry-run")
-		err = oc.Run("set").Args("data", "cm", "cm-47555", "--from-literal=name=def", "--dry-run=server").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		afterSetcm, err := oc.Run("get").Args("cm", "cm-47555", "-o=jsonpath={.data.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if match, _ := regexp.MatchString(beforeSetcm, afterSetcm); !match {
-			e2e.Failf("Should not persistent update configmap with server dry-run")
-		}
-		g.By("Create new secret")
-		err = oc.Run("create").Args("secret", "generic", "secret-47555", "--from-literal=name=abc").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Save the data for secret")
-		beforeSetse, err := oc.Run("get").Args("secret", "secret-47555", "-o=jsonpath={.data.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Run the set with server dry-run")
-		err = oc.Run("set").Args("data", "secret", "secret-47555", "--from-literal=name=def", "--dry-run=server").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		afterSetse, err := oc.Run("get").Args("secret", "secret-47555", "-o=jsonpath={.data.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if match, _ := regexp.MatchString(beforeSetse, afterSetse); !match {
-			e2e.Failf("Should not persistent update secret with server dry-run")
-		}
-
-	})
-
 	// author: knarra@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-48681-Could start debug pod using pod definition yaml", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
@@ -371,28 +268,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		g.By("Create test pod")
 		pod48681.createDebugPodUsingDefinition(oc)
 		defer oc.Run("delete").Args("pod/pod48681", "-n", oc.Namespace()).Execute()
-	})
-
-	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-49116-oc debug should remove startupProbe when create debug pod", func() {
-		g.By("create new namespace")
-		oc.SetupProject()
-
-		g.By("Create the deploy")
-		err := oc.Run("create").Args("deploy", "d49116", "--image", "quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339", "-n", oc.Namespace()).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("patch the deploy with startupProbe")
-		patchS := `[{"op": "add", "path": "/spec/template/spec/containers/0/startupProbe", "value":{ "exec": {"command": [ "false" ]}}}]`
-		err = oc.Run("patch").Args("deploy", "d49116", "--type=json", "-p", patchS, "-n", oc.Namespace()).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("run the debug with jsonpath")
-		out, err := oc.Run("debug").Args("deploy/d49116", "-o=jsonpath='{.spec.containers[0].startupProbe}'", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if out != "''" {
-			e2e.Failf("The output should be empty, but not: %v", out)
-		}
 	})
 
 	// author: yinzhou@redhat.com
@@ -571,6 +446,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy configured"))
 	})
+
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-42982-Describe quota output should always show units", func() {
 		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") || isBaselineCapsSet(oc, "v4.14") || isBaselineCapsSet(oc, "v4.15") || isBaselineCapsSet(oc, "v4.11") && !isEnabledCapability(oc, "DeploymentConfig") {
@@ -788,44 +664,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	})
 
-	// author: knarra@redhat.com
-	g.It("Author:knarra-Medium-28018-Workloads Custom label for pvc in statefulsets", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
-		deployStatefulSet := filepath.Join(buildPruningBaseDir, "stable-storage.yaml")
-
-		g.By("Check if default sc exists, if not, skip the test")
-		allSC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		defaultSC := gjson.Get(allSC, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true)#.metadata.name")
-		e2e.Logf("The default storageclass list: %s", defaultSC)
-
-		g.By("Skip the test if length of defaultsc is less than one")
-		defaultSCCount := len(defaultSC.Array())
-		if defaultSCCount != 1 {
-			g.Skip("Skip for unexpected default storageclass!")
-		}
-
-		g.By("Create new namespace")
-		oc.SetupProject()
-
-		g.By("Create stable storage stateful set")
-		creationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployStatefulSet, "-n", oc.Namespace()).Execute()
-		o.Expect(creationErr).NotTo(o.HaveOccurred())
-
-		if defaultSC.Array()[0].String() == "filestore-csi" {
-			waitForPvcStatus(oc, oc.Namespace(), "www-hello-statefulset-0")
-		}
-
-		g.By("Check if pod is ready")
-		exutil.AssertPodToBeReady(oc, "hello-statefulset-0", oc.Namespace())
-
-		g.By("Check if the pvc is ready")
-		pvcOutput, pvcCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "www-hello-statefulset-0", "-n", oc.Namespace(), "--template={{.metadata.labels}}").Output()
-		o.Expect(pvcCreationErr).NotTo(o.HaveOccurred())
-		o.Expect(pvcOutput).NotTo(o.BeEmpty())
-		o.Expect(pvcOutput).To(o.ContainSubstring("app:hello-pod"))
-	})
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-High-38178-oc should be able to debug init container", func() {
 		podBaseDir := exutil.FixturePath("testdata", "workloads")
@@ -851,46 +689,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get debug with init container"))
 	})
-	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-High-12387-Check race condition in port forward connection handling logic [Serial]", func() {
-		g.By("Create pod")
-		err := oc.Run("run").Args("pod12387", "--image", "quay.io/openshifttest/hello-openshift@sha256:b6296396b632d15daf9b5e62cf26da20d76157161035fefddbd0e7f7749f4167").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Make sure pod running well")
-		checkPodStatus(oc, "run=pod12387", oc.Namespace(), "Running")
 
-		defer exec.Command("kill", "-9", `lsof -t -i:40032`).Output()
-		cmd1, _, _, err := oc.Run("port-forward").Args("pod12387", "40032:8081").Background()
-		defer cmd1.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("check if port forward succeed")
-		err = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-			checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:40032 --noproxy \"127.0.0.1\"").Output()
-			if err != nil {
-				e2e.Logf("failed to execute the curl: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("Hello OpenShift", string(checkOutput)); matched {
-				e2e.Logf("Check the port-forward command succeeded\n")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get the port-forward result"))
-		g.By("check concurrency request")
-		var wg sync.WaitGroup
-		for i := 0; i < 30; i++ {
-			wg.Add(1)
-			go func() {
-				defer g.GinkgoRecover()
-				defer wg.Done()
-				_, err := exec.Command("bash", "-c", "curl http://127.0.0.1:40032 --noproxy \"127.0.0.1\"").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}()
-		}
-		wg.Wait()
-	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-51018-oc adm release extract support manifest list", func() {
 		if !assertPullSecret(oc) {
@@ -1130,33 +929,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		out, err := oc.WithoutNamespace().Run("get").Args("svc", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, "example-preserveoriginal")).To(o.BeTrue())
-	})
-
-	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-63850-Critical-64919-Verify oc image extract and oc adm release info -h contains --idms-file", func() {
-		g.By("Check oc image extract and oc adm release info -h does not show --icsp-file flag")
-		imageExtractOutput, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", "-h").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(imageExtractOutput, "--idms-file")).To(o.BeTrue())
-		o.Expect(strings.Contains(imageExtractOutput, "--icsp-file")).To(o.BeFalse())
-		releaseInfoOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "-h").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(releaseInfoOutput, "--idms-file")).To(o.BeTrue())
-		o.Expect(strings.Contains(releaseInfoOutput, "--icsp-file")).To(o.BeFalse())
-	})
-
-	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-63855-Medium-64944-Verify oc image extract and oc adm release info throws error when both --icsp-file and -idms-file flag is used", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
-		idmsFile63855 := filepath.Join(buildPruningBaseDir, "idmsFile63855.yaml")
-		icspFile63855 := filepath.Join(buildPruningBaseDir, "icspFile63855.yaml")
-		g.By("Check oc image extract and oc adm release info throws error when both --icsp-file and --idms-file flag is used")
-		imageExtractOutput, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", "quay.io/openshift-release-dev/ocp-release:4.12.5-x86_64", "--path=/usr/bin/oc-mirror:.", "--idms-file="+idmsFile63855, "--icsp-file="+icspFile63855, "--insecure", "--confirm").Output()
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(imageExtractOutput, "error: icsp-file and idms-file are mutually exclusive")).To(o.BeTrue())
-		releaseInfoOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "quay.io/openshift-release-dev/ocp-release:4.12.5-x86_64", "--idms-file="+idmsFile63855, "--icsp-file="+icspFile63855).Output()
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(releaseInfoOutput, "error: icsp-file and idms-file are mutually exclusive")).To(o.BeTrue())
 	})
 
 	// author: knarra@redhat.com
@@ -1484,6 +1256,331 @@ var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
 	)
 
 	// author: knarra@redhat.com
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:knarra-Critical-63850-Critical-64919-Verify oc image extract and oc adm release info -h contains --idms-file", func() {
+		g.By("Check oc image extract and oc adm release info -h does not show --icsp-file flag")
+		imageExtractOutput, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", "-h").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(imageExtractOutput, "--idms-file")).To(o.BeTrue())
+		o.Expect(strings.Contains(imageExtractOutput, "--icsp-file")).To(o.BeFalse())
+		releaseInfoOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "-h").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(releaseInfoOutput, "--idms-file")).To(o.BeTrue())
+		o.Expect(strings.Contains(releaseInfoOutput, "--icsp-file")).To(o.BeFalse())
+	})
+
+	// author: knarra@redhat.com
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:knarra-High-63855-Medium-64944-Verify oc image extract and oc adm release info throws error when both --icsp-file and -idms-file flag is used", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		idmsFile63855 := filepath.Join(buildPruningBaseDir, "idmsFile63855.yaml")
+		icspFile63855 := filepath.Join(buildPruningBaseDir, "icspFile63855.yaml")
+		g.By("Check oc image extract and oc adm release info throws error when both --icsp-file and --idms-file flag is used")
+		imageExtractOutput, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", "quay.io/openshift-release-dev/ocp-release:4.12.5-x86_64", "--path=/usr/bin/oc-mirror:.", "--idms-file="+idmsFile63855, "--icsp-file="+icspFile63855, "--insecure", "--confirm").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(imageExtractOutput, "error: icsp-file and idms-file are mutually exclusive")).To(o.BeTrue())
+		releaseInfoOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "quay.io/openshift-release-dev/ocp-release:4.12.5-x86_64", "--idms-file="+idmsFile63855, "--icsp-file="+icspFile63855).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(releaseInfoOutput, "error: icsp-file and idms-file are mutually exclusive")).To(o.BeTrue())
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("MicroShiftBoth-Author:yinzhou-High-12387-Check race condition in port forward connection handling logic [Serial]", func() {
+		exutil.By("Check if a cluster is Microshift or OCP")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		project12387 := "project12387"
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "microshift version")
+		if err != nil {
+			oc.SetupProject()
+			project12387 = oc.Namespace()
+		} else {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", project12387).Execute()
+			createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", project12387).Execute()
+			o.Expect(createNSErr).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Set namespace as privileged namespace")
+		exutil.SetNamespacePrivileged(oc, project12387)
+
+		g.By("Create pod")
+		err = oc.Run("run").Args("pod12387", "--image", "quay.io/openshifttest/hello-openshift@sha256:b6296396b632d15daf9b5e62cf26da20d76157161035fefddbd0e7f7749f4167", "-n", project12387).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Make sure pod running well")
+		checkPodStatus(oc, "run=pod12387", project12387, "Running")
+
+		defer exec.Command("kill", "-9", `lsof -t -i:40032`).Output()
+		cmd1, _, _, err := oc.Run("port-forward").Args("pod12387", "40032:8081").Background()
+		defer cmd1.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check if port forward succeed")
+		err = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:40032 --noproxy \"127.0.0.1\"").Output()
+			if err != nil {
+				e2e.Logf("failed to execute the curl: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("Hello OpenShift", string(checkOutput)); matched {
+				e2e.Logf("Check the port-forward command succeeded\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get the port-forward result"))
+		g.By("check concurrency request")
+		var wg sync.WaitGroup
+		for i := 0; i < 30; i++ {
+			wg.Add(1)
+			go func() {
+				defer g.GinkgoRecover()
+				defer wg.Done()
+				_, err := exec.Command("bash", "-c", "curl http://127.0.0.1:40032 --noproxy \"127.0.0.1\"").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+		}
+		wg.Wait()
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-28007-Checking oc version show clean as gitTreeState value", func() {
+		out, err := oc.Run("version").Args("-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		versionInfo := &VersionInfo{}
+		if err := json.Unmarshal([]byte(out), &versionInfo); err != nil {
+			e2e.Failf("unable to decode version with error: %v", err)
+		}
+		if match, _ := regexp.MatchString("clean", versionInfo.ClientInfo.GitTreeState); !match {
+			e2e.Failf("varification GitTreeState with error: %v", err)
+		}
+
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:yinzhou-High-43030-oc get events always show the timestamp as LAST SEEN", func() {
+		// Check if cluster is microshift or OCP
+		exutil.By("Check if cluster is microshift or OCP")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		exutil.By("Get all the namespaces")
+		var output string
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "microshift version")
+		if err != nil {
+			output, err = oc.AsAdmin().Run("get").Args("projects", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			output, err = oc.AsAdmin().Run("get").Args("ns", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		projectList := strings.Fields(output)
+
+		g.By("check the events per project")
+		for _, projectN := range projectList {
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", projectN).Output()
+			if match, _ := regexp.MatchString("No resources found", string(output)); match {
+				e2e.Logf("No events in project: %v", projectN)
+			} else {
+				result, _ := exec.Command("bash", "-c", "cat "+output+" | awk '{print $1}'").Output()
+				if match, _ := regexp.MatchString("unknown", string(result)); match {
+					e2e.Failf("Does not show timestamp as expected: %v", result)
+				}
+			}
+		}
+
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("MicroShiftBoth-VMonly-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-42983-always delete the debug pod when the oc debug node command exist [Flaky]", func() {
+		exutil.By("Check if a cluster is Microshift or OCP")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		project42983 := "project42983"
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "microshift version")
+		if err != nil {
+			oc.SetupProject()
+			project42983 = oc.Namespace()
+		} else {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", project42983).Execute()
+			createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", project42983).Execute()
+			o.Expect(createNSErr).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Set namespace as privileged namespace")
+		exutil.SetNamespacePrivileged(oc, project42983)
+
+		g.By("Get all the node name list")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeList := strings.Fields(out)
+
+		g.By("Run debug node")
+		for _, nodeName := range nodeList {
+			err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", project42983, "--", "chroot", "/host", "date").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Make sure debug pods have been deleted")
+		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("pods", "-n", project42983).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if matched, _ := regexp.MatchString("No resources found", output); !matched {
+				e2e.Logf("pods still not deleted :\n%s, try again ", output)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pods still not deleted")
+
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-34155-oc get events sorted by lastTimestamp", func() {
+		g.By("Get events sorted by lastTimestamp")
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", "openshift-operator-lifecycle-manager", "--sort-by="+".lastTimestamp").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-47555-Should not update data when use oc set data with dry-run as server", func() {
+		exutil.By("Check if cluster is microshift or OCP")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		project47555 := "project47555"
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "microshift version")
+		if err != nil {
+			oc.SetupProject()
+			project47555 = oc.Namespace()
+		} else {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", project47555).Execute()
+			createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", project47555).Execute()
+			o.Expect(createNSErr).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Create new configmap")
+		err = oc.Run("create").Args("configmap", "cm-47555", "--from-literal=name=abc", "-n", project47555).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Save the data for configmap")
+		beforeSetcm, err := oc.Run("get").Args("cm", "cm-47555", "-o=jsonpath={.data.name}", "-n", project47555).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Run the set with server dry-run")
+		err = oc.Run("set").Args("data", "cm", "cm-47555", "--from-literal=name=def", "--dry-run=server", "-n", project47555).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		afterSetcm, err := oc.Run("get").Args("cm", "cm-47555", "-o=jsonpath={.data.name}", "-n", project47555).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if match, _ := regexp.MatchString(beforeSetcm, afterSetcm); !match {
+			e2e.Failf("Should not persistent update configmap with server dry-run")
+		}
+		g.By("Create new secret")
+		err = oc.Run("create").Args("secret", "generic", "secret-47555", "--from-literal=name=abc", "-n", project47555).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Save the data for secret")
+		beforeSetse, err := oc.Run("get").Args("secret", "secret-47555", "-o=jsonpath={.data.name}", "-n", project47555).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Run the set with server dry-run")
+		err = oc.Run("set").Args("data", "secret", "secret-47555", "--from-literal=name=def", "--dry-run=server", "-n", project47555).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		afterSetse, err := oc.Run("get").Args("secret", "secret-47555", "-o=jsonpath={.data.name}", "-n", project47555).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if match, _ := regexp.MatchString(beforeSetse, afterSetse); !match {
+			e2e.Failf("Should not persistent update secret with server dry-run")
+		}
+
+	})
+
+	// author: yinzhou@redhat.com
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-49116-oc debug should remove startupProbe when create debug pod", func() {
+		exutil.By("Check if cluster is microshift or OCP")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		project49116 := "project49116"
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "microshift version")
+		if err != nil {
+			oc.SetupProject()
+			project49116 = oc.Namespace()
+		} else {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", project49116).Execute()
+			createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", project49116).Execute()
+			o.Expect(createNSErr).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Create the deploy")
+		err = oc.Run("create").Args("deploy", "d49116", "--image", "quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339", "-n", project49116).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("patch the deploy with startupProbe")
+		patchS := `[{"op": "add", "path": "/spec/template/spec/containers/0/startupProbe", "value":{ "exec": {"command": [ "false" ]}}}]`
+		err = oc.Run("patch").Args("deploy", "d49116", "--type=json", "-p", patchS, "-n", project49116).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("run the debug with jsonpath")
+		out, err := oc.Run("debug").Args("deploy/d49116", "-o=jsonpath='{.spec.containers[0].startupProbe}'", "-n", project49116).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if out != "''" {
+			e2e.Failf("The output should be empty, but not: %v", out)
+		}
+	})
+
+	// author: knarra@redhat.com
+	g.It("MicroShiftBoth-Author:knarra-Medium-28018-Workloads Custom label for pvc in statefulsets", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		deployStatefulSet := filepath.Join(buildPruningBaseDir, "stable-storage.yaml")
+
+		g.By("Check if default sc exists, if not, skip the test")
+		allSC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defaultSC := gjson.Get(allSC, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true)#.metadata.name")
+		e2e.Logf("The default storageclass list: %s", defaultSC)
+
+		g.By("Skip the test if length of defaultsc is less than one")
+		defaultSCCount := len(defaultSC.Array())
+		if defaultSCCount != 1 {
+			g.Skip("Skip for unexpected default storageclass!")
+		}
+
+		exutil.By("Check if cluster is microshift or OCP")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		project28018 := "project28018"
+		_, err = exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "microshift version")
+		if err != nil {
+			oc.SetupProject()
+			project28018 = oc.Namespace()
+		} else {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", project28018).Execute()
+			createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", project28018).Execute()
+			o.Expect(createNSErr).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Create stable storage stateful set")
+		creationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployStatefulSet, "-n", project28018).Execute()
+		o.Expect(creationErr).NotTo(o.HaveOccurred())
+
+		if defaultSC.Array()[0].String() == "filestore-csi" {
+			waitForPvcStatus(oc, oc.Namespace(), "www-hello-statefulset-0")
+		}
+
+		g.By("Check if pod is ready")
+		exutil.AssertPodToBeReady(oc, "hello-statefulset-0", project28018)
+
+		g.By("Check if the pvc is ready")
+		pvcOutput, pvcCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "www-hello-statefulset-0", "-n", project28018, "--template={{.metadata.labels}}").Output()
+		o.Expect(pvcCreationErr).NotTo(o.HaveOccurred())
+		o.Expect(pvcOutput).NotTo(o.BeEmpty())
+		o.Expect(pvcOutput).To(o.ContainSubstring("app:hello-pod"))
+	})
+
+	// author: knarra@redhat.com
 	g.It("MicroShiftOnly-Author:knarra-Critical-60924-Critical-60929-High-68257-Verify sos report -l lists enabled microshift plugins and Verify running sos report -p microshift collects microshift and microshift config related information [Serial]", func() {
 
 		g.By("Get microshift node")
@@ -1647,16 +1744,8 @@ sudo tar -xvf %v -C /tmp/test68256`, sosreportNames[1])
 		o.Expect(strings.Contains(greenbootConfFileOut, "greenboot.conf")).To(o.BeTrue())
 	})
 
-})
-
-var _ = g.Describe("[sig-cli] Workloads client test", func() {
-	defer g.GinkgoRecover()
-
-	var (
-		oc = exutil.NewCLIWithoutNamespace("default")
-	)
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-66724-oc explain should be work for all the clusterresource [Serial]", func() {
+	g.It("MicroShiftBoth-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-66724-oc explain should be work for all the clusterresource [Serial]", func() {
 		clusterResourceFile, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--no-headers").OutputToFile("apiresourceout.txt")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterResourceList, err := getClusterResourceName(clusterResourceFile)
@@ -1666,6 +1755,16 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
+
+})
+
+var _ = g.Describe("[sig-cli] Workloads client test", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc = exutil.NewCLIWithoutNamespace("default")
+	)
+
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-12021-Return description with cli describe with invalid parameter", func() {
 		if checkOpenshiftSamples(oc) {
