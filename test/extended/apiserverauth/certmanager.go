@@ -839,7 +839,9 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	g.It("ROSA-ARO-OSD_CCS-Author:yuewu-Medium-65031-Operand and operator log levels can be set [Serial]", func() {
 		const (
 			operandNamespace  = "cert-manager"
+			operandLabel      = "app.kubernetes.io/instance=cert-manager"
 			operatorNamespace = "cert-manager-operator"
+			operatorLabel     = "name=cert-manager-operator"
 		)
 
 		exutil.By("Set operands log level to an invalid value")
@@ -850,20 +852,24 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		// The valid values can be "Normal", "Debug", "Trace", and "TraceAll", default is "Normal".
 		exutil.By("Set operands log level to a valid value")
+		oldPodList, err := exutil.GetAllPodsWithLabel(oc, operandNamespace, operandLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		patchPath = `{"spec":{"logLevel":"Trace"}}`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("certmanager.operator", "cluster", "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			e2e.Logf("[defer] Unset operands log level")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, operandNamespace, operandLabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			patchPath := `{"spec":{"logLevel":""}}`
 			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
+			waitForPodsToBeRedeployed(oc, operandNamespace, operandLabel, oldPodList, 10*time.Second, 120*time.Second)
 		}()
-		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
+		waitForPodsToBeRedeployed(oc, operandNamespace, operandLabel, oldPodList, 10*time.Second, 120*time.Second)
 
 		exutil.By("Validate the operands log level")
-		podList, err := exutil.GetAllPodsWithLabel(oc, operandNamespace, "app.kubernetes.io/instance=cert-manager")
+		podList, err := exutil.GetAllPodsWithLabel(oc, operandNamespace, operandLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range podList {
 			// Arg '--v=6' equals to 'Trace'
@@ -881,20 +887,24 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		// The valid values range from 1 to 10, default is 2.
 		exutil.By("Set operator log level to a valid value")
+		oldPodList, err = exutil.GetAllPodsWithLabel(oc, operatorNamespace, operatorLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		patchPath = `{"spec":{"config":{"env":[{"name":"OPERATOR_LOG_LEVEL","value":"6"}]}}}`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "openshift-cert-manager-operator", "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			e2e.Logf("[defer] Unset operator log level")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, operatorNamespace, operatorLabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			patchPath = `{"spec":{"config":{"env":[{"name":"OPERATOR_LOG_LEVEL","value":"2"}]}}}`
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "openshift-cert-manager-operator", "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operatorNamespace, 10*time.Second, 120*time.Second)
+			waitForPodsToBeRedeployed(oc, operatorNamespace, operatorLabel, oldPodList, 10*time.Second, 120*time.Second)
 		}()
-		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operatorNamespace, 10*time.Second, 120*time.Second)
+		waitForPodsToBeRedeployed(oc, operatorNamespace, operatorLabel, oldPodList, 10*time.Second, 120*time.Second)
 
 		exutil.By("Validate the operator log level")
-		podList, err = exutil.GetAllPodsWithLabel(oc, operatorNamespace, "name=cert-manager-operator")
+		podList, err = exutil.GetAllPodsWithLabel(oc, operatorNamespace, operatorLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range podList {
 			env, err := oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "pod", pod, "-n", operatorNamespace, "--list").Output()
