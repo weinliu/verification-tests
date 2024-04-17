@@ -298,133 +298,136 @@ class SummaryClient:
         day_number = self.days
         filter_version="version:"+self.version.replace(".", "_")
         filter_team = ""
-        if self.sub_team.lower() != "all":
-            filter_team="team:"+self.sub_team
+        filter_url_list = []
         filter_launchtype="launchtype:golang,pipeline_type:prereleasepipeline"
-        if filter_team:
-            filter_url = self.ocp_launch_url + '?filter.has.compositeAttribute={0},{1},{2}&filter.btw.startTime=-{3};1440;-0000&page.size=2000'.format(filter_version,filter_team,filter_launchtype,str(1440*day_number))
-        else:
+        if self.sub_team.lower() == "all":
             filter_url = self.ocp_launch_url + '?filter.has.compositeAttribute={0},{1}&filter.btw.startTime=-{2};1440;-0000&page.size=2000'.format(filter_version,filter_launchtype,str(1440*day_number))
-
+            filter_url_list.append(filter_url)
+        else:
+            for sub_team_index in self.sub_team.split(","):
+                filter_team="team:"+sub_team_index
+                filter_url = self.ocp_launch_url + '?filter.has.compositeAttribute={0},{1},{2}&filter.btw.startTime=-{3};1440;-0000&page.size=2000'.format(filter_version,filter_team,filter_launchtype,str(1440*day_number))
+                filter_url_list.append(filter_url)
+            
         
-        self.logger.debug("filter_url is "+filter_url)
-        try:
-            r = self.session.get(url=filter_url)
-            if (r.status_code != 200):
-                self.logger.error("get launch error: {0}".format(r.text))
-            self.logger.debug(json.dumps(r.json(), indent=4, sort_keys=True))
-            if len(r.json()["content"]) == 0:
-                self.logger.debug("no launch found")
-            lanch_number = 0
-            for ret in r.json()["content"]:
-                if not ret["statistics"]["executions"]:
-                    continue
-                build_version = ''
-                architecture = ''
-                profilename = ''
-                for attribute in ret['attributes']:
-                    if attribute['key'] == 'build_version':
-                        build_version = attribute['value']
-                    if attribute['key'] == 'profilename':
-                        profilename = attribute['value']
-                platform = self.get_jenkins_platform(profilename)
-                architecture = self.get_architecture(build_version)
-                start_time = ret["startTime"]
-                id = ret["id"]
-                date_str = datetime.fromtimestamp(int(start_time)/1000).strftime('%Y-%m-%d')
-                link = self.ocp_ui_url+str(id)
-                name = ret["name"]
+        for filter_url in filter_url_list:
+        
+            self.logger.info("filter_url is "+filter_url)
+            try:
+                r = self.session.get(url=filter_url)
+                if (r.status_code != 200):
+                    self.logger.error("get launch error: {0}".format(r.text))
+                self.logger.debug(json.dumps(r.json(), indent=4, sort_keys=True))
+                if len(r.json()["content"]) == 0:
+                    self.logger.debug("no launch found")
+                lanch_number = 0
+                for ret in r.json()["content"]:
+                    if not ret["statistics"]["executions"]:
+                        continue
+                    build_version = ''
+                    architecture = ''
+                    profilename = ''
+                    for attribute in ret['attributes']:
+                        if attribute['key'] == 'build_version':
+                            build_version = attribute['value']
+                        if attribute['key'] == 'profilename':
+                            profilename = attribute['value']
+                    platform = self.get_jenkins_platform(profilename)
+                    architecture = self.get_architecture(build_version)
+                    start_time = ret["startTime"]
+                    id = ret["id"]
+                    date_str = datetime.fromtimestamp(int(start_time)/1000).strftime('%Y-%m-%d')
+                    link = self.ocp_ui_url+str(id)
+                    name = ret["name"]
 
-                self.logger.info("get result from: %s: %s %s", lanch_number, name, id)
-                lanch_number = lanch_number +1
-                item_url = self.ocp_item_url + "?filter.eq.launchId={0}&launchesLimit=0&page.size=400&page.page=1".format(id)
-                self.logger.debug(item_url)
-                try:
-                    launch_result = self.session.get(url=item_url)
-                    if (launch_result.status_code != 200):
-                        self.logger.error("get item case error: {0}".format(launch_result.text))
-                    if len(launch_result.json()["content"]) == 0:
-                        return ''
-                    self.logger.debug(json.dumps(launch_result.json(), indent=4, sort_keys=True))
-                    total_pages = launch_result.json()["page"]["totalPages"]
-                    
-                    for page_number in range(1, total_pages+1):
-                        if page_number == 1:
-                            content = launch_result.json()["content"]
-                        else:
-                            item_url_tmp = item_url.replace("page.page=1", "page.page="+str(page_number))
-                            launch_result_tmp = self.session.get(url=item_url_tmp)
-                            if (launch_result_tmp.status_code != 200):
-                                self.logger.error("get item case error: {0}".format(launch_result_tmp.text))
-                            if len(launch_result_tmp.json()["content"]) == 0:
-                                break
-                            self.logger.debug(json.dumps(launch_result_tmp.json(), indent=4, sort_keys=True))
-                            content = launch_result_tmp.json()["content"]
+                    self.logger.info("get result from: %s: %s %s", lanch_number, name, id)
+                    lanch_number = lanch_number +1
+                    item_url = self.ocp_item_url + "?filter.eq.launchId={0}&launchesLimit=0&page.size=400&page.page=1".format(id)
+                    self.logger.debug(item_url)
+                    try:
+                        launch_result = self.session.get(url=item_url)
+                        if (launch_result.status_code != 200):
+                            self.logger.error("get item case error: {0}".format(launch_result.text))
+                        if len(launch_result.json()["content"]) == 0:
+                            return ''
+                        self.logger.debug(json.dumps(launch_result.json(), indent=4, sort_keys=True))
+                        total_pages = launch_result.json()["page"]["totalPages"]
+                        
+                        for page_number in range(1, total_pages+1):
+                            if page_number == 1:
+                                content = launch_result.json()["content"]
+                            else:
+                                item_url_tmp = item_url.replace("page.page=1", "page.page="+str(page_number))
+                                launch_result_tmp = self.session.get(url=item_url_tmp)
+                                if (launch_result_tmp.status_code != 200):
+                                    self.logger.error("get item case error: {0}".format(launch_result_tmp.text))
+                                if len(launch_result_tmp.json()["content"]) == 0:
+                                    break
+                                self.logger.debug(json.dumps(launch_result_tmp.json(), indent=4, sort_keys=True))
+                                content = launch_result_tmp.json()["content"]
 
-                        for ret in content:
-                            if ret["type"] == "STEP":
-                                subteamOut = ret["pathNames"]["itemPaths"][0]["name"].replace("_cucushift", "")
-                                name = ret["name"]
-                                status = ret["status"]
-                                caseitemid = ret["id"]
-                                errorMsg = ""
-                                system_issue = False
-                                if status == "FAILED":
-                                    log_url = self.base_url + "/api/v1/ocp/log?filter.eq.item={0}".format(caseitemid)
-                                    errorMsg = self.get_error_message(log_url)
-                                    system_issue = self.check_system_issue(errorMsg)
-                                caseids = re.findall(r'OCP-\d{4,}', name)
-                                caseAuthor = ""
-                                title = ""
-                                if len(caseids) > 0:
-                                    if ":" in name:
-                                        caseAuthor = name.split(":")[1]
-                                        title = name.split(":")[-1]
+                            for ret in content:
+                                if ret["type"] == "STEP":
+                                    subteamOut = ret["pathNames"]["itemPaths"][0]["name"].replace("_cucushift", "")
+                                    name = ret["name"]
+                                    status = ret["status"]
+                                    caseitemid = ret["id"]
+                                    errorMsg = ""
+                                    system_issue = False
+                                    if status == "FAILED":
+                                        log_url = self.base_url + "/api/v1/ocp/log?filter.eq.item={0}".format(caseitemid)
+                                        errorMsg = self.get_error_message(log_url)
+                                        system_issue = self.check_system_issue(errorMsg)
+                                    caseids = re.findall(r'OCP-\d{4,}', name)
+                                    caseAuthor = ""
+                                    title = ""
+                                    if len(caseids) > 0:
+                                        if ":" in name:
+                                            caseAuthor = name.split(":")[1]
+                                            title = name.split(":")[-1]
+                                        else:
+                                            caseAuthor = ""
+                                            title = name
+                                        for caseid in caseids:
+                                            if caseid not in self.cases_result.keys():
+                                                self.cases_result[caseid] = dict()
+                                            self.cases_result[caseid]["subteam"] = subteamOut
+                                            self.cases_result[caseid]["ocp"+str(id)] = dict()
+                                            self.cases_result[caseid]["ocp"+str(id)]["status"] = status
+                                            self.cases_result[caseid]["ocp"+str(id)]["caseAuthor"] = caseAuthor
+                                            self.cases_result[caseid]["ocp"+str(id)]["link"] = link
+                                            self.cases_result[caseid]["ocp"+str(id)]["date"] = date_str
+                                            self.cases_result[caseid]["ocp"+str(id)]["buildversion"] = build_version
+                                            self.cases_result[caseid]["ocp"+str(id)]["architecture"] = architecture
+                                            self.cases_result[caseid]["ocp"+str(id)]["profilename"] = profilename
+                                            self.cases_result[caseid]["ocp"+str(id)]["platfrom"] = platform
+                                            self.cases_result[caseid]["ocp"+str(id)]["title"] = title
+                                            self.cases_result[caseid]["ocp"+str(id)]["errorMsg"] = errorMsg
+                                            self.cases_result[caseid]["ocp"+str(id)]["system_issue"] = system_issue
                                     else:
-                                        caseAuthor = ""
-                                        title = name
-                                    for caseid in caseids:
-                                        if caseid not in self.cases_result.keys():
-                                            self.cases_result[caseid] = dict()
-                                        self.cases_result[caseid]["subteam"] = subteamOut
-                                        self.cases_result[caseid]["ocp"+str(id)] = dict()
-                                        self.cases_result[caseid]["ocp"+str(id)]["status"] = status
-                                        self.cases_result[caseid]["ocp"+str(id)]["caseAuthor"] = caseAuthor
-                                        self.cases_result[caseid]["ocp"+str(id)]["link"] = link
-                                        self.cases_result[caseid]["ocp"+str(id)]["date"] = date_str
-                                        self.cases_result[caseid]["ocp"+str(id)]["buildversion"] = build_version
-                                        self.cases_result[caseid]["ocp"+str(id)]["architecture"] = architecture
-                                        self.cases_result[caseid]["ocp"+str(id)]["profilename"] = profilename
-                                        self.cases_result[caseid]["ocp"+str(id)]["platfrom"] = platform
-                                        self.cases_result[caseid]["ocp"+str(id)]["title"] = title
-                                        self.cases_result[caseid]["ocp"+str(id)]["errorMsg"] = errorMsg
-                                        self.cases_result[caseid]["ocp"+str(id)]["system_issue"] = system_issue
-                                else:
-                                    if name not in self.cases_result.keys():
-                                        self.cases_result[name] = dict()
-                                    self.cases_result[name]["subteam"] = subteamOut
-                                    self.cases_result[name]["ocp"+str(id)] = dict()
-                                    self.cases_result[name]["ocp"+str(id)]["caseAuthor"] = ""
-                                    self.cases_result[name]["ocp"+str(id)]["status"] = status 
-                                    self.cases_result[name]["ocp"+str(id)]["link"] = link
-                                    self.cases_result[name]["ocp"+str(id)]["date"] = date_str
-                                    self.cases_result[name]["ocp"+str(id)]["buildversion"] = build_version
-                                    self.cases_result[name]["ocp"+str(id)]["architecture"] = architecture
-                                    self.cases_result[name]["ocp"+str(id)]["profilename"] = profilename  
-                                    self.cases_result[name]["ocp"+str(id)]["platfrom"] = platform
-                                    self.cases_result[name]["ocp"+str(id)]["title"] = name 
-                                    self.cases_result[name]["ocp"+str(id)]["errorMsg"] = errorMsg
-                                    self.cases_result[name]["ocp"+str(id)]["system_issue"] = system_issue   
-                    self.logger.debug(json.dumps(self.cases_result, indent=4, sort_keys=True))
-                except BaseException as e:
-                    self.logger.error(e)
+                                        if name not in self.cases_result.keys():
+                                            self.cases_result[name] = dict()
+                                        self.cases_result[name]["subteam"] = subteamOut
+                                        self.cases_result[name]["ocp"+str(id)] = dict()
+                                        self.cases_result[name]["ocp"+str(id)]["caseAuthor"] = ""
+                                        self.cases_result[name]["ocp"+str(id)]["status"] = status 
+                                        self.cases_result[name]["ocp"+str(id)]["link"] = link
+                                        self.cases_result[name]["ocp"+str(id)]["date"] = date_str
+                                        self.cases_result[name]["ocp"+str(id)]["buildversion"] = build_version
+                                        self.cases_result[name]["ocp"+str(id)]["architecture"] = architecture
+                                        self.cases_result[name]["ocp"+str(id)]["profilename"] = profilename  
+                                        self.cases_result[name]["ocp"+str(id)]["platfrom"] = platform
+                                        self.cases_result[name]["ocp"+str(id)]["title"] = name 
+                                        self.cases_result[name]["ocp"+str(id)]["errorMsg"] = errorMsg
+                                        self.cases_result[name]["ocp"+str(id)]["system_issue"] = system_issue   
+                        self.logger.debug(json.dumps(self.cases_result, indent=4, sort_keys=True))
+                    except BaseException as e:
+                        self.logger.error(e)
 
-            self.logger.debug(self.cases_result.keys())
-            return self.cases_result
-        except BaseException as e:
-            print(e)
-            return dict()
-        
+                self.logger.debug(self.cases_result.keys())
+            except BaseException as e:
+                print(e)
+        return self.cases_result
 
     def update_summary(self, summary_sheet, version, sheet_name):
         if version == "4.16":
@@ -473,7 +476,11 @@ class SummaryClient:
         for case_number in self.cases_result:
             subteam = self.cases_result[case_number]["subteam"]
             if self.sub_team.lower() != "all":
-                if subteam != self.sub_team:
+                if "," in self.sub_team:
+                    sub_team_list = self.sub_team.split(",")
+                    if subteam not in sub_team_list:
+                        continue
+                elif subteam != self.sub_team:
                     continue
             self.logger.info("check %s result", case_number)
             passed = 0
