@@ -29,16 +29,16 @@ export namespace podsPageUtils {
   export const podsPage = {
     goToPodsInAllNamespaces: () => {
       cy.visit('/k8s/all-namespaces/pods');
-      cy.get('.pf-c-table__text').should('exist');
+      cy.get('tr[data-test-rows="resource-row"]').should('exist');
     },
     goToPodsForGivenNamespace: (namespace: String) => {
       cy.visit('/k8s/ns/'+namespace+'/pods');
-      cy.get('.pf-c-table__text').should('exist');
+      cy.get('tr[data-test-rows="resource-row"]').should('exist');
     },
     // this is to make sure the page is loaded,
     // the pods page is loaded when the columns are displayed hence checking for this condition
     isLoaded: () => {
-      cy.get('.pf-c-table__text').should('exist')
+      cy.get('tr[data-test-rows="resource-row"]').should('exist')
     },
     goToPodDetails: (namespace, podName) => {
       cy.visit('/k8s/ns/'+namespace+'/pods/'+podName);

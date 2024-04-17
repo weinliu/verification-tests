@@ -44,11 +44,6 @@ describe('PDB List Page and Detail Page Test', () => {
     cy.visit(`/k8s/ns/${testParams.projectName}/deployments/${deploymentParams.name}`);
     cy.byLegacyTestID('actions-menu-button').click({force: true});
     cy.byButtonText('Edit PodDisruptionBudget').click({force: true});
-    // add workaround due to bug OCPBUGS-11464
-    cy.get('form').should('be.visible');
-    cy.get('.pf-c-dropdown__toggle-text').contains('maxUnavailable').parent('button').click();
-    cy.get('.pf-c-dropdown__menu-item').contains('maxUnavailable').click();
-
     cy.get('[name="availability requirement value"]').clear().type('0');
     button.saveChanges();
     cy.adminCLI(`oc get pdb ${pdbParams.name} -n ${testParams.projectName} -o yaml`)

@@ -9,7 +9,7 @@ export const pdbListPage = {
     cy.get('[id="form"]').click();
     cy.get('[id="pdb-name"]').clear().type(name);
     cy.byButtonText('Requirement').parent().click();
-    cy.get('.pf-c-dropdown__menu-item').contains('maxUnavailable').click();
+    cy.get('button[class*="dropdown__menu-item"]').contains('maxUnavailable').click();
     cy.get('[name="availability requirement value"]').clear().type(value);
     cy.get('[id="save-changes"]').click();
   },

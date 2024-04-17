@@ -56,7 +56,7 @@ export const statusCard = {
 export const notificationDrawer = {
   toggleNotificationItem: (item: string, toggle: string)=> {
     let action_flag = toggle === 'expand' ? 'true' : 'false'
-    cy.get('.pf-c-notification-drawer__group-toggle-title')
+    cy.get('[class*=notification-drawer__group-toggle-title]')
       .contains(`${item}`)
       .parent('button')
       .as('itemButton')
