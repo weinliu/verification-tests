@@ -34,6 +34,12 @@ export const Pages = {
     cy.visit('/search/all-namespaces');
     cy.get('div#content-scrollable').should('be.visible');
   },
+  gotoImagePullSecretCreation: (namespace) => {
+    cy.visit(`/k8s/ns/${namespace}/secrets/~new/image`);
+  },
+  gotoSourceSecretCreation: (namespace) => {
+    cy.visit(`/k8s/ns/${namespace}/secrets/~new/source`)
+  },
   gotoAPIExplorer: () => {
     cy.visit('/api-explorer');
     cy.get('table[aria-label="API resources"]').should('be.visible');

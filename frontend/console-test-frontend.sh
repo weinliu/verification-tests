@@ -34,6 +34,8 @@ for i in $(seq 1 5); do
         htpasswd -c -B -b ${htpass_file} "${username}" "${password}"
     fi
 done
+# remove trailing ',' for case parsing
+users=${users%?}
 
 # current generation
 gen=$(oc get deployment oauth-openshift -n openshift-authentication -o jsonpath='{.metadata.generation}')
