@@ -4250,7 +4250,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Set infra node nodeAffinity when infra node set - 30419")
-		infraworkers, err := oc.AsAdmin().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", `-o=jsonpath={.items[*].metadata.name}`).Output()
+		infraworkers, err := oc.AsAdmin().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os!=windows", `-o=jsonpath={.items[*].metadata.name}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		infraList := strings.Fields(infraworkers)
 
