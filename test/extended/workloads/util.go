@@ -1178,9 +1178,9 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 	// Adjust the hour and minute components
 	if minu == 59 {
 		hour = (hour + 1) % 24
-		minu = 0
+		minu = 01
 	} else {
-		minu += 1
+		minu += 02
 	}
 	cronSchedule := fmt.Sprintf("%d %d * * *", minu, hour)
 	return cronSchedule, localZone.String()

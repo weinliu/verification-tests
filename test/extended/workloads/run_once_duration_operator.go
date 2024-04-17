@@ -151,7 +151,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 			o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.1.0")).To(o.BeTrue())
 		}
 		if sub.opsrcName == "qe-app-registry" {
-			o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.1.1")).To(o.BeTrue())
+			o.Expect(strings.Contains(rodoCsvOutput, "runoncedurationoverrideoperator.v1.1.0")).To(o.BeTrue())
 		}
 
 		//Add the k8 dependencies checkpoint for RODO

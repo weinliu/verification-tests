@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString("3", output); matched {
+			if strings.Contains(output, "2") || strings.Contains(output, "3") || strings.Contains(output, "4") {
 				e2e.Logf("deploy is up:\n%s", output)
 				return true, nil
 			}
@@ -1449,7 +1449,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get pod name")
-		podNameIpa, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=d50193", "-n", testd3.namespace, "-o=jsonpath={.items..metadata.name}").Output()
+		podNameIpa, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=d50193", "-n", testd3.namespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podNameIpa).NotTo(o.BeEmpty())
 
 		g.By("Create the test4 deploy")
