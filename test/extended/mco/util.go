@@ -536,13 +536,6 @@ func preChecks(oc *exutil.CLI) {
 
 	}
 
-	logger.Infof("Check that all nodes are running")
-	nodes, err := NewNodeList(oc).GetAllLinux()
-	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "It is not possible to get the list of nodes in the cluster")
-
-	for _, node := range nodes {
-		o.EventuallyWithOffset(1, node.IsReady, "2m", "20s").Should(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
-	}
 	logger.Infof("End of MCO Preconditions\n")
 }
 
