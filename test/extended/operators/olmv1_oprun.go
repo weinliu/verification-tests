@@ -237,14 +237,14 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("Create clusterextension with channel candidate-v0.0, version >=0.0.1")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v0.0.3"))
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v0.0.3"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.x")
 		clusterextension.Channel = "candidate-v1.0"
 		clusterextension.Version = "1.0.x"
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.0.2"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
@@ -252,7 +252,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.Version = ">=0.0.1 !=1.1.0 <1.1.2"
 		clusterextension.Template = clusterextensionWithoutChannelTemplate
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.0.2"))
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.0.2"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with channel empty, version empty")
@@ -260,7 +260,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.Version = ""
 		clusterextension.Template = clusterextensionWithoutChannelVersionTemplate
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.1.0"))
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.1.0"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with invalid version")
@@ -296,36 +296,36 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.1")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.InstalledBundleResource).To(o.ContainSubstring("v1.0.1"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("update version to be >=1.0.1")
 		clusterextension.Patch(oc, `{"spec":{"version":">=1.0.1"}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
-			if !strings.Contains(resolvedBundleResource, "v1.0.2") {
-				e2e.Logf("clusterextension.resolvedBundleResource is %s, not v1.0.2, and try next", resolvedBundleResource)
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
+			if !strings.Contains(resolvedBundle, "v1.0.2") {
+				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.0.2, and try next", resolvedBundle)
 				return false, nil
 			}
 			return true, nil
 		})
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
-			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundleResource is not v1.0.2")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundle is not v1.0.2")
 		}
 
 		exutil.By("update channel to be candidate-v1.1")
 		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundleResource, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
-			if !strings.Contains(resolvedBundleResource, "v1.1.0") {
-				e2e.Logf("clusterextension.resolvedBundleResource is %s, not v1.1.0, and try next", resolvedBundleResource)
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
+			if !strings.Contains(resolvedBundle, "v1.1.0") {
+				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.1.0, and try next", resolvedBundle)
 				return false, nil
 			}
 			return true, nil
 		})
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "clusterextensiono", clusterextension.Name, "-o=jsonpath-as-json={.status}")
-			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundleResource is not v1.1.0")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundle is not v1.1.0")
 		}
 	})
 

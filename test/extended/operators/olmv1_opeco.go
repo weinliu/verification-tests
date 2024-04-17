@@ -379,7 +379,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.By("4) install clusterextension")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundleResource).To(o.ContainSubstring("v1.0.1"))
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.0.1"))
 	})
 
 	// author: jfan@redhat.com

@@ -21,8 +21,8 @@ type ClusterExtensionDescription struct {
 	Version                 string
 	UpgradeConstraintPolicy string
 	Template                string
-	InstalledBundleResource string
-	ResolvedBundleResource  string
+	InstalledBundle         string
+	ResolvedBundle          string
 }
 
 func (clusterextension *ClusterExtensionDescription) Create(oc *exutil.CLI) {
@@ -88,13 +88,13 @@ func (clusterextension *ClusterExtensionDescription) WaitClusterExtensionConditi
 func (clusterextension *ClusterExtensionDescription) GetBundleResource(oc *exutil.CLI) {
 	e2e.Logf("=========Get clusterextension %v BundleResource =========", clusterextension.Name)
 
-	installedBundleResource, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.installedBundleResource}")
+	installedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.installedBundle}")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	clusterextension.InstalledBundleResource = installedBundleResource
+	clusterextension.InstalledBundle = installedBundle
 
-	resolvedBundleResource, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundleResource}")
+	resolvedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	clusterextension.ResolvedBundleResource = resolvedBundleResource
+	clusterextension.ResolvedBundle = resolvedBundle
 }
 
 func (clusterextension *ClusterExtensionDescription) Patch(oc *exutil.CLI, patch string) {
