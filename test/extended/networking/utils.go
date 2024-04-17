@@ -3721,3 +3721,38 @@ func applyConfigTypeExtHost(leftPublicIP, configType string) error {
 	}
 	return nil
 }
+
+// get hostname for LB service, this fuction is likely to be useful only for AWS, other public cloud platforms may not give LB service hostname
+func getLBSVCHostname(oc *exutil.CLI, svc genericServiceResource) string {
+	var LBSVCHostname string
+	var cmdErr error
+	e2e.Logf("Getting the Load Balancer service hostname ...")
+	getLBSVCHostnameErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+		LBSVCHostname, cmdErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", svc.servicename, "-n", svc.namespace, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}").Output()
+		if cmdErr != nil || LBSVCHostname == "pending" || LBSVCHostname == "" {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(getLBSVCHostnameErr, fmt.Sprintf("Could not get LB service's hostname, err: %v", getLBSVCHostnameErr))
+
+	return LBSVCHostname
+}
+
+// get IP address of LB service
+func getLBSVCIP(oc *exutil.CLI, namespace string, svcName string) string {
+	var svcExternalIP string
+	var cmdErr error
+	checkErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		svcExternalIP, cmdErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
+		if svcExternalIP == "" || cmdErr != nil {
+			e2e.Logf("Waiting for lb service IP assignment. Trying again...")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Failed to get externalIP to the externalIP service %s", svcName))
+
+	return svcExternalIP
+}

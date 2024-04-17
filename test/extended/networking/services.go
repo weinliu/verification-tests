@@ -1256,4 +1256,110 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-24672-ExternalIP configured from autoAssignCIDRs. [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		genericServiceTemplate := filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+		var subnet, ingressLBIPString string
+		var ingressLBIP net.IP
+
+		platform := exutil.CheckPlatform(oc)
+		e2e.Logf("platform %s", platform)
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
+		if !acceptedPlatform {
+			g.Skip("Test cases should be run on AWS, GCP, Azure, skip for other platforms or other network plugin!!")
+		}
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough nodes, need 2 nodes for the test, skip the case!!")
+		}
+
+		exutil.By("1. Get namespace\n")
+		ns := oc.Namespace()
+
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "LoadBalancer",
+			ipFamilyPolicy:        "SingleStack",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "Cluster",
+			template:              genericServiceTemplate,
+		}
+
+		// For AWS/GCP/Azure, create a loadbalancer service first to get LB service's hostname or LB ip address, then derive its subnet to be used in step 3,
+		exutil.By("2.1 For public cloud platform, create a loadBalancer service first\n")
+		svc.createServiceFromParams(oc)
+		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
+
+		// on AWS, need to get LB service's hostname first, then wait for LB ip address be assigned before deriving its subnet
+		if strings.Contains(platform, "aws") {
+			exutil.By("2.2 For AWS, get LB's hostname then its ip address\n")
+			svcHostname := getLBSVCHostname(oc, svc)
+			e2e.Logf("For platform %s, got LB service's hostname as: %s", platform, svcHostname)
+
+			time.Sleep(60 * time.Second) // wait a little for LB service to take effect
+
+			// From any node, use nslookup to get LB service's IP address
+			nslookupCmd := "nslookup " + svcHostname + " | awk '/^Address: / { print $2 }'"
+			output, _ := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeList.Items[0].Name, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", nslookupCmd)
+			e2e.Logf("\n output from nslookup: %s\n", output)
+			ingressLBIPString = strings.Split(output, "\n")[0]
+		}
+
+		// on GCP/Azure, can get LB service's IP address directly
+		if strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") {
+			exutil.By("2.2 For GCP/Azure, get LB's ip address\n")
+			ingressLBIPString = getLBSVCIP(oc, svc.namespace, svc.servicename)
+		}
+
+		exutil.By("2.3 Derive LB's subnet from its IP address\n")
+		ingressLBIP = net.ParseIP(ingressLBIPString)
+		if ingressLBIP == nil {
+			g.Skip("Did not get valid IP address for the host of LB service, skip the rest of test!!")
+		}
+		mask := net.CIDRMask(24, 32) // Assuming /24 subnet mask
+		subnet = ingressLBIP.Mask(mask).String() + "/24"
+
+		exutil.By("3. Patch update network.config with subnet obtained above to enable autoAssignCIDR for externalIP\n")
+		original, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("network/cluster", "-ojsonpath={.spec.externalIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patch := `[{"op": "replace", "path": "/spec/externalIP", "value": ` + original + `}]`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("network/cluster", "-p", patch, "--type=json").Execute()
+		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"autoAssignCIDRs\":[\""+subnet+"\"]}}}")
+		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+subnet+"\"]}}}}")
+
+		exutil.By("4. Create a test pod\n")
+		pod := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod.name)
+
+		exutil.By("5.Get the externalIP address of externalIP service\n")
+		svcExternalIP := getLBSVCIP(oc, svc.namespace, svc.servicename)
+		e2e.Logf("Got externalIP service IP: %v", svcExternalIP)
+		o.Expect(svcExternalIP).NotTo(o.BeEmpty())
+
+		exutil.By("6.Curl the externalIP service from test runner\n")
+		svc4URL := net.JoinHostPort(svcExternalIP, "27017")
+		svcChkCmd := fmt.Sprintf("curl  %s --connect-timeout 5", svc4URL)
+		e2e.Logf("\n svcChkCmd: %v\n", svcChkCmd)
+		output, err := exec.Command("bash", "-c", svcChkCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
+	})
+
 })
