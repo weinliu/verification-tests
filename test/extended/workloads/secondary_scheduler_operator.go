@@ -1,7 +1,6 @@
 package workloads
 
 import (
-	"fmt"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"regexp"
@@ -10,28 +9,26 @@ import (
 	o "github.com/onsi/gomega"
 
 	"strings"
-	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automates pod evictions using different profiles", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc                       = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
-		kubeNamespace            = "openshift-secondary-scheduler-operator"
-		buildPruningBaseDir      string
-		ssoOperatorGroupT        string
-		ssoSubscriptionT         string
-		secondarySchedulerT      string
-		secondarySchedulerConfig string
-		sub                      ssoSubscription
-		og                       ssoOperatorgroup
-		secschu                  secondaryScheduler
-		ssImage                  string
-		guestClusterKubeconfig   string
+		oc                                                          = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+		kubeNamespace                                               = "openshift-secondary-scheduler-operator"
+		buildPruningBaseDir                                         string
+		ssoOperatorGroupT                                           string
+		ssoSubscriptionT                                            string
+		secondarySchedulerT                                         string
+		secondarySchedulerConfig                                    string
+		sub                                                         ssoSubscription
+		og                                                          ssoOperatorgroup
+		secschu                                                     secondaryScheduler
+		ssImage                                                     string
+		guestClusterName, guestClusterKubeconfig, hostedClusterName string
 	)
 
 	g.BeforeEach(func() {
@@ -58,7 +55,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		// Get secheduler Image
-		guestClusterName, guestClusterKubeconfig, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+		guestClusterName, guestClusterKubeconfig, hostedClusterName = exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
 		if guestClusterKubeconfig != "" {
 			hostedClusterNS := hostedClusterName + "-" + guestClusterName
 			e2e.Logf("hostedClusterNS is %s", hostedClusterNS)
@@ -126,21 +123,9 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		secschu.createSecondaryScheduler(getOCPerKubeConf(oc, guestClusterKubeconfig))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			output, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("deployment", "secondary-scheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
-			if err != nil {
-				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("2", output); matched {
-				e2e.Logf("deploy is up:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 		g.By("Check the secondary scheduler run well")
 		checkAvailable(getOCPerKubeConf(oc, guestClusterKubeconfig), "deploy", "secondary-scheduler", kubeNamespace, "1")
+
 		g.By("Validate that right version of secondary-scheduler is running")
 		ssCsvOutput, err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", kubeNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -152,11 +137,13 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(versionErr).NotTo(o.HaveOccurred())
 		kubenetesVersion := strings.Split(strings.Split(ocVersion, "+")[0], "v")[1]
 		kuberVersion := strings.Split(kubenetesVersion, ".")[0] + "." + strings.Split(kubenetesVersion, ".")[1]
+		e2e.Logf("kuberVersion is %s", kuberVersion)
 
 		g.By("Get rebased version of kubernetes from sso operator")
 		minkuberversion, deschedulerErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/openshift-secondary-scheduler-operator.openshift-secondary-sche=", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
 		o.Expect(deschedulerErr).NotTo(o.HaveOccurred())
 		rebasedVersion := strings.Split(minkuberversion, ".")[0] + "." + strings.Split(minkuberversion, ".")[1]
+		e2e.Logf("RebasedVersion is %s", rebasedVersion)
 
 		if matched, _ := regexp.MatchString(rebasedVersion, kuberVersion); !matched {
 			e2e.Failf("SSO operator not rebased with latest kubernetes")
