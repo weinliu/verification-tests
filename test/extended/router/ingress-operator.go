@@ -1400,4 +1400,110 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output := waitRouterLogsAppear(oc, routerpod, ep)
 		o.Expect(output).To(o.MatchRegexp("haproxy.+" + ep + ".+HTTP/1.1"))
 	})
+
+	// Test case creater: hongli@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-22636-The namespaceSelector of router is controlled by ingresscontroller", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvName             = "service-unsecure"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp22636",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+		)
+
+		exutil.By("1. Create one custom ingresscontroller")
+		project1 := oc.Namespace()
+		baseDomain := getBaseDomain(oc)
+		routehost := srvName + ".ocp22636." + baseDomain
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+
+		exutil.By("2. Create a server pod and expose an unsecure service")
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "route/"+srvName, ".spec.host", routehost)
+
+		exutil.By("3. Label the namespace to 'namespace=router-test'")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", project1, "namespace=router-test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Patch the custom ingresscontroller with the namespaceSelector")
+		patchNamespaceSelector := "{\"spec\":{\"namespaceSelector\":{\"matchLabels\":{\"namespace\": \"router-test\"}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchNamespaceSelector)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newCustContPod := getNewRouterPod(oc, ingctrl.name)
+
+		exutil.By("5. Check the haproxy config on the custom router pod to find the backend details of the " + project1 + " route")
+		checkoutput := readRouterPodData(oc, newCustContPod, "cat haproxy.config", "service-unsecure")
+		o.Expect(checkoutput).To(o.ContainSubstring("backend be_http:" + project1 + ":service-unsecure"))
+
+		exutil.By("6. Check the haproxy config on the custom router to confirm no backend details of other routes are present")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", newCustContPod, "--", "bash", "-c", "cat haproxy.config | grep canary").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("command terminated with exit code 1"))
+	})
+
+	// Test case creater: hongli@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-22637-The routeSelector of router is controlled by ingresscontroller", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvName             = "service-unsecure"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp22637",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+		)
+
+		exutil.By("1. Create one custom ingresscontroller")
+		project1 := oc.Namespace()
+		baseDomain := getBaseDomain(oc)
+		routehost := srvName + ".ocp22637." + baseDomain
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+
+		exutil.By("2. Create a server pod and expose an unsecure service")
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "route/"+srvName, ".spec.host", routehost)
+
+		exutil.By("3. Label the route to 'route=router-test'")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("route", "service-unsecure", "route=router-test", "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Patch the custom ingresscontroller with the namespaceSelector")
+		patchNamespaceSelector := "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"route\": \"router-test\"}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchNamespaceSelector)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newCustContPod := getNewRouterPod(oc, ingctrl.name)
+
+		exutil.By("5. Check the haproxy config on the custom router pod to find the backend details of the route for service-unsecure")
+		checkoutput := readRouterPodData(oc, newCustContPod, "cat haproxy.config", "service-unsecure")
+		o.Expect(checkoutput).To(o.ContainSubstring("backend be_http:" + project1 + ":service-unsecure"))
+
+		exutil.By("6. Check the haproxy config on the custom router to confirm no backend details of other routes are present")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", newCustContPod, "--", "bash", "-c", "cat haproxy.config | grep canary").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("command terminated with exit code 1"))
+	})
 })
