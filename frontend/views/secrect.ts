@@ -12,7 +12,7 @@ export const Secrets = {
     validKeyValueExist :(key: string, value: string) => {
         // Just for one new add key/value
         Secrets.revealValue();
-        cy.get('.secret-data dt').first().should('have.text', key);
+        cy.get('[data-test="secret-data-term"]').first().should('have.text', key);
         cy.get('code').first().should('have.text', value);
     },
     createImagePullSecret: (secretname: string, address: string, username: string, password: string, email: string) => {
