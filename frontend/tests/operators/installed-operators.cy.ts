@@ -92,7 +92,7 @@ describe('Operators Installed page test', () => {
     cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${params.specialNs}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
     cy.uiLogout();
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     /*' Scription' Tab is exist for the operator installed in the All namespace
        Page is Restricted Access */
     cy.visit(`/k8s/ns/${params.specialNs}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);

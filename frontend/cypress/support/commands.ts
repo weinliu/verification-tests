@@ -7,7 +7,7 @@ declare global {
             switchPerspective(perspective: string);
             uiLogin(provider: string, username: string, password: string);
             uiLogout();
-            cliLogin();
+            cliLogin(username?, password?, hostapi?);
             cliLogout();
             adminCLI(command: string, options?);
             retryTask(condition, expectedoutput, options?);
@@ -78,10 +78,14 @@ Cypress.Commands.add('uiLogout', () => {
   })
 });
 
-Cypress.Commands.add("cliLogin", () => {
-  cy.exec(`oc login -u ${Cypress.env('LOGIN_USERNAME')} -p ${Cypress.env('LOGIN_PASSWORD')} ${Cypress.env('HOST_API')} --insecure-skip-tls-verify=true`, { failOnNonZeroExit: false }).then(result => {
-    cy.log(result.stderr);
-    cy.log(result.stdout);
+Cypress.Commands.add("cliLogin", (username?, password?, hostapi?) => {
+  const loginUsername = username || Cypress.env('LOGIN_USERNAME');
+  const loginPassword = password || Cypress.env('LOGIN_PASSWORD');
+  const hostapiurl = hostapi || Cypress.env('HOST_API');
+  cy.exec(`oc login -u ${loginUsername} -p ${loginPassword} ${hostapiurl} --insecure-skip-tls-verify=true`, { failOnNonZeroExit: false })
+    .then(result => {
+      cy.log(result.stderr);
+      cy.log(result.stdout);
   });
 });
 
@@ -209,4 +213,3 @@ Cypress.Commands.add("isIPICluster", () => {
     }
   });
 });
-
