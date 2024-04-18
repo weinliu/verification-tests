@@ -1000,8 +1000,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(res2).Should(o.ContainSubstring(fmt.Sprintf("error %s: verification failed", dirname+"/system-admin_client.crt")))
 	})
 
+	// TODO: fix it so it could run as a part of the aws-ipi-ovn-hypershift-private-mgmt-f7 job.
 	// author: mihuang@redhat.com
-	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-60744-Better signal for NodePool inability to talk to management side[Serial][Disruptive]", func() {
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-60744-Better signal for NodePool inability to talk to management side [Disruptive] [Flaky]", func() {
 		g.By("Create a nodepool to verify that NodePool inability to talk to management side")
 
 		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
