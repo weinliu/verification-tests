@@ -1856,4 +1856,288 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod2Net1IPv4, "192.168.10.")).Should(o.BeTrue())
 		o.Expect(strings.HasPrefix(pod2Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
 	})
+
+	g.It("MicroShiftOnly-Author:weliang-Medium-73086-Multus CNI ipvlan/l2 with static", func() {
+		var (
+			nadName              = "ipvlan-l2-static"
+			caseID               = "73086"
+			e2eTestNamespace     = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			pod1Name             = "ipvlan-l2-static-pod1"
+			interfaceName        = "net1"
+			MultusNADGenericYaml = getFileContentforUshift("microshift", "multus-NAD-static.yaml")
+		)
+
+		exutil.By("Creating a namespace for the scenario")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		err := exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Configuring a NetworkAttachmentDefinition using ipvlan/l2 with static")
+		NAD_pmtrs := map[string]string{
+			"$nadname":    nadName,
+			"$namespace":  e2eTestNamespace,
+			"$plugintype": "ipvlan",
+			"$mode":       "l2",
+			"$ipamtype":   "static",
+			"$ipv4add":    "192.168.10.100/24",
+			"$ipv6add":    "fd00:dead:beef:10::100/64",
+		}
+		defer removeResource(oc, true, true, "net-attach-def", nadName, "-n", e2eTestNamespace)
+		createMultusNADforUshift(oc, NAD_pmtrs, MultusNADGenericYaml)
+
+		exutil.By("Verifying the configued NetworkAttachmentDefinition")
+		if checkNAD(oc, e2eTestNamespace, nadName) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
+		}
+
+		exutil.By("Configuring a pod to get additional network")
+		pod_pmtrs := map[string]string{
+			"$podname":    pod1Name,
+			"$namespace":  e2eTestNamespace,
+			"$podlabel":   pod1Name,
+			"$nadname":    nadName,
+			"$podenvname": pod1Name,
+		}
+		defer removeResource(oc, true, true, "pod", pod1Name, "-n", e2eTestNamespace)
+		createMultusPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, pod1Name)
+
+		exutil.By("Getting IPs from pod1's secondary interface")
+		pod1Net1IPv4, pod1Net1IPv6 := getMicroshiftPodMultiNetworks(oc, e2eTestNamespace, pod1Name, interfaceName)
+		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
+		e2e.Logf("The v6 address of pod1's net1 is: %v", pod1Net1IPv6)
+
+		exutil.By("Checking if the IPs from pod1's secondary interface are assigned the static addresses")
+		o.Expect(strings.HasPrefix(pod1Net1IPv4, "192.168.10.100")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::100")).Should(o.BeTrue())
+	})
+
+	g.It("MicroShiftOnly-Author:weliang-Medium-73087-Multus CNI ipvlan/l2 with host-local", func() {
+		var (
+			nadName              = "ipvlan-l2-host-local"
+			caseID               = "73087"
+			e2eTestNamespace     = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			pod1Name             = "ipvlan-l2-host-local-pod1"
+			pod2Name             = "ipvlan-l2-host-local-pod2"
+			interfaceName        = "net1"
+			MultusNADGenericYaml = getFileContentforUshift("microshift", "multus-NAD-hostlocal.yaml")
+		)
+
+		exutil.By("Creating a namespace for the scenario")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		err := exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Configuring a NetworkAttachmentDefinition using ipvlan/l2 with host-local")
+		NAD_pmtrs := map[string]string{
+			"$nadname":      nadName,
+			"$namespace":    e2eTestNamespace,
+			"$plugintype":   "ipvlan",
+			"$mode":         "l2",
+			"$ipamtype":     "host-local",
+			"$ipv4range":    "192.168.10.0/24",
+			"$ipv6range":    "fd00:dead:beef:10::/64",
+			"$v4rangestart": "192.168.10.1",
+			"$v4rangeend":   "192.168.10.9",
+			"$v6rangestart": "fd00:dead:beef:10::1",
+			"$v6rangeend":   "fd00:dead:beef:10::9",
+		}
+		defer removeResource(oc, true, true, "net-attach-def", nadName, "-n", e2eTestNamespace)
+		createMultusNADforUshift(oc, NAD_pmtrs, MultusNADGenericYaml)
+
+		exutil.By("Verifying the configued NetworkAttachmentDefinition")
+		if checkNAD(oc, e2eTestNamespace, nadName) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
+		}
+
+		exutil.By("Configuring first pod to get additional network")
+		pod_pmtrs := map[string]string{
+			"$podname":    pod1Name,
+			"$namespace":  e2eTestNamespace,
+			"$podlabel":   pod1Name,
+			"$nadname":    nadName,
+			"$podenvname": pod1Name,
+		}
+		defer removeResource(oc, true, true, "pod", pod1Name, "-n", e2eTestNamespace)
+		createMultusPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, pod1Name)
+
+		exutil.By("Configuring second pod to get additional network")
+		pod2_pmtrs := map[string]string{
+			"$podname":    pod2Name,
+			"$namespace":  e2eTestNamespace,
+			"$podlabel":   pod2Name,
+			"$nadname":    nadName,
+			"$podenvname": pod2Name,
+		}
+		defer removeResource(oc, true, true, "pod", pod2Name, "-n", e2eTestNamespace)
+		createMultusPodforUshift(oc, pod2_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, pod2Name)
+
+		exutil.By("Get IPs from pod1's secondary interface")
+		pod1Net1IPv4, pod1Net1IPv6 := getMicroshiftPodMultiNetworks(oc, e2eTestNamespace, pod1Name, interfaceName)
+		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
+		e2e.Logf("The v6 address of pod1's net1 is: %v", pod1Net1IPv6)
+		o.Expect(strings.HasPrefix(pod1Net1IPv4, "192.168.10.")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
+
+		exutil.By("Get IPs from pod2's secondary interface")
+		pod2Net1IPv4, pod2Net1IPv6 := getMicroshiftPodMultiNetworks(oc, e2eTestNamespace, pod2Name, interfaceName)
+		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv4)
+		e2e.Logf("The v6 address of pod2's net1 is: %v", pod2Net1IPv6)
+		o.Expect(strings.HasPrefix(pod2Net1IPv4, "192.168.10.")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod2Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
+
+		exutil.By("Checking the connectivity from pod 1 to pod 2 over secondary interface - net1")
+		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv4, interfaceName, pod2Name)
+		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv6, interfaceName, pod2Name)
+	})
+
+	g.It("MicroShiftOnly-Author:weliang-Medium-73098-Multus CNI ipvlan/l3 with host-local. [Disruptive]", func() {
+		var (
+			nadName              = "ipvlan-l3-host-local"
+			caseID               = "73098"
+			e2eTestNamespace     = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			pod1Name             = "ipvlan-l3-host-local-pod1"
+			pod2Name             = "ipvlan-l3-host-local-pod2"
+			interfaceName        = "net1"
+			MultusNADGenericYaml = getFileContentforUshift("microshift", "multus-NAD-hostlocal.yaml")
+		)
+
+		exutil.By("Creating a namespace for the scenario")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		err := exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Configuring a NetworkAttachmentDefinition using ipvlan/l3 with host-local")
+		NAD_pmtrs := map[string]string{
+			"$nadname":      nadName,
+			"$namespace":    e2eTestNamespace,
+			"$plugintype":   "ipvlan",
+			"$mode":         "l3",
+			"$ipamtype":     "host-local",
+			"$ipv4range":    "192.168.10.0/24",
+			"$ipv6range":    "fd00:dead:beef:10::/64",
+			"$v4rangestart": "192.168.10.1",
+			"$v4rangeend":   "192.168.10.9",
+			"$v6rangestart": "fd00:dead:beef:10::1",
+			"$v6rangeend":   "fd00:dead:beef:10::9",
+		}
+		defer removeResource(oc, true, true, "net-attach-def", nadName, "-n", e2eTestNamespace)
+		createMultusNADforUshift(oc, NAD_pmtrs, MultusNADGenericYaml)
+
+		exutil.By("Verifying the configued NetworkAttachmentDefinition")
+		if checkNAD(oc, e2eTestNamespace, nadName) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
+		}
+
+		exutil.By("Configuring first pod to get additional network")
+		pod_pmtrs := map[string]string{
+			"$podname":    pod1Name,
+			"$namespace":  e2eTestNamespace,
+			"$podlabel":   pod1Name,
+			"$nadname":    nadName,
+			"$podenvname": pod1Name,
+		}
+		defer removeResource(oc, true, true, "pod", pod1Name, "-n", e2eTestNamespace)
+		createMultusPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, pod1Name)
+
+		exutil.By("Configuring second pod to get additional network")
+		pod2_pmtrs := map[string]string{
+			"$podname":    pod2Name,
+			"$namespace":  e2eTestNamespace,
+			"$podlabel":   pod2Name,
+			"$nadname":    nadName,
+			"$podenvname": pod2Name,
+		}
+		defer removeResource(oc, true, true, "pod", pod2Name, "-n", e2eTestNamespace)
+		createMultusPodforUshift(oc, pod2_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, pod2Name)
+
+		exutil.By("Get IPs from pod1's secondary interface")
+		pod1Net1IPv4, pod1Net1IPv6 := getPodMultiNetworks(oc, e2eTestNamespace, pod1Name, interfaceName)
+		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
+		e2e.Logf("The v6 address of pod1's net1 is: %v", pod1Net1IPv6)
+		o.Expect(strings.HasPrefix(pod1Net1IPv4, "192.168.10.")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
+
+		exutil.By("Get IPs from pod2's secondary interface")
+		pod2Net1IPv4, pod2Net1IPv6 := getPodMultiNetworks(oc, e2eTestNamespace, pod2Name, interfaceName)
+		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv4)
+		e2e.Logf("The v6 address of pod2's net1 is: %v", pod2Net1IPv6)
+		o.Expect(strings.HasPrefix(pod2Net1IPv4, "192.168.10.")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod2Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
+
+		exutil.By("Checking the connectivity from pod 1 to pod 2 over secondary interface - net1")
+		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv4, interfaceName, pod2Name)
+		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv6, interfaceName, pod2Name)
+	})
+
+	g.It("MicroShiftOnly-Author:weliang-Medium-73099-Multus CNI ipvlan/l3 with static. [Disruptive]", func() {
+		var (
+			nadName              = "ipvlan-l3-static"
+			caseID               = "73099"
+			e2eTestNamespace     = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			pod1Name             = "ipvlan-l3-static-pod1"
+			interfaceName        = "net1"
+			MultusNADGenericYaml = getFileContentforUshift("microshift", "multus-NAD-static.yaml")
+		)
+
+		exutil.By("Creating a namespace for the scenario")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		err := exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Configuring a NetworkAttachmentDefinition using ipvlan/l3 with static")
+		NAD_pmtrs := map[string]string{
+			"$nadname":    nadName,
+			"$namespace":  e2eTestNamespace,
+			"$plugintype": "ipvlan",
+			"$mode":       "l3",
+			"$ipamtype":   "static",
+			"$ipv4add":    "192.168.10.100/24",
+			"$ipv6add":    "fd00:dead:beef:10::100/64",
+		}
+		defer removeResource(oc, true, true, "net-attach-def", nadName, "-n", e2eTestNamespace)
+		createMultusNADforUshift(oc, NAD_pmtrs, MultusNADGenericYaml)
+
+		exutil.By("Verifying the configued NetworkAttachmentDefinition")
+		if checkNAD(oc, e2eTestNamespace, nadName) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
+		}
+
+		exutil.By("Configuring a pod to get additional network")
+		pod_pmtrs := map[string]string{
+			"$podname":    pod1Name,
+			"$namespace":  e2eTestNamespace,
+			"$podlabel":   pod1Name,
+			"$nadname":    nadName,
+			"$podenvname": pod1Name,
+		}
+		defer removeResource(oc, true, true, "pod", pod1Name, "-n", e2eTestNamespace)
+		createMultusPodforUshift(oc, pod_pmtrs)
+		waitPodReady(oc, e2eTestNamespace, pod1Name)
+
+		exutil.By("Getting IPs from pod1's secondary interface")
+		pod1Net1IPv4, pod1Net1IPv6 := getPodMultiNetworks(oc, e2eTestNamespace, pod1Name, interfaceName)
+		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
+		e2e.Logf("The v6 address of pod1's net1 is: %v", pod1Net1IPv6)
+
+		exutil.By("Checking if the IPs from pod1's secondary interface are assigned the static addresses")
+		o.Expect(strings.HasPrefix(pod1Net1IPv4, "192.168.10.100")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::100")).Should(o.BeTrue())
+	})
 })
