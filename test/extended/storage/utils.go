@@ -523,9 +523,9 @@ func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	for i := 0; i < len(supportProvisionersResult); i++ {
 		supportProvisioners = append(supportProvisioners, gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#.name|@flatten."+strconv.Itoa(i)).String())
 	}
-	if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) {
+	if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) || checkFips(oc) {
 		supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
-		e2e.Logf("***%s \"AWS-EFS CSI Driver\" not installed, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
+		e2e.Logf("***%s \"AWS-EFS CSI Driver\" not installed OR it installed in FIPS enabled cluster, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
 	}
 	if cloudProvider == "gcp" && !checkCSIDriverInstalled(oc, []string{"filestore.csi.storage.gke.io"}) {
 		supportProvisioners = deleteElement(supportProvisioners, "filestore.csi.storage.gke.io")
@@ -824,7 +824,7 @@ func getResourceGroupID(oc *exutil.CLI) string {
 // Check if FIPS is enabled
 // Azure-file doesn't work on FIPS enabled cluster
 func checkFips(oc *exutil.CLI) bool {
-	node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/worker", "-o=jsonpath={.items[0].metadata.name}").Output()
+	node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	fipsInfo, err := execCommandInSpecificNode(oc, node, "fips-mode-setup --check")
 	o.Expect(err).NotTo(o.HaveOccurred())
