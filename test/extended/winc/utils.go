@@ -21,6 +21,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1459,4 +1460,14 @@ func getWmcoConfigMaps(oc *exutil.CLI) []string {
 		}
 	}
 	return configMaps
+}
+
+// Function to extract metric value from Prometheus query result
+func extractMetricValue(queryResult string) string {
+	jsonResult := gjson.Parse(queryResult)
+	status := jsonResult.Get("status").String()
+	o.Expect(status).Should(o.Equal("success"), "Query execution failed: %s", status)
+
+	metricValue := jsonResult.Get("data.result.0.value.1").String()
+	return metricValue
 }

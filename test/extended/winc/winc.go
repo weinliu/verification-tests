@@ -1350,7 +1350,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			"Error creating new thanos monitor")
 
 		for _, metricQuery := range winMetrics {
-
 			g.By(fmt.Sprintf("Check that the metric %s is exposed to telemetry", metricQuery))
 
 			expectedExposedMetric := fmt.Sprintf(`{__name__=\"%s\"}`, metricQuery)
@@ -1362,22 +1361,17 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			g.By(fmt.Sprintf("Verify the metric %s displays the right value", metricQuery))
 
 			queryResult, err := mon.SimpleQuery(metricQuery + "{label_node_openshift_io_os_id=\"Windows\"}")
+			metricValue := extractMetricValue(queryResult)
 			o.Expect(err).NotTo(o.HaveOccurred(),
-				"Error querying metric: %s", metricQuery)
+				"Error querying metric: %s: %s", metricQuery, metricValue)
 
-			jsonResult := gjson.Parse(queryResult)
-			status := jsonResult.Get("status").String()
-			o.Expect(status).Should(o.Equal("success"),
-				"Query %s execution failed: %s", metricQuery, status)
-
-			metricValue := gjson.Parse(queryResult).Get("data.result.0.value.1").String()
+			metricValue = extractMetricValue(queryResult)
 
 			valueFromCluster := getMetricsFromCluster(oc, metricQuery)
 
 			e2e.Logf("Query %s value: %s", metricQuery, metricValue)
 			o.Expect(metricValue).Should(o.Equal(valueFromCluster),
 				"Prometheus metric %s does not match the value %s obtained from the cluster", metricValue, valueFromCluster)
-
 		}
 	})
 
@@ -1874,4 +1868,57 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", "winc-test-config", "-n", "winc-test", "-p", `{"data":{"wmco_upgrade_index_image": ""}}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to reset configmap winc-test-config")
 	})
+
+	g.It("Smokerun-Author:weinliu-Medium-70922-Monitor CPU, Memory, and Filesystem graphs for Windows Pods managed by wmco", func() {
+		// Define the metrics queries for CPU, Memory, and Filesystem
+		cpuMetricQuery := "pod:container_cpu_usage:sum"
+		memoryMetricQuery := "pod:container_memory_usage_bytes:sum"
+		filesystemMetricQuery := "pod:container_fs_usage_bytes:sum"
+
+		// Create Prometheus monitor instance
+		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating new Prometheus monitor")
+
+		// Define the namespace where the Windows workloads are deployed
+		namespace := wmcoNamespace
+
+		// Check if the WMCO deployment is ready
+		ready := checkWorkloadCreated(oc, wmcoDeployment, namespace, 1)
+		if !ready {
+			e2e.Failf("WMCO deployment %s is not ready", wmcoDeployment)
+			return
+		}
+
+		g.By(fmt.Sprintf("Checking CPU, Memory, and Filesystem graphs for Windows pods managed by WMCO"))
+
+		// Get the pods managed by WMCO
+		podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+wmcoDeployment, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting pods managed by WMCO")
+
+		// Split the pod list
+		podNames := strings.Fields(podList)
+
+		for _, podName := range podNames {
+			// Check CPU metric
+			g.By(fmt.Sprintf("Verify CPU metric availability for pod: %s", podName))
+			cpuQueryResult, err := mon.SimpleQuery(cpuMetricQuery + "{pod=\"" + podName + "\"}")
+			cpuMetricValue := extractMetricValue(cpuQueryResult)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error querying CPU metric for pod %s: %s", podName, cpuMetricValue)
+
+			// Check Memory metric
+			g.By(fmt.Sprintf("Verify Memory metric availability for pod: %s", podName))
+			memoryQueryResult, err := mon.SimpleQuery(memoryMetricQuery + "{pod=\"" + podName + "\"}")
+			memoryMetricValue := extractMetricValue(memoryQueryResult)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error querying Memory metric for pod %s: %s", podName, memoryMetricValue)
+
+			// Check Filesystem metric
+			g.By(fmt.Sprintf("Verify Filesystem metric availability for pod: %s", podName))
+			filesystemQueryResult, err := mon.SimpleQuery(filesystemMetricQuery + "{pod=\"" + podName + "\"}")
+			filesystemMetricValue := extractMetricValue(filesystemQueryResult)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error querying Filesystem metric for pod %s: %s", podName, filesystemMetricValue)
+
+			// Add your expectations/assertions to validate the metrics
+		}
+	})
+
 })
