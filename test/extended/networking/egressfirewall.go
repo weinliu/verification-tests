@@ -732,6 +732,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		exutil.By("Create a new machineset with 2 nodes")
 		machinesetName := "machineset-61213"
 		ms := exutil.MachineSetDescription{machinesetName, 2}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
@@ -751,6 +752,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
 		err = ms.DeleteMachineSet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesDisapper(oc, machinesetName)
 
 		exutil.By("Wait ovnkuber-control-plane pods ready\n")
 		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
