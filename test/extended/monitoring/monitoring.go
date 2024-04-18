@@ -1731,6 +1731,49 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(output).To(o.ContainSubstring("tls-cert-file=/etc/tls/private/tls.crt"))
 			o.Expect(output).To(o.ContainSubstring("tls-private-key-file=/etc/tls/private/tls.key"))
 		})
+
+		//author: tagao@redhat.com
+		g.It("Author:tagao-High-73213-Enable controller id for CMO Prometheus resources", func() {
+			exutil.By("wait for all pods ready")
+			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
+			exutil.AssertPodToBeReady(oc, "alertmanager-user-workload-0", "openshift-user-workload-monitoring")
+			exutil.AssertPodToBeReady(oc, "thanos-ruler-user-workload-0", "openshift-user-workload-monitoring")
+
+			exutil.By("check alertmanager controller-id")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager", "main", "-n", "openshift-monitoring", "-ojsonpath={.metadata.annotations}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"operator.prometheus.io/controller-id":"openshift-monitoring/prometheus-operator"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check UWM alertmanager controller-id")
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanager", "user-workload", "-n", "openshift-user-workload-monitoring", "-ojsonpath={.metadata.annotations}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"operator.prometheus.io/controller-id":"openshift-user-workload-monitoring/prometheus-operator"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check prometheus k8s controller-id")
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", "-n", "openshift-monitoring", "-ojsonpath={.metadata.annotations}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"operator.prometheus.io/controller-id":"openshift-monitoring/prometheus-operator"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check prometheus-operator deployment controller-id")
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-operator", "-n", "openshift-monitoring", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].args}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"--controller-id=openshift-monitoring/prometheus-operator"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check UWM prometheus-operator deployment controller-id")
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-operator", "-n", "openshift-user-workload-monitoring", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-operator\")].args}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"--controller-id=openshift-user-workload-monitoring/prometheus-operator"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check UWM prometheus user-workload controller-id")
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-n", "openshift-user-workload-monitoring", "-ojsonpath={.metadata.annotations}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"operator.prometheus.io/controller-id":"openshift-user-workload-monitoring/prometheus-operator"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check ThanosRuler user-workload controller-id")
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ThanosRuler", "user-workload", "-n", "openshift-user-workload-monitoring", "-ojsonpath={.metadata.annotations}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"operator.prometheus.io/controller-id":"openshift-user-workload-monitoring/prometheus-operator"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+		})
 	})
 
 	//author: tagao@redhat.com
