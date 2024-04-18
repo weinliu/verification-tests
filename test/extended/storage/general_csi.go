@@ -788,7 +788,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-46358 - [CSI-Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-LEVEL0-Critical-46358-[CSI-Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "file.csi.azure.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -804,6 +804,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject() //create new project
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
 			// Set the resource definition for the original
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
@@ -857,7 +858,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-47224 - [CSI-Driver] [CSI Clone] [Filesystem] provisioning volume with pvc data source larger than original volume
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-High-47224-[CSI-Driver] [CSI Clone] [Filesystem] provisioning volume with pvc data source larger than original volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "file.csi.azure.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -4355,7 +4356,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-53309 - [CSI-Driver] [CSI Clone] Clone volume support different storage class
 	g.It("ARO-Author:chaoyang-Low-53309-[CSI-Driver] [CSI Clone] [Filesystem] Clone volume support different storage class", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "file.csi.azure.com"}
 
 		// Set the resource template for the scenario
 		var (
@@ -4419,7 +4420,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podClone.checkMountedVolumeDataExist(oc, true)
 
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
-
 		}
 	})
 

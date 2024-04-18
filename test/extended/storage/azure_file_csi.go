@@ -3,6 +3,7 @@ package storage
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -668,6 +669,106 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		output, err := execCommandInSpecificNode(oc, nodeName, "mount | grep "+pvName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("acregmin=30,acregmax=30,acdirmax=30"))
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-72138 - [Azure-File-CSI-Driver] [nfs] [CSI Clone] ProvisioningFails with pvc data source as not supported
+	g.It("ARO-Author:ropatil-Medium-72138-[Azure-File-CSI-Driver] [nfs] [CSI Clone] ProvisioningFails with pvc data source as not supported", func() {
+		// Set up a specified project share for all the phases
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource definition for the scenario
+		storageClassParameters := map[string]string{
+			"protocol": "nfs",
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+
+		exutil.By("#. Create csi storageclass with nfs protocol")
+		sc.createWithExtraParameters(oc, extraParameters)
+		defer sc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create a pvc with the csi storageclass")
+		pvcOri.scname = sc.name
+		e2e.Logf("%s", pvcOri.scname)
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		exutil.By("#. Wait for the pvc become to bound")
+		pvcOri.waitStatusAsExpected(oc, "Bound")
+
+		// Set the resource definition for the clone
+		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvcOri.name))
+
+		exutil.By("#. Create a clone pvc with the csi storageclass")
+		pvcClone.scname = sc.name
+		pvcClone.capacity = pvcOri.capacity
+		pvcClone.createWithCloneDataSource(oc)
+		defer pvcClone.deleteAsAdmin(oc)
+
+		exutil.By("#. Wait for the pvc reach to Pending and check for the expected output")
+		pvcClone.checkStatusAsExpectedConsistently(oc, "Pending")
+		waitResourceSpecifiedEventsOccurred(oc, pvcClone.namespace, pvcClone.name, "ProvisioningFailed", "protocol nfs is not supported for volume cloning")
+
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-72163 - [Azure-File-CSI-Driver] [CSI Clone] provisioning volume with pvc data source having large number of files
+	g.It("ARO-Longduration-NonPreRelease-Author:ropatil-Medium-72163-[Azure-File-CSI-Driver] [CSI Clone] provisioning volume with pvc data source having large number of files [Serial]", func() {
+		// Set up a specified project share for all the phases
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource definition for the scenario
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
+
+		exutil.By("#. Create a pvc with the csi storageclass")
+		pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+		nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
+
+		exutil.By("#. Create 10000 files inside volume with each of 10 bytes size")
+		_, err := podOri.execCommand(oc, "dd if=/dev/zero of="+podOri.mountPath+"/testfile bs=1 count=100000")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = podOri.execCommand(oc, "cd "+podOri.mountPath+" && split -b 10 -a 7 "+podOri.mountPath+"/testfile")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Eventually(func() string {
+			filesCount, _ := podOri.execCommand(oc, "ls "+podOri.mountPath+" | wc -l")
+			return filesCount
+		}, 60*time.Second, 600*time.Second).Should(o.ContainSubstring("10001"))
+		podOri.execCommand(oc, "sync")
+
+		// Set the resource definition for the clone
+		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvcOri.name))
+		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
+
+		exutil.By("#. Create a clone pvc with the preset csi storageclass")
+		pvcClone.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+		e2e.Logf("%s", pvcOri.scname)
+		pvcClone.capacity = pvcOri.capacity
+		pvcClone.createWithCloneDataSource(oc)
+		defer pvcClone.deleteAsAdmin(oc)
+
+		exutil.By("#. Create pod with the cloned pvc and wait for the pod ready")
+		podClone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
+		defer podClone.deleteAsAdmin(oc)
+		podClone.waitReady(oc)
+
+		exutil.By("#. Check the cloned volume has original 10000 files")
+		filesCount, err := podClone.execCommand(oc, "ls "+podClone.mountPath+" | wc -l")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(filesCount).To(o.ContainSubstring("10001"))
 	})
 
 })
