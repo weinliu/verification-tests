@@ -335,6 +335,20 @@ func patchResourceAsAdminAndGetLog(oc *exutil.CLI, ns, resource, patch string) (
 	return outPut, err
 }
 
+func createARoute(oc *exutil.CLI, ns, routeType, routeName, serviceName, routeHost string, extraParas []string) {
+	if routeType == "http" {
+		cmd := []string{"-n", ns, "service", serviceName, "--name=" + routeName, "--hostname=" + routeHost}
+		cmd = append(cmd, extraParas...)
+		_, err := oc.Run("expose").Args(cmd...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		cmd := []string{"-n", ns, "route", routeType, routeName, "--service=" + serviceName, "--hostname=" + routeHost}
+		cmd = append(cmd, extraParas...)
+		_, err := oc.WithoutNamespace().Run("create").Args(cmd...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
 func exposeRoute(oc *exutil.CLI, ns, resource string) {
 	err := oc.Run("expose").Args(resource, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
