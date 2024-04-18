@@ -445,12 +445,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Prune images without '--ignore-invalid-refs' options")
 		pruneout, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--keep-tag-revisions=1", "--keep-younger-than=0", "--token="+token, "--registry-url="+refRoute, "--confirm", "--loglevel=5").SilentOutput()
-		o.Expect(pruneout).To(o.ContainSubstring("invalid"))
-		o.Expect(pruneout).NotTo(o.ContainSubstring("skipping"))
+		o.Expect(strings.Contains(pruneout, "invalid image reference")).To(o.BeTrue())
+		if strings.Contains(pruneout, "invalid reference format - skipping") {
+			e2e.Failf("Won't skip prune pod with invalid image without --ignore-invalid-refs")
+		}
 
 		g.By("Prune images with '--ignore-invalid-refs' options")
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--keep-tag-revisions=1", "--keep-younger-than=0", "--token="+token, "--registry-url="+refRoute, "--ignore-invalid-refs", "--confirm", "--loglevel=4").SilentOutput()
-		o.Expect(out).To(o.ContainSubstring("skipping"))
+		o.Expect(strings.Contains(out, "invalid reference format - skipping")).To(o.BeTrue())
 	})
 
 	//author: wewang@redhat.com
