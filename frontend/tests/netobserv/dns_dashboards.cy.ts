@@ -38,7 +38,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         Operator.createFlowcollector(project, "DNSTracking")
     })
 
-    it("(OCP-67087, aramesha, Network_Observability) Validate DNS over TCP and UDP", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-67087, aramesha, Network_Observability) Validate DNS over TCP and UDP", function () {
         netflowPage.visit()
         cy.get('#tabs-container li:nth-child(2)').click()
         cy.byTestID("table-composable").should('exist')
@@ -90,7 +90,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         netflowPage.resetClearFilters()
     })
 
-    it("(OCP-67087, aramesha, Network_Observability) Validate DNSLatencies edge label and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-67087, aramesha, Network_Observability) Validate DNSLatencies edge label and Query Summary stats", function () {
         netflowPage.visit()
         cy.get('#tabs-container li:nth-child(3)').click()
         cy.get('#drawer').should('not.be.empty')
@@ -125,7 +125,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         netflowPage.resetClearFilters()
     })
 
-    it("(OCP-67087, aramesha, Network_Observability) Validate DNSTracking dashboards", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-67087, aramesha, Network_Observability) Validate DNSTracking dashboards", function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")

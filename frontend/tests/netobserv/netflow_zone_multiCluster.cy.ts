@@ -36,7 +36,7 @@ describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiClu
         netflowPage.visit()
     })
 
-    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should validate zone and multiCluster related columns", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should validate zone and multiCluster related columns", function () {
         cy.get('#tabs-container li:nth-child(2)').click()
         cy.byTestID("table-composable").should('exist')
 
@@ -63,7 +63,7 @@ describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiClu
         })
     })
 
-    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should verify zone and cluster scope in topology view", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should verify zone and cluster scope in topology view", function () {
         cy.get('#tabs-container li:nth-child(3)').click()
         // check if topology view exists, if not clear filters.
         // this can be removed when multiple page loads are fixed.

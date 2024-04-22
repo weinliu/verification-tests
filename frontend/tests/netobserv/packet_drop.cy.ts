@@ -36,7 +36,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_
         netflowPage.visit()
     })
 
-    it("(OCP-66141, aramesha, Network_Observability) verify packetDrop panels", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-66141, aramesha, Network_Observability) verify packetDrop panels", function () {
         netflowPage.stopAutoRefresh()
 
         // verify default PacketDrop panels are visible
@@ -63,7 +63,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_
         cy.checkPanelsNum(6);
     })
 
-    it("(OCP-66141, aramesha, Network_Observability) Verify packetDrop Query Options filters", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-66141, aramesha, Network_Observability) Verify packetDrop Query Options filters", function () {
         netflowPage.stopAutoRefresh()
 
         cy.get('#tabs-container li:nth-child(2)').click()
@@ -89,7 +89,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_
         }).as('matchedUrl')
     })
 
-    it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop filters", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop filters", function () {
         netflowPage.stopAutoRefresh()
 
         cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')

@@ -32,7 +32,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         netflowPage.visit()
     })
 
-    it("(OCP-67087, aramesha, Network_Observability) Verify DNSTracking panels and Query Summary", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-67087, aramesha, Network_Observability) Verify DNSTracking panels and Query Summary", function () {
         // verify default DNSTracking panels are visible
         cy.checkPanel(overviewSelectors.defaultDNSTrackingPanels)
         cy.checkPanelsNum(5);
@@ -62,7 +62,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         })
     })
 
-    it("(OCP-67087, aramesha) Validate DNSTracking columns", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-67087, aramesha) Validate DNSTracking columns", function () {
         cy.get('#tabs-container li:nth-child(2)').click()
         cy.byTestID("table-composable").should('exist')
         netflowPage.stopAutoRefresh()

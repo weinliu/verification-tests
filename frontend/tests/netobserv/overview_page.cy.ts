@@ -37,7 +37,7 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
         cy.checkPanelsNum();
     })
 
-    it("(OCP-54839, aramesha, Network_Observability) should validate overview page features", { tags: ['e2e', 'admin', '@smoke'] }, function () {
+    it("(OCP-54839, aramesha, Network_Observability) should validate overview page features", { tags: ['@smoke'] }, function () {
         cy.byTestID(genSelectors.timeDrop).then(btn => {
             expect(btn).to.exist
             cy.wrap(btn).click().then(drop => {
@@ -115,7 +115,7 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
         cy.contains('Sampling').should('exist')
     })
 
-    it("(OCP-54839, aramesha, Network_Observability) should validate panels", { tags: ['e2e', 'admin', '@smoke'] }, function () {
+    it("(OCP-54839, aramesha, Network_Observability) should validate panels", { tags: ['@smoke'] }, function () {
         // open panels modal
         cy.openPanelsModal();
 

@@ -32,7 +32,7 @@ describe.skip('Network_Observability dashboards tests', { tags: ['Network_Observ
         Operator.createFlowcollector(project)
     })
 
-    it('(OCP-61893, memodi, Network_Observability), should have default health dashboards', { tags: ['e2e', 'admin', '@smoke'] }, function () {
+    it('(OCP-61893, memodi, Network_Observability), should have default health dashboards', function () {
         // navigate to 'NetObserv / Health' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-health")
@@ -83,7 +83,7 @@ describe.skip('Network_Observability dashboards tests', { tags: ['Network_Observ
         cy.byTestID("-chart").find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
     })
 
-    it("(OCP-63790, memodi, Network_Observability), should have default flow-based dashboards", { tags: ['e2e', 'admin', '@smoke'] }, function () {
+    it("(OCP-63790, memodi, Network_Observability), should have default flow-based dashboards", function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")

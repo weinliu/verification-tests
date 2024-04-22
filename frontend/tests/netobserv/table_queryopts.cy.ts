@@ -38,7 +38,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         cy.byTestID("table-composable").should('exist')
     })
 
-    it("(OCP-50532, aramesha, Network_Observability) should verify Query Options dropdown", { tags: ['e2e', 'admin', '@smoke'] }, function () {
+    it("(OCP-50532, aramesha, Network_Observability) should verify Query Options dropdown", { tags: ['@smoke'] }, function () {
         // toggle between the page limits
         cy.changeQueryOption('500')
         netflowPage.waitForLokiQuery()
@@ -59,7 +59,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         }).as('matchedUrl')
     })
 
-    it("(OCP-50532, memodi, Network_Observability) should validate query summary panel", { tags: ['e2e', 'admin', '@smoke'] }, function () {
+    it("(OCP-50532, memodi, Network_Observability) should validate query summary panel", { tags: ['@smoke'] }, function () {
         let warningExists = false
         cy.get(querySumSelectors.queryStatsPanel).should('exist').then(qrySum => {
             if (Cypress.$(querySumSelectors.queryStatsPanel + ' svg.query-summary-warning').length > 0) {

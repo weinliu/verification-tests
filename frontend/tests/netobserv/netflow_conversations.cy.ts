@@ -34,14 +34,14 @@ describe('(OCP-71787 Network_Observability) Conversation tracking test', { tags:
         cy.byTestID("table-composable").should('exist')
     })
 
-    it("(OCP-71787, aramesha, Network_Observability) should validate default conversation tracking columns", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-71787, aramesha, Network_Observability) should validate default conversation tracking columns", function () {
         cy.byTestID('table-composable').should('exist').within(() => {
             cy.get(colSelectors.RecordType).should('exist')
             cy.get(colSelectors.conversationID).should('exist')
         })
     })
 
-    it("(OCP-71787, aramesha, Network_Observability) should verify Query Summary panel", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-71787, aramesha, Network_Observability) should verify Query Summary panel", function () {
         cy.get('#filter-toolbar-search-filters').contains('Query options').click();
         cy.get('#query-options-dropdown').click();
         cy.get('#recordType-allConnections').click()

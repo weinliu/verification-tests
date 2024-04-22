@@ -32,7 +32,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         netflowPage.visit()
     })
 
-    it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT column values", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT column values", function () {
         // go to table view
         cy.get('#tabs-container li:nth-child(2)').click()
         cy.byTestID("table-composable").should('exist')
@@ -53,7 +53,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         })
     })
 
-    it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT panels", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT panels", function () {
         // verify default flowRTT panels are visible
         cy.checkPanel(overviewSelectors.defaultFlowRTTPanels)
         cy.checkPanelsNum(5);

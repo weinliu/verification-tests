@@ -61,7 +61,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
         // advance options menu remains visible throughout the test
     })
 
-    it("(OCP-53591, memodi, Network_Observability) should verify topology page features", { tags: ['e2e', 'admin', '@smoke'] }, function () {
+    it("(OCP-53591, memodi, Network_Observability) should verify topology page features", { tags: ['@smoke'] }, function () {
         cy.byTestID('search-topology-element-input').should('exist')
         cy.contains('Display options').should('exist').click()
 

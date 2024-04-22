@@ -33,7 +33,7 @@ describe('(OCP-70972 Network_Observability) Netflow traffic pages on workloads',
         Operator.createFlowcollector(project)
     })
 
-    it('(OCP-70972, memodi, Network_Observability), netflow traffic pages should appear on workloads', { tags: ["e2e", "admin", "@smoke"] }, function () {
+    it('(OCP-70972, memodi, Network_Observability), netflow traffic pages should appear on workloads', { tags: ["@smoke"] }, function () {
         pagesToVisit.forEach((page) => {
             cy.visitNetflowTrafficTab(page)
         })

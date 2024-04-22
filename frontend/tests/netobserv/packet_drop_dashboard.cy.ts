@@ -29,7 +29,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags:
         Operator.createFlowcollector(project, "PacketDrop")
     })
 
-    it("(OCP-66141, aramesha, Network_Observability) Validate PacketDrop edge labels and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-66141, aramesha, Network_Observability) Validate PacketDrop edge labels and Query Summary stats", function () {
         netflowPage.visit()
         cy.get('#tabs-container li:nth-child(3)').click()
         // check if topology view exists, if not clear filters.
@@ -83,7 +83,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags:
         netflowPage.resetClearFilters()
     })
 
-    it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop dashboards", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop dashboards", function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")

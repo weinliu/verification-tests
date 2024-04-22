@@ -39,7 +39,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         netflowPage.visit()
     })
 
-    it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT edge labels and Query Summary stats", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT edge labels and Query Summary stats", function () {
         cy.clearLocalStorage()
         cy.get('#tabs-container li:nth-child(3)').click()
         // check if topology view exists, if not clear filters.
@@ -80,7 +80,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         netflowPage.resetClearFilters()
     })
 
-    it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT dashboards", { tags: ['e2e', 'admin'] }, function () {
+    it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT dashboards", function () {
         // navigate to 'NetObserv' Dashboard page
         dashboard.visit()
         dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
