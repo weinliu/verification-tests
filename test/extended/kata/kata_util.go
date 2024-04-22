@@ -47,7 +47,7 @@ type TestRunDescription struct {
 	checked            bool
 	catalogSourceName  string
 	channel            string
-	icspNeeded         bool
+	redirectNeeded     bool
 	mustgatherImage    string
 	operatorVer        string
 	eligibility        bool
@@ -433,14 +433,13 @@ func waitForNodesInDebug(oc *exutil.CLI, opNamespace string) (msg string, err er
 }
 
 // author: tbuskey@redhat.com
-func applyImageContentSourcePolicy(oc *exutil.CLI, icspFile, icspName string) (msg string, err error) {
-	g.By("Applying ImageContentSourcePolicy")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", icspFile).Output()
+func applyImageRedirect(oc *exutil.CLI, redirectFile, redirectType, redirectName string) error {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", redirectFile).Output()
 	if err != nil {
-		e2e.Logf("ERROR applying ImageContentSourcePolicy %v %v", msg, err)
+		return fmt.Errorf("ERROR applying %v: %v %v", redirectType, msg, err)
 	}
-	msg, err = checkResourceExists(oc, "ImageContentSourcePolicy", icspName, "default", 360*time.Second, 10*time.Second)
-	return msg, err
+	_, err = checkResourceExists(oc, redirectType, redirectName, "default", 360*time.Second, 10*time.Second)
+	return err
 }
 
 func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, err error) {
@@ -1583,16 +1582,16 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 		errorMessage = fmt.Sprintf("channel is missing from data\n%v", errorMessage)
 	}
 
-	if gjson.Get(configmapData, "icspneeded").Exists() {
-		testrun.icspNeeded = gjson.Get(configmapData, "icspneeded").Bool()
+	if gjson.Get(configmapData, "redirectNeeded").Exists() {
+		testrun.redirectNeeded = gjson.Get(configmapData, "redirectNeeded").Bool()
 	} else {
-		errorMessage = fmt.Sprintf("icspneeded is missing from data\n%v", errorMessage)
+		errorMessage = fmt.Sprintf("redirectNeeded is missing from data\n%v", errorMessage)
 	}
 
 	if gjson.Get(configmapData, "mustgatherimage").Exists() {
 		testrun.mustgatherImage = gjson.Get(configmapData, "mustgatherimage").String()
 		if strings.Contains(testrun.mustgatherImage, "brew.registry.redhat.io") {
-			testrun.icspNeeded = true
+			testrun.redirectNeeded = true
 		}
 	} else {
 		errorMessage = fmt.Sprintf("mustgatherimage is missing from data\n%v", errorMessage)

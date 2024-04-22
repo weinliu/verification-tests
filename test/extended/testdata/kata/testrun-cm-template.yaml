@@ -10,7 +10,7 @@ objects:
       namespace: "${NAMESPACE}"
     data:
       exists: "${EXISTS}"
-      icspneeded: "${ICSPNEEDED}"
+      redirectNeeded: "${ICSPNEEDED}"
       catalogsourcename: "${CATSOURCENAME}"
       channel: "${OSCCHANNEL}"
       operatorVer: "${OPERATORVER}"

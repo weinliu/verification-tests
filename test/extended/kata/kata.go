@@ -31,8 +31,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		subTemplate              = filepath.Join(testDataDir, "subscription_template.yaml")
 		nsFile                   = filepath.Join(testDataDir, "namespace.yaml")
 		ogFile                   = filepath.Join(testDataDir, "operatorgroup.yaml")
-		icspName                 = "kata-brew-registry"
-		icspFile                 = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+		redirectFile             = filepath.Join(testDataDir, "ImageTag-DigestMirrorSet.yaml")
+		redirectType             = "ImageTagMirrorSet"
+		redirectName             = "kata-brew-registry"
 		clusterVersion           string
 		ocpMajorVer              string
 		ocpMinorVer              string
@@ -76,7 +77,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		operatorVer:        defaultOpVer,
 		catalogSourceName:  subscription.catalogSourceName,
 		channel:            subscription.channel,
-		icspNeeded:         false,
+		redirectNeeded:     false,
 		mustgatherImage:    "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3",
 		eligibility:        kataconfig.eligibility,
 		labelSingleNode:    false,
@@ -116,7 +117,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 		ensureOperatorGroupIsInstalled(oc, subscription, ogFile)
 
-		// testrun.checked, testrun.icspNeeded and testrun.mustgatherImage are not in subscription or kataconfig
+		// testrun.checked, testrun.redirectNeeded and testrun.mustgatherImage are not in subscription or kataconfig
 		if !testrun.checked {
 			_, err = getTestRunParameters(oc, &subscription, &kataconfig, &testrun, testrunConfigmapNs, testrunConfigmapName)
 			if err != nil {
@@ -132,12 +133,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			return
 		}
 
-		if testrun.icspNeeded {
-			e2e.Logf("An ICSP is being applied to allow %v to work", testrun.mustgatherImage)
-			msg, err = applyImageContentSourcePolicy(oc, icspFile, icspName)
-			if err != nil || msg == "" {
-				logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP %v", icspName), msg, err)
+		if testrun.redirectNeeded {
+			minorVer, _ = strconv.Atoi(ocpMinorVer)
+			if ocpMajorVer == "4" && minorVer <= 12 {
+				redirectType = "ImageContentSourcePolicy"
+				redirectFile = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
 			}
+			err = applyImageRedirect(oc, redirectFile, redirectType, redirectName)
+			o.Expect(err).NotTo(o.HaveOccurred(), err)
 		}
 
 		_, err = subscribeFromTemplate(oc, subscription, subTemplate)
@@ -985,11 +988,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			g.Skip(msg)
 		}
 
-		if testrunUpgradeWithSubscription.icspNeeded {
-			msg, err = applyImageContentSourcePolicy(oc, icspFile, icspName)
-			msgIfErr = fmt.Sprintf("ERROR: Appliying ICSP for upgrade failed: %v %v", msg, err)
-			o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
-			o.Expect(msg).NotTo(o.BeEmpty(), msgIfErr)
+		if testrunUpgradeWithSubscription.redirectNeeded {
+			minorVer, _ := strconv.Atoi(ocpMinorVer)
+			if ocpMajorVer == "4" && minorVer <= 12 {
+				redirectType = "ImageContentSourcePolicy"
+				redirectFile = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+			}
+			err = applyImageRedirect(oc, redirectFile, redirectType, redirectName)
+			o.Expect(err).NotTo(o.HaveOccurred(), err)
 		}
 
 		if testrunUpgradeWithSubscription.catalogSourceName != subscription.catalogSourceName {
