@@ -4354,6 +4354,30 @@ desiredState:
 		o.Expect(newFile.Read()).To(o.And(HaveContent(fileContent), HaveOctalPermissions("0644")), "%s Does not have expected content or permissions", newFile)
 		logger.Infof("OK\n")
 	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-High-72007-check node update frequencies", func() {
+
+		exutil.By("To get node and display its nodeupdate frequiences")
+
+		var (
+			file = "/etc/kubernetes/kubelet.conf"
+			cmd  = "nodeStatusUpdateFrequency|nodeStatusReportFrequency"
+		)
+		nodeList, err := NewNodeList(oc.AsAdmin()).GetAllLinux() // Get all nodes
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the list of nodes")
+
+		for _, node := range nodeList {
+			if node.HasTaintEffectOrFail("NoExecute") {
+				logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
+				continue
+			}
+			nodeUpdate, err := node.DebugNodeWithChroot("grep", "-E", cmd, file) // To get nodeUpdate frequencies value
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error getting nodeupdate frequencies for %s", node.GetName())
+			o.Expect(nodeUpdate).To(o.ContainSubstring(`"nodeStatusUpdateFrequency": "10s"`), "Value for 'nodeStatusUpdateFrequency' is not same as expected.")
+			o.Expect(nodeUpdate).To(o.ContainSubstring(`"nodeStatusReportFrequency": "5m0s"`), "Value for 'nodeStatusReportFrequency' is not same as expected.")
+			logger.Infof("node/%s %s", node, nodeUpdate)
+		}
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
