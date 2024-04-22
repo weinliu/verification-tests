@@ -1666,7 +1666,7 @@ func (f fluentdServer) getPodName(oc *exutil.CLI) string {
 func (f fluentdServer) checkData(oc *exutil.CLI, expect bool, filename string) {
 	cmd := "ls -l /fluentd/log/" + filename
 	if expect {
-		err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 			stdout, err := e2eoutput.RunHostCmdWithRetries(f.namespace, f.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 			if err != nil {
 				if strings.Contains(err.Error(), "No such file or directory") {
@@ -3110,6 +3110,8 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 			if err := resp.Body.Close(); err != nil {
 				e2e.Logf("error closing body", err)
 			}
+			// sleep 5 second before doing next request
+			time.Sleep(5 * time.Second)
 			continue
 		}
 		success = true

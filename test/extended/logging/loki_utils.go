@@ -83,7 +83,6 @@ func newS3Client(cred s3Credential) *s3.Client {
 	if len(cred.Endpoint) > 0 {
 		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 			return aws.Endpoint{
-				PartitionID:       "aws",
 				URL:               cred.Endpoint,
 				HostnameImmutable: true,
 				Source:            aws.EndpointSourceCustom,
@@ -103,7 +102,8 @@ func newS3Client(cred s3Credential) *s3.Client {
 		cfg, err = config.LoadDefaultConfig(context.TODO(),
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cred.AccessKeyID, cred.SecretAccessKey, "")),
 			config.WithEndpointResolverWithOptions(customResolver),
-			config.WithHTTPClient(httpClient))
+			config.WithHTTPClient(httpClient),
+			config.WithRegion("auto"))
 	} else {
 		// aws s3
 		cfg, err = config.LoadDefaultConfig(context.TODO(),

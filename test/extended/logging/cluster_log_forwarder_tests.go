@@ -1364,7 +1364,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				kafka := resource{"kafka", kafkaClusterName, amq.Namespace}
 				kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
 				//defer kafka.clear(oc)
-				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.4.0", "MESSAGE_VERSION=3.4.0")
+				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.5.0", "MESSAGE_VERSION=3.5.0")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				// create topics
 				topicTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
@@ -1689,6 +1689,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			CLO.SubscribeOperator(oc)
 		})
+
+		g.AfterEach(func() {
+			// clear fluentd buffers on each node
+			nodes := exutil.GetNodeListByLabel(oc, "kubernetes.io/os=linux")
+			for _, node := range nodes {
+				_, err := exutil.DebugNodeWithChroot(oc, node, "bash", "-c", "rm -rf /var/lib/fluentd/*")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		})
 		g.It("CPaasrunOnly-Author:anli-Medium-60934-fluentd Forward logs to fluentd over http - https[Serial]", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1778,9 +1787,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.create(oc)
 
 			g.By("check logs in fluentd server")
+			fluentdS.checkData(oc, true, "infra.log")
 			fluentdS.checkData(oc, true, "app.log")
 			fluentdS.checkData(oc, true, "audit.log")
-			fluentdS.checkData(oc, true, "infra.log")
 		})
 
 		g.It("CPaasrunOnly-Author:anli-Medium-60935-fluentd Forward logs to fluentd over http - TLSSkipVerify[Serial]", func() {
@@ -1888,9 +1897,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.create(oc)
 
 			g.By("check logs in fluentd server")
+			fluentdS.checkData(oc, true, "infra.log")
 			fluentdS.checkData(oc, true, "app.log")
 			fluentdS.checkData(oc, true, "audit.log")
-			fluentdS.checkData(oc, true, "infra.log")
 		})
 	})
 

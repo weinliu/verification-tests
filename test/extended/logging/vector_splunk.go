@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -425,7 +426,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("check logs in splunk")
 			for _, logType := range []string{"application", "audit", "infrastructure"} {
 				o.Expect(sp.checkLogs("index=\""+indexName+"\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in "+indexName+" index")
-				r, e := sp.getSearchResult("index=\"main\", log_type=\"" + logType + "\"")
+				r, e := sp.searchLogs("index=\"main\", log_type=\"" + logType + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in default index, this is not expected")
 			}
@@ -489,10 +490,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// container logs should only be stored in the index named as it's namespace name
 			for _, index := range []string{appProj, "openshift-cluster-version", "openshift-dns", "openshift-ingress", "openshift-monitoring"} {
 				o.Expect(sp.checkLogs("index=\""+index+"\"")).To(o.BeTrue(), "can't find logs in "+index+" index")
-				r, e := sp.getSearchResult("index=\"" + index + "\", kubernetes.namespace_name!=\"" + index + "\"")
+				r, e := sp.searchLogs("index=\"" + index + "\", kubernetes.namespace_name!=\"" + index + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find logs from other namespaces in "+index+" index, this is not expected")
-				r, e = sp.getSearchResult("index!=\"" + index + "\", kubernetes.namespace_name=\"" + index + "\"")
+				r, e = sp.searchLogs("index!=\"" + index + "\", kubernetes.namespace_name=\"" + index + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find logs from project "+index+" in other indexes, this is not expected")
 			}
@@ -549,10 +550,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clf.delete(oc)
 			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=openshift.labels.test", "LABELS={\"test\": \""+index+"\"}")
 
+			//sleep 10 seconds for collector pods to send logs to splunk
+			time.Sleep(10 * time.Second)
 			exutil.By("check logs in splunk")
-			for _, logType := range []string{"application", "audit", "infrastructure"} {
+			for _, logType := range []string{"infrastructure", "application", "audit"} {
 				o.Expect(sp.checkLogs("index=\""+index+"\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in "+index+" index")
-				r, e := sp.getSearchResult("index=\"main\", log_type=\"" + logType + "\"")
+			}
+
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
+				r, e := sp.searchLogs("index=\"main\", log_type=\"" + logType + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in default index, this is not expected")
 			}
@@ -608,16 +614,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("check logs in splunk")
 			// logs from project appProj should be stored in 'logging-OCP-71035', other logs should be in default index
 			o.Expect(sp.checkLogs("index=\""+index+"\"")).To(o.BeTrue(), "can't find logs in "+index+" index")
-			r, e := sp.getSearchResult("index=\"" + index + "\", kubernetes.namespace_name!=\"" + appProj + "\"")
+			r, e := sp.searchLogs("index=\"" + index + "\", kubernetes.namespace_name!=\"" + appProj + "\"")
 			o.Expect(e).NotTo(o.HaveOccurred())
 			o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find logs from other namespaces in "+index+" index, this is not expected")
-			r, e = sp.getSearchResult("index!=\"" + index + "\", kubernetes.namespace_name=\"" + appProj + "\"")
+			r, e = sp.searchLogs("index!=\"" + index + "\", kubernetes.namespace_name=\"" + appProj + "\"")
 			o.Expect(e).NotTo(o.HaveOccurred())
 			o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find logs from project "+appProj+" in other indexes, this is not expected")
 
 			for _, logType := range []string{"audit", "infrastructure"} {
 				o.Expect(sp.checkLogs("index=\"main\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in main index")
-				r, e := sp.getSearchResult("index=\"" + index + "\", log_type=\"" + logType + "\"")
+				r, e := sp.searchLogs("index=\"" + index + "\", log_type=\"" + logType + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in "+index+" index, this is not expected")
 			}
@@ -709,7 +715,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("check logs in splunk")
 			for _, logType := range []string{"audit", "infrastructure", "application"} {
 				o.Expect(sp.checkLogs("index=\"main\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in main index")
-				r, e := sp.getSearchResult("index!=\"main\", log_type=\"" + logType + "\"")
+				r, e := sp.searchLogs("index!=\"main\", log_type=\"" + logType + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in other index, this is not expected")
 			}

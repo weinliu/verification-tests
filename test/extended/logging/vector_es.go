@@ -428,7 +428,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(output).Should(o.ContainSubstring("log_logged_bytes_total"))
 
 			g.By("Check Vector and Log File metrics exporter metrics from Prometheus")
-			for _, metric := range []string{"log_logged_bytes_total", "vector_processed_bytes_total"} {
+			for _, metric := range []string{"log_logged_bytes_total", "vector_component_sent_bytes_total"} {
 				checkMetric(oc, bearerToken, metric, 3)
 			}
 		})

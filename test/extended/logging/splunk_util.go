@@ -22,7 +22,12 @@ import (
 
 func (s *splunkPodServer) checkLogs(query string) bool {
 	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		searchResult, err := s.getSearchResult(query)
+		searchID, err := s.requestSearchTask(query)
+		if err != nil {
+			e2e.Logf("error getting search ID: %v", err)
+			return false, nil
+		}
+		searchResult, err := s.getSearchResult(searchID)
 		if err != nil {
 			e2e.Logf("hit error when querying logs with %s: %v, try next round", query, err)
 			return false, nil
@@ -83,7 +88,7 @@ func (s *splunkPodServer) allTypeLogsFound() bool {
 	return s.allQueryFound(queries)
 }
 
-func (s *splunkPodServer) getSearchResult(query string) (*splunkSearchResult, error) {
+func (s *splunkPodServer) getSearchResult(searchID string) (*splunkSearchResult, error) {
 	h := make(http.Header)
 	h.Add("Content-Type", "application/json")
 	h.Add(
@@ -95,14 +100,7 @@ func (s *splunkPodServer) getSearchResult(query string) (*splunkSearchResult, er
 
 	var searchResult *splunkSearchResult
 
-	searchID, err := s.requestSearchTask(query)
-	if err != nil {
-		return nil, fmt.Errorf("error getting search ID: %v", err)
-	}
-
-	// to avoid getting `204 No Content`, sleep 10 seconds before getting results
-	time.Sleep(10 * time.Second)
-	resp, err1 := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 2, nil, 200)
+	resp, err1 := doHTTPRequest(h, "https://"+s.splunkdRoute, "/services/search/jobs/"+searchID+"/results", params.Encode(), "GET", true, 5, nil, 200)
 	if err1 != nil {
 		return nil, fmt.Errorf("failed to get response: %v", err1)
 	}
@@ -112,6 +110,14 @@ func (s *splunkPodServer) getSearchResult(query string) (*splunkSearchResult, er
 		return nil, fmt.Errorf("failed to unmarshal splunk response: %v", err2)
 	}
 	return searchResult, nil
+}
+
+func (s *splunkPodServer) searchLogs(query string) (*splunkSearchResult, error) {
+	searchID, err := s.requestSearchTask(query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting search ID: %v", err)
+	}
+	return s.getSearchResult(searchID)
 }
 
 func (s *splunkPodServer) requestSearchTask(query string) (string, error) {

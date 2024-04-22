@@ -791,7 +791,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			g.By("check data in Loki")
-			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+			defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			bearerToken := getSAToken(oc, "default", oc.Namespace())
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)

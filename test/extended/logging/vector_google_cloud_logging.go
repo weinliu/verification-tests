@@ -247,13 +247,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			name:                   "clf-61602",
 			namespace:              clfNS,
 			secretName:             gcpSecret.name,
-			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-namespace-selector.yaml"),
+			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
 			waitForPodReady:        true,
 			collectApplicationLogs: true,
 			serviceAccountName:     "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "DATA_PROJECT="+appProj1)
+		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUTREFS=[\"application\"]")
 
 		g.By("The Google Cloud sink in Vector config must use the intermediate tlsSecurityProfile")
 		searchString := `[sinks.output_gcp_logging.tls]
