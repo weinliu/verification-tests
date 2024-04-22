@@ -512,7 +512,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipConditionally(oc)
 		architectures := architecture.GetAvailableArchitecturesSet(oc)
 
-		var scaleArch *architecture.Architecture
+		var scaleArch architecture.Architecture = architecture.UNKNOWN
 		var machineSetNames []string
 		var machineSetToScale string
 		for _, arch := range architectures {
@@ -536,11 +536,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			g.By("Create MachineAutoscaler")
 			defer machineAutoscaler.deleteMachineAutoscaler(oc)
 			machineAutoscaler.createMachineAutoscaler(oc)
-			if scaleArch == nil || arch != architecture.AMD64 {
+			if scaleArch == architecture.UNKNOWN || arch != architecture.AMD64 {
 				// The last non-amd64 arch is chosen to be scaled.
 				// Moreover, regardless of what arch it is, we ensure scaleArch to be non-nil by setting it at least
 				// once to a non-nil value.
-				scaleArch = &arch
+				scaleArch = arch
 				machineSetToScale = machinesetName
 			}
 		}
@@ -555,7 +555,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			name:      "workload",
 			namespace: "openshift-machine-api",
 			template:  workLoadTemplate,
-			arch:      *scaleArch,
+			arch:      scaleArch,
 			cpu:       getWorkLoadCPU(oc, machineSetToScale),
 		}
 		defer workLoad.deleteWorkLoad(oc)
