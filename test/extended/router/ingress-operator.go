@@ -1342,6 +1342,91 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-30060-NetworkEdge Create an ingresscontroller that logs to external rsyslog instance", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			baseTemp            = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			syslogPod           = filepath.Join(buildPruningBaseDir, "rsyslogd-pod.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			syslogPodName       = "rsyslogd-pod"
+			syslogPodLabel      = "name=rsyslogd"
+			srvrcInfo           = "web-server-rc"
+			srvName             = "service-unsecure"
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+		)
+
+		exutil.By("1. create a syslog pod for the log receiver")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", syslogPod).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, project1, syslogPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A syslog pod failed to be ready state within allowed time!")
+
+		exutil.By("2. Create a syslog ingresscontroller")
+		syslogPodIP := getPodv4Address(oc, syslogPodName, project1)
+		extraParas := "    logging:\n      access:\n        destination:\n          type: Syslog\n          syslog:\n            address: " + syslogPodIP + "\n            port: 514\n"
+		customTemp := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp)
+		ingctrl := ingressControllerDescription{
+			name:      "ocp30060",
+			namespace: "openshift-ingress-operator",
+			domain:    "",
+			template:  customTemp,
+		}
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+
+		exutil.By("3. Check ROUTER_SYSLOG_ADDRESS env in a router pod")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		syslogEnv := readRouterPodEnv(oc, routerpod, "ROUTER_SYSLOG_ADDRESS")
+		syslogEp := syslogPodIP + ":514"
+		if strings.Contains(syslogPodIP, ":") {
+			syslogEp = "[" + syslogPodIP + "]" + ":514"
+		}
+		o.Expect(syslogEnv).To(o.ContainSubstring(syslogEp))
+
+		exutil.By("4. create a client pod, a server pod and an unsecure service")
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		createResourceFromFile(oc, project1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time!")
+
+		exutil.By("5. create a route")
+		routehost := srvName + "-" + project1 + "." + ingctrl.domain
+		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "route", ".items[0].metadata.name", srvName)
+
+		exutil.By("6. curl the route, and then check the rsyslogd pod's logs which should contain the new http request")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":80:" + podIP
+		jsonPath := ".subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port"
+		ep := fetchJSONPathValue(oc, project1, "endpoints/"+srvName, jsonPath)
+		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		output := ""
+		for i := 0; i < 6; i++ {
+			result := repeatCmd(oc, cmdOnPod, "200", 5)
+			o.Expect(result).To(o.ContainSubstring("passed"))
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", project1, syslogPodName).Output()
+			if strings.Contains(output, ep) {
+				break
+			} else {
+				time.Sleep(1 * time.Second)
+			}
+		}
+		o.Expect(output).To(o.MatchRegexp("haproxy.+" + ep + ".+HTTP/1.1"))
+	})
+
+	// author: shudili@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-30059-NetworkEdge Create an ingresscontroller that logs to a sidecar container", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
@@ -1398,7 +1483,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		result := repeatCmd(oc, cmdOnPod, "200", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
 		output := waitRouterLogsAppear(oc, routerpod, ep)
-		o.Expect(output).To(o.MatchRegexp("haproxy.+" + ep + ".+HTTP/1.1"))
+		log := regexp.MustCompile("haproxy.+" + ep + ".+HTTP/1.1").FindStringSubmatch(output)[0]
+		o.Expect(len(log) > 1).To(o.BeTrue())
 	})
 
 	// Test case creater: hongli@redhat.com

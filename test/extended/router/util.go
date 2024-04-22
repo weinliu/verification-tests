@@ -972,8 +972,13 @@ func waitDNSLogsAppear(oc *exutil.CLI, podList []string, searchStr string) strin
 
 func waitRouterLogsAppear(oc *exutil.CLI, routerpod, searchStr string) string {
 	result := ""
+	containerName := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, ".spec.containers[*].name")
+	logCmd := []string{routerpod, "-n", "openshift-ingress"}
+	if strings.Contains(containerName, "logs") {
+		logCmd = []string{routerpod, "-c", "logs", "-n", "openshift-ingress"}
+	}
 	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(routerpod, "-c", "logs", "-n", "openshift-ingress").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(logCmd...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		primary := false
 		outputList := strings.Split(output, "\n")
