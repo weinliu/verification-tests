@@ -2,6 +2,8 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -552,23 +554,32 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-High-61422-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-High-61422-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "cis-test" + getRandomString(),
-				namespace:       "",
+				namespace:       subD.namespace,
 				profilekind1:    "Profile",
 				profilename1:    "ocp4-cis",
 				profilename2:    "ocp4-cis-node",
 				scansettingname: "default",
 				template:        scansettingbindingTemplate,
 			}
-			ssbWithVersionSuffix = scanSettingBindingDescription{
+			ssbWithVersionSuffix14 = scanSettingBindingDescription{
 				name:            "cis-test-1-4-" + getRandomString(),
-				namespace:       "",
+				namespace:       subD.namespace,
 				profilekind1:    "Profile",
 				profilename1:    "ocp4-cis-1-4",
 				profilename2:    "ocp4-cis-node-1-4",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			ssbWithVersionSuffix15 = scanSettingBindingDescription{
+				name:            "cis-test-1-5-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis-1-5",
+				profilename2:    "ocp4-cis-node-1-5",
 				scansettingname: "default",
 				template:        scansettingbindingTemplate,
 			}
@@ -603,28 +614,36 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		subD.getProfileName(oc, "ocp4-cis-node")
 
 		g.By("Create scansettingbinding !!!\n")
-		ssb.namespace = subD.namespace
-		ssbWithVersionSuffix.namespace = subD.namespace
-		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
-		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbWithVersionSuffix.name})
+		defer cleanupObjects(oc,
+			objectTableRef{"scansettingbinding", subD.namespace, ssb.name},
+			objectTableRef{"scansettingbinding", subD.namespace, ssbWithVersionSuffix14.name},
+			objectTableRef{"scansettingbinding", subD.namespace, ssbWithVersionSuffix15.name})
 		ssb.create(oc)
-		ssbWithVersionSuffix.create(oc)
+		ssbWithVersionSuffix14.create(oc)
+		ssbWithVersionSuffix15.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithVersionSuffix.name, ok, []string{"scansettingbinding", "-n", ssbWithVersionSuffix.namespace,
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithVersionSuffix14.name, ok, []string{"scansettingbinding", "-n", ssbWithVersionSuffix14.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithVersionSuffix15.name, ok, []string{"scansettingbinding", "-n", ssbWithVersionSuffix15.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
 		g.By("Check ComplianceSuite status !!!\n")
 		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
-		checkComplianceSuiteStatus(oc, ssbWithVersionSuffix.name, subD.namespace, "DONE")
+		checkComplianceSuiteStatus(oc, ssbWithVersionSuffix14.name, subD.namespace, "DONE")
+		checkComplianceSuiteStatus(oc, ssbWithVersionSuffix15.name, subD.namespace, "DONE")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
-		subD.complianceSuiteName(oc, ssbWithVersionSuffix.name)
+		subD.complianceSuiteName(oc, ssbWithVersionSuffix14.name)
+		subD.complianceSuiteName(oc, ssbWithVersionSuffix15.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
-		subD.complianceSuiteResult(oc, ssbWithVersionSuffix.name, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbWithVersionSuffix14.name, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbWithVersionSuffix15.name, "NON-COMPLIANT INCONSISTENT")
 		g.By("Check complianceSuite result through exit-code.. !!!\n")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
-		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersionSuffix.name, "2")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersionSuffix14.name, "2")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersionSuffix15.name, "2")
 
 		g.By("Check ccr should exist and pass by default.. !!!\n")
 		for _, ccrShouldPass := range ccrsShouldPass {
@@ -648,6 +667,21 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		} else {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
+
+		g.By("Diff the failed rules between profiles without suffix and profiles of latest version.. !!!\n")
+		labelCISLatest := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssb.name)
+		labelCISSuffix := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssbWithVersionSuffix15.name)
+		failedCcrLatest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISLatest,
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		failedCcrsSuffix, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISSuffix,
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		failedCcrLatestNew := strings.Fields(failedCcrLatest)
+		newFailedCcrsSuffixNew := strings.Fields(strings.ReplaceAll(failedCcrsSuffix, "-1-5", ""))
+		sort.Strings(failedCcrLatestNew)
+		sort.Strings(newFailedCcrsSuffixNew)
+		o.Expect(reflect.DeepEqual(newFailedCcrsSuffixNew, failedCcrLatestNew)).Should(o.BeTrue())
 
 		g.By("ocp-37121-61422 The ComplianceSuite generated successfully using scansetting CR and cis profile and default scansetting... !!!\n")
 	})
@@ -1756,8 +1790,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		allProfilesOnPpc64le := []string{
 			"ocp4-cis",
 			"ocp4-cis-1-4",
+			"ocp4-cis-1-5",
 			"ocp4-cis-node",
 			"ocp4-cis-node-1-4",
+			"ocp4-cis-node-1-5",
 			"ocp4-moderate",
 			"ocp4-moderate-node",
 			"ocp4-moderate-node-rev-4",
@@ -1769,8 +1805,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		allProfilesOnS390x := []string{
 			"ocp4-cis",
 			"ocp4-cis-1-4",
+			"ocp4-cis-1-5",
 			"ocp4-cis-node",
 			"ocp4-cis-node-1-4",
+			"ocp4-cis-node-1-5",
 			"ocp4-moderate",
 			"ocp4-moderate-node",
 			"ocp4-moderate-node-rev-4",
@@ -1778,8 +1816,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		allProfilesOnAmd64 := []string{
 			"ocp4-cis",
 			"ocp4-cis-1-4",
+			"ocp4-cis-1-5",
 			"ocp4-cis-node",
 			"ocp4-cis-node-1-4",
+			"ocp4-cis-node-1-5",
 			"ocp4-e8",
 			"ocp4-high",
 			"ocp4-high-node",
