@@ -17,7 +17,11 @@ import (
 var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc = exutil.NewCLI("olmv1-oprun-"+getRandomString(), exutil.KubeConfigPath())
+		oc = exutil.NewCLIWithoutNamespace("default")
+		// we need to check if it is TP in BeforeEach before every case. if we use exutil.NewCLI("olmv1-oprun-"+getRandomString(), exutil.KubeConfigPath())
+		// it will create temp project, but it will fail sometime on SNO cluster because of system issue.
+		// so, we use exutil.NewCLIWithoutNamespace("default") not to create temp project to get oc client to check if it is TP.
+		// if it need temp project, could use oc.SetupProject() in g.It to create it firstly.
 	)
 
 	g.BeforeEach(func() {
@@ -28,6 +32,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
+		// oc.SetupProject() // it is example if the case need temp project. here it does not need it, so comment it.
 
 		var (
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
