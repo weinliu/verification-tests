@@ -341,6 +341,16 @@ func (c *CLI) SetupProject() {
 		}
 		return false
 	}
+	imageRegistryRemoved := func() bool {
+		pods, err := c.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
+		if err != nil {
+			return true
+		}
+		if len(pods.Items) > 0 {
+			return false
+		}
+		return true
+	}
 	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
 		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityBuild) ||
 		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
@@ -353,10 +363,10 @@ func (c *CLI) SetupProject() {
 			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig)) {
 		DefaultServiceAccounts = append(DefaultServiceAccounts, "deployer")
 	}
-	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
+	if (clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
 		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityImageRegistry) ||
 		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
-			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityImageRegistry)) {
+			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityImageRegistry))) && !imageRegistryRemoved() {
 		shouldCheckSecret = true
 	}
 	for _, sa := range DefaultServiceAccounts {
