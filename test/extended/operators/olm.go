@@ -9157,13 +9157,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(envFromPod).To(o.ContainSubstring(cm.name))
 		o.Expect(envFromPod).To(o.ContainSubstring(secret.name))
 
-		podName := getResource(oc, asAdmin, withoutNamespace, "pods", "--selector=control-plane=controller-manager", "-n", sub.namespace, "-o=jsonpath={..metadata.name}")
-		envPod, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", sub.namespace, "--", "env").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(envPod, "mykey")).To(o.BeTrue())
-		o.Expect(strings.Contains(envPod, "special.how")).To(o.BeTrue())
-		o.Expect(strings.Contains(envPod, "special.type")).To(o.BeTrue())
-
+		names, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", sub.namespace, "-l", "control-plane=controller-manager", "-o", "name").Output()
+		podNames := strings.Split(names, "\n")
+		for _, podName := range podNames {
+			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
+			if status == "Running" {
+				e2e.Logf("check env of pod %s", podName)
+				envPod, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", sub.namespace, "--", "env").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(strings.Contains(envPod, "mykey")).To(o.BeTrue())
+				o.Expect(strings.Contains(envPod, "special.how")).To(o.BeTrue())
+				o.Expect(strings.Contains(envPod, "special.type")).To(o.BeTrue())
+			}
+		}
 	})
 
 	// author: xzha@redhat.com, test case OCP-72018
