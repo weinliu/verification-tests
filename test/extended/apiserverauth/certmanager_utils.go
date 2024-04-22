@@ -536,21 +536,21 @@ func syncRapidastResultsToArtifactDir(oc *exutil.CLI, ns, componentName, pvcName
 func waitForPodsToBeRedeployed(oc *exutil.CLI, namespace, label string, oldPodList []string, interval, timeout time.Duration) {
 	e2e.Logf("Poll the pods with label '%s' in namespace '%s'", label, namespace)
 	statusErr := wait.Poll(interval, timeout, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-o=jsonpath={.items[*].metadata.uid}").Output()
+		newPodList, err := exutil.GetAllPodsWithLabel(oc, namespace, label)
 		if err != nil {
-			return false, err
+			e2e.Logf("Error to get pods: %v", err)
+			return false, nil
 		}
 
 		// Check if each pod in "oldPodList" is not contained in the "newPodList"
 		// To avoid nested range loop, convert the slice (newPodList) to a plain string (newPodListString)
-		newPodList := strings.Fields(output)
 		newPodListString := strings.Join(newPodList, ",")
 		for _, item := range oldPodList {
 			if strings.Contains(newPodListString, item) {
 				return false, nil
 			}
 		}
-		e2e.Logf("All pods are redeployed successfully!")
+		e2e.Logf("All pods are redeployed successfully: %v", newPodList)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("timed out after %v waiting all pods to be redeployed", timeout))
