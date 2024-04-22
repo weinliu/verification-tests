@@ -1007,7 +1007,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for _, pod := range podNames {
 				cmd = "-ojsonpath={.spec.containers[?(@.name==\"prometheus\")].args}"
-				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, `--enable-feature=exemplar-storage`, true)
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, `--enable-feature=`, true)
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, `exemplar-storage`, true)
 			}
 			exutil.By("check sendExemplars is true in UWM prometheus CRD")
 			cmd = "-ojsonpath={.spec.remoteWrite}"
