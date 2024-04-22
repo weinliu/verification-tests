@@ -104,8 +104,8 @@ func (lokilabels Lokilabels) getLokiQuery(parameters ...string) string {
 
 // TODO: add argument for condition to be matched.
 // Get flows from Loki logs
-func (lokilabels Lokilabels) getLokiFlowLogs(token, lokiRoute string, parameters ...string) ([]FlowRecord, error) {
-	lc := newLokiClient(lokiRoute).withToken(token).retry(5)
+func (lokilabels Lokilabels) getLokiFlowLogs(token, lokiRoute string, startTime time.Time, parameters ...string) ([]FlowRecord, error) {
+	lc := newLokiClient(lokiRoute, startTime).withToken(token).retry(5)
 	tenantID := "network"
 	lokiQuery := lokilabels.getLokiQuery(parameters...)
 	flowRecords := []FlowRecord{}
@@ -138,8 +138,8 @@ func (lokilabels Lokilabels) getLokiFlowLogs(token, lokiRoute string, parameters
 }
 
 // Verify loki flow records and if it was written in the last 5 minutes
-func verifyLokilogsTime(token, lokiRoute string) error {
-	lc := newLokiClient(lokiRoute).withToken(token).retry(5)
+func verifyLokilogsTime(token, lokiRoute string, startTime time.Time) error {
+	lc := newLokiClient(lokiRoute, startTime).withToken(token).retry(5)
 	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\", FlowDirection=\"0\"}")
 
 	if err != nil {

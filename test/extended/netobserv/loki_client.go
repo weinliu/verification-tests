@@ -65,15 +65,16 @@ func validateInfraAndResourcesForLoki(oc *exutil.CLI, reqMemory, reqCPU string, 
 }
 
 type lokiClient struct {
-	username        string //Username for HTTP basic auth.
-	password        string //Password for HTTP basic auth
-	address         string //Server address.
-	orgID           string //adds X-Scope-OrgID to API requests for representing tenant ID. Useful for requesting tenant data when bypassing an auth gateway.
-	bearerToken     string //adds the Authorization header to API requests for authentication purposes.
-	bearerTokenFile string //adds the Authorization header to API requests for authentication purposes.
-	retries         int    //How many times to retry each query when getting an error response from Loki.
-	queryTags       string //adds X-Query-Tags header to API requests.
-	quiet           bool   //Suppress query metadata.
+	username        string    //Username for HTTP basic auth.
+	password        string    //Password for HTTP basic auth
+	address         string    //Server address.
+	orgID           string    //adds X-Scope-OrgID to API requests for representing tenant ID. Useful for requesting tenant data when bypassing an auth gateway.
+	bearerToken     string    //adds the Authorization header to API requests for authentication purposes.
+	bearerTokenFile string    //adds the Authorization header to API requests for authentication purposes.
+	retries         int       //How many times to retry each query when getting an error response from Loki.
+	queryTags       string    //adds X-Query-Tags header to API requests.
+	quiet           bool      //Suppress query metadata.
+	startTime       time.Time //Start time for reading logs
 }
 
 type lokiQueryResponse struct {
@@ -127,11 +128,12 @@ type lokiQueryResponse struct {
 }
 
 // newLokiClient initializes a lokiClient with server address
-func newLokiClient(routeAddress string) *lokiClient {
+func newLokiClient(routeAddress string, time time.Time) *lokiClient {
 	client := &lokiClient{}
 	client.address = routeAddress
 	client.retries = 5
 	client.quiet = false
+	client.startTime = time
 	return client
 }
 
@@ -342,7 +344,7 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 }
 
 func (c *lokiClient) searchLogsInLoki(logType, query string) (*lokiQueryResponse, error) {
-	res, err := c.queryRange(logType, query, 50, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+	res, err := c.queryRange(logType, query, 50, c.startTime, time.Now(), false)
 	return res, err
 }
 

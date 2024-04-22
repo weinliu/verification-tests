@@ -137,6 +137,12 @@ func verifyEBPFMetrics(oc *exutil.CLI) {
 	pollMetrics(oc, query)
 }
 
+// verify eBPF filter metrics
+func verifyEBPFFilterMetrics(oc *exutil.CLI) {
+	query := "sum(netobserv_agent_filtered_flows_total)"
+	pollMetrics(oc, query)
+}
+
 func getMetricsScheme(oc *exutil.CLI, servicemonitor string, namespace string) (string, error) {
 	out, err := oc.AsAdmin().Run("get").Args("servicemonitor", servicemonitor, "-n", namespace, "-o", "jsonpath='{.spec.endpoints[].scheme}'").Output()
 

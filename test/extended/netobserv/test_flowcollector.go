@@ -180,14 +180,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				g.By("Deploy flowcollector")
 				flow := Flowcollector{
-					Namespace:               namespace,
-					Template:                flowFixturePath,
-					LokiURL:                 lokiURL,
-					LokiNamespace:           namespace,
-					LokiTLSCertName:         fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					FLPMetricServerTLSType:  "Disabled",
-					EBPFMetricServerTLSType: "Disabled",
-					EBPFMetrics:             "true",
+					Namespace:              namespace,
+					Template:               flowFixturePath,
+					LokiURL:                lokiURL,
+					LokiNamespace:          namespace,
+					LokiTLSCertName:        fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					FLPMetricServerTLSType: "Disabled",
+					EBPFMetrics:            "true",
 				}
 
 				defer flow.deleteFlowcollector(oc)
@@ -356,8 +355,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for 2 mins before logs gets collected and written to loki")
 		time.Sleep(120 * time.Second)
+		startTime := time.Now()
 
-		flowRecords, err := lokilabels.getLokiFlowLogs(token, ls.Route)
+		flowRecords, err := lokilabels.getLokiFlowLogs(token, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords > 0")
 
@@ -407,6 +407,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.It("NonPreRelease-Longduration-Author:aramesha-High-60701-Verify connection tracking [Serial]", func() {
 		namespace := oc.Namespace()
+		startTime := time.Now()
 
 		g.By("Deploying test server and client pods")
 		template := filePath.Join(baseDir, "test-client-server_template.yaml")
@@ -421,7 +422,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		err := testTemplate.createTestClientServer(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Deploy FlowCollector with EndConversations LogType")
+		g.By("Deploy FlowCollector with endConversations LogType")
 		flow := Flowcollector{
 			Namespace:       namespace,
 			Template:        flowFixturePath,
@@ -458,9 +459,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			DstK8S_OwnerName: "nginx-service",
 		}
 
-		g.By("Verify EndConnection Records from loki")
+		g.By("Verify endConnection Records from loki")
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
-		endConnectionRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route)
+		endConnectionRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(endConnectionRecords)).Should(o.BeNumerically(">", 0), "expected number of endConnectionRecords > 0")
 		verifyConversationRecordTime(endConnectionRecords)
@@ -473,6 +474,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Ensure flows are observed and all pods are running")
 		flow.waitForFlowcollectorReady(oc)
+		startTime = time.Now()
 
 		g.By("Escalate SA to cluster admin")
 		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
@@ -485,21 +487,21 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokilabels.RecordType = "newConnection"
 		bearerToken = getSAToken(oc, "netobserv-plugin", namespace)
 
-		newConnectionRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route)
+		newConnectionRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(newConnectionRecords)).Should(o.BeNumerically(">", 0), "expected number of newConnectionRecords > 0")
 		verifyConversationRecordTime(newConnectionRecords)
 
 		g.By("Verify HeartbeatConnection Records from loki")
 		lokilabels.RecordType = "heartbeat"
-		heartbeatConnectionRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route)
+		heartbeatConnectionRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(heartbeatConnectionRecords)).Should(o.BeNumerically(">", 0), "expected number of heartbeatConnectionRecords > 0")
 		verifyConversationRecordTime(heartbeatConnectionRecords)
 
 		g.By("Verify EndConnection Records from loki")
 		lokilabels.RecordType = "endConnection"
-		endConnectionRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route)
+		endConnectionRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(endConnectionRecords)).Should(o.BeNumerically(">", 0), "expected number of endConnectionRecords > 0")
 		verifyConversationRecordTime(endConnectionRecords)
@@ -595,10 +597,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait for a min before logs gets collected and written to loki")
+		startTime := time.Now()
 		time.Sleep(60 * time.Second)
 
 		g.By("get flowlogs from loki")
-		flowRecords, err := lokilabels.getLokiFlowLogs(user0token, ls.Route)
+		flowRecords, err := lokilabels.getLokiFlowLogs(user0token, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords > 0")
 
@@ -610,7 +613,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			SrcK8S_OwnerName: "nginx-service",
 			FlowDirection:    "0",
 		}
-		flowRecords, err = lokilabels.getLokiFlowLogs(user0token, ls.Route)
+		flowRecords, err = lokilabels.getLokiFlowLogs(user0token, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).NotTo(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
 	})
@@ -712,10 +715,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
+		startTime := time.Now()
 
 		g.By("Get flowlogs from loki")
 		token := getSAToken(oc, "netobserv-plugin", namespace)
-		err = verifyLokilogsTime(token, ls.Route)
+		err = verifyLokilogsTime(token, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -786,6 +790,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 		g.By("sctpclient pod start to send sctp traffic")
+		startTime := time.Now()
 		e2eoutput.RunHostCmd(SCTPns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 
 		g.By("server sctp process will end after get sctp traffic from sctp client")
@@ -818,7 +823,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 		parameters := []string{"Proto=\"132\"", "DstPort=\"30102\""}
 
-		SCTPflows, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, parameters...)
+		SCTPflows, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(SCTPflows)).Should(o.BeNumerically(">", 0), "expected number of SCTP flows > 0")
 
@@ -838,7 +843,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
 
-		ICMPflows, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, parameters...)
+		ICMPflows, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(ICMPflows)).Should(o.BeNumerically(">", 0), "expected number of ICMP flows > 0")
 	})
@@ -898,6 +903,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
+		startTime := time.Now()
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
 		// Scenario1: Verify default DSCP value=0
@@ -909,7 +915,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		parameters := []string{"SrcK8S_Name=\"client\""}
 
 		g.By("Verify DSCP value=0")
-		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, parameters...)
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
 		for _, r := range flowRecords {
@@ -924,14 +930,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			time.Sleep(60 * time.Second)
 
 			g.By("Verify DSCP value=59 for flows from DSCP client pod")
-			flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, parameters...)
+			flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows with DSCP value 59 should be > 0")
 
 			g.By("Verify DSCP value=0 for flows from pods other than DSCP client pod in test-client namespace")
 			parameters = []string{"SrcK8S_Name=\"client\", Dscp=\"0\""}
 
-			flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, parameters...)
+			flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows with DSCP value 0 should be > 0")
 		}
@@ -949,6 +955,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Ping loopback address with custom QoS from client pod")
+		startTime = time.Now()
 		e2eoutput.RunHostCmd(testTemplate.ClientNS, "client", "ping -c 10 -Q 0x80 "+destinationIP)
 
 		lokilabels = Lokilabels{
@@ -961,7 +968,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		time.Sleep(60 * time.Second)
 
 		g.By("Verify DSCP value=32")
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, parameters...)
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
 		for _, r := range flowRecords {
@@ -1006,6 +1013,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
+		startTime := time.Now()
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
 		g.By("Verify K8S_ClusterName = Cluster ID")
@@ -1013,7 +1021,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			App:             "netobserv-flowcollector",
 			K8S_ClusterName: clusterID,
 		}
-		clusterIdFlowRecords, err := clusteridlabels.getLokiFlowLogs(bearerToken, ls.Route)
+		clusterIdFlowRecords, err := clusteridlabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(clusterIdFlowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
 
@@ -1023,7 +1031,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			SrcK8S_Type: "Node",
 			DstK8S_Type: "Node",
 		}
-		zoneFlowRecords, err := zonelabels.getLokiFlowLogs(bearerToken, ls.Route)
+		zoneFlowRecords, err := zonelabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
 		for _, r := range zoneFlowRecords {
 			expectedSrcK8SZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", r.Flowlog.SrcK8S_HostName, "-o=jsonpath={.metadata.labels.topology\\.kubernetes\\.io/zone}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1189,10 +1197,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
+		startTime := time.Now()
 
 		g.By("Get flowlogs from loki")
 		token := getSAToken(oc, "netobserv-plugin", namespace)
-		err = verifyLokilogsTime(token, ls.Route)
+		err = verifyLokilogsTime(token, ls.Route, startTime)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Verify eBPF pods are deployed on the specified master node")
@@ -1206,6 +1215,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.It("Author:memodi-Medium-63185-Verify NetOberv must-gather plugin [Serial]", func() {
 		namespace := oc.Namespace()
+
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
 			Namespace:       namespace,
@@ -1214,18 +1224,24 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 			LokiNamespace:   namespace,
 		}
+
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
+
+		g.By("Run must-gather command")
 		mustGatherDir := "/tmp/must-gather-63185"
 		defer exec.Command("bash", "-c", "rm -rf "+mustGatherDir).Output()
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--image", "quay.io/netobserv/must-gather", "--dest-dir="+mustGatherDir).Output()
 		o.Expect(output).NotTo(o.ContainSubstring("error"))
+
+		g.By("Verify operator namespace logs are scraped")
 		mustGatherDir = mustGatherDir + "/quay-io-netobserv-must-gather-*"
 		operatorlogs, err := filePath.Glob(fmt.Sprintf("%s/namespaces/openshift-netobserv-operator/pods/netobserv-controller-manager-*/manager/manager/logs/current.log", mustGatherDir))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = os.Stat(operatorlogs[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		g.By("Verify flowlogs-pipeline pod logs are scraped")
 		pods, err := exutil.GetAllPods(oc, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podlogs, err := filePath.Glob(fmt.Sprintf("%s/namespaces/%s/pods/%s/flowlogs-pipeline/flowlogs-pipeline/logs/current.log", mustGatherDir, namespace, pods[0]))
@@ -1233,6 +1249,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		_, err = os.Stat(podlogs[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		g.By("Verify eBPF agent pod logs are scraped")
 		ebpfPods, err := exutil.GetAllPods(oc, namespace+"-privileged")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ebpflogs, err := filePath.Glob(fmt.Sprintf("%s/namespaces/%s/pods/%s/netobserv-ebpf-agent/netobserv-ebpf-agent/logs/current.log", mustGatherDir, namespace+"-privileged", ebpfPods[0]))
@@ -1241,6 +1258,98 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// TODO: once supported add a check for flowcollector dumped file.
+	})
+
+	g.It("NonPreRelease-Author:aramesha-High-73715-Verify eBPF agent filtering [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+			EBPFMetrics:     "true",
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		// Scenario1: With REJECT action
+		g.By("Patch flowcollector with eBPF agent flowFilter to Reject flows with SrcPort 53 and Protocol 53")
+		action := "Reject"
+		patchValue := `{"action": "` + action + `", "cidr": "0.0.0.0/0", "protocol": "UDP", "sourcePorts": "53", "enable": true}`
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/flowFilter", "value": `+patchValue+`}]`, "--type=json").Output()
+
+		g.By("Ensure flowcollector is ready with Reject flowFilter")
+		flow.waitForFlowcollectorReady(oc)
+		// check if patch is successful
+		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.agent.ebpf.flowFilter.action}'").Output()
+		o.Expect(err).ToNot(o.HaveOccurred())
+		o.Expect(flowPatch).To(o.Equal(`'Reject'`))
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		startTime := time.Now()
+		defer func() {
+			g.By("Remove cluster role")
+			err := removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		lokilabels := Lokilabels{
+			App: "netobserv-flowcollector",
+		}
+
+		g.By("Verify number of flows with SrcPort 53 and UDP Protocol = 0")
+		parameters := []string{"Proto=\"17\"", "SrcPort=\"53\""}
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically("==", 0), "expected number of flows on UDP = 0")
+
+		g.By("Verify number of flows with TCP Protocol > 0")
+		parameters = []string{"Proto=\"6\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows on TCP > 0")
+
+		// Scenario2: With ACCEPT action
+		g.By("Patch flowcollector with eBPF agent flowFilter to Accept flows with SrcPort 53 and Protocol 53")
+		action = "Accept"
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/flowFilter/action", "value": `+action+`}]`, "--type=json").Output()
+
+		g.By("Ensure flowcollector is ready with Accept flowFilter")
+		flow.waitForFlowcollectorReady(oc)
+		// check if patch is successful
+		flowPatch, err = oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.agent.ebpf.flowFilter.action}'").Output()
+		o.Expect(err).ToNot(o.HaveOccurred())
+		o.Expect(flowPatch).To(o.Equal(`'Accept'`))
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+		startTime = time.Now()
+
+		g.By("Verify number of flows with SrcPort 53 and UDP Protocol > 0")
+		parameters = []string{"Proto=\"17\"", "SrcPort=\"53\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows on UDP > 0")
+
+		g.By("Verify number of flows with TCP Protocol = 0")
+		parameters = []string{"Proto=\"6\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically("==", 0), "expected number of flows on TCP = 0")
+
+		g.By("Verify prometheus is able to scrape eBPF metrics")
+		verifyEBPFFilterMetrics(oc)
 	})
 	//Add future NetObserv + Loki test-cases here
 
@@ -1393,10 +1502,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Wait for a min before logs gets collected and written to loki")
 			time.Sleep(60 * time.Second)
+			startTime := time.Now()
 
 			g.By("Get flowlogs from loki")
 			token := getSAToken(oc, "netobserv-plugin", namespace)
-			err = verifyLokilogsTime(token, ls.Route)
+			err = verifyLokilogsTime(token, ls.Route, startTime)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
@@ -1463,10 +1573,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Wait for a min before logs gets collected and written to loki")
 			time.Sleep(60 * time.Second)
+			startTime := time.Now()
 
 			g.By("Get flowlogs from loki")
 			token := getSAToken(oc, "netobserv-plugin", namespace)
-			err = verifyLokilogsTime(token, ls.Route)
+			err = verifyLokilogsTime(token, ls.Route, startTime)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy Kafka consumer pod")
@@ -1592,10 +1703,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Wait for a min before logs gets collected and written to loki")
 			time.Sleep(60 * time.Second)
+			startTime := time.Now()
 
 			g.By("Get flowlogs from loki")
 			token := getSAToken(oc, "netobserv-plugin", flowNS)
-			err = verifyLokilogsTime(token, ls.Route)
+			err = verifyLokilogsTime(token, ls.Route, startTime)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
