@@ -165,7 +165,10 @@ class SummaryClient:
             return True
         if "client connection lost" in message:
             return True
+        if "request did not complete within requested timeout" in message:
+            return True
         return False
+
 
     def get_prow_case_result(self):
         self.logger.info("get_prow_case_result")
