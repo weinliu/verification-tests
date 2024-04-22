@@ -1187,6 +1187,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	// author: jechen@redhat.com
 	g.It("MicroShiftOnly-Author:jechen-High-65838-br-ex interface should be unmanaged by NetworkManager", func() {
 
+		caseID := "65838"
+
+		exutil.By("Create a namespace")
+		e2eTestNamespace := "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		err := exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Get the ready-schedulable worker nodes")
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
