@@ -5,10 +5,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -1159,4 +1161,144 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		o.Expect(strings.Contains(logs, "configure-ovs exited with error")).ShouldNot(o.BeTrue())
 	})
 
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-73027-Verify vlan of bond will get autoconnect when bond ports link revived [Disruptive]", func() {
+		e2e.Logf("It is for OCPBUGS-11300, OCPBUGS-23023")
+		exutil.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
+
+		var (
+			ipAddr1V4 = "192.0.2.251"
+			ipAddr2V4 = "192.0.2.252"
+			ipAddr1V6 = "2001:db8::1:1"
+			ipAddr2V6 = "2001:db8::1:2"
+		)
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		exutil.By("2. Create vlan over bond")
+		exutil.By("2.1 Configure NNCP for vlan over bond")
+		policyName := "ocpbug-11300-23023-vlan-over-bond"
+		bondVlanPolicyTemplate := generateTemplateAbsolutePath("ocpbug-11300-23023.yaml")
+		bondVlanPolicy := bondvlanPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			descr:      "test bond-vlans",
+			bondname:   "bond12",
+			port1:      "dummy1",
+			port1type:  "dummy",
+			port2:      "dummy2",
+			port2type:  "dummy",
+			vlanifname: "bond12.101",
+			vlanid:     101,
+			ipaddrv4:   ipAddr1V4,
+			ipaddrv6:   ipAddr1V6,
+			state:      "up",
+			template:   bondVlanPolicyTemplate,
+		}
+		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			var ifacesAdded []string
+			ifacesAdded = append(ifacesAdded, bondVlanPolicy.vlanifname, bondVlanPolicy.bondname, bondVlanPolicy.port1, bondVlanPolicy.port2)
+			var deferCmd string
+			for _, ifaceAdded := range ifacesAdded {
+				if strings.Contains(ifaces, ifaceAdded) {
+					deferCmd = deferCmd + " nmcli con delete " + ifaceAdded + ";"
+				}
+			}
+			if deferCmd != "" {
+				exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", deferCmd)
+			}
+		}()
+		configErr1 := bondVlanPolicy.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		exutil.By("2.2 Verify the policy is applied")
+		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		exutil.By("2.3 Verify the status of enactments is updated")
+		nnceName := nodeName + "." + policyName
+		nnceErr1 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		exutil.By("2.4 Verify the vlan interface ip addresses are shown correctly")
+		ipCmd := "ip address show " + bondVlanPolicy.vlanifname
+		ifaceInfo1, ifaceErr1 := exutil.DebugNode(oc, nodeName, "bash", "-c", ipCmd)
+		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceInfo1, ipAddr1V4)).Should(o.BeTrue())
+		o.Expect(strings.Contains(ifaceInfo1, ipAddr1V6)).Should(o.BeTrue())
+		e2e.Logf("SUCCESS - vlan interface ip addresses are shown on the node")
+
+		exutil.By("3. edit nncp")
+		exutil.By("3.1 update ip address")
+		patchContent := `[{"op": "replace", "path": "/spec/desiredState/interfaces", "value": [{"name": "` + bondVlanPolicy.vlanifname + `", "type": "vlan", "state": "up", "vlan":{"base-iface": "` + bondVlanPolicy.bondname + `", "id": ` + strconv.Itoa(bondVlanPolicy.vlanid) + `}, "ipv4":{"address":[{"ip": "` + ipAddr2V4 + `", "prefix-length": 24}], "enabled":true}, "ipv6":{"address":[{"ip": "` + ipAddr2V6 + `", "prefix-length": 96}], "enabled":true}}]}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("nncp", policyName, "--type=json", "-p", patchContent).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2 Verify the policy is applied")
+		nncpErr2 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		exutil.By("3.3 Verify the status of enactments is updated")
+		nnceErr2 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		exutil.By("3.4 Verify the vlan interface ip addresses are shown correctly")
+		ifaceInfo2, ifaceErr2 := exutil.DebugNode(oc, nodeName, "bash", "-c", ipCmd)
+		o.Expect(ifaceErr2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceInfo2, ipAddr2V4)).Should(o.BeTrue())
+		o.Expect(strings.Contains(ifaceInfo2, ipAddr2V6)).Should(o.BeTrue())
+		e2e.Logf("SUCCESS - vlan interface ip addresses are shown on the node")
+
+		exutil.By("4. Bring all bond ports link down, wait for the vlan become inactive")
+		downPortCmd := "ip link set " + bondVlanPolicy.port1 + " down; ip link set " + bondVlanPolicy.port2 + " down"
+		_, downPortErr := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", downPortCmd)
+		o.Expect(downPortErr).NotTo(o.HaveOccurred())
+		vlanInfo1 := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			ifaceInfo, ifaceErr := exutil.DebugNode(oc, nodeName, "bash", "-c", ipCmd)
+			o.Expect(ifaceErr).NotTo(o.HaveOccurred())
+			if !strings.Contains(ifaceInfo, "inet") {
+				return true, nil
+			}
+			e2e.Logf("vlan still active and try again")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(vlanInfo1, "Fail to inactive vlan")
+
+		exutil.By("5. Bring all bond ports link up again, vlan will reactive with the original ip addresses")
+		upPortCmd := "ip link set " + bondVlanPolicy.port1 + " up; ip link set " + bondVlanPolicy.port2 + " up"
+		_, upPortErr := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", upPortCmd)
+		o.Expect(upPortErr).NotTo(o.HaveOccurred())
+		vlanInfo2 := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			ifaceInfo, ifaceErr := exutil.DebugNode(oc, nodeName, "bash", "-c", ipCmd)
+			o.Expect(ifaceErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaceInfo, ipAddr2V4) && strings.Contains(ifaceInfo, ipAddr2V6) {
+				return true, nil
+			}
+			e2e.Logf("vlan still down and try again")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(vlanInfo2, "Fail to reactive vlan with the original ip addresses")
+	})
 })

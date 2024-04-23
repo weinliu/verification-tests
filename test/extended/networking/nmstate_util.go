@@ -111,6 +111,24 @@ type ipsecHost2hostPolicyResource struct {
 	template    string
 }
 
+type bondvlanPolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	descr      string
+	state      string
+	bondname   string
+	port1      string
+	port1type  string
+	port2      string
+	port2type  string
+	vlanifname string
+	vlanid     int
+	ipaddrv4   string
+	ipaddrv6   string
+	template   string
+}
+
 func generateTemplateAbsolutePath(fileName string) string {
 	testDataDir := exutil.FixturePath("testdata", "networking/nmstate")
 	return filepath.Join(testDataDir, fileName)
@@ -223,6 +241,15 @@ func (rpr *routePolicyResource) configNNCP(oc *exutil.CLI) error {
 		"DESTADDR="+rpr.destaddr, "NEXTHOPADDR="+rpr.nexthopaddr, "ID="+strconv.Itoa(rpr.tableid))
 	if err != nil {
 		e2e.Logf("Error configure route %v", err)
+		return err
+	}
+	return nil
+}
+
+func (bvpr *bondvlanPolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue, "DESCR="+bvpr.descr, "STATE="+bvpr.state, "BONDNAME="+bvpr.bondname, "PORT1="+bvpr.port1, "PORT1TYPE="+bvpr.port1type, "PORT2="+bvpr.port2, "PORT2TYPE="+bvpr.port2type, "VLANIFNAME="+bvpr.vlanifname, "VLANID="+strconv.Itoa(bvpr.vlanid), "IPADDRV4="+bvpr.ipaddrv4, "IPADDRV6="+bvpr.ipaddrv6)
+	if err != nil {
+		e2e.Logf("Error configure vlan over bond %v", err)
 		return err
 	}
 	return nil
