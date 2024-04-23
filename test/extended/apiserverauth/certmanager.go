@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -757,6 +758,101 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if !strings.Contains(challenge3, "test-example.com") || err != nil {
 			e2e.Failf("challenge3 has not output as expected.")
 		}
+	})
+
+	// author: yuewu@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:yuewu-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
+		const (
+			minSupportedVersion = "1.14.0"
+		)
+
+		skipUnsupportedVersion(oc, minSupportedVersion)
+
+		exutil.By("create a self-signed Issuer and Certificate")
+		createIssuer(oc)
+		createCertificate(oc)
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-ca.yaml")
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-duplicate-secret.yaml")
+
+		exutil.By("create a CA Issuer")
+		err := oc.Run("apply").Args("-f", issuerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		statusErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("issuer", "default-ca", "-o", "wide").Output()
+			if err != nil {
+				e2e.Logf("Error to get issuer: %v", err)
+				return false, nil
+			}
+			if strings.Contains(output, "True") {
+				return true, nil
+			}
+			e2e.Logf("Issuer status is: %v", output)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "timed out after 180s waiting the CA Issuer to be Ready")
+
+		exutil.By("create 3 Certificates with the same secretName")
+		certNames := []string{"duplicate-cert-1", "duplicate-cert-2", "duplicate-cert-3"}
+		for _, name := range certNames {
+			params := []string{"-f", certTemplate, "-p", "CERT_NAME=" + name, "SECRET_NAME_SUFFIX=" + "duplicate"}
+			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		}
+
+		// expect only 0 or 1 CertificateRequest to be created
+		o.Consistently(func() bool {
+			requestNum := 0
+			for _, name := range certNames {
+				output, err := oc.Run("get").Args("certificaterequest", `-o=jsonpath={.items[?(@.metadata.annotations.cert-manager.io/certificate-name==`+name+`)].spec.uid}`).Output()
+				if err != nil {
+					e2e.Logf("Error to get certificaterequest: %v", err)
+					return false
+				}
+				if output != "" {
+					requestNum++
+				}
+			}
+			return requestNum <= 1
+		}, 10*time.Second, 1*time.Second).Should(o.BeTrue(), "expect only 0 or 1 CertificateRequest to be created")
+
+		// expect at most 1 Certificate to be Ready
+		o.Consistently(func() bool {
+			certReadyNum := 0
+			for _, name := range certNames {
+				output, err := oc.Run("get").Args("certificate", name, `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`).Output()
+				if err != nil {
+					e2e.Logf("Error to get certificate: %v", err)
+					return false
+				}
+				if strings.Contains(output, "True") {
+					certReadyNum++
+				}
+			}
+			return certReadyNum <= 1
+		}, 10*time.Second, 1*time.Second).Should(o.BeTrue(), "expect at most 1 Certificate to be Ready")
+
+		exutil.By("update Certificates to make sure all should have an unique secretName")
+		for i, name := range certNames {
+			params := []string{"-f", certTemplate, "-p", "CERT_NAME=" + name, "SECRET_NAME_SUFFIX=" + strconv.Itoa(i)}
+			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		}
+
+		// expect all Certificates to be Ready
+		o.Eventually(func() bool {
+			certReadyNum := 0
+			for _, name := range certNames {
+				output, err := oc.Run("get").Args("certificate", name, `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`).Output()
+				if err != nil {
+					e2e.Logf("Error to get certificate: %v", err)
+					return false
+				}
+				if strings.Contains(output, "True") {
+					certReadyNum++
+				}
+			}
+			return certReadyNum == len(certNames)
+		}, 180*time.Second, 10*time.Second).Should(o.BeTrue(), "expect all Certificates to be Ready")
 	})
 
 	// author: yuewu@redhat.com

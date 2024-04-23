@@ -417,6 +417,18 @@ func getCertManagerOperatorVersion(oc *exutil.CLI) string {
 	return strings.TrimPrefix(version, "cert-manager-operator.v")
 }
 
+// Skip case if current version is below the minimum version requirement
+func skipUnsupportedVersion(oc *exutil.CLI, version string) {
+	currentVersion, _ := semver.Parse(getCertManagerOperatorVersion(oc))
+	minSupportedVersion, _ := semver.Parse(version)
+
+	// semverA.Compare(semverB) == -1 means 'semverA' < 'semverB', see: https://pkg.go.dev/github.com/blang/semver#Version.Compare
+	if currentVersion.Compare(minSupportedVersion) == -1 {
+		e2e.Logf("currentVersion=%s , minSupportedVersion=%s", currentVersion, minSupportedVersion)
+		g.Skip("Skipping the test case since the operator's current version is below the minimum version required")
+	}
+}
+
 // rapidastScan performs RapiDAST scan for apiGroupName using configFile and policyFile
 func rapidastScan(oc *exutil.CLI, ns, componentName, apiGroupName, configFile, policyFile string) {
 	const (
