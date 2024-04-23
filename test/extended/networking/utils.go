@@ -3436,8 +3436,7 @@ func getAllPodsWithLabelAndCertainState(oc *exutil.CLI, namespace string, label 
 	o.Expect(len(allPodsWithLabel)).ShouldNot(o.Equal(0))
 
 	for _, eachPod := range allPodsWithLabel {
-		podStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, eachPod).Output()
-		o.Expect(statusErr).NotTo(o.HaveOccurred())
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, eachPod).Output()
 		if strings.Contains(podStatus, podState) {
 			allPodsWithCertainState = append(allPodsWithCertainState, eachPod)
 		}
