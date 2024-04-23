@@ -1443,7 +1443,7 @@ func getNamespaceRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonSearc
 func repeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, repeatTimes int) string {
 	result := "failed"
 	for i := 0; i < repeatTimes; i++ {
-		output, _ := oc.Run("exec").Args(cmd...).Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
 		if strings.Contains(output, expectOutput) {
 			result = "passed"
 			break

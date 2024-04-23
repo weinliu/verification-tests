@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// Test case creater: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-30190-Set wildcardPolicy of routeAdmission to WildcardsAllowed", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-Critical-30190-Set wildcardPolicy of routeAdmission to WildcardsAllowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -225,7 +225,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 		exutil.By("1. Create a custom ingresscontroller")
 		project1 := oc.Namespace()
-		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
 		// Updating wildcardPolicy as 'WildcardsAllowed' in the yaml file
 		sedCmd := fmt.Sprintf(`sed -i'' -e 's|WildcardsDisallowed|%s|g' %s`, "WildcardsAllowed", customTemp)
 		_, err := exec.Command("bash", "-c", sedCmd).Output()
@@ -254,21 +255,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("5. Check the reachability of the wildcard route")
 		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
 		iplist := getPodIP(oc, "openshift-ingress", custContPod)
-		curlCmd := fmt.Sprintf("curl --resolve %s:80:%s http://%s -I -k --connect-timeout 10", routehost, iplist[0], routehost)
-		statsOut, err := exutil.RemoteShPod(oc, "openshift-ingress-operator", ingressContPod[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		toDst := routehost + ":80:" + iplist[0]
+		cmdOnPod := []string{"-n", "openshift-ingress-operator", ingressContPod[0], "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		result := repeatCmd(oc, cmdOnPod, "200", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
 
 		exutil.By("6. Check the reachability of the test route")
-		curlCmd = fmt.Sprintf("curl --resolve %s:80:%s http://%s -I -k --connect-timeout 10", anyhost, iplist[0], anyhost)
-		statsOut, err = exutil.RemoteShPod(oc, "openshift-ingress-operator", ingressContPod[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		toDst = anyhost + ":80:" + iplist[0]
+		cmdOnPod = []string{"-n", "openshift-ingress-operator", ingressContPod[0], "--", "curl", "-I", "http://" + anyhost, "--resolve", toDst, "--connect-timeout", "10"}
+		result = repeatCmd(oc, cmdOnPod, "200", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
 	})
 
 	// Test case creater: hongli@redhat.com
 	// For OCP-30191 and OCP-30192
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Medium-30191-Set wildcardPolicy of routeAdmission to WildcardsDisallowed", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-Medium-30191-Set wildcardPolicy of routeAdmission to WildcardsDisallowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")

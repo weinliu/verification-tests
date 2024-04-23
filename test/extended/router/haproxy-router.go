@@ -1696,7 +1696,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("curl the route from the client pod")
 		toDst := routehost + ":80:" + podIP
-		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		result := repeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
 	})
