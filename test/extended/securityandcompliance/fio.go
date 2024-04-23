@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Longduration-NonPreRelease-CPaasrunOnly-Author:xiyuan-Critical-27599-check operator file-integrity-operator could run file integrity checks on the cluster nodes and shows relevant fileintegritynodestatuses [Slow][Serial]", func() {
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test27599"
-		nodeName := fi1.getNodeName(oc)
+		nodeName := getOneWorkerNodeName(oc)
 		createCmd := fmt.Sprintf(`mkdir %s; touch %s/test`, filePath, filePath)
 		delCmd := fmt.Sprintf(`if [ -d "%s" ]; then rm -rf %s; fi`, filePath, filePath)
 		defer exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", delCmd)
