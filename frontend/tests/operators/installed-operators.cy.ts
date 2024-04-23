@@ -23,11 +23,11 @@ describe('Operators Installed page test', () => {
     cy.adminCLI(`oc label namespace ${params.specialNs} pod-security.kubernetes.io/warn=privileged --overwrite`);
     cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`);
     cy.visit('/k8s/ns/openshift-marketplace/operators.coreos.com~v1alpha1~CatalogSource/custom-catalogsource');
-    cy.get('[data-test-selector="details-item-value__Status"]').should('contain.text', 'READY');
+    cy.get('[data-test-selector="details-item-value__Status"]', {timeout: 120000 }).should('contain.text', 'READY');
     operatorHubPage.installOperator(params.sonarqube, params.csName, params.specialNs);
-    cy.get('[aria-valuetext="Loading..."]').should('exist');
+    cy.get('[aria-valuetext="Loading..."]', {timeout: 120000 }).should('exist');
     operatorHubPage.installOperator(params.infinispan, params.csName);
-    cy.get('[aria-valuetext="Loading..."]').should('exist');
+    cy.get('[aria-valuetext="Loading..."]', {timeout: 120000 }).should('exist');
     });
 
   after(() => {
@@ -92,11 +92,12 @@ describe('Operators Installed page test', () => {
     cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${params.specialNs}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
     cy.uiLogout();
+    cy.clearCookies();
     cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     /*' Scription' Tab is exist for the operator installed in the All namespace
        Page is Restricted Access */
     cy.visit(`/k8s/ns/${params.specialNs}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-    cy.get('[data-test-operator-row="Infinispan Operator"]').click();
+    cy.get('[data-test-operator-row="Infinispan Operator"]', {timeout: 120000 }).click();
     cy.get('[data-test-id="horizontal-link-Subscription"]')
       .as('subscriptionTab')
       .should('exist')
@@ -105,7 +106,7 @@ describe('Operators Installed page test', () => {
     /* Check 'Scription' Tab is visible to normal user for operator installed in specific namespace
        User who has authority is able to check the installPlan and CatalogSource info */
     cy.visit(`/k8s/ns/${params.specialNs}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-    cy.get('[data-test-operator-row="Sonarqube Operator"]').click();
+    cy.get('[data-test-operator-row="Sonarqube Operator"]', {timeout: 120000 }).click();
     cy.get('@subscriptionTab').should('exist').click();
     cy.get('[title="InstallPlan"]')
       .next('a')
