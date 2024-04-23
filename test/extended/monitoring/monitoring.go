@@ -975,6 +975,42 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				exutil.By("check with a specific series")
 				checkMetric(oc, "\"https://thanos-querier.openshift-monitoring.svc:9092/api/v1/series?match[]=version&namespace="+oc.Namespace()+"\"", token, `"service":"prometheus-example-app"`, 2*uwmLoadTime)
 			})
+
+			//author: tagao@redhat.com
+			g.It("Author:tagao-High-73151-Update Prometheus user-workload to enable additional scrape metrics [Serial]", func() {
+				var (
+					exampleApp2                     = filepath.Join(monitoringBaseDir, "example-app-2-sampleLimit.yaml")
+					approachingEnforcedSamplesLimit = filepath.Join(monitoringBaseDir, "approachingEnforcedSamplesLimit.yaml")
+				)
+				exutil.By("restore monitoring config")
+				defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+				defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PrometheusRule", "monitoring-stack-alerts", "-n", ns).Execute()
+
+				exutil.By("create example-app2")
+				//example-app2 has sampleLimit and should be created under same ns with example-app
+				createResourceFromYaml(oc, ns, exampleApp2)
+
+				exutil.By("wait for pod ready")
+				exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
+
+				exutil.By("check extra-scrape-metrics added to uwm prometheus")
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-ojsonpath={.spec.enableFeatures}", "-n", "openshift-user-workload-monitoring").Output()
+				o.Expect(output).To(o.ContainSubstring("extra-scrape-metrics"))
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				exutil.By("set up the alert rules")
+				createResourceFromYaml(oc, ns, approachingEnforcedSamplesLimit)
+
+				exutil.By("Get token of SA prometheus-k8s")
+				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+				exutil.By("check metrics")
+				exampleAppPods, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns).Output()
+				e2e.Logf("pods condition under ns:\n%s", exampleAppPods)
+				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=(scrape_sample_limit == 1)'`, token, "prometheus-example-app-2", uwmLoadTime)
+				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ApproachingEnforcedSamplesLimit"}'`, token, `"prometheus-example-app-2"`, uwmLoadTime)
+			})
 		})
 
 		// author: hongyli@redhat.com
