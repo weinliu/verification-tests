@@ -17,6 +17,8 @@ declare global {
             isAWSSTSCluster();
             isPlatformSuitableForNMState();
             isManagedCluster();
+            cliLoginAzureExternalOIDC();
+            uiLoginAzureExternalOIDC();
         }
     }
 }
@@ -95,6 +97,78 @@ Cypress.Commands.add("cliLogout", () => {
     cy.log(result.stdout);
   });
 });
+const AzureLoginFlowOnPage = ()=>{
+  const sentArgs = {username: Cypress.env('LOGIN_USER'), password: Cypress.env('LOGIN_PASSWD'), email: Cypress.env('LOGIN_USER_EMAIL')}; 
+  cy.origin('https://login.microsoftonline.com', { args: sentArgs },
+  ({ username, password, email }) => {
+    cy.wait(5000);
+    cy.get('body').then(($body) => {
+      if ($body.text().includes('Pick an account')) {
+        if($body.text().includes(username)){
+          cy.log('Choose an existing account!');
+          cy.contains(username).click();
+        }else {
+          cy.log('Use another account!');
+          cy.contains('Use another account').click();
+          cy.log('Now input account email.');
+          cy.get('input[type="email"]').type(email);
+          cy.get('input[type=submit]').click();
+        }
+      }else if ($body.text().includes('Sign in')) {
+        cy.log('Now input account email.');
+        cy.get('input[type="email"]').type(email);
+        cy.get('input[type=submit]').click();
+      }
+    });
+  });
+  cy.wait(5000);
+  cy.origin('https://auth.redhat.com',{ args: sentArgs }, ({ username, password, email }) => {
+    cy.get('body', {timeout: 10000}).should('include.text','Internal SSO');
+    cy.get('body').then(($body) => {
+      cy.log('Now input user and password.');
+      cy.get('#username').type(username);
+      cy.get('#password').type(password);
+      cy.get('input[type=submit]').click();
+  });
+  });
+  cy.wait(5000);
+
+};
+Cypress.Commands.add("uiLoginAzureExternalOIDC", () => {
+  cy.visit('/');
+  cy.wait(10000);
+  cy.url().then(($url)=>{
+    cy.log('current url is: '+ $url);
+    if($url.includes('console-openshift-console')){
+      cy.log('Already login!');
+    }else{
+      AzureLoginFlowOnPage();
+      cy.url().then(($url1)=>{
+        cy.log('current url is: '+ $url1);
+        if(!$url1.includes('console-openshift-console')){
+          cy.log('Still on microsoft login page.')
+          cy.origin('https://login.microsoftonline.com', () => {
+            cy.get('body').then(($body) => {
+              if ($body.text().includes('signed in')) {
+                cy.get('input[value=No]').click();
+              }
+            });
+          });
+        }  
+      });
+    }
+  });
+  cy.byTestID('user-dropdown').should('exist');
+});
+
+
+Cypress.Commands.add("cliLoginAzureExternalOIDC", () => {
+  cy.origin('http://localhost:8080', () =>{
+    cy.visit('/');
+  });
+  AzureLoginFlowOnPage();
+  cy.log('Login finished!');
+});
 
 Cypress.Commands.add("adminCLI", (command: string, options?: {}) => {
   cy.log(`Run admin command: ${command}`)
@@ -103,7 +177,6 @@ Cypress.Commands.add("adminCLI", (command: string, options?: {}) => {
 
 Cypress.Commands.add('retryTask', (command, expectedOutput, options?) => {
   const { retries, interval } = options || DEFAULT_RETRY_OPTIONS;
-
   const retryTaskFn = (currentRetries) => {
     return cy.adminCLI(command)
       .then(result => {

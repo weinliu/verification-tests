@@ -107,6 +107,8 @@ export default defineConfig({
     specPattern: 'tests/**/*.cy.{js,jsx,ts,tsx}',
     numTestsKeptInMemory: 0,
     testIsolation: false,
+    experimentalModifyObstructiveThirdPartyCode: true,
+    experimentalOriginDependencies: true,
     experimentalMemoryManagement: true
   },
 })
