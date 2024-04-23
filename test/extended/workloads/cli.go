@@ -1566,7 +1566,7 @@ var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
 		creationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployStatefulSet, "-n", project28018).Execute()
 		o.Expect(creationErr).NotTo(o.HaveOccurred())
 
-		if defaultSC.Array()[0].String() == "filestore-csi" {
+		if defaultSC.Array()[0].String() == "filestore-csi" || strings.Contains(defaultSC.Array()[0].String(), "powervs") {
 			waitForPvcStatus(oc, oc.Namespace(), "www-hello-statefulset-0")
 		}
 
