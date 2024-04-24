@@ -27,7 +27,7 @@ type SubscriptionObjects struct {
 	OperatorGroup    string // the file used to create operator group
 	Subscription     string // the file used to create subscription
 	PackageName      string
-	CatalogSource    CatalogSourceObjects `json:",omitempty"`
+	CatalogSource    *CatalogSourceObjects `json:",omitempty"`
 	OperatorPodLabel string
 }
 
@@ -318,6 +318,14 @@ func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 
 func checkOperatorChannel(oc *exutil.CLI, operatorNamespace string, operatorName string) (string, error) {
 	channelName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.spec.channel}").Output()
+	if err != nil {
+		return "", err
+	}
+	return channelName, nil
+}
+
+func checkOperatorSource(oc *exutil.CLI, operatorNamespace string, operatorName string) (string, error) {
+	channelName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.spec.source}").Output()
 	if err != nil {
 		return "", err
 	}

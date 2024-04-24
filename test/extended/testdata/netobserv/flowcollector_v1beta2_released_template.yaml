@@ -1,0 +1,205 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: flowcollector-template
+objects:
+  - apiVersion: flows.netobserv.io/v1beta2
+    kind: FlowCollector
+    metadata:
+      name: cluster
+    spec:
+      namespace: "${Namespace}"
+      deploymentModel: "${DeploymentModel}"
+      agent:
+        type: eBPF
+        ipfix:
+          cacheActiveTimeout: 20s
+          cacheMaxFlows: 400
+          sampling: 400
+          clusterNetworkOperator:
+            namespace: openshift-network-operator
+          ovnKubernetes:
+            namespace: ovn-kubernetes
+            daemonSetName: ovnkube-node
+            containerName: ovnkube-node
+        ebpf:
+          imagePullPolicy: IfNotPresent
+          sampling: 1
+          cacheActiveTimeout: ${EBPFCacheActiveTimeout}
+          cacheMaxFlows: 100000
+          interfaces: [ ]
+          excludeInterfaces: ["lo"]
+          logLevel: info
+          privileged: "${{EBPFPrivileged}}"
+          resources:
+            requests:
+              memory: 50Mi
+              cpu: 100m
+            limits:
+              memory: 800Mi
+          kafkaBatchSize: 10485760
+      processor:
+        imagePullPolicy: IfNotPresent
+        logLevel: trace
+        multiClusterDeployment: "${{MultiClusterDeployment}}"
+        addZone: "${{AddZone}}"
+        metrics:
+          server:
+            port: 9102
+            tls:
+              type: "${FLPMetricServerTLSType}"
+          disableAlerts: []
+        resources:
+          requests:
+            memory: 100Mi
+            cpu: 100m
+          limits:
+            memory: 800Mi
+        kafkaConsumerReplicas: 3
+        kafkaConsumerAutoscaler: null
+        kafkaConsumerQueueCapacity: 1000
+        kafkaConsumerBatchSize: 10485760
+        logTypes: "${LogType}"
+        advanced:
+          port: 2055
+          profilePort: 6060
+          dropUnusedFields: true
+          conversationTerminatingTimeout: 5s
+          conversationHeartbeatInterval: 5s
+          conversationEndTimeout: 20s
+      kafka:
+        address: "${KafkaAddress}"
+        topic: "${KafkaTopic}"
+        tls:
+          enable: "${{KafkaTLSEnable}}"
+          caCert:
+            type: secret
+            name: "${KafkaClusterName}-cluster-ca-cert"
+            certFile: ca.crt
+            namespace: "${KafkaNamespace}"
+          userCert:
+            type: secret
+            name: "${KafkaUser}"
+            certFile: user.crt
+            certKey: user.key
+            namespace: "${KafkaNamespace}"
+      loki:
+        mode: "${LokiMode}"
+        enable: "${{LokiEnable}}"
+        manual:
+          authToken: Forward
+          querierUrl: "${LokiURL}"
+          ingesterUrl: "${LokiURL}"
+          statusUrl: "${LokiStatusURL}"
+          tls:
+            enable: true
+            caCert:
+              type: configmap
+              name: "${LokiTLSCertName}"
+              certFile: service-ca.crt
+              namespace: "${LokiNamespace}"
+            insecureSkipVerify: false
+          statusTls:
+            enable: "${{LokiStatusTLSEnable}}"
+            caCert:
+              certFile: service-ca.crt
+              name: "${LokiStatusTLSCertName}"
+              type: configmap
+              namespace: "${LokiNamespace}"
+            insecureSkipVerify: false
+            userCert:
+              certFile: tls.crt
+              certKey: tls.key
+              name: "${LokiStatusTLSUserCertName}"
+              type: secret
+              namespace: "${LokiNamespace}"
+        monolithic:
+          url: ${MonolithicLokiURL}
+        writeBatchWait: 1s
+        writeBatchSize: 10485760
+        advanced:
+          writeMinBackoff: 1s
+          writeMaxBackoff: 5s
+          writeMaxRetries: 2
+      consolePlugin:
+        enable: "${{PluginEnable}}"
+        imagePullPolicy: IfNotPresent
+        logLevel: info
+        portNaming:
+          enable: true
+          portNames:
+            "3100": loki
+        quickFilters:
+        - name: Applications
+          filter:
+            src_namespace!: 'openshift-,netobserv'
+            dst_namespace!: 'openshift-,netobserv'
+          default: true
+        - name: Infrastructure
+          filter:
+            src_namespace: 'openshift-,netobserv'
+            dst_namespace: 'openshift-,netobserv'
+        - name: Pods network
+          filter:
+            src_kind: 'Pod'
+            dst_kind: 'Pod'
+          default: true
+        - name: Services network
+          filter:
+            dst_kind: 'Service'
+        advanced:
+          port: 9001
+          register: true
+      exporters: []
+parameters:
+  - name: Namespace
+    description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"
+    value: "netobserv"
+  - name: DeploymentModel
+    value: "Direct"
+  - name: EBPFCacheActiveTimeout
+    value: 15s
+  - name: EBPFPrivileged
+    value: "false"
+  - name: FLPMetricServerTLSType
+    value: "Auto"
+  - name: MultiClusterDeployment
+    value: "false"
+  - name: AddZone
+    value: "false"
+  - name: LogType
+    value: "Flows"
+  - name: LokiMode
+    value: "Manual"
+  - name: LokiEnable
+    value: "true"
+  - name: LokiURL
+    value: "https://lokistack-gateway-http.netobserv.svc.cluster.local:8080/api/logs/v1/network/"
+  - name: LokiTLSCertName
+    value: "lokistack-gateway-ca-bundle"
+  - name: LokiStatusURL
+    value: ""
+  - name: LokiStatusTLSEnable
+    value: "false"
+  - name: LokiStatusTLSCertName
+    value: "lokistack-ca-bundle"
+  - name: LokiStatusTLSUserCertName
+    value: "lokistack-query-frontend-http"
+  - name: MonolithicLokiURL
+    value: "http://loki.netobserv.svc:3100/"
+  - name: LokiNamespace
+    value: "netobserv"
+  - name: KafkaAddress
+    value: "kafka-cluster-kafka-bootstrap.netobserv"
+  - name: KafkaTLSEnable
+    value: "false"
+  - name: KafkaClusterName
+    value: "kafka-cluster"
+  - name: KafkaTopic
+    value: "network-flows"
+  - name: KafkaUser
+    value: "flp-kafka"
+  - name: KafkaNamespace
+    value: "netobserv"
+  - name: PluginEnable
+    value: "true"

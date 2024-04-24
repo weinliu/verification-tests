@@ -32,12 +32,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		NOSource      = CatalogSourceObjects{"stable", catsrc.name, catsrc.namespace}
 
 		// Template directories
-		baseDir              = exutil.FixturePath("testdata", "netobserv")
-		lokiDir              = exutil.FixturePath("testdata", "netobserv", "loki")
-		networkingDir        = exutil.FixturePath("testdata", "netobserv", "networking")
-		subscriptionDir      = exutil.FixturePath("testdata", "netobserv", "subscription")
-		flowFixturePath      = filePath.Join(baseDir, "flowcollector_v1beta2_template.yaml")
-		beta1FlowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta1_template.yaml")
+		baseDir                 = exutil.FixturePath("testdata", "netobserv")
+		lokiDir                 = exutil.FixturePath("testdata", "netobserv", "loki")
+		networkingDir           = exutil.FixturePath("testdata", "netobserv", "networking")
+		subscriptionDir         = exutil.FixturePath("testdata", "netobserv", "subscription")
+		flowFixturePath         = filePath.Join(baseDir, "flowcollector_v1beta2_template.yaml")
+		beta1FlowFixturePath    = filePath.Join(baseDir, "flowcollector_v1beta1_template.yaml")
+		releasedFlowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta2_released_template.yaml")
 
 		// Operator namespace object
 		OperatorNS = OperatorNamespace{
@@ -50,7 +51,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			PackageName:   NOPackageName,
 			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
 			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
-			CatalogSource: NOSource,
+			CatalogSource: &NOSource,
 		}
 		// Loki Operator variables
 		lokiNS          = "openshift-operators-redhat"
@@ -64,28 +65,32 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			PackageName:   lokiPackageName,
 			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
 			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
-			CatalogSource: lokiSource,
+			CatalogSource: &lokiSource,
 		}
 		lokiURL string
 	)
 
 	g.BeforeEach(func() {
+		// check if qe-app-registry catSrc is present
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 		if strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
+			// Use redhat-operators castSrc
+			catsrc.name = "redhat-operators"
+			NOSource.SourceName = catsrc.name
+			lokiSource.SourceName = catsrc.name
 		}
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 		// check if Network Observability Operator is already present
-		NOexisting := checkOperatorStatus(oc, netobservNS, NOPackageName)
+		NOexisting := checkOperatorStatus(oc, NO.Namespace, NO.PackageName)
 
-		// Create operatorNS and deploy operator if not present
+		// create operatorNS and deploy operator if not present
 		if !NOexisting {
 			OperatorNS.deployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
 			// check if NO operator is deployed
-			waitForPodReadyWithLabel(oc, netobservNS, "app="+NO.OperatorName)
-			NOStatus := checkOperatorStatus(oc, netobservNS, NOPackageName)
+			waitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
+			NOStatus := checkOperatorStatus(oc, NO.Namespace, NO.PackageName)
 			o.Expect((NOStatus)).To(o.BeTrue())
 
 			// check if flowcollector API exists
@@ -101,7 +106,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Deploy loki operator")
 		// check if Loki Operator exists
 		namespace := oc.Namespace()
-		Lokiexisting = checkOperatorStatus(oc, lokiNS, lokiPackageName)
+		Lokiexisting = checkOperatorStatus(oc, LO.Namespace, LO.PackageName)
 
 		// Don't delete if Loki Operator existed already before NetObserv
 		//  unless it is not using the 'stable' operator
@@ -109,15 +114,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		//  it will install and uninstall after each spec/test.
 		if !Lokiexisting {
 			LO.SubscribeOperator(oc)
-			waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
+			waitForPodReadyWithLabel(oc, LO.Namespace, "name="+LO.OperatorName)
 		} else {
-			channelName, err := checkOperatorChannel(oc, lokiNS, lokiPackageName)
+			channelName, err := checkOperatorChannel(oc, LO.Namespace, LO.PackageName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if channelName != "stable" {
 				e2e.Logf("found %s channel for loki operator, removing and reinstalling with %s channel instead", channelName, lokiSource.Channel)
 				LO.uninstallOperator(oc)
 				LO.SubscribeOperator(oc)
-				waitForPodReadyWithLabel(oc, lokiNS, "name="+LO.OperatorName)
+				waitForPodReadyWithLabel(oc, LO.Namespace, "name="+LO.OperatorName)
 				Lokiexisting = false
 			}
 		}
@@ -169,13 +174,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.Context("FLP, eBPF and Console metrics:", func() {
-		g.When("process.metrics.TLS == Disabled", func() {
-			g.It("Author:aramesha-High-50504-High-72959-Verify flowlogs-pipeline and eBPF agent metrics and health [Serial]", func() {
+	g.Context("FLP and Console metrics:", func() {
+		g.When("processor.metrics.TLS == Disabled", func() {
+			g.It("Author:aramesha-LEVEL0-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
 				var (
-					flpPromSM  = "flowlogs-pipeline-monitor"
-					eBPFPromSM = "ebpf-agent-svc-monitor"
-					namespace  = oc.Namespace()
+					flpPromSM = "flowlogs-pipeline-monitor"
+					namespace = oc.Namespace()
 				)
 
 				g.By("Deploy flowcollector")
@@ -186,7 +190,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 					LokiNamespace:          namespace,
 					LokiTLSCertName:        fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 					FLPMetricServerTLSType: "Disabled",
-					EBPFMetrics:            "true",
+				}
+
+				// use released flowcollector if using redhat-operators catSrc
+				sourceName, err := checkOperatorSource(oc, NO.Namespace, NO.PackageName)
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if sourceName == "redhat-operators" {
+					flow.Template = releasedFlowFixturePath
 				}
 
 				defer flow.deleteFlowcollector(oc)
@@ -216,46 +227,31 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				g.By("Verify prometheus is able to scrape FLP metrics")
 				verifyFLPMetrics(oc)
-
-				g.By("Verify eBPF agent metrics")
-				eBPFpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-ebpf-agent")
-				o.Expect(err).NotTo(o.HaveOccurred())
-
-				for _, pod := range eBPFpods {
-					command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", curlLive}
-					output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-					o.Expect(err).NotTo(o.HaveOccurred())
-					o.Expect(output).To(o.Equal("{}"))
-				}
-
-				tlsScheme, err = getMetricsScheme(oc, eBPFPromSM, flow.Namespace+"-privileged")
-				o.Expect(err).NotTo(o.HaveOccurred())
-				tlsScheme = strings.Trim(tlsScheme, "'")
-				o.Expect(tlsScheme).To(o.Equal("http"))
-
-				g.By("Verify prometheus is able to scrape eBPF metrics")
-				verifyEBPFMetrics(oc)
 			})
 		})
 
-		g.When("processor metrics.TLS == Auto", func() {
-			g.It("Author:aramesha-High-54043-High-66031-High-72959-Verify flowlogs-pipeline, eBPF agent and Console metrics [Serial]", func() {
+		g.When("processor.metrics.TLS == Auto", func() {
+			g.It("Author:aramesha-LEVEL0-High-54043-High-66031-Verify flowlogs-pipeline and Console metrics [Serial]", func() {
 				var (
-					flpPromSM  = "flowlogs-pipeline-monitor"
-					flpPromSA  = "flowlogs-pipeline-prom"
-					eBPFPromSM = "ebpf-agent-svc-monitor"
-					eBPFPromSA = "ebpf-agent-svc-prom"
-					namespace  = oc.Namespace()
+					flpPromSM = "flowlogs-pipeline-monitor"
+					flpPromSA = "flowlogs-pipeline-prom"
+					namespace = oc.Namespace()
 				)
 
 				flow := Flowcollector{
-					Namespace:               namespace,
-					Template:                flowFixturePath,
-					LokiURL:                 lokiURL,
-					LokiTLSCertName:         fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					LokiNamespace:           namespace,
-					EBPFMetrics:             "true",
-					EBPFMetricServerTLSType: "Auto",
+					Namespace:       namespace,
+					Template:        flowFixturePath,
+					LokiURL:         lokiURL,
+					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					LokiNamespace:   namespace,
+				}
+
+				// use released flowcollector if using redhat-operators catSrc
+				sourceName, err := checkOperatorSource(oc, NO.Namespace, NO.PackageName)
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if sourceName == "redhat-operators" {
+					flow.Template = releasedFlowFixturePath
 				}
 
 				defer flow.deleteFlowcollector(oc)
@@ -284,17 +280,87 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				metrics, err := getMetric(oc, query)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(popMetricValue(metrics)).Should(o.BeNumerically(">", 0))
+			})
+		})
+	})
+
+	g.Context("eBPF metrics", func() {
+		g.When("agent.ebpf.metrics.TLS == Disabled", func() {
+			g.It("Author:aramesha-High-72959-Verify eBPF agent metrics and health [Serial]", func() {
+				var (
+					eBPFPromSM = "ebpf-agent-svc-monitor"
+					namespace  = oc.Namespace()
+					curlLive   = "http://localhost:8080/live"
+				)
+
+				g.By("Deploy flowcollector")
+				flow := Flowcollector{
+					Namespace:       namespace,
+					Template:        flowFixturePath,
+					LokiURL:         lokiURL,
+					LokiNamespace:   namespace,
+					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					EBPFMetrics:     "true",
+				}
+
+				defer flow.deleteFlowcollector(oc)
+				flow.createFlowcollector(oc)
+				flow.waitForFlowcollectorReady(oc)
+
+				g.By("Verify eBPF agent metrics")
+				eBPFpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-ebpf-agent")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				for _, pod := range eBPFpods {
+					command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", curlLive}
+					output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(output).To(o.Equal("{}"))
+				}
+
+				tlsScheme, err := getMetricsScheme(oc, eBPFPromSM, flow.Namespace+"-privileged")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				tlsScheme = strings.Trim(tlsScheme, "'")
+				o.Expect(tlsScheme).To(o.Equal("http"))
+
+				g.By("Verify prometheus is able to scrape eBPF metrics")
+				verifyEBPFMetrics(oc)
+			})
+		})
+
+		g.When("ebpf.agent.metrics.TLS == Auto", func() {
+			g.It("Author:aramesha-High-72959-Verify eBPF agent metrics [Serial]", func() {
+				var (
+					eBPFPromSM = "ebpf-agent-svc-monitor"
+					eBPFPromSA = "ebpf-agent-svc-prom"
+					namespace  = oc.Namespace()
+				)
+
+				flow := Flowcollector{
+					Namespace:               namespace,
+					Template:                flowFixturePath,
+					LokiURL:                 lokiURL,
+					LokiTLSCertName:         fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+					LokiNamespace:           namespace,
+					EBPFMetrics:             "true",
+					EBPFMetricServerTLSType: "Auto",
+				}
+
+				defer flow.deleteFlowcollector(oc)
+				flow.createFlowcollector(oc)
+				g.By("Ensure flowcollector pods are ready")
+				flow.waitForFlowcollectorReady(oc)
 
 				g.By("Verify eBPF metrics")
-				tlsScheme, err = getMetricsScheme(oc, eBPFPromSM, flow.Namespace+"-privileged")
+				tlsScheme, err := getMetricsScheme(oc, eBPFPromSM, flow.Namespace+"-privileged")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				tlsScheme = strings.Trim(tlsScheme, "'")
 				o.Expect(tlsScheme).To(o.Equal("https"))
 
-				serverName, err = getMetricsServerName(oc, eBPFPromSM, flow.Namespace+"-privileged")
+				serverName, err := getMetricsServerName(oc, eBPFPromSM, flow.Namespace+"-privileged")
 				serverName = strings.Trim(serverName, "'")
 				o.Expect(err).NotTo(o.HaveOccurred())
-				expectedServerName = fmt.Sprintf("%s.%s.svc", eBPFPromSA, namespace+"-privileged")
+				expectedServerName := fmt.Sprintf("%s.%s.svc", eBPFPromSA, namespace+"-privileged")
 				o.Expect(serverName).To(o.Equal(expectedServerName))
 
 				g.By("Verify prometheus is able to scrape eBPF agent metrics")
@@ -629,7 +695,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		catsrc = resource{"catsrc", "redhat-operators", "openshift-marketplace"}
 		NOSource = CatalogSourceObjects{"stable", catsrc.name, catsrc.namespace}
 
-		NO.CatalogSource = NOSource
+		NO.CatalogSource = &NOSource
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 		OperatorNS.deployOperatorNamespace(oc)
@@ -848,7 +914,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(len(ICMPflows)).Should(o.BeNumerically(">", 0), "expected number of ICMP flows > 0")
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-68125-Verify DSCP with NetObserv [Serial]", func() {
+	g.It("NonPreRelease-Author:aramesha-LEVEL0-High-68125-Verify DSCP with NetObserv [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
@@ -883,6 +949,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			LokiURL:         lokiURL,
 			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 			LokiNamespace:   namespace,
+		}
+
+		// use released flowcollector if using redhat-operators catSrc
+		sourceName, err := checkOperatorSource(oc, NO.Namespace, NO.PackageName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if sourceName == "redhat-operators" {
+			flow.Template = releasedFlowFixturePath
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -1386,7 +1460,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				Namespace:     "openshift-operators",
 				PackageName:   "amq-streams",
 				Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
-				CatalogSource: kafkaSource,
+				CatalogSource: &kafkaSource,
 			}
 
 			// check if amq Streams Operator is already present
