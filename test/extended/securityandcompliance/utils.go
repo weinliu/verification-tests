@@ -3,6 +3,7 @@ package securityandcompliance
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -249,6 +250,30 @@ func (fi1 *fileintegrity) checkKeywordExistInLog(oc *exutil.CLI, podName string,
 		}
 		return false, nil
 	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s does not include %s", podName, expected))
+}
+
+func (fi1 *fileintegrity) checkErrorsExistInLog(oc *exutil.CLI, podName string, expected string) {
+	var logs []byte
+	var errGrep error
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		logFile, errLogs := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+podName, "-n", fi1.namespace).OutputToFile(getRandomString() + "isc-audit.log")
+		if errLogs != nil {
+			return false, errLogs
+		}
+		logs, errGrep = exec.Command("bash", "-c", "cat "+logFile+" | grep -i error; rm -rf "+logFile).Output()
+		if errGrep != nil {
+			return false, errGrep
+		}
+		if strings.Contains(string(logs), expected) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		// Expose more info when the logs didn't contain expected string
+		e2e.Logf("The logs for pod %s is: %s", podName, string(logs))
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s does not include %s", podName, expected))
 }
 
