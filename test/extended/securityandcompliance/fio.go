@@ -788,6 +788,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
 		nodeName := fi1.getNodeName(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 
