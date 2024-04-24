@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1694,4 +1695,38 @@ func getPodIP(oc *exutil.CLI, namespace string, podName string) []string {
 		podIp = append(podIp, podIp1, podIp2)
 	}
 	return podIp
+}
+
+// used to get a microshift node's valid host interfaces and host IPs for router-default load balancer service
+func getValidInterfacesAndIPs(addressInfo string) (intList, IPList []string) {
+	intList = []string{}
+	IPList = []string{}
+	for _, line := range strings.Split(addressInfo, "\n") {
+		// loopback address, link-local address and the address on ovn-kubernetes management port ovn-k8s-mp0 will not used for the load balancer's IPs
+		if !strings.Contains(line, "inet 127") && !strings.Contains(line, "inet 169") && !strings.Contains(line, "ovn-k8s-mp0") {
+			intIPList := strings.Split(strings.TrimRight(line, " "), " ")
+			intName := intIPList[len(intIPList)-1]
+			hostIP := regexp.MustCompile("([0-9\\.]+)/[0-9]+").FindStringSubmatch(line)[1]
+			intList = append(intList, intName)
+			IPList = append(IPList, hostIP)
+		}
+	}
+	e2e.Logf("The valid host interfaces are %v", intList)
+	e2e.Logf("The valid host IPs are %v", IPList)
+	return intList, IPList
+}
+
+// used to sort string type of slice or string which can be transformed to the slice
+func getSortedString(obj interface{}) string {
+	objList := []string{}
+	str, ok := obj.(string)
+	if ok {
+		objList = strings.Split(str, " ")
+	}
+	strList, ok := obj.([]string)
+	if ok {
+		objList = strList
+	}
+	sort.Strings(objList)
+	return strings.Join(objList, " ")
 }
