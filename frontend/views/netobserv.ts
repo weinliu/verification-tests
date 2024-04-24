@@ -29,7 +29,11 @@ export const Operator = {
             }
         })
     },
-    enableAllFLPMetrics: () => {
+    enableAllMetrics: () => {
+        // enable eBPF metrics
+        cy.get('#root_spec_agent_ebpf_metrics_accordion-toggle').click()
+        cy.get('#root_spec_agent_ebpf_metrics_enable').check()
+        // enable FLP metrics
         cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_metrics_accordion-toggle').click()
         cy.get('#root_spec_processor_metrics_includeList_accordion-toggle').should('exist').click()
@@ -107,7 +111,7 @@ export const Operator = {
                     Operator.enableZonesAndMultiCluster()
                 }
                 if (parameters == "AllMetrics") {
-                    Operator.enableAllFLPMetrics()
+                    Operator.enableAllMetrics()
                 }
                 if (parameters == "subnetLabels") {
                     Operator.enableSubnetLabels()
@@ -210,7 +214,6 @@ export const Operator = {
         cy.get('#root_spec_processor_subnetLabels_customLabels_0_cidrs_add-btn').click()
         cy.get('#root_spec_processor_subnetLabels_customLabels_0_cidrs_0').clear().type(`52.200.142.0/24`)
         cy.get('#root_spec_processor_subnetLabels_customLabels_0_name').clear().type(`testcustomlabel`)
-        cy.get('#root_spec_processor_subnetLabels_openShiftAutoDetect').check()
     },
     enableZonesAndMultiCluster: () => {
         cy.get('#root_spec_processor_accordion-toggle').click()

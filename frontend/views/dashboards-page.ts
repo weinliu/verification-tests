@@ -12,11 +12,18 @@ export const dashboard = {
             })
         })
 
-        // to load all the graphs on the dashboard.
+        // to load all the graphs on the dashboard
         cy.wait(5000)
         cy.get('#content-scrollable').scrollTo('bottom')
         cy.wait(5000)
     }
+}
+
+export namespace dashboardSelectors {
+    export const flowStatsToggle = '[data-test-id=panel-flowlogs-pipeline-statistics] > .pf-c-button'
+    export const ebpfStatsToggle = '[data-test-id=panel-e-bpf-agent-statistics] > .pf-c-button'
+    export const operatorStatsToggle = '[data-test-id=panel-operator-statistics] > .pf-c-button'
+    export const resourceStatsToggle = '[data-test-id=panel-resource-usage] > .pf-c-button'
 }
 
 export const graphSelector = {
