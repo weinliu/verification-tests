@@ -1097,8 +1097,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject()
 
 		exutil.By("#. Define storage resources")
+		pvcSize := strconv.FormatInt(getRandomNum(1, 299), 10) + "Mi" // default minimum pvc size for 'xfs' fsType is 300Mi as per fix for OCPBUGS-30266
 		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassName),
-			setPersistentVolumeClaimCapacity("14Mi"), setPersistentVolumeClaimNamespace(oc.Namespace()))
+			setPersistentVolumeClaimCapacity(pvcSize), setPersistentVolumeClaimNamespace(oc.Namespace()))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentNamespace(oc.Namespace()))
 
 		exutil.By("#. Create a pvc with the csi storageclass")
@@ -1112,11 +1113,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("#. Wait for the deployment ready")
 		dep.waitReady(oc)
 
+		exutil.By("#. Check PVC size is defaulted to 300Mi")
+		defaultPvcSize := pvc.getSizeFromStatus(oc)
+		o.Expect(defaultPvcSize).To(o.Equal("300Mi"))
+
 		exutil.By("#. Write data in pod mounted volume")
 		dep.checkPodMountedVolumeCouldRW(oc)
 
 		exutil.By("#. Resize PVC storage capacity to a value bigger than previous value and less than 1Gi")
-		pvcSizeInt64, _ := strconv.ParseInt(pvc.capacity, 10, 64)
+		pvcSizeInt64, _ := strconv.ParseInt(defaultPvcSize, 10, 64)
 		newPvcSizeInt64 := getRandomNum(pvcSizeInt64+50, pvcSizeInt64+1000)
 		newPvcSize := strconv.FormatInt(newPvcSizeInt64, 10) + "Mi"
 		pvc.resizeAndCheckDataIntegrity(oc, dep, newPvcSize)
