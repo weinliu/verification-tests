@@ -354,4 +354,55 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(len(appLogs) > 0).Should(o.BeTrue(), "can't find app logs from project/"+appProj)
 	})
 
+	//author anli@redhat.com
+	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-LEVEL0-Critical-71772 - Forward logs to Azure Log Analytics -- full options", func() {
+		cloudType := getAzureCloudType(oc)
+		acceptedCloud := strings.ToLower(cloudType) == "azurepubliccloud" || strings.ToLower(cloudType) == "azureusgovernmentcloud"
+		if !acceptedCloud {
+			g.Skip("The case can only be running on Azure Public and Azure US Goverment now!")
+		}
+
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skip on the sts enabled cluster!")
+		}
+
+		g.By("Create log producer")
+		clfNS := oc.Namespace()
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", clfNS, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Prepre Azure Log Storage Env")
+		resourceGroupName, err := exutil.GetAzureCredentialFromCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		workSpaceName := getInfrastructureName(oc) + "case71772"
+		azLog, err := newAzureLog(oc, resourceGroupName, workSpaceName, "case71772")
+		defer azLog.deleteWorkspace()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Deploy CLF to send logs to Log Analytics")
+		azureSecret := resource{"secret", "azure-secret-71772", clfNS}
+		defer azureSecret.clear(oc)
+		err = azLog.createSecret(oc, azureSecret.name, azureSecret.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clf := clusterlogforwarder{
+			name:                      "clf-71772",
+			namespace:                 clfNS,
+			secretName:                azureSecret.name,
+			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-to-azure-log-analytics.yaml"),
+			waitForPodReady:           true,
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			serviceAccountName:        "test-clf-" + getRandomString(),
+		}
+		defer clf.delete(oc)
+		clf.create(oc, "PREFIX_OR_NAME="+azLog.tPrefixOrName, "CUSTOMER_ID="+azLog.customerID, "RESOURCE_ID="+azLog.workspaceID, "AZURE_HOST="+azLog.host)
+
+		g.By("Verify the test result")
+		for _, tableName := range []string{azLog.tPrefixOrName + "infra_log_CL", azLog.tPrefixOrName + "audit_log_CL", azLog.tPrefixOrName + "app_log_CL"} {
+			_, err := azLog.getLogByTable(tableName)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("logs are not found in %s in AzureLogWorkspace", tableName))
+		}
+	})
 })
