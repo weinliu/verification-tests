@@ -533,12 +533,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-Low-49131-check haproxy's version", func() {
+	g.It("Author:shudili-High-49131-check haproxy's version and router base image", func() {
 		var expVersion = "haproxy28-2.8.5-1.rhaos4.16.el9"
 		exutil.By("Try to get HAProxy's version in a default router pod")
 		haproxyVer := getHAProxyRPMVersion(oc)
 		exutil.By("show haproxy version(" + haproxyVer + "), and check if it is updated successfully")
 		o.Expect(haproxyVer).To(o.ContainSubstring(expVersion))
+		// in 4.16, OCP-73373 - Bump openshift-router image to RHEL9"
+		routerpod := getNewRouterPod(oc, "default")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat /etc/redhat-release").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Red Hat Enterprise Linux release 9"))
 	})
 
 	// author: shudili@redhat.com
