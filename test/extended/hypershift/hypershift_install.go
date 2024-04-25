@@ -2541,6 +2541,8 @@ spec:
 		Test run duration: 33min
 	*/
 	g.It("NonPreRelease-Longduration-Author:fxie-Critical-67783-[HyperShiftINSTALL] The environment variable OPENSHIFT_IMG_OVERRIDES in CPO deployment should retain mirroring order under a source compared to the original mirror/source listing in the ICSP/IDMSs in the management cluster [Disruptive]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
+
 		type nodesSchedulabilityStatus bool
 
 		// Variables
@@ -2825,6 +2827,8 @@ spec:
 		Test run duration: ~40min
 	*/
 	g.It("Longduration-NonPreRelease-Author:fxie-Critical-67225-[HyperShiftINSTALL] Test annotation 'hypershift.openshift.io/destroy-grace-period' in the HostedCluster [Serial]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
+
 		var (
 			testCaseId         = getTestCaseIDs()[0]
 			resourceNamePrefix = fmt.Sprintf("%s-%s", testCaseId, strings.ToLower(exutil.RandStrDefault()))
