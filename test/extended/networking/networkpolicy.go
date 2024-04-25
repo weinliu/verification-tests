@@ -1519,7 +1519,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("Author:asood-Critical-64786-Network policy in namespace that has long name fails to be recreated as the ACLs are considered duplicate [Disruptive]", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-15371
 		var (
-			testNs                     = "test-the-networkpolicy-with-a-62chars-62chars-long-namespace62"
+			testNs                     = "test-64786networkpolicy-with-a-62chars-62chars-long-namespace62"
 			buildPruningBaseDir        = exutil.FixturePath("testdata", "networking")
 			allowToNSNetworkPolicyFile = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-to-same-namespace.yaml")
 			pingPodTemplate            = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
