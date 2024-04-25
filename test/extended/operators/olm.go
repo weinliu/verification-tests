@@ -91,6 +91,80 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.BeforeEach(func() {
 		exutil.SkipNoOLMCore(oc)
 	})
+	g.It("Author:jiazha-High-73201-OLM catalog pods do not recover from node failure [Disruptive][Serial]", func() {
+		exutil.By("1, create a custom catalogsource in a random project")
+		dr := make(describerResrouce)
+		itName := g.CurrentSpecReport().FullText()
+		dr.addIr(itName)
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+
+		cs := catalogSourceDescription{
+			name:        "cs-73201",
+			namespace:   oc.Namespace(),
+			displayName: "QE Operators",
+			publisher:   "QE",
+			sourceType:  "grpc",
+			address:     "quay.io/openshift-qe-optional-operators/aosqe-index:v4.16",
+			interval:    "4m",
+			template:    csImageTemplate,
+		}
+		defer cs.delete(itName, dr)
+		cs.createWithCheck(oc, itName, dr)
+
+		exutil.By("2, get the pod's node and name")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "olm.catalogSource=cs-73201", "-o=jsonpath={.items[0].spec.nodeName}", "-n", oc.Namespace()).Output()
+		if err != nil {
+			e2e.Failf("Fail to get pod's node:%v", err)
+		}
+
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "olm.catalogSource=cs-73201", "-o=jsonpath={.items[0].metadata.name}", "-n", oc.Namespace()).Output()
+		if err != nil {
+			e2e.Failf("Fail to get pod's name:%v", err)
+		}
+
+		exutil.By("3, make the node to NotReady and recover after 480s")
+		timeSleep := "480"
+		cmdStr := fmt.Sprintf(`systemctl stop kubelet; sleep %s; systemctl start kubelet`, timeSleep)
+		cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(fmt.Sprintf("nodes/%s", nodeName), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Background()
+		defer cmd.Process.Kill()
+		defer func() {
+			var nodeStatus string
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 500*time.Second, false, func(ctx context.Context) (bool, error) {
+				nodeStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "--no-headers").Output()
+				if !strings.Contains(nodeStatus, "NotReady") {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The node(%s) doesn't recover to Ready status(%s) after 500s", nodeName, nodeStatus))
+		}()
+
+		exutil.By("4, check if the node is NotReady")
+		var nodeStatus string
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			nodeStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "--no-headers").Output()
+			if strings.Contains(nodeStatus, "NotReady") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The node(%s) still in Ready status(%s) after 300s", nodeName, nodeStatus))
+
+		exutil.By("5, check if new catalogsource pod generated")
+		var podStatus string
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 480*time.Second, false, func(ctx context.Context) (bool, error) {
+			podStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "olm.catalogSource=cs-73201", "-n", oc.Namespace(), "--no-headers").Output()
+			podNewName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "olm.catalogSource=cs-73201", "-o=jsonpath={.items[0].metadata.name}", "-n", oc.Namespace()).Output()
+			if strings.Contains(podStatus, "Running") && podName != podNewName {
+				e2e.Logf("new pod(%s) generated, old pod(%s)", podNewName, podName)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No new pod generated after 480s, old pod(%s) status(%s)", podName, podStatus))
+	})
 
 	g.It("Author:jiazha-LEVEL0-Critical-72192-OLM is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
 		exutil.By("1) get marketplace and OLM pods' image/imagePullPolicy")
