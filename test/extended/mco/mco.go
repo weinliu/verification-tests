@@ -975,7 +975,10 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("cluster version is %s", clusterVersion)
 		commitID, commitErr := getCommitID(oc, "machine-config", clusterVersion)
 		o.Expect(commitErr).NotTo(o.HaveOccurred())
-		o.Expect(commitID).NotTo(o.BeEmpty())
+		// there is a case that in the payload no commit id from mco
+		if commitID == "" {
+			g.Skip("No code change from MCO, skip this case")
+		}
 		logger.Infof("machine config commit id is %s", commitID)
 		goVersion, verErr := getGoVersion("machine-config-operator", commitID)
 		o.Expect(verErr).NotTo(o.HaveOccurred())
