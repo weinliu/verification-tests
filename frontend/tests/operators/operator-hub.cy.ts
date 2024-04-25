@@ -25,14 +25,17 @@ describe('Operator Hub tests', () => {
   });
 
   it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
-    operatorHubPage.goTo()
-    operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG)
-    OperatorHubSelector.SOURCE_MAP.forEach((operatorSource, operatorSourceLabel) => {
-      operatorHubPage.checkSourceCheckBox(operatorSourceLabel);
-      operatorHubPage.getAllTileLabels().each(($el, index, $list) => {
-        cy.wrap($el).should('have.text',operatorSource)
-      })
-      operatorHubPage.uncheckSourceCheckBox(operatorSourceLabel);
+    const queryCatalogSource = `oc get catalogsource custom-catalogsource -n openshift-marketplace -o jsonpath={.status.connectionState.lastObservedState}`;
+    cy.checkCommandResult(queryCatalogSource, 'READY', { retries: 6, interval: 10000 }).then(() => {
+      operatorHubPage.goTo();
+      operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG);
+      OperatorHubSelector.SOURCE_MAP.forEach((operatorSource, operatorSourceLabel) => {
+        operatorHubPage.checkSourceCheckBox(operatorSourceLabel);
+        operatorHubPage.getAllTileLabels().each(($el, index, $list) => {
+          cy.wrap($el).should('have.text',operatorSource)
+        })
+        operatorHubPage.uncheckSourceCheckBox(operatorSourceLabel);
+      });
     });
   });
 

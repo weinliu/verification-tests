@@ -4,7 +4,7 @@ export const operatorHubPage = {
   goTo: () => {
     cy.visit('/operatorhub/all-namespaces');
     // the operator hub page is loaded when the count is displayed
-    cy.get('.co-catalog-page__num-items').should('exist')
+    cy.get('.co-catalog-page__num-items', {timeout: 120000}).should('exist');
   },
   goToWithNamespace: (ns: string) => {
     cy.visit(`/operatorhub/ns/${ns}`);
