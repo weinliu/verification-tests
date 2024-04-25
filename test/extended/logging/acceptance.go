@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("Author:qitang-LEVEL0-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
+	g.It("WRS-Author:qitang-LEVEL0-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
 		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {

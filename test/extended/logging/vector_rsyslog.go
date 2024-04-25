@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:gkarager-Medium-61477-Vector-Forward logs to syslog (mtls with private key passphrase)", func() {
+		g.It("CPaasrunOnly-WRS-Author:gkarager-Medium-61477-Vector-Forward logs to syslog (mtls with private key passphrase)", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
