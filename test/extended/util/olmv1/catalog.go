@@ -248,7 +248,7 @@ func GetChannelNameByPakcage(channelDataOut []ChannelData, packageName string) [
 	return channelsName
 }
 
-// PackageData returns the channel info
+// PackageData returns the package info
 type PackageData struct {
 	DefaultChannel string `json:"defaultChannel"`
 	Name           string `json:"name"`
@@ -266,22 +266,78 @@ func ListPackagesName(packageDataOut []PackageData) []string {
 	return packagesName
 }
 
+// ReferenceInfo returns the Reference info
+type ReferenceInfo struct {
+	Name   string `json:"name"`
+	Schema string `json:"schema"`
+}
+
+// EntriesInfo returns the entries info
+type DeprecatedEntriesInfo struct {
+	Message   string        `json:"message"`
+	Reference ReferenceInfo `json:"reference"`
+}
+
+// DeprecationData returns the deprecated info
+type DeprecationData struct {
+	Entries []DeprecatedEntriesInfo `json:"entries"`
+	Package string                  `json:"package"`
+	Schema  string                  `json:"schema"`
+}
+
+func GetDeprecatedChannelNameByPakcage(deprecationDataOut []DeprecationData, packageName string) []string {
+
+	var channelsName []string
+	var singleDeprecationData DeprecationData
+	var deprecatedEntriesInfo DeprecatedEntriesInfo
+
+	for _, singleDeprecationData = range deprecationDataOut {
+		if singleDeprecationData.Package == packageName {
+			for _, deprecatedEntriesInfo = range singleDeprecationData.Entries {
+				if deprecatedEntriesInfo.Reference.Schema == "olm.channel" {
+					channelsName = append(channelsName, deprecatedEntriesInfo.Reference.Name)
+				}
+			}
+		}
+	}
+	return channelsName
+}
+
+func GetDeprecatedBundlesNameByPakcage(deprecationDataOut []DeprecationData, packageName string) []string {
+
+	var bundlesName []string
+	var singleDeprecationData DeprecationData
+	var deprecatedEntriesInfo DeprecatedEntriesInfo
+
+	for _, singleDeprecationData = range deprecationDataOut {
+		if singleDeprecationData.Package == packageName {
+			for _, deprecatedEntriesInfo = range singleDeprecationData.Entries {
+				if deprecatedEntriesInfo.Reference.Schema == "olm.bundle" {
+					bundlesName = append(bundlesName, deprecatedEntriesInfo.Reference.Name)
+				}
+			}
+		}
+	}
+	return bundlesName
+}
+
 type ContentData struct {
-	Packages []PackageData
-	Channels []ChannelData
-	Bundles  []BundleData
-	//Deprecations []Deprecation
+	Packages     []PackageData
+	Channels     []ChannelData
+	Bundles      []BundleData
+	Deprecations []DeprecationData
 }
 
 // Unmarshal Content
 func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema string) (ContentData, error) {
 	var (
-		singlePackageData PackageData
-		singleChannelData ChannelData
-		singleBundleData  BundleData
-		ContentData       ContentData
-		targetData        interface{}
-		err               error
+		singlePackageData     PackageData
+		singleChannelData     ChannelData
+		singleBundleData      BundleData
+		singleDeprecationData DeprecationData
+		ContentData           ContentData
+		targetData            interface{}
+		err                   error
 	)
 
 	switch schema {
@@ -293,6 +349,8 @@ func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema strin
 		targetData = &singleChannelData
 	case "package":
 		targetData = &singlePackageData
+	case "deprecations":
+		targetData = &singleDeprecationData
 	default:
 		return ContentData, fmt.Errorf("unsupported schema: %s", schema)
 	}
@@ -313,6 +371,8 @@ func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema strin
 				ContentData.Channels = append(ContentData.Channels, singleChannelData)
 			case "package":
 				ContentData.Packages = append(ContentData.Packages, singlePackageData)
+			case "deprecations":
+				ContentData.Deprecations = append(ContentData.Deprecations, singleDeprecationData)
 			}
 		}
 	}
@@ -332,6 +392,10 @@ func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema strin
 		if len(ContentData.Packages) == 0 {
 			err = fmt.Errorf("can not get Packages")
 		}
+	case "deprecations":
+		if len(ContentData.Deprecations) == 0 {
+			err = fmt.Errorf("can not get Deprecations")
+		}
 	}
 	return ContentData, err
 
@@ -344,7 +408,7 @@ func (catalog *CatalogDescription) UnmarshalAllContent(oc *exutil.CLI) (ContentD
 	lines := strings.Split(string(contents), "\n")
 
 	for _, line := range lines {
-		if strings.Contains(line, "\"schema\":\"olm.bundle\"") || strings.Contains(line, "\"schema\":\"olm.channel\"") || strings.Contains(line, "\"schema\":\"olm.package\"") {
+		if strings.Contains(line, "\"schema\":\"olm.bundle\"") || strings.Contains(line, "\"schema\":\"olm.channel\"") || strings.Contains(line, "\"schema\":\"olm.package\"") || strings.Contains(line, "\"schema\":\"olm.deprecations\"") {
 
 			var targetData interface{}
 			switch {
@@ -354,6 +418,8 @@ func (catalog *CatalogDescription) UnmarshalAllContent(oc *exutil.CLI) (ContentD
 				targetData = new(ChannelData)
 			case strings.Contains(line, "\"schema\":\"olm.package\""):
 				targetData = new(PackageData)
+			case strings.Contains(line, "\"schema\":\"olm.deprecations\""):
+				targetData = new(DeprecationData)
 			}
 
 			if err := json.Unmarshal([]byte(line), targetData); err != nil {
@@ -367,10 +433,12 @@ func (catalog *CatalogDescription) UnmarshalAllContent(oc *exutil.CLI) (ContentD
 				ContentData.Channels = append(ContentData.Channels, *data)
 			case *PackageData:
 				ContentData.Packages = append(ContentData.Packages, *data)
+			case *DeprecationData:
+				ContentData.Deprecations = append(ContentData.Deprecations, *data)
 			}
 		}
 	}
-	if len(ContentData.Bundles) == 0 && len(ContentData.Channels) == 0 && len(ContentData.Packages) == 0 {
+	if len(ContentData.Bundles) == 0 && len(ContentData.Channels) == 0 && len(ContentData.Packages) == 0 && len(ContentData.Deprecations) == 0 {
 		return ContentData, fmt.Errorf("no any bundle, channel or package are got")
 	}
 	return ContentData, nil

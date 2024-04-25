@@ -417,4 +417,32 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Cannot get the port-forward result"))
 	})
+
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-High-73219-Fetch deprecation data from the catalogd http server", func() {
+		var (
+			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
+			catalog         = olmv1util.CatalogDescription{
+				Name:     "catalog-73219",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm73219",
+				Template: catalogTemplate,
+			}
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("get the deprecation content through http service on cluster")
+		unmarshalContent, err := catalog.UnmarshalContent(oc, "deprecations")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		deprecatedChannel := olmv1util.GetDeprecatedChannelNameByPakcage(unmarshalContent.Deprecations, "nginx73219")
+		o.Expect(deprecatedChannel[0]).To(o.ContainSubstring("candidate-v0.0"))
+
+		deprecatedBundle := olmv1util.GetDeprecatedBundlesNameByPakcage(unmarshalContent.Deprecations, "nginx73219")
+		o.Expect(deprecatedBundle[0]).To(o.ContainSubstring("nginx73219.v0.0.1"))
+
+	})
+
 })
