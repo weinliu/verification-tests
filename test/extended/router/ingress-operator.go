@@ -48,9 +48,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		annotation := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-nodeport-ocp42276", ".metadata.annotations")
 		o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
 
-		// In IBM cloud the externalTrafficPolicy will be 'Cluster' for default LB service, so skipping the same
+		// In IBM cloud and PowerVS the externalTrafficPolicy will be 'Cluster' for default LB service, so skipping the same
 		platformtype := exutil.CheckPlatform(oc)
-		if !strings.Contains(platformtype, "ibm") {
+		platforms := map[string]bool{
+			"ibmcloud": true,
+			"powervs":  true,
+		}
+		if !platforms[platformtype] {
 			exutil.By("check the annotation of default LoadBalancer service if it is available")
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ingress", "service", "router-default", "-o=jsonpath={.spec.type}").Output()
 			// LB service is supported on public cloud platform like aws, gcp, azure and alibaba
