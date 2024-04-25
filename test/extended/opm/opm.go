@@ -1906,4 +1906,19 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-Medium-73218-opm alpha render-graph indicate deprecated graph content", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+
+		exutil.By("step: opm alpha render-graph index-image with deprecated label")
+		output, err := opmCLI.Run("alpha").Args("render-graph", "quay.io/olmqe/olmtest-operator-index:nginxolm73218").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("classDef deprecated fill:#E8960F"))
+		o.Expect(string(output)).To(o.ContainSubstring("nginx73218-candidate-v1.0-nginx73218.v1.0.1[\"nginx73218.v1.0.1\"]:::deprecated"))
+		o.Expect(string(output)).To(o.ContainSubstring("nginx73218-candidate-v1.0-nginx73218.v1.0.1[\"nginx73218.v1.0.1\"]-- skip --> nginx73218-candidate-v1.0-nginx73218.v1.0.3[\"nginx73218.v1.0.3\"]"))
+
+	})
+
 })
