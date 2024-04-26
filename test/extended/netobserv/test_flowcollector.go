@@ -1229,16 +1229,18 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		exutil.AssertWaitPollNoErr(err, "Did not find Type IPFIX in ipfix-collector pod logs")
 	})
 
-	g.It("NonPreRelease-Author:aramesha-Medium-72875-Verify nodeSelector with netobserv components [Serial]", func() {
+	g.It("NonPreRelease-Author:aramesha-Medium-72875-Verify nodeSelector and tolerations with netobserv components [Serial]", func() {
 		namespace := oc.Namespace()
 
-		g.By("Get master node of the cluster")
-		masterNode, err := exutil.GetFirstMasterNode(oc)
+		// verify tolerations
+		g.By("Get worker node of the cluster")
+		workerNode, err := exutil.GetFirstWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Add netobserv label to a particular master node")
-		defer exutil.DeleteLabelFromNode(oc, masterNode, "test")
-		exutil.AddLabelToNode(oc, masterNode, "test", "netobserv")
+		g.By("Taint worker node")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", workerNode, "netobserv-agent", "--overwrite").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", workerNode, "netobserv-agent=true:NoSchedule", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
@@ -1252,38 +1254,53 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
 
-		g.By("Patch flowcollector with nodeSelector for eBPF pods")
-		patchValue := `{"nodeSelector":{"test": "netobserv"}}`
+		g.By("Add wrong toleration for eBPF spec for the taint netobserv-agent=false:NoSchedule")
+		patchValue := `{"scheduling":{"tolerations":[{"effect": "NoSchedule", "key": "netobserv-agent", "value": "false", "operator": "Equal"}]}}`
 		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/advanced", "value": `+patchValue+`}]`, "--type=json").Output()
 
 		g.By("Ensure flowcollector is ready")
 		flow.waitForFlowcollectorReady(oc)
 
-		// verify logs
-		g.By("Escalate SA to cluster admin")
-		defer func() {
-			g.By("Remove cluster role")
-			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
-		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		g.By(fmt.Sprintf("Verify eBPF pod is not scheduled on the %s", workerNode))
+		eBPFPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", flow.Namespace+"-privileged", "pods", "--field-selector", "spec.nodeName="+workerNode+"", "-o", "name").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(eBPFPod).Should(o.BeEmpty())
 
-		g.By("Wait for a min before logs gets collected and written to loki")
-		time.Sleep(60 * time.Second)
-		startTime := time.Now()
+		g.By("Add correct toleration for eBPF spec for the taint netobserv-agent=true:NoSchedule")
+		flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+		patchValue = `{"scheduling":{"tolerations":[{"effect": "NoSchedule", "key": "netobserv-agent", "value": "true", "operator": "Equal"}]}}`
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/advanced", "value": `+patchValue+`}]`, "--type=json").Output()
 
-		g.By("Get flowlogs from loki")
-		token := getSAToken(oc, "netobserv-plugin", namespace)
-		err = verifyLokilogsTime(token, ls.Route, startTime)
+		g.By("Ensure flowcollector is ready")
+		flow.waitForFlowcollectorReady(oc)
+
+		g.By(fmt.Sprintf("Verify eBPF pod is scheduled on the node %s after applying toleration for taint netobserv-agent=true:NoSchedule", workerNode))
+		eBPFPod, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", flow.Namespace+"-privileged", "pods", "--field-selector", "spec.nodeName="+workerNode+"", "-o", "name").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(eBPFPod).NotTo(o.BeEmpty())
 
-		g.By("Verify eBPF pods are deployed on the specified master node")
-		eBPFpods, err := exutil.GetAllPodsWithLabel(oc, "netobserv-privileged", "app=netobserv-ebpf-agent")
+		// verify nodeSelector
+		g.By("Add netobserv label to above worker node")
+		defer exutil.DeleteLabelFromNode(oc, workerNode, "test")
+		exutil.AddLabelToNode(oc, workerNode, "netobserv-agent", "true")
+
+		g.By("Patch flowcollector with nodeSelector for eBPF pods")
+		flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+		patchValue = `{"scheduling":{"nodeSelector":{"netobserv-agent": "true"}}}`
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/advanced", "value": `+patchValue+`}]`, "--type=json").Output()
+
+		g.By("Ensure flowcollector is ready")
+		flow.waitForFlowcollectorReady(oc)
+
+		g.By("Verify all eBPF pods are deployed on the above worker node")
+		eBPFpods, err := exutil.GetAllPodsWithLabel(oc, flow.Namespace+"-privileged", "app=netobserv-ebpf-agent")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range eBPFpods {
-			nodeName, err := exutil.GetPodNodeName(oc, "netobserv-privileged", pod)
+			nodeName, err := exutil.GetPodNodeName(oc, flow.Namespace+"-privileged", pod)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(nodeName).To(o.Equal(masterNode))
+			o.Expect(nodeName).To(o.Equal(workerNode))
 		}
 	})
 
