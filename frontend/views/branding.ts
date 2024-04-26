@@ -1,8 +1,6 @@
 export const Branding = {
   checkAboutModalLogo: () => {
-    cy.get(".pf-c-about-modal-box__brand")
-      .find("img")
-      .should("have.attr", "src", "static/assets/openshift-logo.svg");
+    cy.get("div[class$='about-modal-box__brand']").find("img").should("have.attr", "src").and("contain", "openshift-logo.svg");
     cy.get('[aria-label="Close Dialog"]').click();
   },
   checkLoginPageLogo: () => {

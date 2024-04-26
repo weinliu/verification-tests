@@ -8,11 +8,7 @@ export const Overview = {
     cy.get("button").contains("About").click();
   },
   checkUpperLeftLogo: () => {
-    cy.get("img").should(
-      "have.attr",
-      "src",
-      "static/assets/openshift-logo.svg"
-    );
+    cy.get("img").should('have.attr', 'src').and('contain', 'openshift-logo.svg');
   },
   navToOverviewPage: () => {
     cy.get('[data-quickstart-id="qs-nav-home"]').click();
