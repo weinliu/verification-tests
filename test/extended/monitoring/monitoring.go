@@ -802,6 +802,43 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, "https://"+host+"/api/v2/receivers", token, `"name":"Watchdog"`, 2*platformLoadTime)
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-73294-add role.rbac.authorization.k8s.io/monitoring-alertmanager-view", func() {
+		exutil.By("Check monitoring-alertmanager-view role is created")
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("role", "monitoring-alertmanager-view", "-n", "openshift-monitoring").Execute()
+		if err != nil {
+			e2e.Logf("Unable to get role monitoring-alertmanager-view.")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Bind monitoring-alertmanager-view role to user")
+		admErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "monitoring-alertmanager-view", oc.Username()).Execute()
+		o.Expect(admErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "--role-namespace=openshift-monitoring", "-n", "openshift-monitoring", "monitoring-alertmanager-view", oc.Username()).Execute()
+
+		exutil.By("Get alertmanager-main route")
+		host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "alertmanager-main", "-ojsonpath={.spec.host}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get token of current user")
+		token := oc.UserConfig().BearerToken
+
+		exutil.By("Check monitoring-alertmanager-view role can view receivers and alerts API")
+		checkMetric(oc, "https://"+host+"/api/v2/receivers", token, "Watchdog", 2*platformLoadTime)
+		checkMetric(oc, "https://"+host+"/api/v2/alerts?&filter={alertname=\"Watchdog\"}", token, "Watchdog", 2*platformLoadTime)
+
+		exutil.By("Check monitoring-alertmanager-view role can not silence alert")
+		currentTime := time.Now()
+		start := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+		twoHoursLater := currentTime.Add(2 * time.Hour)
+		end := twoHoursLater.UTC().Format("2006-01-02T15:04:05Z")
+		// % curl -k -H "Authorization: Bearer $token" -X POST -d '{"matchers":[{"name":"alertname","value":"Watchdog"}],"startsAt":"'"$start"'","endsAt":"'"$end"'","createdBy":"testuser","comment":"Silence Watchdog alert"}' https://$HOST/api/v2/silences
+		curlCmd := `curl -k -H "Authorization: Bearer ` + token + `" -X POST -d '{"matchers":[{"name":"alertname","value":"Watchdog"}],"startsAt":"` + start + `","endsAt":"` + end + `","createdBy":"testuser","comment":"Silence Watchdog alert"}' "https://` + host + `/api/v2/silences"`
+		out, err := exec.Command("bash", "-c", curlCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(out), "Forbidden")).Should(o.BeTrue())
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
