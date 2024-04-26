@@ -7,7 +7,7 @@ describe('nodes page', () => {
   });
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.adminCLI('oc delete machinehealthcheck test-mhc');
+    cy.adminCLI('oc delete machinehealthchecks.machine.openshift.io test-mhc -n openshift-machine-api');
   });
   it('(OCP-70839,yanpzhan,UserInterface) Node overview page displays well when related machinehealthcheck does not set spec.unhealthyConditions', {tags: ['e2e','admin']}, function () {
     cy.isIPICluster().then(value => {

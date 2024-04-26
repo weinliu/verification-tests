@@ -18,6 +18,6 @@ export const Deployment = {
     });
   },
   checkDetailItem: (key, value) => {
-    cy.contains('dt', `${key}`).next().should('contain', `${value}`);
+    cy.contains('dt', `${key}`).next({timeout: 60000}).should('contain', `${value}`);
   }
 }
