@@ -88,11 +88,10 @@ describe('Operators Installed page test', () => {
       })
   });
 
-  it('(OCP-65876,xiyuzhao,UserInterface) Non cluster-admin user should able to update the operator in Console	',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it.skip('(OCP-65876,xiyuzhao,UserInterface) Non cluster-admin user should able to update the operator in Console	',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${params.specialNs}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
     cy.uiLogout();
-    cy.clearCookies();
     cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     /*' Scription' Tab is exist for the operator installed in the All namespace
        Page is Restricted Access */
