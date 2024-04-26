@@ -1528,7 +1528,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring").Execute()
 
 			exutil.By("check alertmanager pod is created")
-			err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(context.Context) (bool, error) {
 				podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
 				if err != nil || strings.Contains(podStats, "not found") {
 					return false, nil
@@ -1562,16 +1562,16 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
 			exutil.By("check the user alerts TestAlert1 and TestAlert2 are shown in \"in-cluster alertmanager\" API")
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "TestAlert1", 3*uwmLoadTime)
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, `"generatorURL":"https://thanos-querier-openshift-monitoring`, 3*uwmLoadTime)
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "TestAlert2", 3*uwmLoadTime)
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, `"generatorURL":"http://prometheus-user-workload-`, 3*uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "TestAlert1", uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "TestAlert2", uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
 
 			exutil.By("check the alerts are also sent to external alertmanager")
-			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", 3*uwmLoadTime)
-			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", `"generatorURL":"https://thanos-querier-openshift-monitoring`, 3*uwmLoadTime)
-			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert2", 3*uwmLoadTime)
-			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", `"generatorURL":"http://prometheus-user-workload-`, 3*uwmLoadTime)
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v2/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", uwmLoadTime)
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v2/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v2/alerts?filter={alertname="TestAlert2"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert2", uwmLoadTime)
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v2/alerts?filter={alertname="TestAlert2"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
 		})
 
 		// author: tagao@redhat.com

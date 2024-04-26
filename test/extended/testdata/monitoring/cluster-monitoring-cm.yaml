@@ -18,7 +18,7 @@ objects:
         retention: 45d
         additionalAlertmanagerConfigs:
         - scheme: http
-          apiVersion: v1
+          apiVersion: v2
           staticConfigs:
           - alertmanager-operated.openshift-user-workload-monitoring.svc:9093
       alertmanagerMain:
