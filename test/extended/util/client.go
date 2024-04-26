@@ -24,6 +24,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
+	crdv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 
 	e2edebug "k8s.io/kubernetes/test/e2e/framework/debug"
 
@@ -660,6 +661,11 @@ func (c *CLI) Namespace() string {
 func (c *CLI) setOutput(out io.Writer) *CLI {
 	c.stdout = out
 	return c
+}
+
+// AdminAPIExtensionsV1Client returns a ClientSet for the APIExtensionsV1Beta1 API
+func (c *CLI) AdminAPIExtensionsV1Client() crdv1.ApiextensionsV1Interface {
+	return crdv1.NewForConfigOrDie(c.AdminConfig())
 }
 
 // Run executes given OpenShift CLI command verb (iow. "oc <verb>").

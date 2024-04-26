@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"context"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -8,6 +9,8 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -190,5 +193,28 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(err).To(o.HaveOccurred())
 		}
 	})
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-Medium-29351-Use oc explain to see detailed documentation of the resources", func() {
+		_, err := oc.AdminAPIExtensionsV1Client().CustomResourceDefinitions().Get(context.TODO(), "machines.machine.openshift.io", metav1.GetOptions{})
+		if err != nil && apierrors.IsNotFound(err) {
+			g.Skip("The cluster does not have pre-requisite CRDs for the test")
+		}
+		if err != nil {
+			e2e.Failf("Failed to get CRD: %v", err)
+		}
+		resources := `machines.machine.openshift.io
+machinesets.machine.openshift.io
+machinehealthchecks.machine.openshift.io
+machineautoscalers.autoscaling.openshift.io`
 
+		resource := strings.Split(resources, "\n")
+
+		for _, explained := range resource {
+			// Execute `oc explain resource` for each resource
+			explained, err := oc.AsAdmin().WithoutNamespace().Run("explain").Args(explained).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(explained).To(o.ContainSubstring("apiVersion"))
+		}
+
+	})
 })

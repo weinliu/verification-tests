@@ -1,12 +1,16 @@
 package clusterinfrastructure
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
@@ -53,17 +57,24 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-43174-ClusterAutoscaler CR could be deleted with foreground deletion", func() {
+		_, err := oc.AdminAPIExtensionsV1Client().CustomResourceDefinitions().Get(context.TODO(),
+			"clusterautoscalers.autoscaling.openshift.io", metav1.GetOptions{})
+		if err != nil && apierrors.IsNotFound(err) {
+			g.Skip("The cluster does not have pre-requisite CRDs for the test")
+		}
+		if err != nil {
+			e2e.Failf("Failed to get CRD: %v", err)
+		}
 		g.By("Create clusterautoscaler")
 		clusterAutoscaler.createClusterAutoscaler(oc)
 		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
 		g.By("Delete clusterautoscaler with foreground deletion")
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterautoscaler", "default", "--cascade=foreground").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterautoscaler", "default", "--cascade=foreground").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterautoscaler").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).NotTo(o.ContainSubstring("default"))
 	})
-
 	//author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-Low-45430-MachineSet scaling from 0 should be evaluated correctly for the new or changed instance types [Serial][Slow][Disruptive]", func() {
 		machineAutoscaler = machineAutoscalerDescription{
