@@ -1100,4 +1100,59 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
+	// author: anusaxen@redhat.com
+	//bug: https://issues.redhat.com/browse/OCPBUGS-11266
+	g.It("Author:anusaxen-Medium-66884-Larger packet size than Cluster MTU should not cause packet drops", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+		platform := checkPlatform(oc)
+		if !strings.Contains(platform, "aws") {
+			g.Skip("Test requires AWS, skip for other platforms!")
+		}
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		exutil.By("create a hello pod1 in namespace")
+		pod1ns := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: oc.Namespace(),
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod1ns.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns.namespace, pod1ns.name)
+
+		exutil.By("create a hello-pod2 in namespace")
+		pod2ns := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: oc.Namespace(),
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod2ns.createPingPodNode(oc)
+		waitPodReady(oc, pod2ns.namespace, pod2ns.name)
+		exutil.By("Get IP of the hello-pod2")
+		helloPod2IP := getPodIPv4(oc, oc.Namespace(), "hello-pod2")
+
+		//Cluster network MTU on AWS is 8901 and negotiated MSS is 8849 which accomodates TCP and IP header etc. We will use MSS of 9000 in this test
+		iperfClientCmd := "iperf3 -c " + helloPod2IP + " -p 60001 -b 30M -N -V -M 9000|grep -i -A 5 'Test Complete' | grep -i -A 1 'Retr' | awk '{ print $9 }' | tail -1"
+		iperfServerCmd := "iperf3 -s -p 60001&"
+
+		cmdBackground, _, _, errBackground := oc.Run("exec").Args("-n", pod2ns.namespace, pod2ns.name, "--", "/bin/sh", "-c", iperfServerCmd).Background()
+		defer cmdBackground.Process.Kill()
+		o.Expect(errBackground).NotTo(o.HaveOccurred())
+		retr_count, err := oc.Run("exec").Args("-n", pod1ns.namespace, pod1ns.name, "--", "/bin/sh", "-c", iperfClientCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(fmt.Sprintf("Total Retr count is \n %s", retr_count))
+		retr_count_int, err := strconv.Atoi(retr_count)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//iperf simulates 10 iterations with 30Mbps so we expect retr count of not more than 1 per iteration hence should not be more than 10 in total
+		o.Expect(retr_count_int < 11).To(o.BeTrue())
+
+	})
 })
