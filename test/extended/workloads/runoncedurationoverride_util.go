@@ -107,6 +107,8 @@ func (sub *rodoSubscription) skipMissingCatalogsources(oc *exutil.CLI) {
 			o.Expect(errRed).NotTo(o.HaveOccurred())
 		}
 		sub.opsrcName = "redhat-operators"
+	} else if errQeReg != nil && strings.Contains(output, "doesn't have a resource type \"catalogsource\"") {
+		g.Skip("Skip since catalogsource is not available")
 	} else {
 		o.Expect(errQeReg).NotTo(o.HaveOccurred())
 	}
