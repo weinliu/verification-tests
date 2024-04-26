@@ -5,6 +5,9 @@ metadata:
 spec:
   imageTagMirrors:
     - mirrors:
+        - brew.registry.redhat.io/rh-osbs/openshift-sandboxed-containers-podvm-builder
+      source: registry.redhat.io/openshift-sandboxed-containers/osc-podvm-builder-rhel9
+    - mirrors:
         - brew.registry.redhat.io/rh-osbs/openshift-sandboxed-containers-podvm-payload
       source: registry.redhat.io/openshift-sandboxed-containers/osc-podvm-payload-rhel9
     - mirrors:
@@ -26,6 +29,9 @@ metadata:
   name: kata-brew-registry
 spec:
   imageDigestMirrors:
+    - mirrors:
+        - brew.registry.redhat.io/rh-osbs/openshift-sandboxed-containers-podvm-builder
+      source: registry.redhat.io/openshift-sandboxed-containers/osc-podvm-builder-rhel9
     - mirrors:
         - brew.registry.redhat.io/rh-osbs/openshift-sandboxed-containers-podvm-payload
       source: registry.redhat.io/openshift-sandboxed-containers/osc-podvm-payload-rhel9
