@@ -181,7 +181,7 @@ describe('Dynamic plugins features', () => {
     cy.contains('success').should('be.visible');
   });
 
-  it('(OCP-53123,OCP-41459,yapei,UserInterface) Exposed components in dynamic-plugin-sdk', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-53123,yapei,UserInterface) Exposed components in dynamic-plugin-sdk', {tags: ['e2e','admin','@osd-ccs']}, () => {
     // ResourceIcon is exposed
     cy.switchPerspective('Administrator');
     cy.visit('/demo-list-page');
@@ -208,7 +208,10 @@ describe('Dynamic plugins features', () => {
     namespaceDropdown.selectNamespace('openshift-dns');
     cy.get('h1').contains('Currently selected namespace').should('exist');
     cy.get('h2').contains('openshift-dns').should('exist');
-    // Add support for analytics and integration with Segment
+  });
+
+  it('(OCP-41459,yapei,UserInterface)Add support for analytics and integration with Segment', {tags: ['e2e','admin','@osd-ccs']}, () => {
+    cy.switchPerspective('Administrator');
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "page");
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "Perspective Changed");
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "identify");
