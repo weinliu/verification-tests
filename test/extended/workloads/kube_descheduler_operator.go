@@ -672,6 +672,9 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", testd4.dName, "-n", testd4.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", testd3.dName, "-n", testd3.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		// Test for RemoveDuplicates
 
 		g.By("Cordon all nodes in the cluster")
@@ -731,6 +734,25 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
 
+		deschu = kubedescheduler{
+			namespace:        kubeNamespace,
+			interSeconds:     60,
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.15.0",
+			logLevel:         "Normal",
+			operatorLogLevel: "Normal",
+			profile1:         "EvictPodsWithPVC",
+			profile2:         "TopologyAndDuplicates",
+			profile3:         "LifecycleAndUtilization",
+			template:         deschedulerT,
+		}
+
+		g.By("Create descheduler cluster")
+		deschu.createKubeDescheduler(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
 		g.By("Cordon all nodes in the cluster")
 		nodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -784,6 +806,11 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		g.By("uncordon Node1")
 		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Retreive descheduler podName
+		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podName).ShouldNot(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see evict logs")

@@ -106,6 +106,10 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
 			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
+		} else if strings.Contains(checkLocalZoneNode, "Windows") {
+			g.Skip("Skipping the test as node is a windows node")
+		} else if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/outposts") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityoutposts.yaml")
 		}
 
 		// Create priority pods
@@ -185,6 +189,8 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
 			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
+		} else if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/outposts") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityoutposts.yaml")
 		}
 
 		exutil.By("Create another priority podl")
@@ -349,6 +355,10 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
 			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
+		} else if strings.Contains(checkLocalZoneNode, "Windows") {
+			g.Skip("Skipping the test as node is a windows node")
+		} else if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/outposts") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityoutposts.yaml")
 		}
 
 		g.By("Set namespace privileged")
@@ -538,6 +548,10 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
 			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
+		} else if strings.Contains(checkLocalZoneNode, "Windows") {
+			g.Skip("Skipping the test as node is a windows node")
+		} else if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/outposts") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityoutposts.yaml")
 		}
 
 		exutil.By("Set namespace privileged")
@@ -700,6 +714,10 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/edge") {
 			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityllocalzone.yaml")
+		} else if strings.Contains(checkLocalZoneNode, "Windows") {
+			g.Skip("Skipping the test as node is a windows node")
+		} else if strings.Contains(checkLocalZoneNode, "node-role.kubernetes.io/outposts") {
+			deploypodlT = filepath.Join(buildPruningBaseDir, "priorityoutposts.yaml")
 		}
 
 		exutil.By("Set namespace privileged")
