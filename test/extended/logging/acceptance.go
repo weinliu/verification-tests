@@ -355,7 +355,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	//author anli@redhat.com
-	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-LEVEL0-Critical-71772 - Forward logs to Azure Log Analytics -- full options", func() {
+	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-LEVEL0-Critical-71772-Forward logs to Azure Log Analytics -- full options", func() {
 		cloudType := getAzureCloudType(oc)
 		acceptedCloud := strings.ToLower(cloudType) == "azurepubliccloud" || strings.ToLower(cloudType) == "azureusgovernmentcloud"
 		if !acceptedCloud {

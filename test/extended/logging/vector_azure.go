@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	//author anli@redhat.com
-	g.It("CPaasrunOnly-ConnectedOnly-Author:anli-High-71770 - Forward logs to Azure Log Analytics -- Minimal Options", func() {
+	g.It("CPaasrunOnly-ConnectedOnly-Author:anli-High-71770-Forward logs to Azure Log Analytics -- Minimal Options", func() {
 		cloudType := getAzureCloudType(oc)
 		if strings.ToLower(cloudType) != "azurepubliccloud" {
 			g.Skip("Skip as the cluster is not on Azure Public!")
