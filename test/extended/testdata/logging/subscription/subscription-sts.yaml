@@ -1,0 +1,32 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: subscription-template
+objects:
+- apiVersion: operators.coreos.com/v1alpha1
+  kind: Subscription
+  metadata:
+    name: ${PACKAGE_NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    channel: ${CHANNEL}
+    installPlanApproval: ${INSTALL_PLAN_APPROVAL}
+    name: ${PACKAGE_NAME}
+    source: ${SOURCE}
+    sourceNamespace: ${SOURCE_NAMESPACE}
+    config:
+      env:
+      - name: ROLEARN
+        value: ${ROLEARN}
+parameters:
+  - name: PACKAGE_NAME
+  - name: NAMESPACE
+  - name: CHANNEL
+  - name: SOURCE
+    value: "qe-app-registry"
+  - name: SOURCE_NAMESPACE
+    value: "openshift-marketplace"
+  - name: INSTALL_PLAN_APPROVAL
+    value: Manual
+  - name: ROLEARN
+    value: "no_role_arn"

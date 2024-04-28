@@ -265,6 +265,12 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 		if strings.Contains(msg, "NotFound") {
 			so.setCatalogSourceObjects(oc)
 			//create subscription object
+			currentPlatform := exutil.CheckPlatform(oc)
+			if currentPlatform == "aws" && exutil.IsWorkloadIdentityCluster(oc) && so.PackageName == "loki-operator" {
+				e2e.Logf("Deploying Loki in STS mode...")
+				loggingBaseDir := exutil.FixturePath("testdata", "logging")
+				so.Subscription = filepath.Join(loggingBaseDir, "subscription", "subscription-sts.yaml")
+			}
 			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+so.CatalogSource.Channel, "SOURCE="+so.CatalogSource.SourceName, "SOURCE_NAMESPACE="+so.CatalogSource.SourceNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer os.Remove(subscriptionFile)
@@ -281,6 +287,15 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
 			// check status in subscription
 			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
+				installPlanApproval, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-o=jsonpath={.spec.installPlanApproval}`).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if installPlanApproval == "Manual" {
+					installPlanID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-o=jsonpath={.status.installPlanRef.name}`).Output()
+					installPlanApprovedStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "InstallPlans", installPlanID, `-o=jsonpath={.spec.approved}`).Output()
+					if installPlanApprovedStatus == "false" {
+						oc.AsAdmin().WithoutNamespace().Run("patch").Args("InstallPlans", installPlanID, "-n", so.Namespace, "-p", `{"spec":{"approved":true}}`, "--type=merge").Execute()
+					}
+				}
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-ojsonpath={.status.state}`).Output()
 				if err != nil {
 					e2e.Logf("error getting subscription/%s: %v", so.PackageName, err)
@@ -3561,4 +3576,12 @@ func (azLog *azureMonitorLog) deleteWorkspace() error {
 	}
 	workspacesClient.BeginDelete(ctx, azLog.resourceGroupName, azLog.workspaceName, &armoperationalinsights.WorkspacesClientBeginDeleteOptions{Force: new(bool)})
 	return nil
+}
+
+func getOIDC(oc *exutil.CLI) string {
+	oidc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication.config", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	oidc = strings.TrimPrefix(oidc, "https://")
+	e2e.Logf("The OIDC of STS cluster is: %v\n", oidc)
+	return oidc
 }

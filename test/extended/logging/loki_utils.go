@@ -438,13 +438,24 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	switch l.storageType {
 	case "s3":
 		{
-			cred := getAWSCredentialFromCluster(oc)
-			client := newS3Client(cred)
-			err = createS3Bucket(client, l.bucketName, cred)
-			if err != nil {
-				return err
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				iamClient := newIamClient()
+				stsClient := newStsClient()
+				var s3AssumeRoleName string
+				defer func() {
+					deleteIAMroleonAWS(s3AssumeRoleName)
+				}()
+				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.name)
+				createObjectStorageSecretWithS3OnSTS(oc, stsClient, s3AssumeRoleArn, l)
+			} else {
+				cred := getAWSCredentialFromCluster(oc)
+				client := newS3Client(cred)
+				err = createS3Bucket(client, l.bucketName, cred)
+				if err != nil {
+					return err
+				}
+				err = createSecretForAWSS3Bucket(oc, l.bucketName, l.storageSecret, l.namespace)
 			}
-			err = createSecretForAWSS3Bucket(oc, l.bucketName, l.storageSecret, l.namespace)
 		}
 	case "azure":
 		{
@@ -578,9 +589,22 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	switch l.storageType {
 	case "s3":
 		{
-			cred := getAWSCredentialFromCluster(oc)
-			client := newS3Client(cred)
-			err = deleteS3Bucket(client, l.bucketName)
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				iamClient := newIamClient()
+				stsClient := newStsClient()
+				var s3AssumeRoleName string
+				defer func() {
+					deleteIAMroleonAWS(s3AssumeRoleName)
+				}()
+				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.name)
+				if checkIfS3bucketExistsWithSTS(stsClient, s3AssumeRoleArn, l.bucketName) {
+					deleteS3bucketWithSTS(stsClient, s3AssumeRoleArn, l.bucketName)
+				}
+			} else {
+				cred := getAWSCredentialFromCluster(oc)
+				client := newS3Client(cred)
+				err = deleteS3Bucket(client, l.bucketName)
+			}
 		}
 	case "azure":
 		{
