@@ -1,6 +1,7 @@
 package workloads
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -185,4 +186,63 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(warningErr, "time: missing unit")).To(o.BeTrue())
 	})
+
+	// author: knarra@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Critical-73054-Verify version of oc binary is included into the must-gather directory when running oc adm must-gather command [Slow]", func() {
+		exutil.By("Get oc client version")
+		clientVersion, clientVersionErr := oc.Run("version").Args("-o", "json").Output()
+		o.Expect(clientVersionErr).NotTo(o.HaveOccurred())
+		versionInfo := &VersionInfo{}
+		if err := json.Unmarshal([]byte(clientVersion), &versionInfo); err != nil {
+			e2e.Failf("unable to decode version with error: %v", err)
+		}
+		e2e.Logf("Version output is %s", versionInfo.ClientInfo.GitVersion)
+
+		exutil.By("Run the must-gather")
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-73054").Output()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-73054", "--", "/usr/bin/gather_audit_logs").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("check the must-gather and verify that oc binary version is included")
+		headContent, err := exec.Command("bash", "-c", fmt.Sprintf("cat /tmp/must-gather-73054/must-gather.logs| head -n 5")).Output()
+		e2e.Logf("headContent is %s", headContent)
+		if err != nil {
+			e2e.Logf("Error is %s", err.Error())
+		}
+		o.Expect(headContent).To(o.ContainSubstring(versionInfo.ClientInfo.GitVersion))
+	})
+
+	// author: knarra@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Critical-73055-Verify logs generated are included in the must-gather directory when running the oc adm must-gather command [Slow]", func() {
+		exutil.By("Run the must-gather")
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-73055").Output()
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-73055-1").Output()
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-73055-2").Output()
+		mustGatherOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-73055", "--", "/usr/bin/gather_audit_logs").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("check logs generated are included in the must-gather directory when must-gather is run")
+		fileContent, err := exec.Command("bash", "-c", fmt.Sprintf("cat /tmp/must-gather-73055/must-gather.logs | head -n 10")).Output()
+		if err != nil {
+			e2e.Logf("Error reading file must-gather.logs:", err)
+		}
+		fileContentStr := string(fileContent)
+		if !strings.Contains(mustGatherOutput, fileContentStr) {
+			e2e.Failf("contains output")
+		}
+
+		// Check if gather.logs exists in the directory for default must-gather image
+		checkGatherLogsForImage(oc, "/tmp/must-gather-73055")
+
+		// Check if gather.logs exists in the directory for CNV image
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--image=registry.redhat.io/container-native-virtualization/cnv-must-gather-rhel9:v4.15.0", "--dest-dir=/tmp/must-gather-73055-1").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkGatherLogsForImage(oc, "/tmp/must-gather-73055-1")
+
+		// Check if gather.logs exists for both the images when passed to must-gather
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--image-stream=openshift/must-gather", "--image=registry.redhat.io/container-native-virtualization/cnv-must-gather-rhel9:v4.15.0", "--dest-dir=/tmp/must-gather-73055-2").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkGatherLogsForImage(oc, "/tmp/must-gather-73055-2")
+	})
+
 })

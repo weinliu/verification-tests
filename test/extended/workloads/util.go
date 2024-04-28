@@ -1985,3 +1985,31 @@ func waitCreateCr(oc *exutil.CLI, crFileName string, namespace string) error {
 		return true, nil
 	})
 }
+
+func checkGatherLogsForImage(oc *exutil.CLI, filePath string) {
+	imageDir, err := os.Open(filePath)
+	if err != nil {
+		e2e.Logf("Error opening directory:", err)
+	}
+
+	defer imageDir.Close()
+
+	// Read the contents of the directory
+	gatherlogInfos, err := imageDir.Readdir(-1)
+	if err != nil {
+		e2e.Logf("Error reading directory contents:", err)
+	}
+
+	// Check if gather.logs exist for each image
+	for _, gatherlogInfo := range gatherlogInfos {
+		if gatherlogInfo.IsDir() {
+			filesList, err := exec.Command("bash", "-c", fmt.Sprintf("ls -l %v/%v", filePath, gatherlogInfo.Name())).Output()
+			if err != nil {
+				e2e.Failf("Error listing directory:", err)
+			}
+			o.Expect(strings.Contains(string(filesList), "gather.logs")).To(o.BeTrue())
+		} else {
+			e2e.Logf("Not a directory, continuing to the next")
+		}
+	}
+}
