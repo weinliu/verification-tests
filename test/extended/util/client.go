@@ -296,22 +296,37 @@ func (c CLI) AsGuestKubeconf() *CLI {
 	return &c
 }
 
-// SetupProject creates a new project and assign a random user to the project.
-// All resources will be then created within this project.
+// SetupProject initializes and transitions to a new project.
+// All resources created henceforth will reside within this project.
+// For clusters that are not using external OIDC, it also generates and switches to a random temporary user.
 func (c *CLI) SetupProject() {
 	newNamespace := names.SimpleNameGenerator.GenerateName(fmt.Sprintf("e2e-test-%s-", c.kubeFramework.BaseName))
-	c.SetNamespace(newNamespace).ChangeUser(fmt.Sprintf("%s-user", newNamespace))
-	e2e.Logf("The user is now %q", c.Username())
+	c.SetNamespace(newNamespace)
+
+	// The user.openshift.io and oauth.openshift.io APIs are unavailable on external OIDC clusters by design.
+	// We will create and switch to a temporary user for non-external-oidc clusters only.
+	//
+	// For all cluster types, a temporary KUBECONFIG file will be created (with c.configPath points to it).
+	// This file will be deleted when calling TeardownProject().
+	isExternalOIDCCluster, err := IsExternalOIDCCluster(c)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if isExternalOIDCCluster {
+		// Clear username to avoid manipulation to users (e.g. oc adm policy ...)
+		c.username = ""
+		c.SetKubeconf(DuplicateFileToTemp(c.adminConfigPath, ""))
+		e2e.Logf("External OIDC cluster detected, keep using the current user")
+	} else {
+		c.ChangeUser(fmt.Sprintf("%s-user", newNamespace))
+		e2e.Logf("The user is now %q", c.Username())
+	}
 
 	e2e.Logf("Creating project %q", newNamespace)
-	_, err := c.ProjectClient().ProjectV1().ProjectRequests().Create(context.Background(), &projectv1.ProjectRequest{
+	_, err = c.ProjectClient().ProjectV1().ProjectRequests().Create(context.Background(), &projectv1.ProjectRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: newNamespace,
 		},
 	}, metav1.CreateOptions{})
-
 	o.Expect(err).NotTo(o.HaveOccurred())
-
 	c.kubeFramework.AddNamespacesToDelete(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: newNamespace}})
 
 	e2e.Logf("Waiting on permissions in project %q ...", newNamespace)

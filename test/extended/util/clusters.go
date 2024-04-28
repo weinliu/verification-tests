@@ -278,3 +278,14 @@ func IsInfrastructuresHighlyAvailable(oc *CLI) bool {
 	}
 	return strings.Compare(topology, "HighlyAvailable") == 0
 }
+
+// IsExternalOIDCCluster checks if the cluster is using external OIDC.
+func IsExternalOIDCCluster(oc *CLI) (bool, error) {
+	authType, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication/cluster", "-o=jsonpath={.spec.type}").Outputs()
+	if err != nil {
+		return false, fmt.Errorf("error checking if the cluster is using external OIDC: %v", err)
+	}
+	e2e.Logf("Found authentication type used: %v", authType)
+
+	return authType == string(configv1.AuthenticationTypeOIDC), nil
+}
