@@ -1141,7 +1141,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		//Cluster network MTU on AWS is 8901 and negotiated MSS is 8849 which accomodates TCP and IP header etc. We will use MSS of 9000 in this test
 		iperfClientCmd := "iperf3 -c " + helloPod2IP + " -p 60001 -b 30M -N -V -M 9000|grep -i -A 5 'Test Complete' | grep -i -A 1 'Retr' | awk '{ print $9 }' | tail -1"
-		iperfServerCmd := "iperf3 -s -p 60001&"
+		iperfServerCmd := "nohup iperf3 -s -p 60001&"
 
 		cmdBackground, _, _, errBackground := oc.Run("exec").Args("-n", pod2ns.namespace, pod2ns.name, "--", "/bin/sh", "-c", iperfServerCmd).Background()
 		defer cmdBackground.Process.Kill()
