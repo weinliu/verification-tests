@@ -1121,8 +1121,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.checkPodMountedVolumeCouldRW(oc)
 
 		exutil.By("#. Resize PVC storage capacity to a value bigger than previous value and less than 1Gi")
-		pvcSizeInt64, _ := strconv.ParseInt(defaultPvcSize, 10, 64)
-		newPvcSizeInt64 := getRandomNum(pvcSizeInt64+50, pvcSizeInt64+1000)
+		pvcSizeInt64, _ := strconv.ParseInt(strings.TrimRight(defaultPvcSize, "Mi"), 10, 64)
+		newPvcSizeInt64 := getRandomNum(pvcSizeInt64+50, pvcSizeInt64+700)
 		newPvcSize := strconv.FormatInt(newPvcSizeInt64, 10) + "Mi"
 		pvc.resizeAndCheckDataIntegrity(oc, dep, newPvcSize)
 
