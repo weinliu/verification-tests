@@ -1106,7 +1106,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		exutil.By("Check logs of machine-config-daemon on master-n-worker nodes, make sure pull secret changes are detected, drain and reboot are skipped")
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		commonExpectedStrings := []string{"File diff: detected change to /var/lib/kubelet/config.json", "Changes do not require drain, skipping"}
+		commonExpectedStrings := []string{`Writing file "/var/lib/kubelet/config.json"`, "Changes do not require drain, skipping"}
 		expectedStringsForMaster := append(commonExpectedStrings, "Node has Desired Config "+renderedMasterConf+", skipping reboot")
 		expectedStringsForWorker := append(commonExpectedStrings, "Node has Desired Config "+renderedWorkerConf+", skipping reboot")
 		masterMcdLogs, masterMcdLogErr := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, masterNode.GetMachineConfigDaemon(), "")
