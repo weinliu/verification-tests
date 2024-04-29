@@ -13,7 +13,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -23,7 +22,7 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc             = exutil.NewCLI("logfwd-namespace", exutil.KubeConfigPath())
+		oc             = exutil.NewCLI("logfwd-ns", exutil.KubeConfigPath())
 		loggingBaseDir string
 	)
 
@@ -1120,15 +1119,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("Log Forward to Cloudwatch", func() {
-		var cw cloudwatchSpec
 		g.BeforeEach(func() {
 			platform := exutil.CheckPlatform(oc)
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
-			}
-			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
 			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")
@@ -1141,19 +1135,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
-			g.By("init Cloudwatch test spec")
-			cw.init(oc)
-		})
-
-		g.AfterEach(func() {
-			cw.deleteGroups()
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43839-Fluentd logs to Cloudwatch group by namespaceName and groupPrefix [Serial]", func() {
-			cw.setGroupPrefix("logging-43839-" + getInfrastructureName(oc))
-			cw.setGroupType("namespaceName")
-			// Disable audit, so the test be more stable
-			cw.setLogTypes("infrastructure", "application")
+			cw := cloudwatchSpec{
+				clfAccountName:  "logcollector",
+				secretName:      "clf-43839",
+				secretNamespace: "openshift-logging",
+				groupType:       "namespaceName",
+				groupPrefix:     "logging-43839-" + getInfrastructureName(oc),
+				logTypes:        []string{"infrastructure", "application"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			g.By("create log producer")
 			appProj := oc.Namespace()
@@ -1190,10 +1184,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43840-Forward logs to Cloudwatch group by namespaceUUID and groupPrefix [Serial]", func() {
-			cw.setGroupPrefix("logging-43840-" + getInfrastructureName(oc))
-			cw.setGroupType("namespaceUUID")
-			// Disable audit, so the test be more stable
-			cw.setLogTypes("infrastructure", "application")
+			cw := cloudwatchSpec{
+				clfAccountName:  "logcollector",
+				secretName:      "clf-43840",
+				secretNamespace: "openshift-logging",
+				groupType:       "logType",
+				groupPrefix:     "logging-43840-" + getInfrastructureName(oc),
+				logTypes:        []string{"infrastructure", "application"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			g.By("create log producer")
 			appProj := oc.Namespace()
@@ -1234,9 +1234,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-47052-[fluentd]CLF API change for Opt-in to multiline error detection (Forward to CloudWatch)[Serial]", func() {
-			cw.setGroupPrefix("logging-47052-" + getInfrastructureName(oc))
-			cw.setGroupType("logType")
-			cw.setLogTypes("infrastructure", "audit", "application")
+			cw := cloudwatchSpec{
+				clfAccountName:  "logcollector",
+				secretName:      "clf-47052",
+				secretNamespace: "openshift-logging",
+				groupPrefix:     "logging-47052-" + getInfrastructureName(oc),
+				groupType:       "logType",
+				logTypes:        []string{"infrastructure", "application", "audit"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			g.By("create clusterlogforwarder/instance")
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)

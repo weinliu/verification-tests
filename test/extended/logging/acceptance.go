@@ -11,7 +11,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -20,7 +19,7 @@ import (
 var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc             = exutil.NewCLI("logging-acceptance", exutil.KubeConfigPath())
+		oc             = exutil.NewCLI("log-accept", exutil.KubeConfigPath())
 		loggingBaseDir string
 		CLO, LO        SubscriptionObjects
 	)
@@ -202,23 +201,20 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")
 		}
-		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
-		}
 
 		cw := cloudwatchSpec{
-			groupPrefix: getInfrastructureName(oc) + "-43443",
-			groupType:   "logType",
-			logTypes:    []string{"infrastructure", "application", "audit"},
+			clfAccountName: "logcollector",
+			groupPrefix:    "logging-43443-" + getInfrastructureName(oc),
+			groupType:      "logType",
+			logTypes:       []string{"infrastructure", "application", "audit"},
 		}
 		cw.init(oc)
-		defer cw.deleteGroups()
+		defer cw.deleteResources()
 
 		g.By("create log producer")
 		appProj := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("create clusterlogforwarder/instance")
@@ -254,25 +250,21 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")
 		}
-		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
-		}
 
 		clfNS := oc.Namespace()
 		cw := cloudwatchSpec{
-			groupPrefix:     getInfrastructureName(oc) + "-51974",
+			groupPrefix:     "logging-51974-" + getInfrastructureName(oc),
 			groupType:       "logType",
 			logTypes:        []string{"infrastructure", "application", "audit"},
 			secretNamespace: clfNS,
 		}
 		cw.init(oc)
-		defer cw.deleteGroups()
+		defer cw.deleteResources()
 
 		g.By("Create log producer")
 		appProj := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create clusterlogforwarder/instance")
@@ -288,7 +280,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
-			serviceAccountName:        "test-clf-" + getRandomString(),
+			serviceAccountName:        cw.clfAccountName,
 		}
 		defer clf.delete(oc)
 		clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix)

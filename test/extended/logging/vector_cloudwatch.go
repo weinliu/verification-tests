@@ -1,7 +1,7 @@
 package logging
 
 import (
-	"context"
+	//	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -11,17 +11,14 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc             = exutil.NewCLI("vector-cloudwatch", exutil.KubeConfigPath())
+		oc             = exutil.NewCLI("vector-cw", exutil.KubeConfigPath())
 		loggingBaseDir string
-		cw             cloudwatchSpec
 		infraName      string
 	)
 
@@ -31,10 +28,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			platform := exutil.CheckPlatform(oc)
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the supported platform is AWS!!!")
-			}
-			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				g.Skip("Can not find secret/aws-creds. You could be running tests on an AWS STS cluster.")
 			}
 
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
@@ -49,19 +42,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
-			g.By("init Cloudwatch test spec")
-			cw.init(oc)
 			infraName = getInfrastructureName(oc)
 		})
 
-		g.AfterEach(func() {
-			cw.deleteGroups()
-		})
-
 		g.It("CPaasrunOnly-Author:ikanse-Critical-51977-Vector logs to Cloudwatch group by namespaceName and groupPrefix", func() {
-			cw.setGroupPrefix("logging-51977-" + infraName)
-			cw.setGroupType("namespaceName")
-			cw.setLogTypes("infrastructure", "application", "audit")
+			g.By("init Cloudwatch test spec")
+			clfNS := oc.Namespace()
+			cw := cloudwatchSpec{
+				secretNamespace: clfNS,
+				groupPrefix:     "logging-51977-" + infraName,
+				groupType:       "namespaceName",
+				logTypes:        []string{"infrastructure", "application", "audit"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			g.By("Create log producer")
 			appProj := oc.Namespace()
@@ -69,9 +63,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			oc.SetupProject()
-			clfNS := oc.Namespace()
-			cw.setSecretNamespace(clfNS)
 			g.By("Create clusterlogforwarder")
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
@@ -85,7 +76,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
-				serviceAccountName:        "clf-" + getRandomString(),
+				serviceAccountName:        cw.clfAccountName,
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
@@ -107,11 +98,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-51978-Vector Forward logs to Cloudwatch using namespaceUUID and groupPrefix", func() {
+			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
-			cw.setSecretNamespace(clfNS)
-			cw.setGroupPrefix("logging-51978-" + infraName)
-			cw.setGroupType("namespaceUUID")
-			cw.setLogTypes("application", "infrastructure", "audit")
+			cw := cloudwatchSpec{
+				secretNamespace: clfNS,
+				groupType:       "namespaceUUID",
+				groupPrefix:     "logging-51978-" + infraName,
+				logTypes:        []string{"infrastructure", "application", "audit"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
@@ -136,7 +132,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
-				serviceAccountName:        "test-clf-" + getRandomString(),
+				serviceAccountName:        cw.clfAccountName,
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
@@ -146,11 +142,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-61600-Collector External Cloudwatch output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
-			cw.setSecretNamespace(clfNS)
-			cw.setGroupPrefix("logging-61600-" + infraName)
-			cw.setGroupType("logType")
-			cw.setLogTypes("infrastructure", "audit", "application")
+			cw := cloudwatchSpec{
+				secretNamespace: clfNS,
+				groupType:       "logType",
+				groupPrefix:     "logging-61600-" + infraName,
+				logTypes:        []string{"infrastructure", "application", "audit"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			g.By("Configure the global tlsSecurityProfile to use custom profile")
 			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
@@ -183,7 +184,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
-				serviceAccountName:        "test-clf-" + getRandomString(),
+				serviceAccountName:        cw.clfAccountName,
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
@@ -247,11 +248,16 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-71778-Collect or exclude logs by matching pod labels and namespaces.[Slow]", func() {
+			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
-			cw.setSecretNamespace(clfNS)
-			cw.setGroupPrefix("logging-71778-" + infraName)
-			cw.setGroupType("logType")
-			cw.setLogTypes("application")
+			cw := cloudwatchSpec{
+				secretNamespace: clfNS,
+				groupType:       "logType",
+				groupPrefix:     "logging-71778-" + infraName,
+				logTypes:        []string{"application"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			exutil.By("Create projects for app logs and deploy the log generators")
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -284,7 +290,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 				secretName:             cw.secretName,
 				waitForPodReady:        true,
 				collectApplicationLogs: true,
-				serviceAccountName:     "test-clf-" + getRandomString(),
+				serviceAccountName:     cw.clfAccountName,
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType, "MATCH_LABELS={\"test.logging.io/logging.qe-test-label\": \"logging-71778-test\"}")
@@ -303,8 +309,8 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			cw.deleteGroups()
 
 			exutil.By("Check logs in Cloudwatch")
-			cw.setGroupPrefix("new-logging-71778-" + infraName)
 			clf.update(oc, "", `[{"op": "replace", "path": "/spec/outputs/0/cloudwatch/groupPrefix", "value": "new-logging-71778-`+infraName+`"}]`, "--type=json")
+			cw.setGroupPrefix("new-logging-71778-" + infraName)
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 			cw.selAppNamespaces = []string{namespaces[0]}
 			cw.disAppNamespaces = []string{namespaces[1], namespaces[2], appNS1}
@@ -313,11 +319,18 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-71488-Collect container logs from infrastructure projects in an application input.", func() {
+			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
-			cw.setSecretNamespace(clfNS)
-			cw.setGroupPrefix("logging-71488-" + infraName)
-			cw.setGroupType("logType")
-			cw.setLogTypes("application")
+			cw := cloudwatchSpec{
+				clfAccountName:  "clf-71448",
+				secretName:      "clf-71448",
+				secretNamespace: clfNS,
+				groupPrefix:     "logging-71488-" + infraName,
+				groupType:       "logType",
+				logTypes:        []string{"application"},
+			}
+			defer cw.deleteResources()
+			cw.init(oc)
 
 			exutil.By("Create clusterlogforwarder")
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
@@ -328,7 +341,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
 				secretName:             cw.secretName,
 				collectApplicationLogs: true,
-				serviceAccountName:     "test-clf-" + getRandomString(),
+				serviceAccountName:     cw.clfAccountName,
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType, "INPUT_REFS=[\"application\"]")
