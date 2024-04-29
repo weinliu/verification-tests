@@ -36,7 +36,7 @@ func (clusterextension *ClusterExtensionDescription) Create(oc *exutil.CLI) {
 
 func (clusterextension *ClusterExtensionDescription) CreateWithoutCheck(oc *exutil.CLI) error {
 	e2e.Logf("=========CreateWithoutCheck clusterextension %v=========", clusterextension.Name)
-	paremeters := []string{"--ignore-unknown-parameters=true", "-f", clusterextension.Template, "-p"}
+	paremeters := []string{"-n", "default", "--ignore-unknown-parameters=true", "-f", clusterextension.Template, "-p"}
 	if len(clusterextension.Name) > 0 {
 		paremeters = append(paremeters, "NAME="+clusterextension.Name)
 	}

@@ -30,7 +30,7 @@ type ChildResource struct {
 func (bd *BundleDeploymentDescription) Create(oc *exutil.CLI) {
 	e2e.Logf("=========Create bd %v=========", bd.BdName)
 
-	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, "--ignore-unknown-parameters=true", "-f", bd.Template, "-p", "NAME="+bd.BdName, "ADDRESS="+bd.Address)
+	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, "-n", "default", "--ignore-unknown-parameters=true", "-f", bd.Template, "-p", "NAME="+bd.BdName, "ADDRESS="+bd.Address)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	bd.AssertInstalled(oc, "true")
 	bd.AssertHealthy(oc, "true")
@@ -41,7 +41,7 @@ func (bd *BundleDeploymentDescription) Create(oc *exutil.CLI) {
 func (bd *BundleDeploymentDescription) CreateWithoutCheck(oc *exutil.CLI) {
 	e2e.Logf("=========CreateWithoutCheck bd %v=========", bd.BdName)
 
-	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, "--ignore-unknown-parameters=true", "-f", bd.Template, "-p", "NAME="+bd.BdName, "ADDRESS="+bd.Address)
+	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, "-n", "default", "--ignore-unknown-parameters=true", "-f", bd.Template, "-p", "NAME="+bd.BdName, "ADDRESS="+bd.Address)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 }

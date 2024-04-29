@@ -37,7 +37,7 @@ func (catalog *CatalogDescription) Create(oc *exutil.CLI) {
 }
 
 func (catalog *CatalogDescription) CreateWithoutCheck(oc *exutil.CLI) error {
-	paremeters := []string{"--ignore-unknown-parameters=true", "-f", catalog.Template, "-p"}
+	paremeters := []string{"-n", "default", "--ignore-unknown-parameters=true", "-f", catalog.Template, "-p"}
 	if len(catalog.Name) > 0 {
 		paremeters = append(paremeters, "NAME="+catalog.Name)
 	}
