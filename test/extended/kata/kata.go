@@ -23,33 +23,34 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                       = exutil.NewCLI("kata", exutil.KubeConfigPath())
-		testDataDir              = exutil.FixturePath("testdata", "kata")
-		kcTemplate               = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment        = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
-		defaultPod               = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
-		subTemplate              = filepath.Join(testDataDir, "subscription_template.yaml")
-		nsFile                   = filepath.Join(testDataDir, "namespace.yaml")
-		ogFile                   = filepath.Join(testDataDir, "operatorgroup.yaml")
-		redirectFile             = filepath.Join(testDataDir, "ImageTag-DigestMirrorSet.yaml")
-		redirectType             = "ImageTagMirrorSet"
-		redirectName             = "kata-brew-registry"
-		clusterVersion           string
-		ocpMajorVer              string
-		ocpMinorVer              string
-		opNamespace              = "openshift-sandboxed-containers-operator"
-		workload                 = "have securityContext"
-		ppParam                  PeerpodParam
-		ppRuntimeClass           = "kata-remote"
-		ppSecretName             = "peer-pods-secret"
-		ppConfigMapName          = "peer-pods-cm"
-		secretTemplateAws        = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")
-		ppConfigMapTemplate      string
-		ppAWSConfigMapTemplate   = filepath.Join(testDataDir, "peer-pod-aws-cm-template.yaml")
-		ppAzureConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
-		podAnnotatedTemplate     = filepath.Join(testDataDir, "pod-annotations-template.yaml")
-		testrunConfigmapNs       = "default"
-		testrunConfigmapName     = "osc-config"
+		oc                         = exutil.NewCLI("kata", exutil.KubeConfigPath())
+		testDataDir                = exutil.FixturePath("testdata", "kata")
+		kcTemplate                 = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment          = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
+		defaultPod                 = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
+		subTemplate                = filepath.Join(testDataDir, "subscription_template.yaml")
+		nsFile                     = filepath.Join(testDataDir, "namespace.yaml")
+		ogFile                     = filepath.Join(testDataDir, "operatorgroup.yaml")
+		redirectFile               = filepath.Join(testDataDir, "ImageTag-DigestMirrorSet.yaml")
+		redirectType               = "ImageTagMirrorSet"
+		redirectName               = "kata-brew-registry"
+		clusterVersion             string
+		ocpMajorVer                string
+		ocpMinorVer                string
+		opNamespace                = "openshift-sandboxed-containers-operator"
+		workload                   = "have securityContext"
+		ppParam                    PeerpodParam
+		ppRuntimeClass             = "kata-remote"
+		ppSecretName               = "peer-pods-secret"
+		ppConfigMapName            = "peer-pods-cm"
+		secretTemplateAws          = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")
+		ppConfigMapTemplate        string
+		ppAWSConfigMapTemplate     = filepath.Join(testDataDir, "peer-pod-aws-cm-template.yaml")
+		ppAzureConfigMapTemplate   = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
+		ppLibvirtConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-libvirt-cm-template.yaml")
+		podAnnotatedTemplate       = filepath.Join(testDataDir, "pod-annotations-template.yaml")
+		testrunConfigmapNs         = "default"
+		testrunConfigmapName       = "osc-config"
 	)
 
 	subscription := SubscriptionDescription{
@@ -160,11 +161,17 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
 			}
 
-			if cloudPlatform == "aws" {
-				ppConfigMapTemplate = ppAWSConfigMapTemplate
-			} else {
+			switch cloudPlatform {
+			case "azure":
 				ppConfigMapTemplate = ppAzureConfigMapTemplate
+			case "aws":
+				ppConfigMapTemplate = ppAWSConfigMapTemplate
+			case "libvirt":
+				ppConfigMapTemplate = ppLibvirtConfigMapTemplate
+			default:
+				e2e.Failf("Cloud provider %v is not supported", cloudPlatform)
 			}
+
 			msg, err = createApplyPeerPodConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppConfigMapName, ppConfigMapTemplate)
 			if err != nil {
 				e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)

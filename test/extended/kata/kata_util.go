@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -59,21 +59,22 @@ type TestRunDescription struct {
 
 // If you changes this please make changes to func createPeerPodSecrets
 type PeerpodParam struct {
-	AWS_SUBNET_ID        string
-	AWS_VPC_ID           string
-	PODVM_INSTANCE_TYPE  string
-	PROXY_TIMEOUT        string
-	VXLAN_PORT           string
-	AWS_REGION           string
-	AWS_SG_IDS           string
-	PODVM_AMI_ID         string
-	CLOUD_PROVIDER       string
-	AZURE_REGION         string
-	AZURE_RESOURCE_GROUP string
-	AZURE_IMAGE_ID       string
-	AZURE_INSTANCE_SIZE  string
-	AZURE_NSG_ID         string
-	AZURE_SUBNET_ID      string
+	AWS_SUBNET_ID            string
+	AWS_VPC_ID               string
+	PODVM_INSTANCE_TYPE      string
+	PROXY_TIMEOUT            string
+	VXLAN_PORT               string
+	AWS_REGION               string
+	AWS_SG_IDS               string
+	PODVM_AMI_ID             string
+	CLOUD_PROVIDER           string
+	AZURE_REGION             string
+	AZURE_RESOURCE_GROUP     string
+	AZURE_IMAGE_ID           string
+	AZURE_INSTANCE_SIZE      string
+	AZURE_NSG_ID             string
+	AZURE_SUBNET_ID          string
+	LIBVIRT_KVM_HOST_ADDRESS string
 }
 
 type UpgradeCatalogDescription struct {
@@ -669,7 +670,7 @@ func checkPeerPodSecrets(oc *exutil.CLI, opNamespace, provider string, ppSecretN
 	case "aws":
 		providerVars = append(providerVars, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
 	case "libvirt":
-		providerVars = append(providerVars, "LIBVIRT_URI")
+		providerVars = append(providerVars, "LIBVIRT_URI", "LIBVIRT_POOL", "LIBVIRT_VOL_NAME")
 	default:
 		msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
 		err = fmt.Errorf("%v", msg)
@@ -960,6 +961,8 @@ func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodP
 			secretFilePath, err = createAWSPeerPodSecrets(oc, ppParam, ciSecretName, secretTemplate)
 		} else if provider == "azure" {
 			secretFilePath, err = createAzurePeerPodSecrets(oc, ppParam, ciSecretName, secretTemplate)
+		} else if provider == "libvirt" {
+			secretFilePath, err = createLibvirtPeerPodSecrets(oc, ppParam, ciCmName, secretTemplate)
 		} else {
 			msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
 			return msg, fmt.Errorf("%v", msg)
@@ -991,9 +994,24 @@ func parseCIPpConfigMapData(provider, configmapData string) (PeerpodParam, error
 		return parseAWSCIConfigMapData(configmapData)
 	case "azure":
 		return parseAzureCIConfigMapData(configmapData)
+	case "libvirt":
+		return parseLibvirtCIConfigMapData(configmapData)
 	default:
 		return ppParam, fmt.Errorf("Cloud provider %v is not supported", provider)
 	}
+}
+
+func parseLibvirtCIConfigMapData(configmapData string) (PeerpodParam, error) {
+	var ppParam PeerpodParam
+
+	if gjson.Get(configmapData, "PROXY_TIMEOUT").Exists() {
+		ppParam.PROXY_TIMEOUT = gjson.Get(configmapData, "PROXY_TIMEOUT").String()
+	}
+	if gjson.Get(configmapData, "LIBVIRT_KVM_HOST_ADDRESS").Exists() {
+		ppParam.LIBVIRT_KVM_HOST_ADDRESS = gjson.Get(configmapData, "LIBVIRT_KVM_HOST_ADDRESS").String()
+	}
+
+	return ppParam, nil
 }
 
 func parseAWSCIConfigMapData(configmapData string) (PeerpodParam, error) {
@@ -1050,6 +1068,68 @@ func parseAzureCIConfigMapData(configmapData string) (PeerpodParam, error) {
 	}
 
 	return ppParam, nil
+}
+
+func createLibvirtPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretName, secretTemplate string) (string, error) {
+	configmapDatav2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciSecretName, "-n", "default", "-o=jsonpath={.data}").Output()
+	if err != nil {
+		e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciSecretName, configmapDatav2, err)
+	}
+
+	LIBVIRT_URI := ""
+	LIBVIRT_POOL := ""
+	LIBVIRT_VOL_NAME := ""
+	PROXY_TIMEOUT := ""
+
+	if gjson.Get(configmapDatav2, "LIBVIRT_POOL").Exists() {
+		LIBVIRT_POOL = gjson.Get(configmapDatav2, "LIBVIRT_POOL").String()
+	}
+	if gjson.Get(configmapDatav2, "LIBVIRT_URI").Exists() {
+		LIBVIRT_URI = gjson.Get(configmapDatav2, "LIBVIRT_URI").String()
+	}
+	if gjson.Get(configmapDatav2, "LIBVIRT_VOL_NAME").Exists() {
+		LIBVIRT_VOL_NAME = gjson.Get(configmapDatav2, "LIBVIRT_VOL_NAME").String()
+	}
+	if gjson.Get(configmapDatav2, "PROXY_TIMEOUT").Exists() {
+		PROXY_TIMEOUT = gjson.Get(configmapDatav2, "PROXY_TIMEOUT").String()
+	}
+
+	// Check for libvirt credentials
+	if LIBVIRT_POOL == "" || LIBVIRT_URI == "" || LIBVIRT_VOL_NAME == "" || PROXY_TIMEOUT == "" {
+		msg := "Libvirt credentials not found in the data."
+		return msg, fmt.Errorf("Libvirt credentials not found")
+	}
+
+	// Construct the secretJSON for Libvirt
+	secretJSON := map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Secret",
+		"type":       "Opaque",
+		"metadata": map[string]string{
+			"name":      "peer-pods-secret",
+			"namespace": "openshift-sandboxed-containers-operator",
+		},
+		"stringData": map[string]string{
+			"CLOUD_PROVIDER":   "libvirt",
+			"LIBVIRT_URI":      LIBVIRT_URI,
+			"LIBVIRT_POOL":     LIBVIRT_POOL,
+			"LIBVIRT_VOL_NAME": LIBVIRT_VOL_NAME,
+		},
+	}
+
+	// Marshal the JSON to a string
+	secretJSONString, err := json.Marshal(secretJSON)
+	if err != nil {
+		return "", err
+	}
+
+	// Write the JSON string to the secretTemplate file
+	err = os.WriteFile(secretTemplate, []byte(secretJSONString), 0644)
+	if err != nil {
+		return "", err
+	}
+
+	return secretTemplate, nil
 }
 
 func createAWSPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretName, secretTemplate string) (string, error) {
@@ -1119,7 +1199,7 @@ func createAWSPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretName,
 	}
 
 	// Write the JSON string to the secretTemplate file
-	err = ioutil.WriteFile(secretTemplate, []byte(secretJSONString), 0644)
+	err = os.WriteFile(secretTemplate, []byte(secretJSONString), 0644)
 	if err != nil {
 		return "", err
 	}
@@ -1203,7 +1283,7 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 	}
 
 	// Write the JSON string to the secretTemplate file
-	err = ioutil.WriteFile(secretTemplate, []byte(secretJSONString), 0644)
+	err = os.WriteFile(secretTemplate, []byte(secretJSONString), 0644)
 	if err != nil {
 		return "", err
 	}
@@ -1214,8 +1294,9 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 // Get the cloud provider type of the test environment copied from test/extended/storage/utils
 func getCloudProvider(oc *exutil.CLI) string {
 	var (
-		errMsg error
-		output string
+		errMsg        error
+		output        string
+		cloudprovider string
 	)
 	err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
 		output, errMsg = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
@@ -1223,11 +1304,17 @@ func getCloudProvider(oc *exutil.CLI) string {
 			e2e.Logf("Get cloudProvider *failed with* :\"%v\",wait 5 seconds retry.", errMsg)
 			return false, errMsg
 		}
-		e2e.Logf("The test cluster cloudProvider is :\"%s\".", strings.ToLower(output))
+
+		cloudprovider = strings.ToLower(output)
+		if cloudprovider == "none" {
+			cloudprovider = "libvirt"
+		}
+		e2e.Logf("The test cluster cloudProvider is :\"%s\".", strings.ToLower(cloudprovider))
+
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Waiting for get cloudProvider timeout")
-	return strings.ToLower(output)
+	return strings.ToLower(cloudprovider)
 }
 
 func createRWOfilePVC(oc *exutil.CLI, opNamespace, pvcName, capacity string) (err error) {
@@ -1334,6 +1421,12 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 			configFile, err = createAWSPeerPodsConfigMap(oc, ppParam, ppConfigMapTemplate)
 		} else if provider == "azure" {
 			configFile, err = createAzurePeerPodsConfigMap(oc, ppParam, ppConfigMapTemplate)
+		} else if provider == "libvirt" {
+			configFile, err = createLibvirtPeerPodsConfigMap(oc, ppParam, ppConfigMapTemplate)
+			if err != nil {
+				err = createLibvirtPeerPodsKeys(oc, ppParam)
+				o.Expect(err).NotTo(o.HaveOccurred(), err)
+			}
 		} else {
 			msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
 			return msg, fmt.Errorf("%v", msg)
@@ -1403,6 +1496,51 @@ func createAzurePeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfig
 	}
 
 	return configFile, err
+}
+
+func createLibvirtPeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfigMapTemplate string) (string, error) {
+	g.By("Create peer-pods-cm file")
+
+	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
+	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
+		"-p", "PROXY_TIMEOUT="+ppParam.PROXY_TIMEOUT).OutputToFile(getRandomString() + "peer-pods-cm.json")
+
+	if configFile != "" {
+		osStatMsg, configFileExists := os.Stat(configFile)
+		if configFileExists != nil {
+			e2e.Logf("issue creating peer-pods-cm file %s, err: %v , osStatMsg: %v", configFile, err, osStatMsg)
+		}
+	}
+
+	return configFile, err
+}
+
+func createLibvirtPeerPodsKeys(oc *exutil.CLI, ppParam PeerpodParam) error {
+	g.By("Create ssh keys")
+
+	keyName := "id_rsa_" + getRandomString()
+	pubKeyName := keyName + ".pub"
+
+	shredRMCmd := fmt.Sprintf(`shred -f --remove ./%v ./%v`, keyName, pubKeyName)
+	defer exec.Command("bash", "-c", shredRMCmd).CombinedOutput()
+
+	sshKeyGenCmd := fmt.Sprintf(`ssh-keygen -f ./%v -N ""`, keyName)
+	retCmd, err := exec.Command("bash", "-c", sshKeyGenCmd).CombinedOutput()
+	if err != nil {
+		e2e.Logf("the error: %v", string(retCmd))
+		return err
+	}
+
+	sshCopyIdCmd := fmt.Sprintf(`ssh-copy-id -i ./%v %v`, pubKeyName, ppParam.LIBVIRT_KVM_HOST_ADDRESS)
+	retCmd, err = exec.Command("bash", "-c", sshCopyIdCmd).CombinedOutput()
+	if err != nil {
+		e2e.Logf("the error: %v", string(retCmd))
+		return err
+	}
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-sandboxed-containers-operator", "secret", "generic", "ssh-key-secret",
+		"--from-file=id_rsa.pub=./"+pubKeyName, "--from-file=id_rsa=./"+keyName).Output()
+	return err
 }
 
 func checkLabeledPodsExpectedRunning(oc *exutil.CLI, resNs, label, expectedRunning string) (msg string, err error) {

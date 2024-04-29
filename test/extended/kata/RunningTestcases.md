@@ -24,8 +24,6 @@ examples:
 - `egrep 'sig-kata | egrep -iv '43523|41813|upgrade'`
   - run the full suite, excluding upgrade and the 2 tests that delete kataconfig
 
-
-
 ### Change the test defaults with a configmap
 
 To override the hard coded defaults, a *configmap* named `osc-config` in the `default` *namespace* is used.
@@ -45,9 +43,23 @@ Values not specified will be the defaults from the template. The `CATSOURCENAME`
 ### Change the test defaults with environment variables
 This was not being used and environment variables have been removed from the code.
 
+### Changes for libvirt related test cases on s390x
+For libvirt-related test cases to run on s390x machine, a *configmap* named `peerpods-param-cm.yaml` needs to be applied before running the test. Attaching the structure of *configmap* here,
 
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: peerpods-param-cm
+    namespace: default
+data:
+    PROXY_TIMEOUT: "<Enter the Proxy timeout>"
+    LIBVIRT_URI: "<Enter the IP address of your KVM host>"
+    LIBVIRT_POOL: "<Enter the Libvirt pool name>"
+    LIBVIRT_VOL_NAME: "<Enter the Libvirt volume name>"
+    LIBVIRT_KVM_HOST_ADDRESS: "<Enter the IP address of your KVM host>"
 
-
+```
 
 ## Upgrading
 An upgrade should be done in its own testrun.  If it is combined with other tests, the tests will be in random order.  Therefore, you should create your cluster, run the upgrade test by itself and then run the full suite.
@@ -126,6 +138,8 @@ You _can_ run the rest of the tests with this configmap in place but it will slo
 
 ### Before running further tests
 The `osc-config` configmap should be updated with `operatorVer` set to _your-next-index_'s version so the `66108-Version in operator CSV should match expected version` test passes.
+
+
 
 ## Changing the *Subscription* and channel for an upgrade
 This is not how Openshift does upgrades.  Early on, we used a channel in OSC for each version.  We upgraded by changing the subscription.
