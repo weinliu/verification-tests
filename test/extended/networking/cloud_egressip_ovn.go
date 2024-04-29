@@ -36,12 +36,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix") || strings.Contains(platform, "powervs")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal/Nutanix/Powervs cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 
-		if !strings.Contains(platform, "none") && (checkProxy(oc) || checkDisconnect(oc)) {
+		if !(strings.Contains(platform, "none") || strings.Contains(platform, "powervs")) && (checkProxy(oc) || checkDisconnect(oc)) {
 			g.Skip("This is proxy/disconnect cluster, skip the test.")
 		}
 
@@ -164,6 +164,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Logf("\n Nutanix is detected, running the case on Nutanix\n")
 			flag = "tcpdump"
 			e2e.Logf("Use tcpdump way to verify egressIP on Nutanix")
+		case "powervs":
+			e2e.Logf("\n Powervs is detected, running the case on Powervs\n")
+			flag = "tcpdump"
+			e2e.Logf("Use tcpdump way to verify egressIP on Powervs")
 		default:
 			e2e.Logf("Not support cloud provider for  egressip cases for now.")
 			g.Skip("Not support cloud provider for  egressip cases for now.")
@@ -2083,9 +2087,9 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix") || strings.Contains(platform, "powervs")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal/Nutanix cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal/Nutanix/Powervs cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 		if strings.Contains(platform, "none") {
 			// For UPI baremetal, egressIP cases only can be tested on clusters from upi-on-baremetal/versioned-installer-packet-http_proxy-private-vlan as some limitations on other clusters.
@@ -2715,8 +2719,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.SkipConditionally(oc)
 		machinesetName := "machineset-61344"
 		ms := exutil.MachineSetDescription{machinesetName, 2}
+		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
+
+		// Wait 180 seconds first, as exutil.WaitForMachinesRunning() uses total 960 seconds in wait.poll, it may not be enough for some platform(s)
+		time.Sleep(180 * time.Second)
 		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
 		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
 		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
@@ -2922,9 +2930,9 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "nutanix")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "nutanix") || strings.Contains(platform, "powervs")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal/Nutanix cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal/Nutanix/Powervs cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 	})
 
