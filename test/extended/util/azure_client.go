@@ -10,12 +10,15 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/services/authorization/mgmt/2020-10-01/authorization"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/msi/mgmt/2018-11-30/msi"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
+	"github.com/Azure/go-autorest/autorest/to"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -387,5 +390,68 @@ func EmptyAzureBlobContainer(container azblob.ContainerURL) error {
 		}
 	}
 	e2e.Logf("deleted all blob items in the container.")
+	return nil
+}
+
+// getUserAssignedIdentitiesClient get user assigned identities client
+func getUserAssignedIdentitiesClient(sess *AzureSession) msi.UserAssignedIdentitiesClient {
+	msiClient := msi.NewUserAssignedIdentitiesClient(sess.SubscriptionID)
+	msiClient.Authorizer = sess.Authorizer
+	return msiClient
+}
+
+// GetUserAssignedIdentityPrincipalID get user assigned identity PrincipalID
+func GetUserAssignedIdentityPrincipalID(sess *AzureSession, resourceGroup string, identityName string) (string, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	msiClient := getUserAssignedIdentitiesClient(sess)
+	identity, err := msiClient.Get(ctx, resourceGroup, identityName)
+	if err != nil {
+		return "", err
+	}
+	return identity.PrincipalID.String(), nil
+}
+
+// getRoleAssignmentsClient get role assignments client
+func getRoleAssignmentsClient(sess *AzureSession) authorization.RoleAssignmentsClient {
+	roleAssignmentsClient := authorization.NewRoleAssignmentsClient(sess.SubscriptionID)
+	roleAssignmentsClient.Authorizer = sess.Authorizer
+	return roleAssignmentsClient
+}
+
+// GrantRoleToPrincipalIDByResourceGroup grant role to principalID by resource group
+func GrantRoleToPrincipalIDByResourceGroup(sess *AzureSession, principalID string, resourceGroup string, roleId string) (roleAssignmentName string, scope string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	roleAssignmentsClient := getRoleAssignmentsClient(sess)
+
+	roleAssignment := authorization.RoleAssignmentCreateParameters{
+		Properties: &authorization.RoleAssignmentProperties{
+			PrincipalID:      &principalID,
+			RoleDefinitionID: to.StringPtr("/subscriptions/" + sess.SubscriptionID + "/providers/Microsoft.Authorization/roleDefinitions/" + roleId),
+		},
+	}
+	roleAssignmentName = sess.SubscriptionID[:8] + principalID[8:24] + roleId[24:]
+	scope = "/subscriptions/" + sess.SubscriptionID + "/resourceGroups/" + resourceGroup
+	result, err := roleAssignmentsClient.Create(ctx, scope, roleAssignmentName, roleAssignment)
+	if err != nil {
+		e2e.Logf("Error creating role assignment: %v", err)
+	} else {
+		e2e.Logf("Role assignment created: %s", *result.Name)
+	}
+	return roleAssignmentName, scope
+}
+
+// DeleteRoleAssignments deletes role assignments
+func DeleteRoleAssignments(sess *AzureSession, roleAssignmentName string, scope string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	roleAssignmentsClient := getRoleAssignmentsClient(sess)
+	_, err := roleAssignmentsClient.Delete(ctx, roleAssignmentName, scope)
+	if err != nil {
+		return fmt.Errorf("error deleting role assignment: %v", err)
+	}
+	e2e.Logf("Role assignment is deleted")
 	return nil
 }

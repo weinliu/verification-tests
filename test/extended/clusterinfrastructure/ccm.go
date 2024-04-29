@@ -477,4 +477,42 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("CCM %v failed to fully terminate", "pod/"+value))
 		}
 	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-High-72120-[CCM] Pull images from ACR repository should succeed [Disruptive]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureCloudName == "AzureStackCloud" || azureCloudName == "AzureUSGovernmentCloud" {
+			g.Skip("Skip for ASH and azure Gov due to we didn't create container registry on them!")
+		}
+		exutil.By("Create RoleAssignments for resourcegroup")
+		infrastructureID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		identityName := infrastructureID + "-identity"
+		resourceGroup, err := exutil.GetAzureCredentialFromCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		az, sessErr := exutil.NewAzureSessionFromEnv()
+		o.Expect(sessErr).NotTo(o.HaveOccurred())
+		principalId, _ := exutil.GetUserAssignedIdentityPrincipalID(az, resourceGroup, identityName)
+		roleAssignmentName, scope := "", ""
+		defer func() {
+			exutil.DeleteRoleAssignments(az, roleAssignmentName, scope)
+		}()
+		//AcrPull id is 7f951dda-4ed3-4680-a7ca-43fe172d538d, check from https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
+		roleAssignmentName, scope = exutil.GrantRoleToPrincipalIDByResourceGroup(az, principalId, "os4-common", "7f951dda-4ed3-4680-a7ca-43fe172d538d")
+
+		exutil.By("Create a new project for testing")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "hello-acr72120").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "hello-acr72120").Execute()
+
+		exutil.By("Create a new app using the image on ACR")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-acr", "--image=zhsunregistry.azurecr.io/hello-acr:latest", "--allow-missing-images", "-n", "hello-acr72120").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Wait the pod ready")
+		err = waitForPodWithLabelReady(oc, "hello-acr72120", "deployment=hello-acr")
+		exutil.AssertWaitPollNoErr(err, "the pod failed to be ready state within allowed time!")
+	})
 })
