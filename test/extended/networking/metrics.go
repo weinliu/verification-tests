@@ -13,6 +13,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -934,6 +935,56 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(ipsecDisabled, fmt.Sprintf("Fail to get metric when disabled IPSec and the error is:%s", ipsecDisabled))
+	})
+
+	// author huirwang@redhat.com
+	g.It("Author:huirwang-High-72893-IPSec state can be shown in prometheus endpoint.", func() {
+		metricQuery := "openshift:openshift_network_operator_ipsec_state:info"
+
+		exutil.By(fmt.Sprintf("Check that the metric %s is exposed to telemetry", metricQuery))
+		expectedExposedMetric := fmt.Sprintf(`{__name__=\"%s\"}`, metricQuery)
+		telemetryConfig, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", "openshift-monitoring", "telemetry-config", "-o=jsonpath={.data}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(telemetryConfig).To(o.ContainSubstring(expectedExposedMetric),
+			"Metric %s, is not exposed to telemetry", metricQuery)
+
+		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating new prometheus monitor")
+
+		exutil.By(fmt.Sprintf("Verify the metric %s displays the right value", metricQuery))
+
+		queryResult, err := mon.SimpleQuery(metricQuery)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error querying metric: %s", metricQuery)
+
+		jsonResult := gjson.Parse(queryResult)
+		e2e.Logf(jsonResult.String())
+		status := jsonResult.Get("status").String()
+		o.Expect(status).Should(o.Equal("success"),
+			"Query %s execution failed: %s", metricQuery, status)
+		is_legacy_api := gjson.Parse(queryResult).Get("data.result.0.metric.is_legacy_api").String()
+		mode := gjson.Parse(queryResult).Get("data.result.0.metric.mode").String()
+		metricValue := gjson.Parse(queryResult).Get("data.result.0.value.1").String()
+		o.Expect(metricValue).Should(o.Equal("1"))
+
+		ipsecState := checkIPsec(oc)
+		switch ipsecState {
+		case "Full":
+			o.Expect(is_legacy_api).Should(o.Equal("false"))
+			o.Expect(mode).Should(o.Equal("Full"))
+		case "External":
+			o.Expect(is_legacy_api).Should(o.Equal("false"))
+			o.Expect(mode).Should(o.Equal("External"))
+		case "Disabled":
+			o.Expect(is_legacy_api).Should(o.Equal("false"))
+			o.Expect(mode).Should(o.Equal("Disabled"))
+		case "{}":
+			o.Expect(is_legacy_api).Should(o.Equal("true"))
+			o.Expect(mode).Should(o.Equal("Full"))
+		default:
+			o.Expect(is_legacy_api).Should(o.Equal("N/A - ipsec not supported (non-OVN network)"))
+			o.Expect(mode).Should(o.Equal("Disabled"))
+		}
 	})
 
 })
