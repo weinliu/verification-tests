@@ -6290,20 +6290,28 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 		g.By("Verify result for rules in compliancecheckresult.. !!!.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-configure-network-policies-namespaces",
 			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
-			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kubeadmin", "-n", "kube-system").Output()
+		if err != nil && strings.Contains(output, "NotFound") {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
+				"-n", ssb.namespace, "-o=jsonpath={.status}"}).check(oc)
+		} else if err == nil && strings.Contains(output, "Opaque") {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
+				"-n", ssb.namespace, "-o=jsonpath={.status}"}).check(oc)
+		} else {
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		g.By("ocp-63796 Scan hosted cluster for ocp4-cis and ocp4-cis-node profiles on hypershift hosted cluster... !!!\n")
 	})
 
 	// author: xiyuan@redhat.com
 	g.It("Author:xiyuan-High-63795-Scan hosted cluster for ocp4-pci-dss and ocp4-pci-dss-node profiles on hypershift hosted cluster [Serial]", func() {
-		var tprofileCis = "pci-dss-compliance-hypershift" + getRandomString()
+		var tprofilePci = "pci-dss-compliance-hypershift" + getRandomString()
 		var ssb = scanSettingBindingDescription{
 			name:            "test-pci-dss" + getRandomString(),
 			namespace:       sub.namespace,
 			profilekind1:    "TailoredProfile",
-			profilename1:    tprofileCis,
+			profilename1:    tprofilePci,
 			profilename2:    "ocp4-pci-dss-node",
 			scansettingname: "default",
 			template:        scansettingbindingTemplate,
@@ -6314,10 +6322,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 			objectTableRef{"tailoredprofile", sub.namespace, ssb.profilename1})
 
 		g.By("Create tailoredprofile for ocp4-pci-dss and check status !!!\n")
-		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", sub.namespace, "-f", tprofilePcidssHypershiftHostedTemplate, "-p", "NAME="+tprofileCis,
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", sub.namespace, "-f", tprofilePcidssHypershiftHostedTemplate, "-p", "NAME="+tprofilePci,
 			"NAMESPACE="+sub.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", sub.namespace, tprofileCis,
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", sub.namespace, tprofilePci,
 			"-o=jsonpath={.status.state}"}).check(oc)
 
 		g.By("Create scansettingbinding !!!\n")
@@ -6333,10 +6341,18 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 		sub.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
 
 		g.By("Verify result for rules in compliancecheckresult.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-configure-network-policies-namespaces",
+		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofilePci + "-configure-network-policies-namespaces",
 			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "FAIL", ok, []string{"compliancecheckresult", tprofileCis + "-kubeadmin-removed",
-			"-n", sub.namespace, "-o=jsonpath={.status}"}).check(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kubeadmin", "-n", "kube-system").Output()
+		if err != nil && strings.Contains(output, "NotFound") {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult", tprofilePci + "-kubeadmin-removed",
+				"-n", ssb.namespace, "-o=jsonpath={.status}"}).check(oc)
+		} else if err == nil && strings.Contains(output, "Opaque") {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult", tprofilePci + "-kubeadmin-removed",
+				"-n", ssb.namespace, "-o=jsonpath={.status}"}).check(oc)
+		} else {
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		g.By("ocp-63795 Scan hosted cluster for ocp4-pci-dss and ocp4-pci-dss-node profiles on hypershift hosted cluster... !!!\n")
 	})
