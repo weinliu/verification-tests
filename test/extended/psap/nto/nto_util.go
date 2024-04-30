@@ -1019,37 +1019,6 @@ func isROSAHostedCluster(oc *exutil.CLI) bool {
 	return strings.Contains(clusterType, "rosa")
 }
 
-// func getFirstWorkerMachinesetName(oc *exutil.CLI) string {
-func getWorkerMachinesetName(oc *exutil.CLI, machineseetSN int) string {
-
-	var (
-		machinesetName  string
-		linuxMachineset = make([]string, 0, 3)
-	)
-	machinesetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-machine-api", "machineset", "-ojsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	//workerMachineSets := strings.ReplaceAll(machinesetList, " ", "\n")
-	workerMachineSets := strings.Split(machinesetList, " ")
-	e2e.Logf("workerMachineSets is %v in getWorkerMachinesetName", workerMachineSets)
-
-	if len(workerMachineSets) > 0 {
-		for i := 0; i < len(workerMachineSets); i++ {
-			//Skip windows worker node
-			if !strings.Contains(workerMachineSets[i], "windows") && strings.Contains(workerMachineSets[i], "worker") {
-				linuxMachineset = append(linuxMachineset, workerMachineSets[i])
-			}
-		}
-		e2e.Logf("linuxMachineset is %v in getWorkerMachinesetName", linuxMachineset)
-		if machineseetSN < len(linuxMachineset) {
-			machinesetName = linuxMachineset[machineseetSN]
-		}
-	}
-
-	e2e.Logf("machinesetName is %v in getWorkerMachinesetName", machinesetName)
-	return machinesetName
-}
-
 func getFirstMasterNodeName(oc *exutil.CLI) string {
 	var firstMasterNodeName string
 	masterNodeNamesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l node-role.kubernetes.io/control-plane=", `-ojsonpath='{.items[*].status.addresses[?(@.type=="Hostname")].address}'`).Output()
@@ -1086,4 +1055,67 @@ func assertCoStatusWithKeywords(oc *exutil.CLI, keywords string) {
 		}
 		return strings.Contains(coStatus, keywords)
 	}, 60*time.Second, time.Second).Should(o.BeTrue())
+}
+
+func getWorkerMachinesetName(oc *exutil.CLI, machineseetSN int) string {
+
+	var (
+		machinesetName  string
+		linuxMachineset = make([]string, 0, 3)
+	)
+	machinesetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-machine-api", "machineset", "-ojsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//workerMachineSets := strings.ReplaceAll(machinesetList, " ", "\n")
+	workerMachineSets := strings.Split(machinesetList, " ")
+	e2e.Logf("workerMachineSets is %v in getWorkerMachinesetName", workerMachineSets)
+
+	if len(workerMachineSets) > 0 {
+		for i := 0; i < len(workerMachineSets); i++ {
+			//Skip windows worker node
+			if (!strings.Contains(workerMachineSets[i], "windows") || !strings.Contains(workerMachineSets[i], "edge")) && strings.Contains(workerMachineSets[i], "worker") {
+				linuxMachineset = append(linuxMachineset, workerMachineSets[i])
+			}
+		}
+		e2e.Logf("linuxMachineset is %v in getWorkerMachinesetName", linuxMachineset)
+		if machineseetSN < len(linuxMachineset) {
+			machinesetName = linuxMachineset[machineseetSN]
+		}
+	}
+
+	e2e.Logf("machinesetName is %v in getWorkerMachinesetName", machinesetName)
+	return machinesetName
+}
+
+func choseOneWorkerNodeNotByMachineset(oc *exutil.CLI, choseBy int) {
+	//0 means the first worker node, 1 means the last worker node
+	if choseBy == 0 {
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else if choseBy == 1 {
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		e2e.Logf("Invalid parameter for choseBy is %v ", choseBy)
+	}
+}
+
+func choseOneWorkerNodeToRunCase(oc *exutil.CLI, choseBy int) (tunedNodeName string) {
+	//Prior to choose worker nodes with machineset
+	if exutil.IsMachineSetExist(oc) {
+		machinesetName := getWorkerMachinesetName(oc, choseBy)
+		e2e.Logf("machinesetName is %v ", machinesetName)
+		machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+		if !strings.Contains(machinesetReplicas, "0") {
+			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			choseOneWorkerNodeNotByMachineset(oc, choseBy)
+		}
+	} else {
+		choseOneWorkerNodeNotByMachineset(oc, choseBy)
+	}
+	return tunedNodeName
 }
