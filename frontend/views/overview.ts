@@ -16,7 +16,11 @@ export const Overview = {
     Overview.isLoaded();
   },
   checkControlplaneStatusHidden: () => cy.get('[data-test="Control Plane"]').should('not.exist'),
-  checkGetStartIDPConfHidden: () => cy.get('[data-test="item identity-providers"]').should('not.exist')
+  checkGetStartIDPConfHidden: () => cy.get('[data-test="item identity-providers"]').should('not.exist'),
+  ExploreNewFeature: (featureName, OperatorName) => {
+    cy.contains(`${featureName}`).click();
+    cy.contains('h1', `${OperatorName}`, {timeout: 30000}).should('exist');
+  }
 };
 export const quotaCard = {
   checkQuotaCollapsed: (quotaname) => cy.get(`a[data-test-id="${quotaname}"]`).parents('button[aria-expanded="false"]').should('exist'),
