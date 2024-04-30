@@ -4451,80 +4451,39 @@ spec:
 
 	// author: dpunia@redhat.com
 	g.It("WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-Author:dpunia-High-43336-Support customRules list for by-group profiles to the audit configuration [Disruptive][Slow]", func() {
+		var (
+			patchCustomRules string
+			auditEventCount  int
+			users            []User
+			usersHTpassFile  string
+			htPassSecret     string
+		)
+
 		defer func() {
 			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
 			o.Expect(contextErr).NotTo(o.HaveOccurred())
 			contextOutput, contextErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-context").Output()
 			o.Expect(contextErr).NotTo(o.HaveOccurred())
-			e2e.Logf("Context after rollack :: %v", contextOutput)
+			e2e.Logf("Context after rollback :: %v", contextOutput)
 
 			//Reset customRules profile to default one.
 			output := setAuditProfile(oc, "apiserver/cluster", `[{"op": "remove", "path": "/spec/audit"}]`)
 			if strings.Contains(output, "patched (no change)") {
 				e2e.Logf("Apiserver/cluster's audit profile not changed from the default values")
 			}
+			userCleanup(oc, users, usersHTpassFile, htPassSecret)
 		}()
 
-		// Function to get audit event logs for user login.
-		checkAuditEventCount := func(logGroup string, user string, pass string) (string, int) {
-			var eventLogs string
-			var eventCount int
-			now := time.Now().UTC().Unix()
-			time.Sleep(3 * time.Second)
-			errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", user, "-p", pass).NotShowInfo().Execute()
-			o.Expect(errUser).NotTo(o.HaveOccurred())
-
-			script := fmt.Sprintf(`rm -if /tmp/OCP-43336-*.json; for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do sleep 5; grep -h "%v" /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > %v)' >> /tmp/OCP-43336-$logpath.json; done; cat /tmp/OCP-43336-*.json`, logGroup, now)
-			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
-			o.Expect(contextErr).NotTo(o.HaveOccurred())
-
-			e2e.Logf("Get all master nodes.")
-			masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
-			o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
-			o.Expect(masterNodes).NotTo(o.BeEmpty())
-			for _, masterNode := range masterNodes {
-				eventLogs, eventCount = checkAuditLogs(oc, script, masterNode, "openshift-kube-apiserver")
-				eventCount += eventCount
-			}
-			return eventLogs, eventCount
-		}
-
 		// Get user detail used by the test and cleanup after execution.
-		users, usersHTpassFile, htPassSecret := getNewUser(oc, 4)
-		defer userCleanup(oc, users, usersHTpassFile, htPassSecret)
+		users, usersHTpassFile, htPassSecret = getNewUser(oc, 4)
 
-		exutil.By("1. Configure audit config for customRules system:authenticated:oauth profile as None and audit profile as Default")
-		patchCustomRules := `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "None"}],"profile": "Default"}}]`
-		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
-
-		exutil.By("2. Check audit events should be zero after login operation")
-		auditEventLog, auditEventCount := checkAuditEventCount("system:authenticated:oauth", users[0].Username, users[0].Password)
-		if auditEventCount > 0 {
-			e2e.Logf("Event Logs :: %v", auditEventLog)
-		}
-		o.Expect(auditEventCount).To(o.BeNumerically("==", 0))
-
-		exutil.By("3. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as Default")
-		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "Default"}}]`
-		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
-
-		exutil.By("4. Check audit events should be greater than zero after login operation")
-		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
-			_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[1].Username, users[1].Password)
-			if auditEventCount > 0 {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Case failed ::  Audit events count is not greater than zero after login operation :: %v", auditEventCount))
-
-		exutil.By("5. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as None")
+		exutil.By("1. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as None")
 		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "None"}}]`
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
-		exutil.By("6. Check audit events should be greater than zero after login operation")
-		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
-			_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[2].Username, users[2].Password)
+		exutil.By("2. Check audit events should be greater than zero after login operation")
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 182*time.Second, false, func(cxt context.Context) (bool, error) {
+			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[2].Username, users[2].Password)
 			if auditEventCount > 0 {
 				return true, nil
 			}
@@ -4532,21 +4491,21 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Case failed ::  Audit events count is not greater than zero after login operation :: %v", auditEventCount))
 
-		exutil.By("7. Configure audit config for customRules system:authenticated:oauth profile as Default & system:serviceaccounts:openshift-console-operator as WriteRequestBodies and audit profile as None")
+		exutil.By("3. Configure audit config for customRules system:authenticated:oauth profile as Default & system:serviceaccounts:openshift-console-operator as WriteRequestBodies and audit profile as None")
 		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}, {"group": "system:serviceaccounts:openshift-console-operator","profile": "WriteRequestBodies"}],"profile": "None"}}]`
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
-		exutil.By("8. Check audit events should be greater than zero after login operation")
-		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
-			_, auditEventCount = checkAuditEventCount("system:authenticated:oauth", users[3].Username, users[3].Password)
+		exutil.By("4. Check audit events should be greater than zero after login operation")
+		err1 := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[3].Username, users[3].Password)
 			if auditEventCount > 0 {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Case failed ::  Audit events count is not greater than zero after login operation :: %v", auditEventCount))
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("Test Case failed ::  Audit events count is not greater than zero after login operation :: %v", auditEventCount))
 
-		_, auditEventCount = checkAuditEventCount("system:serviceaccounts:openshift-console-operator", users[3].Username, users[3].Password)
+		_, auditEventCount = checkUserAuditLog(oc, "system:serviceaccounts:openshift-console-operator", users[3].Username, users[3].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 	})
 
@@ -6023,5 +5982,59 @@ EOF`, serverconf, fqdnName)
 		exutil.AssertPodToBeReady(oc, podName, testNamespace)
 		curlCmdOutput = ExecCommandOnPod(oc, podName, testNamespace, execCmd)
 		o.Expect(curlCmdOutput).Should(o.ContainSubstring("Hello-OpenShift"))
+	})
+
+	// author: kewang@redhat.com
+	g.It("WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-Author:kewang-High-73410-Support customRules list for by-group with none profile to the audit configuration [Disruptive][Slow]", func() {
+		var (
+			patchCustomRules string
+			auditEventCount  int
+			users            []User
+			usersHTpassFile  string
+			htPassSecret     string
+		)
+
+		defer func() {
+			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
+			contextOutput, contextErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-context").Output()
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
+			e2e.Logf("Context after rollback :: %v", contextOutput)
+
+			//Reset customRules profile to default one.
+			output := setAuditProfile(oc, "apiserver/cluster", `[{"op": "remove", "path": "/spec/audit"}]`)
+			if strings.Contains(output, "patched (no change)") {
+				e2e.Logf("Apiserver/cluster's audit profile not changed from the default values")
+			}
+			userCleanup(oc, users, usersHTpassFile, htPassSecret)
+		}()
+
+		// Get user detail used by the test and cleanup after execution.
+		users, usersHTpassFile, htPassSecret = getNewUser(oc, 4)
+
+		exutil.By("1. Configure audit config for customRules system:authenticated:oauth profile as None and audit profile as Default")
+		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "None"}],"profile": "Default"}}]`
+		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
+
+		exutil.By("2. Check audit events should be zero after login operation")
+		auditEventLog, auditEventCount := checkUserAuditLog(oc, "system:authenticated:oauth", users[0].Username, users[0].Password)
+		if auditEventCount > 0 {
+			e2e.Logf("Event Logs :: %v", auditEventLog)
+		}
+		o.Expect(auditEventCount).To(o.BeNumerically("==", 0))
+
+		exutil.By("3. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as Default")
+		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "Default"}}]`
+		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
+
+		exutil.By("4. Check audit events should be greater than zero after login operation")
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[1].Username, users[1].Password)
+			if auditEventCount > 0 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Case failed ::  Audit events count is not greater than zero after login operation :: %v", auditEventCount))
 	})
 })

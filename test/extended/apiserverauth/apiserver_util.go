@@ -1515,3 +1515,30 @@ func applyLabel(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters 
 	_, err := doAction(oc, "label", asAdmin, withoutNamespace, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Adding label to the namespace failed")
 }
+
+// Function to get audit event logs for user login.
+func checkUserAuditLog(oc *exutil.CLI, logGroup string, user string, pass string) (string, int) {
+	var (
+		eventLogs  string
+		eventCount int
+		now        = time.Now().UTC().Unix()
+	)
+
+	errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", user, "-p", pass).NotShowInfo().Execute()
+	o.Expect(errUser).NotTo(o.HaveOccurred())
+	time.Sleep(3 * time.Second)
+
+	script := fmt.Sprintf(`rm -if /tmp/audit-test-*.json; for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do grep -h "%s" /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > %v)' >> /tmp/audit-test-$logpath.json; done; cat /tmp/audit-test-*.json`, logGroup, now)
+	contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
+	o.Expect(contextErr).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Get all master nodes.")
+	masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+	o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+	o.Expect(masterNodes).NotTo(o.BeEmpty())
+	for _, masterNode := range masterNodes {
+		eventLogs, eventCount = checkAuditLogs(oc, script, masterNode, "openshift-kube-apiserver")
+		eventCount += eventCount
+	}
+	return eventLogs, eventCount
+}
