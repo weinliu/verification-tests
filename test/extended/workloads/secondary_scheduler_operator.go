@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		e2e.Logf("kuberVersion is %s", kuberVersion)
 
 		g.By("Get rebased version of kubernetes from sso operator")
-		minkuberversion, deschedulerErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/openshift-secondary-scheduler-operator.openshift-secondary-sche=", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
+		minkuberversion, deschedulerErr := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/openshift-secondary-scheduler-operator.openshift-secondary-sche=", "-n", kubeNamespace, "-o=jsonpath={.items[0].spec.minKubeVersion}").Output()
 		o.Expect(deschedulerErr).NotTo(o.HaveOccurred())
 		rebasedVersion := strings.Split(minkuberversion, ".")[0] + "." + strings.Split(minkuberversion, ".")[1]
 		e2e.Logf("RebasedVersion is %s", rebasedVersion)
