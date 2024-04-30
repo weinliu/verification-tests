@@ -79,9 +79,9 @@ describe('Notification drawer tests', () => {
     preferNotifications.toggleNotifications('hide');
     Overview.goToDashboard();
     Overview.isLoaded();
-    cy.contains('Testing 123').as('testalert').should('not.exist')
+    cy.contains('Testing 123').should('not.exist')
     Overview.clickNotificationDrawer();
-    cy.get('@testalert').should('not.exist');
+    cy.contains('[class$=notification-drawer__list-item-description]', 'Testing 123').should('not.exist');
     preferNotifications.goToNotificationsTab();
     preferNotifications.toggleNotifications('enable');
     Overview.goToDashboard();
@@ -89,7 +89,7 @@ describe('Notification drawer tests', () => {
     cy.wait(30000);
     statusCard.checkAlertItem('TestAlert', 'exist');
     Overview.clickNotificationDrawer();
-    cy.get('.pf-c-notification-drawer__list-item-description').contains('Testing 123');
+    cy.get('[class$=notification-drawer__list-item-description]').contains('Testing 123');
   });
 
   it('(OCP-43119,yapei,UserInterface) Check alerts are filtered based on Pod/Project/Node labels', {tags:['e2e', 'admin']}, () => {
