@@ -75,37 +75,28 @@ class TestResult:
         noderoot = xml.dom.minidom.parse(input)
 
         testsuites = noderoot.getElementsByTagName("testsuite")
-        
-        testedcasenum = testsuites[0].getAttribute("failures")
-        #here is the issue for xml. failures is the total executed cases, not include skip
-        failcasenum = testsuites[0].getAttribute("tests")
-        #here is the issue for xml. tests is the total failing and skip cases
-        #skip is the skip cases
-        #the expected is that tests is executed case, and skip is skipped cases, and failures is failing and skipped cases
-        #the total case is skipped + tests
-        
+
         cases = noderoot.getElementsByTagName("testcase")
         toBeRemove = None
+        totalnum = 0
+        failnum = 0
+        skipnum = 0
         for case in cases:
             value = case.getAttribute("name")
             if "Monitor cluster while tests execute" in value:
-                testsuites[0].setAttribute("tests", str(int(testedcasenum)-1))
-                testsuites[0].setAttribute("failures", str(int(failcasenum)-1))
                 toBeRemove = case
-                break
+                continue
+            totalnum = totalnum + 1
+            if len(case.getElementsByTagName("failure")) != 0:
+                failnum = failnum + 1
+            if len(case.getElementsByTagName("skipped")) != 0:
+                skipnum = skipnum + 1
         if toBeRemove is not None:
             noderoot.firstChild.removeChild(toBeRemove)
 
-        # Before this change, tests is the executed case number, skipped is  the skipped case number, so the total should be
-        # tests+skipped. failures is the failures case and skipped cases number.
-        # for example, tests=23, skipped=2, failures=5, it means total case is 25, and the real failure case is 3
-        # Per https://help.catchsoftware.com/display/ET/JUnit+Format, I try it change to the following:
-        # tests is the total case, skipped is skipped case, and failures is only failure case.
-        # For the above example, tests=25, skipped=2, failures=3
-        totalnum = int(testsuites[0].getAttribute("tests")) + int(testsuites[0].getAttribute("skipped"))
-        failnum = int(testsuites[0].getAttribute("failures")) - int(testsuites[0].getAttribute("skipped"))
         testsuites[0].setAttribute("tests", str(int(totalnum)))
         testsuites[0].setAttribute("failures", str(int(failnum)))
+        testsuites[0].setAttribute("skipped", str(int(skipnum)))
         # it is not used by golang framework, and here hard-coded it as 0 to compatible with other tools
         testsuites[0].setAttribute("errors", "0")
         with open(output, 'wb+') as f:
