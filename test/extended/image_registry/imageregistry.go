@@ -4737,4 +4737,53 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		endTime := filterTimestampFromLogs(acquiredLog[0], 1)
 		o.Expect(getTimeDifferenceInMinute(startTime[0], endTime[0])).Should(o.BeNumerically("<", 0.1))
 	})
+
+	g.It("NonHyperShiftHOST-Author:xiuwang-Critical-73444-azure-path-fix support auth via account key without clientID [Disruptive]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(credType, "Manual") {
+			g.Skip("Skip test on azure sts cluster")
+		}
+
+		g.By("Check image-registry-private-configuration-user secret")
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/image-registry-private-configuration-user", "-n", "openshift-image-registry").Execute()
+		if err != nil {
+			g.By("Extract image-registry-private-configuration secret")
+			tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ir-%s", getRandomString()))
+			err := os.Mkdir(tempDataDir, 0o755)
+			if err != nil {
+				e2e.Logf("Fail to create directory: %v", err)
+			}
+			defer os.RemoveAll(tempDataDir)
+			err = oc.AsAdmin().Run("extract").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry", "--confirm", "--to="+tempDataDir).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Create user provide secret image-registry-private-configuration-user with same content of image-registry-private-configuration")
+			defer func() {
+				g.By("Remove image-registry-private-configuration-user secret")
+				err = oc.AsAdmin().Run("delete").Args("secret/image-registry-private-configuration-user", "-n", "openshift-image-registry").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+			err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "generic", "image-registry-private-configuration-user", "--from-file="+tempDataDir+"/REGISTRY_STORAGE_AZURE_ACCOUNTKEY", "-n", "openshift-image-registry").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		g.By("Check azure path fix job")
+		clientID, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("job/azure-path-fix", "-o=jsonpath={.spec.template.spec.containers[0].env[?(@.name==\"AZURE_CLIENT_ID\")].value}", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clientID).To(o.BeEmpty())
+		err = wait.Poll(20*time.Second, 1*time.Minute, func() (bool, error) {
+			status, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("job/azure-path-fix", "-o=jsonpath={.status.conditions[?(@.type==\"Complete\")].status}", "-n", "openshift-image-registry").Output()
+			if err != nil {
+				return false, err
+			}
+			if status == "True" {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "azure-path-fix pod is error with image-registry-private-configuration-user secret.")
+	})
 })
