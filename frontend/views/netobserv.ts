@@ -19,7 +19,23 @@ export const Operator = {
     },
     install: (catalogSourceDisplayName: string) => {
         cy.visit(`/k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-        //  don't install again if its already installed
+        // if user still does not have admin access
+        // try few more times
+        cy.contains("openshift-netobserv-operator").should('be.visible')
+        cy.get("div.loading-box").should('be.visible').then(() => {
+            for (let retries = 0; retries <= 15; retries++) {
+                cy.get("div.loading-box").should('be.visible')
+                if (Cypress.$('.co-disabled').length == 1) {
+                    cy.log(`user does not have access ${retries}`)
+                    cy.wait(5000)
+                    cy.reload(true)
+                }
+                else {
+                    break;
+                }
+            }
+        })
+        // don't install operator if its already installed
         cy.get("div.loading-box").should('be.visible').then(loading => {
             if (Cypress.$('td[role="gridcell"]').length == 0) {
                 operatorHubPage.goTo()

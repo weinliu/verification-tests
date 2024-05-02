@@ -50,13 +50,11 @@ else:
     testsToRun = modifiedTests[0]
 
 commands = 'cd frontend; ./console-test-frontend.sh --spec ' + testsToRun
-process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE)
+process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+while process.poll() is None:
+    nextline = process.stdout.readline()
+    sys.stdout.write((nextline.decode("utf-8")))
+    sys.stdout.flush()
 out, err = process.communicate()
-print("output:")
-for line in str(out).split("\\n"):
-    print(line)
-if err:
-    for line in str(err).split("\\n"):
-        print(line)
 if process.returncode != 0:
     raise Exception(commands + " failed")

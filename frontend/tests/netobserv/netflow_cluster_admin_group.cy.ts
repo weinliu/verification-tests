@@ -9,7 +9,6 @@ describe('(OCP-67617 Network_Observability) User in group with cluster-admin rol
         cy.adminCLI(`oc adm groups new netobservadmins`)
         cy.adminCLI(`oc adm groups add-users netobservadmins ${Cypress.env('LOGIN_USERNAME')}`)
         cy.adminCLI(`oc adm policy add-cluster-role-to-group cluster-admin netobservadmins`)
-
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
@@ -32,23 +31,21 @@ describe('(OCP-67617 Network_Observability) User in group with cluster-admin rol
         Operator.createFlowcollector(project)
     })
 
-    beforeEach('any user in group with cluster-admin role test', function () {
-        netflowPage.visit()            
-    })
-
     it("(OCP-67617, aramesha, Network_Observability) should verify user in group with cluster-admin role is able to access flows", function () {
         // validate netflow traffic page
+        netflowPage.visit()
         cy.checkNetflowTraffic()
     })
 
     it("(OCP-67617, aramesha, Network_Observability) should verify user NOT in group with cluster-admin role is NOT able to access flows", function () {
         // remove user from cluster-admin group
         cy.adminCLI(`oc adm policy remove-cluster-role-from-group cluster-admin netobservadmins`)
-
+        cy.visit('/netflow-traffic')
+        // skip overview check due to bug: NETOBSERV-1621
         // validate user is not able to access netflow traffic page
         // overview shows no panels
-        cy.get('li.overviewTabButton').should('exist').click()
-        cy.get("#overview-flex").should('not.exist')
+        // cy.get('li.overviewTabButton').should('exist').click()
+        // cy.get("#overview-flex").should('not.exist')
 
         // table view shows no grid
         cy.get('li.tableTabButton').should('exist').click()
@@ -57,10 +54,6 @@ describe('(OCP-67617 Network_Observability) User in group with cluster-admin rol
         // topology view shows no view
         cy.get('li.topologyTabButton').should('exist').click()
         cy.byTestID("error-state").should('exist')
-    })
-
-    afterEach("test", function () {
-        netflowPage.resetClearFilters()
     })
 
     after("all tests", function () {

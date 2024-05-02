@@ -34,7 +34,7 @@ objects:
           metrics:
             enable: "${{EBPFMetrics}}"
             server:
-              port: 9102
+              port: 9400
               tls:
                 type: "${EBPFMetricServerTLSType}"
           resources:
@@ -51,7 +51,7 @@ objects:
         addZone: "${{AddZone}}"
         metrics:
           server:
-            port: 9102
+            port: 9401
             tls:
               type: "${FLPMetricServerTLSType}"
           disableAlerts: []

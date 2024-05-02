@@ -45,6 +45,13 @@ export const netflowPage = {
     },
     waitForLokiQuery: () => {
         cy.get("#refresh-button > span > svg").invoke('attr', 'style').should('contain', '0s linear 0s')
+    },
+    selectSourceNS: (project) => {
+        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        // verify Source namespace filter
+        cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
+        cy.byTestID('autocomplete-search').type(project + '{enter}{enter}')
+        cy.get('#filters div.custom-chip > p').should('contain.text', `${project}`)
     }
 }
 

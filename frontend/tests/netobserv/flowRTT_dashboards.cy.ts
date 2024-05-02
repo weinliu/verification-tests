@@ -35,12 +35,10 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         Operator.createFlowcollector(project, "FlowRTT")
     })
 
-    beforeEach('any flowRTT test', function () {
-        netflowPage.visit()
-    })
-
     it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT edge labels and Query Summary stats", function () {
+        netflowPage.visit()
         cy.clearLocalStorage()
+        netflowPage.selectSourceNS(project)
         cy.get('#tabs-container li:nth-child(3)').click()
         // check if topology view exists, if not clear filters.
         // this can be removed when multiple page loads are fixed.
@@ -68,10 +66,9 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         // validate edge labels shows flowRTT info
         cy.get('#zoom-in').click({ force: true }).click({ force: true }).click({ force: true });
 
-        // commenting out this check for bug: NETOBSERV-1596
-        // cy.get('[data-test-id=edge-handler]').each((g) => {
-        //     expect(g.text()).to.match(/\d* ms/gm);
-        // });
+        cy.get('[data-test-id=edge-handler]').each((g) => {
+            expect(g.text()).to.match(/\d* ms/gm);
+        });
 
         // verify Query summary panel
         cy.get(querySumSelectors.avgRTT).should('exist').then(avgRTT => {

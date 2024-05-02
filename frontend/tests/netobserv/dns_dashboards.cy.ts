@@ -113,10 +113,9 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         // validate edge labels shows DNS latency info
         cy.get('#zoom-in').click({ force: true }).click({ force: true }).click({ force: true });
 
-        // commenting out this check for bug: NETOBSERV-1596
-        // cy.get('[data-test-id=edge-handler]').should('exist').each((g) => {
-        //     expect(g.text()).to.match(/\d* ms/gm);
-        // });
+        cy.get('[data-test-id=edge-handler]').should('exist').each((g) => {
+            expect(g.text()).to.match(/\d* ms/gm);
+        });
 
         // verify Query Summary stats for DNSTracking
         cy.get(querySumSelectors.dnsAvg).should('exist').then(DNSAvg => {
