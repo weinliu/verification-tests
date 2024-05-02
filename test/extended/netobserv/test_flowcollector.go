@@ -1305,6 +1305,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	g.It("Author:memodi-Medium-63185-Verify NetOberv must-gather plugin [Serial]", func() {
+		g.By("Skip if test is running on an arm64 cluster")
+		architecture.SkipArchitectures(oc, architecture.ARM64)
+
+		g.By("Skip if test is running on an ppc64LE cluster")
+		architecture.SkipArchitectures(oc, architecture.PPC64LE)
+
 		namespace := oc.Namespace()
 
 		g.By("Deploy FlowCollector")
