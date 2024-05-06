@@ -3152,6 +3152,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dataPath := "test/extended/testdata/operatorsdk/ocp-44553-data/"
 		crFilePath := filepath.Join(dataPath, "cache_v1_memcached44553.yaml")
 		quayCLI := container.NewQuayCLI()
+
+		exutil.By("step: clear unnecessary tokens")
+		githubToken := os.Getenv("GITHUB_TOKEN")
+		if githubToken != "" {
+			defer os.Setenv("GITHUB_TOKEN", githubToken)
+			os.Setenv("GITHUB_TOKEN", "")
+		}
+
 		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
 
 		defer func() {
