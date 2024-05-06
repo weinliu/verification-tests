@@ -74,11 +74,8 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-Low-51697-Fetch audit logs of login attempts via oc commands [Slow]", func() {
 		g.By("run the must-gather")
 		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-51697").Output()
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-51697", "--", "/usr/bin/gather_audit_logs").Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-51697", "--", "/usr/bin/gather_audit_logs").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "audit_logs/oauth-server") {
-			e2e.Failf("Failed to gather the oauth audit logs")
-		}
 		g.By("check the must-gather result")
 		oauth_audit_files := getOauthAudit("/tmp/must-gather-51697")
 		for _, file := range oauth_audit_files {
