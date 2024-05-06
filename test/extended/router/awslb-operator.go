@@ -2,13 +2,15 @@ package router
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strings"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -82,7 +84,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ingress/ingress-test", "-n", oc.Namespace()).Output()
 		createResourceFromFile(oc, oc.Namespace(), ingress)
 		// if outpost cluster we need to add annotation to ingress
-		if exutil.IsAwsOutpostCluster(oc) {
+		if clusterinfra.IsAwsOutpostCluster(oc) {
 			annotation := "alb.ingress.kubernetes.io/subnets=" + getOutpostSubnetId(oc)
 			_, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ingress", "ingress-test", annotation, "-n", oc.Namespace()).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())

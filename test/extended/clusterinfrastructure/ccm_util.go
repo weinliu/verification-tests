@@ -8,6 +8,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -172,7 +173,7 @@ func getLBSvcIP(oc *exutil.CLI, loadBalancerService loadBalancerServiceDescripti
 	e2e.Logf("Getting the Load Balancer service IP ...")
 	iaasPlatform := exutil.CheckPlatform(oc)
 	var jsonString string
-	if iaasPlatform == "aws" || iaasPlatform == "ibmcloud" {
+	if iaasPlatform == clusterinfra.AWS || iaasPlatform == clusterinfra.IBMCLOUD {
 		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}"
 	} else {
 		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].ip}"

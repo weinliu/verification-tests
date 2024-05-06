@@ -8,6 +8,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -67,7 +68,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			e2e.Logf("No worker node detected with GPU instance, creating a g4dn.xlarge machineset ...")
 			createMachinesetbyInstanceType(oc, gpuMachinesetName, "g4dn.xlarge")
 			// Verify new node was created and is running
-			exutil.WaitForMachinesRunning(oc, 1, gpuMachinesetName)
+			clusterinfra.WaitForMachinesRunning(oc, 1, gpuMachinesetName)
 
 			e2e.Logf("Newly created GPU machineset name: %v", gpuMachinesetName)
 			// Check that the NFD labels are created

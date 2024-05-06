@@ -10,6 +10,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
@@ -183,17 +184,17 @@ var _ = g.Describe("[sig-networking] SDN node", func() {
 	g.It("Longduration-NonPreRelease-Author:asood-Critical-68690-When adding nodes, the overlapped node-subnet should not be allocated. [Disruptive]", func() {
 
 		exutil.By("1. Create a new machineset, get the new node created\n")
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-68690"
-		machineSet := exutil.MachineSetDescription{machinesetName, 2}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		machineSet := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer machineSet.DeleteMachineSet(oc)
 		machineSet.CreateMachineSet(oc)
 
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
 		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
 		for i := 0; i < 2; i++ {
-			nodeName := exutil.GetNodeNameFromMachine(oc, machineName[i])
+			nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName[i])
 			e2e.Logf("Node with name %v added to cluster", nodeName)
 		}
 

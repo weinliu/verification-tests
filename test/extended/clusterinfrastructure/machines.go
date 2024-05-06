@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -28,9 +29,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-45772-MachineSet selector is immutable", func() {
 		g.By("Create a new machineset")
-		exutil.SkipConditionally(oc)
-		ms := exutil.MachineSetDescription{"machineset-45772", 0}
-		defer exutil.WaitForMachinesDisapper(oc, "machineset-45772")
+		clusterinfra.SkipConditionally(oc)
+		ms := clusterinfra.MachineSetDescription{Name: "machineset-45772", Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, "machineset-45772")
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with empty clusterID")
@@ -41,14 +42,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
 		machinesetName := "machineset-45377"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		arch, err := architecture.GetArchitectureFromMachineSet(oc, machinesetName)
+		arch, err := clusterinfra.GetArchitectureFromMachineSet(oc, machinesetName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var vmSize string
 		switch arch {
@@ -68,7 +69,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//test when set acceleratedNetworking: true, machine running needs nearly 9 minutes. so change the method timeout as 10 minutes.
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with acceleratedNetworking: true")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.acceleratedNetworking}").Output()
@@ -80,15 +81,15 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-46967-Implement Ephemeral OS Disks - OS cache placement on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
 		skipTestIfSpotWorkers(oc)
 		machinesetName := "machineset-46967"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		arch, err := architecture.GetArchitectureFromMachineSet(oc, machinesetName)
+		arch, err := clusterinfra.GetArchitectureFromMachineSet(oc, machinesetName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var vmSize string
 		switch arch {
@@ -107,7 +108,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				`"managedDisk":{"storageAccountType":""}}}}}}}}`, vmSize), "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with Ephemeral OS Disks - OS cache placement")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.osDisk.diskSettings.ephemeralStorageLocation}").Output()
@@ -118,9 +119,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-46303-Availability sets could be created when needed for Azure [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		defaultWorkerMachinesetName := exutil.GetRandomMachineSetName(oc)
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		defaultWorkerMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "northcentralus" && region != "westus" {
@@ -134,8 +135,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-46303"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -150,7 +151,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"availabilitySet":"`+availabilitySetName+`"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with availabilitySet")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.availabilitySet}").Output()
@@ -162,17 +163,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-47177-Medium-47201-[MDH] Machine Deletion Hooks appropriately block lifecycle phases [Disruptive]", func() {
 		g.By("Create a new machineset with lifecycle hook")
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-47177-47201"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with lifecycle hook")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"lifecycleHooks":{"preDrain":[{"name":"drain1","owner":"drain-controller1"}],"preTerminate":[{"name":"terminate2","owner":"terminate-controller2"}]}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Delete newly created machine by scaling " + machinesetName + " to 0")
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas=0", "-n", "openshift-machine-api", mapiMachineset, machinesetName).Execute()
@@ -211,10 +212,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-47230-[MDH] Negative lifecycle hook validation [Disruptive]", func() {
 		g.By("Create a new machineset")
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-47230"
-		ms := exutil.MachineSetDescription{machinesetName, 1}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -249,17 +250,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-44977-Machine with GPU is supported on gcp [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		architecture.SkipArchitectures(oc, architecture.ARM64)
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-44977"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		arch, err := architecture.GetArchitectureFromMachineSet(oc, machinesetName)
+		arch, err := clusterinfra.GetArchitectureFromMachineSet(oc, machinesetName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if arch != architecture.AMD64 {
 			g.Skip("The selected machine set's arch is not amd64, skip this case!")
@@ -275,7 +276,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{ "gpus": [ { "count": 1,"type": "nvidia-tesla-p100" }],"machineType":"n1-standard-1", "zone":"us-central1-c", "onHostMaintenance":"Terminate","restartPolicy":"Always"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with GPU")
 		gpuType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.gpus[0].type}").Output()
@@ -292,10 +293,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-48363-Machine providerID should be consistent with node providerID", func() {
 		g.By("Check machine providerID and node providerID are consistent")
-		exutil.SkipConditionally(oc)
-		machineList := exutil.ListAllMachineNames(oc)
+		clusterinfra.SkipConditionally(oc)
+		machineList := clusterinfra.ListAllMachineNames(oc)
 		for _, machineName := range machineList {
-			nodeName := exutil.GetNodeNameFromMachine(oc, machineName)
+			nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
 			if nodeName == "" {
 				continue
 			}
@@ -309,13 +310,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-35513"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
@@ -334,33 +335,33 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiID+`"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.WaitForMachineProvisioned(oc, machinesetName)
+		clusterinfra.WaitForMachineProvisioned(oc, machinesetName)
 	})
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		exutil.SkipForAwsOutpostCluster(oc)
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		clusterinfra.SkipForAwsOutpostCluster(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48012"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with gp3 iops 5000")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices":[{"ebs":{"volumeType":"gp3","iops":5000}}]}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check on aws instance with gp3 iops 5000")
 		instanceID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 
-		volumeInfo, err := exutil.GetAwsVolumeInfoAttachedToInstanceID(instanceID)
+		volumeInfo, err := clusterinfra.GetAwsVolumeInfoAttachedToInstanceID(instanceID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("volumeInfo:%s", volumeInfo)
@@ -369,9 +370,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-33040-Required configuration should be added to the ProviderSpec to enable spot instances - Azure [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
-		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "northcentralus" || region == "westus" || region == "usgovtexas" {
@@ -379,14 +380,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Create a spot instance on azure")
-		exutil.SkipConditionally(oc)
-		ms := exutil.MachineSetDescription{"machineset-33040", 0}
-		defer exutil.WaitForMachinesDisapper(oc, "machineset-33040")
+		clusterinfra.SkipConditionally(oc)
+		ms := clusterinfra.MachineSetDescription{Name: "machineset-33040", Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, "machineset-33040")
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-33040", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, "machineset-33040")
+		clusterinfra.WaitForMachinesRunning(oc, 1, "machineset-33040")
 
 		g.By("Check machine and node were labelled as an `interruptible-instance`")
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
@@ -399,10 +400,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48594-AWS EFA network interfaces should be supported via machine api [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
-		exutil.SkipForAwsOutpostCluster(oc)
+		clusterinfra.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-2" && region != "us-east-1" {
@@ -410,14 +411,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48594"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with networkInterfaceType: EFA")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m5dn.24xlarge"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with networkInterfaceType: EFA")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.networkInterfaceType}").Output()
@@ -428,8 +429,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48595-Negative validation for AWS NetworkInterfaceType [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -438,8 +439,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48595"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with networkInterfaceType: invalid")
@@ -449,7 +450,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Update machineset with not supported instance types")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m6i.xlarge"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachineFailed(oc, machinesetName)
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.errorMessage}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("out:%s", out)
@@ -458,12 +459,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-49827-Ensure pd-balanced disk is supported on GCP via machine api [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-49827"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -474,7 +475,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Update machineset with pd-balanced disk type")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/replicas","value": 1},{"op":"replace","path":"/spec/template/spec/providerSpec/value/disks/0/type","value":"pd-balanced"}]`, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with pd-balanced disk type")
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.disks[0].type}").Output()
@@ -485,19 +486,19 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-50731-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-50731"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset with imds required")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"metadataServiceOptions":{"authentication":"Required"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.metadataServiceOptions.authentication}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("out:%s", out)
@@ -506,9 +507,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Update machineset with imds optional")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"metadataServiceOptions":{"authentication":"Optional"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args(mapiMachine, machineName, "-n", machineAPINamespace).Execute()
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[*].spec.providerSpec.value.metadataServiceOptions.authentication}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("Optional"))
@@ -520,9 +521,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-37915-Creating machines using KMS keys from AWS [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		exutil.SkipForAwsOutpostCluster(oc)
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		clusterinfra.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-1" && region != "us-east-2" {
@@ -531,8 +532,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-37915"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -546,7 +547,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices": [{"ebs":{"encrypted":true,"iops":0,"kmsKey":{"arn":"`+key+`"},"volumeSize":120,"volumeType":"gp2"}}]}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with KMS keys")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.blockDevices[0].ebs.kmsKey.arn}").Output()
@@ -556,27 +557,27 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-52471-Enable configuration of boot diagnostics when creating VMs on Azure [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
 
 		g.By("Create a machineset configuring boot diagnostics with Azure managed storage accounts")
 		machinesetName := "machineset-52471-1"
-		ms1 := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms1 := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms1.DeleteMachineSet(oc)
 		ms1.CreateMachineSet(oc)
 
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"AzureManaged"}}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.diagnostics.boot.storageAccountType}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("AzureManaged"))
 
 		g.By("Create machineset configuring boot diagnostics with Customer managed storage accounts")
 		machinesetName = "machineset-52471-2"
-		ms2 := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms2 := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms2.DeleteMachineSet(oc)
 		ms2.CreateMachineSet(oc)
 
@@ -590,7 +591,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://`+storageAccount+storageAccountURISuffix+`"}}}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.diagnostics.boot.storageAccountType}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("CustomerManaged"))
@@ -598,13 +599,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-52473-Webhook validations for Azure boot diagnostics [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
 
 		g.By("Create a machineset")
 		machinesetName := "machineset-52473-1"
-		ms1 := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms1 := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms1.DeleteMachineSet(oc)
 		ms1.CreateMachineSet(oc)
 
@@ -623,22 +624,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Update machineset with invalid storageAccountURI")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://clusterqa2ob.blob.core.windows.net.invalid"}}}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachineFailed(oc, machinesetName)
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 
 		g.By("Update machineset with invalid storage account")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://invalid.blob.core.windows.net"}}}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachineFailed(oc, machinesetName)
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 	})
 
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Low-36489-Machineset creation when publicIP:true in disconnected or normal (stratergy private or public) Azure,Aws,Gcp enviroment [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "aws", "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE, clusterinfra.AWS, clusterinfra.GCP)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-36489"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		iaasPlatform := exutil.CheckPlatform(oc)
@@ -649,18 +650,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Update machineset with publicIP: true")
 		switch iaasPlatform {
-		case "aws", "Azure":
+		case clusterinfra.AWS, clusterinfra.AZURE:
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"publicIP": true}}}}}}`, "--type=merge").Output()
-			if publicZone == "" && iaasPlatform == "Azure" {
+			if publicZone == "" && iaasPlatform == clusterinfra.AZURE {
 				o.Expect(msg).To(o.ContainSubstring("publicIP is not allowed in Azure disconnected installation with publish strategy as internal"))
 			} else {
 				o.Expect(err).NotTo(o.HaveOccurred())
 				//to scale up machineset with publicIP: true
 				err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas": 1}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+				clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 			}
-		case "gcp":
+		case clusterinfra.GCP:
 			network, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].network}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			subnetwork, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].subnetwork}").Output()
@@ -668,18 +669,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			patchString := fmt.Sprintf(`{"spec":{"template":{"spec":{"providerSpec":{"value":{"networkInterfaces":[{"network":"%s","subnetwork":"%s","publicIP": true}]}}}},"replicas":1}}`, network, subnetwork)
 			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", patchString, "--type=merge").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+			clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 		}
 	})
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-51013-machine api should issue client cert when AWS DNS suffix missing [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
 		g.By("Create a new dhcpOptions")
 		var newDhcpOptionsID, currentDhcpOptionsID string
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 		newDhcpOptionsID, err := awsClient.CreateDhcpOptions()
 		if err != nil {
@@ -688,7 +689,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer awsClient.DeleteDhcpOptions(newDhcpOptionsID)
 
 		g.By("Associate the VPC with the new dhcpOptionsId")
-		machineName := exutil.ListMasterMachineNames(oc)[0]
+		machineName := clusterinfra.ListMasterMachineNames(oc)[0]
 		instanceID, err := awsClient.GetAwsInstanceID(machineName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
@@ -701,29 +702,29 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-51013"
-		ms := exutil.MachineSetDescription{machinesetName, 1}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		nodeName := exutil.GetNodeNameFromMachine(oc, exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0])
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0])
 		e2e.Logf("nodeName:%s", nodeName)
 		o.Expect(strings.HasPrefix(nodeName, "ip-")).To(o.BeTrue())
 	})
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-59718-[Nutanix] Support bootType categories and project fields of NutanixMachineProviderConfig [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "nutanix")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.NUTANIX)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-59718"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset adding these new fields")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"bootType":"Legacy","categories":[{"key":"AppType","value":"Kubernetes"},{"key":"Environment","value":"Testing"}],"project":{"type":"name","name":"qe-project"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with these new fields")
 		bootType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.bootType}").Output()
@@ -738,20 +739,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-59760-Create confidential compute VMs on GCP [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		architecture.SkipArchitectures(oc, architecture.ARM64)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-59760"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset with confidential compute options")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n2d-standard-4","onHostMaintenance":"Terminate","confidentialCompute":"Enabled"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with confidentialCompute enabled")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.confidentialCompute}").Output()
@@ -772,20 +773,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	//author miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-Medium-57438-Add support to Shielded VMs on GCP [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		architecture.SkipArchitectures(oc, architecture.ARM64)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-57438"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset with shieldedInstanceConfig compute options Enabled")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"shieldedInstanceConfig": {"secureBoot": "Enabled","integrityMonitoring": "Enabled","virtualizedTrustedPlatformModule": "Enabled"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with shieldedInstanceConfig options enabled")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.shieldedInstanceConfig}").Output()
@@ -799,20 +800,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	//author miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-48464-Dedicated tenancy should be exposed on aws providerspec [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		exutil.SkipForAwsOutpostCluster(oc)
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		clusterinfra.SkipForAwsOutpostCluster(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48464"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset to have dedicated tenancy ")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placement": {"tenancy": "dedicated"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine available with dedicated tenancy ")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.placement.tenancy}").Output()
@@ -826,19 +827,19 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	//author miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-39639-host-based disk encryption at VM on Azure platform	[Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-39639"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset to have encryption at host enabled ")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"securityProfile": {"encryptionAtHost": true}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine available with encrytption enabled ")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.securityProfile}").Output()
@@ -848,16 +849,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	//author huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-32269-Implement validation/defaulting for AWS [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		mapiBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "mapi")
 		defaultMachinesetAwsTemplate := filepath.Join(mapiBaseDir, "default-machineset-aws.yaml")
 
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		masterArchtype := architecture.GetControlPlaneArch(oc)
-		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
-		msArchtype, err := architecture.GetArchitectureFromMachineSet(oc, randomMachinesetName)
+		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
+		msArchtype, err := clusterinfra.GetArchitectureFromMachineSet(oc, randomMachinesetName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if masterArchtype != msArchtype {
 			g.Skip("The selected machine set's arch is not the same with the master machine's arch, skip this case!")
@@ -889,7 +890,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			namespace:            machineAPINamespace,
 			iamInstanceProfileID: iamInstanceProfileID,
 		}
-		defer exutil.WaitForMachinesDisapper(oc, defaultMachinesetAws.name)
+		defer clusterinfra.WaitForMachinesDisapper(oc, defaultMachinesetAws.name)
 		defer defaultMachinesetAws.deleteDefaultMachineSetOnAws(oc)
 		defaultMachinesetAws.createDefaultMachineSetOnAws(oc)
 		instanceTypeMachine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+defaultMachinesetAws.name, "-o=jsonpath={.items[0].spec.providerSpec.value.instanceType}").Output()
@@ -906,27 +907,27 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	//author huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-37497-ClusterInfrastructure Dedicated Spot Instances could be created [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
-		exutil.SkipForAwsOutpostCluster(oc)
+		clusterinfra.SkipForAwsOutpostCluster(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-37497"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset to Dedicated Spot Instances")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotMarketOptions":{},"instanceType":"c4.8xlarge","placement": {"tenancy": "dedicated"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 	})
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-64909-AWS Placement group support for MAPI [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-2" && region != "us-east-1" {
@@ -934,14 +935,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Create a new machineset")
 		machinesetName := "machineset-64909"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with Placement group")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgcluster"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with Placement group")
 		placementGroupName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.placementGroupName}").Output()
@@ -951,31 +952,31 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-LEVEL0-Critical-25436-Scale up/scale down the cluster by changing the replicas of the machineSet [Disruptive][Slow]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "ibmcloud", "alibabacloud", "nutanix", "openstack", "oVirt")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.VSPHERE, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD, clusterinfra.NUTANIX, clusterinfra.OPENSTACK, clusterinfra.OVIRT)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-25436"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Scale up machineset")
-		exutil.ScaleMachineSet(oc, machinesetName, 1)
+		clusterinfra.ScaleMachineSet(oc, machinesetName, 1)
 
 		g.By("Scale down machineset")
-		exutil.ScaleMachineSet(oc, machinesetName, 0)
+		clusterinfra.ScaleMachineSet(oc, machinesetName, 0)
 	})
 
 	// author: dtobolik@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:dtobolik-Medium-66866-AWS machineset support for multiple AWS security groups [Disruptive][Slow]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
 		g.By("Create aws security group")
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
-		randomMachineName := exutil.ListWorkerMachineNames(oc)[0]
+		randomMachineName := clusterinfra.ListWorkerMachineNames(oc)[0]
 		randomInstanceID, err := awsClient.GetAwsInstanceID(randomMachineName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		vpcID, err := awsClient.GetAwsInstanceVPCId(randomInstanceID)
@@ -990,18 +991,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new machineset")
 		machineSetName := "machineset-66866"
-		machineSet := exutil.MachineSetDescription{Name: machineSetName, Replicas: 0}
-		defer exutil.WaitForMachinesDisapper(oc, machineSetName)
+		machineSet := clusterinfra.MachineSetDescription{Name: machineSetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machineSetName)
 		defer machineSet.DeleteMachineSet(oc)
 		machineSet.CreateMachineSet(oc)
 
 		g.By("Add security group to machineset")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machineSetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/replicas","value":1},{"op":"add","path":"/spec/template/spec/providerSpec/value/securityGroups/-","value":{"filters":[{"name":"tag:Name","values":["`+sgName+`"]}]}}]`, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machineSetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machineSetName)
 
 		g.By("Check security group is attached")
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machineSetName)[0]
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machineSetName)[0]
 		instanceID, err := awsClient.GetAwsInstanceID(machineName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		securityGroups, err := awsClient.GetInstanceSecurityGroupIDs(instanceID)
@@ -1011,8 +1012,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	//author zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-33058-Implement defaulting machineset values for azure [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
 		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(credType, "Manual") {
@@ -1023,7 +1024,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 		location, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		vnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.vnet}").Output()
@@ -1043,22 +1044,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			namespace:            machineAPINamespace,
 			networkResourceGroup: networkResourceGroup,
 		}
-		defer exutil.WaitForMachinesDisapper(oc, defaultMachinesetAzure.name)
+		defer clusterinfra.WaitForMachinesDisapper(oc, defaultMachinesetAzure.name)
 		defaultMachinesetAzure.createDefaultMachineSetOnAzure(oc)
 		defer defaultMachinesetAzure.deleteDefaultMachineSetOnAzure(oc)
 	})
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-46966-Validation webhook check for gpus on GCP [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		skipTestIfSpotWorkers(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64)
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-46966"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
@@ -1078,11 +1079,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("3.Update machineset with other machine type families and set gpus")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"e2-medium","gpus": [ { "count": 1,"type": "nvidia-tesla-p100" }]}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachineFailed(oc, machinesetName)
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
 		o.Expect(out).Should(o.ContainSubstring("e2-medium does not support accelerators. Only A2 and N1 machine type families support guest acceleartors"))
-		exutil.ScaleMachineSet(oc, machinesetName, 0)
+		clusterinfra.ScaleMachineSet(oc, machinesetName, 0)
 
 		g.By("4.Update machineset with A100 GPUs (A2 family) nvidia-tesla-a100, onHostMaintenance is set to Migrate")
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","onHostMaintenance":"Migrate"}}}}}}`, "--type=merge").Output()
@@ -1099,11 +1100,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("7.Update machineset with other GPU types,  count with an invalid value")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n1-standard-1","restartPolicy": "Always","onHostMaintenance": "Terminate","gpus": [ { "count": -1,"type": "nvidia-tesla-p100" }]}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachineFailed(oc, machinesetName)
-		machineName = exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+		machineName = clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
 		o.Expect(strings.Contains(out, "Number of accelerator cards attached to an instance must be one of [1, 2, 4]") || strings.Contains(out, "AcceleratorType nvidia-tesla-p100 not available in the zone")).To(o.BeTrue())
-		exutil.ScaleMachineSet(oc, machinesetName, 0)
+		clusterinfra.ScaleMachineSet(oc, machinesetName, 0)
 
 		g.By("8.Update machineset with other GPU types,  type with an empty value")
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"machineType":"n1-standard-1","restartPolicy": "Always","onHostMaintenance": "Terminate","gpus": [ { "count": 1,"type": "" }]}}}}}}`, "--type=merge").Output()
@@ -1112,20 +1113,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("9.Update machineset with other GPU types,  type with an invalid value")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"n1-standard-1","restartPolicy": "Always","onHostMaintenance": "Terminate","gpus": [ { "count": 1,"type": "invalid" }]}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachineFailed(oc, machinesetName)
-		machineName = exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+		machineName = clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
 		o.Expect(out).Should(o.ContainSubstring("AcceleratorType invalid not available"))
 	})
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-30379-New machine can join cluster when VPC has custom DHCP option set [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
 		g.By("Create a new dhcpOptions")
 		var newDhcpOptionsID, currentDhcpOptionsID string
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("example30379.com")
 		if err != nil {
@@ -1137,7 +1138,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}()
 
 		g.By("Associate the VPC with the new dhcpOptionsId")
-		machineName := exutil.ListMasterMachineNames(oc)[0]
+		machineName := clusterinfra.ListMasterMachineNames(oc)[0]
 		instanceID, err := awsClient.GetAwsInstanceID(machineName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
@@ -1153,13 +1154,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-30379"
-		ms := exutil.MachineSetDescription{machinesetName, 1}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{machinesetName, 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
-		machineNameOfMachineSet := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
-		nodeName := exutil.GetNodeNameFromMachine(oc, machineNameOfMachineSet)
+		machineNameOfMachineSet := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineNameOfMachineSet)
 		readyStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(readyStatus).Should(o.Equal("True"))

@@ -13,6 +13,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	rosacli "github.com/openshift/openshift-tests-private/test/extended/util/rosacli"
 	"github.com/vmware/govmomi"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -1054,7 +1055,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		// This test case is not supposed to run on some special AWS/GCP cluster with STS, use specialPlatformCheck function to identify such a cluster
 		// For Azure cluster, if it has special credential type, this test case should be skipped as well
 		isSpecialSTSorCredCluster := specialPlatformCheck(oc)
-		if isSpecialSTSorCredCluster || exutil.UseSpotInstanceWorkersCheck(oc) {
+		if isSpecialSTSorCredCluster || clusterinfra.UseSpotInstanceWorkersCheck(oc) {
 			g.Skip("Skipped: This test case is not suitable for special AWS/GCP STS cluster or Azure with special credential type or cluster uses spot instances!!")
 		}
 
@@ -2716,19 +2717,19 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		exutil.By("Create a new machineset with 2 nodes")
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-61344"
-		ms := exutil.MachineSetDescription{machinesetName, 2}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		// Wait 180 seconds first, as exutil.WaitForMachinesRunning() uses total 960 seconds in wait.poll, it may not be enough for some platform(s)
 		time.Sleep(180 * time.Second)
-		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
-		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
-		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
+		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
+		nodeName0 := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
+		nodeName1 := clusterinfra.GetNodeNameFromMachine(oc, machineName[1])
 
 		exutil.By("Apply EgressLabel Key to one node. \n")
 		// No defer here, as this node will be deleted explicitly in the following step.
@@ -2757,7 +2758,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.By("Remove the first egress node.\n")
 		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("machines.machine.openshift.io", machineName[0], "-n", "openshift-machine-api").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		exutil.By("Verify egressIP was moved to second egress node.\n")
 		o.Eventually(func() bool {
@@ -3201,7 +3202,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		// cloudprivateipconfig is a resource only available on cloud platforms like AWS, GCP and Azure that egressIP is supported, skip other platforms
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "azure")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "azure")
 
 		exutil.By("1. Get list of nodes, get two worker nodes that have same subnet, use them as egress nodes\n")
 		var egressNode1, egressNode2 string
@@ -4984,7 +4985,7 @@ var _ = g.Describe("[sig-networking] OVN EgressIP on rosa", func() {
 
 			e2e.Logf("Get new nodes created from the machinepool\n")
 			for _, machineName := range machineNames {
-				newNode := exutil.GetNodeNameFromMachine(oc, machineName)
+				newNode := clusterinfra.GetNodeNameFromMachine(oc, machineName)
 				newNodesName = append(newNodesName, newNode)
 			}
 		}

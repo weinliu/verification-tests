@@ -1,4 +1,4 @@
-package util
+package clusterinfra
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
 	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -23,7 +24,7 @@ type MachineSetwithLabelDescription struct {
 }
 
 // CreateMachineSet create a new machineset
-func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *CLI) {
+func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *exutil.CLI) {
 	e2e.Logf("Creating a new MachineSets with labels ...")
 	machinesetName := GetRandomMachineSetName(oc)
 	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", MachineAPINamespace, "-o=json").OutputToFile("machineset.json")
@@ -63,13 +64,13 @@ func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *CLI) {
 }
 
 // DeleteMachineSet delete a machineset
-func (ms *MachineSetwithLabelDescription) DeleteMachineSet(oc *CLI) error {
+func (ms *MachineSetwithLabelDescription) DeleteMachineSet(oc *exutil.CLI) error {
 	e2e.Logf("Deleting a MachineSets ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", MachineAPINamespace).Execute()
 }
 
 // AssertLabelledMachinesRunningDeleteIfNot check labeled machines are running if not delete machineset
-func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfNot(oc *CLI, machineNumber int, machineSetName string) {
+func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfNot(oc *exutil.CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 920*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", MachineAPINamespace).Output()
@@ -84,13 +85,13 @@ func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfN
 	if pollErr != nil {
 		e2e.Logf("Deleting a MachineSets ...")
 		ms.DeleteMachineSet(oc)
-		AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 12 minutes ...", machineNumber))
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 12 minutes ...", machineNumber))
 	}
 	e2e.Logf("All machines are Running ...")
 }
 
 // WaitForMachineFailedToSkip for machines if failed to help skip test early
-func WaitForMachineFailedToSkip(oc *CLI, machineSetName string) error {
+func WaitForMachineFailedToSkip(oc *exutil.CLI, machineSetName string) error {
 	e2e.Logf("Wait for machine to go into Failed phase")
 	err := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()

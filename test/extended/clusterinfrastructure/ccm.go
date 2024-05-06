@@ -10,6 +10,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -59,7 +60,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-High-44212-[CCM] The Kubelet and KCM cloud-provider should be external", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
-		if iaasPlatform == "azure" {
+		if iaasPlatform == clusterinfra.AZURE {
 			g.By("Check if cloud-node-manager daemonset is deployed")
 			ds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -83,7 +84,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-[CCM] 42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE, clusterinfra.VSPHERE)
 
 		g.By("Check if cloud-config cm is copied to openshift-cloud-controller-manager namespace")
 		ccmCM, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -126,7 +127,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Critical-64657-[CCM] Alibaba clusters are TechPreview and should not be upgradeable", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "AlibabaCloud")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.ALIBABACLOUD)
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		g.By("Check cluster is TechPreview and should not be upgradeable")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o=jsonpath={.status.conditions[*]}").Output()
@@ -137,9 +138,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-Medium-70019-[CCM]Security Group and rules resource should be deleted when deleting a Ingress Controller", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		// skip on UPI because there is a bug: https://issues.redhat.com/browse/OCPBUGS-8213
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
 		ingressControllerTemplate := filepath.Join(ccmBaseDir, "ingressController70019.yaml")
 		ingressController := ingressControllerDescription{
@@ -169,7 +170,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		e2e.Logf("groupname: %s", groupname)
 
 		g.By("Get the security group id")
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 		sg, err := awsClient.GetSecurityGroupByGroupName(groupname)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -205,7 +206,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-Medium-70296-[CCM] AWS should not use external-cloud-volume-plugin post CSI migration", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		cmKubeControllerManager, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "config", "-n", "openshift-kube-controller-manager", "-o=yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmKubeControllerManager).NotTo(o.ContainSubstring("external-cloud-volume-plugin"))
@@ -213,12 +214,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-LEVEL0-Critical-70618-[CCM] The new created nodes should be added to load balancer [Disruptive][Slow]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD)
 		var newNodeNames []string
 		g.By("Create a new machineset")
 		machinesetName := "machineset-70618"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer func() {
 			err := waitForClusterOperatorsReady(oc, "ingress", "console", "authentication")
 			exutil.AssertWaitPollNoErr(err, "co recovery fails!")
@@ -227,15 +228,15 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			err := waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default")
 			exutil.AssertWaitPollNoErr(err, "pod recovery fails!")
 		}()
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":2,"template":{"spec":{"taints":null}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
-		machineNames := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
-		newNodeNames = append(newNodeNames, exutil.GetNodeNameFromMachine(oc, machineNames[0]))
-		newNodeNames = append(newNodeNames, exutil.GetNodeNameFromMachine(oc, machineNames[1]))
+		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineNames := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
+		newNodeNames = append(newNodeNames, clusterinfra.GetNodeNameFromMachine(oc, machineNames[0]))
+		newNodeNames = append(newNodeNames, clusterinfra.GetNodeNameFromMachine(oc, machineNames[1]))
 		newNodeNameStr := newNodeNames[0] + " " + newNodeNames[1]
 		e2e.Logf("newNodeNames: %s", newNodeNameStr)
 		for _, value := range newNodeNames {
@@ -278,8 +279,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-High-70620-[CCM] Region and zone labels should be available on the nodes", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "openstack")
-		if iaasPlatform == "azure" {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.IBMCLOUD, clusterinfra.OPENSTACK)
+		if iaasPlatform == clusterinfra.AZURE {
 			azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 			o.Expect(azureErr).NotTo(o.HaveOccurred())
 			if azureStackCloud == "AzureStackCloud" {
@@ -293,8 +294,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-High-70744-[CCM] Pull images from ECR repository [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
-		exutil.SkipForAwsOutpostCluster(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		clusterinfra.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-2" && region != "us-east-1" {
@@ -305,7 +306,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		roleName := infrastructureName + "-worker-role"
 		policyArn := "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		iamClient := exutil.NewIAMClient()
 		err = iamClient.AttachRolePolicy(roleName, policyArn)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -325,8 +326,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-LEVEL0-Critical-70627-[CCM] Service of type LoadBalancer can be created successful [Disruptive]", func() {
-		exutil.SkipForAwsOutpostCluster(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "ibmcloud", "alibabacloud")
+		clusterinfra.SkipForAwsOutpostCluster(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD)
 		if strings.Contains(iaasPlatform, "aws") && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
 			g.Skip("Skipped: There is no public subnet on AWS C2S/SC2S disconnected clusters!")
 		}
@@ -347,11 +348,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-High-71492-[CCM] Create CLB service on aws outposts cluster [Disruptive]", func() {
-		exutil.SkipForNotAwsOutpostMixedCluster(oc)
+		clusterinfra.SkipForNotAwsOutpostMixedCluster(oc)
 		exutil.By("1.1Get regular worker public subnetID")
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).ShouldNot(o.HaveOccurred())
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSessionWithRegion(region)
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -394,7 +395,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		waitForLoadBalancerReady(oc, externalIPForSubnet)
 
 		exutil.By("2.1Add label for one regular node")
-		regularNodes := exutil.ListNonOutpostWorkerNodes(oc)
+		regularNodes := clusterinfra.ListNonOutpostWorkerNodes(oc)
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", regularNodes[0], "key1-").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", regularNodes[0], "key1=value1", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -430,7 +431,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-High-72119-[CCM] Pull images from GCR repository should succeed [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		g.By("Create a new project for testing")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "hello-gcr72119").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -445,10 +446,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-Medium-70689-[CCM] CCM pods should restart to react to changes after credentials update [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "vsphere", "openstack")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSPHERE, clusterinfra.OPENSTACK)
 		var secretName, jsonString, patchPath, podLabel string
 		iaasPlatform := exutil.CheckPlatform(oc)
-		if iaasPlatform == "vsphere" {
+		if iaasPlatform == clusterinfra.VSPHERE {
 			secretName = "vsphere-creds"
 			jsonString = "-o=jsonpath={.data.vcenter\\.devqe\\.ibmc\\.devcluster\\.openshift\\.com\\.password}"
 			patchPath = `{"data":{"vcenter.devqe.ibmc.devcluster.openshift.com.password": `
@@ -480,7 +481,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-High-72120-[CCM] Pull images from ACR repository should succeed [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
 		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 		o.Expect(azureErr).NotTo(o.HaveOccurred())
 		if azureCloudName == "AzureStackCloud" || azureCloudName == "AzureUSGovernmentCloud" {

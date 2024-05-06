@@ -14,6 +14,7 @@ import (
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -728,17 +729,17 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
 			g.Skip("Skip for non-supported auto scaling machineset platforms!!")
 		}
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		exutil.By("Create a new machineset with 2 nodes")
 		machinesetName := "machineset-61213"
-		ms := exutil.MachineSetDescription{machinesetName, 2}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
-		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
-		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
+		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
+		nodeName0 := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
+		nodeName1 := clusterinfra.GetNodeNameFromMachine(oc, machineName[1])
 
 		exutil.By("Obtain the namespace \n")
 		ns := oc.Namespace()
@@ -752,7 +753,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
 		err = ms.DeleteMachineSet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForMachinesDisapper(oc, machinesetName)
+		clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 
 		exutil.By("Wait ovnkuber-control-plane pods ready\n")
 		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")

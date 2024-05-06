@@ -8,6 +8,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
@@ -251,8 +252,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getResourceName(oc, "openshift-ingress-canary", "pods")
 
 		exutil.By("Create a new machineset")
-		exutil.SkipConditionally(oc)
-		ms := exutil.MachineSetDescription{Name: machinSetName, Replicas: 1}
+		clusterinfra.SkipConditionally(oc)
+		ms := clusterinfra.MachineSetDescription{Name: machinSetName, Replicas: 1}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -261,15 +262,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", "machineset-56240", "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"metadata\":{\"labels\":{\"ingress\": \"true\", \"node-role.kubernetes.io/infra\": \"\"}}}}}}", "--type=merge").Output()
 		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
-		updatedMachineName := exutil.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
+		updatedMachineName := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
 
 		exutil.By("Reschedule the running machineset with infra details")
-		exutil.DeleteMachine(oc, updatedMachineName[0])
-		updatedMachineName1 := exutil.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
+		clusterinfra.DeleteMachine(oc, updatedMachineName[0])
+		updatedMachineName1 := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
 
 		exutil.By("Check the canary deamonset is scheduled on infra node which is newly created")
 		// confirm the new machineset is already created
-		updatedMachineSetName := exutil.ListWorkerMachineSetNames(oc)
+		updatedMachineSetName := clusterinfra.ListWorkerMachineSetNames(oc)
 		checkGivenStringPresentOrNot(true, updatedMachineSetName, machinSetName)
 		// confirm infra node presence among the nodes
 		infraNode := searchStringUsingLabel(oc, "node", "node-role.kubernetes.io/infra", ".items[*].metadata.name")
@@ -286,7 +287,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(tolerations).To(o.ContainSubstring(`key":"node-role.kubernetes.io/infra`))
 
 		exutil.By("Tainting the infra nodes with 'NoSchedule' and confirm canary pods continues to remain up and functional on those nodes")
-		nodeNameOfMachine := exutil.GetNodeNameFromMachine(oc, updatedMachineName1[0])
+		nodeNameOfMachine := clusterinfra.GetNodeNameFromMachine(oc, updatedMachineName1[0])
 		output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "nodes", nodeNameOfMachine, "node-role.kubernetes.io/infra:NoSchedule").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("node/" + nodeNameOfMachine + " tainted"))

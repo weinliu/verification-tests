@@ -44,6 +44,7 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
@@ -734,7 +735,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		infraID := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedCluster.name, "-n", hostedCluster.namespace, `-ojsonpath={.spec.infraID}`)
 		provider := fmt.Sprintf("%s.s3.%s.amazonaws.com/%s", bucketName, region, infraID)
 		e2e.Logf("trying to delete OpenIDConnectProvider: %s", provider)
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		iamClient := exutil.NewIAMClient()
 		o.Expect(iamClient.DeleteOpenIDConnectProviderByProviderName(provider)).ShouldNot(o.HaveOccurred())
 
@@ -1377,7 +1378,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		exutil.By("Creating a dummy load balancer which has the default worker SG attached")
 		subnet := doOcpReq(oc, OcpGet, true, "hc", hostedCluster.name, "-n", hostedCluster.namespace, `-o=jsonpath={.spec.platform.aws.cloudProviderConfig.subnet.id}`)
 		e2e.Logf("Found subnet of the hosted cluster = %s", subnet)
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		elbClient := elb.New(session.Must(session.NewSession()), aws.NewConfig().WithRegion(region))
 		defer func() {
 			_, err = elbClient.DeleteLoadBalancer(&elb.DeleteLoadBalancerInput{
@@ -1738,7 +1739,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 
 		exutil.By("Getting info about the management cluster")
-		msetNames := exutil.ListWorkerMachineSetNames(oc)
+		msetNames := clusterinfra.ListWorkerMachineSetNames(oc)
 		// In theory the number of MachineSets does not have to be exactly 3 but should be at least 3.
 		// The following is enforced for alignment with the test case.
 		if numMset := len(msetNames); numMset != numMsetsExpected {
@@ -1793,7 +1794,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		exutil.By("Creating additional worker nodes through MachineSets on the management cluster")
 		e2e.Logf("Creating 2 MachineSets in the first AZ")
 		extraMset1Az1Name := mset1Name + fmt.Sprintf("-%s-1", testCaseId)
-		extraMset1Az1 := exutil.MachineSetNonSpotDescription{
+		extraMset1Az1 := clusterinfra.MachineSetNonSpotDescription{
 			Name:     extraMset1Az1Name,
 			Replicas: 1,
 		}
@@ -1802,7 +1803,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}()
 		extraMset1Az1.CreateMachineSetBasedOnExisting(oc, mset1Name, false)
 		extraMset2Az1Name := mset1Name + fmt.Sprintf("-%s-2", testCaseId)
-		extraMset2Az1 := exutil.MachineSetNonSpotDescription{
+		extraMset2Az1 := clusterinfra.MachineSetNonSpotDescription{
 			Name:     extraMset2Az1Name,
 			Replicas: 1,
 		}
@@ -1813,7 +1814,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		e2e.Logf("Creating a MachineSet in the second AZ")
 		extraMset1Az2Name := mset2Name + fmt.Sprintf("-%s-1", testCaseId)
-		extraMset1Az2 := exutil.MachineSetNonSpotDescription{
+		extraMset1Az2 := clusterinfra.MachineSetNonSpotDescription{
 			Name:     extraMset1Az2Name,
 			Replicas: 1,
 		}
@@ -1824,7 +1825,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		e2e.Logf("Creating a MachineSet in the third AZ")
 		extraMset1Az3Name := mset3Name + fmt.Sprintf("-%s-1", testCaseId)
-		extraMset1Az3 := exutil.MachineSetNonSpotDescription{
+		extraMset1Az3 := clusterinfra.MachineSetNonSpotDescription{
 			Name:     extraMset1Az3Name,
 			Replicas: 1,
 		}
@@ -2279,7 +2280,7 @@ spec:
 		exutil.By("Inspecting platform")
 		exutil.SkipNoCapabilities(oc, "MachineAPI")
 		exutil.SkipIfPlatformTypeNot(oc, "aws")
-		msetNames := exutil.ListWorkerMachineSetNames(oc)
+		msetNames := clusterinfra.ListWorkerMachineSetNames(oc)
 		// In theory the number of MachineSets does not have to be exactly 3 but should be at least 3.
 		// The following enforcement is for alignment with the test case only.
 		if numMset := len(msetNames); numMset != numMsetsExpected {
@@ -2355,7 +2356,7 @@ spec:
 		var extraMsetNames []string
 		for _, msetName := range msetNames {
 			extraMsetName := fmt.Sprintf("%s-%s-1", msetName, testCaseId)
-			extraMset := exutil.MachineSetNonSpotDescription{
+			extraMset := clusterinfra.MachineSetNonSpotDescription{
 				Name:     extraMsetName,
 				Replicas: 1,
 			}
@@ -2791,7 +2792,7 @@ spec:
 		exutil.By("Get Route53 hosted zone for privatelink")
 		hzId := doOcpReq(oc, OcpGet, true, "awsendpointservice/private-router", "-n", hostedCluster.getHostedComponentNamespace(), "-o=jsonpath={.status.dnsZoneID}")
 		e2e.Logf("Found hosted zone ID = %s", hzId)
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		route53Client := exutil.NewRoute53Client()
 		// Get hosted zone name for logging purpose only
 		var getHzOut *route53.GetHostedZoneOutput

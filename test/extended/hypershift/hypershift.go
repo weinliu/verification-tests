@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/test/utils/format"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
@@ -1161,7 +1162,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("create sg by aws client and use it to create a nodepool")
 		vpcID := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.spec.platform.aws.cloudProviderConfig.vpc}`)
 
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 		groupID, err := awsClient.CreateSecurityGroup(fmt.Sprintf("ocp-60140-sg-%s", strings.ToLower(exutil.RandStrDefault())), vpcID, "hypershift ocp-60140")
 		o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -1201,7 +1202,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("get default sg of vpc")
 		vpcID := doOcpReq(oc, OcpGet, true, "hc", hostedcluster.name, "-n", hostedcluster.namespace, `-ojsonpath={.spec.platform.aws.cloudProviderConfig.vpc}`)
 		e2e.Logf("hc vpc is %s", vpcID)
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 		defaultVPCSG, err := awsClient.GetDefaultSecurityGroupByVpcID(vpcID)
 		o.Expect(err).NotTo(o.HaveOccurred())

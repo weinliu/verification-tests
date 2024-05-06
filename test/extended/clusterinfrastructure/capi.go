@@ -7,6 +7,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -23,7 +24,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-51061-Enable cluster API with feature gate [Disruptive]", func() {
 		g.By("Check if cluster api on this platform is supported")
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP)
 
 		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -68,7 +69,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-51141-[CAPI] worker-user-data secret should be synced up [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "vsphere")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSPHERE)
 		skipForCAPINotExist(oc)
 
 		g.By("Delete worker-user-data in openshift-cluster-api namespace")
@@ -90,7 +91,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: dtobolik@redhat.com
 	g.It("NonHyperShiftHOST-Author:dtobolik-Medium-61980-[CAPI] Workload annotation missing from deployments", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "vsphere")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSPHERE)
 		skipForCAPINotExist(oc)
 
 		deployments, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", clusterAPINamespace, "-oname").Output()
@@ -106,7 +107,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71695-[CAPI] Core CAPI CRDs not deployed on unsupported platforms even when explicitly needed by other operators", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere", "gcp", "aws", "alicloud", "ibmcloud", "nutanix")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE, clusterinfra.VSPHERE, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.ALIBABACLOUD, clusterinfra.IBMCLOUD, clusterinfra.NUTANIX)
 		skipForCAPINotExist(oc)
 
 		expectedCRDs := `clusterclasses.cluster.x-k8s.io
@@ -132,7 +133,7 @@ machinesets.cluster.x-k8s.io`
 	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71913-[capi] Promote CAPI IPAM CRDs to GA", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere", "gcp", "aws", "alicloud", "ibmcloud", "nutanix")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE, clusterinfra.VSPHERE, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.ALIBABACLOUD, clusterinfra.IBMCLOUD, clusterinfra.NUTANIX)
 
 		expectedCRDs := `ipaddressclaims.ipam.cluster.x-k8s.io
 ipaddresses.ipam.cluster.x-k8s.io`

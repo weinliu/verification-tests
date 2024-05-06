@@ -24,6 +24,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
@@ -448,7 +449,7 @@ func getMinSupportedOCPVersion() string {
 func getAWSMgmtClusterRegionAvailableZones(oc *exutil.CLI) []string {
 	region, err := exutil.GetAWSClusterRegion(oc)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	exutil.GetAwsCredentialFromCluster(oc)
+	clusterinfra.GetAwsCredentialFromCluster(oc)
 	awsClient := exutil.InitAwsSessionWithRegion(region)
 	availableZones, err := awsClient.GetAvailabilityZoneNames()
 	o.Expect(err).ShouldNot(o.HaveOccurred())

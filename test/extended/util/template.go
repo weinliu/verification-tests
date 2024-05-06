@@ -156,7 +156,7 @@ func ParameterizedTemplateByReplaceToFile(oc *CLI, parameters ...string) string 
 	}
 	templateContentJSON, convertErr := yaml.YAMLToJSON([]byte(templateContentStr))
 	o.Expect(convertErr).NotTo(o.HaveOccurred())
-	configFile := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+getRandomString()+"config.json")
+	configFile := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+GetRandomString()+"config.json")
 	o.Expect(os.WriteFile(configFile, pretty.Pretty(templateContentJSON), 0644)).ShouldNot(o.HaveOccurred())
 	return configFile
 }

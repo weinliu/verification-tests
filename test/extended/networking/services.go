@@ -14,6 +14,7 @@ import (
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -401,15 +402,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		svc.createServiceFromParams(oc)
 		exutil.By("Create a new machineset to add new nodes")
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-62293"
-		ms := exutil.MachineSetDescription{machinesetName, 2}
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		exutil.WaitForMachinesRunning(oc, 2, machinesetName)
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
-		nodeName0 := exutil.GetNodeNameFromMachine(oc, machineName[0])
-		nodeName1 := exutil.GetNodeNameFromMachine(oc, machineName[1])
+		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
+		nodeName0 := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
+		nodeName1 := clusterinfra.GetNodeNameFromMachine(oc, machineName[1])
 		e2e.Logf("The nodes %s and %s added successfully", nodeName0, nodeName1)
 
 		exutil.By(fmt.Sprintf("create 2nd hello pod in %s on newly created node %s", ns, nodeName0))

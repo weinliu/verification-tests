@@ -6,6 +6,7 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -16,7 +17,7 @@ type awsInstance struct {
 
 // GetAwsNodes get nodes and load clouds cred with the specified label.
 func GetAwsNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
-	exutil.GetAwsCredentialFromCluster(oc)
+	clusterinfra.GetAwsCredentialFromCluster(oc)
 	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var results []ComputeNode

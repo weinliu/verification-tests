@@ -859,7 +859,7 @@ func ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster(oc *CLI) (string, st
 	clusterName := clusterNames[1]
 
 	var hostedClusterKubeconfigFile string
-	hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + getRandomString()
+	hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + GetRandomString()
 	output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
 		clusterName, hostedclusterNS, hostedClusterKubeconfigFile)).Output()
 	e2e.Logf("the cmd output: %s", string(output))

@@ -11,6 +11,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
@@ -1173,7 +1174,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		)
 
 		architecture.SkipIfNoNodeWithArchitectures(oc.AsAdmin(), architecture.ARM64)
-		exutil.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
+		clusterinfra.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
 
 		createdCustomPoolName := fmt.Sprintf("mco-test-%s", architecture.ARM64)
 		defer DeleteCustomMCP(oc.AsAdmin(), createdCustomPoolName)

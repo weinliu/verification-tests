@@ -26,6 +26,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 var _ = g.Describe("[sig-cli] Workloads", func() {
@@ -2118,7 +2119,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			e2e.Logf("Cluster is: %s", iaasPlatform)
 			g.Skip("For baremetal cluster , this is something wrong for proxy setting, so skip it for temp!")
 		}
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
 		out, err := oc.Run("explain").Args("po").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, "Pod is a collection of containers")).To(o.BeTrue())
@@ -2156,7 +2157,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") || isBaselineCapsSet(oc, "v4.11") || isBaselineCapsSet(oc, "v4.14") || isBaselineCapsSet(oc, "v4.15") && !isEnabledCapability(oc, "DeploymentConfig") {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "nutanix", "ibmcloud", "alicloud")
 		out, err := oc.WithKubectl().Run("explain").Args("po").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(out, "Pod is a collection of containers")).To(o.BeTrue())

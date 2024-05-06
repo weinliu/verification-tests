@@ -6,6 +6,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -22,7 +23,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Critical-29147-Check that all the baremetalhosts are up and running", func() {
 		g.By("Check if baremetal cluster")
-		if !(iaasPlatform == "baremetal") {
+		if !(iaasPlatform == clusterinfra.BAREMETAL) {
 			e2e.Logf("Cluster is: %s", iaasPlatform)
 			g.Skip("For Non-baremetal cluster , this is not supported!")
 		}
@@ -37,7 +38,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Critical-32198-Verify all master bmh are 'externally provisioned'", func() {
 		g.By("Check if baremetal cluster")
-		if !(iaasPlatform == "baremetal") {
+		if !(iaasPlatform == clusterinfra.BAREMETAL) {
 			e2e.Logf("Cluster is: %s", iaasPlatform)
 			g.Skip("For Non-baremetal cluster , this is not supported!")
 		}

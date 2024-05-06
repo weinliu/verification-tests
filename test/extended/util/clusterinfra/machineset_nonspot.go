@@ -1,4 +1,4 @@
-package util
+package clusterinfra
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/sjson"
 
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -24,7 +25,7 @@ type MachineSetNonSpotDescription struct {
 }
 
 // CreateMachineSet create a new machineset
-func (ms *MachineSetNonSpotDescription) CreateMachineSet(oc *CLI) {
+func (ms *MachineSetNonSpotDescription) CreateMachineSet(oc *exutil.CLI) {
 	g.By("Creating a new MachineSets having dedicated machines ...")
 	machinesetName := GetRandomMachineSetName(oc)
 	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", MachineAPINamespace, "-o=json").OutputToFile("machineset.json")
@@ -65,7 +66,7 @@ func (ms *MachineSetNonSpotDescription) CreateMachineSet(oc *CLI) {
 }
 
 // CreateMachineSetBasedOnExisting creates a non-spot MachineSet based on an existing one
-func (ms *MachineSetNonSpotDescription) CreateMachineSetBasedOnExisting(oc *CLI, existingMset string, waitForMachinesRunning bool) {
+func (ms *MachineSetNonSpotDescription) CreateMachineSetBasedOnExisting(oc *exutil.CLI, existingMset string, waitForMachinesRunning bool) {
 	e2e.Logf("Creating MachineSet/%s based on MachineSet/%s", ms.Name, existingMset)
 	existingMsetJson, err := oc.
 		AsAdmin().
@@ -109,13 +110,13 @@ func (ms *MachineSetNonSpotDescription) CreateMachineSetBasedOnExisting(oc *CLI,
 }
 
 // DeleteMachineSet delete a machineset
-func (ms *MachineSetNonSpotDescription) DeleteMachineSet(oc *CLI) error {
-	By("Deleting a MachineSet ...")
+func (ms *MachineSetNonSpotDescription) DeleteMachineSet(oc *exutil.CLI) error {
+	exutil.By("Deleting a MachineSet ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", MachineAPINamespace).Execute()
 }
 
 // DeleteMachinesetIfDedicatedMachinesAreNotRunning check labeled machines are running if not delete machineset
-func (ms *MachineSetNonSpotDescription) DeleteMachinesetIfDedicatedMachinesAreNotRunning(oc *CLI, machineNumber int, machineSetName string) {
+func (ms *MachineSetNonSpotDescription) DeleteMachinesetIfDedicatedMachinesAreNotRunning(oc *exutil.CLI, machineNumber int, machineSetName string) {
 	g.By("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 920*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", MachineAPINamespace).Output()
@@ -129,13 +130,13 @@ func (ms *MachineSetNonSpotDescription) DeleteMachinesetIfDedicatedMachinesAreNo
 	})
 	if pollErr != nil {
 		ms.DeleteMachineSet(oc)
-		AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 12 minutes ...", machineNumber))
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 12 minutes ...", machineNumber))
 	}
 	g.By("All machines are Running ...")
 }
 
 // WaitForDedicatedMachineFailedToSkip for machines if failed to help skip test early
-func WaitForDedicatedMachineFailedToSkip(oc *CLI, machineSetName string) error {
+func WaitForDedicatedMachineFailedToSkip(oc *exutil.CLI, machineSetName string) error {
 	g.By("Wait for machine to go into Failed phase")
 	err := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()

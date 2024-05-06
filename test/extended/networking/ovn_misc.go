@@ -13,6 +13,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -275,17 +276,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		kubeletKillerPodTemplate := filepath.Join(buildPruningBaseDir, "kubelet-killer-pod-template.yaml")
 
 		exutil.By("1. Create a new machineset, get the new node created\n")
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-68418"
-		ms := exutil.MachineSetDescription{machinesetName, 1}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
 		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
-		nodeName := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
 		e2e.Logf("Get nodeName: %v", nodeName)
 
 		exutil.By("2. Create kubelet-killer pod on the node\n")
@@ -312,20 +313,20 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Verify the machineset is deleted
 		ms.DeleteMachineSet(oc)
-		exutil.WaitForMachinesRunning(oc, 0, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 0, machinesetName)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "kubelet-killer-68418", "-n", kkPod.namespace, "--ignore-not-found=true").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Recreate the machineset, get the newer node created\n")
-		ms2 := exutil.MachineSetDescription{machinesetName, 1}
+		ms2 := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
 		defer ms2.DeleteMachineSet(oc)
 		ms2.CreateMachineSet(oc)
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-		machineName = exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+		machineName = clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
 		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
-		newNodeName := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		newNodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
 
 		exutil.By("5. Recreate kubelet-killer pod with same pod name on the newer node\n")
 		kkPod2 := kubeletKillerPod{
@@ -359,7 +360,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		// 960s total wait.poll time may not be enough for some type of clusters, add some sleep time before WaitForMachinesRunning
 		time.Sleep(180 * time.Second)
-		exutil.WaitForMachinesRunning(oc, 0, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 0, machinesetName)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "kubelet-killer-68418", "-n", kkPod.namespace, "--ignore-not-found=true").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -827,7 +828,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-70011-Medium-70012-Check apbexternalroute/egressfirewall status when machine added/removed [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		nodes, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 
@@ -902,11 +903,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		exutil.By("4. Add machine")
-		ms := exutil.MachineSetDescription{"machineset-70011", 1}
-		defer exutil.WaitForMachinesDisapper(oc, "machineset-70011")
+		ms := clusterinfra.MachineSetDescription{Name: "machineset-70011", Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, "machineset-70011")
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		newNode := exutil.GetNodeNameFromMachine(oc, exutil.GetMachineNamesFromMachineSet(oc, "machineset-70011")[0])
+		newNode := clusterinfra.GetNodeNameFromMachine(oc, clusterinfra.GetMachineNamesFromMachineSet(oc, "machineset-70011")[0])
 		e2e.Logf("New node is:%s", newNode)
 
 		exutil.By("5. Check status of apbexternalroute/egressfirewall object when new machine added")
@@ -923,7 +924,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		exutil.By("6. Remove machine")
 		ms.DeleteMachineSet(oc)
-		exutil.WaitForMachinesDisapper(oc, "machineset-70011")
+		clusterinfra.WaitForMachinesDisapper(oc, "machineset-70011")
 
 		exutil.By("7. Check status of apbexternalroute/egressfirewall object after machine removed")
 		apbExtRouteCheckErr3 := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Success")
@@ -947,7 +948,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		allowFromAllNSNetworkPolicyFile := filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-all-namespaces.yaml")
 
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 
 		exutil.By("1. Get an existing schedulable node\n")
 		currentNodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -975,15 +976,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		exutil.By("5. Create a new machineset, get the new node created\n")
 		machinesetName := "machineset-72028"
-		ms := exutil.MachineSetDescription{machinesetName, 1}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
-		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
 		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
-		newNodeName := exutil.GetNodeNameFromMachine(oc, machineName[0])
+		newNodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
 		e2e.Logf("Get new node name: %s", newNodeName)
 
 		exutil.By("6. Create second namespace,create another test pod in it on the new node\n")

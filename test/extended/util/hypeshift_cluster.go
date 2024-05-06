@@ -84,7 +84,7 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
 		hostedClusterKubeconfigFile = os.Getenv("GUEST_KUBECONFIG")
 		e2e.Logf(fmt.Sprintf("use a known hosted cluster kubeconfig: %v", hostedClusterKubeconfigFile))
 	} else {
-		hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + getRandomString()
+		hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + GetRandomString()
 		output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
 			clusterName, hostedclusterNS, hostedClusterKubeconfigFile)).Output()
 		e2e.Logf("the cmd output: %s", string(output))
@@ -137,7 +137,7 @@ func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string, stri
 		hostedClusterKubeconfigFile = os.Getenv("GUEST_KUBECONFIG")
 		e2e.Logf(fmt.Sprintf("use a known hosted cluster kubeconfig: %v", hostedClusterKubeconfigFile))
 	} else {
-		hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + getRandomString()
+		hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + GetRandomString()
 		output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
 			clusterName, hostedclusterNS, hostedClusterKubeconfigFile)).Output()
 		e2e.Logf("the cmd output: %s", string(output))

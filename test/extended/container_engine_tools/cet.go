@@ -7,6 +7,7 @@ import (
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	//e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -164,7 +165,7 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	// author: minmli@redhat.com
 	g.It("ConnectedOnly-Author:pmali-Critical-48876-Check ping I src IP does work on a container", func() {
 		//azure platform can't support this case, skip if it's an azure cluster
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "osp", "vsphere", "baremetal")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "osp", "vsphere", "baremetal")
 		//cluster with proxy can't support this case
 		if checkProxy(oc) {
 			g.Skip("This is a proxy cluster, skip the test.")

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 
@@ -217,7 +218,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-67787-switch kernel type to 64k-pages for clusters with arm64 nodes [Disruptive]", func() {
 		architecture.SkipIfNoNodeWithArchitectures(oc.AsAdmin(), architecture.ARM64)
-		exutil.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
+		clusterinfra.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
 
 		// If arm64 Compact/SNO we use master
 		// Else if possible we create a custom MCP if there are arm64 nodes in the worker pool
@@ -3774,7 +3775,7 @@ nulla pariatur.`
 	g.It("Author:sregidor-Longduration-NonPreRelease-Critical-67790-create MC with extensions, 64k-pages kernel type and kernel argument [Disruptive]", func() {
 
 		architecture.SkipIfNoNodeWithArchitectures(oc.AsAdmin(), architecture.ARM64)
-		exutil.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
+		clusterinfra.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
 
 		// If arm64 Compact/SNO we use master
 		// Else if possible we create a custom MCP if there are arm64 nodes in the worker pool

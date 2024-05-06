@@ -168,49 +168,10 @@ func (a Architecture) GNUString() string {
 	return ""
 }
 
-func GetArchitectureFromMachineSet(oc *exutil.CLI, machineSetName string) (Architecture, error) {
-	nodeNames := exutil.GetNodeNamesFromMachineSet(oc, machineSetName)
-	if len(nodeNames) == 0 {
-		e2e.Logf("no nodes associated with %s. Using the capacity annotation", machineSetName)
-		machineSetAnnotationCapacity, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-			exutil.MapiMachineset, machineSetName,
-			"-o=jsonpath={.metadata.annotations.capacity\\.cluster-autoscaler\\.kubernetes\\.io/labels}",
-			"-n", exutil.MachineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		capacityLabels := mapFromCommaSeparatedKV(machineSetAnnotationCapacity)
-		e2e.Logf("capacityLabels: %s", capacityLabels)
-		for k, v := range capacityLabels {
-			if strings.Contains(k, NodeArchitectureLabel) {
-				return FromString(v), nil
-			}
-		}
-		return UNKNOWN, fmt.Errorf(
-			"error getting the machineSet's nodes and unable to infer the architecture from the %s's capacity annotations",
-			machineSetName)
-	}
-	arch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeNames[0],
-		"-o=jsonpath={.status.nodeInfo.architecture}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return FromString(arch), nil
-}
-
-// mapFromCommaSeparatedKV convert a comma separated string of key=value pairs into a map
-func mapFromCommaSeparatedKV(list string) map[string]string {
-	merged := make(map[string]string)
-	for _, kv := range strings.Split(list, ",") {
-		kv := strings.Split(kv, "=")
-		if len(kv) != 2 {
-			// ignore invalid key=value pairs
-			continue
-		}
-		merged[kv[0]] = kv[1]
-	}
-	return merged
-}
-
 // GetControlPlaneArch get the architecture of the contol plane node
 func GetControlPlaneArch(oc *exutil.CLI) Architecture {
-	architecture, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", exutil.GetNodeNameFromMachine(oc, exutil.ListMasterMachineNames(oc)[0]), "-o=jsonpath={.status.nodeInfo.architecture}").Output()
+	masterNode, err := exutil.GetFirstMasterNode(oc)
+	architecture, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNode, "-o=jsonpath={.status.nodeInfo.architecture}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return FromString(architecture)
 }

@@ -8,6 +8,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -2834,7 +2835,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Wait for new node is ready when machineset created")
 		//1 means replicas=1
-		exutil.WaitForMachinesRunning(oc, 1, "ocp-psap-qe-diffcpus")
+		clusterinfra.WaitForMachinesRunning(oc, 1, "ocp-psap-qe-diffcpus")
 
 		exutil.By("Label the second node with node-role.kubernetes.io/worker-diffcpus=")
 		secondTunedNodeName := exutil.GetNodeNameByMachineset(oc, "ocp-psap-qe-diffcpus")

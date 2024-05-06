@@ -11,6 +11,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -109,9 +110,9 @@ func checkIfCPMSIsStable(oc *exutil.CLI) bool {
 func getCPMSAvailabilityZones(oc *exutil.CLI, iaasPlatform string) []string {
 	var getCPMSAvailabilityZonesJSON string
 	switch iaasPlatform {
-	case "aws":
+	case clusterinfra.AWS:
 		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-	case "azure", "gcp":
+	case clusterinfra.AZURE, clusterinfra.GCP:
 		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform + "[*].zone}"
 	default:
 		e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
@@ -180,12 +181,12 @@ func replaceOneMasterMachine(oc *exutil.CLI, oldMachineName, newMachineName stri
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	if err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineJSON).Execute(); err != nil {
-		exutil.DeleteMachine(oc, newMachineName)
+		clusterinfra.DeleteMachine(oc, newMachineName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		exutil.DeleteMachine(oc, oldMachineName)
-		exutil.WaitForMachineRunningByName(oc, newMachineName)
-		exutil.WaitForMachineDisappearByName(oc, oldMachineName)
+		clusterinfra.DeleteMachine(oc, oldMachineName)
+		clusterinfra.WaitForMachineRunningByName(oc, newMachineName)
+		clusterinfra.WaitForMachineDisappearByName(oc, oldMachineName)
 	}
 }
 
@@ -199,7 +200,7 @@ func randomMasterMachineName(oldMachineName string) (string, string) {
 
 // getMasterMachineNameBySuffix get the master machine name by suffix
 func getMasterMachineNameBySuffix(oc *exutil.CLI, suffix string) string {
-	currentMasterMachineNames := exutil.ListMasterMachineNames(oc)
+	currentMasterMachineNames := clusterinfra.ListMasterMachineNames(oc)
 	for _, value := range currentMasterMachineNames {
 		if suffix == getMachineSuffix(oc, value) {
 			return value
@@ -253,7 +254,7 @@ func getCPMSState(oc *exutil.CLI) string {
 
 // getArchitectureType get the architecture is arm64 or amd64
 func getArchitectureType(oc *exutil.CLI) string {
-	architecture, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", exutil.GetNodeNameFromMachine(oc, exutil.ListMasterMachineNames(oc)[0]), "-o=jsonpath={.status.nodeInfo.architecture}").Output()
+	architecture, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", clusterinfra.GetNodeNameFromMachine(oc, clusterinfra.ListMasterMachineNames(oc)[0]), "-o=jsonpath={.status.nodeInfo.architecture}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return architecture
 }
@@ -288,9 +289,9 @@ func checkIfCPMSCoIsStable(oc *exutil.CLI) bool {
 // waitMasterNodeReady wait all master node ready
 func waitMasterNodeReady(oc *exutil.CLI) {
 	err := wait.Poll(1*time.Minute, 5*time.Minute, func() (bool, error) {
-		masterMachineList := exutil.ListMasterMachineNames(oc)
+		masterMachineList := clusterinfra.ListMasterMachineNames(oc)
 		for _, masterMachineName := range masterMachineList {
-			nodeName := exutil.GetNodeNameFromMachine(oc, masterMachineName)
+			nodeName := clusterinfra.GetNodeNameFromMachine(oc, masterMachineName)
 			readyStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
 			if readyStatus != "True" {
 				e2e.Logf("node %s is not ready, status:%s", nodeName, readyStatus)

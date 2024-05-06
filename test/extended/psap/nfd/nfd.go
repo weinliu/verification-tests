@@ -6,6 +6,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -71,7 +72,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			exutil.CreateMachinesetbyInstanceType(oc, "openshift-qe-nfd-machineset", machineSetInstanceType)
 
 			g.By("Wait for new node is ready when machineset created")
-			exutil.WaitForMachinesRunning(oc, 1, "openshift-qe-nfd-machineset")
+			clusterinfra.WaitForMachinesRunning(oc, 1, "openshift-qe-nfd-machineset")
 
 			g.By("Check if new created worker node's label are created")
 			newWorkNode := exutil.GetNodeNameByMachineset(oc, "openshift-qe-nfd-machineset")

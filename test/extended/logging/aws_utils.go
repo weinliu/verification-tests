@@ -21,6 +21,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -548,7 +549,7 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 			g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
 		}
 	} else {
-		exutil.GetAwsCredentialFromCluster(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
 	}
 	cw.awsRegion, err = exutil.GetAWSClusterRegion(oc)
 	if err != nil {

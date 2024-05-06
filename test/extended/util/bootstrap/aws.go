@@ -4,6 +4,7 @@ import (
 	"os"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -26,7 +27,7 @@ func (a AWSBSInfoProvider) GetIPs(oc *exutil.CLI) (*Ips, error) {
 
 	bootstrapName := infraName + "-bootstrap"
 
-	exutil.GetAwsCredentialFromCluster(oc.AsAdmin())
+	clusterinfra.GetAwsCredentialFromCluster(oc.AsAdmin())
 	aws := exutil.InitAwsSession()
 	bootstrapInstanceID, err := aws.GetAwsInstanceID(bootstrapName)
 	if err != nil {

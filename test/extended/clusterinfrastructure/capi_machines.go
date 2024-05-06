@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -76,13 +77,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		iaasPlatform = exutil.CheckPlatform(oc)
 		switch iaasPlatform {
-		case "aws":
+		case clusterinfra.AWS:
 			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+			randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 			profile, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.iamInstanceProfile.id}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.instanceType}").Output()
@@ -97,10 +98,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			sgName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.securityGroups[0].filters[0].values[0]}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-		case "gcp":
+		case clusterinfra.GCP:
 			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+			randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 			zone, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			image, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.disks[0].image}").Output()
@@ -111,12 +112,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			subnetwork, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].subnetwork}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-		case "vsphere":
+		case clusterinfra.VSPHERE:
 			vsphere_server, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.vsphere.vcenters[0].server}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			vsphere_host, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.vsphere.apiServerInternalIP}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+			randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 			diskGiB, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.diskGiB}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			int_diskGiB, err = strconv.Atoi(diskGiB)
@@ -269,18 +270,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			template:     vsphereMachineTemplateTemplate,
 		}
 		switch iaasPlatform {
-		case "aws":
+		case clusterinfra.AWS:
 			cluster.kind = "AWSCluster"
 			clusterNotInCapi.kind = "AWSCluster"
 			capiMachineSetAWS.kind = "AWSMachineTemplate"
 			capiMachineSetAWS.machineTemplateName = awsMachineTemplate.name
-		case "gcp":
+		case clusterinfra.GCP:
 			cluster.kind = "GCPCluster"
 			clusterNotInCapi.kind = "GCPCluster"
 			capiMachineSetgcp.kind = "GCPMachineTemplate"
 			capiMachineSetgcp.machineTemplateName = gcpMachineTemplate.name
 			capiMachineSetgcp.failureDomain = zone
-		case "vsphere":
+		case clusterinfra.VSPHERE:
 			cluster.kind = "VSphereCluster"
 			capiMachineSetvsphere.kind = "VSphereMachineTemplate"
 			capiMachineSetvsphere.machineTemplateName = vsphereMachineTemplate.name
@@ -297,8 +298,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-51071-[CAPI] Create machineset with CAPI on aws [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		skipForCAPINotExist(oc)
 
 		g.By("Create capi machineset")
@@ -315,8 +316,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-53100-[CAPI] Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		skipForCAPINotExist(oc)
 
 		g.By("Create capi machineset")
@@ -336,8 +337,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-medium-55205-[CAPI] Webhook validations for CAPI [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP)
 		skipForCAPINotExist(oc)
 
 		g.By("Shouldn't allow to create/update cluster with invalid kind")
@@ -357,7 +358,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-high-69188-[CAPI] cluster object can be deleted in non-cluster-api namespace [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP)
 		skipForCAPINotExist(oc)
 		iaasPlatform = exutil.CheckPlatform(oc)
 		g.By("Create cluster object in namespace other than openshift-cluster-api")
@@ -371,8 +372,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-62928-[CAPI] Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		skipForCAPINotExist(oc)
 
 		g.By("Create cluster, awscluster, awsmachinetemplate")
@@ -397,8 +398,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:miyadav-High-72433-[CAPI] Create machineset with CAPI on vsphere [Disruptive][Slow]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "vsphere")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSPHERE)
 		skipForCAPINotExist(oc)
 
 		g.By("Create capi machineset")

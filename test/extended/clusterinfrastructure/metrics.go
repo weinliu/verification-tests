@@ -11,6 +11,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -51,10 +52,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-43764-MachineHealthCheckUnterminatedShortCircuit alert should be fired when a MHC has been in a short circuit state [Serial][Slow][Disruptive]", func() {
 		g.By("Create a new machineset")
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-43764"
-		ms := exutil.MachineSetDescription{machinesetName, 1}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -78,8 +79,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		mhc.createMhc(oc)
 
 		g.By("Delete the node attached to the machine")
-		machineName := exutil.GetMachineNamesFromMachineSet(oc, "machineset-43764")[0]
-		nodeName := exutil.GetNodeNameFromMachine(oc, machineName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, "machineset-43764")[0]
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("node", nodeName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -100,22 +101,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:huliu-High-36989-mapi_instance_create_failed metrics should work [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
+		clusterinfra.SkipConditionally(oc)
 		var patchstr string
 		platform := exutil.CheckPlatform(oc)
 		switch platform {
-		case "aws", "alibabacloud":
+		case clusterinfra.AWS, clusterinfra.ALIBABACLOUD:
 			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}`
-		case "gcp":
+		case clusterinfra.GCP:
 			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"machineType":"invalid"}}}}}}`
-		case "azure":
+		case clusterinfra.AZURE:
 			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"vmSize":"invalid"}}}}}}`
 		/*
 			there is a bug(https://bugzilla.redhat.com/show_bug.cgi?id=1900538) for openstack
-			case "openstack":
+			case clusterinfra.OPENSTACK:
 				patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"flavor":"invalid"}}}}}}`
 		*/
-		case "vsphere":
+		case clusterinfra.VSPHERE:
 			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"template":"invalid"}}}}}}`
 		default:
 			e2e.Logf("Not support cloud provider for the case for now.")
@@ -124,8 +125,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-36989"
-		ms := exutil.MachineSetDescription{machinesetName, 0}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -133,7 +134,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", patchstr, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.WaitForMachineFailed(oc, machinesetName)
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 
 		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -158,12 +159,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-25615-Medium-37264-Machine metrics should be collected [Disruptive]", func() {
-		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere", "ibmcloud", "alibabacloud", "nutanix", "openstack")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.VSPHERE, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD, clusterinfra.NUTANIX, clusterinfra.OPENSTACK)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-25615-37264"
-		ms := exutil.MachineSetDescription{machinesetName, 1}
-		defer exutil.WaitForMachinesDisapper(oc, machinesetName)
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
