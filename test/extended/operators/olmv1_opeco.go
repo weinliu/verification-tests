@@ -445,4 +445,120 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("ConnectedOnly-Author:jitli-High-73289-Check the deprecation conditions and messages", func() {
+		var (
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			catalog                  = olmv1util.CatalogDescription{
+				Name:     "catalog-73289",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm73289",
+				Template: catalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:        "clusterextension-73289",
+				PackageName: "nginx73289v1",
+				Channel:     "candidate-v1.0",
+				Version:     "1.0.1",
+				Template:    clusterextensionTemplate,
+			}
+		)
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		// Test BundleDeprecated
+		exutil.By("Check BundleDeprecated status")
+		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "BundleDeprecated", "True", 0)
+
+		exutil.By("Check BundleDeprecated message info")
+		message := clusterextension.GetClusterExtensionMessage(oc, "BundleDeprecated")
+		if !strings.Contains(message, "nginx73289v1.v1.0.1 is deprecated. Uninstall and install v1.0.3 for support.") {
+			e2e.Failf("Info does not meet expectations, message :%v", message)
+		}
+
+		exutil.By("update version to be >=1.0.2")
+		clusterextension.Patch(oc, `{"spec":{"version":">=1.0.2"}}`)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
+			if !strings.Contains(resolvedBundle, "v1.0.3") {
+				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.0.3, and try next", resolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundle is not v1.0.3")
+		}
+
+		exutil.By("Check if BundleDeprecated status and messages still exist")
+		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "False", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "BundleDeprecated", "False", 0)
+		message = clusterextension.GetClusterExtensionMessage(oc, "BundleDeprecated")
+		if strings.Contains(message, "nginx73289v1.v1.0.1 is deprecated. Uninstall and install v1.0.3 for support.") {
+			e2e.Failf("BundleDeprecated message still exists :%v", message)
+		}
+		clusterextension.Delete(oc)
+		exutil.By("BundleDeprecated test done")
+
+		// Test ChannelDeprecated
+		exutil.By("update channel to candidate-v3.0")
+		clusterextension.PackageName = "nginx73289v2"
+		clusterextension.Channel = "candidate-v3.0"
+		clusterextension.Version = ">=1.0.0"
+		clusterextension.Template = clusterextensionTemplate
+
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v3.0.1"))
+
+		exutil.By("Check ChannelDeprecated status and message")
+		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "ChannelDeprecated", "True", 0)
+		message = clusterextension.GetClusterExtensionMessage(oc, "ChannelDeprecated")
+		if !strings.Contains(message, "The 'candidate-v3.0' channel is no longer supported. Please switch to the 'candidate-v3.1' channel.") {
+			e2e.Failf("Info does not meet expectations, message :%v", message)
+		}
+
+		exutil.By("update channel to candidate-v3.1")
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v3.1"}}`)
+
+		exutil.By("Check if ChannelDeprecated status and messages still exist")
+		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "False", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "ChannelDeprecated", "False", 0)
+		message = clusterextension.GetClusterExtensionMessage(oc, "ChannelDeprecated")
+		if strings.Contains(message, "The 'candidate-v3.0' channel is no longer supported. Please switch to the 'candidate-v3.1' channel.") {
+			e2e.Failf("ChannelDeprecated message still exists :%v", message)
+		}
+		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
+		clusterextension.Delete(oc)
+		exutil.By("ChannelDeprecated test done")
+
+		// Test PackageDeprecated
+		exutil.By("update Package to 73289v3")
+		clusterextension.PackageName = "nginx73289v3"
+		clusterextension.Channel = "candidate-v1.0"
+		clusterextension.Version = ">=1.0.0"
+		clusterextension.Template = clusterextensionTemplate
+		clusterextension.Create(oc)
+
+		exutil.By("Check PackageDeprecated status and message")
+		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "PackageDeprecated", "True", 0)
+		message = clusterextension.GetClusterExtensionMessage(oc, "PackageDeprecated")
+		if !strings.Contains(message, "The nginx73289v3 package is end of life. Please use the another package for support.") {
+			e2e.Failf("Info does not meet expectations, message :%v", message)
+		}
+		exutil.By("PackageDeprecated test done")
+
+	})
+
 })

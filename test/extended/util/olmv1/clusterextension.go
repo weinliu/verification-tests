@@ -85,6 +85,27 @@ func (clusterextension *ClusterExtensionDescription) WaitClusterExtensionConditi
 	}
 }
 
+func (clusterextension *ClusterExtensionDescription) GetClusterExtensionMessage(oc *exutil.CLI, conditionType string) string {
+
+	var message string
+	e2e.Logf("========= return clusterextension %v %s message =========", clusterextension.Name, conditionType)
+	jsonpath := fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].message}`, conditionType)
+	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+		var err error
+		message, err = Get(oc, "clusterextension", clusterextension.Name, "-o", jsonpath)
+		if err != nil {
+			e2e.Logf("message is %v, error is %v, and try next", message, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if errWait != nil {
+		Get(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("can't get clusterextension %s message", conditionType))
+	}
+	return message
+}
+
 func (clusterextension *ClusterExtensionDescription) GetBundleResource(oc *exutil.CLI) {
 	e2e.Logf("=========Get clusterextension %v BundleResource =========", clusterextension.Name)
 
