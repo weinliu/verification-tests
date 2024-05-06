@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.BeforeEach(func() {
 		exutil.SkipNoOLMCore(oc)
 	})
-	g.It("Author:jiazha-High-73201-OLM catalog pods do not recover from node failure [Disruptive][Serial]", func() {
+	g.It("ConnectedOnly-Author:jiazha-High-73201-OLM catalog pods do not recover from node failure [Disruptive][Serial]", func() {
 		exutil.By("1, create a custom catalogsource in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
