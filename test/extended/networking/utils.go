@@ -3087,16 +3087,21 @@ func checkAllClusterOperatorsState(oc *exutil.CLI, interval int, timeout int) {
 }
 
 // Check OVNK health: OVNK pods health and ovnkube-node DS health
-func checkOVNKState(oc *exutil.CLI) {
+func checkOVNKState(oc *exutil.CLI) error {
 	// check all OVNK pods
 	waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 	waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
-
-	// check ovnkube-node ds rollout status
-	dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-node", "--timeout", "5m").Output()
-	o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
-	o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
-
+	// check ovnkube-node ds rollout status and confirm if rollout has triggered
+	return wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-node", "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(status, "rollout to finish") && strings.Contains(status, "successfully rolled out") {
+			e2e.Logf("ovnkube rollout was triggerred and rolled out successfully")
+			return true, nil
+		}
+		e2e.Logf("ovnkube rollout trigger hasn't happened yet. Trying again")
+		return false, nil
+	})
 }
 
 func addDummyInferface(oc *exutil.CLI, nodeName, IP, nicName string) {

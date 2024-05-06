@@ -120,6 +120,7 @@ var _ = g.Describe("[sig-networking] SDN OVN hypershift", func() {
 
 		exutil.By("8. Check health of OVNK on management cluster \n")
 		checkOVNKState(oc)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("OVNkube didn't trigger or rolled out successfully post oc patch"))
 
 		exutil.By("9. Delete the migration job \n")
 		migrationjob.deleteMigrationJob(oc)
