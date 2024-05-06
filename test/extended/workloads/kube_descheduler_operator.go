@@ -504,6 +504,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			// Add debug log
+			e2e.Logf("Observed Generation is %s", output)
 			if err != nil {
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
