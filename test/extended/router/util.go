@@ -1730,3 +1730,39 @@ func getSortedString(obj interface{}) string {
 	sort.Strings(objList)
 	return strings.Join(objList, " ")
 }
+
+func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
+	var expectedStatus1 string
+	var statusOutput string
+	var err error
+	if expectedStatus == "Ready" {
+		expectedStatus1 = "True"
+	} else if expectedStatus == "NotReady" {
+		expectedStatus1 = "Unknown"
+	} else {
+		err1 := fmt.Errorf("TBD supported node status")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+	}
+	errWait := wait.Poll(15*time.Second, 15*time.Minute, func() (bool, error) {
+		statusOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
+		if err != nil {
+			return false, nil
+		}
+		if statusOutput != expectedStatus1 {
+			return false, nil
+		}
+		return true, nil
+	})
+	if errWait != nil {
+		e2e.Logf("Expect Node %s in state %v, kubelet status is %s with error", nodeName, expectedStatus, statusOutput, err.Error())
+	}
+	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Node %s is not in expected status %s", nodeName, expectedStatus))
+}
+
+func restartMicroshiftService(oc *exutil.CLI, ns, nodeName string) {
+	// As restart the microshift service, the debug node pod will quit with error
+	// debug pod in the default namespace won't be deleted automatically, so debug the node in another namepace
+	oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ns, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "sudo systemctl restart microshift").Output()
+	exec.Command("bash", "-c", "sleep 60").Output()
+	checkNodeStatus(oc, nodeName, "Ready")
+}

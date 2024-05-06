@@ -2,12 +2,13 @@ package router
 
 import (
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
@@ -509,5 +510,130 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
 			adminRepeatCmd(oc, routeReq, "200", 30)
 		}
+	})
+
+	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-High-73203-configuring listening IP addresses and listening Ports [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			unsecsvcName        = "service-unsecure1"
+			secsvcName          = "service-secure1"
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			e2eTestNamespace    = "e2e-ne-ocp73203-" + getRandomString()
+		)
+
+		exutil.By(`create a namespace for testing, then debug node and get all valid host interfaces and invalid host ips`)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+
+		nodeName := fetchJSONPathValue(oc, "default", "nodes", ".items[0].metadata.name")
+		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		intfaceList, hostIPList := getValidInterfacesAndIPs(hostAddresses)
+		seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+		index := seed.Intn(len(intfaceList))
+		randNic := intfaceList[index]
+		randHostIP := hostIPList[index]
+
+		exutil.By(`create the config.yaml under the node with the desired listening IP addresses and listening Ports, if there is the old config.yaml, then make a copy at first`)
+		creatFileCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup73203
+else
+    touch /etc/microshift/config.yaml.no73203
+fi
+cat > /etc/microshift/config.yaml << EOF
+ingress:
+    listenAddress:
+        - %s
+    ports:
+        http: 10080
+        https: 10443
+EOF`, randNic)
+
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no73203; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no73203
+elif test -f /etc/microshift/config.yaml.backup73203 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup73203 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup73203
+fi 
+`)
+
+		// restored to default by the defer function before the case finishes running
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		}()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", creatFileCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+
+		exutil.By("wait the check router-default service is updated and its load balancer ip is as same as configured in default.yaml")
+		regExp := "^" + randHostIP + "$"
+		searchOutput := waitForRegexpOutput(oc, "openshift-ingress", "service/router-default", ".status.loadBalancer.ingress[*].ip", regExp)
+		o.Expect(searchOutput).To(o.Equal(randHostIP))
+
+		exutil.By("check service router-default's http port is changed to 10080 and its https port is changed to 10443")
+		jpath := ".spec.ports[?(@.name==\"http\")].port"
+		HTTPPort := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", jpath)
+		o.Expect(HTTPPort).To(o.Equal("10080"))
+		jpath = ".spec.ports[?(@.name==\"https\")].port"
+		HTTPSPort := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", jpath)
+		o.Expect(HTTPSPort).To(o.Equal("10443"))
+
+		exutil.By("Deploy a client pod, a backend pod and its services resources")
+		createResourceFromFile(oc, e2eTestNamespace, clientPod)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+
+		exutil.By("Create a HTTP/Edge/Passthrough/REEN route")
+		httpRouteHost := unsecsvcName + "-" + "ocp73203." + "apps.example.com"
+		edgeRouteHost := "route-edge" + "-" + "ocp73203." + "apps.example.com"
+		passThRouteHost := "route-passth" + "-" + "ocp73203." + "apps.example.com"
+		reenRouteHost := "route-reen" + "-" + "ocp73203." + "apps.example.com"
+		extraParas := []string{}
+		createARoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, httpRouteHost, extraParas)
+		createARoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, edgeRouteHost, extraParas)
+		createARoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, passThRouteHost, extraParas)
+		createARoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, reenRouteHost, extraParas)
+		waitForOutput(oc, e2eTestNamespace, "route/route-reen", ".status.ingress[0].conditions[0].status", "True")
+		output := fetchJSONPathValue(oc, e2eTestNamespace, "route", ".items[*].metadata.name")
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring("route-http"),
+			o.ContainSubstring("route-edge"),
+			o.ContainSubstring("route-passth"),
+			o.ContainSubstring("route-reen")))
+
+		exutil.By("Curl the routes with destination to the the custom load balancer ip and http/https ports")
+		httpRouteDst := httpRouteHost + ":10080:" + randHostIP
+		edgeRouteDst := edgeRouteHost + ":10443:" + randHostIP
+		passThRouteDst := passThRouteHost + ":10443:" + randHostIP
+		reenRouteDst := reenRouteHost + ":10443:" + randHostIP
+
+		exutil.By("Curl the http route")
+		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost + ":10080", "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, routeReq, "200", 30)
+
+		exutil.By("Curl the Edge route")
+		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost + ":10443", "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, routeReq, "200", 30)
+
+		exutil.By("Curl the Passthrough route")
+		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost + ":10443", "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, routeReq, "200", 30)
+
+		exutil.By("Curl the REEN route")
+		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost + ":10443", "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, routeReq, "200", 30)
 	})
 })
