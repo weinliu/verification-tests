@@ -17,6 +17,7 @@ objects:
           failureDomain: ${ZONE}
           ignition:
             storageType: UnencryptedUserData
+            version: "3.2"
           ami:
             id: ${AMI}
           subnet:
