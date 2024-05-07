@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 	// author: asood@redhat.com
-	g.It("Longduration-NonPreRelease-Author:asood-High-62293-Validate all the constructs are created on logical routers and logical switches for a service type loadbalancer. [Disruptive]", func() {
+	g.It("Longduration-NonPreRelease-Author:asood-High-62293-[FdpOvnOvs] Validate all the constructs are created on logical routers and logical switches for a service type loadbalancer. [Disruptive]", func() {
 		// Bug: https://issues.redhat.com/browse/OCPBUGS-5930 (Duplicate bug https://issues.redhat.com/browse/OCPBUGS-7000)
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
@@ -678,7 +678,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-High-46015-Verify traffic to outside the cluster redirected when OVN is used and NodePort service is configured.", func() {
+	g.It("Author:asood-High-46015-[FdpOvnOvs] Verify traffic to outside the cluster redirected when OVN is used and NodePort service is configured.", func() {
 		// Customer bug https://bugzilla.redhat.com/show_bug.cgi?id=1946696
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
@@ -746,7 +746,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 	//asood@redhat.com
-	g.It("NonPreRelease-Longduration-Author:asood-Critical-63301-Kube's API intermitent timeout via sdn or internal services from nodes or pods using hostnetwork. [Disruptive]", func() {
+	g.It("NonPreRelease-Longduration-Author:asood-Critical-63301-[FdpOvnOvs] Kube's API intermitent timeout via sdn or internal services from nodes or pods using hostnetwork. [Disruptive]", func() {
 		// From customer bug https://issues.redhat.com/browse/OCPBUGS-5828
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")

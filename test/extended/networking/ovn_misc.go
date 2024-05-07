@@ -368,7 +368,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 	// author: asood@redhat.com
 	// https://issues.redhat.com/browse/OCPBUGS-4825
-	g.It("Author:asood-Medium-66047-Verify allocated IP address of the pod on a specific node with completed status when delete is released in OVN DB", func() {
+	g.It("Author:asood-Medium-66047-[FdpOvnOvs] Verify allocated IP address of the pod on a specific node with completed status when delete is released in OVN DB", func() {
 		var (
 			buildPruningBaseDir      = exutil.FixturePath("testdata", "networking")
 			completedPodNodeTemplate = filepath.Join(buildPruningBaseDir, "completed-pod-specific-node-template.yaml")

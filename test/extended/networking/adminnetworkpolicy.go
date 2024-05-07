@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	//https://issues.redhat.com/browse/SDN-2931
-	g.It("Author:asood-High-67103-Egress BANP, NP and ANP policy with allow, deny and pass action. [Serial]", func() {
+	g.It("Author:asood-High-67103-[FdpOvnOvs] Egress BANP, NP and ANP policy with allow, deny and pass action. [Serial]", func() {
 		var (
 			testID               = "67103"
 			testDataDir          = exutil.FixturePath("testdata", "networking")
@@ -184,7 +184,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 	})
-	g.It("Author:asood-High-67104-Ingress BANP, NP and ANP policy with allow, deny and pass action. [Serial]", func() {
+	g.It("Author:asood-High-67104-[FdpOvnOvs] Ingress BANP, NP and ANP policy with allow, deny and pass action. [Serial]", func() {
 		var (
 			testID                  = "67104"
 			testDataDir             = exutil.FixturePath("testdata", "networking")

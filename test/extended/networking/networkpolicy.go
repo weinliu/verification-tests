@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-networkpolicy", exutil.KubeConfigPath())
 
 	// author: zzhao@redhat.com
-	g.It("Author:zzhao-Critical-49076-service domain can be resolved when egress type is enabled", func() {
+	g.It("Author:zzhao-Critical-49076-[FdpOvnOvs]-service domain can be resolved when egress type is enabled", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Critical-49186-[Bug 2035336] Networkpolicy egress rule should work for statefulset pods.", func() {
+	g.It("Author:huirwang-Critical-49186-[FdpOvnOvs] [Bug 2035336] Networkpolicy egress rule should work for statefulset pods.", func() {
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking")
 			testPodFile          = filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -143,7 +143,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-High-49437-[BZ 2037647] Ingress network policy shouldn't be overruled by egress network policy on another pod", func() {
+	g.It("Author:anusaxen-High-49437-[FdpOvnOvs] [BZ 2037647] Ingress network policy shouldn't be overruled by egress network policy on another pod", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressTypeFile      = filepath.Join(buildPruningBaseDir, "networkpolicy/default-allow-egress.yaml")
@@ -221,7 +221,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	// author: anusaxen@redhat.com
 	// modified by: asood@redhat.com
-	g.It("NonHyperShiftHOST-Author:anusaxen-Medium-49686-network policy with ingress rule with ipBlock", func() {
+	g.It("NonHyperShiftHOST-Author:anusaxen-Medium-49686-[FdpOvnOvs] network policy with ingress rule with ipBlock", func() {
 		var (
 			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
 			ipBlockIngressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
@@ -418,7 +418,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: zzhao@redhat.com
-	g.It("Author:zzhao-Critical-49696-mixed ingress and egress policies can work well", func() {
+	g.It("Author:zzhao-Critical-49696-[FdpOvnOvs] mixed ingress and egress policies can work well", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -466,7 +466,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-High-46246-Network Policies should work with OVNKubernetes when traffic hairpins back to the same source through a service", func() {
+	g.It("Author:anusaxen-High-46246-[FdpOvnOvs] Network Policies should work with OVNKubernetes when traffic hairpins back to the same source through a service", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -562,7 +562,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-High-41879-ipBlock should not ignore all other cidr's apart from the last one specified	", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-41879-[FdpOvnOvs] ipBlock should not ignore all other cidr's apart from the last one specified	", func() {
 		var (
 			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
 			ipBlockIngressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-multiple-CIDRs-template.yaml")
@@ -653,7 +653,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-Medium-46807-network policy with egress rule with ipBlock", func() {
+	g.It("Author:asood-Medium-46807-[FdpOvnOvs] network policy with egress rule with ipBlock", func() {
 		var (
 			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
 			ipBlockEgressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-dual-CIDRs-template.yaml")
@@ -773,7 +773,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-Medium-46808-network policy with egress rule with ipBlock and except", func() {
+	g.It("Author:asood-Medium-46808-[FdpOvnOvs] network policy with egress rule with ipBlock and except", func() {
 		var (
 			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
 			ipBlockEgressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-except-dual-CIDRs-template.yaml")
@@ -980,7 +980,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 	// author: asood@redhat.com
-	g.It("Author:asood-Medium-41407-Check networkpolicy ACL audit message is logged with correct policy name", func() {
+	g.It("Author:asood-Medium-41407-[FdpOvnOvs] Check networkpolicy ACL audit message is logged with correct policy name", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
@@ -1134,7 +1134,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("NonHyperShiftHOST-Author:anusaxen-Medium-55287-Default network policy ACLs to a namespace should not be present with arp but arp||nd for ARPAllowPolicies", func() {
+	g.It("NonHyperShiftHOST-Author:anusaxen-Medium-55287-[FdpOvnOvs] Default network policy ACLs to a namespace should not be present with arp but arp||nd for ARPAllowPolicies", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -1173,7 +1173,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-High-62524-OVN address_set referenced in acl should not miss when networkpolicy name includes dot.", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-62524-[FdpOvnOvs] OVN address_set referenced in acl should not miss when networkpolicy name includes dot.", func() {
 		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-4085
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1256,7 +1256,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("NonHyperShiftHOST-Author:asood-Critical-65901-Duplicate transactions should not be executed for network policy for every pod update.", func() {
+	g.It("NonHyperShiftHOST-Author:asood-Critical-65901-[FdpOvnOvs] Duplicate transactions should not be executed for network policy for every pod update.", func() {
 		// Customer https://issues.redhat.com/browse/OCPBUGS-4659
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1320,7 +1320,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(logLinesCount).To(o.Equal(newLogLinesCount))
 
 	})
-	g.It("Author:asood-High-66085-Creating egress network policies for allowing to same namespace and openshift dns in namespace prevents the pod from reaching its own service", func() {
+	g.It("Author:asood-High-66085-[FdpOvnOvs] Creating egress network policies for allowing to same namespace and openshift dns in namespace prevents the pod from reaching its own service", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-4909
 		var (
 			buildPruningBaseDir        = exutil.FixturePath("testdata", "networking")
@@ -1406,7 +1406,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
-	g.It("Author:asood-Medium-64787-Network policy with duplicate egress rules (same CIDR block) fails to be recreated [Disruptive]", func() {
+	g.It("Author:asood-Medium-64787-[FdpOvnOvs] Network policy with duplicate egress rules (same CIDR block) fails to be recreated [Disruptive]", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-5835
 		var (
 			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
@@ -1516,7 +1516,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.Contains(logContents, "failed")).To(o.BeFalse())
 
 	})
-	g.It("Author:asood-Critical-64786-Network policy in namespace that has long name fails to be recreated as the ACLs are considered duplicate [Disruptive]", func() {
+	g.It("Author:asood-Critical-64786-[FdpOvnOvs] Network policy in namespace that has long name fails to be recreated as the ACLs are considered duplicate [Disruptive]", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-15371
 		var (
 			testNs                     = "test-64786networkpolicy-with-a-62chars-62chars-long-namespace62"
@@ -1599,7 +1599,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("NonHyperShiftHOST-Author:asood-High-64788-Same network policies across multiple namespaces fail to be recreated [Disruptive].", func() {
+	g.It("NonHyperShiftHOST-Author:asood-High-64788-[FdpOvnOvs] Same network policies across multiple namespaces fail to be recreated [Disruptive].", func() {
 		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-11447
 		var (
 			buildPruningBaseDir     = exutil.FixturePath("testdata", "networking")
@@ -1683,7 +1683,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		aclMap["name"] = aclName
 
 		exutil.By("Get the port group for the created policy")
-		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group external_ids='{name=%s_%s}'", ns, policyName)
+		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group acls='[%s]'", aclMap["_uuid"])
 		listPGOutput, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listPGCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listPGOutput).NotTo(o.BeEmpty())
@@ -1746,7 +1746,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-Medium-68660-Exposed route of the service should be accessible when allowing inbound traffic from any namespace network policy is created.", func() {
+	g.It("Author:asood-Medium-68660-[FdpOvnOvs] Exposed route of the service should be accessible when allowing inbound traffic from any namespace network policy is created.", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-14632
 		var (
 			buildPruningBaseDir             = exutil.FixturePath("testdata", "networking")
@@ -1878,7 +1878,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-High-70294-Stale acls with empty name should be cleared [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-70294-[FdpOvnOvs] Stale acls with empty name should be cleared [Disruptive]", func() {
 		//https://issues.redhat.com/browse/OCPBUGS-23334
 		exutil.By("Check cluster network type")
 		networkType := exutil.CheckNetworkType(oc)
