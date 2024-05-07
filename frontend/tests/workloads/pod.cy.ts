@@ -55,7 +55,7 @@ describe('pod page', () => {
       })
     }
   });
-  it('(OCP-53357,xiyuzhao,UserInterface) Pod host IP is visible on Pod details page', {tags: ['e2e','admin','@rosa']}, () => {
+  it('(OCP-53357,xiyuzhao,UserInterface) Pod host IP is visible on Pod details page', {tags: ['e2e','admin','@rosa','@smoke']}, () => {
     const podname = "limitpod-withnetworks"
     podsPage.goToPodDetails(testName,podname)
     cy.get('[data-test="Host IP"]')

@@ -44,7 +44,7 @@ describe("yaml editor tests", () => {
     });
   });
 
-  it("(OCP-42019,yapei,UserInterface) Create multiple resources by importing yaml",{tags: ['e2e','@osd-ccs']},() => {
+  it("(OCP-42019,yapei,UserInterface) Create multiple resources by importing yaml",{tags: ['e2e','@osd-ccs', '@smoke']},() => {
     // import multiple resources
     // and check successful creation result on import yaml status page
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);

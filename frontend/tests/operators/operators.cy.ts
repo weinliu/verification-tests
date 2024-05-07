@@ -63,7 +63,7 @@ describe('Operators related features', () => {
         cy.get(`[data-test-id="${params.ns2}"]`).should('exist');
       })
   });
-  it('(OCP-40457,yanpzhan,UserInterface) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
+  it('(OCP-40457,yanpzhan,UserInterface) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     operatorHubPage.installOperator('etcd', 'community-operators', 'test-ocp40457');
     cy.wait(20000);
     operatorHubPage.installOperator('argocd-operator', 'custom-catalogsource', 'test-ocp40457');

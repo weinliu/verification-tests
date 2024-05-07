@@ -14,7 +14,7 @@ describe('Operators related features on sts cluster mode', () => {
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false });
   });
 
- it('(OCP-66651,yanpzhan,UserInterface) Add support for Azure Workload Identity / Federated identity operator installs', {tags: ['e2e','admin','@smoke']}, function () {
+ it('(OCP-66651,yanpzhan,UserInterface) Add support for Azure Workload Identity / Federated identity operator installs', {tags: ['e2e','admin']}, function () {
     let credentialMOde, infraPlatform, authIssuer;
     cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       credentialMOde = result.stdout;
@@ -43,7 +43,7 @@ describe('Operators related features on sts cluster mode', () => {
 
   });
 
-  it('(OCP-64758,yanpzhan,UserInterface) Warning user on operator item detail page if cluster is in sts model', {tags: ['e2e','admin','@rosa','@smoke']}, function () {
+  it('(OCP-64758,yanpzhan,UserInterface) Warning user on operator item detail page if cluster is in sts model', {tags: ['e2e','admin','@rosa']}, function () {
     let credentialMOde, infraPlatform, authIssuer;
     cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       credentialMOde = result.stdout;

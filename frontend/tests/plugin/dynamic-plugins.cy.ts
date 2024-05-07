@@ -84,7 +84,7 @@ describe('Dynamic plugins features', () => {
       })
   });
 
-  it('(OCP-50757,yapei,UserInterface) Support ordering of plugin nav sections in admin perspective', {tags: ['e2e','admin','@osd-ccs','@smoke']}, () => {
+  it('(OCP-50757,yapei,UserInterface) Support ordering of plugin nav sections in admin perspective', {tags: ['e2e','admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator');
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
@@ -114,7 +114,7 @@ describe('Dynamic plugins features', () => {
     cy.get('[data-test="detail-item-value"]').should('include.text','Custom Overview Detail Info');
   });
 
-  it('(OCP-52366,yapei,UserInterface) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin','@osd-ccs','@smoke']}, () => {
+  it('(OCP-52366,yapei,UserInterface) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator');
     Overview.goToDashboard();
     statusCard.toggleItemPopover("Dynamic Plugins");
@@ -132,7 +132,7 @@ describe('Dynamic plugins features', () => {
     })
   });
 
-  it('(OCP-56239,yapei,UserInterface) Add dynamic plugin info to About modal', {tags: ['e2e', 'admin','@osd-ccs','@smoke']}, () => {
+  it('(OCP-56239,yapei,UserInterface) Add dynamic plugin info to About modal', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator')
     Overview.toggleAbout()
     cy.contains('Dynamic plugins').should('exist')
