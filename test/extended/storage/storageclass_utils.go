@@ -391,10 +391,12 @@ func getStorageClassJSONPathValue(oc *exutil.CLI, scName, jsonPath string) strin
 }
 
 func generateValidfilestoreNetworkParameter(oc *exutil.CLI) map[string]string {
+	validfilestoreNetworkParameter := make(map[string]string)
 	scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, "filestore.csi.storage.gke.io")
-	networkID := getStorageClassJSONPathValue(oc, scName, "{.parameters.network}")
+	validfilestoreNetworkParameter["network"] = getStorageClassJSONPathValue(oc, scName, "{.parameters.network}")
 	connectMode := getStorageClassJSONPathValue(oc, scName, "{.parameters.connect-mode}")
-	return map[string]string{
-		"connect-mode": connectMode,
-		"network":      networkID}
+	if !strings.EqualFold(connectMode, "") {
+		validfilestoreNetworkParameter["connect-mode"] = connectMode
+	}
+	return validfilestoreNetworkParameter
 }
