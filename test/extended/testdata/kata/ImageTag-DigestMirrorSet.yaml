@@ -47,15 +47,3 @@ spec:
     - mirrors:
         - brew.registry.redhat.io/rh-osbs/openshift-sandboxed-containers-operator-cloud-api-adaptor-webhook
       source: registry.redhat.io/openshift-sandboxed-containers/osc-cloud-api-adaptor-webhook-rhel9
-    - mirrors:
-        - registry-proxy.engineering.redhat.com/rh-osbs/openshift-sandboxed-containers-operator
-      source: registry.redhat.io/openshift-sandboxed-containers/osc-rhel9-operator
-    - mirrors:
-        - registry-proxy.engineering.redhat.com/rh-osbs/openshift-sandboxed-containers-operator-monitor
-      source: registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel9
-    - mirrors:
-        - registry-proxy.engineering.redhat.com/rh-osbs/openshift-sandboxed-containers-operator-cloud-api-adaptor
-      source: registry.redhat.io/openshift-sandboxed-containers/osc-cloud-api-adaptor-rhel9
-    - mirrors:
-        - registry-proxy.engineering.redhat.com/rh-osbs/openshift-sandboxed-containers-operator-cloud-api-adaptor-webhook
-      source: registry.redhat.io/openshift-sandboxed-containers/osc-cloud-api-adaptor-webhook-rhel9
