@@ -1703,8 +1703,8 @@ func getValidInterfacesAndIPs(addressInfo string) (intList, IPList []string) {
 	intList = []string{}
 	IPList = []string{}
 	for _, line := range strings.Split(addressInfo, "\n") {
-		// loopback address, link-local address and the address on ovn-kubernetes management port ovn-k8s-mp0 will not used for the load balancer's IPs
-		if !strings.Contains(line, "inet 127") && !strings.Contains(line, "inet 169") && !strings.Contains(line, "ovn-k8s-mp0") {
+		// loopback address and link-local address will not used for the load balancer's IPs(updated for OCPBUGS-32946)
+		if !strings.Contains(line, "inet 127") && !strings.Contains(line, "inet 169") {
 			intIPList := strings.Split(strings.TrimRight(line, " "), " ")
 			intName := intIPList[len(intIPList)-1]
 			hostIP := regexp.MustCompile("([0-9\\.]+)/[0-9]+").FindStringSubmatch(line)[1]
