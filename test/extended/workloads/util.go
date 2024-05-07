@@ -865,11 +865,11 @@ func locatePodmanCred(oc *exutil.CLI, dst string) error {
 		copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
 		return nil
 	}
-	_, err = os.Stat(currentRuntime + "containers/auth.json")
+	_, err = os.Stat(currentRuntime + "/containers/auth.json")
 	if os.IsNotExist(err) {
-		err1 := os.MkdirAll(currentRuntime+"containers", 0700)
+		err1 := os.MkdirAll(currentRuntime+"/containers", 0700)
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
+		copyFile(dst+"/"+".dockerconfigjson", currentRuntime+"/containers/auth.json")
 		return nil
 	}
 	if err != nil {
