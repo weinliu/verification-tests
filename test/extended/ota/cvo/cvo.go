@@ -231,16 +231,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		exutil.By("Check risk type=Always updates and 2 risks update present")
 		o.Expect(checkUpdates(oc, true, 1, 3,
-			"Supported but not recommended updates", "Version: 4.88.888888",
+			"Updates with known issues", "Version: 4.88.888888",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"8888888888888888888888888888888888888888888888888888888888888888",
-			"Recommended: False",
 			"Reason: ExposedToRisks",
 			"Message: Too many CI failures on this release, so do not update to it",
 			"Version: 4.77.777777",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"7777777777777777777777777777777777777777777777777777777777777777",
-			"Recommended: False",
 			"Reason: MultipleReasons",
 			"Message: On clusters on default invoker user, this imaginary bug can happen. "+
 				"https://bug.example.com/a",
@@ -248,11 +246,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		exutil.By("Check The reason for the multiple risks is changed to SomeInvokerThing")
 		o.Expect(checkUpdates(oc, true, 60, 6*60,
-			"Supported but not recommended updates",
+			"Updates with known issues",
 			"Version: 4.77.777777",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"7777777777777777777777777777777777777777777777777777777777777777",
-			"Recommended: False",
 			"Reason: SomeInvokerThing",
 			"Message: On clusters on default invoker user, this imaginary bug can happen. "+
 				"https://bug.example.com/a",
@@ -266,7 +263,6 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"Version: 4.77.777777",
 			"Image: registry.ci.openshift.org/ocp/release@sha256:"+
 				"7777777777777777777777777777777777777777777777777777777777777777",
-			"Recommended: False",
 			"Reason: MultipleReasons",
 			"Message: On clusters on default invoker user, this imaginary bug can happen. "+
 				"https://bug.example.com/a",
