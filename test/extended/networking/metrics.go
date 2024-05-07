@@ -118,7 +118,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
 		prometheusURL := "localhost:29105/metrics"
 
-		metricName := "ovn_controller_integration_bridge_openflow"
+		metricName := "ovn_controller_integration_bridge_openflow_total"
 		metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
 			if metricValue != "" {
@@ -460,7 +460,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-52072- Add mechanism to record duration for k8 kinds.", func() {
 		var (
 			namespace = "openshift-ovn-kubernetes"
-			ovncmName = "kube-rbac-proxy-ovn-metrics"
 			podLabel  = "app=ovnkube-node"
 		)
 		networkType := checkNetworkType(oc)
@@ -469,22 +468,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
-		prometheusURL := "localhost:29103/metrics"
+		leaderNodeIP := getPodIPv4(oc, namespace, podName)
+		ip := net.ParseIP(leaderNodeIP)
+		var prometheusURL string
+		if ip.To4() == nil {
+			prometheusURL = "https://[" + leaderNodeIP + "]:9103/metrics"
+		} else {
+			prometheusURL = "https://" + leaderNodeIP + ":9103/metrics"
+		}
 
 		metricName1 := "ovnkube_controller_network_programming_ovn_duration_seconds_bucket"
 		metricName2 := "ovnkube_controller_network_programming_duration_seconds_bucket"
-		metricName := []string{metricName1, metricName2}
-		for _, value := range metricName {
-			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, value)
-				if metricValue != "" {
-					return true, nil
-				}
-				e2e.Logf("Can't get correct metrics value of %s and try again", value)
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
-		}
+		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName1)
+		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName2)
 	})
 
 	g.It("NonHyperShiftHOST-Author:zzhao-Medium-53030-NodeProxyApplySlow should have correct value.", func() {
