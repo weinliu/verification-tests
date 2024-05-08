@@ -13,13 +13,13 @@ describe('Operators related features', () => {
   });
 
   after(() => {
-    cy.exec(`oc delete project test1-ocp56081 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 240000, failOnNonZeroExit: false});
-    cy.exec(`oc delete project test2-ocp56081 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 240000, failOnNonZeroExit: false});
+    cy.adminCLI(`oc delete project test1-ocp56081`, { timeout: 240000, failOnNonZeroExit: false });
+    cy.adminCLI(`oc delete project test2-ocp56081`, { timeout: 240000, failOnNonZeroExit: false });
+    cy.adminCLI(`oc delete project test-ocp40457`, { failOnNonZeroExit: false });
+    cy.adminCLI(`oc delete project test1-ocp68675`, { failOnNonZeroExit: false });
+    cy.adminCLI(`oc delete project test2-ocp68675`, {  failOnNonZeroExit: false });
     cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.adminCLI(`oc delete project test-ocp40457`);
-    cy.adminCLI(`oc delete project test1-ocp68675`);
-    cy.adminCLI(`oc delete project test2-ocp68675`);
   });
   it('(OCP-68675,xiyuzhao,UserInterface) Check Managed Namespaces field when OperatorGourp is set up', {tags: ['e2e','admin','@osd-ccs','@rosa', '@level0']}, () => {
     const params = {
@@ -131,7 +131,7 @@ describe('Operators related features', () => {
         const currentCSV = result.stdout;
         cy.adminCLI(`oc annotate csv ${currentCSV} -n ${testParams.ns2} console.openshift.io/disable-operand-delete=true --overwrite`)
           .its('stdout')
-          .should('contain','annotated');
+          .should('contain','annotate');
         });
     uninstallOperatorCheckOperand(testParams.ns2, 'not.exist');
     cy.get('@uninstallOperator').click();
