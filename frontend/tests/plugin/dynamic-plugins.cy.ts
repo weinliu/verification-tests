@@ -2,35 +2,38 @@ import { nav } from '../../upstream/views/nav';
 import { Overview, statusCard } from '../../views/overview';
 import { namespaceDropdown } from '../../views/namespace-dropdown';
 import { Branding } from '../../views/branding';
+import { ClusterSettingPage } from '../../views/cluster-setting';
 import { guidedTour } from '../../upstream/views/guided-tour';
 import { listPage } from '../../upstream/views/list-page';
 
 describe('Dynamic plugins features', () => {
   before(() => {
-    const demoPluginNamespace = 'console-demo-plugin';
-    cy.adminCLI(`oc create namespace ${demoPluginNamespace}`);
-
+    const query_console_dmeo_plugin_pod = `oc get deployment console-demo-plugin -n console-demo-plugin -o jsonpath='{.status.conditions[?(@.type=="Available")].status}'`;
     // deploy plugin manifests
-    cy.adminCLI(`oc create -f ./fixtures/demo-plugin-consoleplugin.yaml -n ${demoPluginNamespace}`);
-    const resources = ['demo-plugin-deployment', 'demo-plugin-service']
-    resources.forEach((resource) => {
-      cy.adminCLI(`oc create -f ./fixtures/${resource}.yaml -n ${demoPluginNamespace}`)
-        .then(result => { expect(result.stdout).contain("created")})
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI('oc apply -f ./fixtures/console-customization-plugin-manifests.yaml');
+    cy.adminCLI('oc apply -f ./fixtures/console-demo-plugin-manifests.yaml');
+    cy.checkCommandResult(query_console_dmeo_plugin_pod, 'True', { retries: 3, interval: 15000 }).then(() => {
+      cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+      return;
     });
-    cy.adminCLI('oc apply -f ./fixtures/console-customization-plugin-manifest.yaml');
-
-    // login via web
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
+
   beforeEach(() => {
     guidedTour.close();
-    cy.intercept(
-      {
-        method: 'GET',
-        url: '/locales/resource.json?lng=en&ns=plugin__console-demo-plugin'
-      },
-      {}
-    ).as('getConsoleDemoPluginLocales');
+  });
+
+  after(() => {
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge`);
+    ClusterSettingPage.goToConsolePlugins();
+    ClusterSettingPage.toggleConsolePlugin('console-customization', 'Disable');
+    ClusterSettingPage.toggleConsolePlugin('console-demo-plugin', 'Disable');
+    cy.adminCLI(`oc delete namespace console-demo-plugin console-customization-plugin`,{failOnNonZeroExit: false});
+    cy.adminCLI(`oc delete consoleplugin console-customization console-demo-plugin`,{failOnNonZeroExit: false});
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
+  });
+
+  it('(OCP-51743,yapei,UserInterface)Preload - locale files are loaded once plugin is enabled', {tags: ['e2e','admin','@osd-ccs']}, () => {
     cy.intercept(
       {
         method: 'GET',
@@ -38,32 +41,36 @@ describe('Dynamic plugins features', () => {
       },
       {}
     ).as('getConsoleCustomizaitonPluginLocales');
-  });
-  after(() => {
-    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge`);
-    cy.adminCLI(`oc delete consoleplugin console-customization console-demo-plugin`);
-    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge`);
-    cy.adminCLI(`oc delete namespace console-demo-plugin console-customization-plugin`);
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-  });
-
-  it('(OCP-51743,yapei,UserInterface) Implement check for the new i18n annotation for dynamic plugins', {tags: ['e2e','admin','@osd-ccs']},() => {
     cy.log('Preload - locale files are loaded once plugin is enabled');
     // enable console-customization plugin
-    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization"]}}' --type merge`)
+    cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"console-customization"}]'`)
       .then(result => expect(result.stdout).contains('patched'));
     // Use visiting pages to refresh instead of click on 'Refresh console' button
     // which is unreliable
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      expect(result.stdout).contains('console-customization')
+    });
     cy.wait(30000);
     cy.visit('/api-explorer');
     cy.wait('@getConsoleCustomizaitonPluginLocales',{timeout: 60000});
+  });
 
-    cy.log('Lazy - do not load locale files during enablement')
+  it('(OCP-51743,yapei,UserInterface)Lazy - do not load locale files during enablement',{tags: ['e2e','admin','@osd-ccs']},() => {
+    cy.intercept(
+      {
+        method: 'GET',
+        url: '/locales/resource.json?lng=en&ns=plugin__console-demo-plugin'
+      },
+      {}
+    ).as('getConsoleDemoPluginLocales');
     cy.switchPerspective('Developer');
     guidedTour.close();
     // enable console-demo-plugin
-    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization", "console-demo-plugin"]}}' --type merge`)
+    cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"console-demo-plugin"}]'`)
       .then(result => expect(result.stdout).contains('patched'));
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      expect(result.stdout).contains('console-customization').and.contains('console-demo-plugin');
+    });
     cy.wait(30000);
     cy.visit('/topology/all-namespaces');
     cy.wait('@getConsoleDemoPluginLocales', {timeout: 60000});
@@ -72,7 +79,7 @@ describe('Dynamic plugins features', () => {
       if (!e.message.includes('No request ever occurred')){
         throw e;
       }
-    })
+    });
 
     cy.log('Lazy - locale files are only loaded when visit plugin pages')
     cy.switchPerspective('Developer');
@@ -99,7 +106,7 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-54322,yapei,UserInterface) Expose ErrorBoundary and improve overview detail extension', {tags: ['e2e','admin','@osd-ccs']}, () => {
-    cy.log('Expose ErrorBoundary capabilities')
+    cy.log('Expose ErrorBoundary capabilities');
     cy.switchPerspective('Administrator');
     cy.visit('/sample-error-boundary-page');
     cy.contains('Launch buggy component').click({force: true});
@@ -162,7 +169,6 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-45629,yapei,UserInterface) dynamic plugins proxy to services on the cluster', {tags: ['e2e','admin','@osd-ccs']},() => {
-    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.switchPerspective('Developer');
     nav.sidenav.clickNavLink(['Demo Plugin']);
     // demo plugin in Dev perspective
@@ -190,11 +196,7 @@ describe('Dynamic plugins features', () => {
     cy.get('[title="Pod"]').should('exist');
 
     // Modal is exposed
-    cy.visit('/test-modal', {
-      onBeforeLoad (win) {
-        cy.spy(win.console, 'log').as('console.log')
-      }
-    });
+    cy.visit('/test-modal');
     cy.contains('Launch Modal').click({force: true});
     cy.get('[role="dialog"]').should('be.visible');
     cy.get('button[aria-label="Close"]').as('closebutton').click();
@@ -211,6 +213,11 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-41459,yapei,UserInterface)Add support for analytics and integration with Segment', {tags: ['e2e','admin','@osd-ccs']}, () => {
+    cy.visit('/k8s/ns/default/core~v1~Secret', {
+      onBeforeLoad (win) {
+        cy.spy(win.console, 'log').as('console.log')
+      }
+    });
     cy.switchPerspective('Administrator');
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "page");
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "Perspective Changed");

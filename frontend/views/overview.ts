@@ -1,5 +1,8 @@
 export const Overview = {
-  goToDashboard: () => cy.visit('/dashboards'),
+  goToDashboard: () => {
+    cy.visit('/dashboards'),
+    cy.get('[data-test-id="status-card"]').should('be.visible');
+  },
   closeGuidedTour: () => cy.get('#tour-step-footer-secondary').click(),
   isLoaded: () => cy.get('[data-test-id="dashboard"]', { timeout: 60000 }).should('exist'),
   clickNotificationDrawer: () => cy.get('[data-quickstart-id="qs-masthead-notifications"]').first().click(),
