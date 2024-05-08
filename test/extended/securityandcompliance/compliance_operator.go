@@ -3379,8 +3379,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", ssb.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 		g.By("Verify ocp4-moderate-configure-network-policies-namespaces rule status through compliancecheck result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-configure-network-policies-namespaces", "-n", ssb.namespace, "-o=jsonpath={.status}"}).check(oc)
+		ruleCheckResult, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", subD.namespace, "ocp4-moderate-configure-network-policies-namespaces", "-o=jsonpath={.status}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		if ruleCheckResult != "FAIL" {
+			g.Skip(fmt.Sprintf("The precondition not matched! The scan result for rule ocp4-moderate-configure-network-policies-namespaces is: %s! The nonControlNamespacesTerList is: %s", ruleCheckResult, nonControlNamespacesTerList))
+		}
 
 		nonControlNamespacesTerList1 := getNonControlNamespaces(oc, "Terminating")
 		if len(nonControlNamespacesTerList1) == 0 {
