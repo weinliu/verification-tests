@@ -14,43 +14,15 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-networking] SDN nmstate", func() {
+var _ = g.Describe("[sig-networking] SDN nmstate installation", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc          = exutil.NewCLI("networking-nmstate", exutil.KubeConfigPath())
-		opNamespace = "openshift-nmstate"
-		opName      = "kubernetes-nmstate-operator"
+		oc = exutil.NewCLI("networking-nmstate", exutil.KubeConfigPath())
 	)
 
 	g.BeforeEach(func() {
-		preCheckforRegistry(oc)
-
-		namespaceTemplate := generateTemplateAbsolutePath("namespace-template.yaml")
-		operatorGroupTemplate := generateTemplateAbsolutePath("operatorgroup-template.yaml")
-		subscriptionTemplate := generateTemplateAbsolutePath("subscription-template.yaml")
-		sub := subscriptionResource{
-			name:             "nmstate-operator-sub",
-			namespace:        opNamespace,
-			operatorName:     opName,
-			channel:          "stable",
-			catalog:          "qe-app-registry",
-			catalogNamespace: "openshift-marketplace",
-			template:         subscriptionTemplate,
-		}
-		ns := namespaceResource{
-			name:     opNamespace,
-			template: namespaceTemplate,
-		}
-		og := operatorGroupResource{
-			name:             opName,
-			namespace:        opNamespace,
-			targetNamespaces: opNamespace,
-			template:         operatorGroupTemplate,
-		}
-
-		operatorInstall(oc, sub, ns, og)
-
+		installNMstateOperator(oc)
 	})
 
 	g.It("LEVEL0-NonHyperShiftHOST-StagerunBoth-Author:qiowang-Critical-47088-NMState Operator installation ", func() {
@@ -58,13 +30,25 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		e2e.Logf("SUCCESS - NMState operator installed")
 	})
+})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:qiowang-High-46380-High-46382-High-46379-Create/Disable/Remove interface on node [Disruptive] [Slow]", func() {
+var _ = g.Describe("[sig-networking] SDN nmstate functional", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc          = exutil.NewCLI("networking-nmstate", exutil.KubeConfigPath())
+		opNamespace = "openshift-nmstate"
+	)
+
+	g.BeforeEach(func() {
 		g.By("Check the platform if it is suitable for running the test")
 		if !(isPlatformSuitableForNMState(oc)) {
 			g.Skip("Skipping for unsupported platform!")
 		}
+		installNMstateOperator(oc)
+	})
 
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:qiowang-High-46380-High-46382-High-46379-Create/Disable/Remove interface on node [Disruptive] [Slow]", func() {
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -213,11 +197,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("LEVEL0-NonHyperShiftHOST-Author:qiowang-Critical-46329-Configure bond on node [Disruptive]", func() {
-		g.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
-		}
-
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -328,11 +307,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46383-VLAN [Disruptive]", func() {
-		g.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
-		}
-
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -441,11 +415,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53346-Verify that it is able to reset linux-bridge vlan-filtering with vlan is empty [Disruptive]", func() {
-		g.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
-		}
-
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -600,11 +569,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46327-Medium-46795-Static IP and Route can be applied [Disruptive]", func() {
-		g.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
-		}
-
 		var (
 			ipAddrV4      = "192.0.2.251"
 			destAddrV4    = "198.51.100.0/24"
@@ -752,10 +716,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-54350-Verify that nmstate work well with SDN egressIP [Disruptive]", func() {
-		g.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
-		}
 		networkType := checkNetworkType(oc)
 		if !strings.Contains(networkType, "sdn") {
 			g.Skip("Skip for not sdn cluster !!!")
@@ -1041,10 +1001,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-71145-configure bond interface and 70 vlans based on the bond then reboot node, check the boot time [Disruptive] [Slow]", func() {
 		e2e.Logf("It is for OCPBUGS-22771, OCPBUGS-25753, OCPBUGS-26026")
-		exutil.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
-		}
 
 		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
@@ -1163,10 +1119,6 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-73027-Verify vlan of bond will get autoconnect when bond ports link revived [Disruptive]", func() {
 		e2e.Logf("It is for OCPBUGS-11300, OCPBUGS-23023")
-		exutil.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
-		}
 
 		var (
 			ipAddr1V4 = "192.0.2.251"
