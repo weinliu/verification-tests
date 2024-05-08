@@ -53,7 +53,7 @@ func enableSCTPModuleOnNode(oc *exutil.CLI, nodeName, role string) {
 
 }
 
-func prepareSCTPModule(oc *exutil.CLI, sctpModule string) {
+func prepareSCTPModule(oc *exutil.CLI) {
 	nodesOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(nodesOutput, "SchedulingDisabled") || strings.Contains(nodesOutput, "NotReady") {

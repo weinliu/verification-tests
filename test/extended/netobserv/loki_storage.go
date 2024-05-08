@@ -40,6 +40,11 @@ func getAWSCredentialFromCluster(oc *exutil.CLI) S3Credential {
 	region, err := exutil.GetAWSClusterRegion(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
+	// default to region us-east-2
+	if region == "" {
+		region = "us-east-2"
+	}
+
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	defer os.RemoveAll(dirname)
 	err = os.MkdirAll(dirname, 0777)

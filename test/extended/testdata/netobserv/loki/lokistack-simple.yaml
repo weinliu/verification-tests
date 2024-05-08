@@ -6,30 +6,35 @@ objects:
 - kind: "LokiStack"
   apiVersion: "loki.grafana.com/v1"
   metadata:
-    name: ${NAME}
-    namespace: ${NAMESPACE}
+    name: ${Name}
+    namespace: ${Namespace}
   spec:
     managementState: "Managed"
-    size: ${SIZE}
+    size: ${TSize}
     storage:
       secret:
-        name: ${SECRET_NAME}
-        type: ${STORAGE_TYPE}
-    storageClassName: ${STORAGE_CLASS}
+        name: ${StorageSecret}
+        type: ${StorageType}
+    storageClassName: ${StorageClass}
+    hashRing:
+      memberlist:
+        enableIPv6: "${{EnableIPV6}}"
     tenants:
-      mode: ${TENANT}
+      mode: ${Tenant}
 parameters:
-- name: NAME
+- name: Name
   value: "lokistack"
-- name: NAMESPACE
+- name: Namespace
   value: "openshift-operators-redhat"
-- name: SIZE
+- name: TSize
   value: "1x.extra-small"
-- name: SECRET_NAME
+- name: StorageSecret
   value: "s3-secret"
-- name: STORAGE_TYPE
+- name: StorageType
   value: "s3"
-- name: STORAGE_CLASS
+- name: StorageClass
   value: "gp2"
-- name: TENANT
+- name: Tenant
   value: openshift-network
+- name: EnableIPV6
+  value: "false"

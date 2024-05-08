@@ -2,6 +2,7 @@ package netobserv
 
 import (
 	"fmt"
+	"reflect"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -21,6 +22,7 @@ type lokiStack struct {
 	Tenant        string // Loki tenant name
 	Template      string // the file used to create the loki stack
 	Route         string // lokistack-gateway-http route to be initialized after lokistack is up.
+	EnableIPV6    string // enable IPV6
 }
 
 // LokiPersistentVolumeClaim struct to handle Loki PVC resources
@@ -67,17 +69,27 @@ func (loki *LokiStorage) deleteLokiStorage(oc *exutil.CLI) {
 
 // DeployLokiStack creates the lokiStack CR with basic settings: name, namespace, size, storage.secret.name, storage.secret.type, storageClassName
 // optionalParameters is designed for adding parameters to deploy lokiStack with different tenants or some other settings
-func (l lokiStack) deployLokiStack(oc *exutil.CLI, optionalParameters ...string) error {
-	var storage string
-	if l.StorageType == "odf" || l.StorageType == "minio" {
-		storage = "s3"
-	} else {
-		storage = l.StorageType
+func (l lokiStack) deployLokiStack(oc *exutil.CLI) error {
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", l.Template, "-p"}
+
+	lokistack := reflect.ValueOf(&l).Elem()
+
+	for i := 0; i < lokistack.NumField(); i++ {
+		if lokistack.Field(i).Interface() != "" {
+			if lokistack.Type().Field(i).Name != "StorageType" || lokistack.Type().Field(i).Name != "Template" {
+				parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, lokistack.Field(i).Interface()))
+			} else {
+				if lokistack.Type().Field(i).Name == "StorageType" {
+					if lokistack.Field(i).Interface() == "odf" || lokistack.Field(i).Interface() == "minio" {
+						parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, "s3"))
+					} else {
+						parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, lokistack.Field(i).Interface()))
+					}
+				}
+			}
+		}
 	}
-	parameters := []string{"-f", l.Template, "-n", l.Namespace, "-p", "NAME=" + l.Name, "NAMESPACE=" + l.Namespace, "SIZE=" + l.TSize, "SECRET_NAME=" + l.StorageSecret, "STORAGE_TYPE=" + storage, "STORAGE_CLASS=" + l.StorageClass}
-	if len(optionalParameters) != 0 {
-		parameters = append(parameters, optionalParameters...)
-	}
+
 	file, err := processTemplate(oc, parameters...)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", l.Namespace).Execute()

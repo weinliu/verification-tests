@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// Loki Operator variables
 		lokiNS          = "openshift-operators-redhat"
 		lokiPackageName = "loki-operator"
-		ls              lokiStack
+		ls              *lokiStack
 		Lokiexisting    = false
 		lokiSource      = CatalogSourceObjects{"stable", catsrc.name, catsrc.namespace}
 		LO              = SubscriptionObjects{
@@ -79,6 +79,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			NOSource.SourceName = catsrc.name
 			lokiSource.SourceName = catsrc.name
 		}
+		ipStackType := checkIPStackType(oc)
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 		// check if Network Observability Operator is already present
@@ -138,11 +139,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		lokiStackTemplate := filePath.Join(lokiDir, "lokistack-simple.yaml")
 		objectStorageType := getStorageType(oc)
-		if len(objectStorageType) == 0 {
+		if len(objectStorageType) == 0 && ipStackType != "ipv6single" {
 			g.Skip("Current cluster doesn't have a proper object storage for this test!")
 		}
-
-		ls = lokiStack{
+		ls = &lokiStack{
 			Name:          "lokistack",
 			Namespace:     namespace,
 			TSize:         "1x.demo",
@@ -152,6 +152,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			BucketName:    "netobserv-loki-" + getInfrastructureName(oc),
 			Tenant:        lokiTenant,
 			Template:      lokiStackTemplate,
+		}
+
+		if ipStackType == "ipv6single" {
+			e2e.Logf("running IPv6 test")
+			ls.EnableIPV6 = "true"
+			ls.StorageType = "s3"
 		}
 
 		err = ls.prepareResourcesForLokiStack(oc)
@@ -795,13 +801,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		var (
 			sctpClientPodTemplatePath = filePath.Join(networkingDir, "sctpclient.yaml")
 			sctpServerPodTemplatePath = filePath.Join(networkingDir, "sctpserver.yaml")
-			sctpModuleTemplatePath    = filePath.Join(networkingDir, "load-sctp-module.yaml")
 			sctpServerPodname         = "sctpserver"
 			sctpClientPodname         = "sctpclient"
 		)
 
 		g.By("install load-sctp-module in all workers")
-		prepareSCTPModule(oc, sctpModuleTemplatePath)
+		prepareSCTPModule(oc)
 
 		g.By("Create netobserv-sctp NS")
 		SCTPns := "netobserv-sctp-62989"
@@ -1448,6 +1453,47 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Verify prometheus is able to scrape eBPF metrics")
 		verifyEBPFFilterMetrics(oc)
 	})
+
+	g.It("Author:memodi-Medium-53844-Sanity Test NetObserv [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiURL:         lokiURL,
+			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+			LokiNamespace:   namespace,
+			EBPFMetrics:     "true",
+		}
+
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+		flow.waitForFlowcollectorReady(oc)
+
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err := removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		lokilabels := Lokilabels{
+			App: "netobserv-flowcollector",
+		}
+
+		g.By("Verify flows are written to loki")
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows written to loki > 0")
+	})
+
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {

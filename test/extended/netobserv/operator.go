@@ -66,9 +66,6 @@ func (versions *version) deployNetobservOperator(action bool, tempdir *string) e
 	)
 
 	if action {
-		if err != nil {
-			return err
-		}
 		err = versions.gitCheckout(tempdir)
 		if err != nil {
 			return err
