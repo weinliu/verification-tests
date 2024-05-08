@@ -359,6 +359,105 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("second-test " + srvPodName[0] + " http-8080"))
 	})
 
+	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-Medium-73621-Disable/Enable namespace ownership support for router [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure"
+			e2eTestNamespace1   = "e2e-ne-73621-" + getRandomString()
+			e2eTestNamespace2   = "e2e-ne-73621-" + getRandomString()
+		)
+
+		exutil.By("1. prepare two namespaces for the following testing")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace1)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace2)
+		path1 := "/path"
+		path2 := "/path/second"
+		httpRouteHost := unSecSvcName + "-" + "ocp73621." + "apps.example.com"
+
+		exutil.By("2. debug node to disable namespace ownership support by setting namespaceOwnership to Strict in the config.yaml file")
+		nodeName := fetchJSONPathValue(oc, "default", "nodes", ".items[0].metadata.name")
+		creatFileCmdForDisabled := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup73621
+else
+    touch /etc/microshift/config.yaml.no73621
+fi
+cat > /etc/microshift/config.yaml << EOF
+ingress:
+    routeAdmissionPolicy:
+        namespaceOwnership: Strict
+EOF`)
+
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|Strict|InterNamespaceAllowed|g' /etc/microshift/config.yaml`)
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no73621; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no73621
+elif test -f /etc/microshift/config.yaml.backup73621 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup73621 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup73621
+fi
+`)
+
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace1, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace1, nodeName)
+		}()
+
+		_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace1, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", creatFileCmdForDisabled).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace1, nodeName)
+
+		exutil.By("3. create a server pod and the services in one ns")
+		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+
+		exutil.By("4. create a server pod and the services in the other ns")
+		createResourceFromFile(oc, e2eTestNamespace2, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+
+		exutil.By("5. create a route with path " + path1 + " in the first ns")
+		extraParas := []string{"--path=" + path1}
+		createARoute(oc, e2eTestNamespace1, "http", "route-http", unSecSvcName, httpRouteHost, extraParas)
+		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", "route-http")
+
+		exutil.By("6. create a route with path " + path2 + " in the second ns")
+		extraParas = []string{"--path=" + path2}
+		createARoute(oc, e2eTestNamespace2, "http", "route-http", unSecSvcName, httpRouteHost, extraParas)
+		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", "route-http")
+
+		exutil.By("7. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be false")
+		routerPodName := getNewRouterPod(oc, "default")
+		ownershipVal := readRouterPodEnv(oc, routerPodName, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
+		o.Expect(ownershipVal).To(o.ContainSubstring("false"))
+
+		exutil.By("8. check the two route with same hostname but with different path, one is adimitted, while the other isn't")
+		jpath := ".status.ingress[0].conditions[0].status"
+		adtInfo := fetchJSONPathValue(oc, e2eTestNamespace1, "route/route-http", jpath)
+		o.Expect(adtInfo).To(o.Equal("True"))
+		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/route-http", jpath)
+		o.Expect(adtInfo).To(o.Equal("False"))
+
+		exutil.By("9. debug node to enable namespace ownership support by setting namespaceOwnership to InterNamespaceAllowed in the config.yaml file")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace1, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace1, nodeName)
+
+		exutil.By("10. check the two route with same hostname but with different path, both of them should be adimitted")
+		waitForOutput(oc, e2eTestNamespace1, "route/route-http", jpath, "True")
+		waitForOutput(oc, e2eTestNamespace2, "route/route-http", jpath, "True")
+	})
+
 	g.It("MicroShiftOnly-Author:shudili-High-73152-Expose router as load balancer service type", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
