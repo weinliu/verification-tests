@@ -878,10 +878,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf.update(oc, "", patch, "--type=json")
 			checkResource(oc, true, false, "[[\".log_type\" \".message\"] is/are required fields and must be included in the `notIn` list.]", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
 
+			patch = `[{"op": "replace", "path": "/spec/filters", "value": [{"name": "prune-logs", "type": "prune"}]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, "prune filter must have one or both of `in`, `notIn`", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+
 			exutil.By("Check filter validation for drop")
 			patch = `[{"op": "replace", "path": "/spec/filters", "value": [{"name": "drop-logs", "type": "drop", "drop": [{"test": [{"field": ".kubernetes.labels.test.logging.io/logging.qe-test-label", "matches": ".+"}]}]}]}, {"op": "replace", "path": "/spec/pipelines/0/filterRefs", "value": ["drop-logs"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			checkResource(oc, true, false, `[".kubernetes.labels.test.logging.io/logging.qe-test-label" must be a valid dot delimited path expression (.kubernetes.container_name or .kubernetes."test-foo")]`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, `-ojsonpath={.status.filters.drop-logs\:\ test\[0\][0].message}`})
+
+			patch = `[{"op": "replace", "path": "/spec/filters", "value": [{"name": "drop-logs", "type": "drop"}]}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, `drop filter must have at least one test spec'd`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, `-ojsonpath={.status.filters.drop-logs[0].message}`})
+
 		})
 
 	})

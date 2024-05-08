@@ -762,8 +762,10 @@ func (cl *clusterlogging) update(oc *exutil.CLI, template string, patches ...str
 func (cl *clusterlogging) delete(oc *exutil.CLI) {
 	err := resource{"clusterlogging", cl.name, cl.namespace}.clear(oc)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete clusterlogging/%s in %s project", cl.name, cl.namespace))
-
-	resources := []resource{{"daemonset", "collector", cl.namespace}}
+	var resources []resource
+	if cl.name == "instance" && cl.namespace == loggingNS {
+		resources = append(resources, resource{"daemonset", "collector", cl.namespace})
+	}
 	if cl.logStoreType == "elasticsearch" {
 		resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", cl.namespace}, resource{"kibanas.logging.openshift.io", "kibana", cl.namespace})
 		if cl.storageClassName != "" {
@@ -2861,16 +2863,16 @@ func newAzureLog(oc *exutil.CLI, resouceGroupName string, workspaceName string, 
 	if len(azLog.subscriptionID) == 0 {
 		dat, err := oc.AsAdmin().WithoutNamespace().Run("get", "-n", "kube-system", "secret/azure-credentials", "-ojsonpath={.data.azure_subscription_id}").Output()
 		if err != nil {
-			return azLog, fmt.Errorf("Failed to get secret/azure-credentials!")
+			return azLog, fmt.Errorf("failed to get secret/azure-credentials")
 		}
 		data, err := base64.StdEncoding.DecodeString(dat)
 		if err != nil {
-			return azLog, fmt.Errorf("Failed to Decode subscription_id  from secret/azure-credentials!")
+			return azLog, fmt.Errorf("failed to decode subscription_id from secret/azure-credentials")
 		}
 
 		azLog.subscriptionID = string(data)
 		if len(azLog.subscriptionID) == 0 {
-			return azLog, fmt.Errorf("Failed as subscriptionID is empty!")
+			return azLog, fmt.Errorf("failed as subscriptionID is empty")
 		}
 	}
 	cloudType := getAzureCloudType(oc)
@@ -2923,7 +2925,7 @@ func (azLog *azureMonitorLog) getLogByTable(logTable string) ([]azlogs.Row, erro
 
 	client, err := azlogs.NewClient(azLog.azCred,
 		&azlogs.ClientOptions{
-			azLog.clientOpts,
+			ClientOptions: azLog.clientOpts,
 		},
 	)
 	if err != nil {
@@ -2949,9 +2951,7 @@ func (azLog *azureMonitorLog) getLogByTable(logTable string) ([]azlogs.Row, erro
 			return false, nil
 		}
 		for _, table := range res.Tables {
-			for _, row := range table.Rows {
-				entries = append(entries, row)
-			}
+			entries = append(entries, table.Rows...)
 		}
 		return len(entries) > 0, nil
 	})

@@ -356,10 +356,10 @@ func (s *splunkPodServer) deployCustomCertClientForceSplunk(oc *exutil.CLI) {
 }
 
 func (s *splunkPodServer) destroy(oc *exutil.CLI) {
-	oc.AsAdmin().WithoutNamespace().Run("delelte").Args("route", s.name+"-hec", "-n", s.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delelte").Args("route", s.name+"-splunkd", "-n", s.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("statefulset", s.name, "-n", "-n", s.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", s.name, "-n", "-n", s.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", s.name+"-hec", "-n", s.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", s.name+"-splunkd", "-n", s.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("statefulset", s.name, "-n", s.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", s.name, "-n", s.namespace).Execute()
 	oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-scc-from-user", "nonroot", "-z", "default", "-n", s.namespace).Execute()
 }
 

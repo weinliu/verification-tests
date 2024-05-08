@@ -915,7 +915,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// sleep 3 minutes for collector pods to send the cached records
 			time.Sleep(3 * time.Minute)
 			exutil.By("check data in lokistack, only infra container logs are collected")
-			//TODO: logs from logging components should be execluded
+
+			//check vector.toml, logs from logging infra pods should be excluded
+			searchString := `include_paths_glob_patterns = ["/var/log/pods/default_*/*/*.log", "/var/log/pods/kube*_*/*/*.log", "/var/log/pods/openshift*_*/*/*.log"]
+exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.tmp", "/var/log/pods/openshift-logging_*/gateway/*.log", "/var/log/pods/openshift-logging_*/loki*/*.log", "/var/log/pods/openshift-logging_*/opa/*.log", "/var/log/pods/openshift-logging_elasticsearch-*/*/*.log", "/var/log/pods/openshift-logging_kibana-*/*/*.log", "/var/log/pods/openshift-logging_logfilesmetricexporter-*/*/*.log"]`
+			result, err := checkCollectorConfiguration(oc, cl.namespace, "collector-config", searchString)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
+
 			re, _ = lc.queryRange("infrastructure", `{ log_type="infrastructure", kubernetes_namespace_name=~".+" }`, 30, time.Now().Add(time.Duration(-2)*time.Minute), time.Now(), true)
 			o.Expect(len(re.Data.Result) > 0).Should(o.BeTrue())
 			re, _ = lc.queryRange("infrastructure", `{ log_type="infrastructure", kubernetes_namespace_name!~".+" }`, 30, time.Now().Add(time.Duration(-2)*time.Minute), time.Now(), true)
