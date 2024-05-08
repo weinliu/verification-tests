@@ -636,4 +636,70 @@ fi
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost + ":10443", "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		adminRepeatCmd(oc, routeReq, "200", 30)
 	})
+
+	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-High-73209-Add enable/disable option for default router [Disruptive]", func() {
+		var e2eTestNamespace = "e2e-ne-ocp73209-" + getRandomString()
+
+		exutil.By("create a namespace for testing, then debug node and get the valid host ips")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+
+		nodeName := fetchJSONPathValue(oc, "default", "nodes", ".items[0].metadata.name")
+		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, hostIPList := getValidInterfacesAndIPs(hostAddresses)
+		hostIPs := getSortedString(hostIPList)
+
+		exutil.By("debug node to disable the default router by setting ingress status to Removed")
+		creatFileCmdForDisablingRouter := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup73209
+else
+    touch /etc/microshift/config.yaml.no73209
+fi
+cat > /etc/microshift/config.yaml << EOF
+ingress:
+    status: Removed
+EOF`)
+
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|Removed|Managed|g' /etc/microshift/config.yaml`)
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no73209; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no73209
+elif test -f /etc/microshift/config.yaml.backup73209 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup73209 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup73209
+fi
+`)
+
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		}()
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", creatFileCmdForDisablingRouter).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+
+		exutil.By("check the openshift-ingress namespace will be deleted")
+		err = waitForResourceToDisappear(oc, "default", "ns/"+"openshift-ingress")
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "namespace openshift-ingress"))
+
+		exutil.By("debug node to enable the default router by setting ingress status to Managed")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+
+		exutil.By("check router-default load balancer is enabled")
+		waitForOutput(oc, "openshift-ingress", "service/router-default", ".spec.ports[?(@.name==\"http\")].port", "80")
+		lbIPs := fetchJSONPathValue(oc, "openshift-ingress", "service/router-default", ".status.loadBalancer.ingress[*].ip")
+		lbIPs = getSortedString(lbIPs)
+		o.Expect(lbIPs).To(o.Equal(hostIPs))
+		HTTPSPort := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", ".spec.ports[?(@.name==\"https\")].port")
+		o.Expect(HTTPSPort).To(o.Equal("443"))
+	})
 })
