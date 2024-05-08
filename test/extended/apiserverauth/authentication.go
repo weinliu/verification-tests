@@ -760,7 +760,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", clusterRoleYaml).Execute()
 		}()
 
-		patchYaml = `{"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":"system:authenticated"}]}`
+		patchYaml = `{"subjects": null}`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterrolebinding.rbac", "system:oauth-token-deleters", "--type=merge", "-p", patchYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
@@ -784,7 +784,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding.rbac", "system:oauth-token-deleters", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("system:unauthenticated"))
+		o.Expect(output).To(o.ContainSubstring("system:authenticated"))
 		e2e.Logf("The deleted parts in both clusterrole.rbac and clusterrolebinding.rbac are restored.")
 	})
 
