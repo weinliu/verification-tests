@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author:wduan@redhat.com
 	g.It("NonHyperShiftHOST-Author:wduan-High-45514-[vSphere-Problem-Detector] should report metric about vpshere env", func() {
 		// Add 'vsphere_rwx_volumes_total' metric from ocp 4.10
-		exutil.By("Check metric: vsphere_vcenter_info, vsphere_esxi_version_total, vsphere_node_hw_version_total, vsphere_datastore_total, vsphere_rwx_volumes_total")
+		exutil.By("Check metric: vsphere_vcenter_info, vsphere_esxi_version_total, vsphere_node_hw_version_total, vsphere_datastore_total, vsphere_rwx_volumes_total, vsphere_infrastructure_failure_domains")
 		checkStorageMetricsContent(oc, "vsphere_vcenter_info", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_esxi_version_total", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_node_hw_version_total", "hw_version")
@@ -108,6 +108,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// TODO: Check with SPLAT/DPP Team whether we could add the permission in CI account
 		// checkStorageMetricsContent(oc, "vsphere_datastore_total", "instance")
 		checkStorageMetricsContent(oc, "vsphere_rwx_volumes_total", "value")
+		checkStorageMetricsContent(oc, "vsphere_infrastructure_failure_domains", "value")
+
 	})
 
 	// author:wduan@redhat.com
