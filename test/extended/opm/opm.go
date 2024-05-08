@@ -527,6 +527,51 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 	})
 
 	// author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-Medium-54168-opm support '--use-http' global flag", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		opmBaseDir := exutil.FixturePath("testdata", "opm", "53869")
+		opmCLI.ExecCommandPath = opmBaseDir
+		defer DeleteDir(opmBaseDir, "fixture-testdata")
+
+		exutil.By("1) checking alpha list")
+		output, err := opmCLI.Run("alpha").Args("list", "bundles", "quay.io/openshifttest/nginxolm-operator-index:v1", "--use-http").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "nginx-operator") {
+			e2e.Failf(fmt.Sprintf("Failed to obtain the packages from alpha list : %s", output))
+		}
+
+		exutil.By("2) checking render")
+		output, err = opmCLI.Run("render").Args("quay.io/openshifttest/nginxolm-operator-index:v1", "--use-http").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "nginx-operator") {
+			e2e.Failf(fmt.Sprintf("Failed run render command : %s", output))
+		}
+
+		exutil.By("3) checking index add")
+		output, err = opmCLI.Run("index").Args("add", "-b", "quay.io/openshifttest/nginxolm-operator-bundle:v0.0.1", "-t", "quay.io/olmqe/nginxolm-operator-index:v54168", "--use-http", "--generate").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "writing dockerfile") {
+			e2e.Failf(fmt.Sprintf("Failed run render command : %s", output))
+		}
+
+		exutil.By("4) checking render-veneer semver")
+		output, err = opmCLI.Run("alpha").Args("render-template", "--use-http", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "nginx-operator") {
+			e2e.Failf(fmt.Sprintf("Failed run render command : %s", output))
+		}
+
+		exutil.By("5) checking render-graph")
+		output, err = opmCLI.Run("alpha").Args("render-graph", "quay.io/openshifttest/nginxolm-operator-index:v1", "--use-http").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "nginx-operator") {
+			e2e.Failf(fmt.Sprintf("Failed run render-graph command : %s", output))
+		}
+	})
+
+	// author: bandrade@redhat.com
 	g.It("Author:bandrade-VMonly-Low-30318-Bundle build understands packages", func() {
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		testDataPath := filepath.Join(opmBaseDir, "learn_operator")
