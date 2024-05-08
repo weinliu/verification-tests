@@ -449,9 +449,16 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-42982-Describe quota output should always show units", func() {
+	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:yinzhou-High-42982-Describe quota output should always show units", func() {
 		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") || isBaselineCapsSet(oc, "v4.14") || isBaselineCapsSet(oc, "v4.15") || isBaselineCapsSet(oc, "v4.11") && !isEnabledCapability(oc, "DeploymentConfig") {
 			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
+		}
+
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
 		}
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
@@ -459,7 +466,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		clusterresourceF := filepath.Join(buildPruningBaseDir, "clusterresource_for_user.yaml")
 		g.By("create new namespace")
 		oc.SetupProject()
-		err := oc.AsAdmin().Run("create").Args("quota", "compute-resources-42982", "--hard=requests.cpu=4,requests.memory=8Gi,pods=4,limits.cpu=4,limits.memory=8Gi").Execute()
+		err = oc.AsAdmin().Run("create").Args("quota", "compute-resources-42982", "--hard=requests.cpu=4,requests.memory=8Gi,pods=4,limits.cpu=4,limits.memory=8Gi").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", deploymentconfigF).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
