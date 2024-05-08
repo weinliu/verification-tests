@@ -589,4 +589,37 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			return replicas
 		}, defaultTimeout, defaultTimeout/10).Should(o.Equal(0), "The other machineset(s) replicas should be 0")
 	})
+
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Author:huliu-Medium-73113-[CAO] Update CAO to add upstream scale from zero annotations[Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.AZURE, clusterinfra.VSPHERE, clusterinfra.OPENSTACK, clusterinfra.NUTANIX, clusterinfra.IBMCLOUD)
+		g.By("Create a new machineset")
+		machinesetName := "machineset-73113"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Create machineautoscaler")
+		machineAutoscaler = machineAutoscalerDescription{
+			name:           "machineautoscaler-73113",
+			namespace:      machineAPINamespace,
+			maxReplicas:    2,
+			minReplicas:    0,
+			template:       machineAutoscalerTemplate,
+			machineSetName: machinesetName,
+		}
+		defer machineAutoscaler.deleteMachineAutoscaler(oc)
+		machineAutoscaler.createMachineAutoscaler(oc)
+
+		g.By("Check machineset have upstream scale from zero annotations")
+		machineSetAnnotations, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", machineSetAnnotations)
+		o.Expect(strings.Contains(machineSetAnnotations, "capacity.cluster-autoscaler.kubernetes.io/memory") && strings.Contains(machineSetAnnotations, "capacity.cluster-autoscaler.kubernetes.io/cpu")).To(o.BeTrue())
+		if strings.Contains(machineSetAnnotations, "machine.openshift.io/GPU") {
+			o.Expect(strings.Contains(machineSetAnnotations, "capacity.cluster-autoscaler.kubernetes.io/gpu-count") && strings.Contains(machineSetAnnotations, "capacity.cluster-autoscaler.kubernetes.io/gpu-type")).To(o.BeTrue())
+		}
+	})
 })
