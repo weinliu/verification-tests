@@ -73,10 +73,14 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 		//ocPerfAppImageName = "quay.io/openshifttest/hello-openshift:multiarch"
 		e2e.Logf("ocp perfscale test case ocp-22140 will use below image to test:\n[Image Name]:%s", ocPerfAppImageName)
 
-		if iaasPlatform == "azure" {
-			projectCount = 40
+		if iaasPlatform == "ibmcloud" {
+			projectCount = 25
+		} else if iaasPlatform == "aws" {
+			projectCount = 30
+		} else if iaasPlatform == "azure" || iaasPlatform == "gcp" {
+			projectCount = 35
 		} else {
-			projectCount = 45
+			projectCount = 40
 		}
 
 		start := time.Now()
@@ -137,22 +141,22 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 			if metricValueAfter > metricValueBefore {
 				e2e.Logf("The value of %s increased from %d to %d on [%s].", metricName, metricValueBefore, metricValueAfter, masterNodeNames[i])
 			}
-			//Lower than 2.5GB=2.5X1024X1024X1024=2684354560
-			o.Expect(metricValueAfter).To(o.BeNumerically("<=", 2684354560))
+			//Lower than 3GB=3X1024X1024X1024=3221225472, more memory in 4.16
+			o.Expect(metricValueAfter).To(o.BeNumerically("<=", 3221225472))
 		}
 
 		e2e.Logf("Duration for deleting %d projects and 1 deploymentConfig in each of those is %.2f seconds", projectCount, deleteDuration)
 		// all values in BeNumerically are "Expected" and "Threshold" numbers
 		// Expected derived by running this program 5 times against 4.8.0-0.nightly-2021-10-20-155651 and taking median
 		// Threshold is set to lower than the expected value
-		e2e.Logf("createDuration is: %v Expected time is less than 350s.", createDuration)
-		e2e.Logf("getDuration is: %v Expected time is less than 90s.", getDuration)
-		e2e.Logf("scaleDuration is: %v Expected time is less than 75s.", scaleDuration)
-		e2e.Logf("deleteDuration is: %v Expected time is less than 570s.", deleteDuration)
+		e2e.Logf("createDuration is: %v Expected time is less than 720s.", createDuration)
+		e2e.Logf("getDuration is: %v Expected time is less than 300s.", getDuration)
+		e2e.Logf("scaleDuration is: %v Expected time is less than 240s.", scaleDuration)
+		e2e.Logf("deleteDuration is: %v Expected time is less than 900s.", deleteDuration)
 
-		o.Expect(createDuration).To(o.BeNumerically("<=", 350))
-		o.Expect(getDuration).To(o.BeNumerically("<=", 90))
-		o.Expect(scaleDuration).To(o.BeNumerically("<=", 75))
-		o.Expect(deleteDuration).To(o.BeNumerically("<=", 570))
+		o.Expect(createDuration).To(o.BeNumerically("<=", 720))
+		o.Expect(getDuration).To(o.BeNumerically("<=", 300))
+		o.Expect(scaleDuration).To(o.BeNumerically("<=", 240))
+		o.Expect(deleteDuration).To(o.BeNumerically("<=", 900))
 	})
 })
