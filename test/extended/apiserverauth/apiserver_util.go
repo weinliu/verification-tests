@@ -1020,12 +1020,6 @@ func getNewUser(oc *exutil.CLI, count int) ([]User, string, string) {
 
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("--type=json", "-p", `[{"op": "add", "path": "/spec/identityProviders", "value": [{"htpasswd": {"fileData": {"name": "htpass-secret"}}, "mappingMethod": "claim", "name": "htpasswd", "type": "HTPasswd"}]}]`, "oauth/cluster").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Checking authentication operator should be in Progressing in 180 seconds")
-		err = waitCoBecomes(oc, "authentication", 180, map[string]string{"Progressing": "True"})
-		exutil.AssertWaitPollNoErr(err, "authentication operator is not start progressing in 180 seconds")
-		e2e.Logf("Checking authentication operator should be Available in 600 seconds")
-		err = waitCoBecomes(oc, "authentication", 600, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
-		exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 600 seconds")
 	} else {
 		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "openshift-config", "secret/"+htPassSecret, "--to", usersDirPath, "--confirm").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1520,15 +1514,19 @@ func applyLabel(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters 
 func checkUserAuditLog(oc *exutil.CLI, logGroup string, user string, pass string) (string, int) {
 	var (
 		eventLogs  string
-		eventCount int
+		eventCount = 0
+		n          int
 		now        = time.Now().UTC().Unix()
 	)
 
 	errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", user, "-p", pass).NotShowInfo().Execute()
 	o.Expect(errUser).NotTo(o.HaveOccurred())
-	time.Sleep(3 * time.Second)
 
-	script := fmt.Sprintf(`rm -if /tmp/audit-test-*.json; for logpath in kube-apiserver oauth-apiserver openshift-apiserver; do grep -h "%s" /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > %v)' >> /tmp/audit-test-$logpath.json; done; cat /tmp/audit-test-*.json`, logGroup, now)
+	script := fmt.Sprintf(`rm -if /tmp/audit-test-*.json;
+	for logpath in kube-apiserver oauth-apiserver openshift-apiserver;do
+	  grep -h "%s" /var/log/${logpath}/audit*.log | jq -c 'select (.requestReceivedTimestamp | .[0:19] + "Z" | fromdateiso8601 > %v)' >> /tmp/audit-test-$logpath.json;
+	done;
+	cat /tmp/audit-test-*.json`, logGroup, now)
 	contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
 	o.Expect(contextErr).NotTo(o.HaveOccurred())
 
@@ -1537,8 +1535,9 @@ func checkUserAuditLog(oc *exutil.CLI, logGroup string, user string, pass string
 	o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 	o.Expect(masterNodes).NotTo(o.BeEmpty())
 	for _, masterNode := range masterNodes {
-		eventLogs, eventCount = checkAuditLogs(oc, script, masterNode, "openshift-kube-apiserver")
-		eventCount += eventCount
+		eventLogs, n = checkAuditLogs(oc, script, masterNode, "openshift-kube-apiserver")
+		e2e.Logf("event logs count:%v", n)
+		eventCount += n
 	}
 	return eventLogs, eventCount
 }

@@ -4475,15 +4475,15 @@ spec:
 		}()
 
 		// Get user detail used by the test and cleanup after execution.
-		users, usersHTpassFile, htPassSecret = getNewUser(oc, 4)
+		users, usersHTpassFile, htPassSecret = getNewUser(oc, 2)
 
 		exutil.By("1. Configure audit config for customRules system:authenticated:oauth profile as Default and audit profile as None")
 		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "Default"}],"profile": "None"}}]`
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		exutil.By("2. Check audit events should be greater than zero after login operation")
-		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 182*time.Second, false, func(cxt context.Context) (bool, error) {
-			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[2].Username, users[2].Password)
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[0].Username, users[0].Password)
 			if auditEventCount > 0 {
 				return true, nil
 			}
@@ -4497,7 +4497,7 @@ spec:
 
 		exutil.By("4. Check audit events should be greater than zero after login operation")
 		err1 := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
-			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[3].Username, users[3].Password)
+			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[1].Username, users[1].Password)
 			if auditEventCount > 0 {
 				return true, nil
 			}
@@ -4505,7 +4505,7 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("Test Case failed ::  Audit events count is not greater than zero after login operation :: %v", auditEventCount))
 
-		_, auditEventCount = checkUserAuditLog(oc, "system:serviceaccounts:openshift-console-operator", users[3].Username, users[3].Password)
+		_, auditEventCount = checkUserAuditLog(oc, "system:serviceaccounts:openshift-console-operator", users[1].Username, users[1].Password)
 		o.Expect(auditEventCount).To(o.BeNumerically(">", 0))
 	})
 
@@ -6010,7 +6010,7 @@ EOF`, serverconf, fqdnName)
 		}()
 
 		// Get user detail used by the test and cleanup after execution.
-		users, usersHTpassFile, htPassSecret = getNewUser(oc, 4)
+		users, usersHTpassFile, htPassSecret = getNewUser(oc, 2)
 
 		exutil.By("1. Configure audit config for customRules system:authenticated:oauth profile as None and audit profile as Default")
 		patchCustomRules = `[{"op": "replace", "path": "/spec/audit", "value": {"customRules": [ {"group": "system:authenticated:oauth","profile": "None"}],"profile": "Default"}}]`
