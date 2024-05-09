@@ -334,4 +334,270 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		}
 	})
 
+	// author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-High-69193-OLMv1 major version zero", func() {
+		var (
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			catalog                  = olmv1util.CatalogDescription{
+				Name:     "catalog-69193",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm69193",
+				Template: catalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:        "clusterextension-69193",
+				PackageName: "nginx69193",
+				Channel:     "candidate-v0.0",
+				Version:     "0.0.1",
+				Template:    clusterextensionTemplate,
+			}
+		)
+		exutil.By("1) Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("2) Install version 0.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.0.1"))
+
+		exutil.By("3) Attempt to update to version 0.0.2 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"version":"0.0.2"}}`)
+		/*
+			errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+				message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
+				if !strings.Contains(message, "constraints not satisfiable") {
+					e2e.Logf("status is %s", message)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.0.2 should not be installed")
+
+			exutil.By("4) change UpgradeConstraintPolicy to be Ignore, that should work")
+			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)*/
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "0.0.2") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.0.2 is not installed")
+
+		clusterextension.Delete(oc)
+		err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+			catsrcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "nginx69193-system").Output()
+			if strings.Contains(catsrcStatus, "NotFound") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "ns nginx69193-system is not deleted")
+
+		exutil.By("5) Install version 0.1.0 with Enforce policy, that should work")
+		clusterextension.Channel = "candidate-v0.1"
+		clusterextension.Version = "0.1.0"
+		clusterextension.UpgradeConstraintPolicy = "Enforce"
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.1.0"))
+
+		exutil.By("6) Attempt to update to version 0.2.0 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"version":"0.2.0","channel":"candidate-v0.2"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(message, "constraints not satisfiable") {
+				e2e.Logf("status is %s", message)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.2.0 should not be installed")
+
+		exutil.By("7) Install version 0.2.0 with Ignore policy, that should work")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "0.2.0") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.2.0 is not installed")
+
+		exutil.By("8) Install version 0.2.2 with Enforce policy, that should work")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
+		clusterextension.Patch(oc, `{"spec":{"version":"0.2.2"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "0.2.2") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.2.2 is not installed")
+
+	})
+
+	// author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-High-70719-OLMv1 Upgrade non-zero major version	", func() {
+		var (
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			catalog                  = olmv1util.CatalogDescription{
+				Name:     "catalog-70719",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm70719",
+				Template: catalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:        "clusterextension-70719",
+				PackageName: "nginx70719",
+				Channel:     "candidate-v0",
+				Version:     "0.2.2",
+				Template:    clusterextensionTemplate,
+			}
+		)
+		exutil.By("1) Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("2) Install version 0.2.2")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.2.2"))
+
+		exutil.By("3) Attempt to update to version 1.0.0 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1", "version":"1.0.0"}}`)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(message, "constraints not satisfiable") {
+				e2e.Logf("status is %s", message)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.0.0 should not be installed")
+
+		exutil.By("4) change UpgradeConstraintPolicy to be Ignore, that should work")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "1.0.0") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.0.0 is not installed")
+
+		exutil.By("5) change UpgradeConstraintPolicy to be Enforce, attempt to update to version 1.0.1, that should work")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
+		clusterextension.Patch(oc, `{"spec":{"version":"1.0.1"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "1.0.1") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.0.1 is not installed")
+
+		exutil.By("6) attempt to update to version 1.2.1, that should work")
+		clusterextension.Patch(oc, `{"spec":{"version":"1.2.1"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "1.2.1") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.2.1 is not installed")
+
+		exutil.By("7) Attempt to update to version 2.0.0 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"version":"2.0.0"}}`)
+		/*
+			errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+				message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
+				if !strings.Contains(message, "installed package nginx70719 requires at least one of") {
+					e2e.Logf("status is %s", message)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(errWait, "nginx70719 2.0.0 should not be installed")
+
+			exutil.By("8) Install version 2.0.0 with Ignore policy, that should work")
+			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)*/
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "2.0.0") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx70719 2.0.0 is not installed")
+
+	})
+
+	// author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-High-70723-OLMv1 downgrade version", func() {
+		var (
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			catalog                  = olmv1util.CatalogDescription{
+				Name:     "catalog-70723",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm70723",
+				Template: catalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:        "clusterextension-70723",
+				PackageName: "nginx70723",
+				Channel:     "candidate-v2",
+				Version:     "2.2.1",
+				Template:    clusterextensionTemplate,
+			}
+		)
+		exutil.By("1) Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("2) Install version 2.2.1")
+		clusterextension.Create(oc)
+		defer clusterextension.Delete(oc)
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("2.2.1"))
+
+		exutil.By("3) Attempt to downgrade to version 2.0.0 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"version":"2.0.0"}}`)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(message, "constraints not satisfiable") {
+				e2e.Logf("message is %s", message)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx70723 2.0.0 should not be installed")
+
+		exutil.By("4) change UpgradeConstraintPolicy to be Ignore, that should work")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if !strings.Contains(clusterextension.ResolvedBundle, "2.0.0") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx70723 2.0.0 is not installed")
+	})
+
 })
