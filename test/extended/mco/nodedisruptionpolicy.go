@@ -1,25 +1,38 @@
 package mco
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/tidwall/gjson"
 )
 
 // NodeDisruptionPolicy, represents content of machineconfigurations.operator.openshift.io/cluster
 type NodeDisruptionPolicy struct {
-	Resource
+	Resource `json:"-"`
+	Files    []*Policy `json:"files,omitempty"`
+	Units    []*Policy `json:"units,omitempty"`
+	SshKey   *Policy   `json:"sshkey,omitempty"`
 }
 
 // Policy, represents content of every policy
 type Policy struct {
-	result gjson.Result
+	Name    *string  `json:"name,omitempty"`
+	Path    *string  `json:"path"`
+	Actions []Action `json:"actions"`
 }
 
 // Action, represents content of every action in policy
 type Action struct {
-	result gjson.Result
+	Type    string   `json:"type"`
+	Reload  *Service `json:"reload,omitempty"`
+	Restart *Service `json:"restart,omitempty"`
+}
+
+// Service represents service info in reload/restart
+type Service struct {
+	Name string `json:"serviceName"`
 }
 
 // NewNodeDisruptionPolicy constructor of NodeDisruptionPolicy
@@ -27,57 +40,116 @@ func NewNodeDisruptionPolicy(oc *exutil.CLI) NodeDisruptionPolicy {
 	return NodeDisruptionPolicy{Resource: *NewResource(oc.AsAdmin(), "machineconfigurations.operator.openshift.io", "cluster")}
 }
 
-// NewPolicy constructor of policy, input param is parsed gjson.Result
-func NewPolicy(json gjson.Result) Policy {
-	return Policy{result: json}
+// NewPolicyWithParams constructor of Policy
+func NewPolicyWithParams(path, name *string, actions ...Action) Policy {
+	return Policy{Path: path, Name: name, Actions: actions}
 }
 
-// NewAction constructor of action, input param is parsed gjson.Result
-func NewAction(json gjson.Result) Action {
-	return Action{result: json}
+// NewActionWithParams constrctor of Action
+func NewActionWithParams(actnType string, reload, restart *Service) Action {
+	return Action{Type: actnType, Reload: reload, Restart: restart}
 }
 
-// GetType get action type
-func (actn Action) GetType() string {
-	return actn.result.Get("type").String()
+// NewService constructor of Service
+func NewService(name string) *Service {
+	return &Service{Name: name}
 }
 
-// GetServieNameOfReload get serviceName of the reload object
-func (actn Action) GetServieNameOfReload() string {
-	return actn.result.Get("reload.serviceName").String()
+// NewReloadAction create new reload action
+func NewReloadAction(serviceName string) Action {
+	return NewActionWithParams("Reload", NewService(serviceName), nil)
 }
 
-// GetServiceNameOfRestart get serviceName of the restart object
-func (actn Action) GetServiceNameOfRestart() string {
-	return actn.result.Get("restart.serviceName").String()
+// NewRestartAction create new restart action
+func NewRestartAction(serviceName string) Action {
+	return NewActionWithParams("Restart", nil, NewService(serviceName))
 }
 
-// GetPath get file path of the policy
-func (p Policy) GetPath() string {
-	return p.result.Get("path").String()
+// NewCommonAction create new common action, only has type
+func NewCommonAction(actnType string) Action {
+	return NewActionWithParams(actnType, nil, nil)
 }
 
-// GetActions get actions of the policy
-func (p Policy) GetActions() []Action {
-	actions := []Action{}
-	for _, action := range p.result.Get("actions").Array() {
-		actions = append(actions, NewAction(action))
+// Equals deep equal policies
+func (p Policy) Equals(policy Policy) bool {
+	return reflect.DeepEqual(p, policy)
+}
+
+// IsUpdated check whether polcies in this object are synced to status
+func (ndp NodeDisruptionPolicy) IsUpdated() (bool, error) {
+	latest := NewNodeDisruptionPolicy(ndp.oc)
+	err := json.Unmarshal([]byte(ndp.GetOrFail("{.status.nodeDisruptionPolicyStatus.clusterPolicies}")), &latest)
+	if err != nil {
+		return false, err
 	}
-	return actions
-}
 
-// GetPolicies get policies by policy type e.g. files/units/sshkey
-func (ndp NodeDisruptionPolicy) GetPolicies(policyType string) []Policy {
-	policies := []Policy{}
-	// don't cache the policies, because we can get latest change when invoke this func
-	files := gjson.Get(ndp.GetOrFail("{.status.nodeDisruptionPolicyStatus.clusterPolicies}"), policyType)
-	for _, policy := range files.Array() {
-		policies = append(policies, NewPolicy(policy))
+	updatedPolices := 0
+	for _, file := range ndp.Files {
+		for _, latestFile := range latest.Files {
+			if file.Equals(*latestFile) {
+				updatedPolices += 1
+			}
+		}
 	}
-	return policies
+
+	for _, unit := range ndp.Units {
+		for _, latestUnit := range latest.Files {
+			if unit.Equals(*latestUnit) {
+				updatedPolices += 1
+			}
+		}
+	}
+
+	if ndp.SshKey != nil && ndp.SshKey.Equals(*latest.SshKey) {
+		updatedPolices += 1
+	}
+
+	currentPolicies := len(ndp.Files) + len(ndp.Units)
+	if ndp.SshKey != nil {
+		currentPolicies += 1
+	}
+
+	return updatedPolices == currentPolicies, nil
+
 }
 
 // Rollback rollback the spec to the original values, it should be called in defer block
 func (ndp NodeDisruptionPolicy) Rollback() {
 	ndp.Patch("json", fmt.Sprintf(`[{"op": "replace", "path": "/spec", "value": %s}]`, ndp.GetOrFail("{.spec}")))
+}
+
+// AddFilePolicy add file based policy
+func (ndp NodeDisruptionPolicy) AddFilePolicy(path string, actions ...Action) NodeDisruptionPolicy {
+	policy := NewPolicyWithParams(&path, nil, actions...)
+	ndp.Files = append(ndp.Files, &policy)
+	return ndp
+}
+
+// AddUnitPolicy add unit based policy
+func (ndp NodeDisruptionPolicy) AddUnitPolicy(name string, actions ...Action) NodeDisruptionPolicy {
+	policy := NewPolicyWithParams(nil, &name, actions...)
+	ndp.Units = append(ndp.Units, &policy)
+	return ndp
+}
+
+// SetSshKeyPolicy set actions for sshkey based policy
+func (ndp NodeDisruptionPolicy) SetSshKeyPolicy(actions ...Action) NodeDisruptionPolicy {
+	policy := NewPolicyWithParams(nil, nil, actions...)
+	ndp.SshKey = &policy
+	return ndp
+}
+
+// Apply apply changes to machineconfiguration/cluster
+func (ndp NodeDisruptionPolicy) Apply() error {
+	bytes, err := json.Marshal(ndp)
+	if err != nil {
+		return err
+	}
+
+	err = ndp.Patch("merge", fmt.Sprintf(`{"spec":{"nodeDisruptionPolicy":%s}}`, string(bytes)))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -165,6 +165,17 @@ const (
 
 	// TrueString string for true value
 	TrueString = "True"
+
+	// Constants for NodeDisruptionPolicy
+	NodeDisruptionPolicyActionNone         = "None"
+	NodeDisruptionPolicyActionReboot       = "Reboot"
+	NodeDisruptionPolicyActionReload       = "Reload"
+	NodeDisruptionPolicyActionRestart      = "Restart"
+	NodeDisruptionPolicyActionDrain        = "Drain"
+	NodeDisruptionPolicyActionDaemonReload = "DaemonReload"
+	NodeDisruptionPolicyFiles              = "files"
+	NodeDisruptionPolicyUnits              = "units"
+	NodeDisruptionPolicySshkey             = "sshkey"
 )
 
 var (
