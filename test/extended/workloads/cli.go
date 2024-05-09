@@ -1291,7 +1291,7 @@ var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("MicroShiftBoth-Author:yinzhou-High-12387-Check race condition in port forward connection handling logic [Serial]", func() {
+	g.It("Author:yinzhou-High-12387-Check race condition in port forward connection handling logic [Serial]", func() {
 		exutil.By("Check if a cluster is Microshift or OCP")
 		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
