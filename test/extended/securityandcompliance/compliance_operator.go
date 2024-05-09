@@ -1751,9 +1751,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		nodeName := getOneRhcosWorkerNodeName(oc)
 		defer func() {
 			cleanupObjects(oc, objectTableRef{"compliancesuite", subD.namespace, csuiteD.name})
-			_, _ = exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", "/etc/securetty")
+			_, _ = exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"--to-namespace=" + subD.namespace}, "rm", "-rf", "/etc/securetty")
 		}()
-		_, err := exutil.DebugNodeWithChroot(oc, nodeName, "touch", "/etc/securetty")
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"--to-namespace=" + subD.namespace}, "touch", "/etc/securetty")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// adding label to rhcos worker node to skip rhel worker node if any
 		g.By("Label all rhcos worker nodes as wscan !!!\n")
