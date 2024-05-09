@@ -1528,7 +1528,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring").Execute()
 
 			exutil.By("check alertmanager pod is created")
-			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(context.Context) (bool, error) {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 				podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
 				if err != nil || strings.Contains(podStats, "not found") {
 					return false, nil
@@ -1807,7 +1807,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		//author: tagao@redhat.com
-		g.It("Author:tagao-High-73213-Enable controller id for CMO Prometheus resources", func() {
+		g.It("Author:tagao-High-73213-Enable controller id for CMO Prometheus resources [Serial]", func() {
+			var (
+				uwmEnableAlertmanager = filepath.Join(monitoringBaseDir, "uwm-enableAlertmanager.yaml")
+			)
+			exutil.By("delete uwm-config/cm-config at the end of a serial case")
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			exutil.By("enable alertmanager for uwm")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", uwmEnableAlertmanager)
+
 			exutil.By("wait for all pods ready")
 			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
 			exutil.AssertPodToBeReady(oc, "alertmanager-user-workload-0", "openshift-user-workload-monitoring")

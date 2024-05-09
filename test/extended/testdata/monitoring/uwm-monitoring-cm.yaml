@@ -32,5 +32,4 @@ data:
         apiVersion: v2
         staticConfigs:
         - alertmanager-operated.openshift-user-workload-monitoring.svc:9093
-    alertmanager:
-      enabled: true
+
