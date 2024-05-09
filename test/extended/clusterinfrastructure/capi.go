@@ -148,5 +148,18 @@ ipaddresses.ipam.cluster.x-k8s.io`
 			o.Expect(crds).NotTo(o.ContainSubstring("not found"))
 		}
 	})
-
+	// author: miyadav@redhat.com
+	g.It("NonHyperShiftHOST-Author:miyadav-Critical-73620-[CAPI] terminationMessagePolicy should be FallbackToLogsOnError", func() {
+		skipForCAPINotExist(oc)
+		podNames, err := exutil.GetAllPods(oc, "openshift-cluster-api")
+		if err != nil {
+			g.Fail("cluster-api pods seems unstable")
+		}
+		g.By("Get pod yaml and check terminationMessagePolicy")
+		for _, podName := range podNames {
+			terminationMessagePolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", podName, "-n", "openshift-cluster-api", "-o=jsonpath={.spec.containers[0].terminationMessagePolicy}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(terminationMessagePolicy).To(o.ContainSubstring("FallbackToLogsOnError"))
+		}
+	})
 })
