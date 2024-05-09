@@ -492,8 +492,8 @@ func rapidastScan(oc *exutil.CLI, ns, componentName, apiGroupName, configFile, p
 
 	riskHigh, riskMedium := getRapidastRiskNumberFromLogs(podLogs)
 	e2e.Logf("RapiDAST scan summary: [High risk alerts=%v] [Medium risk alerts=%v]", riskHigh, riskMedium)
+	syncRapidastResultsToArtifactDir(oc, ns, componentName, pvcName)
 	if riskHigh > 0 || riskMedium > 0 {
-		syncRapidastResultsToArtifactDir(oc, ns, componentName, pvcName)
 		e2e.Failf("High/Medium risk alerts found! Please check the report and connect ProdSec Team if necessary!")
 	}
 }
