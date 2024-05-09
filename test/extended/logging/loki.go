@@ -189,9 +189,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if len(objectStorage) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
 			}
-			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
-			}
 
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -355,9 +352,6 @@ spec:
 			s := getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
-			}
-			if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")

@@ -156,12 +156,8 @@ func createIAMRoleOnAWS(iamClient *iam.Client, trustPolicy string, roleName stri
 		AssumeRolePolicyDocument: aws.String(trustPolicy),
 		RoleName:                 aws.String(roleName),
 	})
-	if err != nil {
-		e2e.Logf("Couldn't create role %v. Here's why: %v\n", roleName, err)
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(err).NotTo(o.HaveOccurred(), "Couldn't create role %v", roleName)
 	roleArn := aws.ToString(result.Role.Arn)
-	e2e.Logf("The created role ARN is: %v\n", roleArn)
 
 	//Adding managed permission policy if provided
 	if policyArn != "" {
@@ -221,10 +217,11 @@ func deleteIAMroleonAWS(roleName string) {
 }
 
 // Create role_arn required for Loki deployment on STS clusters
-func createIAMRoleForLokiSTSDeployment(oc *exutil.CLI, lokiNamespace string, lokiStackName string, roleName string) string {
+func createIAMRoleForLokiSTSDeployment(oc *exutil.CLI, lokiNamespace, lokiStackName, roleName string) string {
 	iamClient := newIamClient()
 	stsClient := newStsClient()
-	oidcName := getOIDC(oc)
+	oidcName, e := getOIDC(oc)
+	o.Expect(e).NotTo(o.HaveOccurred())
 	AWSAccountID, _ := getAwsAccount(stsClient)
 	policyArn := "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 
@@ -568,20 +565,8 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 	e2e.Logf("Init cloudwatchSpec done ")
 }
 
-func (cw *cloudwatchSpec) setGroupType(groupType string) {
-	cw.groupType = groupType
-}
-
 func (cw *cloudwatchSpec) setGroupPrefix(groupPrefix string) {
 	cw.groupPrefix = groupPrefix
-}
-
-func (cw *cloudwatchSpec) setLogTypes(logs ...string) {
-	cw.logTypes = append(cw.logTypes, logs...)
-}
-
-func (cw *cloudwatchSpec) setSecretNamespace(ns string) {
-	cw.secretNamespace = ns
 }
 
 func (cw *cloudwatchSpec) newCloudwatchClient() {
@@ -599,7 +584,8 @@ func (cw *cloudwatchSpec) newIamClient() {
 }
 
 func (cw *cloudwatchSpec) newIamRole(oc *exutil.CLI) {
-	oidcProvider := getOIDC(oc)
+	oidcProvider, e := getOIDC(oc)
+	o.Expect(e).NotTo(o.HaveOccurred())
 	stsClient := newStsClient()
 	accountID, _ := getAwsAccount(stsClient)
 	trustPolicy := `{
@@ -677,7 +663,7 @@ func (cw *cloudwatchSpec) createStsSecret(oc *exutil.CLI) error {
 	case "CredentialsCreate":
 		credentialsData := `[default]
 sts_regional_endpoints = regional
-role_arn = %s 
+role_arn = %s
 web_identity_token_file = /var/run/secrets/openshift/serviceaccount/token`
 		credentialsData = fmt.Sprintf(credentialsData, cw.awsRoleArn)
 		return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=credentials="+credentialsData, "-n", cw.secretNamespace).Execute()

@@ -21,6 +21,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"google.golang.org/api/cloudresourcemanager/v1"
+	"google.golang.org/api/iam/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -248,6 +250,249 @@ func createSecretForMinIOBucket(oc *exutil.CLI, bucketName, secretName, ns, minI
 
 	endpoint := "http://minio." + minIONS + ".svc:9000"
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/access_key_id", "--from-file=access_key_secret="+dirname+"/secret_access_key", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
+}
+
+func getGCPProjectNumber(projectID string) (string, error) {
+	crmService, err := cloudresourcemanager.NewService(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	project, err := crmService.Projects.Get(projectID).Do()
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(project.ProjectNumber, 10), nil
+}
+
+func getGCPAudience(providerName string) (string, error) {
+	ctx := context.Background()
+	service, err := iam.NewService(ctx)
+
+	if err != nil {
+		return "", fmt.Errorf("iam.NewService: %w", err)
+	}
+	audience, err := service.Projects.Locations.WorkloadIdentityPools.Providers.Get(providerName).Do()
+	if err != nil {
+		return "", fmt.Errorf("can't get audience: %v", err)
+	}
+	return audience.Oidc.AllowedAudiences[0], nil
+
+}
+
+func generateServiceAccountNameForGCS(clusterName string) string {
+	name := clusterName + "-logging-" + getRandomString()
+	return name
+}
+
+func createServiceAccountOnGCP(projectID, name string) (*iam.ServiceAccount, error) {
+	e2e.Logf("start to creating serviceaccount on GCP")
+	ctx := context.Background()
+	service, err := iam.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("iam.NewService: %w", err)
+	}
+
+	request := &iam.CreateServiceAccountRequest{
+		AccountId: name,
+		ServiceAccount: &iam.ServiceAccount{
+			DisplayName: "Service Account for " + name,
+		},
+	}
+	account, err := service.Projects.ServiceAccounts.Create("projects/"+projectID, request).Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create serviceaccount: %w", err)
+	}
+	e2e.Logf("Created service account: %v", account)
+	return account, nil
+}
+
+// ref: https://github.com/GoogleCloudPlatform/golang-samples/blob/main/iam/quickstart/quickstart.go
+func addBinding(projectID, member, role string) error {
+	crmService, err := cloudresourcemanager.NewService(context.Background())
+	if err != nil {
+		return fmt.Errorf("cloudresourcemanager.NewService: %v", err)
+	}
+
+	policy, err := getPolicy(crmService, projectID)
+	if err != nil {
+		return fmt.Errorf("error getting policy: %v", err)
+	}
+
+	// Find the policy binding for role. Only one binding can have the role.
+	var binding *cloudresourcemanager.Binding
+	for _, b := range policy.Bindings {
+		if b.Role == role {
+			binding = b
+			break
+		}
+	}
+
+	if binding != nil {
+		// If the binding exists, adds the member to the binding
+		binding.Members = append(binding.Members, member)
+	} else {
+		// If the binding does not exist, adds a new binding to the policy
+		binding = &cloudresourcemanager.Binding{
+			Role:    role,
+			Members: []string{member},
+		}
+		policy.Bindings = append(policy.Bindings, binding)
+	}
+	return setPolicy(crmService, projectID, policy)
+}
+
+// removeMember removes the member from the project's IAM policy
+func removeMember(projectID, member, role string) error {
+	crmService, err := cloudresourcemanager.NewService(context.Background())
+	if err != nil {
+		return fmt.Errorf("cloudresourcemanager.NewService: %v", err)
+	}
+	policy, err := getPolicy(crmService, projectID)
+	if err != nil {
+		return fmt.Errorf("error getting policy: %v", err)
+	}
+	// Find the policy binding for role. Only one binding can have the role.
+	var binding *cloudresourcemanager.Binding
+	var bindingIndex int
+	for i, b := range policy.Bindings {
+		if b.Role == role {
+			binding = b
+			bindingIndex = i
+			break
+		}
+	}
+
+	if len(binding.Members) == 1 && binding.Members[0] == member {
+		// If the member is the only member in the binding, removes the binding
+		last := len(policy.Bindings) - 1
+		policy.Bindings[bindingIndex] = policy.Bindings[last]
+		policy.Bindings = policy.Bindings[:last]
+	} else {
+		// If there is more than one member in the binding, removes the member
+		var memberIndex int
+		var exist bool
+		for i, mm := range binding.Members {
+			if mm == member {
+				memberIndex = i
+				exist = true
+				break
+			}
+		}
+		if exist {
+			last := len(policy.Bindings[bindingIndex].Members) - 1
+			binding.Members[memberIndex] = binding.Members[last]
+			binding.Members = binding.Members[:last]
+		}
+	}
+
+	return setPolicy(crmService, projectID, policy)
+}
+
+// getPolicy gets the project's IAM policy
+func getPolicy(crmService *cloudresourcemanager.Service, projectID string) (*cloudresourcemanager.Policy, error) {
+	request := new(cloudresourcemanager.GetIamPolicyRequest)
+	policy, err := crmService.Projects.GetIamPolicy(projectID, request).Do()
+	if err != nil {
+		return nil, err
+	}
+	return policy, nil
+}
+
+// setPolicy sets the project's IAM policy
+func setPolicy(crmService *cloudresourcemanager.Service, projectID string, policy *cloudresourcemanager.Policy) error {
+	request := new(cloudresourcemanager.SetIamPolicyRequest)
+	request.Policy = policy
+	_, err := crmService.Projects.SetIamPolicy(projectID, request).Do()
+	return err
+}
+
+func grantPermissionsToGCPServiceAccount(poolID, projectID, projectNumber, lokiNS, lokiStackName, serviceAccountEmail string) error {
+	gcsRoles := []string{
+		"roles/iam.workloadIdentityUser",
+		"roles/storage.objectAdmin",
+	}
+	subjects := []string{
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName,
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName + "-ruler",
+	}
+
+	for _, role := range gcsRoles {
+		err := addBinding(projectID, "serviceAccount:"+serviceAccountEmail, role)
+		if err != nil {
+			return fmt.Errorf("error adding role %s to %s: %v", role, serviceAccountEmail, err)
+		}
+		for _, sub := range subjects {
+			err := addBinding(projectID, "principal://iam.googleapis.com/projects/"+projectNumber+"/locations/global/workloadIdentityPools/"+poolID+"/subject/"+sub, role)
+			if err != nil {
+				return fmt.Errorf("error adding role %s to %s: %v", role, sub, err)
+			}
+		}
+	}
+	return nil
+}
+
+func removePermissionsFromGCPServiceAccount(poolID, projectID, projectNumber, lokiNS, lokiStackName, serviceAccountEmail string) error {
+	gcsRoles := []string{
+		"roles/iam.workloadIdentityUser",
+		"roles/storage.objectAdmin",
+	}
+	subjects := []string{
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName,
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName + "-ruler",
+	}
+
+	for _, role := range gcsRoles {
+		err := removeMember(projectID, "serviceAccount:"+serviceAccountEmail, role)
+		if err != nil {
+			return fmt.Errorf("error removing role %s from %s: %v", role, serviceAccountEmail, err)
+		}
+		for _, sub := range subjects {
+			err := removeMember(projectID, "principal://iam.googleapis.com/projects/"+projectNumber+"/locations/global/workloadIdentityPools/"+poolID+"/subject/"+sub, role)
+			if err != nil {
+				return fmt.Errorf("error removing role %s from %s: %v", role, sub, err)
+			}
+		}
+	}
+	return nil
+}
+
+func removeServiceAccountFromGCP(name string) error {
+	ctx := context.Background()
+	service, err := iam.NewService(ctx)
+	if err != nil {
+		return fmt.Errorf("iam.NewService: %w", err)
+	}
+	_, err = service.Projects.ServiceAccounts.Delete(name).Do()
+	if err != nil {
+		return fmt.Errorf("can't remove service account: %v", err)
+	}
+	return nil
+}
+
+func createSecretForGCSBucketWithSTS(oc *exutil.CLI, projectNumber, poolID, serviceAccountEmail, ns, name, bucketName string) error {
+	providerName := "projects/" + projectNumber + "/locations/global/workloadIdentityPools/" + poolID + "/providers/" + poolID
+	audience, err := getGCPAudience(providerName)
+	if err != nil {
+		return err
+	}
+	key := `{
+		"universe_domain": "googleapis.com",
+		"type": "external_account",
+		"audience": "//iam.googleapis.com/` + providerName + `",
+		"subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+		"token_url": "https://sts.googleapis.com/v1/token",
+		"credential_source": {
+			"file": "/var/run/secrets/storage/serviceaccount/token",
+			"format": {
+				"type": "text"
+			}
+		},
+		"service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/` + serviceAccountEmail + `:generateAccessToken"
+	}`
+
+	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, name,
+		"--from-literal=bucketname="+bucketName, "--from-literal=audience="+audience, "--from-literal=key.json="+key).Execute()
 }
 
 // creates a secret for Loki to connect to gcs bucket
@@ -481,7 +726,31 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 			if err != nil {
 				return err
 			}
-			err = createSecretForGCSBucket(oc, l.bucketName, l.storageSecret, l.namespace)
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				clusterName := getInfrastructureName(oc)
+				gcsSAName := generateServiceAccountNameForGCS(clusterName)
+				os.Setenv("LOGGING_GCS_SERVICE_ACCOUNT_NAME", gcsSAName)
+				projectNumber, err1 := getGCPProjectNumber(projectID)
+				if err1 != nil {
+					return fmt.Errorf("can't get GCP project number: %v", err1)
+				}
+				poolID, err2 := getPoolID(oc)
+				if err2 != nil {
+					return fmt.Errorf("can't get pool ID: %v", err2)
+				}
+				sa, err3 := createServiceAccountOnGCP(projectID, gcsSAName)
+				if err3 != nil {
+					return fmt.Errorf("can't create service account: %v", err3)
+				}
+				os.Setenv("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL", sa.Email)
+				err4 := grantPermissionsToGCPServiceAccount(poolID, projectID, projectNumber, l.namespace, l.name, sa.Email)
+				if err4 != nil {
+					return fmt.Errorf("can't add roles to the serviceaccount: %v", err4)
+				}
+				err = createSecretForGCSBucketWithSTS(oc, projectNumber, poolID, sa.Email, l.namespace, l.storageSecret, l.bucketName)
+			} else {
+				err = createSecretForGCSBucket(oc, l.bucketName, l.storageSecret, l.namespace)
+			}
 		}
 	case "swift":
 		{
@@ -616,6 +885,28 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 		}
 	case "gcs":
 		{
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				sa := os.Getenv("LOGGING_GCS_SERVICE_ACCOUNT_NAME")
+				if sa == "" {
+					e2e.Logf("LOGGING_GCS_SERVICE_ACCOUNT_NAME is not set, no need to delete the serviceaccount")
+				} else {
+					os.Unsetenv("LOGGING_GCS_SERVICE_ACCOUNT_NAME")
+					email := os.Getenv("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL")
+					if email == "" {
+						e2e.Logf("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL is not set, no need to delete the policies")
+					} else {
+						os.Unsetenv("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL")
+						projectID, errGetID := exutil.GetGcpProjectID(oc)
+						o.Expect(errGetID).NotTo(o.HaveOccurred())
+						projectNumber, _ := getGCPProjectNumber(projectID)
+						poolID, _ := getPoolID(oc)
+						err = removePermissionsFromGCPServiceAccount(poolID, projectID, projectNumber, l.namespace, l.name, email)
+						o.Expect(err).NotTo(o.HaveOccurred())
+						err = removeServiceAccountFromGCP("projects/" + projectID + "/serviceAccounts/" + email)
+						o.Expect(err).NotTo(o.HaveOccurred())
+					}
+				}
+			}
 			err = exutil.DeleteGCSBucket(l.bucketName)
 		}
 	case "swift":
@@ -1046,21 +1337,10 @@ func compareClusterResources(oc *exutil.CLI, cpu, memory string) bool {
 // supportedPlatforms the platform types which the case can be executed on, if it's empty, then skip this check
 func validateInfraForLoki(oc *exutil.CLI, supportedPlatforms ...string) bool {
 	currentPlatform := exutil.CheckPlatform(oc)
-	if currentPlatform == "aws" {
+	if currentPlatform == "azure" && exutil.IsWorkloadIdentityCluster(oc) {
 		// skip the case on sts clusters. Todo use sts secret once LOG-4540 is done
-		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			e2e.Logf("Can not find aws-creds, the case will be skipped. That may be a sts enabled cluster.")
-			return false
-		}
-	}
-	if currentPlatform == "azure" {
-		// skip the case on sts clusters. Todo use sts secret once LOG-4540 is done
-		_, _, err := exutil.GetAzureStorageAccountFromCluster(oc)
-		if err != nil {
-			e2e.Logf("Can not find azure creds, the case will be skipped. That may be a sts enabled cluster.")
-			return false
-		}
+		e2e.Logf("Skip the case on sts clusters")
+		return false
 	}
 	if len(supportedPlatforms) > 0 {
 		return contain(supportedPlatforms, currentPlatform)
@@ -1071,27 +1351,7 @@ func validateInfraForLoki(oc *exutil.CLI, supportedPlatforms ...string) bool {
 // validateInfraAndResourcesForLoki checks cluster remaning resources and platform type
 // supportedPlatforms the platform types which the case can be executed on, if it's empty, then skip this check
 func validateInfraAndResourcesForLoki(oc *exutil.CLI, reqMemory, reqCPU string, supportedPlatforms ...string) bool {
-	currentPlatform := exutil.CheckPlatform(oc)
-	if currentPlatform == "aws" {
-		// skip the case on sts clusters. Todo use sts secret once LOG-4540 is done
-		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			e2e.Logf("Can not find aws-creds, the case will be skipped. That may be a sts enabled cluster.")
-			return false
-		}
-	}
-	if currentPlatform == "azure" {
-		// skip the case on sts clusters. Todo use sts secret once LOG-4540 is done
-		_, _, err := exutil.GetAzureStorageAccountFromCluster(oc)
-		if err != nil {
-			e2e.Logf("Can not find azure creds, the case will be skipped. That may be a sts enabled cluster.")
-			return false
-		}
-	}
-	if len(supportedPlatforms) > 0 {
-		return contain(supportedPlatforms, currentPlatform) && compareClusterResources(oc, reqCPU, reqMemory)
-	}
-	return compareClusterResources(oc, reqCPU, reqMemory)
+	return validateInfraForLoki(oc, supportedPlatforms...) && compareClusterResources(oc, reqCPU, reqMemory)
 }
 
 type externalLoki struct {

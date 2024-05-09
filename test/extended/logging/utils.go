@@ -2742,12 +2742,22 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 }
 
 // Get OIDC provider for the cluster
-func getOIDC(oc *exutil.CLI) string {
+func getOIDC(oc *exutil.CLI) (string, error) {
 	oidc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication.config", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	oidc = strings.TrimPrefix(oidc, "https://")
-	e2e.Logf("The OIDC of STS cluster is: %v\n", oidc)
-	return oidc
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(oidc, "https://"), nil
+}
+
+func getPoolID(oc *exutil.CLI) (string, error) {
+	// pool_id="$(oc get authentication cluster -o json | jq -r .spec.serviceAccountIssuer | sed 's/.*\/\([^\/]*\)-oidc/\1/')"
+	issuer, err := getOIDC(oc)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Split(strings.Split(issuer, "/")[1], "-oidc")[0], nil
 }
 
 type azureMonitorLog struct {

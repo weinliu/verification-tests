@@ -53,9 +53,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	g.It("WRS-Author:qitang-LEVEL0-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
-		if !validateInfraAndResourcesForLoki(oc, "10Gi", "6") {
-			g.Skip("Current cluster doesn't have sufficient cpu/memory for this test!")
-		}
 		s := getStorageType(oc)
 		sc, err := getStorageClassName(oc)
 		if err != nil || len(sc) == 0 {
