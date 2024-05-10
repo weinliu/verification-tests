@@ -544,15 +544,41 @@ func createOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGr
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Create subscription for above catalogsource !!!")
-	subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
-		"OPERATORNAME="+subD.operatorPackage, "SOURCENAME="+subD.catalogSourceName, "SOURCENAMESPACE="+subD.catalogSourceNamespace, "STARTINGCSV="+subD.startingCSV, "-n", subD.namespace).OutputToFile(getRandomString() + "sub.json")
-	e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
+	createSubscription(oc, subD)
 
 	msg, err = subscriptionIsFinished(oc, subD)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("err %v, msg %v", err, msg)
+}
+
+// Get a random number of int64 type [m,n], n > m
+func getRandomNum(m int64, n int64) int64 {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Int63n(n-m+1) + m
+}
+
+// create subscription
+func createSubscription(oc *exutil.CLI, subD subscriptionDescription) {
+	err := wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+		output, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subD.subName, "-n", subD.namespace).Output()
+		if errGet == nil {
+			return true, nil
+		}
+		if errGet != nil && (strings.Contains(output, "NotFound")) {
+			randomExpandInt64 := getRandomNum(3, 8)
+			time.Sleep(time.Duration(randomExpandInt64) * time.Second)
+			return false, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		subFile, errApply := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
+			"OPERATORNAME="+subD.operatorPackage, "SOURCENAME="+subD.catalogSourceName, "SOURCENAMESPACE="+subD.catalogSourceNamespace, "STARTINGCSV="+subD.startingCSV, "-n", subD.namespace).OutputToFile(getRandomString() + "sub.json")
+		e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
+		o.Expect(errApply).NotTo(o.HaveOccurred())
+		msg, errCreate := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
+		e2e.Logf("err %v, msg %v", errCreate, msg)
+	}
 }
 
 func createFileIntegrityOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {

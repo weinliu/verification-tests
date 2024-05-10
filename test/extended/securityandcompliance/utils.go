@@ -51,30 +51,8 @@ type podWithProfile struct {
 }
 
 func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
-	g.By("Create namespace security-profiles-operator !!!")
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", subD.namespace).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "openshift.io/cluster-monitoring=true", "--overwrite").Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	g.By("Create operatorGroup !!!")
-	ogFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogD.template, "-p", "NAME="+ogD.name, "NAMESPACE="+ogD.namespace, "-n", ogD.namespace).OutputToFile(getRandomString() + "og.json")
-	e2e.Logf("Created the operator-group yaml %s, %v", ogFile, err)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	g.By("Create subscription for above catalogsource !!!")
-	subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
-		"OPERATORNAME="+subD.operatorPackage, "SOURCENAME="+subD.catalogSourceName, "SOURCENAMESPACE="+subD.catalogSourceNamespace, "STARTINGCSV="+subD.startingCSV, "-n", subD.namespace).OutputToFile(getRandomString() + "sub.json")
-	e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	msg, err = subscriptionIsFinished(oc, subD)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("err %v, msg %v", err, msg)
+	g.By("Install security profiles operator !!!")
+	createOperator(oc, subD, ogD)
 
 	g.By("Check Security Profile Operator &webhook &spod pods are in running state !!!")
 	checkReadyPodCountOfDeployment(oc, "security-profiles-operator", subD.namespace, 3)
@@ -86,7 +64,8 @@ func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription,
 
 func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg string, err error) {
 	var (
-		csvName string
+		csvName   string
+		subStatus string
 	)
 
 	g.By("Check the operator is AtLatestKnown !!!")
@@ -100,8 +79,12 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 	// Expose more info when sub status is not AtLatestKnown
 	if errCheck != nil {
 		e2e.Logf("The result of \"oc get sub %s -n %s -o=jsonpath={.status.state}\" is: %s", sub.subName, sub.namespace, msg)
-		subStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
+		subStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
 		e2e.Logf("The result of \"oc get sub %s -n %s -o=jsonpath={.status}\" is: %s", sub.subName, sub.namespace, subStatus)
+	}
+	// skip test for known OLM bug https://issues.redhat.com/browse/OCPBUGS-19046. More details seen from https://access.redhat.com/solutions/6603001
+	if (errCheck != nil) && (strings.Contains(subStatus, "exists and is not referenced by a subscription")) {
+		g.Skip("Skip test due to known OLM bug ")
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
 
