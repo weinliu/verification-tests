@@ -12,8 +12,21 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 
 	defer g.GinkgoRecover()
 
+	const (
+		LogPrefix                           = `Performing post config change action: `
+		LogPerformingPostConfigNone         = LogPrefix + "None"
+		LogPerformingPostConfigReload       = LogPrefix + "Reload"
+		LogPerformingPostConfigRestart      = LogPrefix + "Restart"
+		LogPerformingPostConfigDaemonReload = LogPrefix + "DaemonReload"
+		LogTemplateForUnitAction            = `%s service %s successfully`
+	)
+
 	var (
-		oc = exutil.NewCLI("mco-nodedisruptionpolicy", exutil.KubeConfigPath())
+		oc                              = exutil.NewCLI("mco-nodedisruptionpolicy", exutil.KubeConfigPath())
+		TestService                     = "crio.service"
+		LogServiceReloadedSuccessfully  = fmt.Sprintf(LogTemplateForUnitAction, TestService, "reloaded")
+		LogServiceRestartedSuccessfully = fmt.Sprintf(LogTemplateForUnitAction, TestService, "restarted")
+		LogDaemonReloadedSuccessfully   = fmt.Sprintf(LogTemplateForUnitAction, "daemon-reload", "reloaded")
 	)
 
 	g.JustBeforeEach(func() {
@@ -28,7 +41,7 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 	})
 
 	g.It("Author:rioliu-NonPreRelease-High-73368-NodeDisruptionPolicy files with action None [Disruptive]", func() {
-		testFileBasedPolicy(oc, "73368", []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}, []string{`Performing post config change action: None`})
+		testFileBasedPolicy(oc, "73368", []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}, []string{LogPerformingPostConfigNone})
 	})
 
 	g.It("Author:rioliu-NonPreRelease-Longduration-High-73374-NodeDisruptionPolicy files with action Reboot [Disruptive]", func() {
@@ -36,15 +49,15 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 	})
 
 	g.It("Author:rioliu-NonPreRelease-High-73375-NodeDisruptionPolicy files with action Restart [Disruptive]", func() {
-		testFileBasedPolicy(oc, "73375", []Action{NewRestartAction("crio.service")}, []string{`Performing post config change action: Restart`, `crio.service service restarted successfully`})
+		testFileBasedPolicy(oc, "73375", []Action{NewRestartAction(TestService)}, []string{LogPerformingPostConfigRestart, LogServiceRestartedSuccessfully})
 	})
 
 	g.It("Author:rioliu-NonPreRelease-High-73378-NodeDisruptionPolicy files with action Reload [Disruptive]", func() {
-		testFileBasedPolicy(oc, "73378", []Action{NewReloadAction("crio.service")}, []string{`Performing post config change action: Reload`, `crio.service service reloaded successfully`})
+		testFileBasedPolicy(oc, "73378", []Action{NewReloadAction(TestService)}, []string{LogPerformingPostConfigReload, LogServiceReloadedSuccessfully})
 	})
 
 	g.It("Author:rioliu-NonPreRelease-High-73385-NodeDisruptionPolicy files with action DaemonReload [Disruptive]", func() {
-		testFileBasedPolicy(oc, "73385", []Action{NewCommonAction(NodeDisruptionPolicyActionDaemonReload)}, []string{`Performing post config change action: DaemonReload`, `daemon-reload service reloaded successfully`})
+		testFileBasedPolicy(oc, "73385", []Action{NewCommonAction(NodeDisruptionPolicyActionDaemonReload)}, []string{LogPerformingPostConfigDaemonReload, LogDaemonReloadedSuccessfully})
 	})
 
 	g.It("Author:rioliu-NonPreRelease-Longduration-High-73388-NodeDisruptionPolicy files with action Drain [Disruptive]", func() {
@@ -55,15 +68,39 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		testFileBasedPolicy(oc, "73389", []Action{
 			NewCommonAction(NodeDisruptionPolicyActionDrain),
 			NewCommonAction(NodeDisruptionPolicyActionDaemonReload),
-			NewReloadAction("crio.service"),
-			NewRestartAction("crio.service"),
+			NewReloadAction(TestService),
+			NewRestartAction(TestService),
 		}, []string{
-			`Performing post config change action: Reload`,
-			`crio.service service reloaded successfully`,
-			`Performing post config change action: Restart`,
-			`crio.service service restarted successfully`,
-			`Performing post config change action: DaemonReload`,
-			`daemon-reload service reloaded successfully`,
+			LogPerformingPostConfigReload,
+			LogServiceReloadedSuccessfully,
+			LogPerformingPostConfigRestart,
+			LogServiceRestartedSuccessfully,
+			LogPerformingPostConfigDaemonReload,
+			LogDaemonReloadedSuccessfully,
+		})
+	})
+
+	g.It("Author:rioliu-NonPreRelease-High-73414-NodeDisruptionPolicy units with action None [Disruptive]", func() {
+		testUnitBasedPolicy(oc, "73414", []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}, []string{LogPerformingPostConfigNone})
+	})
+
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73413-NodeDisruptionPolicy units with action Reboot [Disruptive]", func() {
+		testUnitBasedPolicy(oc, "73413", []Action{NewCommonAction(NodeDisruptionPolicyActionReboot)}, []string{})
+	})
+
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73411-NodeDisruptionPolicy units with multiple actions [Disruptive]", func() {
+		testUnitBasedPolicy(oc, "73411", []Action{
+			NewCommonAction(NodeDisruptionPolicyActionDrain),
+			NewCommonAction(NodeDisruptionPolicyActionDaemonReload),
+			NewReloadAction(TestService),
+			NewRestartAction(TestService),
+		}, []string{
+			LogPerformingPostConfigReload,
+			LogServiceReloadedSuccessfully,
+			LogPerformingPostConfigRestart,
+			LogServiceRestartedSuccessfully,
+			LogPerformingPostConfigDaemonReload,
+			LogDaemonReloadedSuccessfully,
 		})
 	})
 
@@ -76,7 +113,7 @@ func testFileBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expect
 		mcName     = fmt.Sprintf("create-test-file-%s-%s", caseID, exutil.GetRandomString())
 		filePath   = fmt.Sprintf("/etc/test-file-policy-%s-%s", caseID, exutil.GetRandomString())
 		fileConfig = getURLEncodedFileConfig(filePath, fmt.Sprintf("test-%s", caseID), "420")
-		workerNode = NewNodeList(oc.AsAdmin()).GetAllCoreOsWokerNodesOrFail()[0]
+		workerNode = NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
 		workerMcp  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 	)
 
@@ -91,6 +128,41 @@ func testFileBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expect
 	exutil.By("Create a test file on worker node")
 	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
 	mc.SetParams(fmt.Sprintf("FILES=[%s]", fileConfig))
+	mc.skipWaitForMcp = true
+	defer mc.delete()
+	mc.create()
+
+	// check MCN for reboot and drain
+	checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	workerMcp.waitForComplete()
+	// check MCD logs if expectedLogs is not empty
+	checkMachineConfigDaemonLog(workerNode, expectedLogs)
+}
+
+// test func for unit based policy test cases
+func testUnitBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expectedLogs []string) {
+
+	var (
+		unitName    = fmt.Sprintf("test-ndp-%s.service", exutil.GetRandomString())
+		unitContent = "[Unit]\nDescription=test service for disruption policy"
+		unitEnabled = false
+		unitConfig  = getSingleUnitConfig(unitName, unitEnabled, unitContent)
+		mcName      = fmt.Sprintf("create-test-unit-%s-%s", caseID, exutil.GetRandomString())
+		workerNode  = NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
+		workerMcp   = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+	)
+
+	exutil.By("Patch ManchineConfiguration cluster")
+	ndp := NewNodeDisruptionPolicy(oc)
+	defer ndp.Rollback()
+	o.Expect(ndp.AddUnitPolicy(unitName, actions...).Apply()).To(o.Succeed(), "Patch ManchineConfiguration failed")
+
+	exutil.By("Check the nodeDisruptionPolicyStatus, new change should be merged")
+	o.Expect(ndp.IsUpdated()).To(o.BeTrue(), "New policies are not merged properly")
+
+	exutil.By("Create a test unit on worker node")
+	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+	mc.SetParams(fmt.Sprintf("UNITS=[%s]", unitConfig))
 	mc.skipWaitForMcp = true
 	defer mc.delete()
 	mc.create()

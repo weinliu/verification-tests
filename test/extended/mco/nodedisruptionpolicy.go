@@ -13,7 +13,7 @@ type NodeDisruptionPolicy struct {
 	Resource `json:"-"`
 	Files    []*Policy `json:"files,omitempty"`
 	Units    []*Policy `json:"units,omitempty"`
-	SshKey   *Policy   `json:"sshkey,omitempty"`
+	SSHKey   *Policy   `json:"sshkey,omitempty"`
 }
 
 // Policy, represents content of every policy
@@ -87,26 +87,26 @@ func (ndp NodeDisruptionPolicy) IsUpdated() (bool, error) {
 	for _, file := range ndp.Files {
 		for _, latestFile := range latest.Files {
 			if file.Equals(*latestFile) {
-				updatedPolices += 1
+				updatedPolices++
 			}
 		}
 	}
 
 	for _, unit := range ndp.Units {
-		for _, latestUnit := range latest.Files {
+		for _, latestUnit := range latest.Units {
 			if unit.Equals(*latestUnit) {
-				updatedPolices += 1
+				updatedPolices++
 			}
 		}
 	}
 
-	if ndp.SshKey != nil && ndp.SshKey.Equals(*latest.SshKey) {
-		updatedPolices += 1
+	if ndp.SSHKey != nil && ndp.SSHKey.Equals(*latest.SSHKey) {
+		updatedPolices++
 	}
 
 	currentPolicies := len(ndp.Files) + len(ndp.Units)
-	if ndp.SshKey != nil {
-		currentPolicies += 1
+	if ndp.SSHKey != nil {
+		currentPolicies++
 	}
 
 	return updatedPolices == currentPolicies, nil
@@ -132,10 +132,10 @@ func (ndp NodeDisruptionPolicy) AddUnitPolicy(name string, actions ...Action) No
 	return ndp
 }
 
-// SetSshKeyPolicy set actions for sshkey based policy
-func (ndp NodeDisruptionPolicy) SetSshKeyPolicy(actions ...Action) NodeDisruptionPolicy {
+// SetSSHKeyPolicy set actions for sshkey based policy
+func (ndp NodeDisruptionPolicy) SetSSHKeyPolicy(actions ...Action) NodeDisruptionPolicy {
 	policy := NewPolicyWithParams(nil, nil, actions...)
-	ndp.SshKey = &policy
+	ndp.SSHKey = &policy
 	return ndp
 }
 
