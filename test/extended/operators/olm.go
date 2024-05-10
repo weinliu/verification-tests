@@ -421,7 +421,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-63001-workload annotation missing from platform operator deployments", func() {
+	g.It("Author:jiazha-DEPRECATED-Medium-63001-workload annotation missing from platform operator deployments", func() {
 		// Now, 2023-04-27, the platform operator is TP, need to be enabled via the featuregate, so check it.
 		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
 		if err != nil {
@@ -713,7 +713,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("ConnectedOnly-Author:jiazha-High-54233-Add the PO/rukpak components to the OCP payload", func() {
+	g.It("ConnectedOnly-Author:jiazha-DEPRECATED-High-54233-Add the PO/rukpak components to the OCP payload", func() {
 		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the featureSet: %s, error:%v", featureSet, err)
