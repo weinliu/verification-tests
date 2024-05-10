@@ -636,7 +636,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("OSD_CCS-ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
+	g.It("ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
 		g.By("Get server host")
 		routeName1 := getRandomString()
 		routeName2 := getRandomString()
@@ -1237,7 +1237,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
 		// When replicas=2 the image registry pods follow requiredDuringSchedulingIgnoredDuringExecution
 		// anti-affinity rule on 4.11 and above version, other replicas will follow topologySpreadContraints
 		g.By("Check replicas")
