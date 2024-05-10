@@ -1424,17 +1424,20 @@ func createCSAndISCP(oc *exutil.CLI, podLabel string, namespace string, expected
 
 func getOperatorInfo(oc *exutil.CLI, operatorName string, operatorNamespace string, catalogName string, catalogSourceName string) (*customsub, *operatorgroup) {
 	getOperatorChannelCMD := fmt.Sprintf("oc-mirror list operators --catalog %s  |grep %s |awk '{print $NF}'", catalogName, operatorName)
+	e2e.Logf("The command get operator channel %v", getOperatorChannelCMD)
 	channel, err := exec.Command("bash", "-c", getOperatorChannelCMD).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The default chennel %v", string(channel))
 	channelName := strings.ReplaceAll(string(channel), "\n", "")
-	e2e.Logf("the default name%v", channelName)
+	e2e.Logf("The default channel name %s", channelName)
 
 	getstartingCSVCMD := fmt.Sprintf("oc-mirror list operators --catalog %s --package %s  |awk '{if($2~/^%s$/) print $3}'", catalogName, operatorName, channelName)
-	e2e.Logf("the csv name%v", getstartingCSVCMD)
+	e2e.Logf("The command get operator csv %v", getstartingCSVCMD)
+	e2e.Logf("The csv name%v", getstartingCSVCMD)
 	startingCsv, err := exec.Command("bash", "-c", getstartingCSVCMD).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	startingCsvName := strings.ReplaceAll(string(startingCsv), "\n", "")
-	e2e.Logf("the csv name%v", startingCsvName)
+	e2e.Logf("The csv name%v", startingCsvName)
 
 	buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 	subscriptionT := filepath.Join(buildPruningBaseDir, "customsub.yaml")
@@ -2011,5 +2014,48 @@ func checkGatherLogsForImage(oc *exutil.CLI, filePath string) {
 		} else {
 			e2e.Logf("Not a directory, continuing to the next")
 		}
+	}
+}
+
+// create or delete the catalogsource, idms and itms by yaml files
+func operateCSAndMs(oc *exutil.CLI, rootPath string, operation string) {
+	var files []string
+	var yamlFiles []string
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		e2e.Failf("Can't walk the rootpath directory")
+	}
+
+	for _, file := range files {
+		if matched, _ := regexp.MatchString("yaml", file); matched {
+			fmt.Println("file name is %v \n", file)
+			yamlFiles = append(yamlFiles, file)
+		}
+	}
+
+	for _, yamlFileName := range yamlFiles {
+		if strings.Contains(operation, "create") {
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", yamlFileName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else if strings.Contains(operation, "delete") {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", yamlFileName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+	}
+}
+
+func setRegistryVolume(oc *exutil.CLI, resourcetype string, resourcename string, namespace string, volumeSize string, mountPath string) {
+	err := oc.AsAdmin().Run("set").Args("volume", resourcetype, resourcename, "--add", "-t", "pvc", "-n", namespace, "--claim-size="+volumeSize, "-m", mountPath, "--overwrite").Execute()
+	if err != nil {
+		e2e.Failf("Failed to set volume for the resource %s", resourcename)
+	}
+	if ok := waitForAvailableRsRunning(oc, resourcetype, resourcename, namespace, "1"); ok {
+		e2e.Logf("All pods are runnnig now\n")
+	} else {
+		e2e.Failf("The pod is not running even afer waiting for about 3 minutes")
 	}
 }
