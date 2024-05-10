@@ -5800,6 +5800,47 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asAdmin, withoutNamespace, contain, "10", ok, []string{"pods", "-n", "openshift-marketplace", "-l olm.catalogSource=redhat-operators", "-o=jsonpath='{..spec.containers[0].startupProbe.failureThreshold}'"}).check(oc)
 	})
 
+	// It will cover test case: OCP-68521, author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-Medium-68901-Packageserver pod should not crash if pdateStrategy is incorrect	", func() {
+		var (
+			itName              = g.CurrentSpecReport().FullText()
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-incorrect-updatestrategy.yaml")
+
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-68901",
+				namespace:   oc.Namespace(),
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginxolm-operator-index:v1",
+				template:    catsrcImageTemplate,
+			}
+		)
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		catsrc.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "InvalidIntervalError", ok, []string{"catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status.reason}"}).check(oc)
+
+		err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=catalog-operator", "-o=jsonpath={..status.phase}").Output()
+			if strings.Compare(status, "Running") != 0 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollWithErr(err, "catalog-operator pod crash")
+
+		err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver", "-o=jsonpath={..status.phase}").Output()
+			if strings.Compare(status, "Running Running") == 0 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "package-server-manager pod crash")
+
+	})
+
 	// It will cover test case: OCP-24438, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-24438-check subscription CatalogSource Status", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
