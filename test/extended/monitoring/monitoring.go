@@ -1858,6 +1858,14 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(output).To(o.ContainSubstring(`"operator.prometheus.io/controller-id":"openshift-user-workload-monitoring/prometheus-operator"`))
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
+
+		//author: juzhao@redhat.com
+		g.It("Author:juzhao-Low-73684-UWM statefulset should not lack serviceName", func() {
+			exutil.By("check spec.serviceName for UWM statefulset")
+			cmd := "-ojsonpath={.spec.serviceName}}"
+			checkYamlconfig(oc, "openshift-user-workload-monitoring", "statefulset", "prometheus-user-workload", cmd, "prometheus-operated", true)
+			checkYamlconfig(oc, "openshift-user-workload-monitoring", "statefulset", "thanos-ruler-user-workload", cmd, "thanos-ruler-operated", true)
+		})
 	})
 
 	//author: tagao@redhat.com
