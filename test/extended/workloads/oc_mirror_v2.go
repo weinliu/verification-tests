@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -238,5 +239,137 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		rhssoSub, rhssoOG := getOperatorInfo(oc, "rhsso-operator", "openshift-rhsso-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.15", "cs-ocicatalog73452-v14")
 		defer removeOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator")
 		installOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator", "rhsso-operator")
+	})
+
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-73377-support dry-run for v2 [Serial]", func() {
+		dirname := "/tmp/case73377"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73377.yaml")
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-zcon-zosconnect-catalog@sha256:6f02ecef46020bcd21bdd24a01f435023d5fc3943972ef0d9769d5276e178e76 oci://%s", dirname+"/ibm-catalog")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("Copy of ibm catalog failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Max time reached but skopeo copy of ibm catalog failed"))
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-73377")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-73377")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start dry run of mirrro2disk")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorToDiskOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--dry-run", "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirrorToDiskOutput, "dry-run/missing.txt") && strings.Contains(mirrorToDiskOutput, "dry-run/mapping.txt") {
+				e2e.Logf("Mirror to Disk dry run has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed")
+
+		// Validate if source and destination are right in the mapping.txt file
+		exutil.By("check if source and destination are right in the mapping.txt file")
+		mappingTextContent, err := exec.Command("bash", "-c", fmt.Sprintf("cat /tmp/case73377/working-dir/dry-run/mapping.txt | head -n 10")).Output()
+		e2e.Logf("mappingTextContent is %s", mappingTextContent)
+		if err != nil {
+			e2e.Logf("Error reading file must-gather.logs:", err)
+		}
+		mappingTextContentStr := string(mappingTextContent)
+
+		if matched, _ := regexp.MatchString(".*docker://registry.redhat.io.*=docker://localhost:55000.*", mappingTextContentStr); !matched {
+			e2e.Failf("Source and destination for mirror2disk mode is incorrect in mapping.txt")
+		} else {
+			e2e.Logf("Source and destination for mirror2disk are set correctly")
+		}
+
+		exutil.By("Start dry run of disk2mirror")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			diskToMirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName+":5000/d2m", "--v2", "--dry-run", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(diskToMirrorOutput, "dry-run/mapping.txt") {
+				e2e.Logf("Disk to mirror dry run has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror still failed")
+
+		// Check if source and destination are right for disk2mirror in mapping.txt file
+		mappingTextContentd2m, err := exec.Command("bash", "-c", fmt.Sprintf("cat /tmp/case73377/working-dir/dry-run/mapping.txt | head -n 10")).Output()
+		e2e.Logf("mappingTextContent is %s", mappingTextContentd2m)
+		if err != nil {
+			e2e.Logf("Error reading file must-gather.logs:", err)
+		}
+		mappingTextContentd2mStr := string(mappingTextContentd2m)
+
+		if matched, _ := regexp.MatchString(".*docker://localhost:55000.*=docker://"+serInfo.serviceName+":5000/d2m.*", mappingTextContentd2mStr); !matched {
+			e2e.Failf("Source and destination for disk2mirror mode is incorrect in mapping.txt")
+		} else {
+			e2e.Logf("Source and destination for disk2mirror are set correctly")
+		}
+
+		exutil.By("Start dry run of mirror2mirror")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorToMirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName+":5000/m2m", "--workspace", "file://"+dirname, "--v2", "--dry-run", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirrorToMirrorOutput, "dry-run/mapping.txt") {
+				e2e.Logf("Mirror to mirror dry run has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed")
+
+		// Check if source and destination are right for mirror2mirror in mapping.txt file
+		mappingTextContentm2m, err := exec.Command("bash", "-c", fmt.Sprintf("cat /tmp/case73377/working-dir/dry-run/mapping.txt | head -n 10")).Output()
+		e2e.Logf("mappingTextContent is %s", mappingTextContentm2m)
+		if err != nil {
+			e2e.Logf("Error reading file must-gather.logs:", err)
+		}
+		mappingTextContentm2mStr := string(mappingTextContentm2m)
+
+		if matched, _ := regexp.MatchString(".*docker://registry.redhat.io.*=docker://"+serInfo.serviceName+":5000/m2m.*", mappingTextContentm2mStr); !matched {
+			e2e.Failf("Source and destination for mirror2mirror mode is incorrect in mapping.txt")
+		} else {
+			e2e.Logf("Source and destination for mirror2mirror are set correctly")
+		}
+
 	})
 })
