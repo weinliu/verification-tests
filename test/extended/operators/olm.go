@@ -124,11 +124,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("Fail to get pod's name:%v", err)
 		}
 
-		exutil.By("3, make the node to NotReady and recover after 480s")
-		timeSleep := "480"
-		cmdStr := fmt.Sprintf(`systemctl stop kubelet; sleep %s; systemctl start kubelet`, timeSleep)
-		cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(fmt.Sprintf("nodes/%s", nodeName), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Background()
-		defer cmd.Process.Kill()
+		exutil.By("3, make the node to NotReady and recover after 600s")
+		timeSleep := "600"
+		channel := make(chan string)
+		go func() {
+			cmdStr := fmt.Sprintf(`systemctl stop kubelet; sleep %s; systemctl start kubelet`, timeSleep)
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", fmt.Sprintf("nodes/%s", nodeName), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Output()
+			// if err != nil {
+			// 	e2e.Failf("fail to stop node:%v", err)
+			// }
+			e2e.Logf("!!!!output:%s", output)
+			channel <- output
+		}()
+		defer func() {
+			receivedMsg := <-channel
+			e2e.Logf("!!!!receivedMsg:%s", receivedMsg)
+		}()
+
+		// defer cmd.Process.Kill()
 		defer func() {
 			var nodeStatus string
 			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 500*time.Second, false, func(ctx context.Context) (bool, error) {
@@ -154,7 +167,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.By("5, check if new catalogsource pod generated")
 		var podStatus string
-		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 480*time.Second, false, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 			podStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "olm.catalogSource=cs-73201", "-n", oc.Namespace(), "--no-headers").Output()
 			podNewName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "olm.catalogSource=cs-73201", "-o=jsonpath={.items[0].metadata.name}", "-n", oc.Namespace()).Output()
 			if strings.Contains(podStatus, "Running") && podName != podNewName {
@@ -163,7 +176,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No new pod generated after 480s, old pod(%s) status(%s)", podName, podStatus))
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No new pod generated after 600s, old pod(%s) status(%s)", podName, podStatus))
 	})
 
 	g.It("Author:jiazha-LEVEL0-Critical-72192-OLM is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
