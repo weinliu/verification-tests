@@ -537,3 +537,17 @@ func applyVolumeReclaimPolicyPatch(oc *exutil.CLI, pvName string, namespace stri
 	e2e.Logf("The command executed successfully %s", command)
 	return msg, nil
 }
+
+// Apply the patch to change persistent volume's LastPhaseTransitionTime
+func applyVolumeLastPhaseTransitionTimePatch(oc *exutil.CLI, pvName string, customTransitionTime string) (string, error) {
+	command1 := "{\"status\":{\"lastPhaseTransitionTime\":\"" + customTransitionTime + "\"}}"
+	command := []string{"--subresource=status", "pv", pvName, "-p", command1, "--type=merge"}
+	e2e.Logf("The command is %s", command)
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(command...).Output()
+	if err != nil {
+		e2e.Logf("Execute command failed with err:%v .", err)
+		return msg, err
+	}
+	e2e.Logf("The command executed successfully %s", command)
+	return msg, nil
+}

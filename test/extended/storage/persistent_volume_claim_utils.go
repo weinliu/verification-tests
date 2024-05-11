@@ -297,6 +297,15 @@ func (pvc *persistentVolumeClaim) getSizeFromStatus(oc *exutil.CLI) string {
 	return pvcSize
 }
 
+// Get the PersistentVolumeClaim bounded  PersistentVolume's LastPhaseTransitionTime value
+func (pvc *persistentVolumeClaim) getVolumeLastPhaseTransitionTime(oc *exutil.CLI) string {
+	pvName := pvc.getVolumeName(oc)
+	lastPhaseTransitionTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.status.lastPhaseTransitionTime}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The PV's %s lastPhaseTransitionTime is %s", pvName, lastPhaseTransitionTime)
+	return lastPhaseTransitionTime
+}
+
 // Get specified PersistentVolumeClaim status
 func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", namespace, pvcName, "-o=jsonpath={.status.phase}").Output()

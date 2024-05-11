@@ -5497,6 +5497,65 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: rdeore@redhat.com
+	// OCP-72145-[Dynamic PV] Check PV phase status field 'lastPhaseTransitionTime' can be updated to a custom value by user
+	g.It("Author:rdeore-Medium-72145-[Dynamic PV] Check PV phase status field 'lastPhaseTransitionTime' can be updated to a custom value by user", func() {
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			defaultSc          = ""
+		)
+
+		exutil.By("#. Check if default storageClass exists otherwise skip test execution")
+		scNames := getAllStorageClass(oc)
+		if len(scNames) == 0 {
+			g.Skip("Skip as storageClass is not present on the cluster")
+		}
+		for _, storageClass := range scNames {
+			if checkDefaultStorageclass(oc, storageClass) {
+				defaultSc = storageClass
+				break
+			}
+		}
+		if len(defaultSc) == 0 {
+			g.Skip("Skip as default storageClass is not present on the cluster")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("#. Define storage resources")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimNamespace(oc.Namespace()),
+			setPersistentVolumeClaimStorageClassName(defaultSc))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentNamespace(oc.Namespace()))
+
+		exutil.By("#. Create a pvc with the preset csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create a deployment and wait for the pod ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		exutil.By("#. Check LastPhaseTransitionTime value is updated in PV successfully")
+		lastPhaseTransitionTimevalue := pvc.getVolumeLastPhaseTransitionTime(oc)
+		o.Expect(lastPhaseTransitionTimevalue).ShouldNot(o.BeEmpty())
+
+		exutil.By("#. Check PV's lastPhaseTransitionTime value can be patched to null successfully")
+		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, oc.Namespace(), pvc.name)
+		applyVolumeLastPhaseTransitionTimePatch(oc, pvName, "0001-01-01T00:00:00Z")
+		newLastPhaseTransitionTimevalue := pvc.getVolumeLastPhaseTransitionTime(oc)
+		o.Expect(strings.EqualFold(newLastPhaseTransitionTimevalue, "null") || strings.EqualFold(newLastPhaseTransitionTimevalue, "<nil>")).To(o.BeTrue())
+
+		exutil.By("#. Check PV's lastPhaseTransitionTime value can be patched to custom value successfully")
+		customTimeStamp := "2024-05-08T16:26:36Z"
+		applyVolumeLastPhaseTransitionTimePatch(oc, pvName, customTimeStamp)
+		newLastPhaseTransitionTimevalue = pvc.getVolumeLastPhaseTransitionTime(oc)
+		o.Expect(newLastPhaseTransitionTimevalue).To(o.Equal(customTimeStamp))
+	})
 })
 
 // Performing test steps for Online Volume Resizing
