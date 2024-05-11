@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1105,70 +1106,76 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/" + podsrc.image))
 	})
 
-	g.It("NonPreRelease-Longduration-Author:xiuwang-VMonly-Critical-43260-Image registry pod could report to processing after openshift-apiserver reports unconnect quickly[Disruptive][Slow]", func() {
+	g.It("NonPreRelease-Longduration-Author:xiuwang-Critical-43260-Image registry pod could report to processing after openshift-apiserver reports unconnect quickly[Disruptive][Slow]", func() {
+		g.By("Get one master node")
+		var nodeNames []string
 		firstMaster, err := exutil.GetFirstMasterNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		nodeNames = append(nodeNames, firstMaster)
+
+		g.By("Get one worker node which one image registry pod scheduled in")
+		names, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-image-registry", "-l", "docker-registry=default", "-o=jsonpath={..spec.nodeName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		workerNames := strings.Split(names, " ")
+		nodeNames = append(nodeNames, workerNames[0])
+		if nodeNames[0] == nodeNames[1] {
+			g.Skip("This should be a SNO cluster, skip this testing")
+		}
+		names, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-image-registry", "-l", "docker-registry=default", "--sort-by={.status.startTime}", "-o=jsonpath={..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podNames := strings.Split(names, " ")
 
-		g.By("Set status variables")
-		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-
-		if exutil.CheckPlatform(oc) == "none" && strings.HasPrefix(firstMaster, "master") && !strings.HasPrefix(firstMaster, clusterID) && !strings.HasPrefix(firstMaster, "internal") {
-			defer func() {
-				err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"tolerations":[]}}`, "--type=merge").Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
-				o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Make the nodes to NotReady and recover after 480s")
+		for _, nodeName := range nodeNames {
+			timeSleep := "480"
+			var nodeStatus string
+			channel := make(chan string)
+			go func() {
+				cmdStr := fmt.Sprintf(`systemctl stop crio; systemctl stop kubelet; sleep %s; systemctl start crio; systemctl start kubelet`, timeSleep)
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", fmt.Sprintf("nodes/%s", nodeName), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Output()
+				e2e.Logf("!!!!output:%s", output)
+				channel <- output
 			}()
-			output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}}`, "--type=merge").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf(output)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", "-n", "openshift-image-registry", "-l", "docker-registry=default"}).check(oc)
-			names, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-image-registry", "-l", "docker-registry=default", "-o", "name").Output()
-			if err != nil {
-				e2e.Failf("Fail to get the image-registry pods' name")
-			}
-			podNames := strings.Split(names, "\n")
-			privateKeyPath := "/root/openshift-qe.pem"
-			var nodeNames []string
-
-			for _, podName := range podNames {
-				e2e.Logf("get the node name of pod name: %s", podName)
-				nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-image-registry", podName, "-o=jsonpath={.spec.nodeName}").Output()
-				e2e.Logf("node name: %s", nodeName)
-				if err != nil {
-					e2e.Failf("Fail to get the node name")
-				}
-				nodeNames = append(nodeNames, nodeName)
-			}
-
-			for _, nodeName := range nodeNames {
-
-				e2e.Logf("stop crio service of node: %s", nodeName)
-				defer exec.Command("bash", "-c", "ssh -o StrictHostKeyChecking=no -i "+privateKeyPath+" core@"+nodeName+" sudo systemctl start crio").CombinedOutput()
-				defer exec.Command("bash", "-c", "ssh -o StrictHostKeyChecking=no -i "+privateKeyPath+" core@"+nodeName+" sudo systemctl start kubelet").CombinedOutput()
-				output, _ := exec.Command("bash", "-c", "ssh -o StrictHostKeyChecking=no -i "+privateKeyPath+" core@"+nodeName+" sudo systemctl stop crio").CombinedOutput()
-				e2e.Logf("stop crio command result : %s", output)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				e2e.Logf("stop service of node: %s", nodeName)
-				output, _ = exec.Command("bash", "-c", "ssh -o StrictHostKeyChecking=no -i "+privateKeyPath+" core@"+nodeName+" sudo systemctl stop kubelet").CombinedOutput()
-				e2e.Logf("stop kubelet command result : %s", output)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				newCheck("expect", asAdmin, withoutNamespace, contain, "NodeStatusUnknown", ok, []string{"node", nodeName, "-o=jsonpath={.status.conditions..reason}"}).check(oc)
-			}
-			newCheck("expect", asAdmin, withoutNamespace, contain, "True", ok, []string{"co", "image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].status}"}).check(oc)
-			err = wait.Poll(10*time.Second, 330*time.Second, func() (bool, error) {
-				res, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
-				if strings.Contains(res, "True") {
+			defer func() {
+				receivedMsg := <-channel
+				e2e.Logf("!!!!receivedMsg:%s", receivedMsg)
+			}() /*
+				cmdStr := fmt.Sprintf(`systemctl stop crio; systemctl stop kubelet; sleep %s; systemctl start crio; systemctl start kubelet`, timeSleep)
+				cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(fmt.Sprintf("nodes/%s", nodeName), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Background()
+				defer cmd.Process.Kill()
+			*/
+			defer func() {
+				err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 500*time.Second, false, func(ctx context.Context) (bool, error) {
+					nodeStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "--no-headers").Output()
+					if !strings.Contains(nodeStatus, "NotReady") {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The node(%s) doesn't recover to Ready status(%s) after 500s", nodeName, nodeStatus))
+			}()
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+				nodeStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "--no-headers").Output()
+				if strings.Contains(nodeStatus, "NotReady") {
 					return true, nil
 				}
-				e2e.Logf(" Available command result : %s", res)
 				return false, nil
 			})
-			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The node(%s) still in Ready status(%s) after 300s", nodeName, nodeStatus))
 		}
-		e2e.Logf("Only baremetal platform supported for the test")
+		g.By("Image registry should not affect by openshift-apiserver and reschedule to other worker")
+		podNum := getImageRegistryPodNumber(oc)
+		err = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
+			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+			names, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-image-registry", "-l", "docker-registry=default", "--sort-by={.status.startTime}", "-o=jsonpath={..metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			podNewNames := strings.Split(names, " ")
+			if reflect.DeepEqual(podNames, podNewNames) {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The registry does not reschedule after nodes lost"))
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
@@ -1234,6 +1241,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "newis", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 	})
 
 	// author: wewang@redhat.com
