@@ -2984,3 +2984,38 @@ func (azLog *azureMonitorLog) deleteWorkspace() error {
 	workspacesClient.BeginDelete(ctx, azLog.resourceGroupName, azLog.workspaceName, &armoperationalinsights.WorkspacesClientBeginDeleteOptions{Force: new(bool)})
 	return nil
 }
+
+// Create a linux audit policy to generate audit logs in one schedulable worker
+func genLinuxAuditLogsOnWorker(oc *exutil.CLI) (string, error) {
+	workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
+	if err != nil || len(workerNodes) == 0 {
+		return "", fmt.Errorf("can not find schedulable worker to enable audit policy")
+	}
+	result, err := exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "auditctl -w /var/log/pods/ -p rwa -k logging-qe-test-read-write-pod-logs")
+	if err != nil && strings.Contains(result, "Rule exists") {
+		//Node: we still provide the nodeName here, the policy will be deleted if defer deleteLinuxAuditPolicyFromNodes is called.
+		return workerNodes[0].Name, nil
+	}
+	return workerNodes[0].Name, err
+}
+
+// delete the linux audit policy
+func deleteLinuxAuditPolicyFromNode(oc *exutil.CLI, nodeName string) error {
+	if nodeName == "" {
+		return fmt.Errorf("nodeName can not be empty")
+	}
+	_, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", "auditctl -W /var/log/pods/ -p rwa -k logging-qe-test-read-write-pod-logs")
+	return err
+}
+
+// Create a linux journald logs in one schedulable worker, it is best try function
+func genLinuxJournalOnWorker(oc *exutil.CLI) {
+	workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
+	if err != nil || len(workerNodes) == 0 {
+		return
+	}
+	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message1")
+	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message2")
+	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message3")
+	return
+}

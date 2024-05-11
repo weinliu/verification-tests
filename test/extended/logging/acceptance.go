@@ -63,26 +63,17 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		masterNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master="})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// For hypershift guest cluster, the master node count is 0
-		// In hypershift guest cluters, can't get cloud credentials from cluster, so use minIO as the object storage
 		if len(masterNodes.Items) == 0 || len(s) == 0 {
-			defer removeMinIO(oc)
-			deployMinIO(oc)
-			s = "minio"
-		}
-
-		// add audit rule
-		if len(masterNodes.Items) == 0 {
-			workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "auditctl -W /var/log/pods/ -p rwa -k read-write-pod-logs")
-			_, err = exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "auditctl -w /var/log/pods/ -p rwa -k read-write-pod-logs")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			g.Skip("skip case-53817 on hypershift hosted cluster, replaced by OCP-71534 now ")
 		}
 
 		appProj := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName, err := genLinuxAuditLogsOnWorker(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
 		g.By("deploy loki stack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
@@ -190,7 +181,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"" + loNS + "\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
 			checkMetric(oc, token, metric, 3)
 		}
-
 	})
 
 	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-LEVEL0-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial]", func() {
@@ -213,6 +203,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName, err := genLinuxAuditLogsOnWorker(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
 		g.By("create clusterlogforwarder/instance")
 		defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
@@ -263,6 +256,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName, err := genLinuxAuditLogsOnWorker(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
 		g.By("Create clusterlogforwarder/instance")
 		defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)

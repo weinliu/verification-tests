@@ -1279,12 +1279,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "LOG_TYPE=java", "-p", "RATE=120").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			WaitForDeploymentPodsToBeReady(oc, ns, "multiline-log")
-			cw.selAppNamespaces = []string{ns}
+			nodeName, err := genLinuxAuditLogsOnWorker(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
 			g.By("check logs in Cloudwatch")
-			logGroupName := cw.groupPrefix + ".application"
 			o.Expect(cw.logsFound()).To(o.BeTrue())
 
+			logGroupName := cw.groupPrefix + ".application"
 			filteredLogs, err := cw.getLogRecordsFromCloudwatchByNamespace(30, logGroupName, ns)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(filteredLogs) > 0).Should(o.BeTrue(), "couldn't filter logs by namespace")

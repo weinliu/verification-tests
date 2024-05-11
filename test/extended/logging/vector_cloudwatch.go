@@ -62,6 +62,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeName, err := genLinuxAuditLogsOnWorker(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
 			g.By("Create clusterlogforwarder")
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
@@ -118,6 +121,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			uuid, err := oc.WithoutNamespace().Run("get").Args("project", appProj, "-ojsonpath={.metadata.uid}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cw.selNamespacesUUID = []string{uuid}
+			nodeName, err := genLinuxAuditLogsOnWorker(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
 			g.By("Create clusterlogforwarder/instance")
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
@@ -195,6 +201,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cw.selAppNamespaces = []string{appProj1}
+			nodeName, err := genLinuxAuditLogsOnWorker(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
 			g.By("The Cloudwatch sink in Vector config must use the Custom tlsSecurityProfile")
 			searchString := `[sinks.output_cw.tls]

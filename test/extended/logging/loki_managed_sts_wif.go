@@ -56,6 +56,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		o.Expect(err).NotTo(o.HaveOccurred())
 		os.Setenv("AWS_CLUSTER_REGION", region)
 
+		g.By("Create log producer")
+		appNS := oc.Namespace()
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appNS, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName, err := genLinuxAuditLogsOnWorker(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
+
 		exutil.By("Deploy Loki Operator")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
@@ -65,7 +74,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 			storageType:   s,
 			storageSecret: "storage-secret-71534",
 			storageClass:  sc,
-			bucketName:    "loki-71534-" + exutil.GetRandomString(),
+			bucketName:    "logging-loki-71534-" + getInfrastructureName(oc) + "-" + exutil.GetRandomString(),
 			template:      lokiStackTemplate,
 		}
 
@@ -133,7 +142,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		bearerToken := getSAToken(oc, "default", oc.Namespace())
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
-		for _, logType := range []string{"infrastructure", "audit"} {
+		for _, logType := range []string{"infrastructure", "audit", "application"} {
 			lc.waitForLogsAppearByKey(logType, "log_type", logType)
 		}
 

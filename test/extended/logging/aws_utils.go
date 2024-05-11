@@ -22,6 +22,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -293,7 +294,7 @@ func createObjectStorageSecretWithS3OnSTS(oc *exutil.CLI, stsClient *sts.Client,
 	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create bucket: "+ls.bucketName)
 
 	// Creating object storage secret
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", ls.storageSecret, "--from-literal=region="+cfg.Region, "--from-literal=bucketnames="+ls.bucketName, "-n", ls.namespace).Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", ls.storageSecret, "--from-literal=region="+cfg.Region, "--from-literal=bucketnames="+ls.bucketName, "--from-literal=audience=openshift", "-n", ls.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -382,7 +383,7 @@ func patchLokiOperatorWithAWSRoleArn(oc *exutil.CLI, packageName, lokiNamespace,
 		}
 	  }`
 
-	oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", packageName, "-n", lokiNamespace, "-p", fmt.Sprintf(roleArnPatchConfig, roleArn), "--type=merge").Execute()
+	oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("patch").Args("sub", packageName, "-n", lokiNamespace, "-p", fmt.Sprintf(roleArnPatchConfig, roleArn), "--type=merge").Execute()
 	waitForPodReadyWithLabel(oc, loNS, "name=loki-operator-controller-manager")
 }
 
@@ -498,6 +499,7 @@ type cloudwatchSpec struct {
 	//disNamespacesUUID []string // The app namespaces should not be collected
 	nodes            []string // Cluster Nodes Names
 	ovnEnabled       bool     //`default: "false"`//  if ovn is enabled. default: false
+	hasMaster        bool     // if master is enabled.
 	logTypes         []string //`default: "['infrastructure','application', 'audit']"` // logTypes in {"application","infrastructure","audit"}
 	selAppNamespaces []string //The app namespaces should be collected and verified
 	//selInfraNamespaces []string //The infra namespaces should be collected and verified
@@ -514,9 +516,9 @@ type cloudwatchSpec struct {
 
 // The stream present status
 type cloudwatchStreamResult struct {
-	streamPattern string
-	logType       string //container,journal, audit
-	streamFound   bool
+	pattern string
+	logType string //container,journal, audit
+	exist   bool
 }
 
 // Set the default values to the cloudwatchSpec Object, you need to change the default in It if needs
@@ -535,11 +537,17 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 		cw.nodes = getNodeNames(oc, "kubernetes.io/os=linux")
 	}
 	cw.ovnEnabled = false
-	/* May enable it after OVN audit logs producer is enabled by default
-	if checkNetworkType(oc) == "ovnkubernetes" {
-		cw.ovnEnabled = true
+	//TBD enable OVN audit Logs
+	//if checkNetworkType(oc) == "ovnkubernetes" {
+	//	cw.ovnEnabled = true
+	//}
+	cw.hasMaster = false
+	masterNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master="})
+	if err == nil && len(masterNodes.Items) > 0 {
+		cw.hasMaster = true
+	} else {
+		e2e.Logf("Warning: we can not get the master node status, assume that is a hypershift hosted cluster")
 	}
-	*/
 	cw.stsEnabled = exutil.IsSTSCluster(oc)
 	if cw.stsEnabled {
 		if !checkAWSCredentials() {
@@ -737,11 +745,14 @@ func (cw *cloudwatchSpec) getCloudwatchLogStreamNames(groupName string, streamPr
 	var logStreamNames []string
 	var err error
 	var logStreamDesc *cloudwatchlogs.DescribeLogStreamsOutput
+
 	if streamPrefix == "" {
+		e2e.Logf("list logStream in logGroup %s", groupName)
 		logStreamDesc, err = cw.cwClient.DescribeLogStreams(context.TODO(), &cloudwatchlogs.DescribeLogStreamsInput{
 			LogGroupName: &groupName,
 		})
 	} else {
+		e2e.Logf("search logStream %s in logGroup %s", streamPrefix, groupName)
 		logStreamDesc, err = cw.cwClient.DescribeLogStreams(context.TODO(), &cloudwatchlogs.DescribeLogStreamsInput{
 			LogGroupName:        &groupName,
 			LogStreamNamePrefix: &streamPrefix,
@@ -768,18 +779,17 @@ func (cw *cloudwatchSpec) getCloudwatchLogStreamNames(groupName string, streamPr
 	return logStreamNames
 }
 
-// In this function, verify all infra logs from all nodes infra (both journal and container) are present on Cloudwatch
-func (cw *cloudwatchSpec) infrastructureLogsFound(strict bool) bool {
-	var infraLogGroupNames []string
+// In this function, verify if infra pod logstreams exist in Cloudwatch
+func (cw *cloudwatchSpec) infrastructurePodLogsFound(strict bool) bool {
 	var logFoundAll = true
 	var logFoundOne = false
-	var streamsToVerify []*cloudwatchStreamResult
 
+	//Find infrastructure Log Group
+	var infraLogGroupNames []string
 	logGroupNames := cw.getCloudwatchLogGroupNames(cw.groupPrefix)
 	for _, e := range logGroupNames {
 		r, _ := regexp.Compile(`.*\.infrastructure$`)
 		match := r.MatchString(e)
-		//match1, _ := regexp.MatchString(".*\\.infrastructure$", e)
 		if match {
 			infraLogGroupNames = append(infraLogGroupNames, e)
 		}
@@ -787,43 +797,105 @@ func (cw *cloudwatchSpec) infrastructureLogsFound(strict bool) bool {
 	if len(infraLogGroupNames) == 0 {
 		return false
 	}
-	//Construct the stream pattern
+
+	//Construct the stream search pattern.
+	//podLogStream:  ip-10-0-152-69.us-east-2.compute.internal.kubernetes.var.log.pods.openshift-image-registry_image-registry-5dccc4f469-fnbbm_ae43a304-b972-4427-8333-359672194daa.registry.0.log
+	var streamsToVerify []*cloudwatchStreamResult
 	for _, e := range cw.nodes {
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: strings.Split(e, ".")[0] + ".journal.system", logType: "journal", streamFound: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: e + ".kubernetes.var.log.pods", logType: "container", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: e + ".kubernetes.var.log.pods", logType: "container", exist: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: e + ".var.log.pods", logType: "container", exist: false})
 	}
 
-	for _, e := range streamsToVerify {
-		logStreams := cw.getCloudwatchLogStreamNames(infraLogGroupNames[0], e.streamPattern)
+	// Check if logstream can be found
+	for _, streamI := range streamsToVerify {
+		logStreams := cw.getCloudwatchLogStreamNames(infraLogGroupNames[0], streamI.pattern)
 		if len(logStreams) > 0 {
-			e.streamFound = true
+			streamI.exist = true
 			logFoundOne = true
 		}
 	}
-
-	for _, e := range streamsToVerify {
-		if !e.streamFound {
-			e2e.Logf("can not find the stream matching " + e.streamPattern)
+	for _, streamI := range streamsToVerify {
+		if !streamI.exist {
+			e2e.Logf("can not find the stream matching " + streamI.pattern)
 			logFoundAll = false
 		}
 	}
+
+	// when strict=true, return ture if we can find podLogStream for all nodes
 	if strict {
 		return logFoundAll
 	}
+	// when strict=false, return ture if any pod logstream exists
 	return logFoundOne
 }
 
-// In this function, verify all type of audit logs can be found.
-// Note: ovc-audit logs only be present when OVN are enabled
-// LogStream Example:
-//
-//	anli48022-gwbb4-master-2.k8s-audit.log
-//	anli48022-gwbb4-master-2.openshift-audit.log
-//	anli48022-gwbb4-master-1.k8s-audit.log
-//	ip-10-0-136-31.us-east-2.compute.internal.linux-audit.log
-func (cw *cloudwatchSpec) auditLogsFound(strict bool) bool {
+// In this function, verify the system logs present on Cloudwatch
+func (cw *cloudwatchSpec) infrastructureSystemLogsFound(strict bool) bool {
+	var infraLogGroupNames []string
 	var logFoundAll = true
 	var logFoundOne = false
+
+	//Find infrastructure Log Group
+	logGroupNames := cw.getCloudwatchLogGroupNames(cw.groupPrefix)
+	for _, e := range logGroupNames {
+		r, _ := regexp.Compile(`.*\.infrastructure$`)
+		match := r.MatchString(e)
+		if match {
+			infraLogGroupNames = append(infraLogGroupNames, e)
+		}
+	}
+	if len(infraLogGroupNames) == 0 {
+		return false
+	}
+
+	//Construct the stream search pattern.
+	//journalStream: ip-10-0-152-69.journal.system
+	var streamsToVerify []*cloudwatchStreamResult
+	for _, e := range cw.nodes {
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: strings.Split(e, ".")[0] + ".journal.system", logType: "journal", exist: false})
+	}
+
+	// Check if logstream can be found
+	for _, streamI := range streamsToVerify {
+		logStreams := cw.getCloudwatchLogStreamNames(infraLogGroupNames[0], streamI.pattern)
+		if len(logStreams) > 0 {
+			streamI.exist = true
+			logFoundOne = true
+		}
+	}
+	for _, streamI := range streamsToVerify {
+		if !streamI.exist {
+			e2e.Logf("can not find the stream matching the pattern " + streamI.pattern)
+			logFoundAll = false
+		}
+	}
+
+	// when strict=true, return ture if we can find system LogStream for all nodes
+	if strict {
+		return logFoundAll
+	}
+	// when strict=false, return ture if any system logstream exists
+	return logFoundOne
+}
+
+// In this function, verify the system logs present on Cloudwatch
+func (cw *cloudwatchSpec) infrastructureLogsFound(strict bool) bool {
+	if strict {
+		return cw.infrastructureSystemLogsFound(false) && cw.infrastructurePodLogsFound(false)
+	}
+	return cw.infrastructureSystemLogsFound(false) || cw.infrastructurePodLogsFound(false)
+}
+
+// In this function, verify all type of audit logs can be found.
+// LogStream Example:
+//
+//		anli48022-gwbb4-master-2.k8s-audit.log
+//		anli48022-gwbb4-master-2.openshift-audit.log
+//		anli48022-gwbb4-master-1.k8s-audit.log
+//		ip-10-0-136-31.us-east-2.compute.internal.linux-audit.log
+//	  when strict=false, test pass when all type of audit logs are found
+//	  when strict=true,  test pass if any audit log is found.
+func (cw *cloudwatchSpec) auditLogsFound(strict bool) bool {
 	var auditLogGroupNames []string
 	var streamsToVerify []*cloudwatchStreamResult
 
@@ -840,56 +912,32 @@ func (cw *cloudwatchSpec) auditLogsFound(strict bool) bool {
 		return false
 	}
 
-	var ovnFoundInit = true
+	if cw.hasMaster {
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".k8s-audit.log$", logType: "k8saudit", exist: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".openshift-audit.log$", logType: "ocpaudit", exist: false})
+	}
 	if cw.ovnEnabled {
-		ovnFoundInit = false
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".ovn-audit.log", logType: "ovnaudit", exist: false})
 	}
+	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".linux-audit.log$", logType: "linuxaudit", exist: false})
 
-	//Method 1: Not all type of audit logs can be are produced on each node. so this method is comment comment
-	/*for _, e := range cw.masters {
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".k8s-audit.log", logType: "k8saudit", streamFound: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".openshift-audit.log", logType: "ocpaudit", streamFound: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".linux-audit.log", logType: "linuxaudit", streamFound: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
-	}
-
-	for _, e := range cw.workers {
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".k8s-audit.log", logType: "k8saudit", streamFound: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".openshift-audit.log", logType: "ocpaudit", streamFound: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".linux-audit.log", logType: "linuxaudit", streamFound: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
-	}
-
-
-	for _, e := range streamsToVerify {
-		logStreams := cw.getStreamNames(client, auditLogGroupNames[0], e.streamPattern)
-		if len(logStreams)>0 {
-			e.streamFound=true
-		}
-	}*/
-
-	// Method 2: Only search logstream whose suffix is audit.log. the potential issues 1) No audit log on all nodes 2) The stream size > the buffer to large cluster.
-	// TBD: produce audit message on every node
-	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".k8s-audit.log$", logType: "k8saudit", streamFound: false})
-	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".openshift-audit.log$", logType: "ocpaudit", streamFound: false})
-	//streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".linux-audit.log$", logType: "linuxaudit", streamFound: false})
-	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
-
+	//Only search the logstream in which the suffix is audit.log. logStreams can not fetch all records in one batch in larger cluster
+	logFoundOne := false
 	logStreams := cw.getCloudwatchLogStreamNames(auditLogGroupNames[0], "")
-
-	for _, e := range streamsToVerify {
+	for _, streamI := range streamsToVerify {
 		for _, streamName := range logStreams {
-			match, _ := regexp.MatchString(e.streamPattern, streamName)
+			match, _ := regexp.MatchString(streamI.pattern, streamName)
 			if match {
-				e.streamFound = true
+				streamI.exist = true
 				logFoundOne = true
 			}
 		}
 	}
 
-	for _, e := range streamsToVerify {
-		if !e.streamFound {
-			e2e.Logf("failed to find stream matching " + e.streamPattern)
+	logFoundAll := true
+	for _, streamI := range streamsToVerify {
+		if !streamI.exist {
+			e2e.Logf("warning: can not find stream matching the pattern : " + streamI.pattern)
 			logFoundAll = false
 		}
 	}
@@ -1058,54 +1106,54 @@ func (cw *cloudwatchSpec) applicationLogsFound() bool {
 
 // The common function to verify if logs can be found or not. In general, customized the cloudwatchSpec before call this function
 func (cw *cloudwatchSpec) logsFound() bool {
-	var appFound = true
-	var infraFound = true
-	var auditFound = true
+	var appLogSuccess = true
+	var infraLogSuccess = true
+	var auditLogSuccess = true
 
 	for _, logType := range cw.logTypes {
 		if logType == "infrastructure" {
-			err1 := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-				return cw.infrastructureLogsFound(false), nil
+			infraLogSuccess = false
+			err1 := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+				return cw.infrastructureLogsFound(true), nil
 			})
 			if err1 != nil {
-				infraFound = false
 				e2e.Logf("Failed to find infrastructure in given time\n %v", err1)
 			} else {
-				e2e.Logf("Found InfraLogs finally")
+				infraLogSuccess = true
+				e2e.Logf("infraLogSuccess: %t", infraLogSuccess)
 			}
 		}
 		if logType == "audit" {
-			err2 := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+			auditLogSuccess = false
+			err2 := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				return cw.auditLogsFound(true), nil
 			})
 			if err2 != nil {
-				auditFound = false
 				e2e.Logf("Failed to find auditLogs in given time\n %v", err2)
 			} else {
-				e2e.Logf("Found auditLogs finally")
+				auditLogSuccess = true
+				e2e.Logf("auditLogSuccess: %t", auditLogSuccess)
 			}
 		}
 		if logType == "application" {
-			err3 := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+			appLogSuccess = false
+			err3 := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
 				return cw.applicationLogsFound(), nil
 			})
 			if err3 != nil {
-				appFound = false
 				e2e.Logf("Failed to find AppLogs in given time\n %v", err3)
 			} else {
-				e2e.Logf("Found AppLogs finally")
+				appLogSuccess = true
+				e2e.Logf("appFound: %t", auditLogSuccess)
 			}
 		}
 	}
 
-	if infraFound && auditFound && appFound {
+	if infraLogSuccess && auditLogSuccess && appLogSuccess {
 		e2e.Logf("Found all expected logs")
 		return true
 	}
 	e2e.Logf("Error: couldn't find some type of logs. Possible reason: logs weren't generated; connect to AWS failure/timeout; Logging Bugs")
-	e2e.Logf("infraFound: %t", infraFound)
-	e2e.Logf("auditFound: %t", auditFound)
-	e2e.Logf("appFound: %t", appFound)
 	return false
 }
 
