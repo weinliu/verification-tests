@@ -1,4 +1,5 @@
 import { Overview, statusCard } from '../../views/overview';
+import { ClusterSettingPage } from '../../views/cluster-setting';
 
 describe('Dynamic Plugins notification features', () => {
   const testParams = {
@@ -19,29 +20,33 @@ describe('Dynamic Plugins notification features', () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI(`oc create -f ./fixtures/plugin/${testParams.failPluginFileName}`);
     cy.adminCLI(`oc create -f ./fixtures/plugin/${testParams.pendingPluginFileName}`);
-    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":["${testParams.failPluginName}", "${testParams.pendingPluginName}"]}}' --type merge`);
+    cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"${testParams.failPluginName}"}]'`);
+    cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"${testParams.pendingPluginName}"}]'`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   })
 
   after(() => {
-    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge`);
-    cy.adminCLI(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName}`);
-    cy.adminCLI(`oc delete namespace ${testParams.failPluginNamespace} ${testParams.pendingPluginNamespace}`);
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    ClusterSettingPage.goToConsolePlugins();
+    ClusterSettingPage.toggleConsolePlugin(`${testParams.failPluginName}`, 'Disable');
+    ClusterSettingPage.toggleConsolePlugin(`${testParams.pendingPluginName}`, 'Disable');
+    cy.adminCLI(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName}`,{failOnNonZeroExit: false});
+    cy.adminCLI(`oc delete namespace ${testParams.failPluginNamespace} ${testParams.pendingPluginNamespace}`,{timeout: 1200000,failOnNonZeroExit: false});
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   })
 
   it('(OCP-55427,yapei,UserInterface) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
-    cy.adminCLI(`oc get cm console-config -n openshift-console -o yaml`)
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`)
       .its('stdout')
-      .should('include', 'console-customization')
-      .and('include','console-demo-plugin-1')
+      .should('include', `${testParams.failPluginName}`)
+      .and('include',`${testParams.pendingPluginName}`)
+    // wait 60000ms then reload console pages to load all enabled plugins
+    cy.wait(60000);
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
+    cy.get('tr').should('exist');
     cy.get('[data-label="Status"]').should('exist');
-    cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
     checkStatusMessage('Failed', 'ailed to get a valid plugin manifest');
-  });
 
-  it('(OCP-52366,yapei,UserInterface) ocp52366-failure add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
+    cy.log('Check failed status on Cluster Overview and notification drawer')
     Overview.goToDashboard();
     Overview.isLoaded();
     statusCard.secondaryStatus('Dynamic Plugins', 'Degraded');
@@ -65,5 +70,4 @@ describe('Dynamic Plugins notification features', () => {
     cy.byButtonText('View plugin').click();
     cy.byLegacyTestID('resource-title').contains(testParams.failPluginName);
   });
-
 })
