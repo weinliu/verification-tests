@@ -1,15 +1,14 @@
 package util
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
 
-	o "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"
+
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -41,59 +40,42 @@ func (sshClient *SshClient) getConfig() (*ssh.ClientConfig, error) {
 
 // Run runs cmd on the remote host.
 func (sshClient *SshClient) Run(cmd string) error {
-	config, err := sshClient.getConfig()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	connection, err := ssh.Dial("tcp", fmt.Sprintf("%v:%v", sshClient.Host, sshClient.Port), config)
+	combinedOutput, err := sshClient.RunOutput(cmd)
 	if err != nil {
-		e2e.Logf("%v dial failed: %v", sshClient.Host, err)
 		return err
 	}
-	defer connection.Close()
-
-	session, err := connection.NewSession()
-	defer session.Close()
-	var stdoutBuf bytes.Buffer
-	session.Stdout = &stdoutBuf
-	session.Stderr = &stdoutBuf
-	if err != nil {
-		e2e.Logf("Failed to create session: %v", err)
-	}
-	err = session.Run(cmd)
-	if err != nil {
-		e2e.Logf("Failed to run cmd [%s] : \n %v", cmd, stdoutBuf)
-		return err
-	}
-	e2e.Logf("Executed cmd [%s] output:\n %s", cmd, stdoutBuf)
-	return err
+	e2e.Logf("Successfully executed cmd '%s' with output:\n%s", cmd, combinedOutput)
+	return nil
 }
 
-// Run runs cmd on the remote host.
+// RunOutput runs cmd on the remote host and returns its combined standard output and standard error.
 func (sshClient *SshClient) RunOutput(cmd string) (string, error) {
 	config, err := sshClient.getConfig()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return "", fmt.Errorf("failed to get SSH config: %v", err)
+	}
 
 	connection, err := ssh.Dial("tcp", fmt.Sprintf("%v:%v", sshClient.Host, sshClient.Port), config)
 	if err != nil {
-		e2e.Logf("%v dial failed: %v", sshClient.Host, err)
-		return "", err
+		return "", fmt.Errorf("failed to dial %s:%d: %v", sshClient.Host, sshClient.Port, err)
 	}
 	defer connection.Close()
 
 	session, err := connection.NewSession()
-	defer session.Close()
-	var stdoutBuf bytes.Buffer
-	session.Stdout = &stdoutBuf
-	session.Stderr = &stdoutBuf
 	if err != nil {
-		e2e.Logf("Failed to create session: %v", err)
+		return "", fmt.Errorf("failed to create session: %v", err)
 	}
+	defer session.Close()
+
+	combinedOutputBuffer := NewSynchronizedBuffer()
+	session.Stdout = combinedOutputBuffer
+	session.Stderr = combinedOutputBuffer
+
 	err = session.Run(cmd)
 	if err != nil {
-		e2e.Logf("Failed to run cmd [%s] : \n %v", cmd, stdoutBuf)
-		return "", err
+		return "", fmt.Errorf("failed to run cmd '%s': %v\n%s", cmd, err, combinedOutputBuffer.String())
 	}
-	return stdoutBuf.String(), err
+	return combinedOutputBuffer.String(), nil
 }
 
 func GetPrivateKey() (string, error) {
