@@ -1809,39 +1809,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip disableRedirect test on gcp sts test, bz2111311")
 		}
 
-		g.By("Set object storage client accordingly")
-		var storageclient string
-		switch storagetype {
-		case "azure":
-			cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.azure.cloudName}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if cloudName == "AzureStackCloud" {
-				storageclient = "blob.mtcazs.wwtatc.com"
-			} else {
-				storageclient = "blob.core.windows.net"
-			}
-		case "gcs":
-			storageclient = "storage.googleapis.com"
-		case "ibmcos":
-			storageclient = "storage.appdomain.cloud"
-		case "oss":
-			storageclient = "aliyuncs.com"
-		case "swift":
-			storageclient = "redhat.com"
-		case "s3":
-			cloudFrontset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.cloudFront}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if cloudFrontset != "" {
-				storageclient = "cloudfront.net"
-			} else {
-				bucket, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				storageclient = bucket + ".s3"
-			}
-		default:
-			e2e.Failf("Image Registry is using unknown storage type")
-		}
-
 		g.By("Create route to expose the registry")
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
@@ -1868,7 +1835,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
 			curlOutput, err := exec.Command("bash", "-c", cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(string(curlOutput), storageclient) {
+			// When directed to backend storage, the data store format likes this
+			// https://<cloud dns>/<container or bucket>/docker/registry/v2/blobs/sha256/<blob>
+			if strings.Contains(string(curlOutput), "docker/registry/v2/blobs/sha256") {
 				return true, nil
 			}
 			return false, nil
