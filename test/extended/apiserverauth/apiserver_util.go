@@ -1086,21 +1086,41 @@ func isConnectedInternet(oc *exutil.CLI) bool {
 	return true
 }
 
-func restartMicroshift(oc *exutil.CLI, nodename string) {
-	_, restartErr := runSSHCommand(nodename, "redhat", "sudo systemctl restart microshift")
-	o.Expect(restartErr).NotTo(o.HaveOccurred())
-	mstatusErr := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
-		output, err := runSSHCommand(nodename, "redhat", "sudo systemctl is-active microshift")
-		if err == nil && strings.TrimSpace(output) == "active" {
-			e2e.Logf("microshift status is: %v ", output)
-			return true, nil
+func restartMicroshift(nodename string) error {
+	// Try restarting microshift three times
+	var restartErr error
+	for i := 0; i < 3; i++ {
+		// Execute the command
+		_, restartErr = runSSHCommand(nodename, "redhat", "sudo systemctl restart microshift")
+		if restartErr != nil {
+			e2e.Logf("Error restarting microshift :: %v", restartErr)
+			time.Sleep(time.Second * 5) // Wait for 5 seconds before retrying
+			continue
 		}
-		return false, nil
+		// If successful, break out of the loop
+		break
+	}
+	if restartErr != nil {
+		return fmt.Errorf("Failed to restart Microshift server: %v", restartErr)
+	}
+
+	var output string
+	var err error
+	pollErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+		output, err = runSSHCommand(nodename, "redhat", "sudo systemctl is-active microshift")
+		if err != nil {
+			return false, nil // Retry
+		}
+		return strings.TrimSpace(output) == "active", nil
 	})
-	exutil.AssertWaitPollNoErr(mstatusErr, fmt.Sprintf("Failed to restart Microshift: %v", mstatusErr))
+	if pollErr != nil {
+		return fmt.Errorf("Failed to perform action: %v", pollErr)
+	}
+	e2e.Logf("Microshift restarted successfully")
+	return nil
 }
 
-func replacePatternInfile(oc *exutil.CLI, microshiftFilePathYaml string, oldPattern string, newPattern string) {
+func replacePatternInfile(microshiftFilePathYaml string, oldPattern string, newPattern string) {
 	content, err := ioutil.ReadFile(microshiftFilePathYaml)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1119,7 +1139,7 @@ func getPodsList(oc *exutil.CLI, namespace string) []string {
 	return podNames
 }
 
-func changeMicroshiftConfig(oc *exutil.CLI, configStr string, nodeName string, namespace string, configPath string) {
+func changeMicroshiftConfig(configStr string, nodeName string, configPath string) {
 	etcConfigCMD := fmt.Sprintf(`'
 configfile=%v
 cat > $configfile << EOF
@@ -1129,10 +1149,10 @@ EOF'`, configPath, configStr)
 	o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
 }
 
-func addKustomizationToMicroshift(oc *exutil.CLI, nodeName string, namespace string, kustomizationFiles map[string][]string) {
+func addKustomizationToMicroshift(nodeName string, kustomizationFiles map[string][]string) {
 	for key, file := range kustomizationFiles {
 		tmpFileName := getTestDataFilePath(file[0])
-		replacePatternInfile(oc, tmpFileName, file[2], file[3])
+		replacePatternInfile(tmpFileName, file[2], file[3])
 		fileOutput, err := exec.Command("bash", "-c", fmt.Sprintf(`cat %s`, tmpFileName)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		destFile := file[1] + strings.Split(key, ".")[0] + ".yaml"
@@ -1540,4 +1560,70 @@ func checkUserAuditLog(oc *exutil.CLI, logGroup string, user string, pass string
 		eventCount += n
 	}
 	return eventLogs, eventCount
+}
+
+func verifyMicroshiftLogs(nodename string, cmd string, cmp string) (string, int, error) {
+	var (
+		output string
+		err    error
+	)
+	mstatusErr := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
+		output, err = runSSHCommand(nodename, "redhat", cmd)
+		if err != nil {
+			return false, err
+		}
+		count := len(strings.TrimSpace(output))
+		switch cmp {
+		case "==":
+			if count == 0 {
+				return true, nil
+			}
+		case ">":
+			if count > 0 {
+				return true, nil
+			}
+		case "<":
+			if count < 0 {
+				return true, nil
+			}
+		default:
+			return false, fmt.Errorf("invalid comparison operator")
+		}
+		return false, nil
+	})
+	return output, len(strings.TrimSpace(output)), mstatusErr
+}
+
+func getMicroshiftConfig(nodeName string, cmd string, keyValue string) (string, error) {
+	var strValue string
+	mstatusErr := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
+		// Run SSH command to get the YAML configuration
+		yamlData, err := runSSHCommand(nodeName, "redhat", cmd)
+		if err == nil && yamlData != "" {
+			yamlToJson, yamlErr := exutil.Yaml2Json(yamlData)
+			if yamlErr == nil && yamlToJson != "" {
+				// Parse YAML data
+				yamlJson := gjson.Parse(yamlToJson).String()
+				if yamlJson != "" {
+					// Get value from JSON using provided key
+					strValue = gjson.Get(yamlJson, keyValue).String()
+					if strValue != "" {
+						e2e.Logf("Config values : %s", strValue)
+						return true, nil
+					}
+				}
+			}
+		}
+		return false, nil
+	})
+	return strValue, mstatusErr
+}
+
+func gatherSosreports(fqdnName string, user string, sosReportCmd string, tmpdir string) string {
+	sosreportStatus, sosErr := runSSHCommand(fqdnName, user, sosReportCmd)
+	o.Expect(sosErr).NotTo(o.HaveOccurred())
+	e2e.Logf("SOS Report :: %v", sosreportStatus)
+	o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+	o.Expect(strings.Contains(sosreportStatus, tmpdir+"/sosreport")).To(o.BeTrue())
+	return sosreportStatus
 }

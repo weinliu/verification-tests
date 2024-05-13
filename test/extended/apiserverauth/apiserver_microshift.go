@@ -73,7 +73,8 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 			fi'`, etcConfigYaml, etcConfigYamlbak)
 			_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
-			restartMicroshift(oc, fqdnName)
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
 		}()
 
 		defer func() {
@@ -101,7 +102,7 @@ manifests:
   kustomizePaths:
   - /etc/microshift/manifests.d/my-app/*/
   - /etc/microshift/manifests.d/my-app/*/patches`)
-		changeMicroshiftConfig(oc, etcConfig, fqdnName, e2eTestNamespace, etcConfigYaml)
+		changeMicroshiftConfig(etcConfig, fqdnName, etcConfigYaml)
 
 		newSrcFiles := map[string][]string{
 			"busybox.yaml": {
@@ -130,8 +131,9 @@ manifests:
 			},
 		}
 		exutil.By("4.2 Create kustomization and deployemnt files")
-		addKustomizationToMicroshift(oc, fqdnName, e2eTestNamespace, newSrcFiles)
-		restartMicroshift(oc, fqdnName)
+		addKustomizationToMicroshift(fqdnName, newSrcFiles)
+		restartErr := restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 		exutil.By("4.3 Check pods after microshift restart")
 		podsOutput := getPodsList(oc, "hello-openshift-dev-app-ocp63298")
@@ -928,7 +930,8 @@ else
 fi'`, etcConfigYaml, etcConfigYamlbak)
 			_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcdConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
-			restartMicroshift(oc, fqdnName)
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
 		}()
 
 		defer func() {
@@ -1033,7 +1036,8 @@ EOF'`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		o.Expect(strings.TrimSpace(chkContentOutput)).To(o.BeEmpty())
 
 		exutil.By("5. Restart Microshift")
-		restartMicroshift(oc, fqdnName)
+		restartErr := restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 		exutil.By("6. Ensure that userdatadir is empty and globaldatadir is restored after Microshift is restarted")
 		chkContentOutput, chkContentErr = runSSHCommand(fqdnName, user, chkContentUserDatadirCmd)
@@ -1078,7 +1082,8 @@ EOF'`, etcConfigYaml, etcConfigYamlbak, valCfg)
 			fi'`, etcConfigYaml, etcConfigYamlbak)
 			_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
-			restartMicroshift(oc, fqdnName)
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
 		}()
 
 		exutil.By("3. Take backup of config file")
@@ -1101,7 +1106,8 @@ EOF'`, etcConfigYaml, level)
 
 			unixTimestamp := time.Now().Unix()
 			exutil.By(fmt.Sprintf("%v.2 Restart Microshift", stepn+4))
-			restartMicroshift(oc, fqdnName)
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 			exutil.By(fmt.Sprintf("%v.3 Check logLevel should change to %v", stepn+4, level))
 			chkConfigCmd := fmt.Sprintf(`sudo journalctl -u microshift -b -S @%vs | grep "logLevel: %v"|grep -iv journalctl|tail -1`, unixTimestamp, level)
@@ -1160,7 +1166,8 @@ EOF'`, etcConfigYaml, level)
 			fi'`, etcConfigYaml, etcConfigYamlbak)
 			_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
 			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
-			restartMicroshift(oc, fqdnName)
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
 		}()
 
 		defer func() {
@@ -1188,7 +1195,7 @@ EOF'`, etcConfigYaml, level)
 		etcConfigCMD = fmt.Sprintf(`
 manifests:
     kustomizePaths: []`)
-		changeMicroshiftConfig(oc, etcConfigCMD, fqdnName, e2eTestNamespace, etcConfigYaml)
+		changeMicroshiftConfig(etcConfigCMD, fqdnName, etcConfigYaml)
 
 		exutil.By("5.2 :: Scenario-1 :: Create kustomization and deployemnt files")
 		newSrcFiles := map[string][]string{
@@ -1205,8 +1212,9 @@ manifests:
 				tmpNamespace,
 			},
 		}
-		addKustomizationToMicroshift(oc, fqdnName, e2eTestNamespace, newSrcFiles)
-		restartMicroshift(oc, fqdnName)
+		addKustomizationToMicroshift(fqdnName, newSrcFiles)
+		restartErr := restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 		exutil.By("5.3 :: Scenario-1 :: Check pods after microshift restart")
 		podsOp, err := getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "busybox-"+tmpNamespace, "-o=jsonpath={.items[*].metadata.name}")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1219,7 +1227,7 @@ manifests:
 		etcConfigCMD = fmt.Sprintf(`
   kustomizePaths:
   - /etc/microshift/manifests`)
-		changeMicroshiftConfig(oc, etcConfigCMD, fqdnName, e2eTestNamespace, etcConfigYaml)
+		changeMicroshiftConfig(etcConfigCMD, fqdnName, etcConfigYaml)
 
 		exutil.By("6.2 :: Scenario-2 :: Create kustomization and deployemnt files")
 		newSrcFiles = map[string][]string{
@@ -1237,8 +1245,9 @@ manifests:
 			},
 		}
 
-		addKustomizationToMicroshift(oc, fqdnName, e2eTestNamespace, newSrcFiles)
-		restartMicroshift(oc, fqdnName)
+		addKustomizationToMicroshift(fqdnName, newSrcFiles)
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 		exutil.By("6.3 :: Scenario-2 :: Check pods after microshift restart")
 		podsOutput := getPodsList(oc, "busybox-"+tmpNamespace)
@@ -1252,7 +1261,7 @@ manifests:
   kustomizePaths:
   - /etc/microshift/manifests
   - %v`, tmpManifestPath)
-		changeMicroshiftConfig(oc, etcConfigCMD, fqdnName, e2eTestNamespace, etcConfigYaml)
+		changeMicroshiftConfig(etcConfigCMD, fqdnName, etcConfigYaml)
 
 		tmpNamespace = "scenario3-ocp63217"
 		newSrcFiles = map[string][]string{
@@ -1282,8 +1291,9 @@ manifests:
 			},
 		}
 		exutil.By("7.2 :: Scenario-3 :: Create kustomization and deployemnt files")
-		addKustomizationToMicroshift(oc, fqdnName, e2eTestNamespace, newSrcFiles)
-		restartMicroshift(oc, fqdnName)
+		addKustomizationToMicroshift(fqdnName, newSrcFiles)
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 		exutil.By("7.3 Scenario-3 :: Check pods after microshift restart")
 		podsOutput = getPodsList(oc, "hello-openshift-"+tmpNamespace)
@@ -1298,7 +1308,8 @@ manifests:
 		o.Expect(delFileErr).NotTo(o.HaveOccurred())
 		delNsErr := oc.WithoutNamespace().Run("delete").Args("ns", "hello-openshift-scenario3-ocp63217", "--ignore-not-found").Execute()
 		o.Expect(delNsErr).NotTo(o.HaveOccurred())
-		restartMicroshift(oc, fqdnName)
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 		exutil.By("8.2 Scenario-4 :: Check pods after microshift restart")
 		podsOp, err = getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "hello-openshift-"+tmpNamespace, "-o=jsonpath={.items[*].metadata.name}")
@@ -1310,7 +1321,8 @@ manifests:
 		exutil.By("9.1 Scenario-5 :: Set option includes a manifest path that does not exists")
 		_, delDirErr := runSSHCommand(fqdnName, user, "sudo rm -rf "+tmpManifestPath)
 		o.Expect(delDirErr).NotTo(o.HaveOccurred())
-		restartMicroshift(oc, fqdnName)
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 		exutil.By("9.2 Scenario-5 :: Check pods after microshift restart")
 		podsOp, err = getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "hello-openshift-"+tmpNamespace, "-o=jsonpath={.items[*].metadata.name}")
@@ -1323,10 +1335,11 @@ manifests:
 		etcConfigCMD = fmt.Sprintf(`
 manifests:
     kustomizePaths:`)
-		changeMicroshiftConfig(oc, etcConfigCMD, fqdnName, e2eTestNamespace, etcConfigYaml)
+		changeMicroshiftConfig(etcConfigCMD, fqdnName, etcConfigYaml)
 		delNsErr = oc.WithoutNamespace().Run("delete").Args("ns", "busy-scenario3-ocp63217", "--ignore-not-found").Execute()
 		o.Expect(delNsErr).NotTo(o.HaveOccurred())
-		restartMicroshift(oc, fqdnName)
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
 
 		exutil.By("10.2 :: Scenario-6 :: Check manifest config")
 		pattern := `kustomizePaths:\s*\n\s+-\s+/usr/lib/microshift/manifests\s*\n\s+-\s+/usr/lib/microshift/manifests\.d/\*\s*\n\s+-\s+/etc/microshift/manifests\s*\n\s+-\s+/etc/microshift/manifests\.d/\*`
@@ -1342,5 +1355,336 @@ manifests:
 		podsOutput = getPodsList(oc, "busybox-"+tmpNamespace)
 		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Scenario-6 :: Failed :: Pods are not created, manifests are not set to default")
 		e2e.Logf("Scenario-6 :: Passed :: Pods should be created, manifests are loaded from default location")
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-72334-[Apiserver] Make audit log policy configurable for MicroShift [Disruptive][Slow]", func() {
+		var (
+			e2eTestNamespace     = "microshift-ocp72334-" + exutil.GetRandomString()
+			etcConfigYaml        = "/etc/microshift/config.yaml"
+			etcConfigYamlbak     = "/etc/microshift/config.yaml.bak"
+			user                 = "redhat"
+			chkConfigCmd         = `sudo /usr/bin/microshift show-config --mode effective 2>/dev/null`
+			defaultProfileCm     = "my-test-default-profile-cm"
+			writeRequestBodiesCm = "my-test-writerequestbodies-profile-cm"
+			noneProfileCm        = "my-test-none-profile-cm"
+			allRequestBodiesCm   = "my-test-allrequestbodies-profile-cm"
+			auditLogPath         = "/var/log/kube-apiserver/audit.log"
+			writeVerbs           = "create|delete|patch|update"
+			getVerbs             = "get|list|watch"
+			fqdnName             = getMicroshiftHostname(oc)
+		)
+
+		defer func() {
+			etcConfigCMD := fmt.Sprintf(`'configfile=%v;
+			configfilebak=%v;
+			if [ -f $configfilebak ]; then
+				cp $configfilebak $configfile;
+				rm -f $configfilebak;
+			else
+				rm -f $configfile;
+			fi'`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("1. Prepare for audit profile setting.")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		e2e.Logf("Take backup of config file")
+		etcConfigCMD := fmt.Sprintf(`'configfile=%v;
+		configfilebak=%v;
+		if [ -f $configfile ]; then 
+			cp $configfile $configfilebak;
+		fi'`, etcConfigYaml, etcConfigYamlbak)
+		_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
+		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Set audit profile to Invalid profile")
+		etcConfigCMD = fmt.Sprintf(`
+apiServer:
+ auditLog:
+  profile: Unknown`)
+		changeMicroshiftConfig(etcConfigCMD, fqdnName, etcConfigYaml)
+		restartErr := restartMicroshift(fqdnName)
+		o.Expect(restartErr).To(o.HaveOccurred())
+
+		getGrepCMD := func(profileCm, namespace, condition, verbs string, logPath string) string {
+			verbGrepCmd := `""`
+			if strings.Contains(profileCm, "default") && verbs != `""` {
+				verbGrepCmd = fmt.Sprintf(`-hE "\"verb\":\"(%s)\",\"user\":.*(requestObject|responseObject)|\"verb\":\"(%s)\",\"user\":.*(requestObject|responseObject)"`, writeVerbs, getVerbs)
+			} else if strings.Contains(profileCm, "writerequest") || strings.Contains(profileCm, "allrequest") {
+				verbGrepCmd = fmt.Sprintf(`-hE "\"verb\":\"%s\",\"user\":.*(requestObject|responseObject)"`, verbs)
+			}
+			return fmt.Sprintf(`sudo grep -i %s %s | grep -i %s | grep %s | grep %s || true`, profileCm, logPath, namespace, condition, verbGrepCmd)
+		}
+
+		type logCheckStep struct {
+			desc       string
+			cmd        string
+			conditions string
+		}
+
+		type auditProfile struct {
+			name        string
+			etcConfig   string
+			logCountCmd string
+			conditions  string
+			innerSteps  []*logCheckStep
+		}
+
+		steps := []*auditProfile{
+			{
+				name:        "None",
+				etcConfig:   "apiServer:\n  auditLog:\n    profile: None",
+				logCountCmd: getGrepCMD(noneProfileCm, e2eTestNamespace, `""`, `""`, auditLogPath),
+				conditions:  "==",
+			},
+			{
+				name:      "Default",
+				etcConfig: "apiServer:\n  auditLog:",
+				innerSteps: []*logCheckStep{
+					{
+						desc:       "Verify System-Auth logs in profile :: ",
+						cmd:        getGrepCMD(defaultProfileCm, e2eTestNamespace, "-i system:authenticated", `""`, auditLogPath),
+						conditions: ">",
+					},
+					{
+						desc:       "Verify Verb and User logs in profile :: ",
+						cmd:        getGrepCMD(defaultProfileCm, e2eTestNamespace, `""`, getVerbs, auditLogPath),
+						conditions: "==",
+					},
+					{
+						desc:       "Verify default logs in profile :: ",
+						cmd:        getGrepCMD(defaultProfileCm, e2eTestNamespace, `""`, `""`, auditLogPath),
+						conditions: ">",
+					},
+				},
+			},
+			{
+				name:      "WriteRequestBodies",
+				etcConfig: "apiServer:\n  auditLog:\n    profile: WriteRequestBodies",
+				innerSteps: []*logCheckStep{
+					{
+						desc:       "Verify Read logs in profile :: ",
+						cmd:        getGrepCMD(writeRequestBodiesCm, e2eTestNamespace, "", getVerbs, auditLogPath),
+						conditions: "==",
+					},
+					{
+						desc:       "Verify Write logs in profile :: ",
+						cmd:        getGrepCMD(writeRequestBodiesCm, e2eTestNamespace, "", writeVerbs, auditLogPath),
+						conditions: ">",
+					},
+				},
+			},
+			{
+				name:       "AllRequestBodies",
+				etcConfig:  "apiServer:\n  auditLog:\n    profile: AllRequestBodies",
+				conditions: ">",
+				innerSteps: []*logCheckStep{
+					{
+						desc:       "Verify Read logs in profile :: ",
+						cmd:        getGrepCMD(allRequestBodiesCm, e2eTestNamespace, "", getVerbs, auditLogPath),
+						conditions: ">",
+					},
+					{
+						desc:       "Verify Write logs in profile :: ",
+						cmd:        getGrepCMD(allRequestBodiesCm, e2eTestNamespace, "", writeVerbs, auditLogPath),
+						conditions: ">",
+					},
+				},
+			},
+		}
+
+		i := 2
+		for _, step := range steps {
+			exutil.By(fmt.Sprintf("%d.1: Set Microshift Audit profile :: %s", i+1, step.name))
+			changeMicroshiftConfig(step.etcConfig, fqdnName, etcConfigYaml)
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
+
+			exutil.By(fmt.Sprintf("%d.2: Verify Microshift profile :: %s", i+1, step.name))
+			configOutput, configErr := getMicroshiftConfig(fqdnName, chkConfigCmd, "apiServer.auditLog.profile")
+			exutil.AssertWaitPollNoErr(configErr, fmt.Sprintf("Failed to verify Microshift config: %v", configErr))
+			o.Expect(configOutput).To(o.ContainSubstring(step.name))
+
+			exutil.By(fmt.Sprintf("%d.3: Verify Microshift audit logs :: %s", i+1, step.name))
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("cm", fmt.Sprintf("my-test-%s-profile-cm", strings.ToLower(strings.ReplaceAll(step.name, " ", "-"))), "-n", e2eTestNamespace, "--from-literal=key=value").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", fmt.Sprintf("my-test-%s-profile-cm", strings.ToLower(strings.ReplaceAll(step.name, " ", "-"))), "-n", e2eTestNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			j := 3
+			for _, innerStep := range step.innerSteps {
+				exutil.By(fmt.Sprintf("%d.%d: %s%s", i+1, j+1, innerStep.desc, step.name))
+				eventLogs, eventCount, logErr := verifyMicroshiftLogs(fqdnName, innerStep.cmd, innerStep.conditions)
+				exutil.AssertWaitPollNoErr(logErr, fmt.Sprintf("Failed to verify Microshift audit logs: %v :: %s :: %v", logErr, eventLogs, eventCount))
+				o.Expect(eventCount).To(o.BeNumerically(innerStep.conditions, 0))
+				j++
+			}
+			i++
+		}
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-72340-[Apiserver] Microshift Audit Log File Rotation [Disruptive][Slow]", func() {
+		var (
+			e2eTestNamespace = "microshift-ocp72340-" + exutil.GetRandomString()
+			etcConfigYaml    = "/etc/microshift/config.yaml"
+			etcConfigYamlbak = "/etc/microshift/config.yaml.bak"
+			user             = "redhat"
+			chkConfigCmd     = `sudo /usr/bin/microshift show-config --mode effective 2>/dev/null`
+			tmpdir           = "/tmp/" + e2eTestNamespace
+			sosReportCmd     = `sudo microshift-sos-report --tmp-dir ` + tmpdir
+			newAuditlogPath  = "/home/redhat/kube-apiserver"
+			oldAuditlogPath  = "/var/log/kube-apiserver"
+			fqdnName         = getMicroshiftHostname(oc)
+		)
+
+		defer runSSHCommand(fqdnName, user, "sudo rm -rf ", tmpdir)
+		_, cmdErr := runSSHCommand(fqdnName, user, "sudo mkdir -p "+tmpdir)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Recovering audit log path")
+			clearScript := fmt.Sprintf(`'oldPath=%s;
+			newPath=%s;
+			if [ -d $newPath ]; then
+				sudo rm -rf -- $oldPath;
+				sudo rm -rf -- $newPath;
+            fi'`, oldAuditlogPath, newAuditlogPath)
+			_, cmdErr := runSSHCommand(fqdnName, user, "sudo bash -c", clearScript)
+			o.Expect(cmdErr).NotTo(o.HaveOccurred())
+			// adding to avoid race conditions
+			time.Sleep(100 * time.Millisecond)
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
+		}()
+
+		defer func() {
+			e2e.Logf("Recovering microshift config yaml")
+			etcConfigCMD := fmt.Sprintf(`'configfile=%v;
+			configfilebak=%v;
+			if [ -f $configfilebak ]; then
+				cp $configfilebak $configfile;
+				rm -f $configfilebak;
+			else
+				rm -f $configfile;
+			fi'`, etcConfigYaml, etcConfigYamlbak)
+			_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("1. Prepare for audit profile setting.")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		e2e.Logf("Take backup of config file")
+		etcConfigCMD := fmt.Sprintf(`'configfile=%v;
+		configfilebak=%v;
+		if [ -f $configfile ]; then 
+			cp $configfile $configfilebak;
+		fi'`, etcConfigYaml, etcConfigYamlbak)
+		_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
+		o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Check Micoroshift log rotation default values")
+		configOutput, configErr := getMicroshiftConfig(fqdnName, chkConfigCmd, "apiServer.auditLog")
+		exutil.AssertWaitPollNoErr(configErr, fmt.Sprintf("Failed to verify Microshift config: %v", configErr))
+		o.Expect(configOutput).To(o.ContainSubstring(`"maxFileAge":0,"maxFileSize":0,"maxFiles":0,"profile":"Default"`))
+
+		exutil.By("3. Set audit profile to Invalid profile")
+		etcConfigInval := "apiServer:\n  auditLog:\n    maxFileAge: inval\n    maxFileSize: invali\n    maxFiles: inval\n"
+		changeMicroshiftConfig(etcConfigInval, fqdnName, etcConfigYaml)
+		restartErr := restartMicroshift(fqdnName)
+		o.Expect(restartErr).To(o.HaveOccurred())
+
+		exutil.By("4. Verify Log rotation values and size")
+		etcConfig := "apiServer:\n  auditLog:\n    maxFileAge: 1\n    maxFileSize: 2\n    maxFiles: 2\n    profile: AllRequestBodies"
+		changeMicroshiftConfig(etcConfig, fqdnName, etcConfigYaml)
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
+		configOutput, configErr = getMicroshiftConfig(fqdnName, chkConfigCmd, "apiServer.auditLog")
+		exutil.AssertWaitPollNoErr(configErr, fmt.Sprintf("Failed to verify Microshift config: %v", configErr))
+		o.Expect(configOutput).To(o.ContainSubstring(`"maxFileAge":1,"maxFileSize":2,"maxFiles":2,"profile":"AllRequestBodies"`))
+
+		mstatusErr := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
+			// Check audit log files in /var/log/kube-apiserver/ directory
+			checkAuditLogsCmd := "sudo ls -ltrh /var/log/kube-apiserver/"
+			filesOutput, err := runSSHCommand(fqdnName, user, checkAuditLogsCmd)
+			if err != nil {
+				return false, nil
+			}
+			// Check if there are two backup files of size 2M and audit.log is correctly managed
+			lines := strings.Split(string(filesOutput), "\n")
+			backupCount := 0
+			for _, line := range lines {
+				if strings.Contains(line, "audit-") {
+					fields := strings.Fields(line)
+					if len(fields) >= 5 && fields[4] == "2.0M" {
+						backupCount++
+					}
+				}
+			}
+			if backupCount != 2 {
+				oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-A").Execute()
+				return false, nil
+			}
+			e2e.Logf("Verification successful: Audit log configuration and files are as expected")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(mstatusErr, fmt.Sprintf("Failed to verify Microshift audit logs: %s", mstatusErr))
+
+		exutil.By("5. Verify Audit log file storage location path dedicated volume")
+		_, stopErr := runSSHCommand(fqdnName, user, "sudo systemctl stop microshift")
+		o.Expect(stopErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Move kube-apiserver log")
+		_, moveErr := runSSHCommand(fqdnName, user, "sudo mv /var/log/kube-apiserver ~/")
+		o.Expect(moveErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Create symlink for audit logs")
+		_, symLinkErr := runSSHCommand(fqdnName, user, "sudo ln -s ~/kube-apiserver /var/log/kube-apiserver")
+		o.Expect(symLinkErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Restart Microshift")
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Gather SOS report logs")
+		sosreportStatus := gatherSosreports(fqdnName, user, sosReportCmd, tmpdir)
+
+		// Define the regular expression pattern to extract the file name
+		re := regexp.MustCompile(`(/[a-zA-Z0-9/-]+/sosreport-[a-zA-Z0-9-]+\.tar\.xz)`)
+		match := re.FindStringSubmatch(sosreportStatus)
+		if len(match) > 1 {
+			e2e.Logf("File name:", match[1])
+		} else {
+			e2e.Failf("File name not found in output")
+		}
+
+		e2e.Logf("Untart SOS report logs")
+		_, tarSosErr := runSSHCommand(fqdnName, user, "sudo tar -vxf "+match[1]+" -C "+tmpdir)
+		o.Expect(tarSosErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Compare SOS report logs")
+		var sosOutput1 string
+		var sosOutput2 string
+		mSosErr := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
+			sosOutput1, _ = runSSHCommand(fqdnName, user, `sudo find `+tmpdir+` -type l -name kube-apiserver -exec sh -c 'find $(readlink -f {}) -maxdepth 1 -type f | wc -l' \;|tr -d '\n'`)
+			sosOutput2, _ = runSSHCommand(fqdnName, user, `sudo find `+tmpdir+` -type d -name kube-apiserver -exec ls -ltrh {} \;|grep -v total|wc -l|tr -d '\n'`)
+			// Compare the count of both symbolik link and actual path
+			if sosOutput1 != "" && sosOutput2 != "" && sosOutput1 == sosOutput2 {
+				e2e.Logf("Both storage paths are identical.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(mstatusErr, fmt.Sprintf("Both storage paths are not identical :: %v. %s::%s", mSosErr, sosOutput1, sosOutput2))
 	})
 })
