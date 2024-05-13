@@ -255,6 +255,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author: rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Medium-42047-Cluster autoscaling with Windows nodes [Slow][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support changing namespace and scaling up machines")
+		}
 		namespace := "winc-42047"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -295,6 +298,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author rrasouli@redhat.com
 
 	g.It("Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support scaling up machines")
+		}
 		if iaasPlatform != "azure" && iaasPlatform != "aws" {
 			// Currently vSphere and GCP supports only Windows 2022
 			g.Skip("Only Azure and AWS are supporting multiple operating systems, skipping")
@@ -726,6 +732,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Smokerun-Author:rrasouli-NonPreRelease-Longduration-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
 		// vSphere contains a builtin private and public key with it's template, currently changing its private key is super challenging
 		// it implies generating a new template with a different key.
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support changing namespace and scaling up machines")
+		}
 		if iaasPlatform == "vsphere" || iaasPlatform == "none" {
 			g.Skip(fmt.Sprintf("%s does not support key replacement, skipping", iaasPlatform))
 		}
@@ -832,6 +841,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author: sgao@redhat.com
 	g.It("Author:sgao-NonPreRelease-Longduration-Medium-39030-Re queue on Windows machine's edge cases [Slow][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support scaling up Windows machines")
+		}
 		g.By("Scale down WMCO")
 		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
@@ -1499,6 +1511,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author jfrancoa@redhat.com
 	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Serial][Disruptive]", func() {
+		if iaasPlatform == "none" {
+			g.Skip("platform none does not support changing namespace and scaling up machines")
+		}
 		customNamespace := "winc-namespace-test"
 		zone := getAvailabilityZone(oc)
 
@@ -1826,7 +1841,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-43832-[upgrade]-Seamless upgrade with BYOH Windows instances [Serial][Disruptive]", func() {
 		upgrade_index_to := getConfigMapData(oc, wincTestCM, "wmco_upgrade_index_image", defaultNamespace)
-		if upgrade_index_to == "" {
+		trimmedValue := removeOuterQuotes(strings.TrimSpace(upgrade_index_to))
+		if trimmedValue == "" {
 			g.Skip("Upgrade index image hasn't been configured")
 		}
 		source := "wmco1"
