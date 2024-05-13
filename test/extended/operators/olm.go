@@ -5055,11 +5055,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user use", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc = exutil.NewCLI("olm-23440", exutil.KubeConfigPath())
+		oc = exutil.NewCLIWithoutNamespace("default")
 	)
 
 	g.BeforeEach(func() {
 		exutil.SkipNoOLMCore(oc)
+	})
+
+	// author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-Low-73695-PO is disable", func() {
+
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("PO is supported in TP only currently, so skip it")
+		}
+		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "platform-operators-aggregated").Output()
+		o.Expect(err).To(o.HaveOccurred(), "PO is not disable")
 	})
 
 	// author: tbuskey@redhat.com
