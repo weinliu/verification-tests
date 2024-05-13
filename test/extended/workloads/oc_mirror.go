@@ -1407,9 +1407,9 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		defer removeCSAndISCP(oc)
 		createCSAndISCP(oc, "cs-certified-operator-index", "openshift-marketplace", "Running", 1)
-		nvidiaSub, nvidiaOG := getOperatorInfo(oc, "nvidia-network-operator", "nvidia-network-operator", "registry.redhat.io/redhat/certified-operator-index:v4.14", "cs-certified-operator-index")
-		defer removeOperatorFromCustomCS(oc, nvidiaSub, nvidiaOG, "nvidia-network-operator")
-		installOperatorFromCustomCS(oc, nvidiaSub, nvidiaOG, "nvidia-network-operator", "nvidia-network-operator-controller-manager")
+		portworxSub, portworxOG := getOperatorInfo(oc, "portworx-certified", "nvidia-certified-ns", "registry.redhat.io/redhat/certified-operator-index:v4.15", "cs-certified-operator-index")
+		defer removeOperatorFromCustomCS(oc, portworxSub, portworxOG, "nvidia-certified-ns")
+		installOperatorFromCustomCS(oc, portworxSub, portworxOG, "nvidia-certified-ns", "portworx-operator")
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-70047-Medium-70052-oc-mirror requires that the default channel of an operator is mirrored [Serial]", func() {
