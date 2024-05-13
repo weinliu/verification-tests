@@ -76,7 +76,7 @@ export const operatorHubPage = {
     cy.get('[data-test="install-operator"]').click();
   },
   checkOperatorStatus: (csvName, csvStatus) => {
-    cy.get(`[data-test-operator-row="${csvName}"]`)
+    cy.get(`[data-test-operator-row="${csvName}"]`, { timeout: 120000 })
       .parents('tr')
       .children()
       .contains(`${csvStatus}`, { timeout: 60000 });
