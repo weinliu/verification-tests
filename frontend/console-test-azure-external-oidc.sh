@@ -39,6 +39,7 @@ export CYPRESS_LOGIN_PASSWD=${PASSWORD}
 ls -ltr
 echo "Triggering tests"
 set -x
+node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env --spec=tests/external-oidc/externaloidc-ui.cy.ts || true
 rm -rf ~/.kube/cache/oc/*
 nohup oc login --exec-plugin=oc-oidc --issuer-url=$issuer_url --client-id=$cli_client_id --extra-scopes=email,offline_access --callback-port=8080 > /tmp/out.file 2>&1 &
 node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env --spec=tests/external-oidc/externaloidc-cli.cy.ts || true

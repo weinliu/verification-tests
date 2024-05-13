@@ -19,6 +19,7 @@ declare global {
             isManagedCluster();
             cliLoginAzureExternalOIDC();
             uiLoginAzureExternalOIDC();
+            uiLogoutAzureExternalOIDC();
         }
     }
 }
@@ -73,7 +74,7 @@ Cypress.Commands.add('uiLogout', () => {
       cy.log('Skipping logout, console is running with auth disabled');
       return;
     }
-    cy.log('Loggin out UI');
+    cy.log('Log out UI');
     cy.byTestID('user-dropdown').click();
     cy.byTestID('log-out').should('be.visible');
     cy.byTestID('log-out').click({ force: true });
@@ -159,8 +160,25 @@ Cypress.Commands.add("uiLoginAzureExternalOIDC", () => {
     }
   });
   cy.byTestID('user-dropdown').should('exist');
+  guidedTour.close();
+  cy.switchPerspective('Administrator');
+  cy.log('Login Successfully!');
 });
 
+Cypress.Commands.add("uiLogoutAzureExternalOIDC", () => {
+  cy.uiLogout();
+  cy.wait(3000);
+  cy.origin('https://login.microsoftonline.com', () => {
+    cy.get('body').then(($body) => {
+      if ($body.text().includes('Pick an account')) {
+        cy.contains('Signed in').click();
+      }
+    cy.contains('div#login_workload_logo_text', 'You signed out of your account').should('exist');
+    cy.contains('div#SignOutStatusMessage', 'a good idea to close all browser windows').should('exist');
+    });
+  });
+  cy.log('Log out successfully!');
+});
 
 Cypress.Commands.add("cliLoginAzureExternalOIDC", () => {
   cy.origin('http://localhost:8080', () =>{
