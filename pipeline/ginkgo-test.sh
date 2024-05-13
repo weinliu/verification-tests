@@ -39,6 +39,7 @@ function config_env {
   fi
   go version
   go env
+  env|grep -v -E "GLOKIPWD|GITHUB_TOKEN|GITHUB_API_CURL_OPTS"
   oc version -o yaml || echo "can not get oc version"
 }
 
