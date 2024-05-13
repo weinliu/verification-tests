@@ -7,16 +7,15 @@ objects:
     kind: Deployment
     metadata:
       name: "${NAME}"
-      namespace: "${NAMESPACE}"
     spec:
       replicas: ${{REPLICAS}}
       selector:
         matchLabels:
-          app: httpd-app
+          app: "${NAME}"
       template:
         metadata:
           labels:
-            app: httpd-app
+            app: "${NAME}"
         spec:
           replicas: 1
           runtimeClassName: "${RUNTIMECLASSNAME}"
@@ -27,8 +26,9 @@ objects:
               ports:
                 - containerPort: ${{PORT}}
               securityContext:
-                runAsNonRoot: true
+                privileged: false
                 allowPrivilegeEscalation: false
+                runAsNonRoot: true
                 capabilities:
                   drop:
                     - ALL
@@ -37,13 +37,12 @@ objects:
 
 parameters:
   - name: NAME
-    value: "none"
+    value: "hello-openshift"
   - name: REPLICAS
     value: "3"
   - name: RUNTIMECLASSNAME
     value: "kata"
-  - name: NAMESPACE
   - name: IMAGE
-    value: "registry.redhat.io/rhscl/httpd-24-rhel7"
+    value: "quay.io/openshift/origin-hello-openshift"
   - name: PORT
-    value: "8080"
+    value: "8888"

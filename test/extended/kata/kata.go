@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			podlogs, err := oc.AsAdmin().Run("logs").Args("pod/"+newPodName, "-n", podNs).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(podlogs).NotTo(o.BeEmpty())
-			if strings.Contains(podlogs, "httpd") {
+			if strings.Contains(podlogs, "serving on") {
 				return true, nil
 			}
 			return false, nil

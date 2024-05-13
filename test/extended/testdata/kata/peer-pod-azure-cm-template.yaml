@@ -20,6 +20,7 @@ objects:
       AZURE_IMAGE_ID: "${AZURE_IMAGE_ID}"
       AZURE_REGION: "${AZURE_REGION}"
       AZURE_RESOURCE_GROUP: "${AZURE_RESOURCE_GROUP}"
+      PAUSE_IMAGE: "${PAUSE_IMAGE}"
 
 # oc process --ignore-unknown-parameters=true -f $L/peer-pod-azure-cm-template.yaml -p AZURE_SUBNET_ID=${AZURE_SUBNET_ID} AZURE_NSG_ID=${AZURE_NSG_ID} AZURE_IMAGE_ID=${AZURE_IMAGE_ID} AZURE_REGION=${AZURE_REGION} AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
 # This is for end user/Jenkins to create a configmap and apply it to your cluster
@@ -48,3 +49,5 @@ parameters:
     value: "eastus"
   - name: AZURE_RESOURCE_GROUP
     value: ""
+  - name: PAUSE_IMAGE
+    value: "quay.io/bpradipt/okd-pause"

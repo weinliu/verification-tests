@@ -6,27 +6,36 @@ objects:
   - apiVersion: v1
     kind: Pod
     metadata:
-      labels:
-        app: httpd
       name: "${NAME}"
+      labels:
+        app: "${NAME}"
     spec:
       runtimeClassName: "${RUNTIMECLASSNAME}"
       containers:
-        - image: registry.redhat.io/rhscl/httpd-24-rhel7
-          imagePullPolicy: IfNotPresent
-          name: "${NAME}"
+        - name: "${NAME}"
+          image: "${IMAGE}"
           ports:
-            - containerPort: 8080
+            - containerPort: ${{PORT}}
+          imagePullPolicy: IfNotPresent
           securityContext:
-            runAsNonRoot: true
+            privileged: false
             allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1001
             capabilities:
               drop:
                 - ALL
             seccompProfile:
               type: RuntimeDefault
 
+# oc process --ignore-unknown-parameters=true -f $L/workload-pod-securityContext.yaml -p NAME=$NAME RUNTIMECLASSNAME=$RUNTIMECLASSNAME IMAGE=$IMAGE PORT=$PORT > pod.yaml
+
 parameters:
+  - name: NAME
+    value: "hello-openshift"
   - name: RUNTIMECLASSNAME
     value: "kata"
-  - name: NAME
+  - name: IMAGE
+    value: "quay.io/openshift/origin-hello-openshift"
+  - name: PORT
+    value: "8888"

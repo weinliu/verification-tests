@@ -42,6 +42,6 @@ parameters:
   - name: RUNTIMECLASSNAME
     value: "kata-remote"
   - name: IMAGE
-    value: "registry.redhat.io/rhscl/httpd-24-rhel7"
+    value: "quay.io/openshift/origin-hello-openshift"
   - name: PORT
     value: "8080"
