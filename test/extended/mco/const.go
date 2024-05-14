@@ -29,9 +29,6 @@ const (
 	// ControllerLabelValue value used to identify the controller pod
 	ControllerLabelValue = "machine-config-controller"
 
-	// TmplAddSSHAuthorizedKeyForWorker template file name: change-worker-add-ssh-authorized-key
-	TmplAddSSHAuthorizedKeyForWorker = "change-worker-add-ssh-authorized-key"
-
 	// EnvVarLayeringTestImageRepository environment variable to define the image repository used by layering test cases
 	EnvVarLayeringTestImageRepository = "LAYERING_TEST_IMAGE_REPOSITORY"
 
@@ -44,6 +41,8 @@ const (
 	LayeringBaseImageReleaseInfo = "rhel-coreos"
 	// TmplHypershiftMcConfigMap template file name:hypershift-cluster-mc-configmap.yaml, it's used to create mc for hosted cluster
 	TmplHypershiftMcConfigMap = "hypershift-cluster-mc-configmap.yaml"
+	// TmplAddSSHAuthorizedKeyForWorker template file name: change-worker-add-ssh-authorized-key
+	TmplAddSSHAuthorizedKeyForWorker = "change-worker-add-ssh-authorized-key.yaml"
 	// GenericMCTemplate is the name of a MachineConfig template that can be fully configured by parameters
 	GenericMCTemplate = "generic-machine-config-template.yml"
 

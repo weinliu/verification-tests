@@ -574,9 +574,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		workerNode := skipTestIfOsIsNotRhelOs(oc)
 
 		exutil.By("Create new machine config with new authorized key")
-		mcName := TmplAddSSHAuthorizedKeyForWorker
-		mcTemplate := mcName + ".yaml"
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+		mcName := "add-ssh-authorized-key-for-worker"
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(TmplAddSSHAuthorizedKeyForWorker)
 		defer mc.delete()
 		mc.create()
 
@@ -591,9 +590,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		workerNode := skipTestIfOsIsNotRhelOs(oc)
 
 		exutil.By("Create new machine config with new authorized key")
-		mcName := TmplAddSSHAuthorizedKeyForWorker
-		mcTemplate := mcName + ".yaml"
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+		mcName := "add-ssh-authorized-key-for-worker"
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(TmplAddSSHAuthorizedKeyForWorker)
 		defer mc.delete()
 		mc.create()
 

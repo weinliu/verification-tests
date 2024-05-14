@@ -2,10 +2,13 @@ package mco
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
@@ -104,6 +107,48 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		})
 	})
 
+	g.It("Author:rioliu-NonPreRelease-High-73417-NodeDisruptionPolicy sshkey with action None [Disruptive]", func() {
+		testSSHKeyBasedPolicy(oc, "73417", []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}, []string{LogPerformingPostConfigNone})
+	})
+
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73418-NodeDisruptionPolicy sshkey with action Reboot [Disruptive]", func() {
+		testSSHKeyBasedPolicy(oc, "73418", []Action{NewCommonAction(NodeDisruptionPolicyActionReboot)}, []string{})
+	})
+
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73415-NodeDisruptionPolicy sshkey with multiple actions [Disruptive]", func() {
+		testSSHKeyBasedPolicy(oc, "73415", []Action{
+			NewCommonAction(NodeDisruptionPolicyActionDrain),
+			NewCommonAction(NodeDisruptionPolicyActionDaemonReload),
+			NewReloadAction(TestService),
+			NewRestartAction(TestService),
+		}, []string{
+			LogPerformingPostConfigReload,
+			LogServiceReloadedSuccessfully,
+			LogPerformingPostConfigRestart,
+			LogServiceRestartedSuccessfully,
+			LogPerformingPostConfigDaemonReload,
+			LogDaemonReloadedSuccessfully,
+		})
+	})
+
+	g.It("Author:rioliu-NonPreRelease-High-73489-NodeDisruptionPolicy MachineConfigurations is only effective with name cluster", func() {
+
+		var (
+			filePath    = generateTempFilePath(e2e.TestContext.OutputDir, "invalidmc-*")
+			fileContent = strings.ReplaceAll(NewNodeDisruptionPolicy(oc).PrettyString(), "cluster", "iminvalid")
+		)
+
+		exutil.By("Create machineconfiguration.operator.openshift.io with invalid name")
+		o.Expect(os.WriteFile(filePath, []byte(fileContent), 0o644)).NotTo(o.HaveOccurred(), "create invalid MC file failed")
+		defer os.Remove(filePath)
+		output, ocerr := oc.AsAdmin().Run("apply").Args("-f", filePath).Output()
+
+		exutil.By("Check whether oc command is failed")
+		o.Expect(ocerr).To(o.HaveOccurred(), "Expected oc command error not found")
+		o.Expect(output).Should(o.ContainSubstring("Only a single object of MachineConfiguration is allowed and it must be named cluster"))
+
+	})
+
 })
 
 // test func for file based policy test cases
@@ -163,6 +208,37 @@ func testUnitBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expect
 	exutil.By("Create a test unit on worker node")
 	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
 	mc.SetParams(fmt.Sprintf("UNITS=[%s]", unitConfig))
+	mc.skipWaitForMcp = true
+	defer mc.delete()
+	mc.create()
+
+	// check MCN for reboot and drain
+	checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	workerMcp.waitForComplete()
+	// check MCD logs if expectedLogs is not empty
+	checkMachineConfigDaemonLog(workerNode, expectedLogs)
+}
+
+// test func for sshkey based policy test cases
+func testSSHKeyBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expectedLogs []string) {
+
+	var (
+		mcName = fmt.Sprintf("create-test-sshkey-%s-%s", caseID, exutil.GetRandomString())
+		// sshkey change only works on coreOS node
+		workerNode = NewNodeList(oc.AsAdmin()).GetAllCoreOsWokerNodesOrFail()[0]
+		workerMcp  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+	)
+
+	exutil.By("Patch ManchineConfiguration cluster")
+	ndp := NewNodeDisruptionPolicy(oc)
+	defer ndp.Rollback()
+	o.Expect(ndp.SetSSHKeyPolicy(actions...).Apply()).To(o.Succeed(), "Patch ManchineConfiguration failed")
+
+	exutil.By("Check the nodeDisruptionPolicyStatus, new change should be merged")
+	o.Expect(ndp.IsUpdated()).To(o.BeTrue(), "New policies are not merged properly")
+
+	exutil.By("Create machine config with new SSH authorized key")
+	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(TmplAddSSHAuthorizedKeyForWorker)
 	mc.skipWaitForMcp = true
 	defer mc.delete()
 	mc.create()

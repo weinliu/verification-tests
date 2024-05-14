@@ -36,8 +36,8 @@ type Service struct {
 }
 
 // NewNodeDisruptionPolicy constructor of NodeDisruptionPolicy
-func NewNodeDisruptionPolicy(oc *exutil.CLI) NodeDisruptionPolicy {
-	return NodeDisruptionPolicy{Resource: *NewResource(oc.AsAdmin(), "machineconfigurations.operator.openshift.io", "cluster")}
+func NewNodeDisruptionPolicy(oc *exutil.CLI) *NodeDisruptionPolicy {
+	return &NodeDisruptionPolicy{Resource: *NewResource(oc.AsAdmin(), "machineconfigurations.operator.openshift.io", "cluster")}
 }
 
 // NewPolicyWithParams constructor of Policy
