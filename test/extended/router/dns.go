@@ -441,6 +441,52 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.ContainSubstring("denial 9984 30")))
 	})
 
+	// author: shudili@redhat.com
+	g.It("Author:shudili-High-39842-CoreDNS supports dual stack ClusterIP Services for OCP4.8 or higher", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-v4v6rc.yaml")
+			unsecsvcName        = "service-unsecurev4v6"
+			secsvcName          = "service-securev4v6"
+		)
+
+		exutil.By("check the IP stack tpye, skip for non-dualstack platform")
+		ipStackType := checkIPStackType(oc)
+		e2e.Logf("the cluster IP stack type is: %v", ipStackType)
+		if ipStackType != "dualstack" {
+			g.Skip("Skip for non-dualstack platform")
+		}
+
+		exutil.By("deploy a project, a backend pod and its services resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-v4v6rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-v4v6rc, Ready status not met")
+		srvPod := getPodName(oc, project1, "name=web-server-v4v6rc")[0]
+
+		exutil.By("check the services v4v6 addresses")
+		IPAddresses := fetchJSONPathValue(oc, project1, "service/"+unsecsvcName, ".spec.clusterIPs")
+		o.Expect(IPAddresses).To(o.MatchRegexp(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`))
+		o.Expect(strings.Count(IPAddresses, ":") >= 2).To(o.BeTrue())
+
+		IPAddresses = fetchJSONPathValue(oc, project1, "service/"+secsvcName, ".spec.clusterIPs")
+		o.Expect(IPAddresses).To(o.MatchRegexp(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`))
+		o.Expect(strings.Count(IPAddresses, ":") >= 2).To(o.BeTrue())
+
+		exutil.By("check the services names can be resolved to their v4v6 addresses")
+		IPAddress1 := fetchJSONPathValue(oc, project1, "service/"+unsecsvcName, ".spec.clusterIPs[0]")
+		IPAddress2 := fetchJSONPathValue(oc, project1, "service/"+unsecsvcName, ".spec.clusterIPs[1]")
+		cmdOnPod := []string{"-n", project1, srvPod, "--", "getent", "ahosts", unsecsvcName}
+		repeatCmd(oc, cmdOnPod, IPAddress1, 5)
+		repeatCmd(oc, cmdOnPod, IPAddress2, 5)
+
+		IPAddress1 = fetchJSONPathValue(oc, project1, "service/"+secsvcName, ".spec.clusterIPs[0]")
+		IPAddress2 = fetchJSONPathValue(oc, project1, "service/"+secsvcName, ".spec.clusterIPs[1]")
+		cmdOnPod = []string{"-n", project1, srvPod, "--", "getent", "ahosts", secsvcName}
+		repeatCmd(oc, cmdOnPod, IPAddress1, 5)
+		repeatCmd(oc, cmdOnPod, IPAddress2, 5)
+	})
+
 	// Bug: 2061244
 	// no master nodes on HyperShift guest cluster so this case is not available
 	g.It("NonHyperShiftHOST-Author:mjoseph-High-56325-DNS pod should not work on nodes with taint configured [Disruptive]", func() {
