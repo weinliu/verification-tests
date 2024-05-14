@@ -24,12 +24,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("Get the platform type and check the endpointPublishingStrategy type")
 		platformtype := exutil.CheckPlatform(oc)
 		platforms := map[string]bool{
-			"aws":      true,
-			"azure":    true,
-			"gcp":      true,
-			"alicloud": true,
-			"ibmcloud": true,
-			"powervs":  true,
+			"aws":          true,
+			"azure":        true,
+			"gcp":          true,
+			"alibabacloud": true,
+			"ibmcloud":     true,
+			"powervs":      true,
 		}
 
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ingress-operator", "ingresscontroller/default", "-o=jsonpath={.status.endpointPublishingStrategy.type}").Output()
@@ -49,10 +49,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// ibmcloud/powervs has bug https://issues.redhat.com/browse/OCPBUGS-32776
 		platformtype := exutil.CheckPlatform(oc)
 		platforms := map[string]bool{
-			"aws":      true,
-			"azure":    true,
-			"gcp":      true,
-			"alicloud": true,
+			"aws":          true,
+			"azure":        true,
+			"gcp":          true,
+			"alibabacloud": true,
 		}
 		if !platforms[platformtype] {
 			g.Skip("Skip for non-cloud platforms and ibmcloud/powervs due to OCPBUGS-32776")
@@ -103,8 +103,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, patchScope)
 		// AWS needs user to delete the LoadBalancer service manually
 		if platformtype == "aws" {
-			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/ingress").Output()
-			o.Expect(output).To(o.ContainSubstring("To effectuate this change, you must delete the service"))
+			waitForOutput(oc, "default", "co/ingress", ".status.conditions[?(@.type == \"Progressing\")].message", "To effectuate this change, you must delete the service")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "service", "router-"+ingctrl.name).Execute()
 		}
 		waitForOutput(oc, "openshift-ingress-operator", "dnsrecords/"+dnsRecordName, ".metadata.generation", "2")
