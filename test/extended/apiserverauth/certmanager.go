@@ -463,7 +463,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	// This case contains two Polarion cases: 63555 and 69798. The root case is 63555.
-	g.It("ROSA-Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
+	g.It("ROSA-ConnectedOnly-Author:geliu-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
 		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -761,7 +761,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:yuewu-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:yuewu-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
 		const (
 			minSupportedVersion = "1.14.0"
 		)
@@ -856,7 +856,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-Low-63583-Check operand metrics by using user-workload-monitoring [Serial]", func() {
+	g.It("ConnectedOnly-Author:yuewu-Low-63583-Check operand metrics by using user-workload-monitoring [Serial]", func() {
 		const (
 			operandNamespace                = "cert-manager"
 			clusterMonitoringNamespace      = "openshift-monitoring"
@@ -932,7 +932,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:yuewu-Medium-65031-Operand and operator log levels can be set [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:yuewu-Medium-65031-Operand and operator log levels can be set [Serial]", func() {
 		const (
 			operandNamespace  = "cert-manager"
 			operandLabel      = "app.kubernetes.io/instance=cert-manager"
@@ -1015,7 +1015,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("CPaasrunOnly-NonPreRelease-Author:yuewu-Medium-71327-cert-manager Operator should pass DAST scan", func() {
+	g.It("CPaasrunOnly-NonPreRelease-ConnectedOnly-Author:yuewu-Medium-71327-cert-manager Operator should pass DAST scan", func() {
 		// ensure componentName and apiGroupName to follow the file naming conventions
 		const (
 			componentName = "cert-manager"
