@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-networking] SDN network.node-identity", func() {
 
 	})
 
-	g.It("Longduration-NonPreRelease-Author:asood-High-68157-Node identity validating webhook can be disabled and enabled successfully [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:asood-High-68157-Node identity validating webhook can be disabled and enabled successfully [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-networking] SDN network.node-identity", func() {
 
 	})
 
-	g.It("Author:asood-High-68156-ovnkube-node should be modifying annotations on its own node and pods only.[Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:asood-High-68156-ovnkube-node should be modifying annotations on its own node and pods only.[Serial]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
