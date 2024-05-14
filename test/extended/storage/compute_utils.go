@@ -294,6 +294,9 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		nodeInstanceID := tempSlice[len(tempSlice)-1]
 		nodeInstanceType := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.kubernetes\\.io\\/instance-type").String()
 		isTaintsEmpty := !gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.taints").Exists()
+		if !isTaintsEmpty && strSliceContains(nodeRole, "worker") {
+			e2e.Logf("The worker node %q has taints: %s", nodeName, gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.taints|@ugly|@flatten").String())
+		}
 		nodes = append(nodes, node{
 			name:                        nodeName,
 			instanceID:                  nodeInstanceID,
