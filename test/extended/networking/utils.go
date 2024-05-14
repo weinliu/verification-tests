@@ -2136,7 +2136,7 @@ func getOVNGatewayMode(oc *exutil.CLI) string {
 func getEgressCIDRsForNode(oc *exutil.CLI, nodeName string) string {
 	var sub1 string
 	platform := exutil.CheckPlatform(oc)
-	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "nutanix") {
+	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") || strings.Contains(platform, "nutanix") {
 		defaultSubnetV4, err := getDefaultSubnet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, ipNet, err1 := net.ParseCIDR(defaultSubnetV4)
