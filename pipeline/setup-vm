@@ -52,7 +52,7 @@ sos -h
 echo "------------------get oc------------------------"
 echo "get latest oc"
 unset http_proxy https_proxy
-curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/candidate-4.16/openshift-client-linux.tar.gz -o oc-linux.tar.gz
+curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp/candidate-4.16/openshift-client-linux-amd64-rhel9.tar.gz -o oc-linux.tar.gz
 
 tar -xzvf oc-linux.tar.gz
 echo "get oc-linux.tar.gz successfully"
@@ -157,7 +157,7 @@ if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
     echo "get latest opm"
     echo "set env http_proxy https_proxy"
     unset http_proxy https_proxy
-    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/candidate-4.16/opm-linux.tar.gz -o opm-linux.tar.gz
+    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp/candidate-4.16/opm-linux.tar.gz -o opm-linux.tar.gz
     tar -xzvf opm-linux.tar.gz
     echo "get opm-linux.tar.gz successfully"
     rm -f opm-linux.tar.gz
