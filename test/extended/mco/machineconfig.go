@@ -204,3 +204,35 @@ func (mcl *MachineConfigList) GetMachineConfigsWithNameStartingWithRender() ([]M
 
 	return returnMCs, nil
 }
+
+// GetMachineConfigsWithNameStartingWithRender returns a list with all the MCs  whose name starts with "render-master"
+func (mcl *MachineConfigList) GetRenderedMachineConfigForMaster() ([]MachineConfig, error) {
+	mcl.SetItemsFilter(`?(@.metadata.ownerReferences[0].name=="master")`)
+	allMCs, err := mcl.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	returnMCs := []MachineConfig{}
+
+	for _, mc := range allMCs {
+		if strings.HasPrefix(mc.GetName(), "rendered-master") {
+			returnMCs = append(returnMCs, mc)
+		}
+	}
+
+	return returnMCs, nil
+}
+func (mcl *MachineConfigList) GetRenderedMachineConfigForMasterOrFail() []MachineConfig {
+	renderedMcMasterList, err := mcl.GetRenderedMachineConfigForMaster()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the list of the machineconfigs that were created by a MCP ")
+	return renderedMcMasterList
+
+}
+
+// GetMachineConfigCreatedByMCPs returns a list of the machineconfigs that were created by a MCP
+func (mcl *MachineConfigList) GetMCPRenderedMachineConfigsOrFail() []MachineConfig {
+	renderedMcList, err := mcl.GetRenderedMachineConfigForMaster()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the list of the machineconfigs that were created by a MCP ")
+	return renderedMcList
+}

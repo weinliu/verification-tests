@@ -4380,6 +4380,139 @@ desiredState:
 			logger.Infof("node/%s %s", node, nodeUpdate)
 		}
 	})
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-73148-prune renderedmachineconfigs [Disruptive]", func() {
+		var (
+			mcName                    = "fake-worker-pass-1"
+			mcList                    = NewMachineConfigList(oc.AsAdmin())
+			wMcp                      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp                      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			NewSortedRenderedMCMaster []MachineConfig
+			matchString               string
+		)
+
+		// create machine config
+		exutil.By("Create a new MachineConfig")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, "core", "fake-b")}
+		defer mc.delete()
+		mc.create()
+		logger.Infof("OK!\n")
+
+		wSpecConf, specErr := wMcp.getConfigNameOfSpec() // get worker MCP name
+		o.Expect(specErr).NotTo(o.HaveOccurred())
+		mSpecConf, specErr := mMcp.getConfigNameOfSpec() // get master MCP name
+		o.Expect(specErr).NotTo(o.HaveOccurred())
+		logger.Infof("%s %s \n", wSpecConf, mSpecConf)
+
+		//sort mcList by time and get rendered machine config
+		mcList.SortByTimestamp()
+		sortedRenderedMCs := mcList.GetMCPRenderedMachineConfigsOrFail()
+		logger.Infof(" %s", sortedRenderedMCs)
+
+		sortedMCListMaster := mcList.GetRenderedMachineConfigForMasterOrFail() // to get master rendered machine config
+		// 1 To check for `oc adm prune renderedmachineconfigs` cmd
+		exutil.By("To run prune cmd to know which rendered machineconfigs would be deleted")
+		pruneMCOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config for pool")
+		logger.Infof(pruneMCOutput)
+
+		for _, mc := range sortedRenderedMCs {
+			matchString := "DRY RUN: Deleted rendered MachineConfig "
+			if mc.GetName() == wSpecConf || mc.GetName() == mSpecConf {
+				matchString = "DRY RUN: Skipping deletion of rendered MachineConfig "
+			}
+			o.Expect(pruneMCOutput).To(o.ContainSubstring(matchString+mc.GetName()), "The %s is not same as in-use renderedMC in MCP", mc.GetName()) // to check correct rendered MC will be deleted or skipped
+
+			o.Expect(mc.Exists()).To(o.BeTrue(), "The dry run deleted rendered MC is removed but should exist.")
+		}
+		logger.Infof("OK!\n")
+
+		//2 To check for `oc adm prune renderedmachineconfigs --count=1 --pool-name master` cmd
+		exutil.By("To get the rendered machineconfigs based on count and MCP name")
+		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--count=1", "--pool-name", "master").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config for pool")
+		logger.Infof(pruneMCOutput)
+		NewSortedRenderedMCMaster = mcList.GetRenderedMachineConfigForMasterOrFail()
+
+		matchString = "DRY RUN: Deleted rendered MachineConfig "
+		if sortedMCListMaster[0].GetName() == mSpecConf {
+			matchString = "DRY RUN: Skipping deletion of rendered MachineConfig "
+		}
+		o.Expect(pruneMCOutput).To(o.ContainSubstring(matchString+sortedMCListMaster[0].GetName()), "Oldest RenderedMachineConfig is not deleted") // to check old rendered  master MC will be getting deleted
+
+		o.Expect(NewSortedRenderedMCMaster).To(o.Equal(sortedMCListMaster), "The dry run deleted rendered MC is removed but should exist.")
+		logger.Infof("OK!\n")
+
+		//3 To check for 'oc adm prune renderedmachineconfigs list' cmd
+		exutil.By("Get the rendered machineconfigs list")
+		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "list").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
+		logger.Infof(pruneMCOutput)
+		o.Expect(pruneMCOutput).To(o.And(o.ContainSubstring(wSpecConf), o.ContainSubstring(mSpecConf)), "Error: Deleted in-use rendered machine configs")
+		for _, mc := range sortedRenderedMCs {
+			used := "Currently in use: false"
+			if mc.GetName() == wSpecConf || mc.GetName() == mSpecConf {
+				used = "Currently in use: true"
+			}
+			o.Expect(pruneMCOutput).To(o.MatchRegexp(regexp.QuoteMeta(mc.GetName()) + ".*-- .*" + regexp.QuoteMeta(used) + ".*")) // to check correct rendered MC is in-use or not
+		}
+		logger.Infof("OK!\n")
+
+		//4  To check for 'oc adm prune renderedmachineconfigs list --in-use --pool-name master' cmd
+		exutil.By("To get the in use rendered machineconfigs  for each MCP")
+		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "list", "--in-use", "--pool-name", "master").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
+		logger.Infof("%s", mSpecConf)
+		mStatusConf, err := mMcp.getConfigNameOfStatus()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		logger.Infof("%s", mStatusConf)
+		// to check renderedMC is same as `spec` and `status`
+		o.Expect(pruneMCOutput).To(o.ContainSubstring("spec: "+mSpecConf), "Value for `spec` is not same as expected")
+		o.Expect(pruneMCOutput).To(o.ContainSubstring("status: "+mStatusConf), "Value for `status` is not same as expected ")
+		logger.Infof("%s", pruneMCOutput)
+		logger.Infof("OK!\n")
+
+		//5 To check for `oc adm prune renderedmachineconfigs --count=1 --pool-name master --confirm` cmd
+		exutil.By("To delete the  rendered machineconfigs based on count and MCP name")
+		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--count=1", "--pool-name", "master", "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
+		NewSortedRenderedMCMaster = mcList.GetRenderedMachineConfigForMasterOrFail()
+
+		logger.Infof(pruneMCOutput)
+
+		if sortedMCListMaster[0].GetName() == mSpecConf {
+			matchString = "Skipping deletion of rendered MachineConfig "
+		} else {
+			matchString = "Deleted rendered MachineConfig "
+			for _, newMc := range NewSortedRenderedMCMaster {
+				o.Expect(newMc.GetName()).NotTo(o.ContainSubstring(sortedMCListMaster[0].GetName()), "Deleted rendered MachineConfig is still present in the new list") // check expected rendered-master MC is been deleted
+			}
+		}
+		o.Expect(pruneMCOutput).To(o.ContainSubstring(matchString+sortedMCListMaster[0].GetName()), "Oldest RenderedMachineConfig is not deleted") // check oldest rendered master MC is been deleted
+
+		logger.Infof("OK!\n")
+
+		//6 To check for `oc adm prune renderedmachineconfigs --confirm` cmd
+		sortedRenderedMCs = mcList.GetMCPRenderedMachineConfigsOrFail() // Get the current list of rendered machine configs
+		exutil.By("To delete the  rendered machineconfigs based on count and MCP name")
+		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
+		logger.Infof(pruneMCOutput)
+
+		for _, mc := range sortedRenderedMCs {
+			if mc.GetName() == mSpecConf || mc.GetName() == wSpecConf {
+				matchString = "Skipping deletion of rendered MachineConfig "
+				o.Expect(mc.Exists()).To(o.BeTrue(), "Deleted the in-use rendered MC") // check in-use rendered MC is not been deleted
+			} else {
+				matchString = "Deleted rendered MachineConfig "
+				o.Expect(mc.Exists()).To(o.BeFalse(), "The expected rendered MC is not deleted") // check expected rendered MC is been deleted
+			}
+			o.Expect(pruneMCOutput).To(o.ContainSubstring(matchString+mc.GetName()), "Oldest RenderedMachineConfig is not deleted")
+		}
+
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
