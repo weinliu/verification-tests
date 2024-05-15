@@ -306,6 +306,11 @@ func (pvc *persistentVolumeClaim) getVolumeLastPhaseTransitionTime(oc *exutil.CL
 	return lastPhaseTransitionTime
 }
 
+// capacityToBytes parses the pvc capacity to the int64 bytes value
+func (pvc *persistentVolumeClaim) capacityToBytes(oc *exutil.CLI) int64 {
+	return parseCapacityToBytes(pvc.capacity)
+}
+
 // Get specified PersistentVolumeClaim status
 func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", namespace, pvcName, "-o=jsonpath={.status.phase}").Output()

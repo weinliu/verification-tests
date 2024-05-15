@@ -22,6 +22,7 @@ import (
 	"github.com/tidwall/pretty"
 	"github.com/tidwall/sjson"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -1142,4 +1143,12 @@ func isTechPreviewNoUpgrade(oc *exutil.CLI) bool {
 	}
 
 	return featureGate.Spec.FeatureSet == configv1.TechPreviewNoUpgrade
+}
+
+// parseCapacityToBytes parses capacity with unit to int64 bytes size
+func parseCapacityToBytes(capacityWithUnit string) int64 {
+	bytesSize, parseBytesErr := resource.ParseQuantity(capacityWithUnit)
+	o.Expect(parseBytesErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to parse capacity size with unit: %q", capacityWithUnit))
+	e2e.Logf("%q bytes size is %d bytes", capacityWithUnit, bytesSize.Value())
+	return bytesSize.Value()
 }

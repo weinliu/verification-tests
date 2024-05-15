@@ -440,7 +440,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		e2e.Logf("Creating PVC 'pvcLarge' with capacity in Gi: %s", pvcLargeCapacity)
 		pvcLarge.create(oc)
 		defer pvcLarge.deleteAsAdmin(oc)
-		e2e.Logf("Creating PVC 'pvcSmall' with capacity in Gi: %s", pvcLargeCapacity)
+		e2e.Logf("Creating PVC 'pvcSmall' with capacity in Gi: %s", pvcSmallCapacity)
 		pvcSmall.create(oc)
 		defer pvcSmall.deleteAsAdmin(oc)
 
@@ -449,7 +449,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcSmall.waitStatusAsExpected(oc, "Bound")
 
 		exutil.By("Check the pvc.status.capacity is expected")
-		o.Expect(pvcLarge.getSizeFromStatus(oc)).To(o.Equal(pvcLargeCapacity))
+		pvcLargeActualBytesSize := parseCapacityToBytes(pvcLarge.getSizeFromStatus(oc))
+		o.Expect(pvcLarge.capacityToBytes(oc)).To(o.Equal(pvcLargeActualBytesSize))
 		o.Expect(pvcSmall.getSizeFromStatus(oc)).To(o.Equal("513Gi"))
 
 		exutil.By("Check the pvc.spec.csi.volumeAttributes contains enablePerformancePlus")
