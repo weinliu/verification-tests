@@ -12,6 +12,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -718,6 +719,159 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mc operation is not completed on mcp %s", mcp.name))
 }
 
+// GetPoolSynchronizersStatusByType return the PoolsynchronizesStatus matching the give type
+func (mcp *MachineConfigPool) GetPoolSynchronizersStatusByType(pType string) (string, error) {
+	return mcp.Get(`{.status.poolSynchronizersStatus[?(@.poolSynchronizerType=="` + pType + `")]}`)
+}
+
+// IsPinnedImagesComplete returns if the MCP is reporting that there is no pinnedimages operation in progress
+func (mcp *MachineConfigPool) IsPinnedImagesComplete() (bool, error) {
+
+	pinnedStatus, err := mcp.GetPoolSynchronizersStatusByType("PinnedImageSets")
+	if err != nil {
+		return false, err
+	}
+
+	mcpMachineCount, err := mcp.Get(`{.status.machineCount}`)
+	if err != nil {
+		return false, err
+	}
+
+	if mcpMachineCount == "" {
+		return false, fmt.Errorf("status.machineCount is empty in mcp %s", mcp.GetName())
+	}
+
+	pinnedMachineCount := gjson.Get(pinnedStatus, "machineCount").String()
+	if pinnedMachineCount == "" {
+		return false, fmt.Errorf("pinned status machineCount is empty in mcp %s", mcp.GetName())
+	}
+
+	pinnedUnavailableMachineCount := gjson.Get(pinnedStatus, "unavailableMachineCount").String()
+	if pinnedUnavailableMachineCount == "" {
+		return false, fmt.Errorf("pinned status unavailableMachineCount is empty in mcp %s", mcp.GetName())
+	}
+
+	updatedMachineCount := gjson.Get(pinnedStatus, "updatedMachineCount").String()
+	if updatedMachineCount == "" {
+		return false, fmt.Errorf("pinned status updatedMachineCount is empty in mcp %s", mcp.GetName())
+	}
+
+	return mcpMachineCount == pinnedMachineCount && updatedMachineCount == pinnedMachineCount && pinnedUnavailableMachineCount == "0", nil
+}
+
+func (mcp *MachineConfigPool) allNodesReportingPinnedSuccess() (bool, error) {
+	allNodes, err := mcp.GetNodes()
+	if err != nil {
+		return false, err
+	}
+
+	if len(allNodes) == 0 {
+		logger.Infof("Warning, pool %s has no nodes!! We consider all nodes as correctly pinned", mcp.GetName())
+	}
+
+	for _, node := range allNodes {
+		nodeMCN := node.GetMachineConfigNode()
+		if nodeMCN.IsPinnedImageSetsDegraded() {
+			logger.Infof("Node %s is pinned degraded. Condition:\n%s", node.GetName(), nodeMCN.GetConditionByType("PinnedImageSetsDegraded"))
+			return false, nil
+		}
+
+		if nodeMCN.IsPinnedImageSetsProgressing() {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// waitForPinComplete waits until all images are pinned in the MCP. It fails the test case if the images are not pinned
+func (mcp *MachineConfigPool) waitForPinComplete(timeToWait time.Duration) error {
+	logger.Infof("Waiting %s for MCP %s to complete pinned images.", timeToWait, mcp.name)
+
+	immediate := false
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+		pinnedComplete, err := mcp.IsPinnedImagesComplete()
+		if err != nil {
+
+			logger.Infof("Error getting pinned complete")
+			return false, err
+		}
+
+		if !pinnedComplete {
+			logger.Infof("Waiting for PinnedImageSets poolSynchronizersStatus status to repot success")
+			return false, nil
+		}
+
+		allNodesComplete, err := mcp.allNodesReportingPinnedSuccess()
+		if err != nil {
+			logger.Infof("Error getting if all nodes finished")
+			return false, err
+		}
+
+		if !allNodesComplete {
+			logger.Infof("Waiting for all nodes to report pinned images success")
+			return false, nil
+		}
+
+		logger.Infof("Pool %s successfully pinned the images! Complete!", mcp.GetName())
+		return true, nil
+	})
+
+	if err != nil {
+		logger.Infof("Pinned images operation is not completed on mcp %s", mcp.name)
+	}
+	return err
+}
+
+// waitForPinApplied waits until MCP reports that it has started to pin images, and then waits until all images are pinned. It fails the test case if the images are not pinned
+// Because everything is cached in the pinnedimageset controller, it can happen that if the images are already pinned, the status change is too fast and we can miss it
+// This is a problem when we execute test cases that have been previously executed. In order to use this method we need to make sure that the pinned images are not present in the nodes
+// or the test will become unstable.
+func (mcp *MachineConfigPool) waitForPinApplied(timeToWait time.Duration) error {
+	logger.Infof("Waiting %s for MCP %s to apply pinned images.", timeToWait, mcp.name)
+
+	immediate := true
+	pinnedStarted := false
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+		pinnedComplete, err := mcp.IsPinnedImagesComplete()
+		if err != nil {
+			logger.Infof("Error getting pinned complete")
+			return false, err
+		}
+		if !pinnedStarted && !pinnedComplete {
+			pinnedStarted = true
+			logger.Infof("Pool %s has started to pin images", mcp.GetName())
+		}
+
+		if pinnedStarted {
+			if !pinnedComplete {
+				logger.Infof("Waiting for PinnedImageSets poolSynchronizersStatus status to repot success")
+				return false, nil
+			}
+
+			allNodesComplete, err := mcp.allNodesReportingPinnedSuccess()
+			if err != nil {
+				logger.Infof("Error getting if all nodes finished")
+				return false, err
+			}
+			if !allNodesComplete {
+				logger.Infof("Waiting for all nodes to report pinned images success")
+				return false, nil
+			}
+
+			logger.Infof("Pool %s successfully pinned the images! Complete!", mcp.GetName())
+			return true, nil
+		}
+
+		logger.Infof("Pool %s has not started to pin images yet", mcp.GetName())
+		return false, nil
+	})
+	if err != nil {
+		logger.Infof("Pinned images operation is not applied on mcp %s", mcp.name)
+	}
+	return err
+}
+
 // GetReportedOsImageOverrideValue returns the value of the os_image_url_override prometheus metric for this pool
 func (mcp *MachineConfigPool) GetReportedOsImageOverrideValue() (string, error) {
 	query := fmt.Sprintf(`os_image_url_override{pool="%s"}`, strings.ToLower(mcp.GetName()))
@@ -954,6 +1108,52 @@ func (mcp *MachineConfigPool) CaptureAllNodeLogsBeforeRestart() (map[string]stri
 	}
 
 	return returnMap, nil
+}
+
+// GetPinnedImageSets returns a list with the nodes that match the .spec.nodeSelector.matchLabels criteria plus the provided extraLabels
+func (mcp *MachineConfigPool) GetPinnedImageSets() ([]PinnedImageSet, error) {
+	mcp.oc.NotShowInfo()
+	defer mcp.oc.SetShowInfo()
+
+	labelsString, err := mcp.Get(`{.spec.machineConfigSelector.matchLabels}`)
+	if err != nil {
+		return nil, err
+	}
+
+	if labelsString == "" {
+		return nil, fmt.Errorf("No machineConfigSelector found in %s", mcp)
+	}
+
+	labels := gjson.Parse(labelsString)
+
+	requiredLabel := ""
+	labels.ForEach(func(key, value gjson.Result) bool {
+		requiredLabel += fmt.Sprintf("%s=%s,", key.String(), value.String())
+		return true // keep iterating
+	})
+
+	if requiredLabel == "" {
+		return nil, fmt.Errorf("No labels matcher could be built for %s", mcp)
+	}
+	// remove the last comma
+	requiredLabel = strings.TrimSuffix(requiredLabel, ",")
+
+	pisList := NewPinnedImageSetList(mcp.oc)
+	pisList.ByLabel(requiredLabel)
+
+	return pisList.GetAll()
+}
+
+// Reboot reboot all nodes in the pool by using command "oc adm reboot-machine-config-pool mcp/POOLNAME"
+func (mcp *MachineConfigPool) Reboot() error {
+	logger.Infof("Rebooting nodes in pool %s", mcp.GetName())
+	return mcp.oc.WithoutNamespace().Run("adm").Args("reboot-machine-config-pool", "mcp/"+mcp.GetName()).Execute()
+}
+
+// WaitForRebooted wait for the "Reboot" method to actually reboot all nodes by using command "oc adm wait-for-node-reboot nodes -l node-role.kubernetes.io/POOLNAME"
+func (mcp *MachineConfigPool) WaitForRebooted() error {
+	logger.Infof("Waiting for nodes in pool %s to be rebooted", mcp.GetName())
+	return mcp.oc.WithoutNamespace().Run("adm").Args("wait-for-node-reboot", "nodes", "-l", "node-role.kubernetes.io/"+mcp.GetName()).Execute()
 }
 
 // GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time

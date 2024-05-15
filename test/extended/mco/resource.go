@@ -43,6 +43,7 @@ type ResourceInterface interface {
 	Patch(patchType string, patch string) error
 	GetAnnotationOrFail(annotation string) string
 	GetConditionByType(ctype string) string
+	IsConditionStatusTrue(ctype string) bool
 	AddLabel(label, value string) error
 	GetLabel(label string) (string, error)
 	Describe() (string, error)
@@ -225,6 +226,10 @@ func (r *Resource) GetConditionStatusByType(ctype string) string {
 	return r.GetOrFail(`{.status.conditions[?(@.type=="` + ctype + `")].status}`)
 }
 
+func (r *Resource) IsConditionStatusTrue(ctype string) bool {
+	return strings.EqualFold(r.GetConditionStatusByType(ctype), TrueString)
+}
+
 // GetLabel returns the label's value if the value exists. It returns an error if the label does not exist
 func (r *Resource) GetLabel(label string) (string, error) {
 	labels := map[string]string{}
@@ -347,9 +352,7 @@ func (t *Template) Create(parameters ...string) error {
 	allParams := []string{"--ignore-unknown-parameters=true", "-f", t.templateFile}
 	allParams = append(allParams, parameters...)
 
-	exutil.CreateClusterResourceFromTemplate(t.oc, allParams...)
-
-	return nil
+	return exutil.CreateClusterResourceFromTemplateWithError(t.oc, allParams...)
 }
 
 // ResourceList provides the functionality to handle lists of openshift resources

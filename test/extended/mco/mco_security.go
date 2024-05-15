@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 				"The file %s is not served in the ignition config", kubeCloudCertFile)
 
 			logger.Infof("Check that the file has the right content in the nodes")
-			EventuallyFileExistsInNode(kubeCloudCertFile, kubeCloudCertContent, mcp.GetNodesOrFail()[0], "20m", "20s")
+			EventuallyFileExistsInNode(kubeCloudCertFile, kubeCloudCertContent, mcp.GetNodesOrFail()[0], "3m", "20s")
 		} else {
 			logger.Infof("No KubeCloud cert was configured and it was not possible to define a new one, we skip the cloudCA validation")
 		}

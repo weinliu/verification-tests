@@ -292,10 +292,8 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			NotTo(o.HaveOccurred(),
 				"Error installing '%s' rpm in node %s", rpmName, workerNode.GetName())
 
-		rebootOut, err := workerNode.Reboot()
-		o.Expect(err).
-			NotTo(o.HaveOccurred(),
-				"%s\n, Error rebooting node %s", rebootOut, rpmName, workerNode.GetName())
+		o.Expect(workerNode.Reboot()).To(o.Succeed(),
+			"Error rebooting node %s", workerNode.GetName())
 
 		logger.Infof("Check that the wget binary is available")
 		whichOut, err := workerNode.DebugNodeWithChroot("which", "wget")

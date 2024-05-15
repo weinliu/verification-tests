@@ -28,6 +28,12 @@ type NodeList struct {
 	ResourceList
 }
 
+// Struct that stores data usage information in bytes
+type SpaceUsage struct {
+	Used  int64
+	Avail int64
+}
+
 // NewNode construct a new node struct
 func NewNode(oc *exutil.CLI, name string) *Node {
 	return &Node{*NewResource(oc, "node", name), time.Time{}}
@@ -727,9 +733,13 @@ func (n *Node) UninstallRpm(rpmName string) (string, error) {
 }
 
 // Reboot reboots the node after waiting 10 seconds. To know why look https://issues.redhat.com/browse/OCPBUGS-1306
-func (n *Node) Reboot() (string, error) {
+func (n *Node) Reboot() error {
 	logger.Infof("REBOOTING NODE %s !!", n.GetName())
-	return n.DebugNodeWithChroot("sh", "-c", "sleep 10s && systemctl reboot")
+	out, err := n.DebugNodeWithChroot("sh", "-c", "sleep 10s && systemctl reboot")
+	if err != nil {
+		logger.Errorf("Error rebooting node %s:\n%s", n, out)
+	}
+	return err
 }
 
 // IsRpmOsTreeIdle returns true if `rpm-ostree status` reports iddle state
@@ -1066,6 +1076,65 @@ func (n *Node) GetArchitectureOrFail() architecture.Architecture {
 func (n *Node) GetJournalLogs(args ...string) (string, error) {
 	cmd := []string{"journalctl", "-o", "with-unit"}
 	return n.DebugNodeWithChroot(append(cmd, args...)...)
+}
+
+// GetMachineConfigNode returns the MachineConfigNode resource linked to this node
+func (n *Node) GetMachineConfigNode() *MachineConfigNode {
+	return NewMachineConfigNode(n.oc.AsAdmin(), n.GetName())
+}
+
+// GetFileSystemSpaceUsage returns the space usage in the node
+// Parse command
+// $ df -B1 --output=used,avail /
+//
+//	Used      Avail
+//
+// 38409719808 7045369856
+func (n *Node) GetFileSystemSpaceUsage(path string) (*SpaceUsage, error) {
+	var (
+		parserRegex = `(?P<Used>\d+)\D+(?P<Avail>\d+)`
+	)
+	stdout, stderr, err := n.DebugNodeWithChrootStd("df", "-B1", "--output=used,avail", path)
+	if err != nil {
+		logger.Errorf("Error getting the disk usage in node %s:\nstdout:%s\nstderr:%s",
+			n.GetName(), stdout, stderr)
+		return nil, err
+	}
+
+	lines := strings.Split(stdout, "\n")
+	if len(lines) != 2 {
+		return nil, fmt.Errorf("Expected 2 lines, and got:\n%s", stdout)
+	}
+
+	logger.Debugf("parsing: %s", lines[1])
+	re := regexp.MustCompile(parserRegex)
+	match := re.FindStringSubmatch(strings.TrimSpace(lines[1]))
+	logger.Infof("matched disk space stat info: %v", match)
+	// check whether matched string found
+	if len(match) == 0 {
+		return nil, fmt.Errorf("no disk space info matched")
+	}
+
+	usedIndex := re.SubexpIndex("Used")
+	if usedIndex < 0 {
+		return nil, fmt.Errorf("Could not parse Used bytes from\n%s", stdout)
+	}
+	used, err := strconv.ParseInt(match[usedIndex], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("Could convert parsed Used data [%s] into float64 from\n%s", match[usedIndex], stdout)
+
+	}
+
+	availIndex := re.SubexpIndex("Avail")
+	if usedIndex < 0 {
+		return nil, fmt.Errorf("Could not parse Avail bytes from\n%s", stdout)
+	}
+	avail, err := strconv.ParseInt(match[availIndex], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("Could convert parsed Avail data [%s] into float64 from\n%s", match[availIndex], stdout)
+	}
+
+	return &SpaceUsage{Used: used, Avail: avail}, nil
 }
 
 // GetAll returns a []Node list with all existing nodes

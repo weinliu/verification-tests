@@ -35,6 +35,12 @@ func ApplyNsResourceFromTemplate(oc *CLI, namespace string, parameters ...string
 	resourceFromTemplate(oc, false, false, namespace, parameters...)
 }
 
+// CreateClusterResourceFromTemplateWithError create resource from the template and return error if happened.
+// For ex: CreateClusterResourceFromTemplateWithError(oc, "--ignore-unknown-parameters=true", "-f", "TEMPLATE LOCATION")
+func CreateClusterResourceFromTemplateWithError(oc *CLI, parameters ...string) error {
+	return resourceFromTemplate(oc, true, true, "", parameters...)
+}
+
 // CreateClusterResourceFromTemplate create resource from the template.
 // For ex: CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", "TEMPLATE LOCATION")
 func CreateClusterResourceFromTemplate(oc *CLI, parameters ...string) {

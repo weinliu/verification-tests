@@ -128,3 +128,11 @@ func (mcn *MachineConfigNode) GetRebootedNode() string {
 func (mcn *MachineConfigNode) GetReloadedCRIO() string {
 	return mcn.GetConditionStatusByType("ReloadedCRIO")
 }
+
+func (mcn *MachineConfigNode) IsPinnedImageSetsDegraded() bool {
+	return mcn.IsConditionStatusTrue("PinnedImageSetsDegraded")
+}
+
+func (mcn *MachineConfigNode) IsPinnedImageSetsProgressing() bool {
+	return mcn.IsConditionStatusTrue("PinnedImageSetsProgressing")
+}
