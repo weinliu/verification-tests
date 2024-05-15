@@ -1866,6 +1866,33 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkYamlconfig(oc, "openshift-user-workload-monitoring", "statefulset", "prometheus-user-workload", cmd, "prometheus-operated", true)
 			checkYamlconfig(oc, "openshift-user-workload-monitoring", "statefulset", "thanos-ruler-user-workload", cmd, "thanos-ruler-operated", true)
 		})
+
+		//author: tagao@redhat.com
+		g.It("Author:tagao-Medium-73734-Add ownership annotation for certificates [Serial]", func() {
+			var (
+				uwmEnableAlertmanager = filepath.Join(monitoringBaseDir, "uwm-enableAlertmanager.yaml")
+			)
+			exutil.By("delete uwm-config/cm-config at the end of a serial case")
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			exutil.By("enable alertmanager for uwm")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", uwmEnableAlertmanager)
+
+			exutil.By("check annotations added to the CM under the namespace openshift-monitoring")
+			cmd := "-ojsonpath={.metadata.annotations}"
+			checkYamlconfig(oc, "openshift-monitoring", "cm", "alertmanager-trusted-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
+			checkYamlconfig(oc, "openshift-monitoring", "cm", "kubelet-serving-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
+			checkYamlconfig(oc, "openshift-monitoring", "cm", "prometheus-trusted-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
+			telemeterPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app.kubernetes.io/name=telemeter-client", "-n", "openshift-monitoring").Output()
+			if strings.Contains(telemeterPod, "telemeter-client") {
+				checkYamlconfig(oc, "openshift-monitoring", "cm", "telemeter-trusted-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
+			}
+
+			exutil.By("check annotations added to the CM under the namespace openshift-user-workload-monitoring")
+			checkYamlconfig(oc, "openshift-user-workload-monitoring", "cm", "prometheus-user-workload-trusted-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
+			checkYamlconfig(oc, "openshift-user-workload-monitoring", "cm", "alertmanager-trusted-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
+		})
 	})
 
 	//author: tagao@redhat.com
