@@ -275,18 +275,20 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity")
 		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
 		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
+		fi1.assertNodesConditionNotEmpty(oc)
 
 		nodeName := fi1.getNodeName(oc)
 		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 
 		g.By("Check fileintegritynodestatus becomes Errored")
@@ -297,6 +299,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkConfigmapCreated(oc)
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
+		fi1.assertNodesConditionNotEmpty(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Error", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "AIDE error: 17 Invalid configureline error", ok, []string{"events", "-n", sub.namespace, "--field-selector",
 			"reason=NodeIntegrityStatus"}).check(oc)
@@ -575,6 +578,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithoutConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 	})
 
