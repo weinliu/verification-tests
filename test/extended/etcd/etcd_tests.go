@@ -147,6 +147,47 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	})
 
 	// author: skundu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:skundu-Critical-73564-Validate cert rotation in 4.16. [Disruptive]", func() {
+		exutil.By("Test for case OCP-73564-Validate cert rotation in 4.16.")
+		e2e.Logf("Check the lifetime of newly created signer certificate in openshift-etcd namespace")
+		filename := "73564_out.json"
+		initialexpiry, _ := oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-o=jsonpath={.metadata.annotations.auth\\.openshift\\.io/certificate-not-after}").Output()
+		e2e.Logf("initial expiry is: %v ", initialexpiry)
+		e2e.Logf("Recreate the signer by deleting it")
+		defer func() {
+			checkOperator(oc, "etcd")
+			checkOperator(oc, "kube-apiserver")
+		}()
+		_, errdel := oc.AsAdmin().Run("delete").Args("-n", "openshift-etcd", "secret", "etcd-signer").Output()
+		o.Expect(errdel).NotTo(o.HaveOccurred())
+		checkOperator(oc, "etcd")
+		checkOperator(oc, "kube-apiserver")
+		e2e.Logf("Verify the newly created expiry time is differnt from the initial one")
+		newexpiry, _ := oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-o=jsonpath={.metadata.annotations.auth\\.openshift\\.io/certificate-not-after}").Output()
+		e2e.Logf("renewed expiry is: %v ", newexpiry)
+		if initialexpiry == newexpiry {
+			e2e.Failf("The signer cert expiry did n't renew")
+		}
+
+		e2e.Logf("Once the revision with the updated bundle is rolled out, swap the original CA in the openshift-config namespace, with the newly rotated one in openshift-etcd")
+		out, _ := oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-ojson").OutputToFile(filename)
+		jqCmd := fmt.Sprintf(`cat %s | jq 'del(.metadata["namespace","creationTimestamp","resourceVersion","selfLink","uid"])' > /tmp/73564.yaml`, out)
+
+		_, errex := exec.Command("bash", "-c", jqCmd).Output()
+		e2e.Logf("jqcmd is %v", jqCmd)
+		o.Expect(errex).NotTo(o.HaveOccurred())
+		defer os.RemoveAll("/tmp/73564.yaml")
+		_, errj := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-n", "openshift-config", "-f", "/tmp/73564.yaml").Output()
+		o.Expect(errj).NotTo(o.HaveOccurred())
+
+		checkOperator(oc, "etcd")
+		checkOperator(oc, "kube-apiserver")
+		e2e.Logf("Remove old CA from the trust bundle. This will regenerate the bundle with only the signer certificates from openshift-config and openshift-etcd, effectively removing all unknown/old public keys.")
+		_, err := oc.AsAdmin().Run("delete").Args("-n", "openshift-etcd", "configmap", "etcd-ca-bundle").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: skundu@redhat.com
 	g.It("NonHyperShiftHOST-PstChkUpgrade-ConnectedOnly-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
 		g.By("Test for case OCP-22665 Check etcd image have been update to target release value after upgrade.")
 
