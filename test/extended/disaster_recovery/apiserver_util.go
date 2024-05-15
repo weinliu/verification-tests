@@ -185,3 +185,13 @@ func ClusterNodesHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error
 	}
 	return errNode
 }
+
+func isAzureStackCluster(oc *exutil.CLI) (bool, string) {
+	cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.ToLower(cloudName) == "azurestackcloud" {
+		e2e.Logf("This is Azure Stack cluster.")
+		return true, cloudName
+	}
+	return false, ""
+}

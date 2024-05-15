@@ -45,6 +45,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		platform := exutil.CheckPlatform(oc)
+		isAzureStack, _ := isAzureStackCluster(oc)
 		exutil.By("1. Get the leader master node of cluster")
 		nodes, cleanup := GetNodes(oc, "master")
 		if cleanup != nil {
@@ -119,7 +120,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		exutil.By("3. When the leader master node is unavailable, apiservers continue to serve after a short interruption.")
 		// Adding wait time here of 240s because sometimes wait poll taking more thans 30s to complete for osp platform.
-		if platform == "openstack" {
+		if platform == "openstack" || isAzureStack {
 			expectedOutageTime = 240
 		}
 		waitTime := expectedOutageTime + 30

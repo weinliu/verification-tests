@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
+
 	"github.com/Azure/go-autorest/autorest/to"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -236,7 +238,10 @@ func GetAzureVMInstanceState(sess *AzureSession, vmName string, resourceGroupNam
 func GetAzureCredentialFromCluster(oc *CLI) (string, error) {
 	credential, getSecErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o=jsonpath={.data}").Output()
 	if getSecErr != nil {
-		return "", nil
+		credential, getSecErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-cloud-credentials", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.data}").Output()
+		if getSecErr != nil {
+			return "", nil
+		}
 	}
 
 	type azureCredentials struct {
@@ -454,4 +459,34 @@ func DeleteRoleAssignments(sess *AzureSession, roleAssignmentName string, scope 
 	}
 	e2e.Logf("Role assignment is deleted")
 	return nil
+}
+
+// StopAzureStackVM stops the virtual machine with the given name in the specified resource group using Azure CLI
+func StopAzureStackVM(resourceGroupName, vmName string) error {
+	cmd := fmt.Sprintf(`az vm stop --name %s --resource-group %s --no-wait`, vmName, resourceGroupName)
+	err := exec.Command("bash", "-c", cmd).Run()
+	if err != nil {
+		return fmt.Errorf("error stopping VM: %v", err)
+	}
+	return nil
+}
+
+// StartAzureStackVM starts the virtual machine with the given name in the specified resource group using Azure CLI
+func StartAzureStackVM(resourceGroupName, vmName string) error {
+	cmd := fmt.Sprintf(`az vm start --name %s --resource-group %s`, vmName, resourceGroupName)
+	output, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		return fmt.Errorf("error starting VM: %v, output: %s", err, output)
+	}
+	return nil
+}
+
+// GetVMStatus gets the status of the virtual machine with the given name in the specified resource group using Azure CLI
+func GetAzureStackVMStatus(resourceGroupName, vmName string) (string, error) {
+	cmd := fmt.Sprintf(`az vm show --name %s --resource-group %s --query 'powerState' --show-details |awk '{print $2}' | cut -d '"' -f1`, vmName, resourceGroupName)
+	instanceState, err := exec.Command("bash", "-c", cmd).Output()
+	if string(instanceState) == "" || err != nil {
+		return "", fmt.Errorf("Not able to get vm instance state :: %s", err)
+	}
+	return strings.Trim(string(instanceState), "\n"), err
 }
