@@ -74,7 +74,7 @@ describe('user preferences related features', () => {
     atLeastOneResourceShown();
 
     Pages.gotoSearch();
-    searchPage.chooseResourceType('deployment');
+    searchPage.chooseResourceType('Deployment');
     searchPage.searchMethodValues('Name', 'apiver');
     atLeastOneResourceShown();
 
@@ -112,7 +112,7 @@ describe('user preferences related features', () => {
     checkAllItemsExactMatch('config-managed');
 
     Pages.gotoSearch();
-    searchPage.chooseResourceType('deployment');
+    searchPage.chooseResourceType('Deployment');
     searchPage.searchMethodValues('Name', 'apiver');
     emptyResourcesFound();
     searchPage.searchMethodValues('Name', 'apiserver');

@@ -3,7 +3,7 @@ export const searchPage = {
   chooseResourceType: (resource_type) => {
     cy.get('button[aria-label="Options menu"]').click();
     cy.get('input[type="search"]').clear().type(`${resource_type}`);
-    cy.get('input[type="checkbox"]').first().click();
+    cy.get(`input[id$="~${resource_type}"]`).click();
   },
   checkNoMachineResources: () => {
     searchPage.navToSearchPage();

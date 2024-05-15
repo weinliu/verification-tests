@@ -46,6 +46,7 @@ export const userPreferences = {
     cy.get('button[aria-label="User menu"]').click({force: true});
     cy.get('a').contains('User Preferences').click();
     cy.get('.co-user-preference-page-content__tab-content', {timeout: 20000}).should('be.visible');
+    cy.get('ul[role="tablist"] a[data-test="tab general"]').click();
   },
   checkExactMatchDisabledByDefault: () => {
     cy.get('input[id="console.enableExactSearch"]').should('have.attr', 'data-checked-state', 'false');
