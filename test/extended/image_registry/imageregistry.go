@@ -674,7 +674,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		getURL := "curl -Lks -u \"" + oc.Username() + ":" + token + "\" -I HEAD https://" + userroute2 + "/v2/" + oc.Namespace() + "/myimage@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(curlOutput)).To(o.ContainSubstring("404 Not Found"))
+		o.Expect(string(curlOutput)).To(o.ContainSubstring("HTTP/1.1 404"))
 		var podsOfImageRegistry []corev1.Pod
 		podsOfImageRegistry = listPodStartingWith("image-registry", oc, "openshift-image-registry")
 		if len(podsOfImageRegistry) == 0 {
