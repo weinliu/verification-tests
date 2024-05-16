@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -205,6 +206,13 @@ func (lvm *lvmCluster) describeLvmCluster(oc *exutil.CLI) string {
 	return lvmClusterDesc
 }
 
+// Get the Name of existing lvmCluster CR
+func getCurrentLVMClusterName(oc *exutil.CLI) string {
+	output, err := oc.AsAdmin().Run("get").Args("lvmcluster", "-n", "openshift-storage", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.TrimSpace(output)
+}
+
 // Waiting for the lvmCluster to become Ready
 func (lvm *lvmCluster) waitReady(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 240*time.Second, func() (bool, error) {
@@ -353,6 +361,25 @@ func (lvm *lvmCluster) getCurrentTotalLvmStorageCapacityByStorageClass(oc *exuti
 		capacityList := strings.Split(storageCapacity, " ")
 		for _, capacity := range capacityList {
 			size, err := strconv.ParseInt(strings.TrimSpace(strings.TrimRight(capacity, "Mi")), 10, 64)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			totalCapacity = totalCapacity + int(size)
+		}
+	}
+	return totalCapacity
+}
+
+// Get currently available storage capacity by Worker Node that can be used by LVMS to provision PV
+func (lvm *lvmCluster) getCurrentTotalLvmStorageCapacityByWorkerNode(oc *exutil.CLI, workerNode string) int {
+	var totalCapacity int = 0
+	storageCapacity, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csistoragecapacity", "-n", "openshift-storage",
+		fmt.Sprintf(`-ojsonpath='{.items[?(@.nodeTopology.matchLabels.topology\.topolvm\.io/node=="%s")].capacity}`, workerNode)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Storage capacity object sizes: " + storageCapacity)
+	if len(storageCapacity) != 0 {
+		capacityList := strings.Split(storageCapacity, " ")
+		for _, capacity := range capacityList {
+			numericOnlyRegex := regexp.MustCompile("[^0-9]+")
+			size, err := strconv.ParseInt(numericOnlyRegex.ReplaceAllString(capacity, ""), 10, 64)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			totalCapacity = totalCapacity + int(size)
 		}

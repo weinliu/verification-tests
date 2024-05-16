@@ -8,6 +8,7 @@
 package storage
 
 import (
+	"fmt"
 	"math"
 	"path/filepath"
 	"regexp"
@@ -1480,6 +1481,55 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("#. Create original LVMCluster resource")
 		originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
 		originLvmCluster.waitReady(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-73363-[LVMS] Check hot reload of lvmd configuration is working
+	g.It("Author:rdeore-High-73363-[LVMS] Check hot reload of lvmd configuration is working [Disruptive]", func() {
+		// Set the resource template for the scenario
+		var (
+			lvmCluster         = newLvmCluster(setLvmClusterName(getCurrentLVMClusterName(oc)))
+			lvmdConfigFilePath = "/etc/topolvm/lvmd.yaml"
+			modifyLvmdCmd      = `sed -ri 's/^(\s*)(overprovision-ratio\s*:\s*10\s*$)/\1overprovision-ratio: 1/' /etc/topolvm/lvmd.yaml; mv /etc/topolvm/lvmd.yaml /etc/topolvm/tmp-73363.yaml; cat /etc/topolvm/tmp-73363.yaml >> /etc/topolvm/lvmd.yaml`
+		)
+
+		exutil.By("#. Get CSIStorageCapacity object capacity value from one of the worker nodes")
+		workerNode := getWorkersList(oc)[0]
+		originalStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
+
+		exutil.By("#. Update lvmd.config file from the worker node")
+		_, err := execCommandInSpecificNode(oc, workerNode, modifyLvmdCmd) // Set 'overprovision-ratio: 1' in lvmd.config file
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			recoverLvmdConfigCmd := fmt.Sprintf(`test -f "%s" && rm -rf %s || touch %s`, lvmdConfigFilePath, lvmdConfigFilePath, lvmdConfigFilePath)
+			_, recoverErr := execCommandInSpecificNode(oc, workerNode, recoverLvmdConfigCmd)
+			o.Expect(recoverErr).NotTo(o.HaveOccurred())
+			lvmCluster.waitReady(oc)
+		}()
+
+		exutil.By("#. Check LVMCluster state is consistently 'Ready'")
+		o.Consistently(func() string {
+			lvmClusterState, _ := lvmCluster.getLvmClusterStatus(oc)
+			return lvmClusterState
+		}, 20*time.Second, 5*time.Second).Should(o.Equal("Ready"))
+
+		exutil.By("#. Check CSIStorageCapacity object capacity value is updated as per the new 'overprovision-ratio' value")
+		newStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
+		o.Expect(newStorageCapacity == (originalStorageCapacity / 10)).To(o.BeTrue())
+
+		exutil.By("#. Remove new config files from worker node")
+		_, err = execCommandInSpecificNode(oc, workerNode, "rm -rf /etc/topolvm/tmp-73363.yaml "+lvmdConfigFilePath) // When lvmd.yaml is deleted, new lvmd.yaml is auto-generated
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("#. Check LVMCluster state is consistently 'Ready'")
+		o.Consistently(func() string {
+			lvmClusterState, _ := lvmCluster.getLvmClusterStatus(oc)
+			return lvmClusterState
+		}, 20*time.Second, 5*time.Second).Should(o.Equal("Ready"))
+
+		exutil.By("#. Check CSIStorageCapacity object capacity value is updated back to original value")
+		newStorageCapacity = lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
+		o.Expect(newStorageCapacity == originalStorageCapacity).To(o.BeTrue())
 	})
 })
 
