@@ -214,8 +214,13 @@ func locatePodmanCred(oc *exutil.CLI, dst string) (dirname string, err error) {
 
 // Mirror OCP release and graph data image to local registry
 // Return the output direcotry which contains the manifests
-func ocmirror(oc *exutil.CLI, registry string, dirname string) (string, error) {
-	imagesetTemplate := exutil.FixturePath("testdata", "ota", "osus", "imageset-config.yaml")
+func ocmirror(oc *exutil.CLI, registry string, dirname string, imageset string) (string, error) {
+	var imagesetTemplate string
+	if imageset == "" {
+		imagesetTemplate = exutil.FixturePath("testdata", "ota", "osus", "imageset-config.yaml")
+	} else {
+		imagesetTemplate = imageset
+	}
 	sedCmd := fmt.Sprintf("sed -i 's|REGISTRY|%s|g' %s", registry, imagesetTemplate)
 	// e2e.Logf(sedCmd)
 	if err := exec.Command("bash", "-c", sedCmd).Run(); err != nil {
@@ -359,7 +364,7 @@ func restoreAddCA(oc *exutil.CLI, addCA string) {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"additionalTrustedCA\":%s}}", addCA)).Execute()
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+	waitErr := wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
 		registryHealth := checkCOHealth(oc, "image-registry")
 		if registryHealth {
 			return true, nil
@@ -557,4 +562,68 @@ func skipUnsupportedOCPVer(oc *exutil.CLI, version string) {
 	if skip {
 		g.Skip("Skip test for cluster with old osus on unsupported ocp version!")
 	}
+}
+
+// Check metadata in the OSUS application works and return digests
+func checkMetadata(oc *exutil.CLI, podName string) (digests []string, err error) {
+	e2e.Logf("Check the metadata service works...")
+	// Workaound OCPBUGS-33292, will restore it after the bug fix
+	// instance, err := getOSUSApp(oc)
+	// if err != nil {
+	// 	 return
+	// }
+	// MetadataURI, err := oc.AsAdmin().Run("get").Args("-o", "jsonpath={.status.MetadataURI}", "updateservice", instance).Output()
+
+	host, err := oc.AsAdmin().Run("get").Args("route", "update-service-oc-mirror-meta-route", "-o", "jsonpath={.spec.host}").Output()
+	if err != nil || host == "" {
+		return nil, fmt.Errorf("fail to get metadata URI: %v", err)
+	}
+	MetadataURI := "https://" + host
+	result, err := oc.AsAdmin().Run("exec").Args(podName, "-c", "graph-builder", "--", "ls", "/var/lib/cincinnati/graph-data/signatures/sha256/").Output()
+	if err != nil || result == "" {
+		return nil, fmt.Errorf("fail to get signatures info: %v", err)
+	}
+	digests = strings.Fields(result)
+	transCfg := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: transCfg}
+	for _, digest := range digests {
+		api := MetadataURI + "/api/upgrades_info/signatures/sha256=" + digest + "/signature-1"
+		response, err := client.Get(api)
+		if err != nil {
+			return nil, fmt.Errorf("fail to access metadataURI through %s: %v", api, err)
+		}
+		if response.StatusCode != 200 {
+			return nil, fmt.Errorf("no signature found for %s, return: %d", digest, response.StatusCode)
+		}
+	}
+	return
+}
+
+// check if osus instance re-deployed sucessfully
+func verifyAppRolling(oc *exutil.CLI, usname string, prelist []string) (postlist []string, err error) {
+	e2e.Logf("Waiting for operand pods rolling...")
+	err = wait.PollUntilContextTimeout(context.Background(), 1*time.Minute, 5*time.Minute, true, func(context.Context) (bool, error) {
+		postAPPName, err := oc.AsAdmin().Run("get").Args("pods", "--selector=app="+usname, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
+		if err != nil {
+			return false, nil
+		}
+		for _, pre := range prelist {
+			if strings.Contains(postAPPName, pre) {
+				e2e.Logf("waiting: current app pods: %s; while app pods before rolling: %s", postAPPName, prelist)
+				return false, nil
+			}
+		}
+		postlist = strings.Fields(postAPPName)
+		if len(postlist) != len(prelist) {
+			e2e.Logf("waiting for pods [%s] to expected number %d", postlist, len(prelist))
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("pod is not rolling successfully: %v", err)
+	}
+	return
 }
