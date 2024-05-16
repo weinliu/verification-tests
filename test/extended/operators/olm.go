@@ -12555,10 +12555,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			sub                 = subscriptionDescription{
 				subName:                "sub-40531",
 				namespace:              "openshift-operators",
-				channel:                "clusterwide-alpha",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "etcd",
-				catalogSourceName:      "community-operators",
+				operatorPackage:        "learn",
+				catalogSourceName:      "qe-app-registry",
 				catalogSourceNamespace: "openshift-marketplace",
 				template:               subTemplate,
 				singleNamespace:        false,
