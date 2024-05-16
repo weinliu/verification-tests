@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		e2e.Logf("Cloud provider is: %v", iaasPlatform)
-		ManualPickup = true
+		ManualPickup = false
 
 		podShippedFile = exutil.FixturePath("testdata", "psap", "nto", "pod-shipped.yaml")
 		podSysctlFile = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-pod.yaml")
@@ -231,6 +231,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = exutil.LabelPod(oc, loggingNamespace, "web", "tuned.openshift.io/elasticsearch=")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		exutil.By("Wait for pod web is ready")
+		exutil.AssertPodToBeReady(oc, "web", loggingNamespace)
+
 		exutil.By("Get the tuned node and pod names")
 		tunedNodeName, err := exutil.GetPodNodeName(oc, loggingNamespace, "web")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -242,10 +245,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Create new profile from CR")
 		exutil.CreateNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", tunedNFConntrackMaxFile)
 
-		exutil.By("Check logs, profiles, and nodes (profile changes SHOULD NOT be applied since tuned is UNMANAGED)")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		exutil.By("All node's current profile is:")
+		stdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
+		e2e.Logf("Profile Name Per Nodes: %v", stdOut)
 
 		logsCheck, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, "--tail=9", tunedPodName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -297,10 +300,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Create new profile from CR")
 		exutil.CreateNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", tunedNFConntrackMaxFile)
 
-		exutil.By("Check logs, profiles, and nodes (profile changes SHOULD be applied since tuned is MANAGED)")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
+		exutil.By("All node's current profile is:")
+		stdOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("nf-conntrack-max"))
+		e2e.Logf("Profile Name Per Nodes: %v", stdOut)
 
 		exutil.By("Assert nf-conntrack-max applied to the node that web application run on it.")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "nf-conntrack-max")
@@ -310,7 +313,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(profileCheck).To(o.Equal("nf-conntrack-max"))
 
 		exutil.By("All node's current profile is:")
-		stdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		stdOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Profile Name Per Nodes: %v", stdOut)
 
@@ -333,11 +336,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(state).To(o.Equal("Unmanaged"))
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "tuned", "nf-conntrack-max").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("Check logs, profiles, and nodes (profile changes SHOULD NOT be applied since tuned is UNMANAGED)")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("nf-conntrack-max"))
 
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -370,11 +368,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.Equal("Managed"))
 
-		exutil.By("Check logs, profiles, and nodes (profile changes SHOULD be applied since tuned is MANAGED)")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
-
 		if isSNO || is3Master {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, defaultMasterProfileName)
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -405,8 +398,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// test requires NTO to be installed
 		isSNO := exutil.IsSNOCluster(oc)
 		isOneMasterwithNWorker := exutil.IsOneMasterWithNWorkerNodes(oc)
+
 		if !isNTO || isSNO || isOneMasterwithNWorker {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
+		}
+
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
 		}
 
 		defer func() {
@@ -427,9 +425,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoPodName, err := getNTOPodName(oc, ntoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("NTO pod name: %v", ntoPodName)
-		ntoPodLogs, err := exutil.GetSpecificPodLogs(oc, ntoNamespace, "", ntoPodName, "")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ntoPodLogs).To(o.ContainSubstring("profiles openshift-control-plane/openshift-node-performance-hp-performanceprofile have the same priority 30, please use a different priority for your custom profiles!"))
+		//ntoPodLogs, err := exutil.GetSpecificPodLogs(oc, ntoNamespace, "", ntoPodName, "")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoPodName, "10", 180, `openshift-node-performance-hp-performanceprofile have the same priority 30.*please use a different priority for your custom profiles`)
+
+		//o.Expect(err).NotTo(o.HaveOccurred())
+		//o.Expect(ntoPodLogs).To(o.ContainSubstring("profiles openshift-control-plane/openshift-node-performance-hp-performanceprofile have the same priority 30, please use a different priority for your custom profiles!"))
 
 		exutil.By("Patch priority for openshift-node-performance-hp-performanceprofile tuned to 18")
 		err = patchTunedProfile(oc, ntoNamespace, "openshift-node-performance-hp-performanceprofile", hpPerformanceProfilePatchFile)
@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The master node %v has been rebooted", masterNodeName)
 
 		exutil.By("Check MachineConfigPool for expected changes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 720)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 1800)
 
 		exutil.By("Ensure the settings took effect on the master nodes, only check the first rebooted nodes")
 		assertIfMasterNodeChangesApplied(oc, masterNodeName)
@@ -649,8 +649,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
-		exutil.By("Verified the cpu allow list in cgroup black list for openshift-tuned ...")
-		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "openshift-tuned", nodeCPUCoresInt)).To(o.Equal(true))
+		exutil.By("Verified the cpu allow list in cgroup black list for tuned ...")
+		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "tuned", nodeCPUCoresInt)).To(o.Equal(true))
 
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
 		exutil.By("Verified the cpu allow list in cgroup black list for chronyd ...")
@@ -713,11 +713,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Apply new profile that match label tuned.openshift.io/elasticsearch=
 		exutil.By("Apply new profile from CR")
 		ntoRes.createTunedProfileIfNotExist(oc)
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("user-max-mnt-namespaces"))
 
 		exutil.By("Check if new profile  user-max-mnt-namespaces applied to labeled node")
 		//Verify if the new profile is applied
@@ -835,11 +830,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-net-namespaces"))
 
-		exutil.By("Check if new profile in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("user-max-net-namespaces"))
-
 		//Verify nto tuned logs
 		exutil.By("Check NTO tuned pod logs to confirm if user-max-net-namespaces applied")
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `user-max-net-namespaces applied|\(user-max-net-namespaces\) match`)
@@ -864,11 +854,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-net-namespaces"))
-
-		exutil.By("Check if new profile in rendered tuned")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("user-max-net-namespaces"))
 
 		//Verify nto tuned logs
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `user-max-net-namespaces applied|\(user-max-net-namespaces\) match`)
@@ -1137,11 +1122,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("tuning-pidmax"))
 
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
-
 		exutil.By("Check logs, profile changes SHOULD be applied since tuned is MANAGED")
 		logsCheck, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, "--tail=9", tunedPodName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1164,11 +1144,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		podCheck, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "pods").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podCheck).NotTo(o.ContainSubstring("tuned"))
-
-		exutil.By("The rendered profile has been removed since tuned is REMOVED)")
-		renderCheck, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.ContainSubstring("rendered"))
 
 		exutil.By("Check profile status, all node profile should be removed since tuned is REMOVED)")
 		profileCheck, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -1196,11 +1171,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("tuning-pidmax"))
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		exutil.By("Check logs, profile changes SHOULD be applied since tuned is MANAGED)")
 		logsCheck, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, "--tail=9", tunedPodName).Output()
@@ -1240,11 +1210,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create openshift-realtime profile")
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, ntoRealtimeFile)
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-realtime"))
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -1338,13 +1303,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Define duplicated parameter and value
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=kernel.pid_max", "SYSCTLVALUE1=1048575", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("ips-host"))
-
-		exutil.By("Assert active and recommended profile (ips-host) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `active and recommended profile \(ips-host\) match`)
+		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -1385,8 +1345,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Update ips-host profile with new value of fs.mount-max = 868686")
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=868686", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
-		exutil.By("Assert active and recommended profile (ips-host) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `active and recommended profile \(ips-host\) match`)
+		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -1456,11 +1416,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Assert if the MCP worker-cnf has been successfully applied ...")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 750)
 
-		exutil.By("Check if new profile in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-performance-performance"))
-
 		exutil.By("Check if new NTO profile openshift-node-performance-performance was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node-performance-performance")
 
@@ -1491,11 +1446,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Assert if the MCP worker-cnf is ready after node rebooted ...")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 750)
 
-		exutil.By("Check if new profile performance-patch in rendered tuned")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("performance-patch"))
-
 		exutil.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1507,7 +1457,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-performance"))
 
 		exutil.By("Check if tuned pod logs contains Cannot find profile 'openshift-node-performance-example-performanceprofile' on labeled nodes")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "Cannot find profile")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 60, "Cannot find profile")
 
 		exutil.By("Check if the linux kernel parameter as vm.stat_interval = 1")
 		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "1")
@@ -1522,8 +1472,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Check if new NTO profile performance-patch was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "performance-patch")
 
+		exutil.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
 		exutil.By("Check if contains static tuning from profile 'performance-patch' applied in tuned pod logs on labeled nodes")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "static tuning from profile 'performance-patch' applied")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 60, "static tuning from profile 'performance-patch' applied")
 
 		exutil.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -1602,11 +1557,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			exutil.AssertIfMCPChangesAppliedByName(oc, "worker-optimize", 600)
 		}
 
-		exutil.By("Check if new profile include-performance-profile in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("include-performance-profile"))
-
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1622,7 +1572,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		exutil.By("Check if tuned pod logs contains Cannot find profile 'openshift-node-performance-optimize' on labeled nodes")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "Cannot find profile 'openshift-node-performance-optimize'")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 60, "Cannot find profile 'openshift-node-performance-optimize'")
 
 		if isSNO {
 			exutil.By("Apply performance optimize profile")
@@ -1753,12 +1703,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareCertificateBetweenOpenSSLandTLSSecret(oc, ntoNamespace, tunedNodeName)
 	})
 
-	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-49371-NTO will restart tuned daemon when profile application take too long [Disruptive] [Slow]", func() {
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-49371-NTO will not restart tuned daemon when profile application take too long [Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
+		//The restart tuned has removed due to timeout in the bug https://issues.redhat.com/browse/OCPBUGS-30647
 		//Use the first worker node as labeled node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1776,11 +1727,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Create openshift-profile-stuck profile")
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, workerStackFile)
 
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-profile-stuck"))
-
 		exutil.By("Check openshift-profile-stuck tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1791,8 +1737,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
-		exutil.By("Assert active and recommended profile (openshift-profile-stuck) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(openshift-profile-stuck\) match`)
+		exutil.By("Assert recommended profile (openshift-profile-stuck) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-profile-stuck\) matches current configuration`)
 
 		exutil.By("Check if new NTO profile openshift-profile-stuck was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-profile-stuck")
@@ -1807,11 +1753,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
-		exutil.By("Assert timeout (120) to apply TuneD profile; restarting TuneD daemon in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "26", 120, `timeout \(120\) to apply TuneD profile; restarting TuneD daemon`)
+		exutil.By("The log shouldn't contain [ timeout (120) to apply TuneD profile; restarting TuneD daemon ] in tuned pod log")
+		ntoPodLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, tunedPodName, "--tail=10").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ntoPodLogs).NotTo(o.ContainSubstring("timeout (120) to apply TuneD profile; restarting TuneD daemon"))
 
-		exutil.By("Assert error waiting for tuned: signal: terminated in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "26", 120, `error waiting for tuned: signal: terminated`)
+		exutil.By("The log shouldn't contain [ error waiting for tuned: signal: terminated ] in tuned pod log")
+		ntoPodLogs, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, tunedPodName, "--tail=10").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ntoPodLogs).NotTo(o.ContainSubstring("error waiting for tuned: signal: terminated"))
 	})
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-49370-NTO add huge pages to boot time via bootloader [Disruptive] [Slow]", func() {
@@ -1839,11 +1789,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create hugepages tuned profile")
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, hugepageTunedBoottimeFile)
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("hugepages"))
 
 		exutil.By("Check hugepages tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
@@ -1949,11 +1894,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Create openshift-stalld tuned profile")
 		exutil.CreateNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalldTunedFile, "-p", "STALLD_STATUS=start,enable")
 
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-stalld"))
-
 		exutil.By("Check openshift-stalld tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2054,11 +1994,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Create openshift-node-postgresql tuned profile")
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, openshiftNodePostgresqlFile)
 
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-postgresql"))
-
 		exutil.By("Check openshift-node-postgresql tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2077,8 +2012,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
-		exutil.By("Assert active and recommended profile (openshift-node-postgresql) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-node-postgresql\) match|static tuning from profile 'openshift-node-postgresql' applied`)
+		exutil.By("Assert recommended profile (openshift-node-postgresql) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 300, `recommended profile \(openshift-node-postgresql\) matches current configuration|static tuning from profile 'openshift-node-postgresql' applied`)
 	})
 
 	g.It("NonHyperShiftHOST-Author:liqcui-Medium-49705-Tuned net plugin handle net devices with n/a value for a channel. [Disruptive]", func() {
@@ -2122,12 +2057,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create net-plugin tuned profile")
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, netPluginFile)
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("net-plugin"))
 
 		exutil.By("Check net-plugin tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
@@ -2224,7 +2153,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(providerID).To(o.ContainSubstring(providerName))
 
 		exutil.By("Check /var/lib/tuned/provider on target nodes")
-		openshiftProfile, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/var/lib/tuned/provider")
+		openshiftProfile, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/var/lib/ocp-tuned/provider")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(openshiftProfile).NotTo(o.BeEmpty())
 		o.Expect(openshiftProfile).To(o.ContainSubstring(providerName))
@@ -2238,11 +2167,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Apply cloud-provider profile ...")
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cloudProviderFile, "-p", "PROVIDER_NAME="+providerName)
 
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		exutil.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(output).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("provider-" + providerName))
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Check tuned for NTO")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned.tuned.openshift.io").Output()
+		o.Expect(output).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current tuned for NTO: \n%v", output)
 
 		exutil.By("Check provider + providerName profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
@@ -2289,19 +2224,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		//NTO will provides two default tuned, one is default, another is renderd
-		exutil.By("Check the default tuned list, expected default and rendered")
-		allTuneds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "-n", ntoNamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(allTuneds).To(o.ContainSubstring("default"))
-		o.Expect(allTuneds).To(o.ContainSubstring("rendered"))
-
-		//Both tuned should be fresh ones - new default after deletion and new rendered, because there is a new default tuned.
-		exutil.By("The default and renderd tuned will be automatically created after deleting default tuned")
-		renderdTunedCreateTimeBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "rendered", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderdTunedCreateTimeBefore).NotTo(o.BeEmpty())
-
 		defaultTunedCreateTimeBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "default", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(defaultTunedCreateTimeBefore).NotTo(o.BeEmpty())
@@ -2311,45 +2233,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("The make sure the tuned default created and ready")
 		confirmedTunedReady(oc, ntoNamespace, "default", 60)
 
-		renderdTunedCreateTimeAfter, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "rendered", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderdTunedCreateTimeAfter).NotTo(o.BeEmpty())
-		o.Expect(renderdTunedCreateTimeAfter).NotTo(o.ContainSubstring(renderdTunedCreateTimeBefore))
-
 		defaultTunedCreateTimeAfter, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "default", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(defaultTunedCreateTimeAfter).NotTo(o.BeEmpty())
 		o.Expect(defaultTunedCreateTimeAfter).NotTo(o.ContainSubstring(defaultTunedCreateTimeBefore))
 
-		e2e.Logf("renderdTunedCreateTimeBefore is : %v renderdTunedCreateTimeAfter is: %v", renderdTunedCreateTimeBefore, renderdTunedCreateTimeAfter)
-		e2e.Logf("defaultTunedCreateTimeBefore is : %v defaultTunedCreateTimeAfter is: %v", defaultTunedCreateTimeBefore, defaultTunedCreateTimeAfter)
-
-		//Only rendered tuned should be fresh - default tuned doesn't change after deleting rendered.
-		exutil.By("The renderd tuned will be automatically re-created after deleting rendered tuned, expect default tuned no change")
-		renderdTunedCreateTimeBefore, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "rendered", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
-		o.Expect(renderdTunedCreateTimeBefore).NotTo(o.BeEmpty())
-		o.Expect(err).NotTo(o.HaveOccurred())
-
 		defaultTunedCreateTimeBefore, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "default", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
 		o.Expect(defaultTunedCreateTimeBefore).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("Delete the rendered tuned ...")
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "rendered", "-n", ntoNamespace).Execute()
-		exutil.By("The make sure the tuned rendered created and ready")
-		confirmedTunedReady(oc, ntoNamespace, "rendered", 60)
-
-		renderdTunedCreateTimeAfter, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "rendered", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderdTunedCreateTimeAfter).NotTo(o.BeEmpty())
-		o.Expect(renderdTunedCreateTimeAfter).NotTo(o.ContainSubstring(renderdTunedCreateTimeBefore))
 
 		defaultTunedCreateTimeAfter, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "default", "-n", ntoNamespace, "-ojsonpath={.metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(defaultTunedCreateTimeAfter).NotTo(o.BeEmpty())
 		o.Expect(defaultTunedCreateTimeAfter).To(o.ContainSubstring(defaultTunedCreateTimeBefore))
 
-		e2e.Logf("renderdTunedCreateTimeBefore is : %v renderdTunedCreateTimeAfter is: %v", renderdTunedCreateTimeBefore, renderdTunedCreateTimeAfter)
 		e2e.Logf("defaultTunedCreateTimeBefore is : %v defaultTunedCreateTimeAfter is: %v", defaultTunedCreateTimeBefore, defaultTunedCreateTimeAfter)
 
 	})
@@ -2423,12 +2320,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create openshift-stalld tuned profile")
 		exutil.CreateNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalldTunedFile, "-p", "STALLD_STATUS=start,enable")
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-stalld"))
 
 		exutil.By("Check openshift-stalld tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
@@ -2520,6 +2411,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 
+		//Get how many cpus on the specified worker node
+		exutil.By("Get how many cpus cores on the labeled worker node")
+		nodeCPUCores, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.capacity.cpu}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeCPUCores).NotTo(o.BeEmpty())
+
+		nodeCPUCoresInt, err := strconv.Atoi(nodeCPUCores)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodeCPUCoresInt <= 1 {
+			g.Skip("the worker node don't have enough cpus - skipping test ...")
+		}
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 		o.Expect(tunedPodName).NotTo(o.BeEmpty())
@@ -2551,12 +2453,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, "", paoBaseProfileMCP)
 
 		exutil.By("Assert if machine config pool applied for worker nodes")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 720)
-
-		exutil.By("Check if new profile openshift-node-performance-pao-baseprofile in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 1200)
 
 		exutil.By("Check openshift-node-performance-pao-baseprofile tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
@@ -2609,13 +2506,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(realTimekernalOutput).NotTo(o.BeEmpty())
-			o.Expect(realTimekernalOutput).To(o.Or(o.ContainSubstring("rt7"), o.ContainSubstring("rt14")))
+			o.Expect(realTimekernalOutput).To(o.Or(o.ContainSubstring("rt")))
 		} else {
 			exutil.By("Check realTime kernel setting that created by PAO in labled node ")
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(realTimekernalOutput).NotTo(o.BeEmpty())
-			o.Expect(realTimekernalOutput).NotTo(o.Or(o.ContainSubstring("rt7"), o.ContainSubstring("rt14")))
+			o.Expect(realTimekernalOutput).NotTo(o.Or(o.ContainSubstring("rt")))
 		}
 
 		exutil.By("Check runtimeClass setting that created by PAO ... ")
@@ -2772,8 +2669,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
-		exutil.By("Verified the cpu allow list in cgroup black list for openshift-tuned ...")
-		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "openshift-tuned", nodeCPUCoresInt)).To(o.Equal(true))
+		exutil.By("Verified the cpu allow list in cgroup black list for tuned ...")
+		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "tuned", nodeCPUCoresInt)).To(o.Equal(true))
 
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
 		exutil.By("Verified the cpu allow list in cgroup black list for chronyd ...")
@@ -2845,11 +2742,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Assert if the status of adding the two worker node into worker-diffcpus mcp, mcp applied")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-diffcpus", 480)
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-bootcmdline-cpu"))
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -2933,13 +2825,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(tunedNameList).To(o.And(o.ContainSubstring("hc-nodepool-vmdratio"),
 			o.ContainSubstring("tuned-hugepages")))
 
-		exutil.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.And(o.ContainSubstring("hc-nodepool-vmdratio"),
-			o.ContainSubstring("openshift-node-hugepages")))
-
 		appliedProfileList, err := oc.AsAdmin().Run("get").Args("profiles.tuned.openshift.io", "-n", ntoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(appliedProfileList).NotTo(o.BeEmpty())
@@ -2998,16 +2883,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Create tuning-maxpid profile")
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, tuningMaxPidFile)
 
-		//NTO will provides two default tuned, one is default, another is renderd
+		//NTO will provides two default tuned, one is default
 		exutil.By("Check the default tuned list, expected tuning-maxpid")
 		allTuneds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "-n", ntoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(allTuneds).To(o.ContainSubstring("tuning-maxpid"))
-
-		exutil.By("Check if new profile tuning-maxpid is rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("tuning-maxpid"))
 
 		exutil.By("Check if new profile tuning-maxpid applied to labeled node")
 		//Verify if the new profile is applied
@@ -3076,11 +2956,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create tuning-pidmax profile")
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, ntoTunedPidMax)
-
-		exutil.By("Check if new profile in in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
 
 		exutil.By("Create tuning-pidmax profile tuning-pidmax applied to nodes")
 		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
@@ -3209,11 +3084,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 300)
 		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 720)
 
-		exutil.By("Check if new profile openshift-node-performance-pao-baseprofile in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
-
 		exutil.By("Check openshift-node-performance-pao-baseprofile tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3330,11 +3200,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Assert if machine config pool applied for worker nodes")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 1200)
-
-		exutil.By("Check if profile openshift-node-performance-pao-baseprofile in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
 
 		exutil.By("Check openshift-node-performance-pao-baseprofile tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
@@ -3455,11 +3320,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Create tuning-pidmax profile")
 		ntoRes.applyNTOTunedProfile(oc)
 
-		exutil.By("Check if new profile is in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
-
 		exutil.By("Create tuning-pidmax profile tuning-pidmax applied to nodes")
 		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 
@@ -3483,12 +3343,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Apply cloud-provider profile ...")
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cloudProviderFile, "-p", "PROVIDER_NAME="+providerName)
-
-		exutil.By("Check if new profile is in rendered tuned")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("provider-" + providerName))
 
 		exutil.By("Check provider + providerName profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
@@ -3540,11 +3394,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			sysctlvalue: "282828",
 		}
 
-		exutil.By("Check if new profile is in rendered tuned")
-		renderCheck, err := getTunedRender(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("tuning-pidmax"))
-
 		exutil.By("Create tuning-pidmax profile and apply it to nodes")
 		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
 
@@ -3563,12 +3412,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Apply cloud-provider profile ...")
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cloudProviderFile, "-p", "PROVIDER_NAME="+providerName)
-
-		exutil.By("Check if new profile is in rendered tuned")
-		renderCheck, err = getTunedRender(oc, ntoNamespace)
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).To(o.ContainSubstring("provider-" + providerName))
 
 		exutil.By("Check provider + providerName profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()

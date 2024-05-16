@@ -76,11 +76,6 @@ func patchTunedProfile(oc *exutil.CLI, namespace string, tunedName string, patch
 	return oc.AsAdmin().WithoutNamespace().Run("patch").Args("tuned", tunedName, "--patch-file="+patchFile, "--type", "merge", "-n", namespace).Execute()
 }
 
-// getTunedRender returns a string representation of the rendered for tuned in the given namespace
-func getTunedRender(oc *exutil.CLI, namespace string) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "tuned", "rendered", "-o", "yaml").Output()
-}
-
 // getTunedProfile returns a string representation of the status.tunedProfile of the given node in the given namespace
 func getTunedProfile(oc *exutil.CLI, namespace string, tunedNodeName string) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("get").Args("profiles.tuned.openshift.io", tunedNodeName, "-n", namespace, "-o=jsonpath={.status.tunedProfile}").Output()
