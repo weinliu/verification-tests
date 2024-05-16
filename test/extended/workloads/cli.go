@@ -711,7 +711,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pullSpec := getLatestPayload("https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest")
-		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc", "--to="+extractTmpDirName, pullSpec).Execute()
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc.rhel8", "--to="+extractTmpDirName, pullSpec).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check oc executable to make sure match the platform")
 		_, err = exec.Command("bash", "-c", "/tmp/case51018/oc version").Output()
