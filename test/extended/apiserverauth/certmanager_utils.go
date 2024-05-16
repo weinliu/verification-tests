@@ -367,7 +367,7 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 
 // Get the available CatalogSource's name from specific namespace
 func getAvailableCatalogSourceName(oc *exutil.CLI, namespace string) (string, error) {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", "-o=jsonpath={.items[*].metadata.name}").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[?(@.status.connectionState.lastObservedState=="READY")].metadata.name}`).Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get catalogsource from namespace: %s", namespace)
 	}
@@ -379,7 +379,10 @@ func getAvailableCatalogSourceName(oc *exutil.CLI, namespace string) (string, er
 			return name, nil
 		}
 	}
-	// if no target CatalogSource was found, return ""
+
+	// if no target CatalogSource was found, print existing CatalogSource and return ""
+	output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource").Output()
+	e2e.Logf("get existing catalogsource: %s", output)
 	return "", nil
 }
 
