@@ -68,6 +68,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// the case needs at least one worker node since dns pods will be removed from master
 		// so skip on SNO and Compact cluster that no dedicated worker node
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l node-role.kubernetes.io/worker=,node-role.kubernetes.io/master!=", `-ojsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Count(output, "True") < 1 {
 			g.Skip("Skipping as there is no dedicated worker nodes")
 		}
