@@ -55,7 +55,7 @@ export GOLANGCI_LINT_CACHE=/tmp/.cache
 for f in $modified_files;
 do
     if [ -e $f ]; then
-        lint_check_result=$(golangci-lint run --timeout=10m0s --fast $f || true)
+        lint_check_result=$(golangci-lint run --timeout=10m0s --fast $f 2>&1 || true)
         if [[ -n "${lint_check_result}" ]]; then
             bad_golint_files="$bad_golint_files\n$lint_check_result";
         fi
