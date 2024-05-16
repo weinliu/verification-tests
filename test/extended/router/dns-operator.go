@@ -65,12 +65,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
+		// the case needs at least one worker node since dns pods will be removed from master
+		// so skip on SNO and Compact cluster that no dedicated worker node
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l node-role.kubernetes.io/worker=,node-role.kubernetes.io/master!=", `-ojsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}`).Output()
+		if strings.Count(output, "True") < 1 {
+			g.Skip("Skipping as there is no dedicated worker nodes")
+		}
+
 		var (
-			dnsMasterToleration = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement\", \"value\":{\"tolerations\":[" +
-				"{\"effect\":\"NoExecute\",\"key\":\"my-dns-test\", \"operators\":\"Equal\", \"value\":\"abc\"}]}}]"
+			dnsMasterToleration = `[{"op":"replace", "path":"/spec/nodePlacement", "value":{"tolerations":[{"effect":"NoExecute","key":"my-dns-test","operator":"Equal","value":"abc"}]}}]`
 		)
 		exutil.By("check the dns pod placement to confirm it is running on default mode")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("kubernetes.io/os=linux"))
 
@@ -81,7 +87,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Patch dns operator config with custom tolerations of dns pod, not to tolerate master node taints")
 		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
-		jsonPath := ".status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
+		jsonPath := `.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status`
 		defer deleteDnsOperatorToRestore(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterToleration)
 		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
@@ -92,7 +98,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check dns pod placement to check the custom tolerations")
 		outputLcfg1, errLcfg1 := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
 		o.Expect(errLcfg1).NotTo(o.HaveOccurred())
-		o.Expect(outputLcfg1).To(o.ContainSubstring(`{"effect":"NoExecute","key":"my-dns-test","value":"abc"}`))
+		o.Expect(outputLcfg1).To(o.ContainSubstring(`{"effect":"NoExecute","key":"my-dns-test","operator":"Equal","value":"abc"}`))
 
 		exutil.By("check dns.operator status to see any error messages")
 		outputLcfg2, errLcfg2 := oc.AsAdmin().Run("get").Args("dns.operator/default", "-o=jsonpath={.status}").Output()
