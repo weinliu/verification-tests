@@ -1484,6 +1484,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:jitli-LEVEL0-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials", func() {
+		g.By("Add Unauthenticated Groups to `self-access-review` Cluster Role since 4.16 for AUTH-509")
+		template := filepath.Join(imageRegistryBaseDir, "add-self-access-review-unauth.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", oc.Namespace()).Execute()
+		templateErr := oc.AsAdmin().Run("apply").Args("-f", template, "-n", oc.Namespace()).Execute()
+		o.Expect(templateErr).NotTo(o.HaveOccurred())
 
 		g.By("Create route to expose the registry")
 		routeName := getRandomString()
