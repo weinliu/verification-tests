@@ -1470,12 +1470,12 @@ apiServer:
 				innerSteps: []*logCheckStep{
 					{
 						desc:       "Verify Read logs in profile :: ",
-						cmd:        getGrepCMD(writeRequestBodiesCm, e2eTestNamespace, "", getVerbs, auditLogPath),
+						cmd:        getGrepCMD(writeRequestBodiesCm, e2eTestNamespace, `""`, getVerbs, auditLogPath),
 						conditions: "==",
 					},
 					{
 						desc:       "Verify Write logs in profile :: ",
-						cmd:        getGrepCMD(writeRequestBodiesCm, e2eTestNamespace, "", writeVerbs, auditLogPath),
+						cmd:        getGrepCMD(writeRequestBodiesCm, e2eTestNamespace, `""`, writeVerbs, auditLogPath),
 						conditions: ">",
 					},
 				},
@@ -1487,12 +1487,12 @@ apiServer:
 				innerSteps: []*logCheckStep{
 					{
 						desc:       "Verify Read logs in profile :: ",
-						cmd:        getGrepCMD(allRequestBodiesCm, e2eTestNamespace, "", getVerbs, auditLogPath),
+						cmd:        getGrepCMD(allRequestBodiesCm, e2eTestNamespace, `""`, getVerbs, auditLogPath),
 						conditions: ">",
 					},
 					{
 						desc:       "Verify Write logs in profile :: ",
-						cmd:        getGrepCMD(allRequestBodiesCm, e2eTestNamespace, "", writeVerbs, auditLogPath),
+						cmd:        getGrepCMD(allRequestBodiesCm, e2eTestNamespace, `""`, writeVerbs, auditLogPath),
 						conditions: ">",
 					},
 				},
