@@ -3090,7 +3090,9 @@ func checkAllClusterOperatorsState(oc *exutil.CLI, interval int, timeout int) {
 func checkOVNKState(oc *exutil.CLI) error {
 	// check all OVNK pods
 	waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
-	waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
+	if !exutil.IsHypershiftHostedCluster(oc) {
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
+	}
 	// check ovnkube-node ds rollout status and confirm if rollout has triggered
 	return wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-node", "--timeout", "5m").Output()

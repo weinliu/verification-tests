@@ -1158,7 +1158,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	//author: anusaxen@redhat.com
-	g.It("NonHyperShiftHOST-Author:anusaxen-High-73205-High-72817-Make sure internalJoinSubnet and internalTransitSwitchSubnet is configurable post install as a Day 2 operation [Disruptive]", func() {
+	g.It("Author:anusaxen-High-73205-High-72817-Make sure internalJoinSubnet and internalTransitSwitchSubnet is configurable post install as a Day 2 operation [Disruptive]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
