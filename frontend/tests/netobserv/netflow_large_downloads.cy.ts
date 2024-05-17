@@ -56,7 +56,10 @@ describe('(OCP-67782 Network_Observability) Large volume downloads counters test
 
             netflowPage.waitForLokiQuery()
 
-            //get counters from query summary panel
+            // wait for download to finish
+            cy.wait(2000)
+
+            // get bytesCount from query summary panel
             let warningExists = false
             cy.get(querySumSelectors.queryStatsPanel).should('exist').then(qrySum => {
                 if (Cypress.$(querySumSelectors.queryStatsPanel + ' svg.query-summary-warning').length > 0) {

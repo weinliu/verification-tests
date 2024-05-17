@@ -1,8 +1,7 @@
-
-import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, querySumSelectors } from "../../views/netflow-page"
+import { dashboard, graphSelector } from "views/dashboards-page"
 
 describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags: ['Network_Observability'] }, function () {
     before('any test', function () {
@@ -10,7 +9,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags:
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // specify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -84,41 +83,24 @@ describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags:
     })
 
     it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop dashboards", function () {
-        // navigate to 'NetObserv' Dashboard page
+        // navigate to 'NetObserv / Main' Dashboard page
         dashboard.visit()
-        dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
+        dashboard.visitDashboard("netobserv-main")
 
-        // verify 'Byte drop rate per node' panel
-        // panel should appear with the flowcollector metric 'node_drop_bytes_total'
-        cy.get('[data-test-id="panel-byte-drop-rate-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        // verify 'Drops' panel
+        cy.get('[data-test="drops-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'Byte drop rate per node' panel
-        // panel should appear with the flowcollector metric 'node_drop_packets_total'
-        cy.get('[data-test-id="panel-packet-drop-rate-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        // below panel should appear with the flowcollector metric 'namespace_drop_bytes_total'
+        // verify 'Top drops per node' panel
+        cy.get('[data-test="top-drops-per-node-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'Byte drop rate per namespace' panel
-        // panel should appear with the flowcollector metric 'namespace_drop_bytes_total'
-        cy.byLegacyTestID('panel-byte-drop-rate-per-namespace').should('exist').within(byteDropRate => {
-            cy.checkDashboards(appsInfra)
-        })
+        // below panel should appear with the flowcollector metric 'node_drop_bytes_total'
+        // verify 'Top drops per infra namespace' panel
+        cy.get('[data-test="top-drops-per-infra-namespace-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'Packet drop rate per namespace' panel
-        // panel should appear with the flowcollector metric 'namespace_drop_packets_total'
-        cy.byLegacyTestID('panel-packet-drop-rate-per-namespace').should('exist').within(packetDropRate => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Byte drop rate per workload' panel
-        // panel should appear with the flowcollector metric 'workload_drop_bytes_total'
-        cy.byLegacyTestID('panel-byte-drop-rate-per-workload').should('exist').within(byteDropRate => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Packet drop rate per workload' panel
-        // panel should appear with the flowcollector metric 'workload_drop_packets_total'
-        cy.byLegacyTestID('panel-packet-drop-rate-per-workload').should('exist').within(packetDropRate => {
-            cy.checkDashboards(appsInfra)
-        })
+        // below panel should appear with the flowcollector metric 'workload_drop_bytes_total'
+        // verify 'Top drops per infra workload' panel
+        cy.get('[data-test="top-drops-per-infra-workload-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
     })
 
     after("Delete flowcollector", function () {

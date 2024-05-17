@@ -1,7 +1,7 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, querySumSelectors } from "../../views/netflow-page"
-import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
+import { dashboard, graphSelector } from "views/dashboards-page"
 
 const metricType = [
     "Bytes",
@@ -19,7 +19,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         // create DNS over TCP and UDP pods
         cy.adminCLI('oc apply -f ./fixtures/netobserv/DNS-pods.yaml')
 
-        // sepcify --env noo_release=upstream to run tests 
+        // sepcify --env noo_release=upstream to run tests
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -59,6 +59,8 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         cy.byTestID('autocomplete-search').type('dns-traffic')
         cy.get('#search-button').click()
 
+        cy.get('#filters div.custom-chip > p').should('contain.text', 'dns-traffic')
+
         cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
         cy.byTestID('dst_name').click()
         cy.get('#search').type('dnsutils1' + '{enter}')
@@ -74,6 +76,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         })
 
         cy.get('#filters div:nth-child(4) > button').should('exist').click()
+
         cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
         cy.byTestID('dst_name').click()
         cy.get('#search').type('dnsutils2' + '{enter}')
@@ -125,38 +128,39 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
     })
 
     it("(OCP-67087, aramesha, Network_Observability) Validate DNSTracking dashboards", function () {
-        // navigate to 'NetObserv' Dashboard page
+        // navigate to 'NetObserv / Main' Dashboard page
         dashboard.visit()
-        dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
+        dashboard.visitDashboard("netobserv-main")
 
-        // verify 'DNS latency per node (milliseconds - p99 and p50)' panel
-        // below 2 panels should appear with the flowcollector metric 'node_dns_latency_seconds'
-        cy.get('[data-test-id="panel-dns-latency-per-node-milliseconds-p-99-and-p-50"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        // below 3 panels should appear with the flowcollector metric 'node_dns_latency_seconds'
+        // verify 'Top P50 DNS latency per node (ms)' panel
+        cy.get('[data-test="top-p50-dns-latency-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'DNS request rate per code and per node' panel
-        cy.get('[data-test-id="panel-dns-request-rate-per-code-and-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        // verify 'Top P99 DNS latency per node (ms)' panel
+        cy.get('[data-test="top-p99-dns-latency-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'DNS latency per namespace (milliseconds - p99 and p50)' panel
-        // below 2 panels should appear with the flowcollector metric 'namespace_dns_latency_seconds'
-        cy.byLegacyTestID('panel-dns-latency-per-namespace-milliseconds-p-99-and-p-50').should('exist').within(DNSLatencies => {
-            cy.checkDashboards(appsInfra)
-        })
+        // verify 'DNS error rate per node' panel
+        cy.get('[data-test="dns-error-rate-per-node-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'DNS request rate per code and per namespace' panel
-        cy.byLegacyTestID('panel-dns-request-rate-per-code-and-per-namespace').should('exist').within(DNSRequests => {
-            cy.checkDashboards(appsInfra)
-        })
+        // below 3 panels should appear with the flowcollector metric 'namespace_dns_latency_seconds'
+        // verify 'Top P50 DNS latency per infra namespace (ms)' panel
+        cy.get('[data-test="top-p50-dns-latency-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'DNS latency per workload (milliseconds - p99 and p50)' panel
-        // below 2 panels should appear with the flowcollector metric 'workload_dns_latency_seconds'
-        cy.byLegacyTestID('panel-dns-latency-per-workload-milliseconds-p-99-and-p-50').should('exist').within(DNSLatencies => {
-            cy.checkDashboards(appsInfra)
-        })
+        // verify 'Top P99 DNS latency per infra namespace (ms)' panel
+        cy.get('[data-test="top-p99-dns-latency-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'DNS request rate per code and per workload' panel
-        cy.byLegacyTestID('panel-dns-request-rate-per-code-and-per-workload').should('exist').within(DNSRequests => {
-            cy.checkDashboards(appsInfra)
-        })
+        // verify 'DNS error rate per infra namespace' panel
+        cy.get('[data-test="dns-error-rate-per-infra-namespace-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // below 3 panels should appear with the flowcollector metric 'workload_dns_latency_seconds'
+        // verify 'Top P50 DNS latency per infra workload (ms)' panel
+        cy.get('[data-test="top-p50-dns-latency-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // verify 'Top P99 DNS latency per infra workload (ms)' panel
+        cy.get('[data-test="top-p99-dns-latency-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // verify 'DNS error rate per infra workload' panel
+        cy.get('[data-test="dns-error-rate-per-infra-workload-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
     })
 
     after("Delete flowcollector and DNS pods", function () {

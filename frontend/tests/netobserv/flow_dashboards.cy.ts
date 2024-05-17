@@ -1,6 +1,26 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
-import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
+import { dashboard } from "views/dashboards-page"
+
+const overviewPanels = [
+    "total-egress-traffic-chart",
+    "total-ingress-traffic-chart",
+    "infra-egress-traffic-chart",
+    "apps-egress-traffic-chart",
+    "infra-ingress-traffic-chart",
+    "apps-ingress-traffic-chart",
+    "infra-egress-traffic-chart",
+    "apps-egress-traffic-chart"
+]
+
+const trafficRatesPanels = [
+    "top-egress-traffic-per-node-chart",
+    "top-ingress-traffic-per-node-chart",
+    "top-egress-traffic-per-infra-namespace-chart",
+    "top-ingress-traffic-per-infra-namespace-chart",
+    "top-egress-traffic-per-infra-workload-chart",
+    "top-ingress-traffic-per-infra-workload-chart"
+]
 
 describe('Network_Observability flow dashboards tests', { tags: ['Network_Observability'] }, function () {
 
@@ -28,69 +48,15 @@ describe('Network_Observability flow dashboards tests', { tags: ['Network_Observ
     })
 
     it("(OCP-63790, memodi, Network_Observability), should have flow-based dashboards", function () {
-        // navigate to 'NetObserv' Dashboard page
+        // navigate to 'NetObserv / Main' Dashboard page
         dashboard.visit()
-        dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
+        dashboard.visitDashboard("netobserv-main")
 
-        // verify 'Byte rate received per namespace' panel exists and is populated
-        // this panel should appear with the default flowcollector metrics
-        cy.byLegacyTestID('panel-byte-rate-received-per-namespace').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
+        // verify that overview panels panels exist and are populated
+        cy.checkDashboards(overviewPanels)
 
-        // verify 'Byte rate received per workload' panel exists and is populated
-        // this panel should appear with the default flowcollector metrics
-        cy.byLegacyTestID('panel-byte-rate-received-per-workload').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Byte rate sent per node' panel exists and is populated
-        // this panel should appear with the 'node_egress_bytes_total' metric
-        cy.get('[data-test-id="panel-byte-rate-sent-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Packet rate received per node' panel exists and is populated
-        // this panel should appear with the 'node_ingress_packets_total' metric
-        cy.get('[data-test-id="panel-packet-rate-sent-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Packet rate sent per node' panel exists and is populated
-        // this panel should appear with the 'node_egress_packets_total' metric
-        cy.get('[data-test-id="panel-packet-rate-received-per-node"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Byte rate send per namespace' panel exists and is populated
-        // this panel should appear with the 'namespace_egress_bytes_total' metric
-        cy.byLegacyTestID('panel-byte-rate-sent-per-namespace').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Packet rate sent per namespace' panel exists and is populated
-        // this panel should appear with the 'namespace_egress_packets_total' metric
-        cy.byLegacyTestID('panel-packet-rate-sent-per-namespace').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Packet rate received per namespace' panel exists and is populated
-        // this panel should appear with the 'namespace_ingress_packets_total' metric
-        cy.byLegacyTestID('panel-packet-rate-received-per-namespace').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Byte rate sent per workload' panel exists and is populated
-        // this panel should appear with the 'workload_egress_bytes_total' metric
-        cy.byLegacyTestID('panel-byte-rate-sent-per-workload').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Packet rate sent per workload' panel exists and is populated
-        // this panel should appear with the 'workload_egress_packets_total' metric
-        cy.byLegacyTestID('panel-packet-rate-sent-per-workload').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
-
-        // verify 'Packet rate received per workload' panel exists and is populated
-        // this panel should appear with the 'workload_ingress_packets_total' metric
-        cy.byLegacyTestID('panel-packet-rate-received-per-workload').should('exist').within(topBytes => {
-            cy.checkDashboards(appsInfra)
-        })
+        // verify that Traffic Rates panels panels exist and are populated
+        cy.checkDashboards(trafficRatesPanels)
     })
 
     after("delete flowcollector and NetObs Operator", function () {

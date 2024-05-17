@@ -12,10 +12,16 @@ export const dashboard = {
             })
         })
 
+        cy.get('#monitoring-time-range-dropdown').should('exist').then(btn => {
+            cy.wrap(btn).click().then(drop => {
+                cy.contains('Last 5 minutes').should('exist').click()
+            })
+        })
+
         // to load all the graphs on the dashboard
-        cy.wait(5000)
+        cy.wait(1000)
         cy.get('#content-scrollable').scrollTo('bottom')
-        cy.wait(5000)
+        cy.wait(1000)
     }
 }
 

@@ -9,7 +9,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // sepcify --env noo_release=upstream to run tests 
+        // sepcify --env noo_release=upstream to run tests
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"

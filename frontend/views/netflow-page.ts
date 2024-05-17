@@ -289,14 +289,17 @@ Cypress.Commands.add('visitNetflowTrafficTab', (page) => {
 Cypress.Commands.add('checkNetflowTraffic', () => {
     // overview panels
     cy.get('li.overviewTabButton').should('exist').click()
+    cy.wait(2000)
     cy.checkPanel(overviewSelectors.defaultPanels)
 
     // table view
     cy.get('li.tableTabButton').should('exist').click()
+    cy.wait(1000)
     cy.byTestID("table-composable").should('exist')
 
     // topology view
     cy.get('li.topologyTabButton').should('exist').click()
+    cy.wait(1000)
     cy.get('#drawer').should('not.be.empty')
 });
 

@@ -1,7 +1,7 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, querySumSelectors } from "../../views/netflow-page"
-import { dashboard, graphSelector, appsInfra } from "views/dashboards-page"
+import { dashboard, graphSelector } from "views/dashboards-page"
 
 const metricType = [
     "Bytes",
@@ -16,7 +16,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // specify --env noo_release=upstream to run tests 
+        // specify --env noo_release=upstream to run tests
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
@@ -78,25 +78,33 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
     })
 
     it("(OCP-68246, aramesha, Network_Observability) Validate flowRTT dashboards", function () {
-        // navigate to 'NetObserv' Dashboard page
+        // navigate to 'NetObserv / Main' Dashboard page
         dashboard.visit()
-        dashboard.visitDashboard("grafana-dashboard-netobserv-flow-metrics")
+        dashboard.visitDashboard("netobserv-main")
 
-        // verify 'Round-trip time per node (milliseconds - p99 and p50)' panel
-        // panel should appear with the flowcollector metric 'node_rtt_seconds'
-        cy.byLegacyTestID('panel-round-trip-time-per-node-milliseconds-p-99-and-p-50').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        // verify 'TCP latency,p99' panel
+        cy.get('[data-test="tcp-latency,-p99-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'Round-trip time per namespace (milliseconds - p99 and p50)' panel
-        // panel should appear with the flowcollector metric 'namespace_rtt_seconds'
-        cy.byLegacyTestID('panel-round-trip-time-per-namespace-milliseconds-p-99-and-p-50').should('exist').within(FlowRTT => {
-            cy.checkDashboards(appsInfra)
-        })
+        // below 2 panels should appear with the flowcollector metric 'node_rtt_seconds'
+        // verify 'Top P50 sRTT per node (ms)' panel
+        cy.get('[data-test="top-p50-srtt-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // verify 'Round-trip time per workload (milliseconds - p99 and p50)' panel
-        // panel should appear with the flowcollector metric 'workload_rtt_seconds'
-        cy.byLegacyTestID('panel-round-trip-time-per-workload-milliseconds-p-99-and-p-50').should('exist').within(FlowRTT => {
-            cy.checkDashboards(appsInfra)
-        })
+        // verify 'Top P99 sRTT per node (ms)' panel
+        cy.get('[data-test="top-p99-srtt-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // below 2 panels should appear with the flowcollector metric 'namespace_rtt_seconds'
+        // verify 'Top P50 sRTT per infra namespace (ms)' panel
+        cy.get('[data-test="top-p50-srtt-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // verify 'Top P99 sRTT per infra namespace (ms)' panel
+        cy.get('[data-test="top-p99-srtt-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // below 2 panels should appear with the flowcollector metric 'workload_rtt_seconds'
+        // verify 'Top P50 sRTT per infra workload (ms)' panel
+        cy.get('[data-test="top-p50-srtt-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+
+        // verify 'Top P99 sRTT per infra workload (ms)' panel
+        cy.get('[data-test="top-p99-srtt-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
     })
     after("Delete flowcollector", function () {
         Operator.deleteFlowCollector()

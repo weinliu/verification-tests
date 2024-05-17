@@ -32,6 +32,38 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         netflowPage.visit()
     })
 
+    it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT panels", function () {
+        cy.get('#filter-toolbar-search-filters').contains('Query options').click();
+        cy.get('#query-options-dropdown').click();
+        cy.get('#limit-5').click();
+        // to reduce flakes restore default panels first time it comes to overview page
+        cy.openPanelsModal();
+        cy.get(overviewSelectors.panelsModal).contains('Restore default panels').click();
+        cy.get(overviewSelectors.panelsModal).contains('Save').click();
+        netflowPage.waitForLokiQuery()
+        
+        // verify default flowRTT panels are visible
+        cy.checkPanel(overviewSelectors.defaultFlowRTTPanels)
+        cy.checkPanelsNum(5);
+
+        // verify all relevant panels are listed
+        cy.openPanelsModal();
+        cy.checkPopupItems(overviewSelectors.panelsModal, overviewSelectors.manageFlowRTTPanelsList);
+
+        // select all panels and verify they are rendered
+        cy.get(overviewSelectors.panelsModal).contains('Select all').click();
+        cy.get(overviewSelectors.panelsModal).contains('Save').click();
+        netflowPage.waitForLokiQuery()
+
+        cy.checkPanelsNum(9);
+        cy.checkPanel(overviewSelectors.allFlowRTTPanels)
+
+        // verify Query Summary stats for flowRTT
+        cy.get(querySumSelectors.avgRTT).should('exist').then(avgRTT => {
+            cy.checkQuerySummary(avgRTT)
+        })
+    })
+
     it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT column values", function () {
         // go to table view
         cy.get('#tabs-container li:nth-child(2)').click()
@@ -50,36 +82,6 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
 
         cy.get('[data-test-td-column-id=TimeFlowRttMs]').each((td) => {
             expect(td).attr("data-test-td-value").to.match(RegExp("^[0-9]*$"))
-        })
-    })
-
-    it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT panels", function () {
-        // verify default flowRTT panels are visible
-        cy.checkPanel(overviewSelectors.defaultFlowRTTPanels)
-        cy.checkPanelsNum(5);
-
-        // open panels modal and verify all relevant panels are listed
-        cy.openPanelsModal();
-        cy.checkPopupItems(overviewSelectors.panelsModal, overviewSelectors.manageFlowRTTPanelsList);
-
-        // select all panels and verify they are rendered
-        cy.get(overviewSelectors.panelsModal).contains('Select all').click();
-        cy.get(overviewSelectors.panelsModal).contains('Save').click();
-        netflowPage.waitForLokiQuery()
-        cy.checkPanelsNum(9);
-        netflowPage.waitForLokiQuery()
-        cy.checkPanel(overviewSelectors.allFlowRTTPanels)
-
-        // restore default panels and verify they are visible
-        cy.byTestID('view-options-button').click()
-        cy.get(overviewSelectors.mPanels).click().byTestID(overviewSelectors.resetDefault).click().byTestID(overviewSelectors.save).click()
-        netflowPage.waitForLokiQuery()
-        cy.checkPanel(overviewSelectors.defaultFlowRTTPanels)
-        cy.checkPanelsNum(5);
-
-        // verify Query Summary stats for flowRTT
-        cy.get(querySumSelectors.avgRTT).should('exist').then(avgRTT => {
-            cy.checkQuerySummary(avgRTT)
         })
     })
 

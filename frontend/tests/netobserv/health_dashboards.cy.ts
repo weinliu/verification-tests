@@ -13,6 +13,7 @@ const flowPanels = [
     "flows-per-second-chart",
     "flows-overhead-(%-generated-by-netobserv-own-traffic)-chart",
     "by-namespace-chart",
+    "by-node-chart"
 ]
 
 const eBPFPanels = [
@@ -21,7 +22,7 @@ const eBPFPanels = [
     "dropped-flows-rate-chart",
     "ringbuffer-/-hashmap-ratio-chart",
     "buffer-size-chart",
-    "errors-per-minute-chart"
+    "filtered-flows-rate-chart"
 ]
 
 const operatorPanels = [
