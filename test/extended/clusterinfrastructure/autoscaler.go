@@ -33,7 +33,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterAutoscaler         clusterAutoscalerDescription
 		machineAutoscaler         machineAutoscalerDescription
 		workLoad                  workLoadDescription
-		iaasPlatform              string
+		iaasPlatform              clusterinfra.PlatformType
 	)
 
 	g.BeforeEach(func() {
@@ -337,7 +337,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-37854-Autoscaler will scale down the nodegroup that has Failed machine when maxNodeProvisionTime is reached[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.AZURE, clusterinfra.OPENSTACK, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.OpenStack, clusterinfra.VSphere)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-37854"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -345,17 +345,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		var invalidValue string
-		iaasPlatform = exutil.CheckPlatform(oc)
+		iaasPlatform = clusterinfra.CheckPlatform(oc)
 		switch iaasPlatform {
 		case clusterinfra.AWS:
 			invalidValue = "\"instanceType\": \"invalid\""
-		case clusterinfra.AZURE:
+		case clusterinfra.Azure:
 			invalidValue = "\"vmSize\": \"invalid\""
 		case clusterinfra.GCP:
 			invalidValue = "\"machineType\": \"invalid\""
-		case clusterinfra.OPENSTACK:
+		case clusterinfra.OpenStack:
 			invalidValue = "\"flavor\": \"invalid\""
-		case clusterinfra.VSPHERE:
+		case clusterinfra.VSphere:
 			invalidValue = "\"template\": \"invalid\""
 		}
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{`+invalidValue+`}}}}}}`, "--type=merge").Execute()
@@ -404,7 +404,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-28876-Machineset should have relevant annotations to support scale from/to zero[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-28876"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -423,11 +423,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check machineset with invalid instanceType couldn't set autoscaling from zero annotations")
 		var invalidValue string
-		iaasPlatform = exutil.CheckPlatform(oc)
+		iaasPlatform = clusterinfra.CheckPlatform(oc)
 		switch iaasPlatform {
 		case clusterinfra.AWS:
 			invalidValue = "\"instanceType\": \"invalid\""
-		case clusterinfra.AZURE:
+		case clusterinfra.Azure:
 			invalidValue = "\"vmSize\": \"invalid\""
 		case clusterinfra.GCP:
 			invalidValue = "\"machineType\": \"invalid\""
@@ -455,7 +455,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create machineset")
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.OPENSTACK, clusterinfra.GCP, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.OpenStack, clusterinfra.GCP, clusterinfra.VSphere)
 		architecture.SkipArchitectures(oc, architecture.MULTI)
 
 		ms := clusterinfra.MachineSetDescription{Name: "machineset-22038", Replicas: 0}
@@ -481,7 +481,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-66157-Cluster Autoscaler Operator should inject unique labels on Nutanix platform", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.NUTANIX)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
 		exutil.By("Create clusterautoscaler")
 		clusterAutoscaler.createClusterAutoscaler(oc)
 		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
@@ -520,7 +520,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	//author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-64869-[CAO] autoscaler can predict the correct machineset to scale up/down to allocate a particular arch [Serial][Slow][Disruptive]", func() {
 		architecture.SkipNonMultiArchCluster(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure)
 		clusterinfra.SkipConditionally(oc)
 		architectures := architecture.GetAvailableArchitecturesSet(oc)
 
@@ -593,7 +593,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-Medium-73113-[CAO] Update CAO to add upstream scale from zero annotations[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.AZURE, clusterinfra.VSPHERE, clusterinfra.OPENSTACK, clusterinfra.NUTANIX, clusterinfra.IBMCLOUD)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.OpenStack, clusterinfra.Nutanix, clusterinfra.IBMCloud)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-73113"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}

@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-51141-[CAPI] worker-user-data secret should be synced up [Disruptive]", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSphere)
 		skipForCAPINotExist(oc)
 
 		g.By("Delete worker-user-data in openshift-cluster-api namespace")
@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: dtobolik@redhat.com
 	g.It("NonHyperShiftHOST-Author:dtobolik-Medium-61980-[CAPI] Workload annotation missing from deployments", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSphere)
 		skipForCAPINotExist(oc)
 
 		deployments, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", clusterAPINamespace, "-oname").Output()
@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71695-[CAPI] Core CAPI CRDs not deployed on unsupported platforms even when explicitly needed by other operators", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE, clusterinfra.VSPHERE, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.ALIBABACLOUD, clusterinfra.IBMCLOUD, clusterinfra.NUTANIX)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.AlibabaCloud, clusterinfra.IBMCloud, clusterinfra.Nutanix)
 		skipForCAPINotExist(oc)
 
 		expectedCRDs := `clusterclasses.cluster.x-k8s.io
@@ -133,7 +133,7 @@ machinesets.cluster.x-k8s.io`
 	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71913-[capi] Promote CAPI IPAM CRDs to GA", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE, clusterinfra.VSPHERE, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.ALIBABACLOUD, clusterinfra.IBMCLOUD, clusterinfra.NUTANIX)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.AlibabaCloud, clusterinfra.IBMCloud, clusterinfra.Nutanix)
 
 		expectedCRDs := `ipaddressclaims.ipam.cluster.x-k8s.io
 ipaddresses.ipam.cluster.x-k8s.io`

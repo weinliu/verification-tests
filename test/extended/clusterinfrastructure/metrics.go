@@ -103,20 +103,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:huliu-High-36989-mapi_instance_create_failed metrics should work [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		var patchstr string
-		platform := exutil.CheckPlatform(oc)
+		platform := clusterinfra.CheckPlatform(oc)
 		switch platform {
-		case clusterinfra.AWS, clusterinfra.ALIBABACLOUD:
+		case clusterinfra.AWS, clusterinfra.AlibabaCloud:
 			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}`
 		case clusterinfra.GCP:
 			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"machineType":"invalid"}}}}}}`
-		case clusterinfra.AZURE:
+		case clusterinfra.Azure:
 			patchstr = `{"spec":{"replicas":5,"template":{"spec":{"providerSpec":{"value":{"vmSize":"invalid"}}}}}}`
 		/*
 			there is a bug(https://bugzilla.redhat.com/show_bug.cgi?id=1900538) for openstack
-			case clusterinfra.OPENSTACK:
+			case clusterinfra.OpenStack:
 				patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"flavor":"invalid"}}}}}}`
 		*/
-		case clusterinfra.VSPHERE:
+		case clusterinfra.VSphere:
 			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"template":"invalid"}}}}}}`
 		default:
 			e2e.Logf("Not support cloud provider for the case for now.")
@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-25615-Medium-37264-Machine metrics should be collected [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.VSPHERE, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD, clusterinfra.NUTANIX, clusterinfra.OPENSTACK)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-25615-37264"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}

@@ -16,7 +16,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Medium-46078-Signal when mao no-op in the clusterOperator status conditions", func() {
 		g.By("watch the message from machine-api(mapi) clusteroperator ")
-		if exutil.CheckPlatform(oc) == clusterinfra.NONE {
+		if clusterinfra.CheckPlatform(oc) == clusterinfra.None {
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-api", "-o=jsonpath={.status.conditions}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(out).To(o.ContainSubstring("Cluster Machine API Operator is in NoOp mode"))

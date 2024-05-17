@@ -1172,7 +1172,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		)
 
 		architecture.SkipIfNoNodeWithArchitectures(oc.AsAdmin(), architecture.ARM64)
-		clusterinfra.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), GCPPlatform)
+		clusterinfra.SkipTestIfNotSupportedPlatform(oc.AsAdmin(), clusterinfra.GCP)
 
 		createdCustomPoolName := fmt.Sprintf("mco-test-%s", architecture.ARM64)
 		defer DeleteCustomMCP(oc.AsAdmin(), createdCustomPoolName)

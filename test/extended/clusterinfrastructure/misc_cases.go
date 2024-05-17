@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-High-54053-Implement tag categories cache for MAPI vsphere provider [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSphere)
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-54053"
@@ -183,9 +183,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding", "system:openshift:kube-controller-manager:gce-cloud-provider").Output()
 		o.Expect(err).To(o.HaveOccurred())
 
-		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if platformType == "GCP" {
+		platformType := clusterinfra.CheckPlatform(oc)
+		if platformType == clusterinfra.GCP {
 			sa, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "cloud-provider", "-n", "kube-system").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(sa, "cloud-provider")).To(o.BeTrue())

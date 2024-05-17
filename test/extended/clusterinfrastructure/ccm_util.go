@@ -171,9 +171,9 @@ func waitForClusterOperatorsReady(oc *exutil.CLI, clusterOperators ...string) er
 // getLBSvcIP get Load Balancer service IP/Hostname
 func getLBSvcIP(oc *exutil.CLI, loadBalancerService loadBalancerServiceDescription) string {
 	e2e.Logf("Getting the Load Balancer service IP ...")
-	iaasPlatform := exutil.CheckPlatform(oc)
+	iaasPlatform := clusterinfra.CheckPlatform(oc)
 	var jsonString string
-	if iaasPlatform == clusterinfra.AWS || iaasPlatform == clusterinfra.IBMCLOUD {
+	if iaasPlatform == clusterinfra.AWS || iaasPlatform == clusterinfra.IBMCloud {
 		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}"
 	} else {
 		jsonString = "-o=jsonpath={.status.loadBalancer.ingress[0].ip}"

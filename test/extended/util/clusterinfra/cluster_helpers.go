@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -16,18 +17,20 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type PlatformType int
+
 const (
-	AWS          = "aws"
-	GCP          = "gcp"
-	AZURE        = "azure"
-	VSPHERE      = "vsphere"
-	NUTANIX      = "nutanix"
-	OPENSTACK    = "openstack"
-	IBMCLOUD     = "ibmcloud"
-	ALIBABACLOUD = "alibabacloud"
-	NONE         = "none"
-	BAREMETAL    = "baremetal"
-	OVIRT        = "ovirt"
+	AWS PlatformType = iota
+	GCP
+	Azure
+	VSphere
+	Nutanix
+	OpenStack
+	IBMCloud
+	AlibabaCloud
+	None
+	BareMetal
+	Ovirt
 )
 
 const (
@@ -35,29 +38,97 @@ const (
 	VsphereServer = "vcenter.sddc-44-236-21-251.vmwarevmc.com"
 )
 
+// FromString returns the PlatformType value for the given string
+func FromString(platform string) PlatformType {
+	switch platform {
+	case "aws":
+		return AWS
+	case "gcp":
+		return GCP
+	case "azure":
+		return Azure
+	case "vsphere":
+		return VSphere
+	case "nutanix":
+		return Nutanix
+	case "openstack":
+		return OpenStack
+	case "ibmcloud":
+		return IBMCloud
+	case "alibabacloud":
+		return AlibabaCloud
+	case "none":
+		return None
+	case "baremetal":
+		return BareMetal
+	case "ovirt":
+		return Ovirt
+	default:
+		e2e.Failf("Unknown platform %s", platform)
+	}
+	return AWS
+}
+
+// String returns the string value for the given PlatformType
+func (p PlatformType) String() string {
+	switch p {
+	case AWS:
+		return "aws"
+	case GCP:
+		return "gcp"
+	case Azure:
+		return "azure"
+	case VSphere:
+		return "vsphere"
+	case Nutanix:
+		return "nutanix"
+	case OpenStack:
+		return "openstack"
+	case IBMCloud:
+		return "ibmcloud"
+	case AlibabaCloud:
+		return "alibabacloud"
+	case None:
+		return "none"
+	case BareMetal:
+		return "baremetal"
+	case Ovirt:
+		return "ovirt"
+	default:
+		e2e.Failf("Unknown platform %d", p)
+	}
+	return ""
+}
+
+// CheckPlatform check the cluster's platform, rewrite this function in util/machine_helpers but return PlatformType
+func CheckPlatform(oc *exutil.CLI) PlatformType {
+	pstr := exutil.CheckPlatform(oc)
+	return FromString(pstr)
+}
+
 // SkipTestIfNotSupportedPlatform skip the test if current platform matches one of the provided not supported platforms
-func SkipTestIfNotSupportedPlatform(oc *exutil.CLI, notsupported ...string) {
-	p := exutil.CheckPlatform(oc)
+func SkipTestIfNotSupportedPlatform(oc *exutil.CLI, notsupported ...PlatformType) {
+	p := CheckPlatform(oc)
 	for _, nsp := range notsupported {
-		if strings.EqualFold(nsp, p) {
-			g.Skip("Skip this test scenario because it is not supported on the " + p + " platform")
+		if nsp == p {
+			g.Skip("Skip this test scenario because it is not supported on the " + p.String() + " platform")
 		}
 	}
 }
 
 // SkipTestIfSupportedPlatformNotMatched skip the test if supported platforms are not matched
-func SkipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...string) {
+func SkipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...PlatformType) {
 	var match bool
-	p := exutil.CheckPlatform(oc)
+	p := CheckPlatform(oc)
 	for _, sp := range supported {
-		if strings.EqualFold(sp, p) {
+		if sp == p {
 			match = true
 			break
 		}
 	}
 
 	if !match {
-		g.Skip("Skip this test scenario because it is not supported on the " + p + " platform")
+		g.Skip("Skip this test scenario because it is not supported on the " + p.String() + " platform")
 	}
 }
 
@@ -147,7 +218,7 @@ func GetGcpCredentialFromCluster(oc *exutil.CLI) {
 
 // IsAwsOutpostCluster judges whether the aws test cluster has outpost workers
 func IsAwsOutpostCluster(oc *exutil.CLI) bool {
-	if exutil.CheckPlatform(oc) != AWS {
+	if CheckPlatform(oc) != AWS {
 		return false
 	}
 	workersLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "--show-labels").Output()

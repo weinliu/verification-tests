@@ -107,15 +107,15 @@ func checkIfCPMSIsStable(oc *exutil.CLI) bool {
 }
 
 // getCPMSAvailabilityZones get zones from cpms
-func getCPMSAvailabilityZones(oc *exutil.CLI, iaasPlatform string) []string {
+func getCPMSAvailabilityZones(oc *exutil.CLI, iaasPlatform clusterinfra.PlatformType) []string {
 	var getCPMSAvailabilityZonesJSON string
 	switch iaasPlatform {
 	case clusterinfra.AWS:
 		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-	case clusterinfra.AZURE, clusterinfra.GCP:
-		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform + "[*].zone}"
+	case clusterinfra.Azure, clusterinfra.GCP:
+		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform.String() + "[*].zone}"
 	default:
-		e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
+		e2e.Logf("The " + iaasPlatform.String() + " Platform is not supported for now.")
 	}
 	availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

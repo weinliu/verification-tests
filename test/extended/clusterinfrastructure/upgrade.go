@@ -15,17 +15,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc           = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
-		iaasPlatform string
+		iaasPlatform clusterinfra.PlatformType
 	)
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
-		iaasPlatform = exutil.CheckPlatform(oc)
+		iaasPlatform = clusterinfra.CheckPlatform(oc)
 	})
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PreChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -96,7 +96,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:huliu-Medium-62265-[Upgrade] Ensure controlplanemachineset is generated automatically after upgrade", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.NUTANIX, clusterinfra.OPENSTACK)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		cpmsOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
 		e2e.Logf("cpmsOut:%s", cpmsOut)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -105,7 +105,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-LEVEL0-Critical-22612-[Upgrade] Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.VSPHERE, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD, clusterinfra.NUTANIX, clusterinfra.OPENSTACK)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-22612"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -122,8 +122,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-LEVEL0-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade [Disruptive][Slow]", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD)
-		if strings.Contains(iaasPlatform, "aws") && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
+		if iaasPlatform == clusterinfra.AWS && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
 			g.Skip("Skipped: There is no public subnet on AWS C2S/SC2S disconnected clusters!")
 		}
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")

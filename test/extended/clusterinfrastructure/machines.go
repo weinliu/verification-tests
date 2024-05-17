@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		machinesetName := "machineset-45377"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
@@ -82,7 +82,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-46967-Implement Ephemeral OS Disks - OS cache placement on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		skipTestIfSpotWorkers(oc)
 		machinesetName := "machineset-46967"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-46303-Availability sets could be created when needed for Azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		defaultWorkerMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -371,7 +371,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-33040-Required configuration should be added to the ProviderSpec to enable spot instances - Azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -558,7 +558,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-52471-Enable configuration of boot diagnostics when creating VMs on Azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 
 		g.By("Create a machineset configuring boot diagnostics with Azure managed storage accounts")
 		machinesetName := "machineset-52471-1"
@@ -600,7 +600,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-52473-Webhook validations for Azure boot diagnostics [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 
 		g.By("Create a machineset")
 		machinesetName := "machineset-52473-1"
@@ -635,14 +635,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-Low-36489-Machineset creation when publicIP:true in disconnected or normal (stratergy private or public) Azure,Aws,Gcp enviroment [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE, clusterinfra.AWS, clusterinfra.GCP)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.AWS, clusterinfra.GCP)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-36489"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		iaasPlatform := exutil.CheckPlatform(oc)
+		iaasPlatform := clusterinfra.CheckPlatform(oc)
 
 		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
 		if err != nil {
@@ -650,9 +650,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Update machineset with publicIP: true")
 		switch iaasPlatform {
-		case clusterinfra.AWS, clusterinfra.AZURE:
+		case clusterinfra.AWS, clusterinfra.Azure:
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"publicIP": true}}}}}}`, "--type=merge").Output()
-			if publicZone == "" && iaasPlatform == clusterinfra.AZURE {
+			if publicZone == "" && iaasPlatform == clusterinfra.Azure {
 				o.Expect(msg).To(o.ContainSubstring("publicIP is not allowed in Azure disconnected installation with publish strategy as internal"))
 			} else {
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -714,7 +714,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-59718-[Nutanix] Support bootType categories and project fields of NutanixMachineProviderConfig [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.NUTANIX)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-59718"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -828,7 +828,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	//author miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-39639-host-based disk encryption at VM on Azure platform	[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-39639"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -953,7 +953,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-LEVEL0-Critical-25436-Scale up/scale down the cluster by changing the replicas of the machineSet [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.VSPHERE, clusterinfra.IBMCLOUD, clusterinfra.ALIBABACLOUD, clusterinfra.NUTANIX, clusterinfra.OPENSTACK, clusterinfra.OVIRT)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack, clusterinfra.Ovirt)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-25436"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -1013,7 +1013,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	//author zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-33058-Implement defaulting machineset values for azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AZURE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(credType, "Manual") {

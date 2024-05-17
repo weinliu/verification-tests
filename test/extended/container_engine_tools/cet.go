@@ -165,7 +165,7 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	// author: minmli@redhat.com
 	g.It("ConnectedOnly-Author:pmali-Critical-48876-Check ping I src IP does work on a container", func() {
 		//azure platform can't support this case, skip if it's an azure cluster
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp", "osp", "vsphere", "baremetal")
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.OpenStack, clusterinfra.VSphere, clusterinfra.BareMetal)
 		//cluster with proxy can't support this case
 		if checkProxy(oc) {
 			g.Skip("This is a proxy cluster, skip the test.")

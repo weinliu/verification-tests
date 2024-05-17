@@ -30,30 +30,30 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc                         = exutil.NewCLI("control-plane-machineset", exutil.KubeConfigPath())
-		iaasPlatform               string
-		changeToBackupInstanceType = map[string]map[architecture.Architecture]map[string]string{
+		iaasPlatform               clusterinfra.PlatformType
+		changeToBackupInstanceType = map[clusterinfra.PlatformType]map[architecture.Architecture]map[string]string{
 			clusterinfra.AWS: {architecture.AMD64: {changeInstanceTypeCon: "m5.xlarge", backupInstanceTypeCon: "m6i.xlarge"},
 				architecture.ARM64: {changeInstanceTypeCon: "m6gd.xlarge", backupInstanceTypeCon: "m6g.xlarge"}},
-			clusterinfra.AZURE: {architecture.AMD64: {changeInstanceTypeCon: "Standard_D4s_v3", backupInstanceTypeCon: "Standard_D8s_v3"},
+			clusterinfra.Azure: {architecture.AMD64: {changeInstanceTypeCon: "Standard_D4s_v3", backupInstanceTypeCon: "Standard_D8s_v3"},
 				architecture.ARM64: {changeInstanceTypeCon: "Standard_D4ps_v5", backupInstanceTypeCon: "Standard_D8ps_v5"}},
 			clusterinfra.GCP: {architecture.AMD64: {changeInstanceTypeCon: "e2-standard-4", backupInstanceTypeCon: "n2-standard-4"},
 				architecture.ARM64: {changeInstanceTypeCon: "t2a-standard-8", backupInstanceTypeCon: "t2a-standard-4"}},
 		}
-		getInstanceTypeJsonByCloud = map[string]map[string]string{
+		getInstanceTypeJsonByCloud = map[clusterinfra.PlatformType]map[string]string{
 			clusterinfra.AWS: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.instanceType}",
 				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"`,
 				patchInstanceTypeSuffixCon: `"}}}}}}}`},
-			clusterinfra.AZURE: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}",
+			clusterinfra.Azure: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}",
 				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`,
 				patchInstanceTypeSuffixCon: `"}}}}}}}`},
 			clusterinfra.GCP: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}",
 				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`,
 				patchInstanceTypeSuffixCon: `"}}}}}}}`},
 		}
-		getAvailabilityZoneJSONByCloud = map[string]map[string]string{
+		getAvailabilityZoneJSONByCloud = map[clusterinfra.PlatformType]map[string]string{
 			clusterinfra.AWS: {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}",
 				getCPMSAvailabilityZonesJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"},
-			clusterinfra.AZURE: {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.zone}",
+			clusterinfra.Azure: {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.zone}",
 				getCPMSAvailabilityZonesJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.azure[*].zone}"},
 			clusterinfra.GCP: {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.zone}",
 				getCPMSAvailabilityZonesJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.gcp[*].zone}"},
@@ -61,12 +61,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
-		iaasPlatform = exutil.CheckPlatform(oc)
+		iaasPlatform = clusterinfra.CheckPlatform(oc)
 	})
 
 	g.It("NonHyperShiftHOST-Author:zhsun-High-56086-[CPMS] Controlplanemachineset should be created by default", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.AZURE, clusterinfra.NUTANIX, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.Nutanix, clusterinfra.VSphere)
 
 		g.By("CPMS should be created by default and state is Active")
 		cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
@@ -77,7 +77,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53320-[CPMS] Owner reference could be added/removed to control plan machines [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.NUTANIX, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 
 		g.By("Check ownerReferences is added to master machines")
 		masterMachineList := clusterinfra.ListMasterMachineNames(oc)
@@ -111,7 +111,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53081-[CPMS] Finalizer should be added to control plan machineset [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.NUTANIX, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		g.By("Check finalizer is added to controlplanemachineset")
 		finalizers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.metadata.finalizers[0]}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy update instance type [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		controlPlaneArch := architecture.GetControlPlaneArch(oc)
@@ -193,7 +193,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.NUTANIX)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		var changeFieldValue, backupFieldValue, getFieldValueJSON string
@@ -235,7 +235,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55631-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete a master machine [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.NUTANIX, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		g.By("Random pick a master machine")
@@ -243,7 +243,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		suffix := getMachineSuffix(oc, machineName)
 		var getMachineAvailabilityZoneJSON string
 		labels := "machine.openshift.io/cluster-api-machine-type=master"
-		if iaasPlatform == clusterinfra.AWS || iaasPlatform == clusterinfra.AZURE || iaasPlatform == clusterinfra.GCP {
+		if iaasPlatform == clusterinfra.AWS || iaasPlatform == clusterinfra.Azure || iaasPlatform == clusterinfra.GCP {
 			getMachineAvailabilityZoneJSON = getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
 			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machineName, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -264,7 +264,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-54005-[CPMS] Control plane machine set OnDelete update strategies - update instance type [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		controlPlaneArch := architecture.GetControlPlaneArch(oc)
@@ -322,7 +322,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.NUTANIX)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		var changeFieldValue, backupFieldValue, getFieldValueJSON string
@@ -374,7 +374,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-55724-[CPMS] Control plane machine set OnDelete update strategies - Delete/Add a failureDomain [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		g.By("Check failureDomains")
@@ -386,7 +386,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		key, value, machineName := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
 		getMachineAvailabilityZoneJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
 		getCPMSAvailabilityZonesJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getCPMSAvailabilityZonesJSONCon]
-		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform+"["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
+		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform.String()+"["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer printNodeInfo(oc)
@@ -396,7 +396,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(availabilityZonesStr, value) {
-				oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 				waitForCPMSUpdateCompleted(oc, 1)
 			}
 		}()
@@ -407,7 +407,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Pick the failureDomain which has only one master machine and delete the failureDomain")
 		suffix := getMachineSuffix(oc, machineName)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/`+strconv.Itoa(key)+`"}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/`+strconv.Itoa(key)+`"}]`, "--type=json", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Delete the master machine in the selected failureDomain")
@@ -424,14 +424,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		availabilityZones = getCPMSAvailabilityZones(oc, iaasPlatform)
 		if len(availabilityZones) >= 3 {
 			e2e.Logf("availabilityZones>=3 means the three master machines are in different zones now, it will not rebalance when adding new zone")
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 			o.Expect(checkIfCPMSCoIsStable(oc)).To(o.BeTrue())
 		} else {
 			g.By("Add the failureDomain back to check OnDelete strategy rebalance the machines")
 			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			labelsAfter = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 
 			g.By("Delete the new created master machine ")
 			clusterinfra.DeleteMachine(oc, newMachineNameRolledWithFailureDomain)
@@ -449,7 +449,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-55725-[CPMS] Control plane machine set OnDelete update strategies - Delete a master machine [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.NUTANIX, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		g.By("Update strategy to OnDelete")
@@ -465,7 +465,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		toDeletedMachineName := clusterinfra.ListMasterMachineNames(oc)[rand.Int31n(int32(len(clusterinfra.ListMasterMachineNames(oc))))]
 		var getMachineAvailabilityZoneJSON string
 		labels := "machine.openshift.io/cluster-api-machine-type=master"
-		if iaasPlatform == clusterinfra.AWS || iaasPlatform == clusterinfra.AZURE || iaasPlatform == clusterinfra.GCP {
+		if iaasPlatform == clusterinfra.AWS || iaasPlatform == clusterinfra.Azure || iaasPlatform == clusterinfra.GCP {
 			getMachineAvailabilityZoneJSON = getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
 			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, toDeletedMachineName, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -486,7 +486,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53328-[CPMS] It doesn't rearrange the availability zones if the order of the zones isn't matching in the CPMS and the Control Plane [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
 		g.By("Check failureDomains")
 		availabilityZones := getCPMSAvailabilityZones(oc, iaasPlatform)
@@ -501,11 +501,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Change the failureDomain's order by deleting/adding failureDomain")
-		changeFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform+"[1]}", "-n", machineAPINamespace).Output()
+		changeFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform.String()+"[1]}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/1"}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/1"}]`, "--type=json", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+changeFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/0","value":`+changeFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Update strategy to RollingUpdate check if will rearrange the availability zones and no update for masters")
@@ -519,7 +519,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-54895-[CPMS] CPMS generator controller will create a new CPMS if a CPMS is removed from cluster [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.NUTANIX, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
 		g.By("Delete controlplanemachineset")
 		defer printNodeInfo(oc)
@@ -544,7 +544,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		switch iaasPlatform {
 		case clusterinfra.AWS:
 			fieldName = "instanceType"
-		case clusterinfra.AZURE:
+		case clusterinfra.Azure:
 			fieldName = "vmSize"
 		case clusterinfra.GCP:
 			fieldName = "machineType"
@@ -553,16 +553,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			if confidentialCompute == "Enabled" {
 				fieldValue = "c2d-standard-4"
 			}
-		case clusterinfra.NUTANIX:
+		case clusterinfra.Nutanix:
 			fieldName = "bootType"
 			fieldValue = "Legacy"
-		case clusterinfra.VSPHERE:
+		case clusterinfra.VSphere:
 			fieldName = "diskGiB"
 			fieldValue = strconv.Itoa(140)
 		default:
-			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
+			e2e.Logf("The " + iaasPlatform.String() + " Platform is not supported for now.")
 		}
-		if iaasPlatform == clusterinfra.VSPHERE {
+		if iaasPlatform == clusterinfra.VSphere {
 			// Construct JSON payload with the appropriate type handling for fieldValue
 			jsonPayload := fmt.Sprintf(`{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"%s":%v}}}}}}}`, fieldName, fieldValue)
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", jsonPayload, "--type=merge", "-n", machineAPINamespace).Execute()
@@ -578,7 +578,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-52587-[CPMS] Webhook validations for CPMS resource [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP, clusterinfra.NUTANIX, clusterinfra.VSPHERE)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		g.By("Update CPMS name")
 		cpmsName, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"metadata":{"name":"invalid"}}`, "--type=merge", "-n", machineAPINamespace).Output()
 		o.Expect(cpmsName).To(o.ContainSubstring("the name of the object (invalid) does not match the name on the URL (cluster)"))
@@ -601,7 +601,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55485-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete/Add a failureDomain [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.AZURE, clusterinfra.GCP)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		g.By("Check failureDomains")
@@ -616,7 +616,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		suffix := getMachineSuffix(oc, machineName)
 		getMachineAvailabilityZoneJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getMachineAvailabilityZoneJSONCon]
 		getCPMSAvailabilityZonesJSON := getAvailabilityZoneJSONByCloud[iaasPlatform][getCPMSAvailabilityZonesJSONCon]
-		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform+"["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
+		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform.String()+"["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Delete the failureDomain to trigger RollingUpdate")
@@ -629,11 +629,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(availabilityZonesStr, value) {
-				oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 				waitForCPMSUpdateCompleted(oc, 1)
 			}
 		}()
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/`+strconv.Itoa(key)+`"}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/`+strconv.Itoa(key)+`"}]`, "--type=json", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newMachineNameRolledWithFailureDomain := clusterinfra.WaitForMachineRunningBySuffix(oc, suffix, labelsAfter)
 		clusterinfra.WaitForMachineDisappearBySuffix(oc, suffix, labelsBefore)
@@ -643,14 +643,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		availabilityZones = getCPMSAvailabilityZones(oc, iaasPlatform)
 		if len(availabilityZones) >= 3 {
 			e2e.Logf("availabilityZones>=3 means the three master machines are in different zones now, it will not rebalance when adding new zone")
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 			o.Expect(checkIfCPMSCoIsStable(oc)).To(o.BeTrue())
 		} else {
 			g.By("Add the failureDomain back to check RollingUpdate strategy rebalance the machines")
 			availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			labelsAfter = "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/`+iaasPlatform.String()+`/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
 			newMachineNameRolledBalancedFailureDomain := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, labelsBefore)[0]
 			e2e.Logf("updatedMachineName:%s", newMachineNameRolledBalancedFailureDomain)
 			suffix = getMachineSuffix(oc, newMachineNameRolledBalancedFailureDomain)
