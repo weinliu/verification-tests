@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -5280,15 +5281,23 @@ spec:
 		apiServerRecover()
 
 		exutil.By("4) Verifying the additionalCORSAllowedOrigins by inspecting the HTTP response headers")
-		url, err := oc.Run("whoami").Args("--show-server").Output()
+		urlStr, err := oc.Run("whoami").Args("--show-server").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequest("GET", urlStr, nil)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		req.Header.Set("Origin", "http://localhost")
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+
+		tr := &http.Transport{}
+		if os.Getenv("HTTPS_PROXY") != "" || os.Getenv("https_proxy") != "" {
+			httpsProxy, err := url.Parse(os.Getenv("https_proxy"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			tr.Proxy = http.ProxyURL(httpsProxy)
 		}
-		client := &http.Client{Transport: tr}
+		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		client := &http.Client{
+			Transport: tr,
+			Timeout:   time.Second * 30, // Set a timeout for the entire request
+		}
 
 		resp, err := client.Do(req)
 		o.Expect(err).NotTo(o.HaveOccurred())
