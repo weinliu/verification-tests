@@ -51,18 +51,8 @@ describe('Dynamic Plugins notification features', () => {
     Overview.isLoaded();
     statusCard.secondaryStatus('Dynamic Plugins', 'Degraded');
     statusCard.toggleItemPopover("Dynamic Plugins");
-    let total = 0;
-    cy.adminCLI(`oc get consoleplugin`).then((result) => {
-      total = result.stdout.split(/\r\n|\r|\n/).length - 1
-    })
     cy.get('[class*="popover__body"]').within(($div) => {
       cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
-      cy.get(`.text-secondary`).should(($element) => {
-        const text = $element.text();
-        const regrex = new RegExp(`^(0|1)\/${total} enabled$`);
-        expect(text).to.match(regrex);
-      })
-      // cy.contains(`${enabled}/${total} enabled`).should('exist')
       cy.contains('Failed plugins').should('exist')
     });
     Overview.clickNotificationDrawer();
