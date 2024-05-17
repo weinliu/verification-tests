@@ -1169,4 +1169,53 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(strings.Contains(internalDNS, "example30379.com")).To(o.BeTrue())
 	})
 
+	// author: huliu@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-73762-New machine can join cluster when VPC has custom DHCP option set containing multiple domain names [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+
+		g.By("Create a new dhcpOptions")
+		var newDhcpOptionsID, currentDhcpOptionsID string
+		clusterinfra.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("example73762a.com example73762b.com example73762c.com")
+		if err != nil {
+			g.Skip("The credential is insufficient to perform create dhcpOptions operation, skip the cases!!")
+		}
+		defer func() {
+			err := awsClient.DeleteDhcpOptions(newDhcpOptionsID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("Associate the VPC with the new dhcpOptionsId")
+		machineName := clusterinfra.ListMasterMachineNames(oc)[0]
+		instanceID, err := awsClient.GetAwsInstanceID(machineName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		currentDhcpOptionsID, err = awsClient.GetDhcpOptionsIDOfVpc(vpcID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			err := awsClient.AssociateDhcpOptions(vpcID, currentDhcpOptionsID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = awsClient.AssociateDhcpOptions(vpcID, newDhcpOptionsID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new machineset")
+		machinesetName := "machineset-73762"
+		ms := clusterinfra.MachineSetDescription{machinesetName, 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		machineNameOfMachineSet := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineNameOfMachineSet)
+		readyStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(readyStatus).Should(o.Equal("True"))
+		internalDNS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machineNameOfMachineSet, "-o=jsonpath={.status.addresses[?(@.type==\"InternalDNS\")].address}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(internalDNS, "example73762a.com") && strings.Contains(internalDNS, "example73762b.com") && strings.Contains(internalDNS, "example73762c.com")).To(o.BeTrue())
+	})
 })
