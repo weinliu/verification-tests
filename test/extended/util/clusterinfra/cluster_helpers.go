@@ -244,3 +244,15 @@ func SkipForNotAwsOutpostMixedCluster(oc *exutil.CLI) {
 		g.Skip("Skip for not Aws Outpost Mixed cluster.")
 	}
 }
+
+// CheckProxy checks whether the cluster is proxy kind
+func CheckProxy(oc *exutil.CLI) bool {
+	httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	httpsProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpsProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if httpProxy != "" || httpsProxy != "" {
+		return true
+	}
+	return false
+}

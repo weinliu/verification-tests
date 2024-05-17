@@ -12,6 +12,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"github.com/tidwall/sjson"
 	"github.com/vmware/govmomi/cns"
 	cnstypes "github.com/vmware/govmomi/cns/types"
@@ -245,7 +246,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storage/cluster", "-o=jsonpath={.spec}").Output()
 		e2e.Logf("Storage cluster output is %v", output)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).NotTo(o.ContainSubstring("vsphereStorageDriver"))
+		if !clusterinfra.CheckProxy(oc) {
+			o.Expect(output).NotTo(o.ContainSubstring("vsphereStorageDriver"))
+		}
 
 		exutil.By("# Add parameter vsphereStorageDriver with valid value CSIWithMigrationDriver")
 		path := `{"spec":{"vsphereStorageDriver":"CSIWithMigrationDriver"}}`
