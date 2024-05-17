@@ -279,9 +279,9 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		restoreCluster := func(oc *exutil.CLI) {
 			err := oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			output := getResourceToBeReady(oc, asAdmin, withoutNamespace, "secret", "-n", "clusters")
+			output := getResourceToBeReady(oc, asAdmin, withoutNamespace, "secret", "-n", hostedClusterNS)
 			if strings.Contains(output, "custom-api-cert") {
-				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "custom-api-cert", "-n", "clusters", "--ignore-not-found").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "custom-api-cert", "-n", hostedClusterNS, "--ignore-not-found").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf("Cluster openshift-config secret reset to default values")
 			}
@@ -306,7 +306,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			return nil
 		}
 
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "custom-api-cert", "-n", "clusters", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "custom-api-cert", "-n", hostedClusterNS, "--ignore-not-found").Execute()
 
 		//Taking backup of old hosted kubeconfig to restore old kubeconfig
 		exutil.By("1. Get the original hosted kubeconfig backup")
@@ -368,7 +368,7 @@ EOF`, serverconf, fqdnName.Hostname())
 		o.Expect(serverCertWithSANErr).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Creating custom secret using server certificate")
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "tls", "custom-api-cert", "--cert="+serverCertWithSAN, "--key="+serverKeypem, "-n", "clusters").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "tls", "custom-api-cert", "--cert="+serverCertWithSAN, "--key="+serverKeypem, "-n", hostedClusterNS).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Add new certificate to apiserver")
