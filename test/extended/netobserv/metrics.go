@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -92,17 +91,17 @@ func queryPrometheus(promRoute string, query string, bearerToken string) (*prome
 }
 
 // return the first metric value
-func popMetricValue(metrics []metric) int {
+func popMetricValue(metrics []metric) float64 {
 	valInterface := metrics[0].Value[1]
 	val, _ := valInterface.(string)
 	value, err := strconv.ParseFloat(val, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return int(math.Round(value))
+	return value
 }
 
 // polls any prometheus metrics
-func pollMetrics(oc *exutil.CLI, promQuery string) int {
-	var metricsVal int
+func pollMetrics(oc *exutil.CLI, promQuery string) float64 {
+	var metricsVal float64
 	e2e.Logf("Query is %s", promQuery)
 	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 300*time.Second, false, func(context.Context) (bool, error) {
 		metrics, err := getMetric(oc, promQuery)
@@ -110,7 +109,7 @@ func pollMetrics(oc *exutil.CLI, promQuery string) int {
 			return false, err
 		}
 		metricsVal = popMetricValue(metrics)
-		if metricsVal < 0 {
+		if metricsVal <= 0 {
 			e2e.Logf("%s did not return metrics value > 0, will try again", promQuery)
 		}
 		return metricsVal > 0, nil

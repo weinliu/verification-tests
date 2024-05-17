@@ -37,7 +37,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		networkingDir           = exutil.FixturePath("testdata", "netobserv", "networking")
 		subscriptionDir         = exutil.FixturePath("testdata", "netobserv", "subscription")
 		flowFixturePath         = filePath.Join(baseDir, "flowcollector_v1beta2_template.yaml")
-		beta1FlowFixturePath    = filePath.Join(baseDir, "flowcollector_v1beta1_template.yaml")
 		releasedFlowFixturePath = filePath.Join(baseDir, "flowcollector_v1beta2_released_template.yaml")
 
 		// Operator namespace object
@@ -67,7 +66,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: &lokiSource,
 		}
-		lokiURL string
 	)
 
 	g.BeforeEach(func() {
@@ -166,10 +164,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 		ls.Route = "https://" + getRouteAddress(oc, ls.Namespace, ls.Name)
-
-		// loki URL
-		lokiURL = fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, ls.Namespace)
-
 	})
 
 	g.AfterEach(func() {
@@ -192,9 +186,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				flow := Flowcollector{
 					Namespace:              namespace,
 					Template:               flowFixturePath,
-					LokiURL:                lokiURL,
 					LokiNamespace:          namespace,
-					LokiTLSCertName:        fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 					FLPMetricServerTLSType: "Disabled",
 				}
 
@@ -245,11 +237,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				)
 
 				flow := Flowcollector{
-					Namespace:       namespace,
-					Template:        flowFixturePath,
-					LokiURL:         lokiURL,
-					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					LokiNamespace:   namespace,
+					Namespace:     namespace,
+					Template:      flowFixturePath,
+					LokiNamespace: namespace,
 				}
 
 				// use released flowcollector if using redhat-operators catSrc
@@ -301,12 +291,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				g.By("Deploy flowcollector")
 				flow := Flowcollector{
-					Namespace:       namespace,
-					Template:        flowFixturePath,
-					LokiURL:         lokiURL,
-					LokiNamespace:   namespace,
-					LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-					EBPFMetrics:     "true",
+					Namespace:     namespace,
+					Template:      flowFixturePath,
+					LokiNamespace: namespace,
 				}
 
 				defer flow.deleteFlowcollector(oc)
@@ -345,10 +332,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				flow := Flowcollector{
 					Namespace:               namespace,
 					Template:                flowFixturePath,
-					LokiURL:                 lokiURL,
-					LokiTLSCertName:         fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 					LokiNamespace:           namespace,
-					EBPFMetrics:             "true",
 					EBPFMetricServerTLSType: "Auto",
 				}
 
@@ -393,11 +377,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -496,12 +478,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector with endConversations LogType")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LogType:         "EndedConversations",
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LogType:       "EndedConversations",
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -597,11 +577,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -718,11 +696,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        beta1FlowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      releasedFlowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -824,11 +800,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -949,11 +923,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		// use released flowcollector if using redhat-operators catSrc
@@ -1069,8 +1041,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			MultiClusterDeployment: "true",
 			AddZone:                "true",
 			Template:               flowFixturePath,
-			LokiURL:                lokiURL,
-			LokiTLSCertName:        fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 			LokiNamespace:          namespace,
 		}
 
@@ -1125,11 +1095,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	g.It("NonPreRelease-Longduration-Author:memodi-Medium-60664-Medium-61482-Alerts-with-NetObserv [Serial][Slow]", func() {
 		namespace := oc.Namespace()
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
@@ -1151,7 +1119,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("patched"))
 
-		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, gen, namespace)
+		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, "generation", gen, namespace)
 		rules, err = getConfiguredAlertRules(oc, alertRuleName, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
@@ -1163,7 +1131,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "--type=json", "-p", disableAlertPatch).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("patched"))
-		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, gen, namespace)
+		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, "generation", gen, namespace)
 		rules, err = getConfiguredAlertRules(oc, alertRuleName, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
@@ -1200,12 +1168,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector with Loki disabled")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiEnable:      "false",
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiEnable:    "false",
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -1249,11 +1215,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -1314,11 +1278,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -1361,12 +1323,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
-			EBPFMetrics:     "true",
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -1453,12 +1412,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:       namespace,
-			Template:        flowFixturePath,
-			LokiURL:         lokiURL,
-			LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-			LokiNamespace:   namespace,
-			EBPFMetrics:     "true",
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
 		}
 
 		defer flow.deleteFlowcollector(oc)
@@ -1589,8 +1545,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				Namespace:       namespace,
 				DeploymentModel: "Kafka",
 				Template:        flowFixturePath,
-				LokiURL:         lokiURL,
-				LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 				LokiNamespace:   namespace,
 				KafkaAddress:    fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
 				KafkaTLSEnable:  "true",
@@ -1668,8 +1622,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				Namespace:       namespace,
 				DeploymentModel: "Kafka",
 				Template:        flowFixturePath,
-				LokiURL:         lokiURL,
-				LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
 				LokiNamespace:   namespace,
 				KafkaAddress:    fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
 				KafkaTLSEnable:  "true",
@@ -1804,9 +1756,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			oc.CreateSpecifiedNamespaceAsAdmin(flowNS)
 
 			g.By("Deploy FlowCollector with Kafka TLS")
+			lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, namespace)
+
 			flow := Flowcollector{
 				Namespace:       flowNS,
 				DeploymentModel: "Kafka",
+				LokiMode:        "Manual",
 				Template:        flowFixturePath,
 				LokiURL:         lokiURL,
 				LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),

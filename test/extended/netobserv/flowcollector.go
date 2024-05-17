@@ -3,7 +3,6 @@ package netobserv
 import (
 	"context"
 	"fmt"
-	filePath "path/filepath"
 	"reflect"
 	"time"
 
@@ -42,6 +41,7 @@ type Flowcollector struct {
 	EBPFCacheActiveTimeout    string
 	EBPFPrivileged            string
 	EBPFMetrics               string
+	EBPFeatures               []string
 	PacketDropEnable          string
 	DNStrackingEnable         string
 	PluginEnable              string
@@ -119,55 +119,22 @@ type Lokilabels struct {
 func (flow Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p"}
 
-	flpSA := "flowlogs-pipeline"
-	if flow.DeploymentModel == "Kafka" {
-		flpSA = "flowlogs-pipeline-transformer"
-	}
-
 	flowCollector := reflect.ValueOf(&flow).Elem()
 
 	for i := 0; i < flowCollector.NumField(); i++ {
 		if flowCollector.Field(i).Interface() != "" {
-			if flowCollector.Type().Field(i).Name != "Namespace" || flowCollector.Type().Field(i).Name != "Template" {
+			if flowCollector.Type().Field(i).Name != "Template" {
 				parameters = append(parameters, fmt.Sprintf("%s=%s", flowCollector.Type().Field(i).Name, flowCollector.Field(i).Interface()))
 			}
 		}
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
-
-	// deploy Forward CRB
-	baseDir := exutil.FixturePath("testdata", "netobserv")
-	forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
-	forwardCRB := ForwardClusterRoleBinding{
-		Namespace:          flow.Namespace,
-		Template:           forwardCRBPath,
-		ServiceAccountName: flpSA,
-	}
-	if flow.LokiEnable != "false" && flow.PluginEnable != "false" {
-		forwardCRB.deployForwardCRB(oc)
-	}
 }
 
 // delete flowcollector CRD from a cluster
 func (flow *Flowcollector) deleteFlowcollector(oc *exutil.CLI) error {
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("flowcollector", "cluster").Execute()
-}
-
-// deploy ForwardClusterRoleBinding
-func (crb *ForwardClusterRoleBinding) deployForwardCRB(oc *exutil.CLI) {
-	e2e.Logf("Deploy ClusterRoleBinding in Forward mode")
-	parameters := []string{"--ignore-unknown-parameters=true", "-f", crb.Template, "-p", "NAMESPACE=" + crb.Namespace}
-
-	if crb.Name != "" {
-		parameters = append(parameters, "NAME="+crb.Name)
-	}
-
-	if crb.ServiceAccountName != "" {
-		parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+crb.ServiceAccountName)
-	}
-
-	exutil.ApplyNsResourceFromTemplate(oc, crb.Namespace, parameters...)
 }
 
 func (flow *Flowcollector) waitForFlowcollectorReady(oc *exutil.CLI) {

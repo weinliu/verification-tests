@@ -247,7 +247,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
 	var secrets string
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 360*time.Second, false, func(context.Context) (done bool, err error) {
-		secrets, err = oc.AsAdmin().Run("get").Args("secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}{\" \"}'").Output()
+		secrets, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}{\" \"}'").Output()
 
 		if err != nil {
 			return false, err
@@ -360,9 +360,9 @@ func (testTemplate *TestClientServerTemplate) createTestClientServer(oc *exutil.
 }
 
 // wait until DaemonSet is Ready
-func waitUntilDaemonSetReady(oc *exutil.CLI, daemonset string, namespace string) {
+func waitUntilDaemonSetReady(oc *exutil.CLI, daemonset, namespace string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
-		desiredNumber, err := oc.AsAdmin().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.desiredNumberScheduled}'").Output()
+		desiredNumber, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.desiredNumberScheduled}'").Output()
 
 		if err != nil {
 			// loop until daemonset is found or until timeout
@@ -371,7 +371,7 @@ func waitUntilDaemonSetReady(oc *exutil.CLI, daemonset string, namespace string)
 			}
 			return false, err
 		}
-		numberReady, err := oc.AsAdmin().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.numberReady}'").Output()
+		numberReady, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.numberReady}'").Output()
 		if err != nil {
 			return false, err
 		}
@@ -387,7 +387,7 @@ func waitUntilDaemonSetReady(oc *exutil.CLI, daemonset string, namespace string)
 		if numberReadyi != desiredNumberi {
 			return false, nil
 		}
-		updatedNumber, err := oc.AsAdmin().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.updatedNumberScheduled}'").Output()
+		updatedNumber, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", daemonset, "-n", namespace, "-o", "jsonpath='{.status.updatedNumberScheduled}'").Output()
 		if err != nil {
 			return false, err
 		}
@@ -405,9 +405,9 @@ func waitUntilDaemonSetReady(oc *exutil.CLI, daemonset string, namespace string)
 }
 
 // wait until Deployment is Ready
-func waitUntilDeploymentReady(oc *exutil.CLI, deployment string, namespace string) {
+func waitUntilDeploymentReady(oc *exutil.CLI, deployment, ns string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
-		status, err := oc.AsAdmin().Run("get").Args("deployment", deployment, "-n", namespace, "-o", "jsonpath='{.status.conditions[0].type}'").Output()
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployment, "-n", ns, "-o", "jsonpath='{.status.conditions[0].type}'").Output()
 
 		if err != nil {
 			// loop until deployment is found or until timeout
@@ -425,8 +425,8 @@ func waitUntilDeploymentReady(oc *exutil.CLI, deployment string, namespace strin
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Deployment %s did not become Available", deployment))
 }
 
-func getResourceGeneration(oc *exutil.CLI, resource string, name string, namespace string) (int, error) {
-	gen, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-o=jsonpath='{.metadata.generation}'", "-n", namespace).Output()
+func getResourceGeneration(oc *exutil.CLI, resource, name, ns string) (int, error) {
+	gen, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-o=jsonpath='{.metadata.generation}'", "-n", ns).Output()
 	if err != nil {
 		return -1, err
 	}
@@ -438,17 +438,50 @@ func getResourceGeneration(oc *exutil.CLI, resource string, name string, namespa
 
 }
 
-func waitForResourceGenerationUpdate(oc *exutil.CLI, resource string, name string, generation int, namespace string) {
+func getResourceVersion(oc *exutil.CLI, resource, name, ns string) (int, error) {
+	resV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-o=jsonpath='{.metadata.resourceVersion}'", "-n", ns).Output()
+	if err != nil {
+		return -1, err
+	}
+	vers, err := strconv.Atoi(strings.Trim(resV, "'"))
+	if err != nil {
+		return -1, err
+	}
+	return vers, nil
+}
+
+func waitForResourceGenerationUpdate(oc *exutil.CLI, resource, name, field string, prev int, ns string) {
 
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(context.Context) (done bool, err error) {
-		gen, err := getResourceGeneration(oc, resource, name, namespace)
+		var cur int
+		if field == "generation" {
+			cur, err = getResourceGeneration(oc, resource, name, ns)
+
+		} else if field == "resourceVersion" {
+			cur, err = getResourceVersion(oc, resource, name, ns)
+
+		}
 		if err != nil {
 			return false, err
 		}
-		if gen > generation {
+		if cur != prev {
 			return true, nil
 		}
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s generation did not update", resource, name))
+}
+
+func checkResourceExists(oc *exutil.CLI, resource, name, ns string) (bool, error) {
+	stdout, stderr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, name, "-n", ns).Outputs()
+	if err != nil {
+		return false, err
+	}
+	if strings.Contains(stderr, "NotFound") {
+		return false, nil
+	}
+	if strings.Contains(stdout, name) {
+		return true, nil
+	}
+	return false, nil
 }

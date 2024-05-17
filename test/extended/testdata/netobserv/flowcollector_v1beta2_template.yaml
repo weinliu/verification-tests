@@ -12,16 +12,6 @@ objects:
       deploymentModel: "${DeploymentModel}"
       agent:
         type: eBPF
-        ipfix:
-          cacheActiveTimeout: 20s
-          cacheMaxFlows: 400
-          sampling: 400
-          clusterNetworkOperator:
-            namespace: openshift-network-operator
-          ovnKubernetes:
-            namespace: ovn-kubernetes
-            daemonSetName: ovnkube-node
-            containerName: ovnkube-node
         ebpf:
           imagePullPolicy: IfNotPresent
           sampling: 1
@@ -29,6 +19,7 @@ objects:
           cacheMaxFlows: 100000
           interfaces: [ ]
           excludeInterfaces: ["lo"]
+          features: "${{EBPFeatures}}"
           logLevel: info
           privileged: "${{EBPFPrivileged}}"
           metrics:
@@ -92,6 +83,8 @@ objects:
       loki:
         mode: "${LokiMode}"
         enable: "${{LokiEnable}}"
+        lokiStack:
+          name: ${LokistackName}
         manual:
           authToken: Forward
           querierUrl: "${LokiURL}"
@@ -168,7 +161,7 @@ parameters:
   - name: EBPFPrivileged
     value: "false"
   - name: EBPFMetrics
-    value: "false"
+    value: "true"
   - name: FLPMetricServerTLSType
     value: "Auto"
   - name: EBPFMetricServerTLSType
@@ -180,9 +173,11 @@ parameters:
   - name: LogType
     value: "Flows"
   - name: LokiMode
-    value: "Manual"
+    value: "LokiStack"
   - name: LokiEnable
     value: "true"
+  - name: LokistackName
+    value: lokistack
   - name: LokiURL
     value: "https://lokistack-gateway-http.netobserv.svc.cluster.local:8080/api/logs/v1/network/"
   - name: LokiTLSCertName
@@ -213,3 +208,5 @@ parameters:
     value: "netobserv"
   - name: PluginEnable
     value: "true"
+  - name: EBPFeatures
+    value: '[]'
