@@ -337,14 +337,14 @@ func patchResourceAsAdminAndGetLog(oc *exutil.CLI, ns, resource, patch string) (
 	return outPut, err
 }
 
-func createARoute(oc *exutil.CLI, ns, routeType, routeName, serviceName, routeHost string, extraParas []string) {
+func createRoute(oc *exutil.CLI, ns, routeType, routeName, serviceName string, extraParas []string) {
 	if routeType == "http" {
-		cmd := []string{"-n", ns, "service", serviceName, "--name=" + routeName, "--hostname=" + routeHost}
+		cmd := []string{"-n", ns, "service", serviceName, "--name=" + routeName}
 		cmd = append(cmd, extraParas...)
 		_, err := oc.Run("expose").Args(cmd...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		cmd := []string{"-n", ns, "route", routeType, routeName, "--service=" + serviceName, "--hostname=" + routeHost}
+		cmd := []string{"-n", ns, "route", routeType, routeName, "--service=" + serviceName}
 		cmd = append(cmd, extraParas...)
 		_, err := oc.WithoutNamespace().Run("create").Args(cmd...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

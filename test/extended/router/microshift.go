@@ -427,13 +427,13 @@ fi
 		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
 
 		exutil.By("5. create a route with path " + path1 + " in the first ns")
-		extraParas := []string{"--path=" + path1}
-		createARoute(oc, e2eTestNamespace1, "http", "route-http", unSecSvcName, httpRouteHost, extraParas)
+		extraParas := []string{"--hostname=" + httpRouteHost, "--path=" + path1}
+		createRoute(oc, e2eTestNamespace1, "http", "route-http", unSecSvcName, extraParas)
 		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", "route-http")
 
 		exutil.By("6. create a route with path " + path2 + " in the second ns")
-		extraParas = []string{"--path=" + path2}
-		createARoute(oc, e2eTestNamespace2, "http", "route-http", unSecSvcName, httpRouteHost, extraParas)
+		extraParas = []string{"--hostname=" + httpRouteHost, "--path=" + path2}
+		createRoute(oc, e2eTestNamespace2, "http", "route-http", unSecSvcName, extraParas)
 		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", "route-http")
 
 		exutil.By("7. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be false")
@@ -497,11 +497,10 @@ fi
 		edgeRouteDst := edgeRouteHost + ":443:" + lbIP
 		passThRouteDst := passThRouteHost + ":443:" + lbIP
 		reenRouteDst := reenRouteHost + ":443:" + lbIP
-		extraParas := []string{}
-		createARoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, httpRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, edgeRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, passThRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, reenRouteHost, extraParas)
+		createRoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, []string{"--hostname=" + httpRouteHost})
+		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, []string{"--hostname=" + edgeRouteHost})
+		createRoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, []string{"--hostname=" + passThRouteHost})
+		createRoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, []string{"--hostname=" + reenRouteHost})
 		waitForOutput(oc, e2eTestNamespace, "route/route-reen", ".status.ingress[0].conditions[0].status", "True")
 		output := fetchJSONPathValue(oc, e2eTestNamespace, "route", ".items[*].metadata.name")
 		o.Expect(output).Should(o.And(
@@ -573,11 +572,10 @@ fi
 		edgeRouteHost := "route-edge" + "-" + "ocp73202." + "apps.example.com"
 		passThRouteHost := "route-passth" + "-" + "ocp73202." + "apps.example.com"
 		reenRouteHost := "route-reen" + "-" + "ocp73202." + "apps.example.com"
-		extraParas := []string{}
-		createARoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, httpRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, edgeRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, passThRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, reenRouteHost, extraParas)
+		createRoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, []string{"--hostname=" + httpRouteHost})
+		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, []string{"--hostname=" + edgeRouteHost})
+		createRoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, []string{"--hostname=" + passThRouteHost})
+		createRoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, []string{"--hostname=" + reenRouteHost})
 		waitForOutput(oc, e2eTestNamespace, "route/route-reen", ".status.ingress[0].conditions[0].status", "True")
 		output := fetchJSONPathValue(oc, e2eTestNamespace, "route", ".items[*].metadata.name")
 		o.Expect(output).Should(o.And(
@@ -700,11 +698,10 @@ fi
 		edgeRouteHost := "route-edge" + "-" + "ocp73203." + "apps.example.com"
 		passThRouteHost := "route-passth" + "-" + "ocp73203." + "apps.example.com"
 		reenRouteHost := "route-reen" + "-" + "ocp73203." + "apps.example.com"
-		extraParas := []string{}
-		createARoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, httpRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, edgeRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, passThRouteHost, extraParas)
-		createARoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, reenRouteHost, extraParas)
+		createRoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, []string{"--hostname=" + httpRouteHost})
+		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, []string{"--hostname=" + edgeRouteHost})
+		createRoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, []string{"--hostname=" + passThRouteHost})
+		createRoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, []string{"--hostname=" + reenRouteHost})
 		waitForOutput(oc, e2eTestNamespace, "route/route-reen", ".status.ingress[0].conditions[0].status", "True")
 		output := fetchJSONPathValue(oc, e2eTestNamespace, "route", ".items[*].metadata.name")
 		o.Expect(output).Should(o.And(
