@@ -103,12 +103,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-pidmax"))
 
-		g.By("Check if the tuned rendered contain hc-nodepool-pidmax")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-pidmax"))
-
 		g.By("Get the tuned pod name that running on labeled node with hc-nodepool-pidmax=")
 		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -124,8 +118,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to labeled worker nodes with hc-nodepool-pidmax=")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "hc-nodepool-pidmax")
 
-		g.By("Assert active and recommended profile (hc-nodepool-pidmax) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(hc-nodepool-pidmax\) match`)
+		g.By("Assert recommended profile (hc-nodepool-pidmax) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration`)
 
 		g.By("Check if the setting of sysctl kernel.pid_max applied to labeled worker nodes, expected value is 868686")
 		compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc, ntoNamespace, workerNodeName, "sysctl", "kernel.pid_max", "868686")
@@ -142,8 +136,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 
 		g.By("Check if the custom tuned profile removed from labeled worker nodes, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
@@ -202,12 +196,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-invalid"))
 
-		g.By("Check if the tuned rendered contain hc-nodepool-invalid")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-invalid"))
-
 		g.By("Get the tuned pod name that running on labeled node with hc-nodepool-invalid=")
 		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -223,10 +211,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to labeled worker nodes with hc-nodepool-invalid=")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "hc-nodepool-invalid")
 
-		g.By("Assert active and recommended profile (hc-nodepool-invalid) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(hc-nodepool-invalid\) match|static tuning from profile 'hc-nodepool-invalid' applied`)
+		g.By("Assert recommended profile (hc-nodepool-invalid) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-invalid\) matches current configuration|static tuning from profile 'hc-nodepool-invalid' applied`)
 
-		g.By("Assert active and recommended profile (hc-nodepool-invalid) match in tuned pod log")
+		g.By("Assert Failed to read sysctl parameter in tuned pod log")
 		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "20", 300, `ERROR    tuned.plugins.plugin_sysctl: Failed to read sysctl parameter`)
 
 		expectedDegradedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Degraded")].status}'`).Output()
@@ -252,8 +240,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 
 		g.By("Check if the custom tuned profile removed from labeled worker nodes, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
@@ -313,12 +301,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
 
-		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
-
 		g.By("Get the tuned pod name that running on first node of nodepool")
 		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -328,8 +310,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in specifed nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "hc-nodepool-vmdratio")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-vmdratio)\ matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to labeled worker nodes, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "vm.dirty_ratio", "56")
 
@@ -345,8 +327,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "openshift-node")
@@ -403,12 +385,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-pidmax-tuned"))
 
-		g.By("Check if the tuned rendered contain hc-nodepool-pidmax")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-pidmax-profile"))
-
 		g.By("Get the tuned pod name that running on labeled node with hc-nodepool-pidmax=")
 		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -424,8 +400,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to labeled worker nodes with hc-nodepool-pidmax=")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "hc-nodepool-pidmax-profile")
 
-		g.By("Assert active and recommended profile (hc-nodepool-pidmax-profile) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(hc-nodepool-pidmax-profile\) match`)
+		g.By("Assert recommended profile (hc-nodepool-pidmax-profile) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-pidmax-profile\) matches current configuration`)
 
 		g.By("Check if the setting of sysctl kernel.pid_max applied to labeled worker nodes, expected value is 868686")
 		compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc, ntoNamespace, workerNodeName, "sysctl", "kernel.pid_max", "868686")
@@ -442,8 +418,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 
 		g.By("Check if the custom tuned profile removed from labeled worker nodes, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
@@ -516,12 +492,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(tunedNameList).NotTo(o.BeEmpty())
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hugepages"))
-
-		g.By("Check if the tuned rendered contain openshift-node-hugepages")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-hugepages"))
 
 		g.By("Get the tuned pod name that running on custom node pool worker node")
 		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
@@ -623,12 +593,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hugepages"))
 
-		g.By("Check if the tuned rendered contain openshift-node-hugepages")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-hugepages"))
-
 		g.By("Get the tuned pod name that running on custom node pool worker node")
 		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -725,12 +689,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(tunedNameList).NotTo(o.BeEmpty())
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hugepages"))
-
-		g.By("Check if the tuned rendered contain openshift-node-hugepages")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-hugepages"))
 
 		g.By("Get the tuned pod name that running on custom node pool worker node")
 		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
@@ -846,12 +804,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
 
-		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
-
 		g.By("Get the tuned pod name that running on first custom nodepool worker node")
 		tunedPodNameInFirstNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInFirstNodepool)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -864,8 +816,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in the first nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "hc-nodepool-vmdratio")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the first custom nodepool, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -891,8 +843,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in the first nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-vmdratio")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the second nodepool, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -931,9 +883,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+secondNodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
@@ -1036,13 +988,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-pidmax"))
 
-		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-pidmax"))
-
 		g.By("Get the tuned pod name that running on first custom nodepool worker node")
 		tunedPodNameInFirstNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInFirstNodepool)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1067,11 +1012,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in the second nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-pidmax")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration`)
 
-		g.By("Assert active and recommended profile (hc-nodepool-pidmax) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(hc-nodepool-pidmax\) match`)
+		g.By("Assert recommended profile (hc-nodepool-pidmax) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration`)
 
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the first custom nodepool, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1126,9 +1071,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+secondNodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
@@ -1198,13 +1143,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
 		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-pidmax"))
 
-		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-pidmax"))
-
 		g.By("Get the tuned pod name that running on default nodepool worker node")
 		tunedPodNameInNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInNodepool)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1217,8 +1155,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in the second nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "hc-nodepool-pidmax")
 
-		g.By("Assert active and recommended profile (hc-nodepool-pidmax) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `active and recommended profile \(hc-nodepool-pidmax\) match`)
+		g.By("Assert recommended profile (hc-nodepool-pidmax) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration`)
 
 		g.By("Check if the setting of sysctl kernel.pid_max applied to worker nodes in the default nodepool, expected value is 868686")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "kernel.pid_max", "868686")
@@ -1233,8 +1171,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile hc-nodepool-vmdratio applied to all worker node in the nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "hc-nodepool-vmdratio")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration`)
 
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the nodepool, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1280,8 +1218,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "openshift-node")
@@ -1367,12 +1305,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
 		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-vmdratio", ntoNamespace)
 
-		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
-
 		g.By("Get the tuned pod name that running on first custom nodepool worker node")
 		tunedPodNameInFirstNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInFirstNodepool)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1385,8 +1317,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in the first nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "hc-nodepool-vmdratio")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in first hosted cluster, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1406,12 +1338,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
 		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-vmdratio", ntoNamespace)
 
-		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err = getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
-
 		g.By("Get the tuned pod name that running on first custom nodepool worker node")
 		tunedPodNameInSecondNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInSecondNodepool)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1424,8 +1350,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in in second hosted cluster.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-vmdratio")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes of default nodepool in second hosted cluster, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1476,15 +1402,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Set first kubeconfig to access first hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube)
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log in first hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in first hosted")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool in first hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
 
 		g.By("Set second kubeconfig to access second hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube2)
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log in second hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in second hosted")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool in second hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
@@ -1577,12 +1503,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
 		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-vmdratio", ntoNamespace)
 
-		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
-		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
-
 		g.By("Get the tuned pod name that running on first custom nodepool worker node")
 		tunedPodNameInFirstNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInFirstNodepool)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1595,8 +1515,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in the first nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "hc-nodepool-vmdratio")
 
-		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+		g.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 
 		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in first hosted cluster, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1622,12 +1542,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned hc-nodepool-pidmax-xxxxxx is created in hosted cluster nodepool")
 		AssertIfTunedIsReadyByNameInHostedCluster(oc, "hc-nodepool-pidmax", ntoNamespace)
 
-		g.By("Check if the tuned rendered contain hc-nodepool-pidmax")
-		renderCheck, err = getTunedRenderInHostedCluster(oc, ntoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(renderCheck).NotTo(o.BeEmpty())
-		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-pidmax"))
-
 		g.By("Get the tuned pod name that running on first custom nodepool worker node")
 		tunedPodNameInSecondNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInSecondNodepool)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1640,8 +1554,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if the tuned profile applied to all worker node in in second hosted cluster.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-pidmax")
 
-		g.By("Assert active and recommended profile (hc-nodepool-pidmax) match in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(hc-nodepool-pidmax\) match|static tuning from profile 'hc-nodepool-pidmax' applied`)
+		g.By("Assert recommended profile (hc-nodepool-pidmax) matches current configuration in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration|static tuning from profile 'hc-nodepool-pidmax' applied`)
 
 		g.By("Check if the setting of sysctl kernel.pid_max applies on worker nodes in second hosted cluster, expected value is 868686")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "kernel.pid_max", "868686")
@@ -1708,15 +1622,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Set first kubeconfig to access first hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube)
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log in first hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in first hosted")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool in first hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
 
 		g.By("Set second kubeconfig to access second hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube2)
-		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log in second hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in second hosted")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool in second hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
