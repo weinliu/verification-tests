@@ -481,7 +481,7 @@ func StartAzureStackVM(resourceGroupName, vmName string) error {
 	return nil
 }
 
-// GetVMStatus gets the status of the virtual machine with the given name in the specified resource group using Azure CLI
+// GetAzureStackVMStatus gets the status of the virtual machine with the given name in the specified resource group using Azure CLI
 func GetAzureStackVMStatus(resourceGroupName, vmName string) (string, error) {
 	cmd := fmt.Sprintf(`az vm show --name %s --resource-group %s --query 'powerState' --show-details |awk '{print $2}' | cut -d '"' -f1`, vmName, resourceGroupName)
 	instanceState, err := exec.Command("bash", "-c", cmd).Output()

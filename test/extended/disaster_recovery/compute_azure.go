@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -38,9 +39,19 @@ func GetAzureNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
 		} else {
 			g.Skip(fmt.Sprintf("Error checking file: %v\n", err))
 		}
+
 		cmd := fmt.Sprintf(`source %s`, filePath)
-		_, cmdErr := exec.Command("bash", "-c", cmd).Output()
+		cmdop := exec.Command("bash", "-c", cmd)
+		_, cmdErr := cmdop.CombinedOutput()
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		os.Setenv("REQUESTS_CA_BUNDLE", "/tmp/ca.pem")
+
+		vmOutput, azcmdErr := exec.Command("bash", "-c", `az vm list --output table`).Output()
+		if azcmdErr == nil && string(vmOutput) != "" {
+			logger.Debugf("Able to run azure cli successfully :: %s :: %s", vmOutput, azcmdErr)
+		} else {
+			e2e.Failf("Not able to run azure cli successfully :: %s :: %s", string(vmOutput), azcmdErr)
+		}
 	}
 	var results []ComputeNode
 	for _, nodeName := range nodeNames {
