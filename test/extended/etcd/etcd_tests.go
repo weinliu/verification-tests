@@ -1060,4 +1060,39 @@ etcd:
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
+
+	// author: geliu@redhat.com
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:geliu-High-73511-Selectable etcd database size. [Disruptive]", func() {
+
+		g.By("check cluster has enabled TechPreviewNoUpgradec.")
+		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if featureSet != "TechPreviewNoUpgrade" {
+			g.Skip("featureSet is not TechPreviewNoUpgradec, skip it!")
+		}
+
+		defer func() {
+			patchPath := "{\"spec\":{\"backendQuotaGiB\": 8}}"
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", patchPath).Output()
+			if strings.Contains(output, "etcd backendQuotaGiB may not be decreased") {
+				e2e.Logf("etcd backendQuotaGiB may not be decreased: %v ", output)
+			}
+			checkOperator(oc, "etcd")
+		}()
+
+		g.By("patch etcd cluster backendQuotaGiB to 16G.")
+		patchPath := "{\"spec\":{\"backendQuotaGiB\": 16}}"
+		err0 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err0).NotTo(o.HaveOccurred())
+
+		g.By("waiting for etcd rollout automatically, restart all etcd pods at a time to pick up the new values")
+		checkOperator(oc, "etcd")
+
+		g.By("verify ETCD_QUOTA_BACKEND_BYTES value in etcd pods.")
+		etcdPodList := getPodListByLabel(oc, "etcd=true")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.spec.containers[0].env[16].value}").Output()
+		if output != "17179869184" || err != nil {
+			e2e.Failf("ETCD_QUOTA_BACKEND_BYTES is not expected value: 17179869184")
+		}
+	})
 })
