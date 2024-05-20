@@ -420,4 +420,27 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		cmd := fmt.Sprintf(`1digit9.apps.%s`, getBaseDomain(oc))
 		waitForOutput(oc, oc.Namespace(), "ingress.config.openshift.io/cluster", ".spec.componentRoutes[0].hostname", cmd)
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-73619-Checking whether the ingress operator is enabled as optional component", func() {
+		var (
+			enabledCapabilities = "{.status.capabilities.enabledCapabilities}"
+			capability          = "{.metadata.annotations}"
+			ingressCapability   = `"capability.openshift.io/name":"Ingress"`
+		)
+
+		exutil.By("Check whether 'enabledCapabilities' is enabled in cluster version resource")
+		searchLine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath="+enabledCapabilities).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(searchLine).To(o.ContainSubstring("Ingress"))
+
+		exutil.By("Check the Ingress capability in dnsrecords crd")
+		searchLine, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "dnsrecords.ingress.operator.openshift.io", "-o=jsonpath="+capability).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(searchLine).To(o.ContainSubstring(ingressCapability))
+
+		exutil.By("Check the Ingress capability in ingresscontrollers crd")
+		searchLine, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "ingresscontrollers.operator.openshift.io", "-o=jsonpath="+capability).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(searchLine).To(o.ContainSubstring(ingressCapability))
+	})
 })
