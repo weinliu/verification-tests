@@ -307,7 +307,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:jiazha-Medium-53771-The certificate relating to operator-lifecycle-manager-packageserver isn't rotated after expired [Disruptive]", func() {
-		var image string
+		var image, phase, olmPhase, packagePhase string
 		customOLMImage := "quay.io/olmqe/operator-framework-olm:cert-rotation-auto"
 		defer func() {
 			_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion", "version", "-p", "{\"spec\": {\"overrides\":[{\"kind\": \"Deployment\", \"name\": \"olm-operator\", \"namespace\": \"openshift-operator-lifecycle-manager\", \"unmanaged\": false, \"group\": \"apps\"}]}}", "--type=merge").Output()
@@ -315,15 +315,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("Fail to put OLM into a managed state, error:%v", err)
 			}
 			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-				image, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].spec.containers[0].image}").Output()
-				olmPhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator").Output()
-				packagePhase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver").Output()
+				image, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].spec.containers[0].image}").Output()
+				olmPhase, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator").Output()
+				packagePhase, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=packageserver").Output()
 				if image != customOLMImage && strings.Contains(olmPhase, "Running") && strings.Contains(packagePhase, "Running") {
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("OLM pod image(%s) didn't recover after 180s", image))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("OLM pod image(%s),olmPhase(%s),packagePhase(%s) didn't recover after 180s", image, olmPhase, packagePhase))
 		}()
 		exutil.By("1, put OLM into an unmanaged state")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion", "version", "-p", "{\"spec\": {\"overrides\":[{\"kind\": \"Deployment\", \"name\": \"olm-operator\", \"namespace\": \"openshift-operator-lifecycle-manager\", \"unmanaged\": true, \"group\": \"apps\"}]}}", "--type=merge").Output()
@@ -337,13 +337,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 			image, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator", "-o=jsonpath={.items[0].spec.containers[0].image}").Output()
-			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator").Output()
+			phase, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "-l", "app=olm-operator").Output()
 			if image == customOLMImage && strings.Contains(phase, "Running") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the olm-operator pod image(%s) not updated after 600s", image))
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the olm-operator pod image(%s) and phase(%s) not updated after 600s", image, phase))
 		exutil.By("3, delete the existing packageserver cert to initiate the creation of a new one")
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			info, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "packageserver-service-cert", "--wait=true", "-n", "openshift-operator-lifecycle-manager").Output()
