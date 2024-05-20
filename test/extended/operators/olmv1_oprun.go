@@ -35,38 +35,48 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		// oc.SetupProject() // it is example if the case need temp project. here it does not need it, so comment it.
 
 		var (
+			ns                        = "ns-68903"
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
 			unhealthyPod              = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-pod-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-podunhealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-pod-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-podunhealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			unhealthyPodChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyApiservice = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-apis-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-apisunhealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-apis-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-apisunhealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			unhealthyApiserviceChild = []olmv1util.ChildResource{
 				{Kind: "APIService", Ns: ""},
 			}
 			unhealthyCRD = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-crd-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-crdunhealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-crd-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-crdunhealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			unhealthyDS = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-ds-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-dsunhealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-ds-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-dsunhealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			unhealthyDSChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create unhealthy pod")
 		defer unhealthyPod.DeleteWithoutCheck(oc)
@@ -98,13 +108,15 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68936-BundleDeployment Health resource healthy and install fail", func() {
 
 		var (
+			ns                           = "ns-68936"
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate    = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
 			basicBdRegistryImageTemplate = filepath.Join(baseDir, "basic-bd-registry-image.yaml")
 			healthBd                     = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-healthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-healthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-healthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-healthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			healthChild = []olmv1util.ChildResource{
 				{Kind: "CustomResourceDefinition", Ns: ""},
@@ -113,28 +125,36 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyDp = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-deployment-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:registry-68903-deployunhealthy",
-				Template: basicBdRegistryImageTemplate,
+				BdName:    "68903-deployment-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:registry-68903-deployunhealthy",
+				Namespace: ns,
+				Template:  basicBdRegistryImageTemplate,
 			}
 			unhealthyDpChild = []olmv1util.ChildResource{
-				{Kind: "CustomResourceDefinition", Ns: ""},
-				{Kind: "namespace", Ns: ""},
+				// {Kind: "CustomResourceDefinition", Ns: ""},
+				// {Kind: "namespace", Ns: ""},
 			}
 			unhealthyRC = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-rc-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-rcunhealth",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-rc-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-rcunhealth",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			unhealthyRCChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyInstall = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-install-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-installunhealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-install-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-installunhealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create health bundledeployment")
 		defer healthBd.DeleteWithoutCheck(oc)
@@ -165,34 +185,43 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68937-BundleDeployment Health resource unhealthy ss rs unspport", func() {
 
 		var (
+			ns                        = "ns-68937"
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
 			basicBdPlainImageTemplate = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
 			unhealthySS               = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-ss-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-ssunhealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-ss-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-ssunhealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			unhealthySSChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 			unhealthyRS = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-rs-unhealthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-rsunhealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-rs-unhealthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-rsunhealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			unhealthyRSChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 
 			healthUnspport = olmv1util.BundleDeploymentDescription{
-				BdName:   "68903-unspport-healthy",
-				Address:  "quay.io/olmqe/olmv1bundle:plain-68903-unsupporthealthy",
-				Template: basicBdPlainImageTemplate,
+				BdName:    "68903-unspport-healthy",
+				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-unsupporthealthy",
+				Namespace: ns,
+				Template:  basicBdPlainImageTemplate,
 			}
 			healthUnspportChild = []olmv1util.ChildResource{
 				{Kind: "namespace", Ns: ""},
 			}
 		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create unhealthy SS")
 		defer unhealthySS.DeleteWithoutCheck(oc)

@@ -8,6 +8,7 @@ objects:
   metadata:
     name: "${NAME}"
   spec:
+    installNamespace: "${NAMESPACE}"
     provisionerClassName: "core-rukpak-io-plain"
     source:
       image:
@@ -16,3 +17,4 @@ objects:
 parameters:
 - name: NAME
 - name: ADDRESS
+- name: NAMESPACE
