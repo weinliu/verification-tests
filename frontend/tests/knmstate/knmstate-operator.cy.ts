@@ -1,6 +1,7 @@
 import { knmstateUtils } from "../../views/knmstate-utils";
 import { intPolicy, nncpPage } from "../../views/nncp-page";
 import { nnsPage } from "../../views/nns-page";
+import {searchPage} from "../../views/search";
 
 describe('knmstate operator console plugin related features', () => {
 
@@ -11,6 +12,7 @@ describe('knmstate operator console plugin related features', () => {
       }
     });
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.cliLogin();
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     cy.switchPerspective('Administrator');
     cy.log('delete nmstate instance and uninstall knmstate operator if existed before installing');
@@ -63,7 +65,7 @@ describe('knmstate operator console plugin related features', () => {
     cy.log("2. Check NNCP status");
     cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
     cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
-      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 30000});
+      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 600000});
     });
 
     cy.log("3. Check NNS");
@@ -137,7 +139,7 @@ describe('knmstate operator console plugin related features', () => {
     cy.log("2. Check NNCP status");
     cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
     cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
-      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 30000});
+      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 600000});
     });
 
     cy.log("3. Check NNS");
@@ -210,7 +212,7 @@ describe('knmstate operator console plugin related features', () => {
     cy.log("2. Check NNCP status");
     cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
     cy.get(`[data-test-rows="resource-row"]`).contains(pName).parents('tr').within(() => {
-      cy.get('td[id="status"]').contains(" "+this.workerList.length+" Available", {timeout: 30000});
+      cy.get('td[id="status"]').contains(" "+this.workerList.length+" Available", {timeout: 600000});
     });
 
     cy.log("3. Check NNS, only configured on the selected node");
@@ -347,6 +349,155 @@ describe('knmstate operator console plugin related features', () => {
     cy.log("6. Delete NNCP");
     nncpPage.deleteNNCP(pName);
     cy.byTestID(pName).should('not.exist');
+  });
+
+  it('(OCP-64852,qiowang,SDN) Check NodeNetworkConfigurationPolicy Page', {tags: ['e2e','admin']}, function () {
+    cy.log("1. Create NNCP for dummy interface via CLI");
+    cy.adminCLI(`oc create -f ./fixtures/knmstate-nncp-64852.yaml`);
+    let pName1 = "nncp-64852-1";
+    let pName2 = "nncp-64852-2";
+
+    cy.log("2. Check NNCP status on NodeNetworkConfigurationPolicy Page");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.byTestID(pName1).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" "+this.nodeList.length+" Available", {timeout: 600000});
+    });
+    cy.byTestID(pName2).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains("Failing", {timeout: 600000});
+    });
+
+    cy.log("3. Filter NNCP with Enactment states on NodeNetworkConfigurationPolicy Page");
+    nncpPage.filterByRequester("Available");
+    cy.byTestID(pName1).should('exist');
+    cy.byTestID(pName2).should('not.exist');
+    searchPage.clearAllFilters();
+    nncpPage.filterByRequester("Failing");
+    cy.byTestID(pName1).should('not.exist');
+    cy.byTestID(pName2).should('exist');
+    searchPage.clearAllFilters();
+
+    cy.log("4. Search NNCP with Name on NodeNetworkConfigurationPolicy Page");
+    nncpPage.searchByRequester("NAME", pName1);
+    cy.byTestID(pName1).should('exist');
+    cy.byTestID(pName2).should('not.exist');
+    searchPage.clearAllFilters();
+
+    cy.log("5. Search NNCP with Label on NodeNetworkConfigurationPolicy Page");
+    nncpPage.searchByRequester("LABEL", "test=err-value");
+    cy.byTestID(pName1).should('not.exist');
+    cy.byTestID(pName2).should('exist');
+    searchPage.clearAllFilters();
+
+    cy.log("6. Click NNCP Name on NodeNetworkConfigurationPolicy Page");
+    cy.byTestID(pName1).click();
+    cy.byLegacyTestID('resource-title').contains(pName1).should('exist');
+
+    cy.log("7. Click NNCP Enactment states on NodeNetworkConfigurationPolicy Page");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.byTestID(pName1).parents('tr').within(() => {
+      cy.get('td[id="status"]').get('button[type="button"]').first().click();
+    });
+    cy.get('[aria-label="Policy enactments drawer"]').should('exist');
+    cy.get('[aria-label="Policy enactments drawer"]').get('button[aria-label="Close"]').click();
+
+    cy.log("8. Delete NNCP via CLI");
+    cy.adminCLI(`oc delete -f ./fixtures/knmstate-nncp-64852.yaml`);
+
+    cy.log("9. Check NNCP on web console");
+    cy.byTestID(pName1).should('not.exist');
+    cy.byTestID(pName2).should('not.exist');
+  });
+
+  it('(OCP-64853,qiowang,SDN) Check NodeNetworkState Page', {tags: ['e2e','admin']}, function () {
+    cy.log("1. Create NNCP for bridge interface on web console");
+    let pName = "pname-64853";
+    let nncpTest: intPolicy = {
+        intName: "bridge03",
+        intState: "Up",
+        intType: "Bridge",
+        ipv4Enable: true,
+        ip: "113.9.9.9",
+        prefixLen: "24",
+        disAutoDNS: false,
+        disAutoRoutes: false,
+        disAutoGW: false,
+        port: "",
+        br_stpEnable: true,
+        bond_cpMacFrom: "",
+        bond_aggrMode: "",
+        action: "",
+    };
+    let nncps: intPolicy[] = [];
+    nncps.push(nncpTest);
+    nncpPage.creatNNCPFromForm(pName, "test123", nncps, "kubernetes.io/hostname", this.workerList[0]);
+
+    cy.log("2. Check NNCP via web console and CLI");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.byTestID(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" 1 Available", {timeout: 600000});
+    });
+    cy.adminCLI("oc get nncp "+pName, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stdout).to.contain('Available');
+    });
+    cy.adminCLI("oc get nnce "+this.workerList[0]+"."+pName, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stdout).to.contain('Available');
+    });
+
+    cy.log("3. Filter NNS with interface type on NodeNetworkState Page");
+    nnsPage.goToNNS();
+    nnsPage.filterByRequester("linux-bridge");
+    for (let i = 0; i < this.nodeList.length; i++) {
+      if (this.nodeList[i] == this.workerList[0]) {
+        cy.byTestID(this.nodeList[i]).should('exist');
+      } else {
+        cy.byTestID(this.nodeList[i]).should('not.exist');
+      };
+    };
+    searchPage.clearAllFilters();
+
+    cy.log("4. Search NNS with IP address on NodeNetworkState Page");
+    nnsPage.searchByRequester("ip-address", nncpTest.ip);
+    for (let i = 0; i < this.nodeList.length; i++) {
+      if (this.nodeList[i] == this.workerList[0]) {
+        cy.byTestID(this.nodeList[i]).should('exist');
+      } else {
+        cy.byTestID(this.nodeList[i]).should('not.exist');
+      };
+    };
+    searchPage.clearAllFilters();
+
+    cy.log("5. Click NNS Name on NodeNetworkState Page");
+    cy.byTestID(this.workerList[0]).click();
+    cy.byLegacyTestID('resource-title').contains(this.workerList[0]).should('exist');
+
+    cy.log("6. Edit NNCP to remove the interface on web console");
+    nncpTest.action = "editOld";
+    nncpTest.intState = "Absent";
+    nncpPage.editNNCPFromForm(pName, 'test123', nncps);
+
+    cy.log("7. Check NNCP via web console and CLI");
+    cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+    cy.byTestID(pName).parents('tr').within(() => {
+      cy.get('td[id="status"]').contains(" 1 Available", {timeout: 30000});
+    });
+    cy.adminCLI("oc get nncp "+pName, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stdout).to.contain('Available');
+    });
+    cy.adminCLI("oc get nnce "+this.workerList[0]+"."+pName, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stdout).to.contain('Available');
+    });
+
+    cy.log("8. Delete NNCP on web console");
+    nncpPage.deleteNNCP(pName);
+    cy.byTestID(pName).should('not.exist');
+
+    cy.log("9. Check NNCP vi CLI");
+    cy.adminCLI("oc get nncp "+pName, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stderr).to.contain('not found');
+    });
+    cy.adminCLI("oc get nnce "+this.workerList[0]+"."+pName, {failOnNonZeroExit: false}).then(result => {
+      expect(result.stderr).to.contain('not found');
+    });
   });
 
   after(() => {

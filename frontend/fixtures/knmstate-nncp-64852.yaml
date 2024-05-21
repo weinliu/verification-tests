@@ -1,0 +1,24 @@
+apiVersion: nmstate.io/v1
+kind: NodeNetworkConfigurationPolicy
+metadata:
+  name: nncp-64852-1
+spec:
+  desiredState:
+    interfaces:
+    - name: dummy1
+      type: dummy
+      state: absent
+---
+apiVersion: nmstate.io/v1
+kind: NodeNetworkConfigurationPolicy
+metadata:
+  name: nncp-64852-2
+  labels:
+    test: err-value
+spec:
+  desiredState:
+    interfaces:
+    - name: dummy2
+      type: dummy
+      state: errval
+

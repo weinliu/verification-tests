@@ -15,7 +15,7 @@ export const searchPage = {
     });
   },
   clearAllFilters: () => {
-    cy.byButtonText('Clear all filters').click();
+    cy.byButtonText('Clear all filters').click({force: true});
   },
   searchMethodValues: (method, value) => {
     cy.get('button[id="toggle-id"]').click();

@@ -1,3 +1,5 @@
+import {listPage} from "../upstream/views/list-page";
+
 export interface intPolicy {
     intName: string,
     intState: string,
@@ -159,5 +161,19 @@ export const nncpPage = {
             cy.get('#text-confirmation').clear().type(policyName)
             cy.get('button[type="submit"]').click()
         })
+    },
+    filterByRequester: (selector) => {
+        listPage.filter.clickFilterDropdown();
+        cy.get('#'+selector).check();
+    },
+    searchByRequester: (selectorKey, selectorVal) => {
+        listPage.filter.clickSearchByDropdown();
+        cy.get(`button[data-test-dropdown-menu="${selectorKey}"]`).click();
+        if (selectorKey == "NAME") {
+            cy.get('[aria-label="Search by name..."]').type(selectorVal);
+        };
+        if (selectorKey == "LABEL") {
+            cy.get('[aria-label="Search by label..."]').type(selectorVal).get('span.co-text-node').contains(selectorVal).click();
+        };
     },
 };
