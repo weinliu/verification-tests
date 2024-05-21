@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	o "github.com/onsi/gomega"
@@ -2058,4 +2059,41 @@ func setRegistryVolume(oc *exutil.CLI, resourcetype string, resourcename string,
 	} else {
 		e2e.Failf("The pod is not running even afer waiting for about 3 minutes")
 	}
+}
+
+func validateTargetcatalogAndTag(regsitryUri string, expectedTag string) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Get(regsitryUri)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer resp.Body.Close()
+	content, err := ioutil.ReadAll(resp.Body)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The output  %v :", strings.ReplaceAll(string(content), "\n", ""))
+	if strings.Contains(strings.ReplaceAll(string(content), "\n", ""), expectedTag) {
+		e2e.Logf("Find the expected tag %v :", expectedTag)
+	} else {
+		e2e.Failf("Can't find the expected tag %v", expectedTag)
+	}
+}
+
+func skopeExecute(skopeoCommand string) {
+	e2e.Logf("skopeo command %v :", skopeoCommand)
+	var skopeooutStr string
+	waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+		skopeoout, err := exec.Command("bash", "-c", skopeoCommand).Output()
+		if err != nil {
+			e2e.Logf("copy failed, retrying...")
+			skopeooutStr = string(skopeoout)
+			return false, nil
+		}
+		return true, nil
+
+	})
+	if waitErr != nil {
+		e2e.Logf("output: %v", skopeooutStr)
+	}
+	exutil.AssertWaitPollNoErr(waitErr, "max time reached but the skopeo copy still failed")
 }

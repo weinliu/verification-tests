@@ -240,7 +240,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer removeOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator")
 		installOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator", "rhsso-operator")
 	})
-
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-73377-support dry-run for v2 [Serial]", func() {
 		dirname := "/tmp/case73377"
 		defer os.RemoveAll(dirname)
@@ -371,5 +370,80 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Logf("Source and destination for mirror2mirror are set correctly")
 		}
 
+	})
+
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Medium-72949-support targetCatalog and targetTag setting of mirror v2docker2 and oci for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72949"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72949-1.yaml")
+		imageSetYamlFileS := filepath.Join(ocmirrorBaseDir, "config-72949-2.yaml")
+
+		exutil.By("Use skopoe copy catalogsource to localhost")
+		skopeExecute(fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-zcon-zosconnect-catalog@sha256:6f02ecef46020bcd21bdd24a01f435023d5fc3943972ef0d9769d5276e178e76 oci://%s --remove-signatures", dirname+"/ibm-catalog"))
+
+		exutil.By("Start mirror2mirror for oci & rh marketplace operators")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileS, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+
+		rhMarketUri := "https://" + serInfo.serviceName + "/v2/72949/redhat-marketplace-index/tags/list"
+		validateTargetcatalogAndTag(rhMarketUri, "v15")
+		ibmOciUri := "https://" + serInfo.serviceName + "/v2/72949/catalog/tags/list"
+		validateTargetcatalogAndTag(ibmOciUri, "v15")
+
+		os.RemoveAll(".oc-mirror.log")
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
+
+		exutil.By("Start disk2mirror")
+		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror still failed")
+
+		exutil.By("Validate the target catalog and tag")
+		rhOperatorUri := "https://" + serInfo.serviceName + "/v2/72949/redhat-operator-index/tags/list"
+		e2e.Logf("The rhOperatorUri is %v", rhOperatorUri)
+		validateTargetcatalogAndTag(rhOperatorUri, "v4.15")
 	})
 })
