@@ -345,6 +345,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog-secret.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
+			ns                       = "ns-70817"
 			catalog                  = olmv1util.CatalogDescription{
 				Name:         "catalog-70817-quay",
 				Imageref:     "quay.io/olmqe/olmtest-operator-index-private:nginxolm70817",
@@ -353,15 +354,21 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Template:     catalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:        "clusterextension-70817",
-				PackageName: "nginx70817",
-				Template:    clusterextensionTemplate,
+				Name:             "clusterextension-70817",
+				InstallNamespace: ns,
+				PackageName:      "nginx70817",
+				Template:         clusterextensionTemplate,
 			}
 		)
 
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("1) Create secret")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-catalogd", "secret", "secret-70817-quay").Output()
-		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-catalogd", "secret", "generic", "secret-70817-quay", "--from-file=.dockerconfigjson=/home/cloud-user/.docker/config.json", "--type=kubernetes.io/dockerconfigjson").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-catalogd", "secret", "generic", "secret-70817-quay", "--from-file=.dockerconfigjson=/home/cloud-user/.docker/config.json", "--type=kubernetes.io/dockerconfigjson").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("2) Create catalog")
@@ -451,19 +458,26 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			ns                       = "ns-73289"
 			catalog                  = olmv1util.CatalogDescription{
 				Name:     "catalog-73289",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm73289",
 				Template: catalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:        "clusterextension-73289",
-				PackageName: "nginx73289v1",
-				Channel:     "candidate-v1.0",
-				Version:     "1.0.1",
-				Template:    clusterextensionTemplate,
+				Name:             "clusterextension-73289",
+				InstallNamespace: ns,
+				PackageName:      "nginx73289v1",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.1",
+				Template:         clusterextensionTemplate,
 			}
 		)
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
@@ -528,7 +542,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		}
 
 		exutil.By("update channel to candidate-v3.1")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v3.1"}}`)
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v3.1","upgradeConstraintPolicy":"Ignore"}}`)
 
 		exutil.By("Check if ChannelDeprecated status and messages still exist")
 		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "False", 0)

@@ -19,6 +19,7 @@ type ClusterExtensionDescription struct {
 	PackageName             string
 	Channel                 string
 	Version                 string
+	InstallNamespace        string
 	UpgradeConstraintPolicy string
 	Template                string
 	InstalledBundle         string
@@ -48,6 +49,9 @@ func (clusterextension *ClusterExtensionDescription) CreateWithoutCheck(oc *exut
 	}
 	if len(clusterextension.Version) > 0 {
 		paremeters = append(paremeters, "VERSION="+clusterextension.Version)
+	}
+	if len(clusterextension.InstallNamespace) > 0 {
+		paremeters = append(paremeters, "INSTALLNAMESPACE="+clusterextension.InstallNamespace)
 	}
 	if len(clusterextension.UpgradeConstraintPolicy) > 0 {
 		paremeters = append(paremeters, "POLICY="+clusterextension.UpgradeConstraintPolicy)

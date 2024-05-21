@@ -8,11 +8,13 @@ objects:
   metadata:
     name: "${NAME}"
   spec:
+    installNamespace: "${INSTALLNAMESPACE}"
     packageName: "${PACKAGE}"
     version: "${VERSION}"
     upgradeConstraintPolicy: "${POLICY}"
 parameters:
 - name: NAME
+- name: INSTALLNAMESPACE
 - name: PACKAGE
 - name: VERSION
 - name: POLICY

@@ -251,19 +251,27 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			clusterextensionTemplate                      = filepath.Join(baseDir, "clusterextension.yaml")
 			clusterextensionWithoutChannelTemplate        = filepath.Join(baseDir, "clusterextensionWithoutChannel.yaml")
 			clusterextensionWithoutChannelVersionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
+			ns                                            = "ns-68821"
 			catalog                                       = olmv1util.CatalogDescription{
 				Name:     "catalog-68821",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
 				Template: catalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:        "clusterextension-68821",
-				PackageName: "nginx68821",
-				Channel:     "candidate-v0.0",
-				Version:     ">=0.0.1",
-				Template:    clusterextensionTemplate,
+				Name:             "clusterextension-68821",
+				PackageName:      "nginx68821",
+				Channel:          "candidate-v0.0",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				Template:         clusterextensionTemplate,
 			}
 		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
@@ -300,7 +308,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("Create clusterextension with invalid version")
 		clusterextension.Version = "!1.0.1"
 		clusterextension.Template = clusterextensionTemplate
-		err := clusterextension.CreateWithoutCheck(oc)
+		err = clusterextension.CreateWithoutCheck(oc)
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
@@ -315,14 +323,22 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69196",
 				Template: catalogTemplate,
 			}
+			ns               = "ns-69196"
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:        "clusterextension-69196",
-				PackageName: "nginx69196",
-				Channel:     "candidate-v1.0",
-				Version:     "1.0.1",
-				Template:    clusterextensionTemplate,
+				Name:             "clusterextension-69196",
+				InstallNamespace: ns,
+				PackageName:      "nginx69196",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.1",
+				Template:         clusterextensionTemplate,
 			}
 		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
@@ -369,19 +385,27 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			ns                       = "ns-69193"
 			catalog                  = olmv1util.CatalogDescription{
 				Name:     "catalog-69193",
 				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm69193",
 				Template: catalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:        "clusterextension-69193",
-				PackageName: "nginx69193",
-				Channel:     "candidate-v0.0",
-				Version:     "0.0.1",
-				Template:    clusterextensionTemplate,
+				Name:             "clusterextension-69193",
+				InstallNamespace: ns,
+				PackageName:      "nginx69193",
+				Channel:          "candidate-v0.0",
+				Version:          "0.0.1",
+				Template:         clusterextensionTemplate,
 			}
 		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("1) Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
@@ -417,14 +441,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.0.2 is not installed")
 
 		clusterextension.Delete(oc)
-		err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
-			catsrcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "nginx69193-system").Output()
-			if strings.Contains(catsrcStatus, "NotFound") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "ns nginx69193-system is not deleted")
 
 		exutil.By("5) Install version 0.1.0 with Enforce policy, that should work")
 		clusterextension.Channel = "candidate-v0.1"
@@ -437,7 +453,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"version":"0.2.0","channel":"candidate-v0.2"}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
-			if !strings.Contains(message, "constraints not satisfiable") {
+			if !strings.Contains(message, "error upgrading") {
 				e2e.Logf("status is %s", message)
 				return false, nil
 			}
@@ -473,24 +489,31 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-High-70719-OLMv1 Upgrade non-zero major version	", func() {
+	g.It("ConnectedOnly-Author:bandrade-High-70719-OLMv1 Upgrade non-zero major version", func() {
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			ns                       = "ns-70719"
 			catalog                  = olmv1util.CatalogDescription{
 				Name:     "catalog-70719",
 				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm70719",
 				Template: catalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:        "clusterextension-70719",
-				PackageName: "nginx70719",
-				Channel:     "candidate-v0",
-				Version:     "0.2.2",
-				Template:    clusterextensionTemplate,
+				Name:             "clusterextension-70719",
+				InstallNamespace: ns,
+				PackageName:      "nginx70719",
+				Channel:          "candidate-v0",
+				Version:          "0.2.2",
+				Template:         clusterextensionTemplate,
 			}
 		)
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("1) Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
@@ -504,7 +527,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1", "version":"1.0.0"}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
-			if !strings.Contains(message, "constraints not satisfiable") {
+			if !strings.Contains(message, "error upgrading") {
 				e2e.Logf("status is %s", message)
 				return false, nil
 			}
@@ -582,19 +605,27 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			ns                       = "ns-70723"
 			catalog                  = olmv1util.CatalogDescription{
 				Name:     "catalog-70723",
 				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm70723",
 				Template: catalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:        "clusterextension-70723",
-				PackageName: "nginx70723",
-				Channel:     "candidate-v2",
-				Version:     "2.2.1",
-				Template:    clusterextensionTemplate,
+				Name:             "clusterextension-70723",
+				InstallNamespace: ns,
+				PackageName:      "nginx70723",
+				Channel:          "candidate-v2",
+				Version:          "2.2.1",
+				Template:         clusterextensionTemplate,
 			}
 		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("1) Create catalog")
 		defer catalog.Delete(oc)
 		catalog.Create(oc)
@@ -608,7 +639,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"version":"2.0.0"}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
-			if !strings.Contains(message, "constraints not satisfiable") {
+			if !strings.Contains(message, "error upgrading") {
 				e2e.Logf("message is %s", message)
 				return false, nil
 			}

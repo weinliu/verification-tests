@@ -8,12 +8,14 @@ objects:
   metadata:
     name: "${NAME}"
   spec:
+    installNamespace: "${INSTALLNAMESPACE}"
     packageName: "${PACKAGE}"
     channel: "${CHANNEL}"
     version: "${VERSION}"
     upgradeConstraintPolicy: "${POLICY}"
 parameters:
 - name: NAME
+- name: INSTALLNAMESPACE
 - name: PACKAGE
 - name: CHANNEL
 - name: VERSION

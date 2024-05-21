@@ -8,7 +8,9 @@ objects:
   metadata:
     name: "${NAME}"
   spec:
+    installNamespace: "${INSTALLNAMESPACE}"
     packageName: "${PACKAGE}"
 parameters:
 - name: NAME
+- name: INSTALLNAMESPACE
 - name: PACKAGE
