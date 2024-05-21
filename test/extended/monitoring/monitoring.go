@@ -2080,7 +2080,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		exutil.By("should see error in CMO logs which indicate collectionProfiles is a TechPreview feature")
 		CMOPodName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=cluster-monitoring-operator", "-ojsonpath={.items[].metadata.name}").Output()
-		checkLogsInContainer(oc, "openshift-monitoring", CMOPodName, "cluster-monitoring-operator", "collectionProfiles is a TechPreview feature")
+		checkLogsInContainer(oc, "openshift-monitoring", CMOPodName, "cluster-monitoring-operator", "collectionProfiles is currently a TechPreview feature")
 	})
 
 	//author: tagao@redhat.com
