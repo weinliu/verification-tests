@@ -112,3 +112,52 @@ func mapFromCommaSeparatedKV(list string) map[string]string {
 	}
 	return merged
 }
+
+// GetInstanceTypeByProviderAndArch get intance types for this provider and architecture
+func GetInstanceTypeValuesByProviderAndArch(cloudProvider PlatformType, arch architecture.Architecture) []string {
+	e2e.Logf("Getting instance type by provider and arch ...")
+	instanceTypesMap := map[PlatformType]map[architecture.Architecture][]string{
+		AWS: {
+			architecture.AMD64: {
+				"m5.xlarge",
+				"m6i.xlarge",
+			},
+			architecture.ARM64: {
+				"m6gd.xlarge",
+				"m6g.xlarge",
+			},
+		},
+		GCP: {
+			architecture.AMD64: {
+				"Standard_D4s_v3",
+				"Standard_D8s_v3",
+			},
+			architecture.ARM64: {
+				"t2a-standard-4",
+				"t2a-standard-8",
+			},
+		},
+		Azure: {
+			architecture.AMD64: {
+				"Standard_D4s_v3",
+				"Standard_D8s_v3",
+			},
+			architecture.ARM64: {
+				"Standard_D4ps_v5",
+				"Standard_D8ps_v5",
+			},
+		},
+	}
+	return instanceTypesMap[cloudProvider][arch]
+}
+
+// GetInstanceTypeKeyByProvider get intance type key for this provider
+func GetInstanceTypeKeyByProvider(cloudProvider PlatformType) string {
+	e2e.Logf("Getting instance type key by provider ...")
+	instanceTypeKey := map[PlatformType]string{
+		AWS:   "instanceType",
+		GCP:   "machineType",
+		Azure: "vmSize",
+	}
+	return instanceTypeKey[cloudProvider]
+}

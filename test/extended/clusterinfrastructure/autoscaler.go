@@ -48,6 +48,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			maxCore:   320000,
 			minMemory: 0,
 			maxMemory: 6400000,
+			expander:  Random,
 			template:  clusterAutoscalerTemplate,
 		}
 		workLoad = workLoadDescription{
@@ -621,5 +622,165 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		if strings.Contains(machineSetAnnotations, "machine.openshift.io/GPU") {
 			o.Expect(strings.Contains(machineSetAnnotations, "capacity.cluster-autoscaler.kubernetes.io/gpu-count") && strings.Contains(machineSetAnnotations, "capacity.cluster-autoscaler.kubernetes.io/gpu-type")).To(o.BeTrue())
 		}
+	})
+
+	//author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-73120-[CAO] Cluster autoscaler support least-waste expander option to decide which machineset to expand [Serial][Slow][Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure)
+
+		exutil.By("Create clusterautoscaler")
+		clusterAutoscaler.expander = LeastWaste
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		exutil.By("Create machinesets and machineautoscalers")
+		var machineSetNames []string
+		if architecture.IsMultiArchCluster(oc) {
+			architectures := architecture.GetAvailableArchitecturesSet(oc)
+			for _, arch := range architectures {
+				machinesetName := "machineset-73120-" + arch.String()
+				machineSetNames = append(machineSetNames, machinesetName)
+				machineAutoscaler := machineAutoscalerDescription{
+					name:           machinesetName,
+					namespace:      "openshift-machine-api",
+					maxReplicas:    1,
+					minReplicas:    0,
+					template:       machineAutoscalerTemplate,
+					machineSetName: machinesetName,
+				}
+				g.By("Create machineset")
+				machineSet := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+				defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+				defer machineSet.DeleteMachineSet(oc)
+				machineSet.CreateMachineSetByArch(oc, arch)
+				g.By("Create MachineAutoscaler")
+				defer machineAutoscaler.deleteMachineAutoscaler(oc)
+				machineAutoscaler.createMachineAutoscaler(oc)
+			}
+		} else {
+			machineSetNames = []string{"machineset-73120-1", "machineset-73120-2"}
+			for _, machinesetName := range machineSetNames {
+				ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+				defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+				defer ms.DeleteMachineSet(oc)
+				ms.CreateMachineSet(oc)
+				machineAutoscaler := machineAutoscalerDescription{
+					name:           machinesetName,
+					namespace:      "openshift-machine-api",
+					maxReplicas:    1,
+					minReplicas:    0,
+					template:       machineAutoscalerTemplate,
+					machineSetName: machinesetName,
+				}
+				defer machineAutoscaler.deleteMachineAutoscaler(oc)
+				machineAutoscaler.createMachineAutoscaler(oc)
+			}
+			arch := architecture.ClusterArchitecture(oc)
+			iaasPlatform = clusterinfra.FromString(exutil.CheckPlatform(oc))
+			instanceTypeKey := clusterinfra.GetInstanceTypeKeyByProvider(iaasPlatform)
+			instanceTypeValues := clusterinfra.GetInstanceTypeValuesByProviderAndArch(iaasPlatform, arch)
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machineSetNames[0], "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"`+instanceTypeKey+`":"`+instanceTypeValues[0]+`"}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machineSetNames[0], "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"`+instanceTypeKey+`":"`+instanceTypeValues[1]+`"}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Create workload")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		exutil.By("Check autoscaler scales up based on LeastWaste")
+		autoscalePodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-machine-api", "-l", "cluster-autoscaler=default", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
+			autoscalerLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+autoscalePodName, "-n", "openshift-machine-api").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(autoscalerLog, "Expanding Node Group MachineSet/openshift-machine-api/"+machineSetNames[0]+" would waste") && strings.Contains(autoscalerLog, "Expanding Node Group MachineSet/openshift-machine-api/"+machineSetNames[1]+" would waste") {
+				return true, nil
+			}
+			e2e.Logf("There is no LeastWaste info in autoscaler logs")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "cluster didn't scale up based on LeastWaste")
+		o.Eventually(func() int {
+			return clusterinfra.GetMachineSetReplicas(oc, machineSetNames[0]) * clusterinfra.GetMachineSetReplicas(oc, machineSetNames[1])
+		}, defaultTimeout, defaultTimeout/10).Should(o.Equal(1), "The machinesets should scale up to 1")
+	})
+
+	//author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-73446-[CAO] Cluster autoscaler support priority expander option to decide which machineset to expand [Serial][Slow][Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure)
+
+		exutil.By("Create machinesets and machineautoscalers")
+		var machineSetNames []string
+		if architecture.IsMultiArchCluster(oc) {
+			architectures := architecture.GetAvailableArchitecturesSet(oc)
+			for _, arch := range architectures {
+				machinesetName := "machineset-73446-" + arch.String()
+				machineSetNames = append(machineSetNames, machinesetName)
+				machineAutoscaler := machineAutoscalerDescription{
+					name:           machinesetName,
+					namespace:      "openshift-machine-api",
+					maxReplicas:    1,
+					minReplicas:    0,
+					template:       machineAutoscalerTemplate,
+					machineSetName: machinesetName,
+				}
+				g.By("Create machineset")
+				machineSet := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+				defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+				defer machineSet.DeleteMachineSet(oc)
+				machineSet.CreateMachineSetByArch(oc, arch)
+				g.By("Create MachineAutoscaler")
+				defer machineAutoscaler.deleteMachineAutoscaler(oc)
+				machineAutoscaler.createMachineAutoscaler(oc)
+			}
+		} else {
+			machineSetNames = []string{"machineset-73446-1", "machineset-73446-2"}
+			for _, machinesetName := range machineSetNames {
+				ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+				defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+				defer ms.DeleteMachineSet(oc)
+				ms.CreateMachineSet(oc)
+				machineAutoscaler := machineAutoscalerDescription{
+					name:           machinesetName,
+					namespace:      "openshift-machine-api",
+					maxReplicas:    1,
+					minReplicas:    0,
+					template:       machineAutoscalerTemplate,
+					machineSetName: machinesetName,
+				}
+				defer machineAutoscaler.deleteMachineAutoscaler(oc)
+				machineAutoscaler.createMachineAutoscaler(oc)
+			}
+		}
+
+		exutil.By("Create clusterautoscaler")
+		clusterAutoscaler.expander = Priority
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		exutil.By("Create cluster-autoscaler-priority-expander")
+		priorityExpanderTemplate := filepath.Join(autoscalerBaseDir, "cluster-autoscaler-priority-expander.yaml")
+		priorityExpander := priorityExpanderDescription{
+			p10:       machineSetNames[0],
+			p20:       machineSetNames[1],
+			namespace: "openshift-machine-api",
+			template:  priorityExpanderTemplate,
+		}
+		defer priorityExpander.deletePriorityExpander(oc)
+		priorityExpander.createPriorityExpander(oc)
+
+		exutil.By("Create workload")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		exutil.By("Check autoscaler scales up based on Priority")
+		o.Eventually(func() int {
+			return clusterinfra.GetMachineSetReplicas(oc, machineSetNames[0]) * clusterinfra.GetMachineSetReplicas(oc, machineSetNames[1])
+		}, defaultTimeout, defaultTimeout/10).Should(o.Equal(1), "The machinesets should scale to 1")
+		o.Expect(exutil.CompareMachineCreationTime(oc, machineSetNames[0], machineSetNames[1])).Should(o.Equal(true))
 	})
 })

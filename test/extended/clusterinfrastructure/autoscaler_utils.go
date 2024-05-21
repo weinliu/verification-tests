@@ -11,6 +11,14 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type ExpanderImplementation int
+
+const (
+	Random ExpanderImplementation = iota
+	LeastWaste
+	Priority
+)
+
 type clusterAutoscalerDescription struct {
 	maxNode              int
 	minCore              int
@@ -20,6 +28,7 @@ type clusterAutoscalerDescription struct {
 	utilizationThreshold string
 	template             string
 	logVerbosity         int
+	expander             ExpanderImplementation
 }
 
 type machineAutoscalerDescription struct {
@@ -39,6 +48,13 @@ type workLoadDescription struct {
 	cpu       string
 }
 
+type priorityExpanderDescription struct {
+	template  string
+	namespace string
+	p10       string
+	p20       string
+}
+
 func (clusterAutoscaler *clusterAutoscalerDescription) createClusterAutoscaler(oc *exutil.CLI) {
 	e2e.Logf("Creating clusterautoscaler ...")
 	var err error
@@ -47,7 +63,7 @@ func (clusterAutoscaler *clusterAutoscalerDescription) createClusterAutoscaler(o
 	} else if strings.Contains(clusterAutoscaler.template, "verbose") {
 		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory), "LOGVERBOSITY="+strconv.Itoa(clusterAutoscaler.logVerbosity))
 	} else {
-		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory))
+		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory), "EXPANDER="+clusterAutoscaler.expander.String())
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
@@ -92,4 +108,30 @@ func getWorkLoadCPU(oc *exutil.CLI, machineSetName string) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cpu := cpuFloat * 1000 * 0.6
 	return strconv.FormatFloat(cpu, 'f', -1, 64) + "m"
+}
+
+func (priorityExpander *priorityExpanderDescription) createPriorityExpander(oc *exutil.CLI) {
+	e2e.Logf("Creating clusterAutoscalerPriorityExpander ...")
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", priorityExpander.template, "NAMESPACE="+priorityExpander.namespace, "-p", "P10="+priorityExpander.p10, "P20="+priorityExpander.p20)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (priorityExpander *priorityExpanderDescription) deletePriorityExpander(oc *exutil.CLI) error {
+	e2e.Logf("Deleting clusterAutoscalerPriorityExpander ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("cm", "cluster-autoscaler-priority-expander", "-n", machineAPINamespace).Execute()
+}
+
+// String returns the string value for the given Expander
+func (a ExpanderImplementation) String() string {
+	switch a {
+	case Random:
+		return "Random"
+	case LeastWaste:
+		return "LeastWaste"
+	case Priority:
+		return "Priority"
+	default:
+		e2e.Failf("Unknown expander %d", a)
+	}
+	return ""
 }

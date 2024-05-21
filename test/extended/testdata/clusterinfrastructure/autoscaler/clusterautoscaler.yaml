@@ -8,6 +8,7 @@ objects:
     metadata:
       name: "default"
     spec:
+      expanders: ["${EXPANDER}"]
       resourceLimits:
         maxNodesTotal: ${{MAXNODE}}
         cores:
@@ -28,3 +29,4 @@ parameters:
 - name: MAXCORE
 - name: MINMEMORY
 - name: MAXMEMORY
+- name: EXPANDER
