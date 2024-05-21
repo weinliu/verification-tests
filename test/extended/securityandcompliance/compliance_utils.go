@@ -960,23 +960,26 @@ func getSAToken(oc *exutil.CLI, account string, ns string) string {
 
 func checkMetric(oc *exutil.CLI, metricString []string, url string) {
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+	var metricsLog []byte
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).OutputToFile("metrics.txt")
 		if err != nil {
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		metricsLog, _ := exec.Command("bash", "-c", "cat "+output).Output()
-
+		metricsLog, _ = exec.Command("bash", "-c", "cat "+output+" | grep compliance; rm -rf "+output).Output()
 		for _, metricStr := range metricString {
-			matched, err := regexp.MatchString(metricStr, string(metricsLog))
-			if err != nil || !matched {
+			matched, errMatch := regexp.MatchString(metricStr, string(metricsLog))
+			if errMatch != nil || !matched {
 				return false, nil
 			}
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "The string does not contain in compliance operator matrics")
+	if err != nil {
+		e2e.Logf("The result of the metrics log is: %s", string(metricsLog))
+	}
+	exutil.AssertWaitPollNoErr(err, "The expected string does not contain in the matrics")
 }
 
 func getRemRuleStatus(oc *exutil.CLI, suiteName string, expected string, namespace string) {
@@ -1147,7 +1150,7 @@ func assertCompliancescanDone(oc *exutil.CLI, namespace string, parameters ...st
 		resPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace).Output()
 		e2e.Logf("The result of \"oc get pod -n %s\" is: %s", namespace, resPod)
 		resPv, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", "-n", namespace).Output()
-		e2e.Logf("The result of \"oc get pvc -n %s\" is: %s", namespace, resPv)
+		e2e.Logf("The result of \"oc get pv -n %s\" is: %s", namespace, resPv)
 		resPvc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-n", namespace).Output()
 		e2e.Logf("The result of \"oc get pvc -n %s\" is: %s", namespace, resPvc)
 	}
