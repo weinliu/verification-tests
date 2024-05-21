@@ -3762,3 +3762,11 @@ func getLBSVCIP(oc *exutil.CLI, namespace string, svcName string) string {
 
 	return svcExternalIP
 }
+
+func getNetworkDiagnosticsAvailable(oc *exutil.CLI) string {
+	statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Network.config.openshift.io/cluster", "-o=jsonpath={.status.conditions[?(@.type == \"NetworkDiagnosticsAvailable\")].status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	statusOutput = strings.ToLower(statusOutput)
+	e2e.Logf("NetworkDiagnosticsAvailable status is %s", statusOutput)
+	return statusOutput
+}
