@@ -16,7 +16,7 @@ objects:
           imagePullPolicy: IfNotPresent
           sampling: 1
           cacheActiveTimeout: ${EBPFCacheActiveTimeout}
-          cacheMaxFlows: 100000
+          cacheMaxFlows: ${{CacheMaxFlows}}
           interfaces: [ ]
           excludeInterfaces: ["lo"]
           features: "${{EBPFeatures}}"
@@ -166,6 +166,8 @@ parameters:
     value: "Auto"
   - name: EBPFMetricServerTLSType
     value: "Disabled"
+  - name: CacheMaxFlows
+    value: "100000"
   - name: MultiClusterDeployment
     value: "false"
   - name: AddZone

@@ -42,6 +42,7 @@ type Flowcollector struct {
 	EBPFPrivileged            string
 	EBPFMetrics               string
 	EBPFeatures               []string
+	CacheMaxFlows             string
 	PacketDropEnable          string
 	DNStrackingEnable         string
 	PluginEnable              string

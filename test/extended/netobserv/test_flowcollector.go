@@ -1101,16 +1101,26 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
+		g.By("Ensure flowcollector is ready")
 		flow.waitForFlowcollectorReady(oc)
 
-		// verify configured alerts
-		alertRuleName := "flowlogs-pipeline-alert"
-		rules, err := getConfiguredAlertRules(oc, alertRuleName, namespace)
+		// verify configured alerts for flp
+		g.By("Get FLP Alert name and Alert Rules")
+		FLPAlertRuleName := "flowlogs-pipeline-alert"
+		rules, err := getConfiguredAlertRules(oc, FLPAlertRuleName, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
 		o.Expect(rules).To(o.ContainSubstring("NetObservLokiError"))
 
+		// verify configured alerts for ebpf-agent
+		g.By("Get EBPF Alert name and Alert Rules")
+		ebpfAlertRuleName := "ebpf-agent-prom-alert"
+		ebpfRules, err := getConfiguredAlertRules(oc, ebpfAlertRuleName, namespace+"-privileged")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ebpfRules).To(o.ContainSubstring("NetObservAgentFlowsDropped"))
+
 		// verify disable alerts feature
+		g.By("Verify alerts can be disabled")
 		gen, err := getResourceGeneration(oc, "prometheusRule", "flowlogs-pipeline-alert", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		disableAlertPatchTemp := `[{"op": "$op", "path": "/spec/processor/metrics/disableAlerts", "value": ["NetObservLokiError"]}]`
@@ -1119,8 +1129,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("patched"))
 
-		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, "generation", gen, namespace)
-		rules, err = getConfiguredAlertRules(oc, alertRuleName, namespace)
+		waitForResourceGenerationUpdate(oc, "prometheusRule", FLPAlertRuleName, "generation", gen, namespace)
+		rules, err = getConfiguredAlertRules(oc, FLPAlertRuleName, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
 		o.Expect(rules).ToNot(o.ContainSubstring("NetObservLokiError"))
@@ -1131,25 +1141,32 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "--type=json", "-p", disableAlertPatch).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("patched"))
-		waitForResourceGenerationUpdate(oc, "prometheusRule", alertRuleName, "generation", gen, namespace)
-		rules, err = getConfiguredAlertRules(oc, alertRuleName, namespace)
+		waitForResourceGenerationUpdate(oc, "prometheusRule", FLPAlertRuleName, "generation", gen, namespace)
+		rules, err = getConfiguredAlertRules(oc, FLPAlertRuleName, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(rules).To(o.ContainSubstring("NetObservNoFlows"))
 		o.Expect(rules).To(o.ContainSubstring("NetObservLokiError"))
 
+		g.By("delete flowcollector")
 		flow.deleteFlowcollector(oc)
 
 		// verify alert firing.
 		// configure flowcollector with incorrect loki URL
+		// configure very low CacheMaxFlows to have ebpf alert fired.
 		flow = Flowcollector{
 			Namespace:         namespace,
 			Template:          flowFixturePath,
+			CacheMaxFlows:     "100",
 			LokiMode:          "Monolithic",
 			MonolithicLokiURL: "http://loki.no-ns.svc:3100",
 		}
+		g.By("Deploy flowcollector with incorrect loki URL and lower cacheMaxFlows value")
 		flow.createFlowcollector(oc)
 		flow.waitForFlowcollectorReady(oc)
+
+		g.By("Wait for alerts to be active")
 		waitForAlertToBeActive(oc, "NetObservLokiError")
+		waitForAlertToBeActive(oc, "NetObservAgentFlowsDropped")
 	})
 
 	g.It("NonPreRelease-Author:aramesha-High-64156-Verify IPFIX-exporter [Serial]", func() {
