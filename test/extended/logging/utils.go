@@ -2016,19 +2016,11 @@ func (r resource) createEventRouter(oc *exutil.CLI, parameters ...string) {
 
 // createSecretForGCL creates a secret for collector pods to forward logs to Google Cloud Logging
 func createSecretForGCL(oc *exutil.CLI, name, namespace string) error {
-	// for GCP STS clusters, get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
-	_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "gcp-credentials", metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-		return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=google-application-credentials.json="+gcsCred).Execute()
-	}
-	dirname := "/tmp/" + oc.Namespace() + "-creds"
-	defer os.RemoveAll(dirname)
-	err = os.MkdirAll(dirname, 0777)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-credentials", "-n", "kube-system", "--confirm", "--to="+dirname).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=google-application-credentials.json="+dirname+"/service_account.json").Execute()
+	// get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
+
+	gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=google-application-credentials.json="+gcsCred).Execute()
+
 }
 
 type googleCloudLogging struct {

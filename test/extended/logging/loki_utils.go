@@ -500,21 +500,10 @@ func createSecretForGCSBucket(oc *exutil.CLI, bucketName, secretName, ns string)
 	if len(secretName) == 0 {
 		return fmt.Errorf("secret name shouldn't be empty")
 	}
-	dirname := "/tmp/" + oc.Namespace() + "-creds"
-	defer os.RemoveAll(dirname)
-	err := os.MkdirAll(dirname, 0777)
-	o.Expect(err).NotTo(o.HaveOccurred())
 
-	// for GCP STS clusters, get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
-	// TODO: support using STS token to create the secret
-	_, err = oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "gcp-credentials", metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-		return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", ns, "--from-literal=bucketname="+bucketName, "--from-file=key.json="+gcsCred).Execute()
-	}
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-credentials", "-n", "kube-system", "--confirm", "--to="+dirname).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", ns, "--from-literal=bucketname="+bucketName, "--from-file=key.json="+dirname+"/service_account.json").Execute()
+	//get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
+	gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", ns, "--from-literal=bucketname="+bucketName, "--from-file=key.json="+gcsCred).Execute()
 }
 
 // creates a secret for Loki to connect to azure container
