@@ -129,14 +129,13 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		exutil.By("Add label as infra to the existing node")
 		infraLabel := "node-role.kubernetes.io/infra"
-		labelOutput, err := workerNode.AddLabel(infraLabel, "")
+		err := workerNode.AddLabel(infraLabel, "")
 		defer func() {
 			// ignore output, just focus on error handling, if error is occurred, fail this case
 			_, deletefailure := workerNode.DeleteLabel(infraLabel)
 			o.Expect(deletefailure).NotTo(o.HaveOccurred())
 		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(labelOutput).Should(o.ContainSubstring(workerNode.name))
 		nodeLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes/" + workerNode.name).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(nodeLabel).Should(o.ContainSubstring("infra"))
@@ -4404,7 +4403,7 @@ desiredState:
 		o.Expect(specErr).NotTo(o.HaveOccurred())
 		logger.Infof("%s %s \n", wSpecConf, mSpecConf)
 
-		//sort mcList by time and get rendered machine config
+		// sort mcList by time and get rendered machine config
 		mcList.SortByTimestamp()
 		sortedRenderedMCs := mcList.GetMCPRenderedMachineConfigsOrFail()
 		logger.Infof(" %s", sortedRenderedMCs)
@@ -4427,7 +4426,7 @@ desiredState:
 		}
 		logger.Infof("OK!\n")
 
-		//2 To check for `oc adm prune renderedmachineconfigs --count=1 --pool-name master` cmd
+		// 2 To check for `oc adm prune renderedmachineconfigs --count=1 --pool-name master` cmd
 		exutil.By("To get the rendered machineconfigs based on count and MCP name")
 		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--count=1", "--pool-name", "master").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config for pool")
@@ -4443,7 +4442,7 @@ desiredState:
 		o.Expect(NewSortedRenderedMCMaster).To(o.Equal(sortedMCListMaster), "The dry run deleted rendered MC is removed but should exist.")
 		logger.Infof("OK!\n")
 
-		//3 To check for 'oc adm prune renderedmachineconfigs list' cmd
+		// 3 To check for 'oc adm prune renderedmachineconfigs list' cmd
 		exutil.By("Get the rendered machineconfigs list")
 		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "list").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
@@ -4458,7 +4457,7 @@ desiredState:
 		}
 		logger.Infof("OK!\n")
 
-		//4  To check for 'oc adm prune renderedmachineconfigs list --in-use --pool-name master' cmd
+		// 4  To check for 'oc adm prune renderedmachineconfigs list --in-use --pool-name master' cmd
 		exutil.By("To get the in use rendered machineconfigs  for each MCP")
 		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "list", "--in-use", "--pool-name", "master").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
@@ -4472,7 +4471,7 @@ desiredState:
 		logger.Infof("%s", pruneMCOutput)
 		logger.Infof("OK!\n")
 
-		//5 To check for `oc adm prune renderedmachineconfigs --count=1 --pool-name master --confirm` cmd
+		// 5 To check for `oc adm prune renderedmachineconfigs --count=1 --pool-name master --confirm` cmd
 		exutil.By("To delete the  rendered machineconfigs based on count and MCP name")
 		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--count=1", "--pool-name", "master", "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
@@ -4492,7 +4491,7 @@ desiredState:
 
 		logger.Infof("OK!\n")
 
-		//6 To check for `oc adm prune renderedmachineconfigs --confirm` cmd
+		// 6 To check for `oc adm prune renderedmachineconfigs --confirm` cmd
 		sortedRenderedMCs = mcList.GetMCPRenderedMachineConfigsOrFail() // Get the current list of rendered machine configs
 		exutil.By("To delete the  rendered machineconfigs based on count and MCP name")
 		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--confirm").Output()

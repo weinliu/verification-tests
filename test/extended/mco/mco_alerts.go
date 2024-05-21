@@ -200,7 +200,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 			_, deletefailure := masterNode.DeleteLabel(infraLabel)
 			o.Expect(deletefailure).NotTo(o.HaveOccurred())
 		}()
-		_, err = masterNode.AddLabel(infraLabel, "")
+		err = masterNode.AddLabel(infraLabel, "")
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Could not add the label %s to node %s", infraLabel, masterNode)
 		logger.Infof("OK!\n")

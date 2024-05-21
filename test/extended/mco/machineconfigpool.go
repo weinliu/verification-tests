@@ -1292,7 +1292,7 @@ func CreateCustomMCPByNodes(oc *exutil.CLI, name string, nodes []Node) (*Machine
 	customMcp := NewMachineConfigPool(oc, name)
 
 	for _, n := range nodes {
-		_, err := n.AddLabel(fmt.Sprintf("node-role.kubernetes.io/%s", name), "")
+		err := n.AddLabel(fmt.Sprintf("node-role.kubernetes.io/%s", name), "")
 		if err != nil {
 			logger.Infof("Error labeling node %s to add it to pool %s", n.GetName(), customMcp.GetName())
 		}

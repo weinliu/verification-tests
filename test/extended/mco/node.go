@@ -133,12 +133,6 @@ func (n *Node) DebugNode(cmd ...string) (string, error) {
 	return exutil.DebugNode(n.oc, n.name, cmd...)
 }
 
-// AddLabel add the given label to the node
-func (n *Node) AddLabel(label, value string) (string, error) {
-	return exutil.AddLabelToNode(n.oc, n.name, label, value)
-
-}
-
 // DeleteLabel removes the given label from the node
 func (n *Node) DeleteLabel(label string) (string, error) {
 	logger.Infof("Delete label %s from node %s", label, n.GetName())

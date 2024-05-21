@@ -381,6 +381,68 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			"The machineset should be fixed by MCC and use the coreos boot image configured in the coreos-bootimage configmap. %s", machineSet.PrettyString())
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73636-Pinned images in scaled nodes [Disruptive]", func() {
+		// The pinnedimageset feature is currently only supported in techpreview
+		skipIfNoTechPreview(oc.AsAdmin())
+
+		var (
+			waitForPinned      = time.Minute * 5
+			initialNumWorkers  = len(wMcp.GetNodesOrFail())
+			numNewNodes        = 3
+			pinnedImageSetName = "tc-73636-pinned-images-scale"
+			pinnedImageName    = BusyBoxImage
+		)
+
+		exutil.By("Pin images")
+		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, wMcp.GetName(), []string{pinnedImageName})
+		defer pis.DeleteAndWait(waitForPinned)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the pool is reporting the right pinnedimageset status")
+		o.Expect(wMcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", wMcp)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the image was pinned in all nodes")
+		for _, node := range wMcp.GetNodesOrFail() {
+			rmi := NewRemoteImage(node, pinnedImageName)
+			o.Expect(rmi.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", rmi)
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Scale up a machineset")
+		allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+		ms := allMs[0]
+
+		initialNumMsNodes := len(ms.GetNodesOrFail())
+
+		logger.Infof("Scaling up machineset %s by %d", ms.GetName(), numNewNodes)
+		defer func() { _ = ms.ScaleTo(initialNumMsNodes) }()
+		o.Expect(ms.ScaleTo(initialNumMsNodes+numNewNodes)).NotTo(
+			o.HaveOccurred(),
+			"Error scaling up MachineSet %s", ms.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that worker pool is increased and updated")
+		o.Eventually(wMcp.GetNodesOrFail, "5m", "30s").Should(o.HaveLen(initialNumWorkers+numNewNodes),
+			"The worker pool has not added the new nodes created by the new Machineset.\n%s", wMcp.PrettyString())
+		wMcp.waitForComplete()
+		logger.Infof("All nodes are up and ready!")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the pool is reporting the right pinnedimageset status")
+		o.Expect(wMcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", wMcp)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the image was pinned in all nodes")
+		for _, node := range wMcp.GetNodesOrFail() {
+			rmi := NewRemoteImage(node, pinnedImageName)
+			o.Expect(rmi.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", rmi)
+		}
+		logger.Infof("OK!\n")
+	})
 })
 
 func cloneMachineSet(oc *exutil.CLI, newMsName, imageVersion, ignitionVersion string) *MachineSet {

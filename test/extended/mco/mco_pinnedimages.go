@@ -35,16 +35,221 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		preChecks(oc)
 	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73659-Pinned images when disk-pressure [Disruptive]", func() {
+		var (
+			waitForPinned                        = time.Minute * 5
+			pinnedImageSetName                   = "tc-73659-pin-images-disk-pressure"
+			pinnedImageName                      = BusyBoxImage
+			allNodes                             = mcp.GetNodesOrFail()
+			node                                 = allNodes[0]
+			cleanFileTimedService                = generateTemplateAbsolutePath("tc-73659-clean-file-timed.service")
+			cleanFileTimedServiceDestinationPath = "/etc/systemd/system/tc-73659-clean-file-timed.service"
+		)
+
+		exutil.By("Get disk usage in node")
+		diskUsage, err := node.GetFileSystemSpaceUsage("/var/lib/containers/storage/")
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Cannot get the disk usage in node %s", node.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Create a timed service that will restore the original disk usage after 5 minutes")
+		logger.Infof("Copy the service in the node")
+		defer node.DebugNodeWithChroot("rm", cleanFileTimedServiceDestinationPath)
+		o.Expect(node.CopyFromLocal(cleanFileTimedService, cleanFileTimedServiceDestinationPath)).
+			NotTo(o.HaveOccurred(),
+				"Error copying  %s to %s in node %s", cleanFileTimedService, cleanFileTimedServiceDestinationPath, node.GetName())
+		// We create transient timer that will execute the sercive, this service will restore the disk usage to its original usage
+		logger.Infof("Create a transient timer to execute the service after 5 mintues")
+		// If an error happens, the transient timer will not be deleted unless we execute this command
+		defer node.DebugNodeWithChroot("systemctl", "reset-failed", "tc-73659-clean-file-timed.service")
+		defer node.DebugNodeWithChroot("systemctl", "stop", "tc-73659-clean-file-timed.service")
+		_, err = node.DebugNodeWithChroot("systemd-run", `--on-active=5minutes`, `--unit=tc-73659-clean-file-timed.service`)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the transient timer")
+		logger.Infof("OK!\n")
+
+		exutil.By("Create a huge file so that the node reports disk pressure. Use about 90 per cent of the free space in the disk")
+		fileSize := ((diskUsage.Avail + diskUsage.Used) * 9 / 10) - diskUsage.Used // calculate the file size to use a 90% of the disk space
+		o.Expect(fileSize).To(o.And(
+			o.BeNumerically("<", diskUsage.Avail),
+			o.BeNumerically(">", 0)),
+			"Error not enough space on device to execute this test. Available: %d, Used %d", diskUsage.Avail, diskUsage.Used)
+		_, err = node.DebugNodeWithChroot("fallocate", "-l", fmt.Sprintf("%d", fileSize), "/var/lib/containers/storage/tc-73659-huge-test-file.file")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a file to trigger disk pressure")
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for disk pressure to be reported")
+		// It makes no sense to wait longer than the 5 minutes time out that we use to fix the disk usage.
+		// If we need to increse this timeout, we need to increase the transiente timer too
+		o.Eventually(&node, "5m", "20s").Should(HaveConditionField("DiskPressure", "status", TrueString),
+			"Node is not reporting DiskPressure, but it should.\n%s", node.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Pin images")
+		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{pinnedImageName})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		defer pis.DeleteAndWait(waitForPinned)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check the degraded status")
+		logger.Infof("Check that the node with disk pressure is reporting pinnedimagesetdegraded status")
+		mcn := node.GetMachineConfigNode()
+		o.Eventually(mcn, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "status", TrueString),
+			"MachineConfigNode was not degraded.\n%s\n%s", mcn.PrettyString(), node.PrettyString())
+		o.Eventually(mcn, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "reason", "PrefetchFailed"),
+			"MachineConfigNode was not degraded with the expected reason.\n%s\n%s", mcn.PrettyString(), node.PrettyString())
+		o.Eventually(mcn, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "message", `node `+node.GetName()+` is reporting OutOfDisk=True`),
+			"MachineConfigNode was not degraded with the expected message.\n%s\n%s", mcn.PrettyString(), node.PrettyString())
+		logger.Infof("Check that the rest of the nodes could pin the image and are not degraded")
+		for _, n := range allNodes {
+			if n.GetName() != node.GetName() {
+				logger.Infof("Checking node %s", n.GetName())
+				o.Eventually(n.GetMachineConfigNode, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "status", FalseString),
+					"MachineConfigNode was degraded.\n%s\n%s", node.GetMachineConfigNode().PrettyString(), node.PrettyString())
+				rmi := NewRemoteImage(n, pinnedImageName)
+				o.Eventually(rmi.IsPinned, "5m", "20s").Should(o.BeTrue(), "%s should be pinned but it is not", rmi)
+			}
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for disk pressure to be fixed") // It should be fixed by the timed service that was created before
+		o.Eventually(&node, "20m", "20s").Should(HaveConditionField("DiskPressure", "status", FalseString),
+			"Node is reporting DiskPressure, but it should not.\n%s", node.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the degraded status was fixed")
+		o.Eventually(mcn, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "status", FalseString),
+			"MachineConfigNode was not degraded.\n%s\n%s", mcn.PrettyString(), node.PrettyString())
+		o.Eventually(NewRemoteImage(node, pinnedImageName).IsPinned, "2m", "20s").Should(o.BeTrue(),
+			"The degraded status was fixed, but the image was not pinned")
+		logger.Infof("OK!\n")
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-73623-Pin images [Disruptive]", func() {
+		var (
+			waitForPinned      = time.Minute * 5
+			pinnedImageSetName = "tc-73623-pin-images"
+			node               = mcp.GetNodesOrFail()[0]
+			firstPinnedImage   = NewRemoteImage(node, BusyBoxImage)
+			secondPinnedImage  = NewRemoteImage(node, AlpineImage)
+		)
+
+		exutil.By("Remove images")
+		_ = firstPinnedImage.Rmi()
+		_ = secondPinnedImage.Rmi()
+		logger.Infof("OK!\n")
+
+		exutil.By("Pin images")
+		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{firstPinnedImage.ImageName, secondPinnedImage.ImageName})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		defer pis.DeleteAndWait(waitForPinned)
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for all images to be pinned")
+		o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the images are pinned")
+		o.Expect(firstPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", firstPinnedImage)
+		o.Expect(secondPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", secondPinnedImage)
+		logger.Infof("OK!\n")
+
+		exutil.By("Patch the pinnedimageset and remove one image")
+		o.Expect(
+			pis.Patch("json", fmt.Sprintf(`[{"op": "replace", "path": "/spec/pinnedImages", "value": [{"name": "%s"}]}]`, firstPinnedImage.ImageName)),
+		).To(o.Succeed(),
+			"Error patching %s to remove one image")
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for the pinnedimageset changes to be applied")
+		o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that only the image reamaining in the pinnedimageset is pinned")
+		o.Expect(firstPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", firstPinnedImage)
+		o.Expect(secondPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", secondPinnedImage)
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the pinnedimageset")
+		o.Expect(pis.Delete()).To(o.Succeed(), "Error removing %s", pis)
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for the pinnedimageset removal to be applied")
+		o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that only the image reamaining in the pinnedimageset is pinned")
+		o.Expect(firstPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", firstPinnedImage)
+		o.Expect(secondPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", secondPinnedImage)
+		logger.Infof("OK!\n")
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73653-Pinned images with a ImageDigestMirrorSet mirroring a single repository [Disruptive]", func() {
+		var (
+			idmsName    = "tc-73653-mirror-single-repository"
+			idmsMirrors = `[{"mirrors":["quay.io/openshifttest/busybox"], "source": "example-repo.io/digest-example/mybusy", "mirrorSourcePolicy":"NeverContactSource"}]`
+			// actually  quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f but using our configured mirror instead
+			pinnedImage        = strings.Replace(BusyBoxImage, "quay.io/openshifttest/busybox", "example-repo.io/digest-example/mybusy", 1)
+			pinnedImageSetName = "tc-73653-mirror-single-repository"
+		)
+
+		DigestMirrorTest(oc, mcp, idmsName, idmsMirrors, pinnedImage, pinnedImageSetName)
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73657-Pinned images with a ImageDigestMirrorSet mirroring a domain [Disruptive]", func() {
+		var (
+			idmsName    = "tc-73657-mirror-domain"
+			idmsMirrors = `[{"mirrors":["quay.io:443"], "source": "example-domain.io:443", "mirrorSourcePolicy":"NeverContactSource"}]`
+			// actually  quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f but using our configured mirror instead
+			pinnedImage        = strings.Replace(BusyBoxImage, "quay.io", "example-domain.io:443", 1)
+			pinnedImageSetName = "tc-73657-mirror-domain"
+		)
+
+		DigestMirrorTest(oc, mcp, idmsName, idmsMirrors, pinnedImage, pinnedImageSetName)
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73361-Pinnedimageset invalid pinned images [Disruptive]", func() {
+		var (
+			invalidPinnedImage = "quay.io/openshiftfake/fakeimage@sha256:0415f56ccc05526f2af5a7ae8654baec97d4a614f24736e8eef41a4591f08019"
+			pinnedImageSetName = "tc-73361-invalid-pinned-image"
+			waitForPinned      = 10 * time.Minute
+		)
+
+		exutil.By("Pin invalid image")
+		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{invalidPinnedImage})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		defer pis.DeleteAndWait(waitForPinned)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that MCNs are PinnedImageSetDegraded")
+		for _, node := range mcp.GetNodesOrFail() {
+			mcn := node.GetMachineConfigNode()
+			o.Eventually(mcn, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "status", TrueString))
+			o.Eventually(mcn, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "reason", "PrefetchFailed"))
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the pinnedimageset")
+		o.Expect(pis.Delete()).To(o.Succeed(), "Error removing %s", pis)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that MCNs are not PinnedImageSetDegraded anymore")
+		for _, node := range mcp.GetNodesOrFail() {
+			mcn := node.GetMachineConfigNode()
+			o.Eventually(mcn, "2m", "20s").Should(HaveConditionField("PinnedImageSetsDegraded", "status", FalseString))
+		}
+		logger.Infof("OK!\n")
+	})
+
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73631-Pinned images garbage collection [Disruptive]", func() {
 		var (
 			waitForPinned       = time.Minute * 5
 			pinnedImageSetName  = "tc-73631-pinned-images-garbage-collector"
-			gcKubeletConfig     = `{"imageMinimumGCAge": "2m", "imageGCHighThresholdPercent": 2, "imageGCLowThresholdPercent": 1}`
+			gcKubeletConfig     = `{"imageMinimumGCAge": "1m", "imageGCHighThresholdPercent": 2, "imageGCLowThresholdPercent": 1}`
 			kcTemplate          = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
 			kcName              = "tc-73631-pinned-garbage-collector"
 			node                = mcp.GetNodesOrFail()[0]
-			pinnedImage         = NewRemoteImage(node, "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f")
-			manuallyPulledImage = NewRemoteImage(node, "quay.io/openshifttest/alpine@sha256:dc1536cbff0ba235d4219462aeccd4caceab9def96ae8064257d049166890083")
+			pinnedImage         = NewRemoteImage(node, BusyBoxImage)
+			manuallyPulledImage = NewRemoteImage(node, AlpineImage)
 		)
 
 		exutil.By("Remove the test images")
@@ -65,8 +270,8 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		logger.Infof("Pin image")
 		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{pinnedImage.ImageName})
-		defer pis.DeleteAndWait(waitForPinned)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		defer pis.DeleteAndWait(waitForPinned)
 		logger.Infof("OK!\n")
 
 		exutil.By("Wait for all images to be pinned")
@@ -107,7 +312,10 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 			waitForPinned      = time.Minute * 5
 			pinnedImageSetName = "tc-73635-pinned-images-no-registry"
 			// We pin the current release's tools image
-			pinnedImage = getCurrentReleaseInfoImageSpecOrFail(oc.AsAdmin(), "tools")
+			// if we cannot get the "tools" image it means we are in a disconnected cluster
+			// and in disconnected clusters openshifttest images are mirrored and need the credentials for the mirror too
+			// so if we cannot get the "tools" image we can use the "busybox" one.
+			pinnedImage = getCurrentReleaseInfoImageSpecOrDefault(oc.AsAdmin(), "tools", BusyBoxImage)
 			allNodes    = mcp.GetNodesOrFail()
 			pullSecret  = GetPullSecret(oc.AsAdmin())
 
@@ -121,10 +329,6 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		exutil.By("Remove the image from all nodes in the pool")
 		for _, node := range allNodes {
-			if node.HasTaintEffectOrFail("NoExecute") {
-				logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
-				continue
-			}
 			// We ignore errors, since the image can be present or not in the nodes
 			_ = NewRemoteImage(node, pinnedImage).Rmi()
 		}
@@ -132,8 +336,8 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		exutil.By("Create pinnedimageset")
 		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{pinnedImage})
-		defer pis.DeleteAndWait(waitForPinned)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		defer pis.DeleteAndWait(waitForPinned)
 		logger.Infof("OK!\n")
 
 		exutil.By("Wait for all images to be pinned")
@@ -142,10 +346,6 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		exutil.By("Check that the image was pinned in all nodes in the pool")
 		for _, node := range allNodes {
-			if node.HasTaintEffectOrFail("NoExecute") {
-				logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
-				continue
-			}
 			ri := NewRemoteImage(node, pinnedImage)
 			logger.Infof("Checking %s", ri)
 			o.Expect(ri.IsPinned()).To(o.BeTrue(),
@@ -179,10 +379,6 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		exutil.By("Check that the image is pinned")
 		for _, node := range allNodes {
-			if node.HasTaintEffectOrFail("NoExecute") {
-				logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
-				continue
-			}
 			logger.Infof("Checking node %s", node.GetName())
 			ri := NewRemoteImage(node, pinnedImage)
 			o.Expect(ri.IsPinned()).To(o.BeTrue(),
@@ -239,8 +435,8 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		exutil.By("Create pinnedimageset to pin all pullSpec images")
 		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), pinnedImages)
-		defer pis.DeleteAndWait(waitForPinned)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		defer pis.DeleteAndWait(waitForPinned)
 		logger.Infof("OK!\n")
 
 		exutil.By("Wait for all images to be pinned")
@@ -291,18 +487,85 @@ func skipIfDiskSpaceLessThanBytes(node Node, path string, minNumBytes int64) {
 
 }
 
-func getCurrentReleaseInfoImageSpecOrFail(oc *exutil.CLI, imageName string) string {
+// getCurrentReleaseInfoImageSpecOrDefault returns the image spec for the given image in the release. If there is any error, it returns the given default image
+// In disconnected clusters the release image is mirrored. Unfortunately, "oc adm release info" command does not take /etc/containers/registries.conf mirrors into account,
+// hence in disconnected clusters we cannot get the release image specs unless we apply the mirror manually.
+// TODO: When the "oc adm release info" command spec fails:
+// 1. parse the output to get the release image name
+// 2. search in all imagecontentsourcepolicies and all imagedigestimirrorsets if there is any mirror for the release image (it should)
+// 3. use the mirror manually to get the image specs
+func getCurrentReleaseInfoImageSpecOrDefault(oc *exutil.CLI, imageName, defaultImageName string) string {
+	image, err := getCurrentReleaseInfoImageSpec(oc, imageName)
+	if err != nil {
+		return defaultImageName
+	}
+	return image
+}
+
+// getCurrentReleaseInfoImageSpec returns the image spec for the given image in the release
+func getCurrentReleaseInfoImageSpec(oc *exutil.CLI, imageName string) (string, error) {
 	mMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
-	master := mMcp.GetNodesOrFail()[0]
+	allNodes, err := mMcp.GetNodes()
+	if err != nil {
+		return "", err
+	}
+	master := allNodes[0]
 
 	remoteAdminKubeConfig := fmt.Sprintf("/root/remoteKubeConfig-%s", exutil.GetRandomString())
 	adminKubeConfig := exutil.KubeConfigPath()
 
 	defer master.RemoveFile(remoteAdminKubeConfig)
-	o.Expect(master.CopyFromLocal(adminKubeConfig, remoteAdminKubeConfig)).To(o.Succeed(),
-		"Error copying kubeconfig file to master node")
+	err = master.CopyFromLocal(adminKubeConfig, remoteAdminKubeConfig)
+	if err != nil {
+		return "", err
+	}
 
 	stdout, _, err := master.DebugNodeWithChrootStd("oc", "adm", "release", "info", "--image-for", imageName, "--registry-config", "/var/lib/kubelet/config.json", "--kubeconfig", remoteAdminKubeConfig)
-	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting image release pull specs")
-	return stdout
+	if err != nil {
+		return "", err
+	}
+	return stdout, nil
+}
+
+// DigestMirrorTest generic instructions for DigestImageMirrorSet tests
+func DigestMirrorTest(oc *exutil.CLI, mcp *MachineConfigPool, idmsName, idmsMirrors, pinnedImage, pinnedImageSetName string) {
+	var (
+		allNodes      = mcp.GetNodesOrFail()
+		waitForPinned = 10 * time.Minute
+	)
+
+	exutil.By("Remove the image from all nodes in the pool")
+	for _, node := range allNodes {
+		// We ignore errors, since the image can be present or not in the nodes
+		_ = NewRemoteImage(node, pinnedImage).Rmi()
+	}
+	logger.Infof("OK!\n")
+
+	exutil.By("Create new machine config to deploy a ImageDigestMirrorSet configuring a mirror registry")
+	idms := NewImageDigestMirrorSet(oc.AsAdmin(), idmsName, *NewMCOTemplate(oc, "add-image-digest-mirror-set.yaml"))
+	defer mcp.waitForComplete()
+	defer idms.Delete()
+
+	idms.Create("-p", "NAME="+idmsName, "IMAGEDIGESTMIRRORS="+idmsMirrors)
+	mcp.waitForComplete()
+	logger.Infof("OK!\n")
+
+	exutil.By("Pin the mirrored image")
+	pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{pinnedImage})
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+	defer pis.DeleteAndWait(waitForPinned)
+	logger.Infof("OK!\n")
+
+	exutil.By("Wait for all images to be pinned")
+	o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that the image is pinned")
+	for _, node := range allNodes {
+		ri := NewRemoteImage(node, pinnedImage)
+		logger.Infof("Checking %s", ri)
+		o.Expect(ri.IsPinned()).To(o.BeTrue(),
+			"%s is not pinned, but it should. %s")
+	}
+	logger.Infof("OK!\n")
 }

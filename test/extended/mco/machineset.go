@@ -183,6 +183,13 @@ func (ms MachineSet) GetNodes() ([]*Node, error) {
 	return nodes, nil
 }
 
+// GetNodesOrFail returns a slice with all nodes that have been created for this MachineSet and fails the test if any error happens
+func (ms MachineSet) GetNodesOrFail() []*Node {
+	nodes, err := ms.GetNodes()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting the nodes that belong to %s", ms)
+	return nodes
+}
+
 // WaitUntilReady waits until the MachineSet reports a Ready status
 func (ms MachineSet) WaitUntilReady(duration string) error {
 	pDuration, err := time.ParseDuration(duration)

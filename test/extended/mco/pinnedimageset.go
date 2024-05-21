@@ -56,15 +56,21 @@ func CreateGenericPinnedImageSet(oc *exutil.CLI, name, pool string, images []str
 	return newPIS, nil
 }
 
-// GetPoolsOrFail returns the pools where this PinnedImageSet will be applied
-func (pis PinnedImageSet) GetPoolsOrFail() []MachineConfigPool {
+// GetPools returns the pools where this PinnedImageSet will be applied
+func (pis PinnedImageSet) GetPools() ([]MachineConfigPool, error) {
 
 	returnPools := []MachineConfigPool{}
+	pools, err := NewMachineConfigPoolList(pis.GetOC()).GetAll()
+	if err != nil {
+		return nil, err
+	}
 
-	for _, item := range NewMachineConfigPoolList(pis.GetOC()).GetAllOrFail() {
+	for _, item := range pools {
 		pool := item
 		ps, err := pool.GetPinnedImageSets()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting pinnedimagesets that apply to %s", pool)
+		if err != nil {
+			return nil, err
+		}
 		for _, p := range ps {
 			if p.GetName() == pis.GetName() {
 				returnPools = append(returnPools, pool)
@@ -73,7 +79,7 @@ func (pis PinnedImageSet) GetPoolsOrFail() []MachineConfigPool {
 		}
 	}
 
-	return returnPools
+	return returnPools, nil
 }
 
 func (pis PinnedImageSet) DeleteAndWait(waitingTime time.Duration) error {
@@ -86,7 +92,12 @@ func (pis PinnedImageSet) DeleteAndWait(waitingTime time.Duration) error {
 		return err
 	}
 
-	for _, pool := range pis.GetPoolsOrFail() {
+	pools, err := pis.GetPools()
+	if err != nil {
+		return err
+	}
+
+	for _, pool := range pools {
 		err := pool.waitForPinComplete(waitingTime)
 		if err != nil {
 			return err

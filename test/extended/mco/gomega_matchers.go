@@ -27,6 +27,7 @@ func (matcher *conditionMatcher) Match(actual interface{}) (success bool, err er
 	// Check that the checked valued is a Resource
 	resource, ok := actual.(ResourceInterface)
 	if !ok {
+		logger.Errorf("Wrong type. Matcher expects a type implementing 'ResourceInterface'")
 		return false, fmt.Errorf(`Wrong type. Matcher expects a type "Resource" in test case %v`, g.CurrentSpecReport().FullText())
 	}
 
