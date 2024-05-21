@@ -30,7 +30,7 @@ data:
         limits:
           cpu: 20m
           memory: 100Mi
-    k8sPrometheusAdapter:
+    metricsServer:
       resources:
         requests:
           cpu: 2m

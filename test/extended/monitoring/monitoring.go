@@ -163,22 +163,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
-	// author: juzhao@redhat.com
-	g.It("Author:juzhao-Medium-45271-Allow OpenShift users to configure audit logs for prometheus-adapter", func() {
-		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("prometheus-adapter Pods: %v", podList)
-
-		exutil.By("check the audit logs")
-		for _, pod := range podList {
-			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
-			output, err := exutil.RemoteShContainer(oc, "openshift-monitoring", pod, "prometheus-adapter", "cat", "/var/log/adapter/audit.log")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(output, `"level":"Request"`)).To(o.BeTrue(), "level Request is not in audit.log")
-		}
-	})
-
 	//author: tagao@redhat.com
 	g.It("Author:tagao-Medium-48432-Allow OpenShift users to configure request logging for Thanos Querier query endpoint", func() {
 		exutil.By("check thanos-querier pods are normal and able to see the request.logging-config setting")
@@ -235,9 +219,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(podStatus).To(o.ContainSubstring("Completed"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("check prometheus-adapter pod logs")
+		exutil.By("check metrics-server pod logs")
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-		output, logsErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=prometheus-adapter", "-c", "prometheus-adapter", "--tail=-1", "-n", "openshift-monitoring").Output()
+		output, logsErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=metrics-server", "-c", "metrics-server", "--tail=-1", "-n", "openshift-monitoring").Output()
 		o.Expect(logsErr).NotTo(o.HaveOccurred())
 		if strings.Contains(output, "unable to fetch CPU metrics for pod openshift-kube-scheduler/") {
 			e2e.Logf("output result in logs:\n%s", output)
@@ -474,21 +458,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: tagao@redhat.com
-	g.It("Author:tagao-Medium-66860-add startup probe for prometheus-adapter", func() {
-		exutil.By("check startupProbe config in prometheus-adapter deployment")
-		// % oc -n openshift-monitoring get deploy prometheus-adapter -ojsonpath='{.spec.template.spec.containers[?(@.name=="prometheus-adapter")].startupProbe}'
-		output, deployErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].startupProbe}", "-n", "openshift-monitoring").Output()
-		o.Expect(deployErr).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring(`{"failureThreshold":18,"httpGet":{"path":"/livez","port":"https","scheme":"HTTPS"},"periodSeconds":10,"successThreshold":1,"timeoutSeconds":1}`))
-
-		exutil.By("check prometheus-adapter pod logs, should not see crashlooping logs")
-		// % oc -n openshift-monitoring logs -l app.kubernetes.io/name=prometheus-adapter -c prometheus-adapter --tail=-1
-		output, logsErr := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-l", "app.kubernetes.io/name=prometheus-adapter", "-c", "prometheus-adapter", "--tail=-1", "-n", "openshift-monitoring").Output()
-		o.Expect(logsErr).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(output, "Shutting down controller")).NotTo(o.BeTrue())
-	})
-
-	// author: tagao@redhat.com
 	g.It("Author:tagao-Low-67008-node-exporter: disable btrfs collector", func() {
 		exutil.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
@@ -513,23 +482,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		gomaxprocsNum, _ := strconv.Atoi(string(gomaxprocsValue))
 		o.Expect(gomaxprocsNum).To(o.BeNumerically("<=", 4))
 		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	// author: tagao@redhat.com
-	g.It("Author:tagao-Low-68401-prometheus-adapter removed --logtostderr", func() {
-		exutil.By("check prometheus-adapter deployment under openshift-monitoring")
-		cmd := "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].args}"
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", cmd, "-n", "openshift-monitoring").Output()
-		o.Expect(output).NotTo(o.ContainSubstring("--logtostderr"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("check the same config in pod")
-		prometheusAdapterPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, pod := range prometheusAdapterPodNames {
-			cmd := "-ojsonpath={.spec.containers[?(@.name==\"prometheus-adapter\")].args}"
-			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, "--logtostderr", false)
-		}
 	})
 
 	// author: juzhao@redhat.com
@@ -1626,9 +1578,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			minTLSVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiservers.operator.openshift.io", "cluster", "-ojsonpath={.spec.observedConfig.servingInfo.minTLSVersion}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			exutil.By("check tls-cipher-suites and tls-min-version for prometheus-adapter under openshift-monitoring")
-			// % oc -n openshift-monitoring get deploy prometheus-adapter -ojsonpath='{.spec.template.spec.containers[?(@tls-cipher-suites=)].args}'
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@tls-cipher-suites=)].args}", "-n", "openshift-monitoring").Output()
+			exutil.By("check tls-cipher-suites and tls-min-version for metrics-server under openshift-monitoring")
+			// % oc -n openshift-monitoring get deploy metrics-server -ojsonpath='{.spec.template.spec.containers[?(@tls-cipher-suites=)].args}'
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "metrics-server", "-ojsonpath={.spec.template.spec.containers[?(@tls-cipher-suites=)].args}", "-n", "openshift-monitoring").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(output, cipherSuitesFormat) {
 				e2e.Failf("tls-cipher-suites is different from global setting! %s", output)
@@ -1722,6 +1674,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			}
 			//oc get pod -l app.kubernetes.io/name=prometheus-operator -n openshift-user-workload-monitoring
 			UWMpoPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=prometheus-operator")
+			// `UWMpoPodNames` should only have one value, otherwise means there are PO pods in progress deleting
+			e2e.Logf("UWMpoPodNames: %v", UWMpoPodNames)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for _, pod := range UWMpoPodNames {
 				cmd := "-ojsonpath={.spec.containers[?(@.name==\"kube-rbac-proxy\")].args}"
@@ -2527,14 +2481,14 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get openshift-state-metrics container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"20m","memory":"100Mi"`))
 
-		exutil.By("check the resources.requests and resources.limits take effect for prometheus-adapter")
-		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="prometheus-adapter",namespace="openshift-monitoring"}'`, token, `"pod":"prometheus-adapter-`, 3*uwmLoadTime)
-		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].resources.requests}", "-n", "openshift-monitoring").Output()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-adapter container resources.requests setting")
+		exutil.By("check the resources.requests and resources.limits take effect for metrics-server")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_pod_container_resource_limits{container="metrics-server",namespace="openshift-monitoring"}'`, token, `"pod":"metrics-server-`, 3*uwmLoadTime)
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/metrics-server", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"metrics-server\")].resources.requests}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get metrics-server container resources.requests setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"2m","memory":"80Mi"`))
 
-		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/prometheus-adapter", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"prometheus-adapter\")].resources.limits}", "-n", "openshift-monitoring").Output()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get prometheus-adapter container resources.limits setting")
+		result, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/metrics-server", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"metrics-server\")].resources.limits}", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get metrics-server container resources.limits setting")
 		o.Expect(result).To(o.ContainSubstring(`"cpu":"10m","memory":"100Mi"`))
 
 		exutil.By("check the resources.requests and resources.limits take effect for prometheus-operator")
