@@ -85,6 +85,7 @@ func (pis PinnedImageSet) GetPools() ([]MachineConfigPool, error) {
 func (pis PinnedImageSet) DeleteAndWait(waitingTime time.Duration) error {
 	if !pis.Exists() {
 		logger.Infof("%s does not exist! No need to delete it!", pis)
+		return nil
 	}
 
 	err := pis.Delete()

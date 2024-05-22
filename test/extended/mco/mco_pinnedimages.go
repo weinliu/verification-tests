@@ -452,6 +452,89 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sserafin-NonHyperShiftHOST-NonPreRelease-Longduration-High-73648-A rebooted node reconciles with the pinned images status [Disruptive]", func() {
+		var (
+			waitForPinned      = time.Minute * 5
+			pinnedImageSetName = "tc-73648-pinned-image"
+			pinnedImage        = BusyBoxImage
+			allMasters         = mMcp.GetNodesOrFail()
+			pullSecret         = GetPullSecret(oc.AsAdmin())
+		)
+
+		exutil.By("Create pinnedimageset")
+		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mMcp.GetName(), []string{pinnedImage})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+		defer pis.DeleteAndWait(waitForPinned)
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for all images to be pinned")
+		o.Expect(mMcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mMcp)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the image was pinned in all nodes in the pool")
+		for _, node := range allMasters {
+			ri := NewRemoteImage(node, pinnedImage)
+			logger.Infof("Checking %s", ri)
+			o.Expect(ri.IsPinned()).To(o.BeTrue(),
+				"%s is not pinned, but it should", ri)
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Capture the current pull-secret value")
+		secretFile, err := getPullSecret(oc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the pull-secret")
+		logger.Debugf("Pull-secret content stored in file %s", secretFile)
+		defer func() {
+			logger.Infof("Restoring initial pull-secret value")
+			output, err := setDataForPullSecret(oc, secretFile)
+			if err != nil {
+				logger.Errorf("Error restoring the pull-secret's value. Error: %v\nOutput: %s", err, output)
+			}
+			wMcp.waitForComplete()
+			mMcp.waitForComplete()
+		}()
+		logger.Infof("OK!\n")
+
+		exutil.By("Set an empty pull-secret")
+		o.Expect(pullSecret.SetDataValue(".dockerconfigjson", "{}")).To(o.Succeed(),
+			"Error setting an empty pull-secret value")
+		mMcp.waitForComplete()
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		//find the node with the machine-config-controller
+		exutil.By("Get the mcc node")
+		var mcc = NewController(oc.AsAdmin())
+		mccMaster, err := mcc.GetNode()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the node where the MCO controller is running")
+		logger.Infof("OK!\n")
+
+		//reboot the node with mcc
+		exutil.By("Reboot node")
+		o.Expect(mccMaster.Reboot()).To(o.Succeed(), "Error rebooting node %s", mccMaster)
+		logger.Infof("OK!\n")
+
+		//delete the pinnedImageSet
+		exutil.By("Delete the pinnedimageset")
+		o.Expect(pis.DeleteAndWait(waitForPinned)).NotTo(o.HaveOccurred(), "Error deleting pinnedimageset %s", pis)
+		logger.Infof("OK!\n")
+
+		//wait for the rebooted node
+		exutil.By("Wait for the rebooted node")
+		mMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		//check pinned imageset is deleted in all nodes in the pool
+		exutil.By("Check that the images are not pinned in all nodes in the pool")
+		for _, node := range allMasters {
+			ri := NewRemoteImage(node, pinnedImage)
+			logger.Infof("Checking %s", ri)
+			o.Expect(ri.IsPinned()).To(o.BeFalse(),
+				"%s is pinned, but it should not", ri)
+		}
+		logger.Infof("OK!\n")
+	})
 })
 
 // getReleaseInfoPullspecOrFail returns a list of strings containing the names of the pullspec images

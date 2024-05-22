@@ -151,3 +151,19 @@ func (mcc Controller) RemovePod() error {
 
 	return mcc.oc.WithoutNamespace().Run("delete").Args("pod", "-n", MachineConfigNamespace, cachedPodName).Execute()
 }
+
+// GetNode return the node where the machine controller is running
+func (mcc Controller) GetNode() (*Node, error) {
+	controllerPodName, err := mcc.GetCachedPodName()
+	if err != nil {
+		return nil, err
+	}
+
+	controllerPod := NewNamespacedResource(mcc.oc, "pod", MachineConfigNamespace, controllerPodName)
+	nodeName, err := controllerPod.Get(`{.spec.nodeName}`)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewNode(mcc.oc, nodeName), nil
+}
