@@ -917,13 +917,15 @@ func (rolebinding *rolebindingDescription) create(oc *exutil.CLI) {
 type secretDescription struct {
 	name      string
 	namespace string
+	saname    string
+	sectype   string
 	template  string
 }
 
 // the method is to create secret with template
 func (secret *secretDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", secret.template,
-		"-p", "NAME="+secret.name, "NAMESPACE="+secret.namespace)
+		"-p", "NAME="+secret.name, "NAMESPACE="+secret.namespace, "SANAME="+secret.saname, "TYPE="+secret.sectype)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

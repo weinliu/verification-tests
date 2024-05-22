@@ -2869,6 +2869,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		namespace := oc.Namespace()
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		secTemplate := filepath.Join(buildPruningBaseDir, "secret.yaml")
+		csv := "learn-operator.v0.0.3"
+		sa := "scoped-24771"
 
 		sub := subscriptionDescription{
 			subName:                "sub-24771",
@@ -2882,12 +2885,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			singleNamespace:        false,
 			template:               subTemplate,
 		}
-		csv := "learn-operator.v0.0.3"
-		sa := "scoped-24771"
 
-		// create the namespace
-		project := projectDescription{
-			name: namespace,
+		secret := secretDescription{
+			name:      sa,
+			namespace: namespace,
+			saname:    sa,
+			sectype:   "kubernetes.io/service-account-token",
+			template:  secTemplate,
 		}
 
 		// create the OperatorGroup resource
@@ -2910,22 +2914,33 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("2) Create the namespace")
-		project.createwithCheck(oc, itName, dr)
-
 		exutil.By("3) Create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
 
 		exutil.By("4) Create the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		secret.create(oc)
 
 		exutil.By("5) Create a Subscription")
 		sub.createWithoutCheck(oc, itName, dr)
 
 		exutil.By("6) The install plan is Failed")
 		installPlan := sub.getIP(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "cannot create resource", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := oc.AsAdmin().Run("get").Args("installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.message}").Output()
+			if strings.Contains(message, "cannot create resource") {
+				return true, nil
+			}
+			return false, nil
+		})
+		if err != nil {
+			message, _ := oc.AsAdmin().Run("get").Args("installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.message}").Output()
+			e2e.Logf(message)
+			conditions, _ := oc.AsAdmin().Run("get").Args("installplan", installPlan, "-n", sub.namespace, "-o=jsonpath-as-json={.status.conditions}").Output()
+			e2e.Logf(conditions)
+		}
+		exutil.AssertWaitPollNoErr(err, "cannot create resource not in install plan message")
 
 		exutil.By("7) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
@@ -3005,6 +3020,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		namespace := oc.Namespace()
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		secTemplate := filepath.Join(buildPruningBaseDir, "secret.yaml")
 		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24772"
 		sub := subscriptionDescription{
@@ -3018,6 +3034,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			startingCSV:            "learn-operator.v0.0.3",
 			singleNamespace:        false,
 			template:               subTemplate,
+		}
+		secret := secretDescription{
+			name:      sa,
+			namespace: namespace,
+			saname:    sa,
+			sectype:   "kubernetes.io/service-account-token",
+			template:  secTemplate,
 		}
 
 		// create the namespace
@@ -3054,6 +3077,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("4) Create the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		secret.create(oc)
 
 		exutil.By("5) Create a Subscription")
 
@@ -3086,6 +3110,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		ogTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		secTemplate := filepath.Join(buildPruningBaseDir, "secret.yaml")
 		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24886"
 
@@ -3100,6 +3125,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			startingCSV:            "learn-operator.v0.0.3",
 			singleNamespace:        false,
 			template:               subTemplate,
+		}
+		secret := secretDescription{
+			name:      sa,
+			namespace: namespace,
+			saname:    sa,
+			sectype:   "kubernetes.io/service-account-token",
+			template:  secTemplate,
 		}
 		// create the namespace
 		project := projectDescription{
@@ -3153,6 +3185,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("7) Create the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		secret.create(oc)
 
 		exutil.By("9) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
@@ -9830,6 +9863,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		rolebindingtemplate := filepath.Join(buildPruningBaseDir, "role-binding.yaml")
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		secTemplate := filepath.Join(buildPruningBaseDir, "secret.yaml")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		itName := g.CurrentSpecReport().FullText()
@@ -9866,11 +9900,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				saname:    sa,
 				template:  rolebindingtemplate,
 			}
+			secret = secretDescription{
+				name:      sa,
+				namespace: namespace,
+				saname:    sa,
+				sectype:   "kubernetes.io/service-account-token",
+				template:  secTemplate,
+			}
 		)
 
-		exutil.By("1) Create the service account and OperatorGroup")
+		exutil.By("1) Create the service account, secret and OperatorGroup")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		secret.create(oc)
+
 		og.createwithCheck(oc, itName, dr)
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, sa, ok, []string{"og", og.name, "-n", og.namespace, "-o=jsonpath={.status.serviceAccountRef.name}"}).checkWithoutAssert(oc)
 		if err != nil {
@@ -9930,7 +9973,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		rolebindingtemplate := filepath.Join(buildPruningBaseDir, "role-binding.yaml")
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		secretTemplate := filepath.Join(buildPruningBaseDir, "secret_opaque.yaml")
+		secretTemplate := filepath.Join(buildPruningBaseDir, "secret.yaml")
+		secretopaqueTemplate := filepath.Join(buildPruningBaseDir, "secret_opaque.yaml")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		itName := g.CurrentSpecReport().FullText()
@@ -9965,9 +10009,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				saname:    sa,
 				template:  rolebindingtemplate,
 			}
-			secret = secretDescription{
+			secretopaque = secretDescription{
 				name:      "zsecret-56371",
 				namespace: namespace,
+				template:  secretopaqueTemplate,
+			}
+			secret = secretDescription{
+				name:      sa,
+				namespace: namespace,
+				saname:    sa,
+				sectype:   "kubernetes.io/service-account-token",
 				template:  secretTemplate,
 			}
 		)
@@ -9975,6 +10026,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("1) Create the service account")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		secret.create(oc)
 
 		exutil.By("2) Create the OperatorGroup")
 		og.createwithCheck(oc, itName, dr)
@@ -9986,7 +10038,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.serviceAccountRef.name of og %s is not %s", og.name, sa))
 
 		exutil.By("3) Create the Secret")
-		secret.create(oc)
+		secretopaque.create(oc)
 
 		exutil.By("4) Grant the proper permissions to the service account")
 		role.create(oc)
@@ -9998,7 +10050,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("6) Checking the secret")
 		secrets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(secrets).To(o.ContainSubstring(secret.name))
+		o.Expect(secrets).To(o.ContainSubstring(secretopaque.name))
 
 		exutil.By("7) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
