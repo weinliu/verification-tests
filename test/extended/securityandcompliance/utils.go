@@ -81,6 +81,9 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		e2e.Logf("The result of \"oc get sub %s -n %s -o=jsonpath={.status.state}\" is: %s", sub.subName, sub.namespace, msg)
 		subStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
 		e2e.Logf("The result of \"oc get sub %s -n %s -o=jsonpath={.status}\" is: %s", sub.subName, sub.namespace, subStatus)
+		source, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.spec.source}").Output()
+		soucePodStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "olm.catalogSource="+source, "-n", "openshift-marketplace", "-o=jsonpath={.items[0].status}").Output()
+		e2e.Logf("The pod status for catalogsource %s is: %s", source, soucePodStatus)
 	}
 	// skip test for known OLM bug https://issues.redhat.com/browse/OCPBUGS-19046. More details seen from https://access.redhat.com/solutions/6603001
 	if (errCheck != nil) && (strings.Contains(subStatus, "exists and is not referenced by a subscription")) {
