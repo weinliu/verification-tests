@@ -83,7 +83,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create a passthrough route")
-		exposeRoutePassth(oc, e2eTestNamespace, "ms-pass", "service-secure", passRoute)
+		createRoute(oc, e2eTestNamespace, "passthrough", "ms-pass", "service-secure", []string{"--hostname=" + passRoute})
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether passthrough route details are present")
@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_tcp:" + e2eTestNamespace + ":ms-pass"))
 
 		exutil.By("create a edge route")
-		exposeRouteEdge(oc, e2eTestNamespace, "ms-edge", "service-unsecure", edgeRoute)
+		createRoute(oc, e2eTestNamespace, "edge", "ms-edge", "service-unsecure", []string{"--hostname=" + edgeRoute})
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether edge route details are present")
@@ -165,7 +165,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_http:" + e2eTestNamespace + ":ms-http"))
 
 		exutil.By("create a reen route")
-		exposeRouteReen(oc, e2eTestNamespace, "ms-reen", "service-secure1", reenRoute)
+		createRoute(oc, e2eTestNamespace, "reencrypt", "ms-reen", "service-secure1", []string{"--hostname=" + reenRoute})
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether reen route details are present")

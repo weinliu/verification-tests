@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 
 		exutil.By("expose a service in the project")
-		exposeRoute(oc, oc.Namespace(), "svc/service-unsecure")
+		createRoute(oc, oc.Namespace(), "http", "service-unsecure", "service-unsecure", []string{})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure"))
@@ -77,7 +77,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 
 		exutil.By("expose a service in the project")
-		exposeRoute(oc, oc.Namespace(), "svc/service-secure")
+		createRoute(oc, oc.Namespace(), "http", "service-secure", "service-secure", []string{})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-secure"))
@@ -316,7 +316,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 
 		exutil.By("expose a service in the project")
-		exposeRoute(oc, project1, "svc/service-unsecure")
+		createRoute(oc, project1, "http", "service-unsecure", "service-unsecure", []string{})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure"))

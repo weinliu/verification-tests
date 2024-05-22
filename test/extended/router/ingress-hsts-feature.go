@@ -46,7 +46,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var output string
 		ingctldomain := getIngressctlDomain(oc, ingctrl.name)
 		routehost := "route-edge" + "-" + oc.Namespace() + "." + ingctrl.domain
-		exposeRouteEdge(oc, oc.Namespace(), "route-edge", "service-unsecure", routehost)
+		createRoute(oc, oc.Namespace(), "edge", "route-edge", "service-unsecure", []string{"--hostname=" + routehost})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("route-edge"))
@@ -111,7 +111,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var output string
 		ingctldomain := getIngressctlDomain(oc, ingctrl.name)
 		routedomain := "route-edge" + "-" + oc.Namespace() + "." + ingctrl.domain
-		exposeRouteEdge(oc, oc.Namespace(), "route-edge", "service-unsecure", routedomain)
+		createRoute(oc, oc.Namespace(), "edge", "route-edge", "service-unsecure", []string{"--hostname=" + routedomain})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("route-edge"))
@@ -168,7 +168,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var output string
 		ingctldomain := getIngressctlDomain(oc, ingctrl.name)
 		routehost := "route-edge" + "-" + oc.Namespace() + "." + ingctrl.domain
-		exposeRouteEdge(oc, oc.Namespace(), "route-edge", "service-unsecure", routehost)
+		createRoute(oc, oc.Namespace(), "edge", "route-edge", "service-unsecure", []string{"--hostname=" + routehost})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("route-edge"))
@@ -233,7 +233,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var output string
 		ingctldomain := getIngressctlDomain(oc, ingctrl.name)
 		routehost := "route-edge" + "-" + oc.Namespace() + "." + ingctrl.domain
-		exposeRouteEdge(oc, oc.Namespace(), "route-edge", "service-unsecure", routehost)
+		createRoute(oc, oc.Namespace(), "edge", "route-edge", "service-unsecure", []string{"--hostname=" + routehost})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("route-edge"))
@@ -290,7 +290,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var output string
 		ingctldomain := getIngressctlDomain(oc, ingctrl.name)
 		routehost := "route-edge" + "-" + oc.Namespace() + "." + ingctrl.domain
-		exposeRouteEdge(oc, oc.Namespace(), "route-edge", "service-unsecure", routehost)
+		createRoute(oc, oc.Namespace(), "edge", "route-edge", "service-unsecure", []string{"--hostname=" + routehost})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("route-edge"))
@@ -363,7 +363,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var output1 string
 		ingctldomain1 := getIngressctlDomain(oc, ingctrl1.name)
 		routehost1 := "route-edge1" + "-" + oc.Namespace() + "." + ingctrl1.domain
-		exposeRouteEdge(oc, oc.Namespace(), "route-edge1", "service-unsecure", routehost1)
+		createRoute(oc, oc.Namespace(), "edge", "route-edge1", "service-unsecure", []string{"--hostname=" + routehost1})
 		output1, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output1).To(o.ContainSubstring("route-edge1"))
@@ -372,7 +372,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var output2 string
 		ingctldomain2 := getIngressctlDomain(oc, ingctrl2.name)
 		routehost2 := "route-edge2" + "-" + oc.Namespace() + "." + ingctrl2.domain
-		exposeRouteEdge(oc, oc.Namespace(), "route-edge2", "service-unsecure", routehost2)
+		createRoute(oc, oc.Namespace(), "edge", "route-edge2", "service-unsecure", []string{"--hostname=" + routehost2})
 		output2, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output2).To(o.ContainSubstring("route-edge2"))
@@ -458,7 +458,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("Test for outcome by creating an edge route via the default non-HSTS policy controlled domain through the project2")
 		routehost2 := "route-edge2" + "-" + project2 + "." + ingctrl.domain
-		exposeRouteEdge(oc, project2, "route-edge", "service-unsecure", routehost2)
+		createRoute(oc, project2, "edge", "route-edge", "service-unsecure", []string{"--hostname=" + routehost2})
 		output2, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output2).To(o.ContainSubstring("route-edge2"))
