@@ -33,6 +33,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:jitli-High-69758-Catalogd Polling remote registries for update to images content", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
@@ -138,6 +139,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-69123-Catalogd catalog offer the operator content through http server", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
@@ -168,6 +170,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-69124-check the catalog source type before created", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir             = exutil.FixturePath("testdata", "olm", "v1")
 			catalogPollTemplate = filepath.Join(baseDir, "catalog-secret.yaml")
@@ -196,6 +199,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from catalog CR", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
@@ -226,6 +230,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-69069-Replace pod-based image unpacker with an image registry client", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
@@ -289,6 +294,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-69869-Catalogd Add metrics to the Storage implementation", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
@@ -341,6 +347,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-High-70817-catalogd support setting a pull secret", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog-secret.yaml")
@@ -391,6 +398,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-69202-Catalogd catalog offer the operator content through http server off cluster", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
@@ -427,6 +435,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-73219-Fetch deprecation data from the catalogd http server", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
@@ -454,6 +463,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jitli@redhat.com
 	g.It("ConnectedOnly-Author:jitli-High-73289-Check the deprecation conditions and messages", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")

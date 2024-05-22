@@ -289,3 +289,15 @@ func IsExternalOIDCCluster(oc *CLI) (bool, error) {
 
 	return authType == string(configv1.AuthenticationTypeOIDC), nil
 }
+
+// Skip for proxy platform
+func SkipOnProxyCluster(oc *CLI) {
+	g.By("Check if cluster is a proxy platform")
+	httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	httpsProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpsProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(httpProxy) != 0 || len(httpsProxy) != 0 {
+		g.Skip("Skip for proxy platform")
+	}
+}

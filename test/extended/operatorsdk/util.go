@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
@@ -49,18 +48,6 @@ func buildPushOperatorImage(architecture architecture.Architecture, tmpPath, ima
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, "Podman push bundle image failed.")
-
-}
-
-// Skip for proxy platform
-func skipOnProxyCluster(oc *exutil.CLI) {
-
-	g.By("Check if it is a proxy platform")
-	proxySet, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if proxySet != "" {
-		g.Skip("Skip for proxy platform")
-	}
 
 }
 
