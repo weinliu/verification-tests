@@ -21,7 +21,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"gopkg.in/yaml.v3"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -812,9 +814,14 @@ func removeMCOPods(oc *exutil.CLI, argsSelector ...string) error {
 		return err
 	}
 
+	return waitForAllMCOPodsReady(oc, 15*time.Minute)
+}
+
+// waitForAllMCOPodsReady waits
+func waitForAllMCOPodsReady(oc *exutil.CLI, timeout time.Duration) error {
 	logger.Infof("Waiting for MCO pods to be runnging and ready in namespace %s", MachineConfigNamespace)
 	immediate := false
-	waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 15*time.Minute, immediate,
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, timeout, immediate,
 		func(ctx context.Context) (bool, error) {
 			status, err := NewNamespacedResourceList(oc.AsAdmin(), "pod", MachineConfigNamespace).
 				Get(`{.items[*].status.conditions[?(@.type=="Ready")].status}`)
@@ -1231,4 +1238,66 @@ func skipIfNoTechPreview(oc *exutil.CLI) {
 
 func IsTrue(s string) bool {
 	return strings.EqualFold(s, TrueString)
+}
+
+// getCertsFromKubeconfig returns the certificate used in a kubeconfig file
+func getCertsFromKubeconfig(kubeconfig string) (string, error) {
+	// We don't know if the kubeconfig file will be in YAML or in JSON format
+	// We will parse it as YAML and transform it into a json string that can be handled with gjson lib
+	data := map[string]interface{}{}
+
+	err := yaml.Unmarshal([]byte(kubeconfig), data)
+	if err != nil {
+		return "", err
+	}
+	JSONbytes, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+
+	JSONstring := string(JSONbytes)
+
+	currentCtx := gjson.Get(JSONstring, "current-context")
+	logger.Debugf("Context: %s\n", currentCtx)
+	if !currentCtx.Exists() || currentCtx.String() == "" {
+		return "", fmt.Errorf("No current-contenxt in the provided kubeconfig")
+	}
+
+	logger.Debugf("Current context: %s", currentCtx.String())
+
+	cluster := gjson.Get(JSONstring, `contexts.#(name=="`+currentCtx.String()+`").context.cluster`)
+	if !cluster.Exists() || cluster.String() == "" {
+		return "", fmt.Errorf("No current cluster information for context %s in the provided kubeconfig", currentCtx.String())
+	}
+
+	logger.Debugf("Cluster: %s\n", cluster.String())
+
+	cert64 := gjson.Get(JSONstring, `clusters.#(name=="`+cluster.String()+`").cluster.certificate-authority-data`)
+	if !cert64.Exists() || cert64.String() == "" {
+		return "", fmt.Errorf("No current certificate-authority-data information for context %s and cluster %s in the provided kubeconfig", currentCtx.String(), cluster.String())
+	}
+
+	cert, err := b64.StdEncoding.DecodeString(cert64.String())
+	if err != nil {
+		logger.Errorf("The certiifcate provided in the kubeconfig is not base64 encoded")
+		return "", err
+	}
+
+	logger.Infof("Certificate successfully extracted from kubeconfig data")
+	logger.Debugf("Cert: %s\n", string(cert))
+	return string(cert), nil
+}
+
+// checkAllOperatorsHealthy fails the test if any ClusterOperator resource is degraded
+func checkAllOperatorsHealthy(oc *exutil.CLI, timeout, poll string) {
+	ops, err := NewResourceList(oc, "co").GetAll()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Could not get a list with all the clusteroperator resources")
+
+	o.Eventually(func(gm o.Gomega) { // Passing o.Gomega as parameter we can use assertions inside the Eventually function without breaking the retries.
+		for _, op := range ops {
+			gm.Expect(&op).NotTo(BeDegraded(), "%s is Degraded!. \n%s", op.PrettyString())
+		}
+	}, timeout, poll).
+		Should(o.Succeed(),
+			"There are degraded ClusterOperators!")
 }

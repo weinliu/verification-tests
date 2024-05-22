@@ -129,3 +129,29 @@ func waitUntilSecretHasStableValue(secret *Secret, data string, timeout, poll ti
 
 	return "", waitErr
 }
+
+// rotateCertificateInSecret rotates the certificates in a Secret. We only return "tls.crt" since currently there is no use case for "tls.key"
+func rotateTLSSecretOrFail(secret *Secret) string {
+
+	logger.Infof("Rotating TLS certificate in %s", secret)
+	initialCert := secret.GetDataValueOrFail("tls.crt")
+	logger.Debugf("Current certificate: %s", initialCert)
+
+	logger.Infof("Patch certificate")
+	o.Expect(
+		secret.Patch("merge", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`),
+	).To(o.Succeed(),
+		"The secret %s could not be patched in order to rotate the certificate", secret)
+
+	logger.Infof("Wait for certificate rotation")
+	o.Eventually(secret.GetDataValueOrFail, "3m", "20s").WithArguments("tls.crt").
+		ShouldNot(exutil.Secure(o.Equal(initialCert)),
+			"The certificate was not rotated in %s", secret)
+
+	logger.Infof("Wait for the new certificate to be stable (avoid double rotations: OCPQE-20323)")
+	newCert, err := waitUntilSecretHasStableValue(secret, "tls.crt", 5*time.Minute, 5*time.Second, 3)
+	o.Expect(err).NotTo(o.HaveOccurred(),
+		"We cannot get a new stable certificate after the certificate rotation in %s", secret)
+
+	return newCert
+}

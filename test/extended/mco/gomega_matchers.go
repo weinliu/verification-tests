@@ -28,7 +28,7 @@ func (matcher *conditionMatcher) Match(actual interface{}) (success bool, err er
 	resource, ok := actual.(ResourceInterface)
 	if !ok {
 		logger.Errorf("Wrong type. Matcher expects a type implementing 'ResourceInterface'")
-		return false, fmt.Errorf(`Wrong type. Matcher expects a type "Resource" in test case %v`, g.CurrentSpecReport().FullText())
+		return false, fmt.Errorf(`Wrong type. Matcher expects a type "ResourceInterface" in test case %v`, g.CurrentSpecReport().FullText())
 	}
 
 	// Extract the value of the condition that we want to check

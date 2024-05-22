@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -367,6 +369,102 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		o.Expect(objsignCABundleRemote.Read()).NotTo(exutil.Secure(HaveContent(o.ContainSubstring(certRemote.GetTextContent()))),
 			"In node %s: The the content of the file %s should have been removed from the file %s. Command 'update-ca-trust' was not executed by MCD after removing the MC",
 			node.GetName(), certRemote.fullPath, objsignCABundleRemote.fullPath)
+		logger.Infof("OK!\n")
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-70857-boostrap-kubeconfig must be updated when kube-apiserver server CA is rotated [Disruptive]", func() {
+		var (
+			mco                      = NewResource(oc.AsAdmin(), "co", "machine-config")
+			kubernetesKubeconfigPath = "/etc/kubernetes/kubeconfig"
+			kubeletKubeconfigPath    = "/var/lib/kubelet/kubeconfig"
+			lbServingSignerSecret    = NewSecret(oc.AsAdmin(), "openshift-kube-apiserver-operator", "loadbalancer-serving-signer")
+			kubeAPIServerCM          = NewConfigMap(oc.AsAdmin(), "openshift-config-managed", "kube-apiserver-server-ca")
+			node                     = mcp.GetSortedNodesOrFail()[0]
+			startTime                = node.GetDateOrFail()
+		)
+
+		// we are going to fail the test if there is any CO degraded, so we want to know the initial status of the COs
+		NewResourceList(oc.AsAdmin(), "co").PrintDebugCommand()
+
+		exutil.By("Rotate certificate in loadbalancer-serving-signer secret")
+		newCert := rotateTLSSecretOrFail(lbServingSignerSecret)
+		logger.Debugf("New TLS cert:\n%s", newCert)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the kube-apiserver-serve-ca configmap contains the new TLS secret")
+		o.Eventually(kubeAPIServerCM.GetDataValue, "5m", "20s").WithArguments("ca-bundle.crt").Should(
+			exutil.Secure(o.ContainSubstring(newCert)),
+			"The new TLS certificate was not added to configmap %s", kubeAPIServerCM)
+
+		caBundle := strings.TrimSpace(kubeAPIServerCM.GetDataValueOrFail("ca-bundle.crt"))
+		logger.Debugf("New CA bundle:\n%s", caBundle)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check kubernetes kubconfig file was correctly updated")
+		// Eventually the kubeconfig file should be updated with the new certificates stored in kube-apiserver-serve-ca
+		rfKubernetesKubecon := NewRemoteFile(node, kubernetesKubeconfigPath)
+		o.Eventually(func() (string, error) {
+			err := rfKubernetesKubecon.Fetch()
+			if err != nil {
+				return "", err
+			}
+			cert, err := getCertsFromKubeconfig(rfKubernetesKubecon.GetTextContent())
+			if err != nil {
+				return "", err
+			}
+
+			logger.Debugf("Kube cert:\n%s", cert)
+
+			return strings.TrimSpace(cert), nil
+		}, "5m", "10s").
+			Should(exutil.Secure(o.Equal(caBundle)),
+				"%s does not contain the certificates stored in %s.", kubernetesKubeconfigPath, kubeAPIServerCM)
+
+		o.Expect(rfKubernetesKubecon).To(o.And(
+			HaveOctalPermissions("0600"),
+			HaveOwner("root"),
+			HaveGroup("root")),
+			"Wrong security attributes in %s", rfKubernetesKubecon)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check kubelet kubconfig file was correctly updated")
+		// Eventually the kubeconfig file should be updated with the new certificates stored in kube-apiserver-serve-ca
+		o.Eventually(func() (string, error) {
+			rfKubeletKubecon := NewRemoteFile(node, kubeletKubeconfigPath)
+			err := rfKubeletKubecon.Fetch()
+			if err != nil {
+				return "", err
+			}
+			cert, err := getCertsFromKubeconfig(rfKubeletKubecon.GetTextContent())
+			if err != nil {
+				return "", err
+			}
+			return cert, nil
+		}, "5m", "10s").
+			Should(exutil.Secure(o.Equal(caBundle)),
+				"%s does not contain the certificates stored in %s.", kubernetesKubeconfigPath, kubeAPIServerCM)
+
+		o.Expect(rfKubernetesKubecon).To(o.And(
+			HaveOctalPermissions("0600"),
+			HaveOwner("root"),
+			HaveGroup("root")),
+			"Wrong security attributes in %s", rfKubernetesKubecon)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that kubelet was restarted")
+		o.Expect(node.GetUnitActiveEnterTime("kubelet.service")).To(o.BeTemporally(">", startTime),
+			"Kubelet service was NOT restarted, but it should be")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that MCO pods are healthy")
+		o.Expect(waitForAllMCOPodsReady(oc.AsAdmin(), 10*time.Minute)).To(o.Succeed(),
+			"MCO pods are not Ready after cert rotation")
+
+		o.Expect(mco).NotTo(BeDegraded(), "Error! %s is degraded:\n%s", mco, mco.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that all cluster operators are healthy")
+		checkAllOperatorsHealthy(oc.AsAdmin(), "20m", "30s")
 		logger.Infof("OK!\n")
 	})
 })

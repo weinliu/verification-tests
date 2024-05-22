@@ -772,11 +772,6 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			certSecret = NewSecret(oc.AsAdmin(), "openshift-kube-apiserver-operator", "kube-apiserver-to-kubelet-signer")
 		)
 
-		exutil.By("Get current kube-apiserver certificate and rendered configs")
-		logger.Infof("Get current kube-apiserver certificate")
-		initialCert := certSecret.GetDataValueOrFail("tls.crt")
-		logger.Infof("Current certificate length: %d", len(initialCert))
-
 		logger.Infof("Get currently rendered MCs")
 		initialMCs, err := mcList.GetAll()
 		o.Expect(err).NotTo(o.HaveOccurred(),
@@ -798,27 +793,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Rotate certificate")
-		o.Expect(
-			certSecret.Patch("merge", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`),
-		).To(o.Succeed(),
-			"The secret could not be patched in order to rotate the certificate")
-		logger.Infof("OK!\n")
-
-		exutil.By("Get new kube-apiserver certificate")
-		logger.Infof("Wait for certificate rotation")
-		o.Eventually(certSecret.GetDataValueOrFail, "3m", "20s").WithArguments("tls.crt").
-			ShouldNot(o.Equal(initialCert),
-				"The certificate was not rotated")
-
-		logger.Infof("Wait for the new certificate to be stable (avoid double rotations: OCPQE-20323)")
-		newCert, err := waitUntilSecretHasStableValue(certSecret, "tls.crt", 5*time.Minute, 5*time.Second, 3)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"We cannot get a new stable certificate after the certificate rotation in %s", certSecret)
-
-		logger.Infof("New certificate length: %d", len(newCert))
-
-		o.Expect(initialCert == newCert).NotTo(o.BeTrue(),
-			"The certificate was not rotated")
+		newCert := rotateTLSSecretOrFail(certSecret)
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that no new MC is created")

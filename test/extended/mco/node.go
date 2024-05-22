@@ -556,6 +556,14 @@ func (n *Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (strin
 
 }
 
+// GetDateOrFail executes `date`command and returns the current time in the node and fails the test case if there is any error
+func (n Node) GetDateOrFail() time.Time {
+	date, err := n.GetDate()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Could not get the current date in %s", n)
+
+	return date
+}
+
 // GetDate executes `date`command and returns the current time in the node
 func (n Node) GetDate() (time.Time, error) {
 
