@@ -189,6 +189,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		podSlice1 := getProjectPods(oc, "openshift-operator-lifecycle-manager")
 		for _, pod := range podSlice1 {
+			// skip those cronjob pod since they will be deleted every 15 mins that leads error
+			if strings.Contains(pod, "collect-profiles") {
+				continue
+			}
 			podMap[pod] = "openshift-operator-lifecycle-manager"
 		}
 		for pod, project := range podMap {
@@ -200,6 +204,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 		}
 		exutil.By("2) check the imagePullPolicy of the container that uses the tag image.")
+		image, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "collect-profiles", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.jobTemplate.spec.template.spec.containers[0].image}").Output()
+		imagePullPolicy, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "collect-profiles", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.jobTemplate.spec.template.spec.containers[0].imagePullPolicy}").Output()
+		allImageMap[image] = imagePullPolicy
 		for image, policy := range allImageMap {
 			// check the tag kind image, not the digest image
 			if !strings.Contains(image, "@sha256") && strings.Contains(image, ":") {
