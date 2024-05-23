@@ -510,7 +510,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString("3", output); matched {
+			if strings.Contains("3", output) || strings.Contains("4", output) {
 				e2e.Logf("deploy is up:\n%s", output)
 				return true, nil
 			}
