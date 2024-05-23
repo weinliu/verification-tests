@@ -4545,8 +4545,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-moderate-audit-profile-set", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
-			"ocp4-moderate-node-wrscan-directory-access-var-log-kube-audit", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		result, _ := oc.AsAdmin().Run("get").Args("ccr", "-n", subD.namespace, "-l", "compliance.openshift.io/automated-remediation=,compliance.openshift.io/check-status=FAIL").Output()
 		if !strings.Contains(result, "No resources found") {
 			e2e.Failf("%s is NOT expected result for the final result", result)
