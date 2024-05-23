@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -81,6 +85,57 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		stringToMatch := string(certArrayPart) + ".+\n.*-----END CERTIFICATE-----\n\n.+\n.+-----BEGIN CERTIFICATE-----"
 		o.Expect(output).To(o.MatchRegexp(stringToMatch))
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	g.It("Author:qiowang-Medium-73156-Verify pod netns iptables usage will be detected and warned [Serial]", func() {
+		var (
+			namespace           = "openshift-network-operator"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodYaml         = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
+			testPodName         = "hello-pod"
+		)
+
+		exutil.By("Create netns privileged pod")
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "pod", testPodName).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", testPodYaml).Execute()
+		waitPodReady(oc, ns, testPodName)
+
+		exutil.By("create iptables in the pod")
+		cmdErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args(testPodName, "-n", ns, "--", "iptables-nft", "-A", "INPUT", "-p", "tcp", "--dport", "9999", "-j", "DROP").Execute()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+
+		exutil.By("restart iptables-alerter pod which lands on the same node with the test pod, trigger iptables-alerter script")
+		nodeName, getNodeErr := exutil.GetPodNodeName(oc, ns, testPodName)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		alerterPodName1, getPodNameErr1 := exutil.GetPodName(oc, namespace, "app=iptables-alerter", nodeName)
+		o.Expect(getPodNameErr1).NotTo(o.HaveOccurred())
+		o.Expect(alerterPodName1).NotTo(o.BeEmpty())
+		delPodErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", alerterPodName1, "-n", namespace, "--ignore-not-found=true").Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+
+		exutil.By("check logs of iptables-alerter pod")
+		alerterPodName2, getPodNameErr2 := exutil.GetPodName(oc, namespace, "app=iptables-alerter", nodeName)
+		o.Expect(getPodNameErr2).NotTo(o.HaveOccurred())
+		o.Expect(alerterPodName2).NotTo(o.BeEmpty())
+		waitPodReady(oc, namespace, alerterPodName2)
+		podLogs, getLogErr := checkLogMessageInPod(oc, namespace, "iptables-alerter", alerterPodName2, ns+"/"+testPodName)
+		o.Expect(getLogErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The log is : %s", podLogs)
+		o.Expect(strings.Contains(podLogs, "Logging event for "+ns+"/"+testPodName+" which has iptables rules")).Should(o.BeTrue())
+
+		exutil.By("check event for the test namespace")
+		waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			events, getEventsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", ns).Output()
+			o.Expect(getEventsErr).NotTo(o.HaveOccurred())
+			if !strings.Contains(events, "IPTablesUsageObserved") {
+				e2e.Logf("Continue to next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Check events failed")
 	})
 
 })
