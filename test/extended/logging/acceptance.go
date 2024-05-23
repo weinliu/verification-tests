@@ -334,9 +334,8 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
 		}
-		appLogs, err := gcl.getLogByNamespace(appProj)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(appLogs) > 0).Should(o.BeTrue(), "can't find app logs from project/"+appProj)
+		err = gcl.waitForLogsAppearByNamespace(appProj)
+		exutil.AssertWaitPollNoErr(err, "can't find app logs from project/"+appProj)
 	})
 
 	//author anli@redhat.com
