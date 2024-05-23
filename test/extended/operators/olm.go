@@ -2417,23 +2417,33 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				template:               subFile,
 			}
 
-			workerNodes, _ = exutil.GetClusterNodesBy(oc, "worker")
+			workerNodes, _ = exutil.GetSchedulableLinuxWorkerNodes(oc)
 			firstNode      = workerNodes[0]
 		)
 
+		exists, _ := clusterPackageExists(oc, sub)
+		if !exists {
+			g.Skip("SKIP:PackageMissing prometheus does not exist in catalog community-operators")
+		}
+
 		if isSNOCluster(oc) {
 			g.Skip("SNO cluster - skipping test ...")
+		}
+
+		if len(strings.TrimSpace(firstNode.Name)) == 0 {
+			g.Skip("Skipping becauuse there's no cluster with READY state")
 		}
 
 		exutil.By("1) Install the OperatorGroup in a random project")
 		og.createwithCheck(oc, itName, dr)
 		exutil.By("2) Install the Prometheus with Automatic approval")
 		sub.create(oc, itName, dr)
+
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("3) Add app label")
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode, "app_54038")
-		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app_54038", "dev")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode.Name, "app_54038")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode.Name, "app_54038", "dev")
 
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--show-labels", "--no-headers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2446,7 +2456,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.By("5) Ensure that pod is not scheduled in the node with the defined label")
 		deployedNode := getResource(oc, asAdmin, withoutNamespace, "pods", "prometheus-example-0", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}")
-		if firstNode == deployedNode {
+		if firstNode.Name == deployedNode {
 			e2e.Failf("Prometheus is deployed in the same node of app_54038 label. Node: %s . Node Labels: %s", deployedNode, msg)
 		}
 
