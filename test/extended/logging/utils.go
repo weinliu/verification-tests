@@ -25,6 +25,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -259,12 +260,6 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 		if strings.Contains(msg, "NotFound") {
 			so.setCatalogSourceObjects(oc)
 			//create subscription object
-			currentPlatform := exutil.CheckPlatform(oc)
-			if currentPlatform == "aws" && exutil.IsWorkloadIdentityCluster(oc) && so.PackageName == "loki-operator" {
-				e2e.Logf("Deploying Loki in STS mode...")
-				loggingBaseDir := exutil.FixturePath("testdata", "logging")
-				so.Subscription = filepath.Join(loggingBaseDir, "subscription", "subscription-sts.yaml")
-			}
 			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+so.CatalogSource.Channel, "SOURCE="+so.CatalogSource.SourceName, "SOURCE_NAMESPACE="+so.CatalogSource.SourceNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer os.Remove(subscriptionFile)
@@ -281,15 +276,6 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
 			// check status in subscription
 			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
-				installPlanApproval, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-o=jsonpath={.spec.installPlanApproval}`).Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if installPlanApproval == "Manual" {
-					installPlanID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-o=jsonpath={.status.installPlanRef.name}`).Output()
-					installPlanApprovedStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "InstallPlans", installPlanID, `-o=jsonpath={.spec.approved}`).Output()
-					if installPlanApprovedStatus == "false" {
-						oc.AsAdmin().WithoutNamespace().Run("patch").Args("InstallPlans", installPlanID, "-n", so.Namespace, "-p", `{"spec":{"approved":true}}`, "--type=merge").Execute()
-					}
-				}
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub", so.PackageName, `-ojsonpath={.status.state}`).Output()
 				if err != nil {
 					e2e.Logf("error getting subscription/%s: %v", so.PackageName, err)
@@ -3010,4 +2996,59 @@ func genLinuxJournalOnWorker(oc *exutil.CLI) {
 	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message2")
 	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message3")
 	return
+}
+
+func getResourceGroupOnAzure(oc *exutil.CLI) (string, error) {
+	resourceGroup, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.platformStatus.azure.resourceGroupName}").Output()
+	return resourceGroup, err
+}
+
+// Get region/location of cluster running on Azure Cloud
+func getAzureClusterRegion(oc *exutil.CLI) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("node", `-ojsonpath={.items[].metadata.labels.topology\.kubernetes\.io/region}`).Output()
+}
+
+// To read Azure subscription json file from local disk.
+// Also injects ENV vars needed to perform certain operations on Managed Identities.
+func readAzureCredentials() bool {
+	var azureCredFile string
+	envDir, present := os.LookupEnv("CLUSTER_PROFILE_DIR")
+	if present {
+		azureCredFile = filepath.Join(envDir, "osServicePrincipal.json")
+	} else {
+		authFileLocation, present := os.LookupEnv("AZURE_AUTH_LOCATION")
+		if present {
+			azureCredFile = authFileLocation
+		}
+	}
+	if len(azureCredFile) > 0 {
+		fileContent, err := os.ReadFile(azureCredFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		subscriptionID := gjson.Get(string(fileContent), `azure_subscription_id`).String()
+		if subscriptionID == "" {
+			subscriptionID = gjson.Get(string(fileContent), `subscriptionId`).String()
+		}
+		os.Setenv("AZURE_SUBSCRIPTION_ID", subscriptionID)
+
+		tenantID := gjson.Get(string(fileContent), `azure_tenant_id`).String()
+		if tenantID == "" {
+			tenantID = gjson.Get(string(fileContent), `tenantId`).String()
+		}
+		os.Setenv("AZURE_TENANT_ID", tenantID)
+
+		clientID := gjson.Get(string(fileContent), `azure_client_id`).String()
+		if clientID == "" {
+			clientID = gjson.Get(string(fileContent), `clientId`).String()
+		}
+		os.Setenv("AZURE_CLIENT_ID", clientID)
+
+		clientSecret := gjson.Get(string(fileContent), `azure_client_secret`).String()
+		if clientSecret == "" {
+			clientSecret = gjson.Get(string(fileContent), `clientSecret`).String()
+		}
+		os.Setenv("AZURE_CLIENT_SECRET", clientSecret)
+		return true
+	}
+	return false
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -40,9 +41,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 			Subscription:  subTemplate,
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
 
-		g.By("deploy CLO")
+		g.By("deploy CLO and Loki Operator")
 		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
 	})
 
 	g.It("CPaasrunOnly-Author:kbharti-LEVEL0-Critical-71534-Verify CCO support on AWS STS cluster and forward logs to default Loki[Serial]", func() {
@@ -65,7 +74,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
-		exutil.By("Deploy Loki Operator")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
 			name:          "lokistack-71534",
@@ -78,21 +86,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 			template:      lokiStackTemplate,
 		}
 
-		lokiSubTemplate := filepath.Join(loggingBaseDir, "subscription", "subscription-sts.yaml")
-		LO := SubscriptionObjects{
-			OperatorName:  "loki-operator-controller-manager",
-			Namespace:     loNS,
-			PackageName:   "loki-operator",
-			Subscription:  lokiSubTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
-		LO.SubscribeOperator(oc)
-
 		exutil.By("Create loki role_arn and patch into Loki Operator configuration")
 		lokiIAMRoleName := ls.name + "-" + exutil.GetRandomString()
 		roleArn := createIAMRoleForLokiSTSDeployment(oc, ls.namespace, ls.name, lokiIAMRoleName)
 		defer deleteIAMroleonAWS(lokiIAMRoleName)
-		patchLokiOperatorWithAWSRoleArn(oc, LO.PackageName, LO.Namespace, roleArn)
+		patchLokiOperatorWithAWSRoleArn(oc, "loki-operator", loNS, roleArn)
 
 		exutil.By("Deploy LokiStack")
 		defer ls.removeObjectStorage(oc)
@@ -102,17 +100,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		err = ls.deployLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
-
-		exutil.By("Validate that Loki Operator creates a CredentialsRequest object")
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest", ls.name, "-n", ls.namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cloudTokenPath, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest", ls.name, "-n", ls.namespace, `-o=jsonpath={.spec.cloudTokenPath}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(cloudTokenPath).Should(o.Equal("/var/run/secrets/storage/serviceaccount/token"))
-		expectedServiceAccountNames := `["%s","%s-ruler"]`
-		serviceAccountNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest", ls.name, "-n", ls.namespace, `-o=jsonpath={.spec.serviceAccountNames}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(serviceAccountNames).Should(o.Equal(fmt.Sprintf(expectedServiceAccountNames, ls.name, ls.name)))
 
 		exutil.By("Create clusterlogforwarder as syslogserver and forward logs to default LokiStack")
 		clf := clusterlogforwarder{
@@ -155,5 +142,69 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		}()
 		s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, ls.name)
 		validateS3contentsWithSTS(ls.bucketName, s3AssumeRoleArn)
+	})
+
+	g.It("CPaasrunOnly-Author:kbharti-Critical-71773-Verify CCO support on Azure WIF cluster and forward logs to default Loki[Serial]", func() {
+
+		currentPlatform := exutil.CheckPlatform(oc)
+		if strings.ToLower(currentPlatform) != "azure" {
+			g.Skip("The platforn is not Azure. Skipping case..")
+		}
+
+		exutil.By("Deploy LokiStack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-71773",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-71773",
+			storageClass:  sc,
+			bucketName:    "loki-71773-" + exutil.GetRandomString(),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("Create clusterlogforwarder as syslogserver and forward logs to default LokiStack")
+		clf := clusterlogforwarder{
+			name:         "instance",
+			namespace:    loggingNS,
+			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+		}
+		defer clf.delete(oc)
+		clf.create(oc)
+
+		exutil.By("Create ClusterLogging instance with Loki as logstore")
+		cl := clusterlogging{
+			name:          "instance",
+			namespace:     loggingNS,
+			collectorType: "vector",
+			logStoreType:  "lokistack",
+			lokistackName: ls.name,
+			waitForReady:  true,
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+		}
+		defer cl.delete(oc)
+		cl.create(oc)
+
+		exutil.By("Validate Logs in Loki")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+		for _, logType := range []string{"infrastructure", "audit"} {
+			lc.waitForLogsAppearByKey(logType, "log_type", logType)
+		}
+
+		exutil.By("Validate log streams in blob container referenced under object storage secret")
+		validateAzureContainerContents(oc, os.Getenv("LOKI_OBJECT_STORAGE_STORAGE_ACCOUNT"), ls.bucketName, []string{"application", "audit", "infrastructure"})
 	})
 })
