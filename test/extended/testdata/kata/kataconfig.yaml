@@ -16,7 +16,7 @@ objects:
           custom-label: test
 parameters:
   - name: NAME
-    value: "example kataconfig"
+    value: "example-kataconfig"
   - name: ELIGIBILITY
     type: boolean
     value: "false"
