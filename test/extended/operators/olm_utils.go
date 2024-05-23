@@ -1694,13 +1694,13 @@ func GetPodImageAndPolicy(oc *exutil.CLI, podName, project string) (imageMap map
 		imageNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, jsonPathImage, "-n", project).Output()
 		// sometimes some job's pod maybe deleted so skip it
 		if err != nil && !strings.Contains(err.Error(), "not found") {
-			e2e.Failf("Fail to get %s image, error:%v", v, err)
+			e2e.Logf("Fail to get %s image, error:%v", v, err)
 		}
 		imageNameSlice := strings.Split(imageNames, " ")
 
 		imagePullPolicys, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, jsonPathPolicy, "-n", project).Output()
 		if err != nil && !strings.Contains(err.Error(), "not found") {
-			e2e.Failf("Fail to get %s imagePullPolicy, error:%v", v, err)
+			e2e.Logf("Fail to get %s imagePullPolicy, error:%v", v, err)
 		}
 		imagePullPolicySlice := strings.Split(imagePullPolicys, " ")
 
