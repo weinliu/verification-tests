@@ -15,7 +15,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
+var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", func() {
 	defer g.GinkgoRecover()
 
 	var (
