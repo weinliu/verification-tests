@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 			"-o=jsonpath={.status.phase}"}).check(oc)
 
 		subD.complianceScanName(oc, "ocp4-cis-node-master")
-		subD.complianceScanResult(oc, "NON-COMPLIANT")
+		subD.getComplianceScanResult(oc, "ocp4-cis-node-master", "NON-COMPLIANT")
 
 		g.By("The ocp-40681 The oc compliance plugin has performed rescan on command successfully... !!!!\n ")
 

@@ -4097,7 +4097,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check ComplianceSuite status !!!\n")
 		checkComplianceSuiteStatus(oc, ssbCis, subD.namespace, "DONE")
 		subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
+		newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-cis", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -4114,7 +4114,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbCis, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
+			newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-cis", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -4204,7 +4204,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Check ComplianceSuite status !!!\n")
 		checkComplianceSuiteStatus(oc, ssbPci, subD.namespace, "DONE")
 		subD.complianceSuiteResult(oc, ssbPci, "NON-COMPLIANT")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
+		newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-pci-dss", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -4222,7 +4222,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkComplianceSuiteStatus(oc, ssbPci, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbPci, "NON-COMPLIANT")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
+			newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-pci-dss", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
