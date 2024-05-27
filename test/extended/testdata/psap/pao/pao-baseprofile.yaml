@@ -8,10 +8,9 @@ objects:
     metadata:
       name: pao-baseprofile
     spec:
-      additionalKernelArgs:
-      - nosmt
-      - tsc=reliable    
-      cpu:
+      additionalKernelArgs:        
+      - tsc=reliable    #      - nosmt  removed nosmt to improve succeed rate due to limited cpu cores
+      cpu:              #but manually renabled when have enough cpu cores
        isolated: "1"
        reserved: "0"
       hugepages:
@@ -27,4 +26,5 @@ objects:
        node-role.kubernetes.io/worker-pao: ""
 parameters:
   - name: ISENABLED
+
 

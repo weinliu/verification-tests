@@ -33,7 +33,7 @@ objects:
           limits:
             hugepages-2Mi: 100Mi
             memory: "1Gi"
-            cpu: "1"
+            cpu: "100m"
           requests:
             hugepages-2Mi: 100Mi
         env:

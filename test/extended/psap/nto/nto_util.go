@@ -1016,15 +1016,17 @@ func isROSAHostedCluster(oc *exutil.CLI) bool {
 
 func getFirstMasterNodeName(oc *exutil.CLI) string {
 	var firstMasterNodeName string
-	masterNodeNamesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l node-role.kubernetes.io/control-plane=", `-ojsonpath='{.items[*].status.addresses[?(@.type=="Hostname")].address}'`).Output()
+	//ibmcloud don't have {.items[*].status.addresses[?(@.type=="Hostname")].address}'
+	masterNodeNamesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l node-role.kubernetes.io/control-plane=", `-oname`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(masterNodeNamesStr).NotTo(o.BeEmpty())
-	masterNodeNames := strings.Trim(masterNodeNamesStr, "'")
-	masterNodeNamesArray := strings.Split(masterNodeNames, " ")
+	masterNodeNamesArray := strings.Split(masterNodeNamesStr, "\n")
 
 	if len(masterNodeNamesArray) > 0 {
-		firstMasterNodeName = masterNodeNamesArray[0]
-
+		firstMasterNodeNameArr := strings.Split(masterNodeNamesArray[0], "/")
+		if len(firstMasterNodeNameArr) > 1 {
+			firstMasterNodeName = firstMasterNodeNameArr[1]
+		}
 	}
 	return firstMasterNodeName
 }
