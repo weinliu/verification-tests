@@ -1688,22 +1688,33 @@ func GetPodImageAndPolicy(oc *exutil.CLI, podName, project string) (imageMap map
 	}
 	containers := []string{"initContainers", "containers"}
 	for _, v := range containers {
+		imageNameSlice := []string{}
+		imagePullPolicySlice := []string{}
 		jsonPathImage := fmt.Sprintf("-o=jsonpath={.spec.%s[*].image}", v)
 		jsonPathPolicy := fmt.Sprintf("-o=jsonpath={.spec.%s[*].imagePullPolicy}", v)
 
 		imageNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, jsonPathImage, "-n", project).Output()
 		// sometimes some job's pod maybe deleted so skip it
-		if err != nil && !strings.Contains(err.Error(), "not found") {
-			e2e.Logf("Fail to get %s image, error:%v", v, err)
+		if err != nil {
+			if !strings.Contains(imageNames, "NotFound") {
+				e2e.Failf("Fail to get %s image, error:%s", v, imageNames)
+			}
+		} else {
+			imageNameSlice = strings.Split(imageNames, " ")
 		}
-		imageNameSlice := strings.Split(imageNames, " ")
 
 		imagePullPolicys, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, jsonPathPolicy, "-n", project).Output()
-		if err != nil && !strings.Contains(err.Error(), "not found") {
-			e2e.Logf("Fail to get %s imagePullPolicy, error:%v", v, err)
+		if err != nil {
+			if !strings.Contains(imageNames, "NotFound") {
+				e2e.Failf("Fail to get %s imagePullPolicy, error:%v", v, err.Error())
+			}
+		} else {
+			imagePullPolicySlice = strings.Split(imagePullPolicys, " ")
 		}
-		imagePullPolicySlice := strings.Split(imagePullPolicys, " ")
 
+		if len(imageNameSlice) < 1 || len(imagePullPolicySlice) < 1 {
+			continue
+		}
 		for i := 0; i < len(imageNameSlice); i++ {
 			if _, ok := imageMap[imageNameSlice[i]]; !ok {
 				imageMap[imageNameSlice[i]] = imagePullPolicySlice[i]
