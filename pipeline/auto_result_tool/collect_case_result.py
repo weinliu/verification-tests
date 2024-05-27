@@ -169,6 +169,8 @@ class SummaryClient:
             return True
         if "Unable to connect to the server" in message:
             return True
+        if "dial tcp" in message and "no route to host" in message:
+            return True
         return False
 
 
