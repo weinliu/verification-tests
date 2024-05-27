@@ -446,4 +446,39 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		e2e.Logf("The rhOperatorUri is %v", rhOperatorUri)
 		validateTargetcatalogAndTag(rhOperatorUri, "v4.15")
 	})
+
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-72938-should give clear information for invalid operator filter setting [Serial]", func() {
+		dirname := "/tmp/case72938"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72938.yaml")
+		imageSetYamlFileT := filepath.Join(ocmirrorBaseDir, "config-72938-1.yaml")
+
+		exutil.By("Start mirrro2disk with min/max filtering")
+		mirrorToDiskOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+		if err != nil {
+			if strings.Contains(mirrorToDiskOutput, "cannot use channels/full and min/max versions at the same time") {
+				e2e.Logf("Error related to invalid operator filter by min/max is seen")
+			} else {
+				e2e.Failf("Error related to filtering by channel and package min/max is not seen")
+			}
+		}
+
+		exutil.By("Start mirror2disk min/max with full true filtering")
+		mirrorToDiskOutputFT, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileT, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+		if err != nil {
+			if strings.Contains(mirrorToDiskOutputFT, "cannot use channels/full and min/max versions at the same time") {
+				e2e.Logf("Error related to invalid operator filtering with full true is seen")
+			} else {
+				e2e.Failf("Error related to invalid operator filtering with full true is not seen")
+			}
+		}
+
+	})
 })
