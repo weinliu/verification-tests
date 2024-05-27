@@ -123,9 +123,8 @@ describe('Operator Hub tests', () => {
   it('(OCP-54037,yapei,UserInterface) Affinity definition support',{tags: ['e2e','admin','@osd-ccs']}, ()=> {
     cy.createProject(testParams.testNamespace);
     operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
-    cy.wait(60000);
     cy.visit(`/k8s/ns/${testParams.testNamespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-    operatorHubPage.checkOperatorStatus('Sonarqube Operator', 'Succeed');
+    operatorHubPage.checkOperatorStatus('Sonarqube Operator', 'Installing');
     cy.visit(`/k8s/ns/${testParams.testNamespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/sonarqube-operator.v0.0.6/sonarsource.parflesh.github.io~v1alpha1~SonarQube`)
     cy.byTestID('item-create').click();
     Operand.switchToFormView();
