@@ -1279,6 +1279,64 @@ func waitForLoadBalancerProvision(oc *exutil.CLI, ns string, ingressName string)
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the Load Balancer is not provisioned"))
 }
 
+// openssl generate the ca.key and ca.crt
+func opensslNewCa(caKey, caCrt, caSubj string) {
+	opensslCmd := fmt.Sprintf(`openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -keyout %v -out %v -nodes -subj "%v"`, caKey, caCrt, caSubj)
+	e2e.Logf("the openssl command is: %v", opensslCmd)
+	_, err := exec.Command("bash", "-c", opensslCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// openssl generate the server CSR
+func opensslNewCsr(serverKey, serverCsr, serverSubj string) {
+	opensslCmd := fmt.Sprintf(`openssl req -newkey rsa:4096 -nodes -sha256 -keyout %v -out %v -subj "%v"`, serverKey, serverCsr, serverSubj)
+	e2e.Logf("the openssl command is: %v", opensslCmd)
+	_, err := exec.Command("bash", "-c", opensslCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// openssl sign the server CSR and generate server.crt
+func opensslSignCsr(extfile, serverCsr, caCrt, caKey, serverCrt string) {
+	opensslCmd := fmt.Sprintf(`openssl x509 -req -extfile <(printf "%v") -days 30 -in %v -CA %v -CAcreateserial -CAkey %v -out %v`, extfile, serverCsr, caCrt, caKey, serverCrt)
+	e2e.Logf("the openssl command is: %v", opensslCmd)
+	_, err := exec.Command("bash", "-c", opensslCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// wait until curling route returns expected output (check error as well)
+// curl is executed on client outside the cluster
+func waitForOutsideCurlContains(url string, curlOptions string, expected string) {
+	cmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, curlOptions, url)
+	e2e.Logf("the command is: %s", cmd)
+	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		result, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("the result is: %s", result)
+		if err != nil {
+			e2e.Logf("the error is: %v", err.Error())
+			if strings.Contains(err.Error(), expected) {
+				e2e.Logf("the expected string is included in err: %v", err)
+				return true, nil
+			} else {
+				e2e.Logf("hit execution error: %v, retrying...", err)
+				return false, nil
+			}
+		}
+		if !strings.Contains(string(result), expected) {
+			e2e.Logf("no expected string in the curl response: %s, retrying...", result)
+			return false, nil
+		}
+		return true, nil
+	})
+	// for debugging: print verbose result of curl if timeout
+	if waitErr != nil {
+		debug_cmd := fmt.Sprintf(`curl --connect-time 10 -s -v %s %s 2>&1`, curlOptions, url)
+		e2e.Logf("the debug command is: %s", debug_cmd)
+		result, err := exec.Command("bash", "-c", debug_cmd).Output()
+		e2e.Logf("debug: the result of curl is %s and err is %v", result, err)
+	}
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but not get expected string"))
+}
+
 // curl command with poll
 func waitForCurl(oc *exutil.CLI, podName, baseDomain string, routestring string, searchWord string, controllerIP string) {
 	e2e.Logf("Polling for curl command")
@@ -1322,6 +1380,14 @@ func nslookupsAndWaitForDNSlog(oc *exutil.CLI, podName, searchLog string, dnsPod
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached,but expected string \"%s\" is not found in the dns logs", searchLog))
 	return output
+}
+
+// this function will get the route hostname
+func getRouteHost(oc *exutil.CLI, ns, routeName string) string {
+	host, err := oc.AsAdmin().Run("get").Args("route", routeName, "-n", ns, `-ojsonpath={.spec.host}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the host of the route %v is %v.", routeName, host)
+	return host
 }
 
 // this function will get the route detail

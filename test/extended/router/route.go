@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -332,5 +333,106 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		backendName := "be_http:" + project1 + ":service-unsecure"
 		output = readHaproxyConfig(oc, defaultPod, backendName, "-A5", "acl whitelist src")
 		o.Expect(output).To(o.ContainSubstring(`acl whitelist src 2600:14a0::/40`))
+	})
+
+	// author: hongli@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:hongli-High-73771-router can load secret", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			requiredRole        = filepath.Join(buildPruningBaseDir, "ocp73771-role.yaml")
+			unsecsvcName        = "service-unsecure1"
+			secsvcName          = "service-secure1"
+			tmpdir              = "/tmp/OCP-73771-CA/"
+			caKey               = tmpdir + "ca.key"
+			caCrt               = tmpdir + "ca.crt"
+			serverKey           = tmpdir + "server.key"
+			serverCsr           = tmpdir + "server.csr"
+			serverCrt           = tmpdir + "server.crt"
+			multiServerCrt      = tmpdir + "multiserver.crt"
+		)
+		exutil.By("create project, pod, svc resources")
+		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
+		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+
+		exutil.By("Create edge/passthrough/reencrypt routes and all should be reachable")
+		extraParas := []string{}
+		createRoute(oc, oc.Namespace(), "edge", "myedge", unsecsvcName, extraParas)
+		createRoute(oc, oc.Namespace(), "passthrough", "mypass", secsvcName, extraParas)
+		createRoute(oc, oc.Namespace(), "reencrypt", "myreen", secsvcName, extraParas)
+		edgeRouteHost := getRouteHost(oc, oc.Namespace(), "myedge")
+		passRouteHost := getRouteHost(oc, oc.Namespace(), "mypass")
+		reenRouteHost := getRouteHost(oc, oc.Namespace(), "myreen")
+		waitForOutsideCurlContains("https://"+edgeRouteHost, "-k", "Hello-OpenShift")
+		waitForOutsideCurlContains("https://"+passRouteHost, "-k", "Hello-OpenShift")
+		waitForOutsideCurlContains("https://"+reenRouteHost, "-k", "Hello-OpenShift")
+
+		exutil.By("should be failed if patch the edge route without required role and secret")
+		err1 := "Forbidden: user does not have update permission on custom-host"
+		err2 := "Forbidden: router serviceaccount does not have permission to get this secret"
+		err3 := "Forbidden: router serviceaccount does not have permission to watch this secret"
+		err4 := "Forbidden: router serviceaccount does not have permission to list this secret"
+		err5 := `Not found: "secrets \"mytls\" not found`
+		output, err := oc.WithoutNamespace().Run("patch").Args("-n", oc.Namespace(), "route/myedge", "-p", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(err1),
+			o.ContainSubstring(err2),
+			o.ContainSubstring(err3),
+			o.ContainSubstring(err4),
+			o.ContainSubstring(err5)))
+
+		exutil.By("create required role/rolebinding and secret")
+		// create required role and rolebinding
+		createResourceFromFile(oc, oc.Namespace(), requiredRole)
+		// prepare the tmp folder and create self-signed cerfitcate
+		defer os.RemoveAll(tmpdir)
+		err = os.MkdirAll(tmpdir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		opensslNewCa(caKey, caCrt, "/CN=ne-root-ca")
+		opensslNewCsr(serverKey, serverCsr, "/CN=ne-server-cert")
+		// san just contains edge route host but not reen route host
+		san := "subjectAltName=DNS:" + edgeRouteHost
+		opensslSignCsr(san, serverCsr, caCrt, caKey, serverCrt)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", oc.Namespace(), "secret", "tls", "mytls", "--cert="+serverCrt, "--key="+serverKey).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("patch the edge and reen route, but only edge route should be reachable")
+		patchResourceAsAdmin(oc, oc.Namespace(), "route/myedge", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`)
+		patchResourceAsAdmin(oc, oc.Namespace(), "route/myreen", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`)
+		curlOptions := fmt.Sprintf("--cacert %v", caCrt)
+		waitForOutsideCurlContains("https://"+edgeRouteHost, curlOptions, "Hello-OpenShift")
+		waitForOutsideCurlContains("https://"+reenRouteHost, curlOptions, "exit status 60")
+
+		exutil.By("renew the server certificate with multi SAN and refresh the secret")
+		// multiSan contains both edge and reen route host
+		multiSan := san + ", DNS:" + reenRouteHost
+		opensslSignCsr(multiSan, serverCsr, caCrt, caKey, multiServerCrt)
+		newSecretYaml, err := oc.Run("create").Args("-n", oc.Namespace(), "secret", "tls", "mytls", "--cert="+multiServerCrt, "--key="+serverKey, "--dry-run=client", "-o=yaml").OutputToFile("ocp73771-newsecret.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("apply").Args("-f", newSecretYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("with the updated secret, both edge and reen route should be reachable")
+		waitForOutsideCurlContains("https://"+edgeRouteHost, curlOptions, "Hello-OpenShift")
+		waitForOutsideCurlContains("https://"+reenRouteHost, curlOptions, "Hello-OpenShift")
+
+		exutil.By("should failed to patch passthrough route with externalCertificate")
+		output, err = oc.WithoutNamespace().Run("patch").Args("-n", oc.Namespace(), "route/mypass", "-p", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("passthrough termination does not support certificate"))
+
+		exutil.By("edge route reports error after deleting the referenced secret")
+		err = oc.Run("delete").Args("-n", oc.Namespace(), "secret", "mytls").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.Run("get").Args("-n", oc.Namespace(), "route", "myedge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("ExternalCertificateValidationFailed"))
 	})
 })
