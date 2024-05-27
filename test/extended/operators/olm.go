@@ -2496,12 +2496,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				singleNamespace:        true,
 				template:               subFile,
 			}
-
-			workerNodes, _ = exutil.GetClusterNodesBy(oc, "worker")
-			firstNode      = workerNodes[0]
 		)
-
-		if isSNOCluster(oc) {
+		workerNodes, _ := exutil.GetSchedulableLinuxWorkerNodes(oc)
+		firstNode := ""
+		for _, worker := range workerNodes {
+			for _, con := range worker.Status.Conditions {
+				_, ok := worker.Labels["node-role.kubernetes.io/edge"]
+				if con.Type == "Ready" && con.Status == "True" && !ok {
+					firstNode = worker.Name
+				}
+			}
+		}
+		if isSNOCluster(oc) || firstNode == "" {
 			g.Skip("SNO cluster - skipping test ...")
 		}
 
