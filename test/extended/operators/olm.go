@@ -6146,7 +6146,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			exutil.IsSpecifiedAnnotationKeyExist(oc, "ingress.config/cluster", "", `ingress.operator.openshift.io/default-enable-http2`) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" ||
+			exutil.IsTechPreviewNoUpgrade(oc) {
 			g.Skip("it is not supported")
 		}
 		var (
