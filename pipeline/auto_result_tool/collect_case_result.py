@@ -167,6 +167,8 @@ class SummaryClient:
             return True
         if "request did not complete within requested timeout" in message:
             return True
+        if "Unable to connect to the server" in message:
+            return True
         return False
 
 
