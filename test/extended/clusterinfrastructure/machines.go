@@ -1218,4 +1218,34 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(internalDNS, "example73762a.com") && strings.Contains(internalDNS, "example73762b.com") && strings.Contains(internalDNS, "example73762c.com")).To(o.BeTrue())
 	})
+
+	//author zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-73851-Node shouldn't have uninitialized taint [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+
+		g.By("Create a new machineset")
+		machinesetName := "machineset-73851"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset taint")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"taints":[{"key":"node.kubernetes.io/unreachable","effect":"NoExecute"},{"key":"anything","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/infra","effect":"NoExecute"},{"key":"node.kubernetes.io/not-ready","effect":"NoExecute"}]}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check no uninitialized taint in node")
+		machineName := clusterinfra.GetLatestMachineFromMachineSet(oc, machinesetName)
+		o.Expect(machineName).NotTo(o.BeEmpty())
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
+		o.Eventually(func() bool {
+			readyStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
+			return err == nil && o.Expect(readyStatus).Should(o.Equal("True"))
+		}).WithTimeout(5 * time.Minute).WithPolling(30 * time.Second).Should(o.BeTrue())
+
+		taints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.taints}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(taints).ShouldNot(o.ContainSubstring("uninitialized"))
+	})
 })

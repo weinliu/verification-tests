@@ -155,6 +155,32 @@ func GetNodeNameFromMachine(oc *exutil.CLI, machineName string) string {
 	return nodeName
 }
 
+// GetLatestMachineFromMachineSet returns the new created machine by a given machineSet.
+func GetLatestMachineFromMachineSet(oc *exutil.CLI, machineSet string) string {
+	machines := GetMachineNamesFromMachineSet(oc, machineSet)
+	if len(machines) == 0 {
+		e2e.Logf("Unable to get the latest machine for machineset %s", machineSet)
+		return ""
+	}
+
+	var machine string
+	newest := time.Date(2020, 0, 1, 12, 0, 0, 0, time.UTC)
+	for key := range machines {
+		machineCreationTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machines[key], "-o=jsonpath={.metadata.creationTimestamp}", "-n", MachineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		parsedMachineCreationTime, err := time.Parse(time.RFC3339, machineCreationTime)
+		if err != nil {
+			e2e.Logf("Error parsing time:", err)
+			return ""
+		}
+		if parsedMachineCreationTime.After(newest) {
+			newest = parsedMachineCreationTime
+			machine = machines[key]
+		}
+	}
+	return machine
+}
+
 // GetRandomMachineSetName get a random RHCOS MachineSet name, if it's aws outpost cluster, return a outpost machineset
 func GetRandomMachineSetName(oc *exutil.CLI) string {
 	e2e.Logf("Getting a random MachineSet ...")
