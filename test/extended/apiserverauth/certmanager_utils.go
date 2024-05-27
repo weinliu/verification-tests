@@ -213,7 +213,12 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status", subscriptionName))
+	if errCheck != nil {
+		e2e.Logf("Dumping the status of subscription %s:", subscriptionName)
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Failf("The subscription %v status is not correct", subscriptionName)
+	}
 
 	// checking csv status
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.installedCSV}").Output()
