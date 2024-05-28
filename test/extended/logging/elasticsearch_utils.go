@@ -1,12 +1,9 @@
 package logging
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,156 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
-
-func getESIndices(ns string, pod string) ([]ESIndex, error) {
-	cmd := "es_util --query=_cat/indices?format=JSON"
-	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 3*time.Second, 9*time.Second)
-	indices := []ESIndex{}
-	json.Unmarshal([]byte(stdout), &indices)
-	return indices, err
-}
-
-func getESIndicesByName(ns string, pod string, indexName string) ([]ESIndex, error) {
-	cmd := "es_util --query=_cat/indices/" + indexName + "*?format=JSON"
-	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
-	indices := []ESIndex{}
-	json.Unmarshal([]byte(stdout), &indices)
-	return indices, err
-}
-
-func waitForIndexAppear(ns string, pod string, indexName string) {
-	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		indices, err := getESIndices(ns, pod)
-		count := 0
-		for _, index := range indices {
-			if strings.Contains(index.Index, indexName) {
-				if index.Health != "red" {
-					docCount, _ := strconv.Atoi(index.DocsCount)
-					count += docCount
-				}
-			}
-		}
-		if count > 0 && err == nil {
-			return true, nil
-		}
-		return false, err
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s is not appeared or the doc count is 0 in last 180 seconds.", indexName))
-}
-
-func getDocCountByQuery(ns string, pod string, indexName string, queryString string) (int64, error) {
-	cmd := "es_util --query=" + indexName + "*/_count?format=JSON -d '" + queryString + "'"
-	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
-	res := CountResult{}
-	json.Unmarshal([]byte(stdout), &res)
-	return res.Count, err
-}
-
-func waitForProjectLogsAppear(ns string, pod string, projectName string, indexName string) {
-	query := "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"" + projectName + "\"}}}"
-	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		logCount, err := getDocCountByQuery(ns, pod, indexName, query)
-		if err != nil {
-			return false, err
-		}
-		if logCount > 0 {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The logs of project %s weren't collected to index %s in last 180 seconds.", projectName, indexName))
-}
-
-func searchDocByQuery(ns string, pod string, indexName string, queryString string) SearchResult {
-	cmd := "es_util --query=" + indexName + "*/_search?format=JSON"
-	if len(queryString) > 0 {
-		cmd += " -d '" + queryString + "'"
-	}
-	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
-	o.Expect(err).ShouldNot(o.HaveOccurred())
-	res := SearchResult{}
-	//data := bytes.NewReader([]byte(stdout))
-	//_ = json.NewDecoder(data).Decode(&res)
-	json.Unmarshal([]byte(stdout), &res)
-	return res
-
-}
-
-func queryInES(ns, pod, queryString string) (SearchResult, error) {
-	cmd := "es_util --query=" + queryString
-	res := SearchResult{}
-	stdout, err := e2eoutput.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
-	if err != nil {
-		return res, err
-	}
-	err = json.Unmarshal([]byte(stdout), &res)
-	return res, err
-}
-
-func exposeESService(oc *exutil.CLI, ns string) {
-	// create a temporary directory
-	dirname := "/tmp/" + oc.Namespace() + "-es"
-	defer os.RemoveAll(dirname)
-	err := os.MkdirAll(dirname, 0777)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/elasticsearch", "-n", ns, "--confirm", "--to="+dirname, "--keys=admin-ca").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	routeFile := exutil.FixturePath("testdata", "logging", "elasticsearch", "route.yaml")
-	err = exec.Command("bash", "-c", fmt.Sprintf("cat %s/admin-ca | sed -e \"s/^/      /\"  >> %s", dirname, routeFile)).Run()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", routeFile, "-n", ns).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func queryInESViaRoute(route, token string, indices []string, path, query, action string) ([]byte, error) {
-	h := make(http.Header)
-	h.Add("Content-Type", "application/json")
-	h.Add("Authorization", "Bearer "+token)
-
-	var index string
-	if len(indices) > 0 {
-		index = strings.Join(indices, ",")
-	}
-
-	if len(path) == 0 {
-		path = "_search"
-	}
-
-	if len(action) == 0 {
-		action = "POST"
-	}
-
-	resp, err := doHTTPRequest(h, route, index+"/"+path, "", strings.ToUpper(action), true, 5, bytes.NewReader([]byte(query)), 200)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-func getIndexNamesViaRoute(route, token, prefix string) ([]string, error) {
-	h := make(http.Header)
-	h.Add("Content-Type", "application/json")
-	h.Add("Authorization", "Bearer "+token)
-
-	params := url.Values{}
-	params.Add("format", "json")
-
-	resp, err := doHTTPRequest(h, route, "_cat/indices", params.Encode(), "GET", true, 5, nil, 200)
-	if err != nil {
-		return nil, err
-	}
-	var esIndices []ESIndex
-	json.Unmarshal([]byte(resp), &esIndices)
-	var indices []string
-	for _, i := range esIndices {
-		if strings.HasPrefix(i.Index, prefix) {
-			indices = append(indices, i.Index)
-		}
-	}
-	return indices, nil
-}
 
 type externalES struct {
 	namespace                  string

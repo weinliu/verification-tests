@@ -9,12 +9,12 @@ objects:
   - kind: ServiceAccount
     apiVersion: v1
     metadata:
-      name: eventrouter
+      name: ${NAME}
       namespace: ${NAMESPACE}
   - kind: ClusterRole
     apiVersion: v1
     metadata:
-      name: event-reader
+      name: ${NAME}-reader
     rules:
     - apiGroups: [""]
       resources: ["events"]
@@ -22,18 +22,18 @@ objects:
   - kind: ClusterRoleBinding
     apiVersion: v1
     metadata:
-      name: event-reader-binding
+      name: ${NAME}-reader-binding
     subjects:
     - kind: ServiceAccount
-      name: eventrouter
+      name: ${NAME}
       namespace: ${NAMESPACE}
     roleRef:
       kind: ClusterRole
-      name: event-reader
+      name: ${NAME}-reader
   - kind: ConfigMap
     apiVersion: v1
     metadata:
-      name: eventrouter
+      name: ${NAME}
       namespace: ${NAMESPACE}
     data:
       config.json: |-
@@ -43,7 +43,7 @@ objects:
   - kind: Deployment
     apiVersion: apps/v1
     metadata:
-      name: ${EVENT_ROUTER_NAME}
+      name: ${NAME}
       namespace: ${NAMESPACE}
       labels:
         component: "eventrouter"
@@ -62,9 +62,9 @@ objects:
             component: "eventrouter"
             logging-infra: "eventrouter"
             provider: "openshift"
-          name: eventrouter
+          name: ${NAME}
         spec:
-          serviceAccount: eventrouter
+          serviceAccount: ${NAME}
           containers:
             - name: kube-eventrouter
               image: ${IMAGE}
@@ -79,7 +79,7 @@ objects:
           volumes:
             - name: config-volume
               configMap:
-                name: eventrouter
+                name: ${NAME}
 parameters:
   - name: IMAGE
     displayName: Image
@@ -93,6 +93,6 @@ parameters:
   - name: NAMESPACE
     displayName: Namespace
     value: "openshift-logging"
-  - name: EVENT_ROUTER_NAME
+  - name: NAME
     value: eventrouter
     displayName: Event Router name

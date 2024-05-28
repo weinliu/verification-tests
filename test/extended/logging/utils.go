@@ -342,7 +342,7 @@ func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 	//_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", csv).Execute()
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "-l", "operators.coreos.com/"+so.PackageName+"."+so.Namespace+"=").Execute()
 	// do not remove namespace openshift-logging and openshift-operators-redhat, and preserve the operatorgroup as there may have several operators deployed in one namespace
-	// for example: loki-operator and elasticsearch-operator
+	// for example: loki-operator
 	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
 		deleteNamespace(oc, so.Namespace)
 	}
@@ -494,35 +494,6 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s is not ready", label))
 }
 
-// getDeploymentsNameByLabel retruns a list of deployment name which have specific labels
-func getDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string {
-	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				e2e.Logf("Can't get deployment(s) match label(s) %s, retrying...\n", label)
-				return false, nil
-			}
-			return false, err
-		}
-		if len(deployList.Items) > 0 {
-			return true, nil
-		}
-		return false, nil
-	})
-	if err == nil {
-		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		expectedDeployments := make([]string, 0, len(deployList.Items))
-		for _, deploy := range deployList.Items {
-			expectedDeployments = append(expectedDeployments, deploy.Name)
-		}
-		return expectedDeployments
-	}
-	e2e.Logf("No deployment matches label(s) %s in %s project", label, ns)
-	return nil
-}
-
 func getPodNames(oc *exutil.CLI, ns, label string) ([]string, error) {
 	var names []string
 	pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
@@ -536,19 +507,6 @@ func getPodNames(oc *exutil.CLI, ns, label string) ([]string, error) {
 		names = append(names, pod.Name)
 	}
 	return names, nil
-}
-
-// WaitForECKPodsToBeReady checks if the EFK pods could become ready or not
-func WaitForECKPodsToBeReady(oc *exutil.CLI, ns string) {
-	//wait for ES
-	esDeployNames := getDeploymentsNameByLabel(oc, ns, "cluster-name=elasticsearch")
-	for _, name := range esDeployNames {
-		WaitForDeploymentPodsToBeReady(oc, ns, name)
-	}
-	// wait for Kibana
-	WaitForDeploymentPodsToBeReady(oc, ns, "kibana")
-	// wait for collector
-	WaitForDaemonsetPodsToBeReady(oc, ns, "collector")
 }
 
 type resource struct {
@@ -631,16 +589,7 @@ func deleteClusterLogging(oc *exutil.CLI, name, namespace string) {
 		json.Unmarshal([]byte(clOutput), &cl)
 		//make sure other resources are removed
 		resources := []resource{{"daemonset", "collector", namespace}}
-		if *cl.Spec.LogStoreSpec.Type == "elasticsearch" {
-			resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", namespace})
-			if len(cl.Spec.LogStoreSpec.ElasticsearchSpec.Storage.StorageClassName) > 0 {
-				// remove all the pvcs in the namespace
-				_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
-			}
-		}
-		if *cl.Spec.VisualizationSpec.Type == "kibana" {
-			resources = append(resources, resource{"kibanas.logging.openshift.io", "kibana", namespace})
-		} else if *cl.Spec.VisualizationSpec.Type == "ocp-console" {
+		if *cl.Spec.VisualizationSpec.Type == "ocp-console" {
 			resources = append(resources, resource{"deployment", "logging-view-plugin", namespace})
 		}
 		for i := 0; i < len(resources); i++ {
@@ -651,16 +600,13 @@ func deleteClusterLogging(oc *exutil.CLI, name, namespace string) {
 }
 
 type clusterlogging struct {
-	name             string // default: instance
-	namespace        string // default: openshift-logging
-	collectorType    string // default: vector
-	logStoreType     string // `elasticsearch` or `lokistack`, no default value
-	esNodeCount      int    // if it's specified, parameter `ES_NODE_COUNT=${esNodeCount}` will be added when creating the CR
-	storageClassName string // works when the logStoreType is elasticsearch
-	storageSize      string // works when the logStoreType is elasticsearch and the storageClassName is specified
-	lokistackName    string // required value when logStoreType is lokistack
-	templateFile     string // the template used to create clusterlogging, no default value
-	waitForReady     bool   // if true, will wait for all the logging pods to be ready after creating the CR
+	name          string // default: instance
+	namespace     string // default: openshift-logging
+	collectorType string // default: vector
+	logStoreType  string // `elasticsearch` or `lokistack`, no default value
+	lokistackName string // required value when logStoreType is lokistack
+	templateFile  string // the template used to create clusterlogging, no default value
+	waitForReady  bool   // if true, will wait for all the logging pods to be ready after creating the CR
 }
 
 // create a clusterlogging CR from a template
@@ -678,18 +624,8 @@ func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
 		cl.collectorType = "vector"
 	}
 
-	if cl.storageClassName != "" && cl.storageSize == "" {
-		cl.storageSize = "20Gi"
-	}
 	parameters := []string{"-p", "NAME=" + cl.name, "NAMESPACE=" + cl.namespace, "COLLECTOR=" + cl.collectorType}
-	if cl.logStoreType == "elasticsearch" {
-		if cl.esNodeCount > 0 {
-			parameters = append(parameters, "ES_NODE_COUNT="+strconv.Itoa(cl.esNodeCount))
-		}
-		if cl.storageClassName != "" {
-			parameters = append(parameters, "STORAGE_CLASS="+cl.storageClassName, "PVC_SIZE="+cl.storageSize)
-		}
-	} else if cl.logStoreType == "lokistack" {
+	if cl.logStoreType == "lokistack" {
 		if cl.lokistackName == "" {
 			e2e.Failf("lokistack name is not provided")
 		}
@@ -752,13 +688,7 @@ func (cl *clusterlogging) delete(oc *exutil.CLI) {
 	if cl.name == "instance" && cl.namespace == loggingNS {
 		resources = append(resources, resource{"daemonset", "collector", cl.namespace})
 	}
-	if cl.logStoreType == "elasticsearch" {
-		resources = append(resources, resource{"elasticsearches.logging.openshift.io", "elasticsearch", cl.namespace}, resource{"kibanas.logging.openshift.io", "kibana", cl.namespace})
-		if cl.storageClassName != "" {
-			// remove all the pvcs in the namespace
-			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", cl.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
-		}
-	} else if cl.logStoreType == "lokistack" {
+	if cl.logStoreType == "lokistack" {
 		resources = append(resources, resource{"deployment", "logging-view-plugin", cl.namespace})
 	}
 	for i := 0; i < len(resources); i++ {
@@ -772,24 +702,7 @@ func (cl *clusterlogging) delete(oc *exutil.CLI) {
 
 // wait for the logging pods to be ready
 func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
-	if cl.logStoreType == "elasticsearch" {
-		var esDeployNames []string
-		err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(context.Context) (done bool, err error) {
-			esDeployNames = getDeploymentsNameByLabel(oc, cl.namespace, "cluster-name=elasticsearch")
-			if len(esDeployNames) != cl.esNodeCount {
-				e2e.Logf("expect %d ES deployments, but only find %d, try next time...", cl.esNodeCount, len(esDeployNames))
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "some ES deployments are not created")
-
-		for _, name := range esDeployNames {
-			WaitForDeploymentPodsToBeReady(oc, cl.namespace, name)
-		}
-		// wait for Kibana
-		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "kibana")
-	} else if cl.logStoreType == "lokistack" {
+	if cl.logStoreType == "lokistack" {
 		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
 	}
 	// wait for collector
@@ -1034,44 +947,6 @@ func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cronjob %s is not available", name))
 }
 
-func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
-	// wait for jobs to appear
-	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, true, func(context.Context) (done bool, err error) {
-		jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "component=indexManagement"})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of jobs\n")
-				return false, nil
-			}
-			return false, err
-		}
-		if len(jobList.Items) > 0 {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("jobs with label %s are not exist", "component=indexManagement"))
-	// wait for jobs to complete
-	jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "component=indexManagement"})
-	o.Expect(err).NotTo(o.HaveOccurred())
-	for _, job := range jobList.Items {
-		err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
-			job, err := oc.AdminKubeClient().BatchV1().Jobs(ns).Get(context.Background(), job.Name, metav1.GetOptions{})
-			//succeeded, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "job", job.Name, "-o=jsonpath={.status.succeeded}").Output()
-			if err != nil {
-				return false, err
-			}
-			if job.Status.Succeeded == 1 {
-				e2e.Logf("job %s completed successfully", job.Name)
-				return true, nil
-			}
-			e2e.Logf("job %s is not completed yet", job.Name)
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("job %s is not completed yet", job.Name))
-	}
-}
-
 func getStorageClassName(oc *exutil.CLI) (string, error) {
 	scs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
@@ -1154,7 +1029,7 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	}
 
 	var p prometheusQueryResult
-	resp, err := doHTTPRequest(h, address, path, params.Encode(), action, false, 5, nil, 200)
+	resp, err := doHTTPRequest(h, address, path, params.Encode(), action, true, 5, nil, 200)
 	if err != nil {
 		return nil, err
 	}
@@ -1209,8 +1084,7 @@ func checkAlert(oc *exutil.CLI, token, alertName, status string, timeInMinutes i
 			return false, err
 		}
 		for _, alert := range alerts {
-			s, _ := regexp.Compile(status)
-			if s.MatchString(alert.State) {
+			if strings.Contains(status, alert.State) {
 				return true, nil
 			}
 		}
@@ -1237,9 +1111,9 @@ func WaitUntilPodsAreGone(oc *exutil.CLI, namespace string, labelSelector string
 }
 
 // Check logs from resource
-func (r resource) checkLogsFromRs(oc *exutil.CLI, expected string, containerName string) {
+func checkLogsFromRs(oc *exutil.CLI, kind, name, namespace, containerName, expected string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(r.kind+`/`+r.name, "-n", r.namespace, "-c", containerName).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(kind+`/`+name, "-n", namespace, "-c", containerName).Output()
 		if err != nil {
 			e2e.Logf("Can't get logs from resource, error: %s. Trying again", err)
 			return false, nil
@@ -1251,7 +1125,7 @@ func (r resource) checkLogsFromRs(oc *exutil.CLI, expected string, containerName
 		e2e.Logf("Check the logs succeed!!\n")
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s is not expected for %s", expected, r.name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s is not expected for %s", expected, name))
 }
 
 func getCurrentCSVFromPackage(oc *exutil.CLI, source, channel, packagemanifest string) string {
@@ -1271,83 +1145,6 @@ func getCurrentCSVFromPackage(oc *exutil.CLI, source, channel, packagemanifest s
 		}
 	}
 	return currentCSV
-}
-
-func chkMustGather(oc *exutil.CLI, ns string, clin string) {
-	cloImg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "deployment.apps/cluster-logging-operator", "-o", "jsonpath={.spec.template.spec.containers[?(@.name == \"cluster-logging-operator\")].image}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The cloImg is: " + cloImg)
-
-	cloPodList, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
-	o.Expect(err).NotTo(o.HaveOccurred())
-	cloImgID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pods", cloPodList.Items[0].Name, "-o", "jsonpath={.status.containerStatuses[0].imageID}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The cloImgID is: " + cloImgID)
-
-	mgDest := "must-gather-" + getRandomString()
-	baseDir := exutil.FixturePath("testdata", "logging")
-	TestDataPath := filepath.Join(baseDir, mgDest)
-	defer exec.Command("rm", "-r", TestDataPath).Output()
-	err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", ns, "must-gather", "--image="+cloImg, "--dest-dir="+TestDataPath).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	replacer := strings.NewReplacer(".", "-", "/", "-", ":", "-", "@", "-")
-	cloImgDir := replacer.Replace(cloImgID)
-	var checkPath []string
-	if clin == "collector" {
-		checkPath = []string{
-			"timestamp",
-			"event-filter.html",
-			cloImgDir + "/timestamp",
-			cloImgDir + "/gather-debug.log",
-			cloImgDir + "/event-filter.html",
-			cloImgDir + "/cluster-scoped-resources",
-			cloImgDir + "/namespaces",
-			cloImgDir + "/cluster-logging/clo",
-			cloImgDir + "/cluster-logging/clo/openshift-logging/daemonsets.txt",
-			cloImgDir + "/cluster-logging/collectors",
-			cloImgDir + "/cluster-logging/install",
-			cloImgDir + "/cluster-logging/install/install_plan-clo",
-			cloImgDir + "/cluster-logging/install/install_plan-eo",
-			cloImgDir + "/cluster-logging/install/subscription-clo",
-			cloImgDir + "/cluster-logging/install/subscription-eo",
-			cloImgDir + "/namespaces/openshift-logging/core/configmaps/collector-config.yaml",
-		}
-	} else {
-		checkPath = []string{
-			"timestamp",
-			"event-filter.html",
-			cloImgDir + "/timestamp",
-			cloImgDir + "/gather-debug.log",
-			cloImgDir + "/event-filter.html",
-			cloImgDir + "/cluster-scoped-resources",
-			cloImgDir + "/namespaces",
-			cloImgDir + "/cluster-logging/clo",
-			cloImgDir + "/namespaces/openshift-logging/core/configmaps/collector-config.yaml",
-			cloImgDir + "/cluster-logging/clo/openshift-logging/deployments.txt",
-			cloImgDir + "/cluster-logging/clo/openshift-logging/daemonsets.txt",
-			cloImgDir + "/cluster-logging/clo/openshift-logging/elasticsearch.crt",
-			cloImgDir + "/cluster-logging/clo/openshift-logging/elasticsearch.key",
-			cloImgDir + "/cluster-logging/clo/openshift-logging/logging-es.crt",
-			cloImgDir + "/cluster-logging/clo/openshift-logging/logging-es.key",
-			cloImgDir + "/cluster-logging/eo",
-			cloImgDir + "/cluster-logging/eo/eo-deployment.describe",
-			cloImgDir + "/cluster-logging/es",
-			cloImgDir + "/cluster-logging/es/cluster-elasticsearch",
-			cloImgDir + "/cluster-logging/es/elasticsearch_cr.yaml",
-			cloImgDir + "/cluster-logging/collectors",
-			cloImgDir + "/cluster-logging/install",
-			cloImgDir + "/cluster-logging/install/install_plan-clo",
-			cloImgDir + "/cluster-logging/install/install_plan-eo",
-			cloImgDir + "/cluster-logging/install/subscription-clo",
-			cloImgDir + "/cluster-logging/install/subscription-eo",
-		}
-	}
-
-	for _, v := range checkPath {
-		pathStat, err := os.Stat(filepath.Join(TestDataPath, v))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(pathStat.Size() > 0).To(o.BeTrue(), "The path %s is empty", v)
-	}
 }
 
 func checkNetworkType(oc *exutil.CLI) string {
@@ -1700,62 +1497,6 @@ func (f fluentdServer) checkData(oc *exutil.CLI, expect bool, filename string) {
 
 }
 
-type logstash struct {
-	name      string
-	namespace string
-}
-
-func (l logstash) deploy(oc *exutil.CLI) {
-	cmFile := exutil.FixturePath("testdata", "logging", "external-log-stores", "logstash", "configmap.yaml")
-	deployFile := exutil.FixturePath("testdata", "logging", "external-log-stores", "logstash", "deployment.yaml")
-
-	deploy := resource{"deployment", l.name, l.namespace}
-	configmap := resource{"configmap", l.name, l.namespace}
-	svc := resource{"svc", l.name, l.namespace}
-
-	err := configmap.applyFromTemplate(oc, "-f", cmFile, "-n", l.namespace, "-p", "NAMESPACE="+l.namespace, "-p", "NAME="+l.name)
-	if err != nil {
-		e2e.Failf("can't create configmap %s in %s project: %v", l.name, l.namespace, err)
-	}
-
-	err = deploy.applyFromTemplate(oc, "-f", deployFile, "-n", l.namespace, "-p", "NAMESPACE="+l.namespace, "-p", "NAME="+l.name)
-	if err != nil {
-		e2e.Failf("can't create deployment %s in %s project: %v", l.name, l.namespace, err)
-	}
-	svc.WaitForResourceToAppear(oc)
-	WaitForDeploymentPodsToBeReady(oc, l.namespace, l.name)
-}
-
-func (l logstash) remove(oc *exutil.CLI) {
-	for _, k := range []string{"deployment", "configmap", "svc"} {
-		resource{k, l.name, l.namespace}.clear(oc)
-	}
-}
-
-func (l logstash) checkData(oc *exutil.CLI, expect bool, filename string) {
-	pods, err := oc.AdminKubeClient().CoreV1().Pods(l.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=" + l.name})
-	if err != nil {
-		e2e.Failf("can't get pod with label component=%s in %s project: %v", l.name, l.namespace, err)
-	}
-
-	cmd := "ls -l /usr/share/logstash/data/" + filename
-	err = wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
-		stdout, err := e2eoutput.RunHostCmdWithRetries(l.namespace, pods.Items[0].Name, cmd, 3*time.Second, 15*time.Second)
-		if err != nil {
-			return false, err
-		}
-		if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
-			return true, nil
-		}
-		return false, nil
-	})
-	if expect {
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The %s doesn't exist", filename))
-	} else {
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The %s exists", filename))
-	}
-}
-
 // return the infrastructureName. For example:  anli922-jglp4
 func getInfrastructureName(oc *exutil.CLI) string {
 	infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.infrastructureName}").Output()
@@ -1970,34 +1711,38 @@ func (k kafka) removeKafka(oc *exutil.CLI) {
 	resource{"deployment", "kafka-consumer-" + k.authtype, k.namespace}.clear(oc)
 }
 
-func deleteEventRouter(oc *exutil.CLI, namespace string) {
-	e2e.Logf("Deleting Event Router and its resources")
-	r := []resource{{"deployment", "", namespace}, {"configmaps", "", namespace}, {"serviceaccounts", "", namespace}}
-	for i := 0; i < len(r); i++ {
-		rName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, r[i].kind, "-l", "app=eventrouter", "-o=jsonpath={.items[0].metadata.name}").Output()
-		if err != nil {
-			errstring := fmt.Sprintf("%v", rName)
-			if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") || strings.Contains(errstring, "array index out of bounds") {
-				e2e.Logf("%s not found for Event Router", r[i].kind)
-				continue
-			}
-		}
-		r[i].name = rName
-		err = r[i].clear(oc)
-		if err != nil {
-			e2e.Logf("could not delete %s/%s", r[i].kind, r[i].name)
-		}
-	}
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", "-l", "app=eventrouter").Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebindings", "-l", "app=eventrouter").Execute()
+type eventRouter struct {
+	name      string
+	namespace string
+	template  string
 }
 
-func (r resource) createEventRouter(oc *exutil.CLI, parameters ...string) {
-	// delete Event Router first.
-	deleteEventRouter(oc, r.namespace)
-	parameters = append(parameters, "-l", "app=eventrouter", "-p", "EVENT_ROUTER_NAME="+r.name)
-	err := r.applyFromTemplate(oc, parameters...)
-	o.Expect(err).NotTo(o.HaveOccurred())
+func (e eventRouter) deploy(oc *exutil.CLI, optionalParameters ...string) {
+	parameters := []string{"-f", e.template, "-l", "app=eventrouter", "-p", "NAME=" + e.name, "NAMESPACE=" + e.namespace}
+	if len(optionalParameters) > 0 {
+		parameters = append(parameters, optionalParameters...)
+	}
+
+	file, processErr := processTemplate(oc, parameters...)
+	defer os.Remove(file)
+	if processErr != nil {
+		e2e.Failf("error processing file: %v", processErr)
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "-n", e.namespace).Execute()
+	if err != nil {
+		e2e.Failf("error deploying eventrouter: %v", err)
+	}
+	resource{"deployment", e.name, e.namespace}.WaitForResourceToAppear(oc)
+	WaitForDeploymentPodsToBeReady(oc, e.namespace, e.name)
+}
+
+func (e eventRouter) delete(oc *exutil.CLI) {
+	resources := []resource{{"deployment", e.name, e.namespace}, {"configmaps", e.name, e.namespace}, {"serviceaccounts", e.name, e.namespace}}
+	for _, r := range resources {
+		r.clear(oc)
+	}
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", e.name+"-reader").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebindings", e.name+"-reader-binding").Execute()
 }
 
 // createSecretForGCL creates a secret for collector pods to forward logs to Google Cloud Logging
@@ -2971,7 +2716,7 @@ func genLinuxAuditLogsOnWorker(oc *exutil.CLI) (string, error) {
 	}
 	result, err := exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "auditctl -w /var/log/pods/ -p rwa -k logging-qe-test-read-write-pod-logs")
 	if err != nil && strings.Contains(result, "Rule exists") {
-		//Node: we still provide the nodeName here, the policy will be deleted if defer deleteLinuxAuditPolicyFromNodes is called.
+		//Note: we still provide the nodeName here, the policy will be deleted if `defer deleteLinuxAuditPolicyFromNodes` is called.
 		return workerNodes[0].Name, nil
 	}
 	return workerNodes[0].Name, err
@@ -2984,18 +2729,6 @@ func deleteLinuxAuditPolicyFromNode(oc *exutil.CLI, nodeName string) error {
 	}
 	_, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", "auditctl -W /var/log/pods/ -p rwa -k logging-qe-test-read-write-pod-logs")
 	return err
-}
-
-// Create a linux journald logs in one schedulable worker, it is best try function
-func genLinuxJournalOnWorker(oc *exutil.CLI) {
-	workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
-	if err != nil || len(workerNodes) == 0 {
-		return
-	}
-	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message1")
-	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message2")
-	exutil.DebugNodeWithChroot(oc, workerNodes[0].Name, "bash", "-c", "logger -i -p local0.warning logging qe journald message3")
-	return
 }
 
 func getResourceGroupOnAzure(oc *exutil.CLI) (string, error) {

@@ -160,6 +160,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		lc.waitForLogsAppearByProject("application", appProj)
 
+		g.By("Check if the ServiceMonitor object for Vector is created.")
+		resource{"servicemonitor", "collector", cl.namespace}.WaitForResourceToAppear(oc)
+
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		g.By("check metrics exposed by collector")
 		for _, job := range []string{"collector", "logfilesmetricexporter"} {
@@ -181,58 +184,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"" + loNS + "\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
 			checkMetric(oc, token, metric, 3)
 		}
-	})
-
-	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-LEVEL0-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial]", func() {
-		platform := exutil.CheckPlatform(oc)
-		if platform != "aws" {
-			g.Skip("Skip for the platform is not AWS!!!")
-		}
-
-		cw := cloudwatchSpec{
-			clfAccountName: "logcollector",
-			groupPrefix:    "logging-43443-" + getInfrastructureName(oc),
-			groupType:      "logType",
-			logTypes:       []string{"infrastructure", "application", "audit"},
-		}
-		cw.init(oc)
-		defer cw.deleteResources()
-
-		g.By("create log producer")
-		appProj := oc.Namespace()
-		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeName, err := genLinuxAuditLogsOnWorker(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
-
-		g.By("create clusterlogforwarder/instance")
-		defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
-		cw.createClfSecret(oc)
-
-		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			secretName:   cw.secretName,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml"),
-		}
-		defer clf.delete(oc)
-		clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix)
-
-		g.By("deploy collector pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "fluentd",
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			waitForReady:  true,
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
-
-		g.By("check logs in Cloudwatch")
-		o.Expect(cw.logsFound()).To(o.BeTrue())
 	})
 
 	g.It("CPaasrunBoth-ConnectedOnly-Author:ikanse-LEVEL0-Critical-51974-Vector Forward logs to Cloudwatch by logtype", func() {

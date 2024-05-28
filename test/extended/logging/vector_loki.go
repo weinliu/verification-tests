@@ -521,6 +521,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.delete(oc)
 			cl.create(oc)
 
+			g.By("Check priorityClass in ds/collector")
+			pri, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cl.namespace, "-ojsonpath={.spec.template.spec.priorityClassName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(pri, "system-node-critical")).To(o.BeTrue(), "the priorityClass in ds/collector is: "+pri)
+
 			//check default logs (app and infra) in loki stack
 			g.By("checking App and infra logs in loki")
 			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
@@ -543,8 +548,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(res.Data.Result)).Should(o.BeZero())
-			e2e.Logf("Audit logs not found!")
 
+			g.By("Check for Vector logs in lokistack")
+			log, err := lc.searchLogsInLoki("infrastructure", `{log_type = "infrastructure", kubernetes_container_name = "collector"}`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(log.Data.Result)).Should(o.BeZero())
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Medium-54663-CLO Loki Integration-CLF works when send log to default-- vector[Serial]", func() {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,443 +13,9 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
-
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-logging-operator should", func() {
-	defer g.GinkgoRecover()
-	var (
-		oc             = exutil.NewCLI("logging-clo", exutil.KubeConfigPath())
-		loggingBaseDir string
-	)
-
-	g.BeforeEach(func() {
-		loggingBaseDir = exutil.FixturePath("testdata", "logging")
-		g.By("deploy CLO and EO")
-		CLO := SubscriptionObjects{
-			OperatorName:  "cluster-logging-operator",
-			Namespace:     cloNS,
-			PackageName:   "cluster-logging",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
-		eoSource := CatalogSourceObjects{
-			Channel: "stable",
-		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			CatalogSource: eoSource,
-		}
-		CLO.SubscribeOperator(oc)
-		EO.SubscribeOperator(oc)
-	})
-
-	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-42405-No configurations when forward to external ES with only username or password set in pipeline secret[Serial]", func() {
-		oc.SetupProject()
-		esProj := oc.Namespace()
-		ees := externalES{
-			namespace:  esProj,
-			version:    "7",
-			serverName: "elasticsearch-server",
-			httpSSL:    true,
-			clientAuth: true,
-			userAuth:   true,
-			username:   "test",
-			password:   getRandomString(),
-			secretName: "external-es-42405",
-			loggingNS:  loggingNS,
-		}
-		defer ees.remove(oc)
-		ees.deploy(oc)
-		eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
-
-		g.By("create secret in openshift-logging namespace")
-		s := resource{"secret", "pipelinesecret", loggingNS}
-		defer s.clear(oc)
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args(s.kind, "-n", s.namespace, "generic", s.name, "--from-literal=username=test").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("create CLF")
-		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
-			secretName:   s.name,
-		}
-		defer clf.delete(oc)
-		clf.create(oc, "ES_URL="+eesURL)
-
-		g.By("deploy collector pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "fluentd",
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
-		checkResource(oc, true, false, "cannot have username without password", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputs.es-created-by-user}"})
-		_, err = oc.AdminKubeClient().CoreV1().ConfigMaps(cl.namespace).Get(context.Background(), "collector-config", metav1.GetOptions{})
-		o.Expect(apierrors.IsNotFound(err)).Should(o.BeTrue())
-	})
-
-	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-49440-[LOG-1415] Allow users to set fluentd read_lines_limit.[Serial]", func() {
-		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
-		}
-		defer clf.delete(oc)
-		clf.create(oc)
-
-		g.By("deploy EFK pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "fluentd",
-			logStoreType:  "elasticsearch",
-			esNodeCount:   1,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
-		patch := "{\"spec\": {\"collection\": {\"fluentd\": {\"inFile\": {\"readLinesLimit\": 50}}}}}"
-		cl.update(oc, "", patch, "--type=merge")
-		WaitForECKPodsToBeReady(oc, cl.namespace)
-
-		// extract fluent.conf from cm/collector-config
-		baseDir := exutil.FixturePath("testdata", "logging")
-		TestDataPath := filepath.Join(baseDir, "temp-"+getRandomString())
-		defer exec.Command("rm", "-r", TestDataPath).Output()
-		err := os.MkdirAll(TestDataPath, 0755)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", cl.namespace, "cm/collector-config", "--confirm", "--to="+TestDataPath).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		data, _ := os.ReadFile(filepath.Join(TestDataPath, "fluent.conf"))
-		o.Expect(strings.Contains(string(data), "read_lines_limit 50")).Should(o.BeTrue())
-	})
-
-	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-53221-Expose more fluentd knobs to support optimizing fluentd for different environments[Serial]", func() {
-		g.By("Create Cluster Logging instance")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cl := clusterlogging{
-			name:             "instance",
-			namespace:        loggingNS,
-			collectorType:    "fluentd",
-			logStoreType:     "elasticsearch",
-			esNodeCount:      1,
-			storageClassName: sc,
-			waitForReady:     true,
-			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-fluentd-buffer.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc, "TOTAL_LIMIT_SIZE=64m", "RETRY_TIMEOUT=30m", "CHUNK_LIMIT_SIZE=16m", "FLUSH_INTERVAL=5s", "FLUSH_THREAD_COUNT=3",
-			"OVERFLOW_ACTION=throw_exception", "RETRY_MAX_INTERVAL=100s", "RETRY_TYPE=periodic", "RETRY_WAIT=2s")
-
-		g.By("check configurations in fluent.conf")
-		fluentConf, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/collector-config", "-n", cl.namespace, `-ojsonpath={.data.fluent\.conf}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		expectedConfigs := []string{"flush_interval 5s", "flush_thread_count 3", "retry_type periodic",
-			"retry_wait 2s", "retry_max_interval 100s", "retry_timeout 30m", "total_limit_size 64m", "chunk_limit_size 16m", "overflow_action throw_exception"}
-		for i := 0; i < len(expectedConfigs); i++ {
-			o.Expect(strings.Contains(fluentConf, expectedConfigs[i])).Should(o.BeTrue(), fmt.Sprintf("can't find config %s in fluent.conf\n", expectedConfigs[i]))
-		}
-
-		// merge case OCP-33894 for logging 5.8 and later
-		g.By("modify the optimizing variables")
-		cl.update(oc, "", `{"spec": {"collection": {"fluentd": {"buffer": {"flushMode":"lazy"}}}}}`, "--type=merge")
-
-		g.By("verify the flunentd are redeployed and the new values are set in fluentd.conf")
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-		fluentConf, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/collector-config", "-n", cl.namespace, `-ojsonpath={.data.fluent\.conf}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(fluentConf, "flush_mode lazy")).Should(o.BeTrue(), "can't find config \"flush_mode lazy\" in fluent.conf\n")
-	})
-
-})
-
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-operator should", func() {
-	defer g.GinkgoRecover()
-	var (
-		oc             = exutil.NewCLI("logging-eo", exutil.KubeConfigPath())
-		loggingBaseDir string
-	)
-
-	g.BeforeEach(func() {
-		loggingBaseDir = exutil.FixturePath("testdata", "logging")
-		g.By("deploy CLO and EO")
-		CLO := SubscriptionObjects{
-			OperatorName:  "cluster-logging-operator",
-			Namespace:     cloNS,
-			PackageName:   "cluster-logging",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-		}
-		eoSource := CatalogSourceObjects{
-			Channel: "stable",
-		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			CatalogSource: eoSource,
-		}
-		CLO.SubscribeOperator(oc)
-		EO.SubscribeOperator(oc)
-	})
-
-	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Low-55198-[BZ 1942609]Should not deploy kibana pods when the kibana.replicas is set to 0.[Serial]", func() {
-		g.By("deploy ECK pods")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "fluentd",
-			logStoreType:  "elasticsearch",
-			esNodeCount:   1,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc, "KIBANA_REPLICAS=0")
-		g.By("waiting for collector pods to be ready...")
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-
-		kibanaPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=kibana"})
-		o.Expect(len(kibanaPods.Items) == 0).Should(o.BeTrue())
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("scale up kibana pods")
-		cl.update(oc, "", "{\"spec\": {\"visualization\": {\"kibana\": {\"replicas\": 1}}}}", "--type=merge")
-		waitForPodReadyWithLabel(oc, cl.namespace, "component=kibana")
-	})
-
-})
-
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasticsearch upgrade testing", func() {
-	defer g.GinkgoRecover()
-	var (
-		oc             = exutil.NewCLI("logging-upgrade", exutil.KubeConfigPath())
-		loggingBaseDir string
-	)
-
-	g.BeforeEach(func() {
-		loggingBaseDir = exutil.FixturePath("testdata", "logging")
-		CLO := SubscriptionObjects{
-			OperatorName: "cluster-logging-operator",
-			Namespace:    cloNS,
-			PackageName:  "cluster-logging",
-		}
-		g.By("uninstall CLO")
-		CLO.uninstallOperator(oc)
-	})
-
-	// author: qitang@redhat.com
-	g.It("Longduration-CPaasrunOnly-Author:qitang-High-44983-Logging auto upgrade in minor version[Serial][Slow]", func() {
-		g.Skip("Skip for logging 5.9 is not released")
-		var targetchannel = "stable-5.9"
-		var oh OperatorHub
-		g.By("check source/redhat-operators status in operatorhub")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		json.Unmarshal([]byte(output), &oh)
-		var disabled bool
-		for _, source := range oh.Status.Sources {
-			if source.Name == "redhat-operators" {
-				disabled = source.Disabled
-				break
-			}
-		}
-		if disabled {
-			g.Skip("source/redhat-operators is disabled, skip this case.")
-		}
-		g.By("deploy EO")
-		EO := SubscriptionObjects{
-			OperatorName: "elasticsearch-operator",
-			Namespace:    eoNS,
-			PackageName:  "elasticsearch-operator",
-			CatalogSource: CatalogSourceObjects{
-				Channel:         "stable",
-				SourceName:      "redhat-operators",
-				SourceNamespace: "openshift-marketplace",
-			},
-		}
-		EO.SubscribeOperator(oc)
-
-		g.By(fmt.Sprintf("Subscribe operators to %s channel", targetchannel))
-		source := CatalogSourceObjects{
-			Channel:         targetchannel,
-			SourceName:      "redhat-operators",
-			SourceNamespace: "openshift-marketplace",
-		}
-		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
-		preCLO := SubscriptionObjects{
-			OperatorName:  "cluster-logging-operator",
-			Namespace:     cloNS,
-			PackageName:   "cluster-logging",
-			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			CatalogSource: source,
-		}
-		defer preCLO.uninstallOperator(oc)
-		preCLO.SubscribeOperator(oc)
-
-		g.By("Deploy clusterlogging")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cl := clusterlogging{
-			name:             "instance",
-			namespace:        loggingNS,
-			collectorType:    "fluentd",
-			logStoreType:     "elasticsearch",
-			storageClassName: sc,
-			esNodeCount:      3,
-			waitForReady:     true,
-			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc, "REDUNDANCY_POLICY=SingleRedundancy")
-
-		//get current csv version
-		preCloCSV := preCLO.getInstalledCSV(oc)
-		// get currentCSV in packagemanifests
-		currentCloCSV := getCurrentCSVFromPackage(oc, "qe-app-registry", targetchannel, preCLO.PackageName)
-
-		var upgraded = false
-		//change source to qe-app-registry if needed, and wait for the new operators to be ready
-		if preCloCSV != currentCloCSV {
-			g.By(fmt.Sprintf("upgrade CLO to %s", currentCloCSV))
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preCLO.Namespace, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			checkResource(oc, true, true, currentCloCSV, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
-			WaitForDeploymentPodsToBeReady(oc, preCLO.Namespace, preCLO.OperatorName)
-			upgraded = true
-		}
-		if upgraded {
-			g.By("waiting for the ECK pods to be ready after upgrade")
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-			WaitForECKPodsToBeReady(oc, cl.namespace)
-			checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
-			//check PVC count, it should be equal to ES node count
-			pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
-			o.Expect(len(pvc.Items) == 3).To(o.BeTrue())
-
-			g.By("checking if the collector can collect logs after upgrading")
-			oc.SetupProject()
-			appProj := oc.Namespace()
-			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
-
-			exutil.By("Check if the cm/grafana-dashboard-cluster-logging is created or not after upgrading")
-			resource{"configmap", "grafana-dashboard-cluster-logging", "openshift-config-managed"}.WaitForResourceToAppear(oc)
-		}
-	})
-
-	// author: qitang@redhat.com
-	g.It("Longduration-CPaasrunOnly-Author:qitang-Medium-40508-upgrade from prior version to current version[Serial][Slow]", func() {
-		// to add logging 5.8, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
-		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
-		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
-		tag, err := getIndexImageTag(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer catsrc.clear(oc)
-		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
-		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
-
-		// for 5.9, only test CLO upgrade from 5.8 to 5.9
-		preSource := CatalogSourceObjects{
-			Channel:         "stable-5.8",
-			SourceName:      catsrc.name,
-			SourceNamespace: catsrc.namespace,
-		}
-		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
-		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
-		preCLO := SubscriptionObjects{
-			OperatorName:  "cluster-logging-operator",
-			Namespace:     cloNS,
-			PackageName:   "cluster-logging",
-			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
-			CatalogSource: preSource,
-		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			CatalogSource: preSource,
-		}
-		defer preCLO.uninstallOperator(oc)
-		preCLO.SubscribeOperator(oc)
-		EO.SubscribeOperator(oc)
-
-		g.By("Deploy clusterlogging")
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cl := clusterlogging{
-			name:             "instance",
-			namespace:        loggingNS,
-			collectorType:    "fluentd",
-			logStoreType:     "elasticsearch",
-			storageClassName: sc,
-			esNodeCount:      3,
-			templateFile:     filepath.Join(loggingBaseDir, "clusterlogging", "cl-storage-template.yaml"),
-			waitForReady:     true,
-		}
-		defer cl.delete(oc)
-		cl.create(oc, "REDUNDANCY_POLICY=SingleRedundancy")
-
-		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-5.9", "qe-app-registry", "openshift-marketplace"}
-		//change channel, and wait for the new operators to be ready
-		version := strings.Split(source.Channel, "-")[1]
-		g.By(fmt.Sprintf("upgrade CLO to %s", source.Channel))
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preCLO.Namespace, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		checkResource(oc, true, false, version, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
-		cloCurrentCSV, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", preCLO.Namespace, preCLO.PackageName, "-ojsonpath={.status.currentCSV}").Output()
-		resource{"csv", cloCurrentCSV, preCLO.Namespace}.WaitForResourceToAppear(oc)
-		checkResource(oc, true, true, "Succeeded", []string{"csv", cloCurrentCSV, "-n", preCLO.Namespace, "-ojsonpath={.status.phase}"})
-		WaitForDeploymentPodsToBeReady(oc, preCLO.Namespace, preCLO.OperatorName)
-
-		g.By("waiting for the ECK pods to be ready after upgrade")
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-		WaitForECKPodsToBeReady(oc, cl.namespace)
-		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
-
-		g.By("checking if the collector can collect logs after upgrading")
-		oc.SetupProject()
-		appProj := oc.Namespace()
-		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
-
-		exutil.By("Check if the cm/grafana-dashboard-cluster-logging is created or not after upgrading")
-		resource{"configmap", "grafana-dashboard-cluster-logging", "openshift-config-managed"}.WaitForResourceToAppear(oc)
-	})
-})
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki upgrade testing", func() {
 	defer g.GinkgoRecover()
@@ -985,8 +550,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 			name:          clf.name,
 			namespace:     clf.namespace,
 			collectorType: "vector",
-			esNodeCount:   1,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-template.yaml"),
+			logStoreType:  "lokistack",
+			lokistackName: "fake-lokistack",
+			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
 		}
 		defer cl.delete(oc)
 		cl.create(oc)
@@ -1024,7 +590,6 @@ spec:
 			name:          clf.name,
 			namespace:     clf.namespace,
 			collectorType: "fluentd",
-			esNodeCount:   1,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
 		}
 		clInvalidCollectorType.create(oc)
@@ -1035,7 +600,6 @@ spec:
 			name:          clf.name,
 			namespace:     clf.namespace,
 			collectorType: "vector",
-			esNodeCount:   1,
 			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
 		}
 		validCL.create(oc)
@@ -1326,7 +890,7 @@ spec:
 		cl := clusterlogging{
 			name:          "instance",
 			namespace:     loggingNS,
-			collectorType: "fluentd",
+			collectorType: "vector",
 			logStoreType:  "lokistack",
 			lokistackName: ls.name,
 			waitForReady:  true,
@@ -1494,19 +1058,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan"
 			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
 			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 		}
-		eoSource := CatalogSourceObjects{
-			Channel: "stable",
-		}
-		EO := SubscriptionObjects{
-			OperatorName:  "elasticsearch-operator",
-			Namespace:     eoNS,
-			PackageName:   "elasticsearch-operator",
-			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
-			CatalogSource: eoSource,
-		}
 		CLO.SubscribeOperator(oc)
-		EO.SubscribeOperator(oc)
 		proj := oc.Namespace()
 		configFile := filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_logging_v1.yaml")
 		policyFile := filepath.Join(loggingBaseDir, "rapidast/customscan.policy")
