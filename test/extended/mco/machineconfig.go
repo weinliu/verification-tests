@@ -205,7 +205,7 @@ func (mcl *MachineConfigList) GetMachineConfigsWithNameStartingWithRender() ([]M
 	return returnMCs, nil
 }
 
-// GetMachineConfigsWithNameStartingWithRender returns a list with all the MCs  whose name starts with "render-master"
+// GetRenderedMachineConfigForMaster returns a list with all the MCs  whose name starts with "render-master"
 func (mcl *MachineConfigList) GetRenderedMachineConfigForMaster() ([]MachineConfig, error) {
 	mcl.SetItemsFilter(`?(@.metadata.ownerReferences[0].name=="master")`)
 	allMCs, err := mcl.GetAll()
@@ -235,4 +235,29 @@ func (mcl *MachineConfigList) GetMCPRenderedMachineConfigsOrFail() []MachineConf
 	renderedMcList, err := mcl.GetRenderedMachineConfigForMaster()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the list of the machineconfigs that were created by a MCP ")
 	return renderedMcList
+}
+
+// GetRenderedMachineConfigForWorker returns a list with all the MCs  whose name starts with "render-worker"
+func (mcl *MachineConfigList) GetRenderedMachineConfigForWorker() ([]MachineConfig, error) {
+	mcl.SetItemsFilter(`?(@.metadata.ownerReferences[0].name=="worker")`)
+	allMCs, err := mcl.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	returnMCs := []MachineConfig{}
+
+	for _, mc := range allMCs {
+		if strings.HasPrefix(mc.GetName(), "rendered-worker") {
+			returnMCs = append(returnMCs, mc)
+		}
+	}
+
+	return returnMCs, nil
+}
+func (mcl *MachineConfigList) GetRenderedMachineConfigForWorkerOrFail() []MachineConfig {
+	renderedMcWorkerList, err := mcl.GetRenderedMachineConfigForWorker()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the list of the machineconfigs that were created by a MCP ")
+	return renderedMcWorkerList
+
 }

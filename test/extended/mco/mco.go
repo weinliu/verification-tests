@@ -4487,6 +4487,94 @@ desiredState:
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-73155-prune renderedmachineconfigs in updating pools[Disruptive]", func() {
+		var (
+			wMcp        = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mcList      = NewMachineConfigList(oc.AsAdmin())
+			node        = wMcp.GetSortedNodesOrFail()[0]
+			fileMode    = "420"
+			fileContent = "test1"
+			filePath    = "/etc/mco-test-case-73155-"
+			mcName      = "mco-tc-73155-"
+		)
+
+		mcList.SortByTimestamp()                         // sort by time
+		wSpecConf, specErr := wMcp.getConfigNameOfSpec() // get worker MCP name
+		o.Expect(specErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create new Machine config")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName+"1", MachineConfigPoolWorker)
+		fileConfig := getBase64EncodedFileConfig(filePath+"1", fileContent, fileMode)
+		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", fileConfig)}
+		mc.skipWaitForMcp = true // to wait to execute command
+
+		defer func() {
+			exutil.By("Check Machine Config are deleted")
+			o.Expect(NewRemoteFile(node, filePath+"1")).NotTo(Exist(),
+				"The file %s should NOT exists", filePath+"1")
+			o.Expect(NewRemoteFile(node, filePath+"2")).NotTo(Exist(),
+				"The file %s should NOT exists", filePath+"2")
+
+			exutil.By("Check the MCP status is not been degreaded")
+			wMcp.waitForComplete()
+		}()
+
+		defer mc.delete() // Clean up after creation
+		mc.create()
+
+		logger.Infof("OK\n")
+
+		exutil.By("Wait for first nodes to be configured")
+
+		o.Eventually(node.IsUpdating, "10m", "20s").Should(o.BeTrue())
+		o.Eventually(node.IsUpdated, "10m", "20s").Should(o.BeTrue()) // check for first node is updated
+
+		initialRenderedMC, specErr := wMcp.getConfigNameOfSpec() // check for new worker rendered MC configured
+		o.Expect(specErr).NotTo(o.HaveOccurred())
+		logger.Infof("OK\n")
+
+		exutil.By("Create new second Machine configs")
+
+		fileConfig = getBase64EncodedFileConfig(filePath+"2", fileContent, fileMode)
+		mc = NewMachineConfig(oc.AsAdmin(), mcName+"2", MachineConfigPoolWorker)
+		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", fileConfig)}
+		mc.skipWaitForMcp = true // to wait to execute command
+
+		defer mc.delete() // Clean up after creation
+		mc.create()
+		logger.Infof("OK\n")
+
+		exutil.By("Run prune command and check new rendered MC is generated with MCP is still updating")
+
+		o.Eventually(wMcp.getConfigNameOfSpec, "5m", "20s").ShouldNot(o.Equal(initialRenderedMC), "Second worker renderedMC is not configured yet")
+		newRenderedMC, specErr := wMcp.getConfigNameOfSpec()
+		o.Expect(specErr).NotTo(o.HaveOccurred(), "Get desired MC of worker pool failed")
+
+		pruneMCOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--pool-name", "worker", "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
+		logger.Infof(pruneMCOutput)
+
+		renderedMCs := []string{wSpecConf, initialRenderedMC, newRenderedMC}
+		// as  wMCP is still updating with previous in-use  rendered MC and new generated MC from 1st and 2nd MC created are also in-use so we need to check they are not deleted
+
+		for _, mc := range renderedMCs {
+			o.Expect(pruneMCOutput).To(o.ContainSubstring("Skipping deletion of rendered MachineConfig "+mc), "Deleted the in-use rendered MC: "+mc)
+		}
+		logger.Infof("OK\n")
+
+		exutil.By("Check no worker MCP is degreaded")
+		wMcp.waitForComplete()
+
+		exutil.By("Execute the prune command again after complete update")
+		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--pool-name", "worker", "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
+		logger.Infof(pruneMCOutput)
+		o.Expect(pruneMCOutput).To(o.ContainSubstring("Skipping deletion of rendered MachineConfig "+newRenderedMC), "Deleted the in-use rendered MC")
+
+		logger.Infof("OK\n")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
