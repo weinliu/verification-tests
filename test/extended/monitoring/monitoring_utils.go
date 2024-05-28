@@ -435,3 +435,24 @@ func assertPodToBeReady(oc *exutil.CLI, podName string, namespace string) {
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pod %s status is not ready!", podName))
 }
+
+// use exec command to check configs/files inside the pod
+func checkConfigInsidePod(oc *exutil.CLI, ns string, container string, pod string, cmd string, checkValue string, expectExist bool) {
+	configCheck := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 360*time.Second, false, func(context.Context) (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", container, pod, "--", "bash", "-c", cmd).Output()
+		if expectExist {
+			if err != nil || !strings.Contains(output, checkValue) {
+				return false, nil
+			}
+			return true, nil
+		}
+		if !expectExist {
+			if err != nil || !strings.Contains(output, checkValue) {
+				return true, nil
+			}
+			return false, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(configCheck, fmt.Sprintf("base on `expectExist=%v`, did (not) find \"%s\" exist", expectExist, checkValue))
+}

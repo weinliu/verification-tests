@@ -1046,15 +1046,25 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 
+			exutil.By("confirm prometheus-k8s-0 pod is ready for check")
+			MONpod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring").Output()
+			e2e.Logf("the MON pods condition: %s", MONpod)
+			exutil.AssertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
+
 			exutil.By("check query log file for prometheus in openshift-monitoring")
 			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "http://localhost:9090/api/v1/query?query=prometheus_build_info").Execute()
-			output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "bash", "-c", "cat /tmp/promethues_query.log | grep prometheus_build_info").Output()
-			o.Expect(output).To(o.ContainSubstring("prometheus_build_info"))
+			cmd := "cat /tmp/promethues_query.log | grep prometheus_build_info"
+			checkConfigInsidePod(oc, "openshift-monitoring", "prometheus", "prometheus-k8s-0", cmd, "prometheus_build_info", true)
+
+			exutil.By("confirm prometheus-user-workload-0 pod is ready for check")
+			UWMpod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-user-workload-monitoring").Output()
+			e2e.Logf("the UWM pods condition: %s", UWMpod)
+			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
 
 			exutil.By("check query log file for prometheus in openshift-user-workload-monitoring")
 			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "curl", "http://localhost:9090/api/v1/query?query=up").Execute()
-			output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "bash", "-c", "cat /tmp/uwm_query.log | grep up").Output()
-			o.Expect(output2).To(o.ContainSubstring("up"))
+			cmd = "cat /tmp/uwm_query.log | grep up"
+			checkConfigInsidePod(oc, "openshift-user-workload-monitoring", "prometheus", "prometheus-user-workload-0", cmd, "up", true)
 		})
 
 		// author: tagao@redhat.com
