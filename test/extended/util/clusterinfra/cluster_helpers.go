@@ -256,3 +256,10 @@ func CheckProxy(oc *exutil.CLI) bool {
 	}
 	return false
 }
+
+// GetInfrastructureName get infrastructure name
+func GetInfrastructureName(oc *exutil.CLI) string {
+	infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return infrastructureName
+}

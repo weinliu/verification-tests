@@ -185,7 +185,8 @@ var _ = g.Describe("[sig-networking] SDN node", func() {
 
 		exutil.By("1. Create a new machineset, get the new node created\n")
 		clusterinfra.SkipConditionally(oc)
-		machinesetName := "machineset-68690"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-68690"
 		machineSet := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer machineSet.DeleteMachineSet(oc)

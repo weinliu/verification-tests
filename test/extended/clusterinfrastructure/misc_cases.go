@@ -163,7 +163,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSphere)
 
 		g.By("Create a new machineset")
-		machinesetName := "machineset-54053"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-54053"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)

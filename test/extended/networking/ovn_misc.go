@@ -277,7 +277,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		exutil.By("1. Create a new machineset, get the new node created\n")
 		clusterinfra.SkipConditionally(oc)
-		machinesetName := "machineset-68418"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-68418"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
@@ -903,11 +904,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		exutil.By("4. Add machine")
-		ms := clusterinfra.MachineSetDescription{Name: "machineset-70011", Replicas: 1}
-		defer clusterinfra.WaitForMachinesDisapper(oc, "machineset-70011")
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-70011"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		newNode := clusterinfra.GetNodeNameFromMachine(oc, clusterinfra.GetMachineNamesFromMachineSet(oc, "machineset-70011")[0])
+		newNode := clusterinfra.GetNodeNameFromMachine(oc, clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0])
 		e2e.Logf("New node is:%s", newNode)
 
 		exutil.By("5. Check status of apbexternalroute/egressfirewall object when new machine added")
@@ -924,7 +927,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		exutil.By("6. Remove machine")
 		ms.DeleteMachineSet(oc)
-		clusterinfra.WaitForMachinesDisapper(oc, "machineset-70011")
+		clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 
 		exutil.By("7. Check status of apbexternalroute/egressfirewall object after machine removed")
 		apbExtRouteCheckErr3 := checkAPBExternalRouteStatus(oc, apbExternalRoute.name, "Success")
@@ -975,7 +978,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, podOnOldNode.namespace, podOnOldNode.name)
 
 		exutil.By("5. Create a new machineset, get the new node created\n")
-		machinesetName := "machineset-72028"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-72028"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)

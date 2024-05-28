@@ -218,7 +218,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		var newNodeNames []string
 		g.By("Create a new machineset")
-		machinesetName := "machineset-70618"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-70618"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer func() {
 			err := waitForClusterOperatorsReady(oc, "ingress", "console", "authentication")
@@ -302,8 +303,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			g.Skip("Not support region " + region + " for the case for now.")
 		}
 		g.By("Add the AmazonEC2ContainerRegistryReadOnly policy to the worker nodes")
-		infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
 		roleName := infrastructureName + "-worker-role"
 		policyArn := "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 		clusterinfra.GetAwsCredentialFromCluster(oc)
@@ -354,8 +354,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSessionWithRegion(region)
-		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID := clusterinfra.GetInfrastructureName(oc)
 		subnetId, err := awsClient.GetAwsPublicSubnetID(clusterID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Subnet -->: %s", subnetId)
@@ -487,8 +486,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			g.Skip("Skip for ASH and azure Gov due to we didn't create container registry on them!")
 		}
 		exutil.By("Create RoleAssignments for resourcegroup")
-		infrastructureID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		infrastructureID := clusterinfra.GetInfrastructureName(oc)
 		identityName := infrastructureID + "-identity"
 		resourceGroup, err := exutil.GetAzureCredentialFromCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())

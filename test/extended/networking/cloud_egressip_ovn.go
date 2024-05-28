@@ -2718,7 +2718,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 
 		exutil.By("Create a new machineset with 2 nodes")
 		clusterinfra.SkipConditionally(oc)
-		machinesetName := "machineset-61344"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-61344"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)

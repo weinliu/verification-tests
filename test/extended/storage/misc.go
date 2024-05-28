@@ -28,7 +28,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-49809-Enable the capability to use UltraSSD disks in Azure worker VMs provisioned by machine-api", func() {
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com"}
 		var (
-			testMachineset         = clusterinfra.MachineSetwithLabelDescription{"machineset-49809", 1, "ultrassd", "Enabled"}
+			infrastructureName     = clusterinfra.GetInfrastructureName(oc)
+			machinesetName         = infrastructureName + "-49809"
+			testMachineset         = clusterinfra.MachineSetwithLabelDescription{machinesetName, 1, "ultrassd", "Enabled"}
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
 			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")

@@ -34,11 +34,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Create a spot instance on azure")
-		ms := clusterinfra.MachineSetDescription{Name: "machineset-41804", Replicas: 0}
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-41804"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		ms.CreateMachineSet(oc)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-41804", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterinfra.WaitForMachinesRunning(oc, 1, "machineset-41804")
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine and node were labelled `interruptible-instance`")
 		machine, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
@@ -57,8 +59,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
 			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
 		}
-		ms := clusterinfra.MachineSetDescription{Name: "machineset-41804", Replicas: 0}
-		defer clusterinfra.WaitForMachinesDisapper(oc, "machineset-41804")
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-41804"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 
 		g.By("Check machine and node were still be labelled `interruptible-instance`")
@@ -78,7 +82,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Create a new machineset")
-		machinesetName := "machineset-61086"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-61086"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
@@ -107,7 +112,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		g.By("Create a new machineset")
-		machinesetName := "machineset-22612"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-22612"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
@@ -165,11 +171,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = awsClient.AssociateDhcpOptions(vpcID, newDhcpOptionsID)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID := clusterinfra.GetInfrastructureName(oc)
 
 		g.By("Create a new machineset")
-		machinesetName := "machineset-72031"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-72031"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
 		ms.CreateMachineSet(oc)
 		//Add a specicacl tag for the original dhcp so that we can find it in PstChkUpgrade case
@@ -190,7 +196,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-huliu-High-72031-[Upgrade] Instances with custom DHCP option set should not block upgrade - AWs [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
-		machinesetName := "machineset-72031"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-72031"
 		machineset, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace).Output()
 		if strings.Contains(machineset, "not found") {
 			g.Skip("The machineset machineset-72031 is not created before upgrade, skip this case!")
@@ -205,8 +212,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newDhcpOptionsID, err := awsClient.GetDhcpOptionsIDOfVpc(vpcID)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID := clusterinfra.GetInfrastructureName(oc)
 		previousDhcpOptionsID, err := awsClient.GetDhcpOptionsIDFromTag("specialName", clusterID+"previousdhcp72031")
 		o.Expect(err).NotTo(o.HaveOccurred())
 

@@ -403,7 +403,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		svc.createServiceFromParams(oc)
 		exutil.By("Create a new machineset to add new nodes")
 		clusterinfra.SkipConditionally(oc)
-		machinesetName := "machineset-62293"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-62293"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)

@@ -245,7 +245,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// no openshift-machine-api namespace on HyperShift guest cluster so this case is not available
 	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-High-56240-Canary daemonset can schedule pods to both worker and infra nodes [Disruptive]", func() {
 		var (
-			machinSetName = "machineset-56240"
+			infrastructureName = clusterinfra.GetInfrastructureName(oc)
+			machinSetName      = infrastructureName + "-56240"
 		)
 
 		exutil.By("Check the intial machines and canary pod details")
@@ -259,15 +260,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ms.CreateMachineSet(oc)
 
 		exutil.By("Update machineset to schedule infra nodes")
-		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", "machineset-56240", "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"taints\":null}}}}", "--type=merge").Output()
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", machinSetName, "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"taints\":null}}}}", "--type=merge").Output()
 		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
-		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", "machineset-56240", "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"metadata\":{\"labels\":{\"ingress\": \"true\", \"node-role.kubernetes.io/infra\": \"\"}}}}}}", "--type=merge").Output()
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", machinSetName, "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"metadata\":{\"labels\":{\"ingress\": \"true\", \"node-role.kubernetes.io/infra\": \"\"}}}}}}", "--type=merge").Output()
 		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
-		updatedMachineName := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
+		updatedMachineName := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset="+machinSetName)
 
 		exutil.By("Reschedule the running machineset with infra details")
 		clusterinfra.DeleteMachine(oc, updatedMachineName[0])
-		updatedMachineName1 := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
+		updatedMachineName1 := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset="+machinSetName)
 
 		exutil.By("Check the canary deamonset is scheduled on infra node which is newly created")
 		// confirm the new machineset is already created

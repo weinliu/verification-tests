@@ -156,8 +156,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		default:
 			g.Skip("IAAS platform is " + iaasPlatform.String() + " which is NOT supported cluster api ...")
 		}
-		clusterID, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID = clusterinfra.GetInfrastructureName(oc)
 		apiServerInternalURI, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.apiServerInternalURI}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		start := strings.Index(apiServerInternalURI, "://")

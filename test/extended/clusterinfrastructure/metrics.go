@@ -53,15 +53,15 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-43764-MachineHealthCheckUnterminatedShortCircuit alert should be fired when a MHC has been in a short circuit state [Serial][Slow][Disruptive]", func() {
 		g.By("Create a new machineset")
 		clusterinfra.SkipConditionally(oc)
-		machinesetName := "machineset-43764"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-43764"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Create a MachineHealthCheck")
-		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterID := clusterinfra.GetInfrastructureName(oc)
 		msMachineRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-o=jsonpath={.spec.template.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machine-type}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		mhcBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "mhc")
@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		mhc := mhcDescription{
 			clusterid:      clusterID,
 			maxunhealthy:   "0%",
-			machinesetName: "machineset-43764",
+			machinesetName: machinesetName,
 			machineRole:    msMachineRole,
 			name:           "mhc-43764",
 			template:       mhcTemplate,
@@ -79,7 +79,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		mhc.createMhc(oc)
 
 		g.By("Delete the node attached to the machine")
-		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, "machineset-43764")[0]
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("node", nodeName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -124,7 +124,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Create a new machineset")
-		machinesetName := "machineset-36989"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-36989"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
@@ -162,7 +163,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		g.By("Create a new machineset")
-		machinesetName := "machineset-25615-37264"
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-25615-37264"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
