@@ -315,7 +315,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:jiazha-Medium-53771-The certificate relating to operator-lifecycle-manager-packageserver isn't rotated after expired [Disruptive]", func() {
 		var image, phase, olmPhase, packagePhase string
-		customOLMImage := "quay.io/olmqe/operator-framework-olm:cert-rotation-auto"
+		customOLMImage := "quay.io/openshifttest/operator-framework-olm:cert5-rotation-rhel9"
 		defer func() {
 			_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion", "version", "-p", "{\"spec\": {\"overrides\":[{\"kind\": \"Deployment\", \"name\": \"olm-operator\", \"namespace\": \"openshift-operator-lifecycle-manager\", \"unmanaged\": false, \"group\": \"apps\"}]}}", "--type=merge").Output()
 			if err != nil {
