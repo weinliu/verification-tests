@@ -600,10 +600,12 @@ func deleteObjectBucketClaim(oc *exutil.CLI, ns, name string) error {
 }
 
 // checkMinIO
-func checkMinIO(oc *exutil.CLI, ns string) bool {
+func checkMinIO(oc *exutil.CLI, ns string) (bool, error) {
 	podReady, svcFound := false, false
 	pod, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "app=minio"})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return false, err
+	}
 	if len(pod.Items) > 0 && pod.Items[0].Status.Phase == "Running" {
 		podReady = true
 	}
@@ -611,7 +613,25 @@ func checkMinIO(oc *exutil.CLI, ns string) bool {
 	if err == nil {
 		svcFound = true
 	}
-	return podReady && svcFound
+	return podReady && svcFound, err
+}
+
+func useExtraObjectStorage(oc *exutil.CLI) string {
+	if checkODF(oc) {
+		e2e.Logf("use the existing ODF storage service")
+		return "odf"
+	}
+	ready, err := checkMinIO(oc, minioNS)
+	if ready {
+		e2e.Logf("use existing MinIO storage service")
+		return "minio"
+	}
+	if strings.Contains(err.Error(), "No resources found") || strings.Contains(err.Error(), "not found") {
+		e2e.Logf("deploy MinIO and use this MinIO as storage service")
+		deployMinIO(oc)
+		return "minio"
+	}
+	return ""
 }
 
 // return the storage type per different platform
@@ -636,13 +656,7 @@ func getStorageType(oc *exutil.CLI) string {
 		}
 	default:
 		{
-			if checkODF(oc) {
-				return "odf"
-			}
-			if checkMinIO(oc, minioNS) {
-				return "minio"
-			}
-			return ""
+			return useExtraObjectStorage(oc)
 		}
 	}
 }

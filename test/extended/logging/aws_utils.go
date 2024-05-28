@@ -556,12 +556,13 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 	} else {
 		clusterinfra.GetAwsCredentialFromCluster(oc)
 	}
-	cw.awsRegion, err = exutil.GetAWSClusterRegion(oc)
-	if err != nil {
-		// use us-east-2 as default region
-		cw.awsRegion = "us-east-2"
+	if cw.awsRegion == "" {
+		cw.awsRegion, err = exutil.GetAWSClusterRegion(oc)
+		if err != nil {
+			// use us-east-2 as default region
+			cw.awsRegion = "us-east-2"
+		}
 	}
-	os.Setenv("AWS_REGION", cw.awsRegion)
 	if cw.stsSecretType == "" {
 		cw.stsSecretType = "CredentialsCreate"
 	}
@@ -594,7 +595,12 @@ func (cw *cloudwatchSpec) newIamClient() {
 func (cw *cloudwatchSpec) newIamRole(oc *exutil.CLI) {
 	oidcProvider, e := getOIDC(oc)
 	o.Expect(e).NotTo(o.HaveOccurred())
-	stsClient := newStsClient()
+	if !checkAWSCredentials() {
+		g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
+	}
+	awscfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(cw.awsRegion))
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to load AWS configuration")
+	stsClient := sts.NewFromConfig(awscfg)
 	accountID, _ := getAwsAccount(stsClient)
 	trustPolicy := `{
 "Version": "2012-10-17",

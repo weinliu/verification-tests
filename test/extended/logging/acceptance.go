@@ -51,20 +51,17 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 	// author qitang@redhat.com
 	g.It("WRS-Author:qitang-LEVEL0-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
+		platform := exutil.CheckPlatform(oc)
+		if exutil.IsSTSCluster(oc) && platform == "aws" {
+			g.Skip("skip this case on sts cluster, the test is replaced by OCP-71534 now ")
+		}
+
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
 		s := getStorageType(oc)
 		sc, err := getStorageClassName(oc)
 		if err != nil || len(sc) == 0 {
 			g.Skip("can't get storageclass from cluster, skip this case")
-		}
-
-		g.By("checking if the cluster is a hypershift guest cluster")
-		masterNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master="})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		// For hypershift guest cluster, the master node count is 0
-		if len(masterNodes.Items) == 0 || len(s) == 0 {
-			g.Skip("skip case-53817 on hypershift hosted cluster, replaced by OCP-71534 now ")
 		}
 
 		appProj := oc.Namespace()
@@ -290,7 +287,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	//author anli@redhat.com
-	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-LEVEL0-Critical-71772-Forward logs to Azure Log Analytics -- full options", func() {
+	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-Critical-71772-Forward logs to Azure Log Analytics -- full options", func() {
 		cloudType := getAzureCloudType(oc)
 		acceptedCloud := strings.ToLower(cloudType) == "azurepubliccloud" || strings.ToLower(cloudType) == "azureusgovernmentcloud"
 		if !acceptedCloud {
