@@ -811,18 +811,19 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:mihuang-Critical-48936-Test HyperShift cluster Infrastructure TopologyMode", func() {
 		controllerAvailabilityPolicy := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.controllerAvailabilityPolicy}")
 		e2e.Logf("controllerAvailabilityPolicy is: %s", controllerAvailabilityPolicy)
-		o.Expect(doOcpReq(oc, OcpGet, true, "infrastructure", "-ojsonpath={.items[*].status.controlPlaneTopology}")).Should(o.Equal(controllerAvailabilityPolicy))
+		if iaasPlatform == "aws" {
+			o.Expect(doOcpReq(oc, OcpGet, true, "infrastructure", "-ojsonpath={.items[*].status.controlPlaneTopology}")).Should(o.Equal(controllerAvailabilityPolicy))
+		}
 		o.Expect(doOcpReq(oc, OcpGet, true, "infrastructure", "-ojsonpath={.items[*].status.controlPlaneTopology}", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)).Should(o.Equal("External"))
 	})
 
 	// author: mihuang@redhat.com
 	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:mihuang-Critical-49436-Test Nodepool conditions[Serial]", func() {
-		g.By("Create nodepool and check nodepool conditions in progress util ready")
-
-		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
-			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 49436 is for AWS - skipping test ...")
 		}
 
+		g.By("Create nodepool and check nodepool conditions in progress util ready")
 		caseID := "49436"
 		dir := "/tmp/hypershift" + caseID
 		defer os.RemoveAll(dir)
@@ -923,6 +924,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: mihuang@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-49108-Critical-49499-Critical-59546-Critical-60490-Critical-61970-Separate client certificate trust from the global Hypershift CA", func() {
+		if iaasPlatform != "aws" && iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 49108 is for AWS or Azure - For other platforms, please set the corresponding expectedMetric to make this case effective. Skipping test ...")
+		}
+
 		g.By("OCP-61970: OCPBUGS-10792-Changing the api group of the hypershift namespace servicemonitor back to coreos.com")
 		o.Expect(doOcpReq(oc, OcpGet, true, "servicemonitor", "-n", "hypershift", "-ojsonpath={.items[*].apiVersion}")).Should(o.ContainSubstring("coreos.com"))
 
@@ -945,9 +950,15 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			metricsOutput, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "sh", "-c", fmt.Sprintf("curl -sS --cacert /etc/prometheus/certs/configmap_%s_root-ca_ca.crt --key /etc/prometheus/certs/secret_%s_metrics-client_tls.key --cert /etc/prometheus/certs/secret_%s_metrics-client_tls.crt https://openshift-apiserver.%s.svc/metrics", hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name, hostedcluster.namespace+"-"+hostedcluster.name)).Output()
 			if err != nil {
 				return false
-			} else {
-				return strings.Contains(metricsOutput, "# HELP aggregator_openapi_v2_regeneration_count [ALPHA] Counter of OpenAPI v2 spec regeneration count broken down by causing APIService name and reason.")
 			}
+			var expectedMetric string
+			switch iaasPlatform {
+			case "aws":
+				expectedMetric = "# HELP aggregator_openapi_v2_regeneration_count [ALPHA] Counter of OpenAPI v2 spec regeneration count broken down by causing APIService name and reason."
+			case "azure":
+				expectedMetric = "# HELP aggregator_discovery_aggregation_count_total [ALPHA] Counter of number of times discovery was aggregated"
+			}
+			return strings.Contains(metricsOutput, expectedMetric)
 		}, 5*LongTimeout, LongTimeout/5).Should(o.BeTrue(), fmt.Sprintf("not all metrics in hostedcluster %s are ready", hostedcluster.name))
 
 		g.By("OCP-49499 Check the clusterID is exist")
@@ -1091,9 +1102,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: mihuang@redhat.com
 	g.It("HyperShiftMGMT-Author:mihuang-Critical-62195-Add validation for taint.value in nodePool[Serial][Disruptive]", func() {
-
-		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
-			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 62195 is for AWS - skipping test ...")
 		}
 
 		g.By("Create a nodepool with invalid taint value and check the ValidConfiguration conditions of hostedcluster CR")
