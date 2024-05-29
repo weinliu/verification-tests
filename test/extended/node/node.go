@@ -54,6 +54,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podDisruptionBudgetTemp   = filepath.Join(buildPruningBaseDir, "pod-disruption-budget.yaml")
 		genericDeploymentTemp     = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
 		podDevFuseTemp            = filepath.Join(buildPruningBaseDir, "pod-dev-fuse.yaml")
+		podCpuLoadBalanceTemp     = filepath.Join(buildPruningBaseDir, "pod-cpu-load-balance.yaml")
 
 		podDevFuse70987 = podDevFuseDescription{
 			name:      "",
@@ -1389,6 +1390,67 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		checkReservedCpu(oc, reservedCpu)
 	})
 
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-62985-Support disable cpu load balancing and cpu quota on RHEL 9 [Disruptive][Slow]", func() {
+		// in 4.16, it support cgroupv2; in 4.15-, it only support cgroupv1
+		exutil.By("Check cpu core num on the node")
+		workerNodes := getWorkersList(oc)
+		cpu_num := getCpuNum(oc, workerNodes[0])
+		//This case can only run on a node with more than 4 cpu cores
+		if cpu_num <= 4 {
+			g.Skip("This cluster has less than 4 cpu cores, skip the test.")
+		}
+
+		cpuPerformanceprofile := filepath.Join(buildPruningBaseDir, "cpu-performanceprofile.yaml")
+		perfProfile62985 := cpuPerfProfile{
+			name:     "performance-62985",
+			isolated: "",
+			template: cpuPerformanceprofile,
+		}
+		isolatedCpu := "0,5-" + strconv.Itoa(cpu_num-1)
+		perfProfile62985.isolated = isolatedCpu
+
+		exutil.By("1)Create a performanceProfile")
+		defer func() {
+			perfProfile62985.delete(oc)
+			err := checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		perfProfile62985.create(oc)
+
+		err := checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("2)Check the reserved cpu are as expected")
+		// 1) "reservedSystemCPUs": "1-4" from /etc/kubernetes/kubelet.conf
+		// 2) sh-5.1# pgrep systemd |while read i; do taskset -cp $i; done  || results: pid 1's current affinity list: 1-4
+		reservedCpu := "1-4"
+		checkReservedCpu(oc, reservedCpu)
+
+		exutil.By("3)Turn on cpu info in dmesg log")
+		defer dmesgTurnOnCpu(oc, "1")
+		dmesgTurnOnCpu(oc, "0")
+
+		exutil.By("4)Create a pod with Guaranteed QoS, using at least a full CPU and load balance/cpu-quota disable annotation")
+		podCpuLoadBalance62985 := podCpuLoadBalance{
+			name:         "cpu-load-balce-62985",
+			namespace:    oc.Namespace(),
+			runtimeclass: "performance-performance-62985", //"performance-" + perfProfile62985.name
+			template:     podCpuLoadBalanceTemp,
+		}
+		defer podCpuLoadBalance62985.delete(oc)
+		podCpuLoadBalance62985.create(oc)
+
+		exutil.By("5)Check pod Status")
+		err = podStatus(oc, podCpuLoadBalance62985.namespace, podCpuLoadBalance62985.name)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		exutil.By("6)Check the cpus are properly having load balance disabled")
+		checkCpuLoadBalanceDisabled(oc, podCpuLoadBalance62985.namespace, podCpuLoadBalance62985.name)
+
+		exutil.By("7)Check cpu-quota is disabled from container scope and pod cgroup correctly")
+		cgroupV := getCgroupVersion(oc)
+		checkCpuQuotaDisabled(oc, podCpuLoadBalance62985.namespace, podCpuLoadBalance62985.name, cgroupV)
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {

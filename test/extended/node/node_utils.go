@@ -198,6 +198,13 @@ type podWASM struct {
 	template  string
 }
 
+type podCpuLoadBalance struct {
+	name         string
+	namespace    string
+	runtimeclass string
+	template     string
+}
+
 type podDisruptionBudget struct {
 	name         string
 	namespace    string
@@ -226,6 +233,16 @@ func (cpuPerfProfile *cpuPerfProfile) create(oc *exutil.CLI) {
 
 func (cpuPerfProfile *cpuPerfProfile) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", cpuPerfProfile.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podCpuLoadBalance *podCpuLoadBalance) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podCpuLoadBalance.template, "-p", "NAME="+podCpuLoadBalance.name, "NAMESPACE="+podCpuLoadBalance.namespace, "RUNTIMECLASS="+podCpuLoadBalance.runtimeclass)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podCpuLoadBalance *podCpuLoadBalance) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podCpuLoadBalance.namespace, "pod", podCpuLoadBalance.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -340,6 +357,7 @@ func getCgroupVersion(oc *exutil.CLI) string {
 	workerNodes := getWorkersList(oc)
 	cgroupV, err := exutil.DebugNodeWithChroot(oc, workerNodes[0], "/bin/bash", "-c", "stat -fc %T /sys/fs/cgroup")
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("cgroup version info is: [%v]\n", cgroupV)
 	if strings.Contains(string(cgroupV), "tmpfs") {
 		return "tmpfs"
 	} else if strings.Contains(string(cgroupV), "cgroup2fs") {
@@ -1901,6 +1919,102 @@ func checkLogLink(oc *exutil.CLI, namespace string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, "check log link failed!")
+}
+
+// this function check Cpu Quota Disabled from container scope and pod cgroup
+func checkCpuQuotaDisabled(oc *exutil.CLI, namespace string, podName string, cgroupV string) {
+	waitErr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+		if cgroupV == "tmpfs" {
+			e2e.Logf("the cgroup version is v1, not support in 4.16+")
+		} else if cgroupV == "cgroup2fs" { // it's for cgroup v2
+			out1, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, podName, "--", "/bin/sh", "-c", "cat /sys/fs/cgroup/cpu.stat | grep nr_throttled").Output()
+			if err != nil {
+				e2e.Logf("failed to check /sys/fs/cgroup/cpu.stat, error: %s ", err)
+				return false, nil
+			}
+			o.Expect(strings.Contains(string(out1), "nr_throttled 0")).Should(o.BeTrue())
+			out2, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, podName, "--", "/bin/sh", "-c", "cat /sys/fs/cgroup/cpu.max").Output()
+			if err != nil {
+				e2e.Logf("failed to check /sys/fs/cgroup/cpu.max, error: %s ", err)
+				return false, nil
+			}
+			o.Expect(strings.Contains(string(out2), "max 100000")).Should(o.BeTrue())
+			return true, nil
+		} else {
+			e2e.Logf("the cgroup version [%s] is valid", cgroupV)
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "check Cpu Quota Disabled failed!")
+}
+
+// this function check Cpu Load Balance Disabled from the pod's host dmesg log
+func checkCpuLoadBalanceDisabled(oc *exutil.CLI, namespace string, podName string) {
+	waitErr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+		nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-o=jsonpath={.spec.nodeName}", "-n", namespace).Output()
+		if err != nil {
+			e2e.Logf("failed to get the pod's node name, error: %s ", err)
+			return false, nil
+		}
+		out, err := exutil.DebugNodeWithChroot(oc, nodename, "/bin/bash", "-c", "dmesg | grep 'CPUs do not have asymmetric capacities'")
+		if err != nil {
+			e2e.Logf("failed to check CPUs asymmetric capacities, error: %s ", err)
+			return false, nil
+		}
+		//For CPU, we set reserved: 1-4, isolated: 0,5-7;
+		//If cpu 0 is load balance disabled, the log show [rd 1-7: CPUs do not have asymmetric capacities]
+		//If cpu 0 and cpu 5 are load balance disabled, the log show [rd 1-4,6-7: CPUs do not have asymmetric capacities]
+		//As long as any cpu is load balance disabled, the log won't be [rd 0-7: CPUs do not have asymmetric capacities]
+		//If the pod doesn't include annotation "cpu-load-balancing.crio.io: "disable"", the log won't appear [CPUs do not have asymmetric capacities]
+		o.Expect(strings.Contains(string(out), "CPUs do not have asymmetric capacities")).Should(o.BeTrue())
+		o.Expect(out).ShouldNot(o.ContainSubstring("rd 0-7: CPUs do not have asymmetric capacities"))
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "check Cpu Quota Disabled failed!")
+}
+
+// this function can show cpu schedule info in dmesg log, flag="0" : turn on / flag="1" : turn off
+func dmesgTurnOnCpu(oc *exutil.CLI, flag string) {
+	nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(nodeErr).NotTo(o.HaveOccurred())
+	e2e.Logf("\nNode Names are %v", nodeName)
+	nodeList := strings.Fields(nodeName)
+
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+		for _, node := range nodeList {
+			nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+			if statusErr != nil {
+				e2e.Logf("failed to get node status, error: %s ", statusErr)
+				return false, nil
+			}
+			e2e.Logf("\nNode %s Status is %s\n", node, nodeStatus)
+
+			if nodeStatus != "True" {
+				e2e.Logf("\n NODES ARE NOT READY\n")
+				return false, nil
+			}
+
+			switch flag {
+			case "0":
+				_, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "echo Y > /sys/kernel/debug/sched/verbose")
+				if err != nil {
+					e2e.Logf("\n failed to set Y to CPU, error: %v ", err)
+					return false, nil
+				}
+			case "1":
+				_, err := exutil.DebugNodeWithChroot(oc, node, "/bin/bash", "-c", "echo N > /sys/kernel/debug/sched/verbose")
+				if err != nil {
+					e2e.Logf("\n failed to set N to CPU, error: %v ", err)
+					return false, nil
+				}
+			default:
+				e2e.Logf("\n switch flag [%s] is invalid", flag)
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "dmesg set cpu log failed!")
 }
 
 // this function create KedaController from template for CMA
