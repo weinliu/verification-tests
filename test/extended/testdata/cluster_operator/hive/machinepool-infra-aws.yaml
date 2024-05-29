@@ -25,6 +25,9 @@ objects:
           size: 22
           type: gp2
         type: m4.xlarge
+        userTags:
+          hive-qe-tag3: hive-qe-value3
+          hive-qe-customizedtag: "${CUSTOMIZEDTAG}"
     replicas: 1
     taints: 
     - effect: NoSchedule
@@ -36,3 +39,4 @@ parameters:
 - name: IOPS
   value: "100"
 - name: AUTHENTICATION
+- name: CUSTOMIZEDTAG

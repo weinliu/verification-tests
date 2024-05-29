@@ -24,6 +24,9 @@ objects:
         credentialsSecretRef:
           name: "${CREDREF}"
         region: "${REGION}"
+        userTags:
+          hive-qe-tag1: hive-qe-value1
+          hive-qe-customizedtag: "${CUSTOMIZEDTAG}"
     provisioning:
       imageSetRef:
         name: "${IMAGESETREF}"
@@ -48,3 +51,4 @@ parameters:
 - name: PULLSECRETREF
 - name: INSTALLATTEMPTSLIMIT
   value: "3"
+- name: CUSTOMIZEDTAG

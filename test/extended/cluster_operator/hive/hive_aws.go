@@ -2350,10 +2350,10 @@ spec:
 		o.Eventually(waitForClusterRunningFalse).WithTimeout(ClusterUninstallTimeout * time.Second).WithPolling(15 * time.Second).Should(o.BeTrue())
 	})
 
-	//author: fxie@redhat.com
+	//author: fxie@redhat.com jshu@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23167"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-23167-The tags created on users in AWS match what the installer did on your instances [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-23167-Critical-73287-The tags created on users in AWS match what the installer did on your instances [Serial]", func() {
 		testCaseID := "23167"
 		cdName := "cd-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 
@@ -2383,6 +2383,19 @@ spec:
 		}
 		defer cleanCD(oc, cd.name+"-imageset", oc.Namespace(), installConfig.name1, cd.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfig, cd)
+
+		exutil.By("Create the infra MachinePool ...")
+		inframachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-infra-aws.yaml")
+		inframp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    inframachinepoolAWSTemp,
+		}
+
+		defer cleanupObjects(oc,
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"},
+		)
+		inframp.create(oc)
 
 		// Wait for the cluster to be installed and extract its infra id
 		newCheck("expect", "get", asAdmin, false, compare, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
@@ -2455,6 +2468,46 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(*listUserTagsOutput.Tags[0].Key).To(o.Equal(targetTag))
 		o.Expect(*listUserTagsOutput.Tags[0].Value).To(o.Equal("owned"))
+
+		exutil.By("Check OCP-73287, the machine in infra MP shall have userTags defined in both CD and MP")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+		instanceId := getResource(oc, asAdmin, withoutNamespace, "machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "--kubeconfig="+kubeconfig)
+		e2e.Logf("instanceId is %v", instanceId)
+
+		describeTagsOutput, err = ec2Client.DescribeTags(context.Background(), &ec2.DescribeTagsInput{
+			Filters: []types.Filter{
+				{
+					Name:   aws.String("resource-id"),
+					Values: []string{instanceId},
+				},
+			},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tagsLen := len(describeTagsOutput.Tags)
+		e2e.Logf("Tags length = %v", tagsLen)
+		numMatchedTags := 0
+		for i := range describeTagsOutput.Tags {
+			e2e.Logf("userTag %v, Key = %v, Value = %v", i, *describeTagsOutput.Tags[i].Key, *describeTagsOutput.Tags[i].Value)
+			// Tag defined in CD
+			if *describeTagsOutput.Tags[i].Key == "hive-qe-tag1" && *describeTagsOutput.Tags[i].Value == "hive-qe-value1" {
+				numMatchedTags++
+			}
+			// Tag defined in MP
+			if *describeTagsOutput.Tags[i].Key == "hive-qe-tag3" && *describeTagsOutput.Tags[i].Value == "hive-qe-value3" {
+				numMatchedTags++
+			}
+			// Tag defined in both CD and MP, MP value shall take precedence
+			if *describeTagsOutput.Tags[i].Key == "hive-qe-customizedtag" && *describeTagsOutput.Tags[i].Value == AWSDefaultMPTag {
+				numMatchedTags++
+			}
+		}
+		//Totally 3 tags matched
+		o.Expect(numMatchedTags).To(o.Equal(3))
 	})
 
 	//author: jshu@redhat.com fxie@redhat.com

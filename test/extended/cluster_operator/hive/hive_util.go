@@ -135,6 +135,7 @@ type clusterDeployment struct {
 	installConfigSecret  string
 	pullSecretRef        string
 	installAttemptsLimit int
+	customizedTag        string
 	template             string
 }
 
@@ -179,6 +180,7 @@ type machinepool struct {
 	authentication   string
 	gcpSecureBoot    string
 	networkProjectID string
+	customizedTag    string
 }
 
 type syncSetResource struct {
@@ -468,6 +470,8 @@ const (
 	AWSCredsPattern = `\[default\]
 aws_access_key_id = ([a-zA-Z0-9+/]+)
 aws_secret_access_key = ([a-zA-Z0-9+/]+)`
+	AWSDefaultCDTag = "hive-qe-cd-tag" //Default customized userTag defined ClusterDeployment's spec
+	AWSDefaultMPTag = "hive-qe-mp-tag" //Default customized userTag defined MachinePool's spec
 )
 
 // Azure Configurations
@@ -659,6 +663,7 @@ func (config *installConfig) create(oc *exutil.CLI) {
 	if config.arch == "" {
 		config.arch = "amd64"
 	}
+
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PUBLISH="+config.publish, "VMTYPE="+config.vmType, "ARCH="+config.arch)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
@@ -669,6 +674,11 @@ func (cluster *clusterDeployment) create(oc *exutil.CLI) {
 		parameters = append(parameters, "INSTALLERTYPE="+cluster.installerType)
 	} else {
 		parameters = append(parameters, "INSTALLERTYPE=installer")
+	}
+	if len(cluster.customizedTag) > 0 {
+		parameters = append(parameters, "CUSTOMIZEDTAG="+cluster.customizedTag)
+	} else {
+		parameters = append(parameters, "CUSTOMIZEDTAG="+AWSDefaultCDTag)
 	}
 	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -689,7 +699,10 @@ func (machine *machinepool) create(oc *exutil.CLI) {
 	if machine.gcpSecureBoot == "" {
 		machine.gcpSecureBoot = "Disabled"
 	}
-	parameters := []string{"--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME=" + machine.clusterName, "NAMESPACE=" + machine.namespace, "IOPS=" + strconv.Itoa(machine.iops), "AUTHENTICATION=" + machine.authentication, "SECUREBOOT=" + machine.gcpSecureBoot}
+	if machine.customizedTag == "" {
+		machine.customizedTag = AWSDefaultMPTag
+	}
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME=" + machine.clusterName, "NAMESPACE=" + machine.namespace, "IOPS=" + strconv.Itoa(machine.iops), "AUTHENTICATION=" + machine.authentication, "SECUREBOOT=" + machine.gcpSecureBoot, "CUSTOMIZEDTAG=" + machine.customizedTag}
 	if len(machine.networkProjectID) > 0 {
 		parameters = append(parameters, "NETWORKPROJECTID="+machine.networkProjectID)
 	}
