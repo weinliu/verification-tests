@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Creating cluster and machine autoscaller")
 		defer destroyWindowsAutoscaller(oc)
-		createWindowsAutoscaller(oc, machinesetName, namespace)
+		createWindowsAutoscaller(oc, machinesetName)
 
 		g.By("Creating Windows workloads")
 		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
@@ -313,12 +313,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		err := configureMachineset(oc, iaasPlatform, "winsecond", machinesetMultiOSFileName, getConfigMapData(oc, wincTestCM, "secondary_windows_image", defaultNamespace))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
-		// here we provision 1 webservers with a runtime class ID, up to 20 minutes due to pull image on AWS
+
+		// here we provision 1 webserver with a runtime class ID, up to 20 minutes due to pull image on AWS
 		waitForMachinesetReady(oc, machinesetName, 20, 1)
 		// Here we fetch machine IP from machineset
 		machineIP := fetchAddress(oc, "InternalIP", machinesetName)
-		nodeName := getNodeNameFromIP(oc, machineIP[0], iaasPlatform)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeName := getNodeNameFromIP(oc, machineIP[0])
 
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -333,15 +333,25 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		e2e.Logf("-------- Windows workload scaled on node IP %v -------------", machineIP[0])
 		e2e.Logf("-------- Scaling up workloads to 5 -------------")
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
+
 		// we get a list of all hostIPs all should be on the same host
 		pods, err := getWorkloadsHostIP(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		// we check that all workloads hostIP are similar for all pods
-		if !checkPodsHaveSimilarHostIP(oc, pods, machineIP[0]) {
-			e2e.Failf("Windows workloads did not bootstrap on the same host...")
-		} else {
-			e2e.Logf("Windows workloads succesfully bootstrap on the same host %v", nodeName)
+		// Iterate through the pods and compare their host IPs with the provided node IP
+		similarHostIP := true
+		for _, pod := range pods {
+			e2e.Logf("Pod host IP is %v, of node IP, %v", pod, machineIP[0])
+			if pod != machineIP[0] {
+				similarHostIP = false
+				break
+			}
 		}
+
+		// Check if all pods have similar host IPs
+		o.Expect(similarHostIP).To(o.BeTrue(), "Windows workloads did not bootstrap on the same host...")
+		e2e.Logf("Windows workloads successfully bootstrapped on the same host %v", nodeName)
 	})
 
 	// author rrasouli@redhat.com
@@ -355,26 +365,26 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer deleteResource(oc, exutil.MapiMachineset, byohMachineSetName, mcoNamespace)
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		address := setBYOH(oc, iaasPlatform, []string{"InternalDNS"}, byohMachineSetName, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
+
 		// removing the config map
-		g.By("Delete the BYOH congigmap for node deconfiguration")
+		g.By("Delete the BYOH configmap for node deconfiguration")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+
 		// log entry 'instance has been deconfigured' after removing services
 		waitUntilWMCOStatusChanged(oc, "instance has been deconfigured")
+
 		// check services are not running
 		g.By("Check services are not running after deleting the Windows Node")
 		runningServices, err := getWinSVCs(bastionHost, address[0], privateKey, iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		svcBool, svc := checkRunningServicesOnWindowsNode(svcs, runningServices)
-		if svcBool {
-			e2e.Failf("Service %v still running on Windows node after deconfiguration", svc)
-		}
-		g.By("Check folder do not exist after deleting the Windows Node")
+		o.Expect(svcBool).To(o.BeFalse(), "Service %v still running on Windows node after deconfiguration", svc)
+
+		// Check folders do not exist after deleting the Windows Node
+		g.By("Check folders do not exist after deleting the Windows Node")
 		for _, folder := range folders {
-			if checkFoldersDoNotExist(bastionHost, address[0], fmt.Sprintf("%v", folder), privateKey, iaasPlatform) {
-				e2e.Failf("Folders still exists on a deleted node %v", fmt.Sprintf("%v", folder))
-			}
+			o.Expect(checkFoldersDoNotExist(bastionHost, address[0], folder, privateKey, iaasPlatform)).To(o.BeTrue(), "Folder %v still exists on a deleted node", folder)
 		}
-		// TODO check network removal test
 	})
 
 	// author rrasouli@redhat.com
@@ -398,7 +408,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
 
-		byohNode := getNodeNameFromIP(oc, byohIP[0], iaasPlatform)
+		byohNode := getNodeNameFromIP(oc, byohIP[0])
 
 		// change version annotation on node
 		oc.AsAdmin().WithoutNamespace().Run("annotate").Args("node", byohNode, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
@@ -1026,7 +1036,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		serviceMonitorAge1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// here we fetch a list of endpoints
-		endpointsIPsBefore := getEndpointsIPs(oc, wmcoNamespace)
+		endpointsIPsBefore, err := getEndpointsIPs(oc, wmcoNamespace)
+		if err != nil {
+			e2e.Failf("Error retrieving endpoint IPs: %v", err)
+		}
 		// restarting the WMCO deployment
 		g.By("Restart WMCO pod by deleting")
 		wmcoID, err := getWorkloadsNames(oc, wmcoDeployment, wmcoNamespace)
@@ -1045,7 +1058,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Test endpoints IPs survives a WMCO restart")
 		waitForEndpointsReady(oc, wmcoNamespace, 5, len(strings.Split(endpointsIPsBefore, " ")))
 
-		endpointsIPsAfter := getEndpointsIPs(oc, wmcoNamespace)
+		endpointsIPsAfter, err := getEndpointsIPs(oc, wmcoNamespace)
+		if err != nil {
+			e2e.Failf("Error retrieving endpoint IPs: %v", err)
+		}
 		endpointsIPsBeforeArray := strings.Split(endpointsIPsBefore, " ")
 		sort.Strings(endpointsIPsBeforeArray)
 		endpointsIPsAfterArray := strings.Split(endpointsIPsAfter, " ")
@@ -1070,7 +1086,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 5, 0, false)
 		g.By("Test endpoints IP are deleted after scalling down")
 		waitForEndpointsReady(oc, wmcoNamespace, 5, 0)
-		endpointsIPsLast := getEndpointsIPs(oc, wmcoNamespace)
+		endpointsIPsLast, err := getEndpointsIPs(oc, wmcoNamespace)
+		if err != nil {
+			e2e.Failf("Error retrieving endpoint IPs: %v", err)
+		}
 		if endpointsIPsLast != "" {
 			e2e.Failf("Endpoints %v are still exists after scalling down Windows nodes", endpointsIPsLast)
 		}
@@ -1448,9 +1467,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		waitWindowsNodesReady(oc, 3, 1000*time.Second)
 		defer os.Remove("mykey")
 		defer os.Remove("mykey.pub")
-		oldPubKey, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
+		oldPubKey, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0]), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		oldUsernameHash, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
+		oldUsernameHash, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0]), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By(" Creating new SSL keys ")
 		cmd := "ssh-keygen  -N '' -C 'test' -f mykey"
@@ -1480,9 +1499,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
 		}
 		g.By(" Comparing username public keys hash changed ")
-		newPubkey, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
+		newPubkey, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0]), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newUsernameHash, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
+		newUsernameHash, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0]), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(oldPubKey).ShouldNot(o.Equal(newPubkey), "Content of old pub key is similar as new pub key")
 		o.Expect(oldUsernameHash).ShouldNot(o.Equal(newUsernameHash), "Old username hash is similiar as new username hash")
@@ -1611,7 +1630,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check if proxy exists on all Windows worker")
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		winInternalIP := getWindowsInternalIPs(oc)
-		checkProxyVarsExistsOnWindowsNode(oc, winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
+		checkProxyVarsExistsOnWindowsNode(winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
 		// verify that trusted-ca ConfigMap exists in the cluster
 		g.By("Ensure that trusted-ca exists")
 		_, err = popItemFromList(oc, "cm", proxyCAConfigMap, wmcoNamespace)
@@ -1661,7 +1680,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if !compareMaps(testNoHttpsClusterEnvVars, wicdProxies) {
 			e2e.Failf("Cluster proxy settings are not equal to WICD proxy settings, https proxy was not removed from WICD CM")
 		}
-		checkProxyVarsExistsOnWindowsNode(oc, winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
+		checkProxyVarsExistsOnWindowsNode(winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
 		// remove http_proxy vars as well and check invoked on each Windows nodes
 		g.By("remove https_proxy vars and check invoked on each Windows nodes")
 		timeNoHttp := getWMCOTimestamp(oc)
@@ -1675,7 +1694,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		wicdPayload, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.environmentVars}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		wicdProxies = getPayloadMap(wicdPayload)
-		checkProxyVarsExistsOnWindowsNode(oc, winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
+		checkProxyVarsExistsOnWindowsNode(winInternalIP, wicdProxies, bastionHost, privateKey, iaasPlatform)
 	})
 
 	g.It("Smokerun-Author:rrasouli-Critical-66670-[node-proxy]-Cluster-wide proxy trusted-ca configmap tests [Serial][Disruptive]", func() {
@@ -1847,7 +1866,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 		source := "wmco1"
 		g.By("installing new upgrade operator with new index image")
-		installNewCatalogSource(oc, source, "catalogsource.yaml", upgrade_index_to, wmcoNamespace)
+		installNewCatalogSource(oc, source, "catalogsource.yaml", upgrade_index_to)
 		g.By("uninstalling old operator")
 		// True to skip namespace deletion
 		uninstallWMCO(oc, wmcoNamespace, true)
@@ -1905,7 +1924,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			return
 		}
 
-		g.By(fmt.Sprintf("Checking CPU, Memory, and Filesystem graphs for Windows pods managed by WMCO"))
+		g.By("Checking CPU, Memory, and Filesystem graphs for Windows pods managed by WMCO")
 
 		// Get the pods managed by WMCO
 		podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+wmcoDeployment, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()

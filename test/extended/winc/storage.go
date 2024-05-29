@@ -21,11 +21,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 	g.BeforeEach(func() {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		iaasPlatform = strings.ToLower(output)
-
 		var err error
 		privateKey, err = exutil.GetPrivateKey()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
+		publicKey, err = exutil.GetPublicKey()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	g.It("Smokerun-Author:jfrancoa-NonPreRelease-Longduration-Critical-66352-Windows workloads support CSI persistent storage [Serial]", func() {

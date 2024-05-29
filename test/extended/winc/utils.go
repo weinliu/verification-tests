@@ -69,6 +69,10 @@ var (
 		2: "c:\\temp",
 		3: "c:\\var\\log",
 	}
+	administratorNames = map[string]string{
+		"azure":   "capi",
+		"default": "Administrator",
+	}
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -85,36 +89,56 @@ func deleteProject(oc *exutil.CLI, namespace string) {
 	oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
 }
 
-func getConfigMapData(oc *exutil.CLI, cm string, dataKey string, namespace string) (dataValue string) {
-	dataValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cm, "-o=jsonpath='{.data."+dataKey+"}'", "-n", namespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: get cm %v -o=jsonpath={.data.%v} failed:  %v %v", cm, dataKey, dataValue, err))
+func getConfigMapData(oc *exutil.CLI, cm string, dataKey string, namespace string) string {
+	// Run the oc command to get the configmap data
+	dataValue, err := oc.AsAdmin().WithoutNamespace().Run("get").
+		Args("configmap", cm, "-o=jsonpath={.data."+dataKey+"}", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: get cm %v -o=jsonpath={.data.%v} failed: %v", cm, dataKey, err))
+	// Check for errors in running the command
+
 	return dataValue
 }
 
 func waitWindowsNodesReady(oc *exutil.CLI, expectedNodes int, timeout time.Duration) {
 	pollErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath='{.items[*].status.conditions[?(@.type==\"Ready\")].status}'").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		return (!strings.Contains(out, "False") && !strings.Contains(out, "Unknown") && len(strings.Fields(out)) == expectedNodes), nil
+		// Run the oc command to get the status of Windows nodes
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Windows nodes")
+
+		// Parse the output to check node statuses
+		statuses := strings.Fields(out)
+		readyCount := 0
+		for _, status := range statuses {
+			if status == "True" {
+				readyCount++
+			}
+		}
+
+		// Check if the number of ready nodes matches the expected number
+		return readyCount == expectedNodes, nil
 	})
-	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows Nodes are not ready after waiting up to %v minutes ...", timeout))
+
+	// Assert that no error occurred during the wait
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows nodes are not ready after waiting up to %v minutes", timeout))
 }
 
 func waitWindowsNodeReady(oc *exutil.CLI, windowsNodeName string, timeout time.Duration) {
 	nodeExists := false
 	pollErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", windowsNodeName, "--no-headers").Output()
-		if err != nil {
-			e2e.Logf("Error getting node %s: %v. Waiting 10 seconds more...", windowsNodeName, err)
-			return false, nil
-		}
+		// Get the node status
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args("nodes", windowsNodeName, "--no-headers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Error getting node %s", windowsNodeName))
 
+		// Parse the node status
 		nodesArray := strings.Fields(msg)
 		if !nodeExists {
 			nodeExists = true
 			e2e.Logf("Expected %s Windows node was found", windowsNodeName)
 		}
 
+		// Check if the node is ready
 		nodesReady := strings.EqualFold(nodesArray[1], "Ready")
 		if !nodesReady {
 			e2e.Logf("Expected %s Windows node is not ready yet. Waiting 10 seconds more ...", windowsNodeName)
@@ -125,25 +149,14 @@ func waitWindowsNodeReady(oc *exutil.CLI, windowsNodeName string, timeout time.D
 		return true, nil
 	})
 
-	if pollErr != nil {
-		e2e.Failf("Expected %s Windows node is not ready after waiting up to %v ...", windowsNodeName, timeout)
-	}
+	// Assert that no error occurred during the wait
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %s Windows node is not ready after waiting up to %v", windowsNodeName, timeout))
 }
 
 // This function returns the windows build e.g windows-build: '10.0.19041'
 func getWindowsBuildID(oc *exutil.CLI, nodeID string) (string, error) {
 	build, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeID, "-o=jsonpath={.metadata.labels.node\\.kubernetes\\.io\\/windows-build}").Output()
 	return build, err
-}
-
-func checkPodsHaveSimilarHostIP(oc *exutil.CLI, pods []string, nodeIP string) bool {
-	for _, pod := range pods {
-		e2e.Logf("Pod host IP is %v, of node IP, %v", pod, nodeIP)
-		if pod != nodeIP {
-			return false
-		}
-	}
-	return true
 }
 
 func waitVersionAnnotationReady(oc *exutil.CLI, windowsNodeName string, interval time.Duration, timeout time.Duration) {
@@ -262,12 +275,12 @@ func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
 	}
 }
 
-// A private function to determine username by platform
-func getAdministratorNameByPlatform(iaasPlatform string) (admin string) {
-	if iaasPlatform == "azure" {
-		return "capi"
+// getAdministratorNameByPlatform returns the administrator username based on the IaaS platform.
+func getAdministratorNameByPlatform(iaasPlatform string) string {
+	if name, exists := administratorNames[iaasPlatform]; exists {
+		return name
 	}
-	return "Administrator"
+	return administratorNames["default"]
 }
 
 func getBastionSSHUser(iaasPlatform string) (user string) {
@@ -281,19 +294,23 @@ func getBastionSSHUser(iaasPlatform string) (user string) {
 	}
 	return "core"
 }
+
 func runPSCommand(bastionHost, windowsHost, command, privateKey, iaasPlatform string) (result string, err error) {
+	// Retrieve administrator username based on IaaS platform
 	windowsUser := getAdministratorNameByPlatform(iaasPlatform)
+
+	// Retrieve bastion private key
 	bastionKey, err := exutil.GetPrivateKey()
-	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get bastion private key with error %v", err)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get bastion private key")
 
 	// Ensure appropriate permissions for private keys
-	os.Chmod(bastionKey, 0600)
-	os.Chmod(privateKey, 0600)
+	o.Expect(os.Chmod(bastionKey, 0600)).NotTo(o.HaveOccurred(), "Failed to set permissions for bastion private key")
+	o.Expect(os.Chmod(privateKey, 0600)).NotTo(o.HaveOccurred(), "Failed to set permissions for private key")
 
 	// Quote the command properly
 	command = "\"" + command + "\""
 
-	// Use proper formatting for the ssh command
+	// Construct the SSH command
 	sshCommand := fmt.Sprintf(
 		"ssh -i %s -T -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i %s -A -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %%h:%%p %s@%s\" %s@%s 'powershell %s'",
 		privateKey, bastionKey, getBastionSSHUser(iaasPlatform), bastionHost, windowsUser, windowsHost, command,
@@ -350,16 +367,15 @@ func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 }
 
 func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
-	if err != nil {
-		e2e.Logf("Command failed with error: %s .... there are no ready workloads", err)
-		return false
-	}
+	// Get the number of ready replicas
+	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+		Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+
+	// Parse the number of ready replicas
 	numberOfWorkloads, _ := strconv.Atoi(msg)
-	if (msg == "" && replicas == 0) || numberOfWorkloads == replicas {
-		return true
-	}
-	return false
+
+	// Check if the number of ready replicas matches the expected number
+	return (msg == "" && replicas == 0) || numberOfWorkloads == replicas
 }
 
 /*
@@ -371,44 +387,61 @@ replacement contains a slice with string to replace (as written in the template,
 	             "<kernelID>": "k3Rn3L-1d"
 */
 func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string, replacement map[string]string, waitBool bool) {
+	// Get the content of the workload file
 	windowsWebServer := exutil.GetFileContent("winc", workloadFile)
+
+	// Replace placeholders in the workload content
 	for rep, value := range replacement {
 		windowsWebServer = strings.ReplaceAll(windowsWebServer, rep, value)
 	}
+
+	// Write the modified content to a temporary file
 	tempFileName := namespace + "-windows-workload"
-	defer os.Remove(tempFileName)
-	os.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
-	oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
-	// Wait up to 15 minutes for Windows workload ready in case of Windows image is not pre-pulled
+	defer os.Remove(tempFileName) // Cleanup the temporary file
+	if err := os.WriteFile(tempFileName, []byte(windowsWebServer), 0644); err != nil {
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to write temporary file")
+		return
+	}
+
+	// Create the Windows workload
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create Windows workload")
+
+	// Wait for the Windows workload to be ready if specified
 	if waitBool {
 		poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
 			return checkWorkloadCreated(oc, windowsWorkloads, namespace, 1), nil
 		})
-		if poolErr != nil {
-			e2e.Failf("Windows workload is not ready after waiting up to 15 minutes ...")
-		}
+		o.Expect(poolErr).NotTo(o.HaveOccurred(), "Windows workload is not ready after waiting up to 15 minutes")
 	}
 }
 
 // Get an external IP of loadbalancer service
-func getExternalIP(iaasPlatform string, oc *exutil.CLI, deploymentName string, namespace string) (extIP string, err error) {
+func getExternalIP(iaasPlatform string, oc *exutil.CLI, deploymentName string, namespace string) (string, error) {
+	var cmdArgs []string
+	if iaasPlatform == "azure" || iaasPlatform == "gcp" {
+		cmdArgs = []string{"get", "service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}", "-n", namespace}
+	} else {
+		cmdArgs = []string{"get", "service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}", "-n", namespace}
+	}
+
+	var extIP string
 	pollErr := wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
-		if iaasPlatform == "azure" || iaasPlatform == "gcp" {
-			extIP, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}", "-n", namespace).Output()
-			e2e.Logf("%v ExternalIP is %v", iaasPlatform, extIP)
-		} else {
-			extIP, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", deploymentName, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}", "-n", namespace).Output()
-			e2e.Logf("%v ExternalIP is %v", iaasPlatform, extIP)
-		}
-		if err != nil || extIP == "" {
-			e2e.Logf("Did not get Loadbalancer IP, trying next round")
+		output, err := oc.AsAdmin().WithoutNamespace().Run(cmdArgs[0]).Args(cmdArgs[1:]...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error retrieving external IP")
+		extIP = output
+		e2e.Logf("%v ExternalIP is %v", iaasPlatform, extIP)
+
+		if extIP == "" {
+			e2e.Logf("External IP is empty, trying next round")
 			return false, nil
 		}
 		return true, nil
 	})
+
 	exutil.AssertWaitPollNoErr(pollErr, "Failed to get Loadbalancer IP after 1 minute ...")
 
-	return extIP, err
+	return extIP, nil
 }
 
 // we retrieve the ClusterIP from a pod according to it's OS
@@ -419,19 +452,27 @@ func getServiceClusterIP(oc *exutil.CLI, deploymentName string, namespace string
 
 // this function scale the deployment workloads
 func scaleDeployment(oc *exutil.CLI, deploymentName string, replicas int, namespace string) error {
-	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "deployment", deploymentName, "-n", namespace).Output()
+	// Scale the deployment
+	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").
+		Args("--replicas="+strconv.Itoa(replicas), "deployment", deploymentName, "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to scale deployment")
+
+	// Poll to check if the workload has been scaled
 	poolErr := wait.Poll(20*time.Second, 30*time.Minute, func() (bool, error) {
 		return checkWorkloadCreated(oc, deploymentName, namespace, replicas), nil
 	})
-	if poolErr != nil {
-		e2e.Failf("Workload did not scale after waiting up to 30 minutes ...")
-	}
-	return err
+	o.Expect(poolErr).NotTo(o.HaveOccurred(), "Workload did not scale after waiting up to 30 minutes")
+
+	return nil
 }
 
 func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, deadTime int, replicas int, skipWait bool) {
-	err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), exutil.MapiMachineset, windowsMachineSetName, "-n", mcoNamespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// Scale the Windows MachineSet
+	err := oc.AsAdmin().WithoutNamespace().Run("scale").
+		Args("--replicas="+strconv.Itoa(replicas), exutil.MapiMachineset, windowsMachineSetName, "-n", mcoNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to scale Windows MachineSet")
+
+	// If skipWait is false, wait for the MachineSet to be ready
 	if !skipWait {
 		waitForMachinesetReady(oc, windowsMachineSetName, deadTime, replicas)
 	}
@@ -604,7 +645,7 @@ func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int,
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows machine is not provisioned after waiting up to %v minutes ...", deadTime))
 }
 
-func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) string {
+func getNodeNameFromIP(oc *exutil.CLI, nodeIP string) string {
 	// Use go-template to iterate over all nodes and for each node, iterate over the .status.addresses
 	// block. Inside that block, if the address field is equal to the nodeIP we pass as argument to the function
 	// return the metadata.name for that node.
@@ -744,22 +785,57 @@ func checkRunningServicesOnWindowsNode(svcs map[int]string, winServices map[stri
 	return expectedService, svc
 }
 
-func checkFoldersDoNotExist(bastionHost string, winInternalIP string, folder string, privateKey string, iaasPlatform string) bool {
-	msg, _ := runPSCommand(bastionHost, winInternalIP, fmt.Sprintf("Get-Item %v", folder), privateKey, iaasPlatform)
-	return !strings.Contains(msg, "ItemNotFoundException")
+// checkFoldersDoNotExist ensures the provided directory does not exist on the target Windows node.
+//
+// Parameters:
+// - bastionHost: A string representing the address of the bastion host used to access the Windows node.
+// - winInternalIP: A string representing the internal IP address of the Windows node.
+// - folder: A string representing the directory path to check on the Windows node.
+// - privateKey: A string representing the path to the private key used for SSH access.
+// - iaasPlatform: A string representing the IaaS platform (e.g., AWS, Azure).
+//
+// Returns:
+// - bool: True if the directory does not exist (i.e., the "ItemNotFoundException" message is found in the output), otherwise false.
+//
+// Usage Scenario:
+// This function is useful in end-to-end (e2e) tests where it is necessary to verify that certain directories
+// do not exist on a Windows node after specific actions, such as the removal of configuration or cleanup processes.
+func checkFoldersDoNotExist(bastionHost, winInternalIP, folder, privateKey, iaasPlatform string) bool {
+	output, _ := runPSCommand(bastionHost, winInternalIP, fmt.Sprintf("Get-Item %v", folder), privateKey, iaasPlatform)
+	return strings.Contains(output, "ItemNotFoundException")
 }
 
+// waitUntilWMCOStatusChanged waits until a specific status message appears in the logs of the
+// Windows Machine Config Operator (WMCO). This is useful to ensure that WMCO has reached a
+// particular state before proceeding with further test steps.
 func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
-	waitLogErr := wait.Poll(10*time.Second, 25*time.Minute, func() (bool, error) {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace, "--since=10s").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, message) {
-			return false, nil
+	// Define the polling interval and timeout duration
+	pollInterval := 10 * time.Second
+	timeout := 25 * time.Minute
+
+	// Define the polling function
+	waitLogErr := wait.Poll(pollInterval, timeout, func() (bool, error) {
+		// Run the oc command to get logs from the WMCO deployment
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").
+			Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace, "--since=10s").Output()
+
+		// Check for errors in running the command
+		if err != nil {
+			return false, err
 		}
-		e2e.Logf("Message: %v, found in WMCO logs", message)
-		return true, nil
+
+		// Check if the specified message is in the logs
+		if strings.Contains(msg, message) {
+			e2e.Logf("Message: %v, found in WMCO logs", message)
+			return true, nil
+		}
+
+		// If message is not found, return false to continue polling
+		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find %v in WMCO log after 15 minutes", message))
+
+	// Assert that no error occurred during the wait
+	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find %v in WMCO log after %v minutes", message, timeout))
 }
 
 func getWMCOVersionFromLogs(oc *exutil.CLI) string {
@@ -795,10 +871,17 @@ func getRandomString(len int) string {
 	return str[:len]
 }
 
-func getEndpointsIPs(oc *exutil.CLI, namespace string) string {
-	endpoints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].subsets[].addresses[*].ip}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return endpoints
+func getEndpointsIPs(oc *exutil.CLI, namespace string) (string, error) {
+	// Run the oc command to get the IPs of the endpoints
+	endpoints, err := oc.AsAdmin().WithoutNamespace().Run("get").
+		Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].subsets[].addresses[*].ip}").Output()
+
+	// Check for errors in running the command
+	if err != nil {
+		return "", fmt.Errorf("failed to get endpoints IPs: %v", err)
+	}
+
+	return endpoints, nil
 }
 
 func setBYOH(oc *exutil.CLI, iaasPlatform string, addressesType []string, machinesetName string, winVersion string) []string {
@@ -843,7 +926,7 @@ func setMachineset(oc *exutil.CLI, iaasPlatform string, winVersion string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func createWindowsAutoscaller(oc *exutil.CLI, machineSetName, namespace string) {
+func createWindowsAutoscaller(oc *exutil.CLI, machineSetName string) {
 	clusterAutoScaller := filepath.Join(exutil.FixturePath("testdata", "winc"), "cluster_autoscaler.yaml")
 	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterAutoScaller).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -992,24 +1075,26 @@ func uninstallWMCO(oc *exutil.CLI, namespace string, withoutNamespace ...bool) {
 
 	if !skipNamespaceDeletion {
 		defer func() {
+			// Attempt to delete the namespace and its resources
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
-			// do not assert the above deletions, and depends on the finally getting deployment to assert the result.
-			// check that the deployment does not exist anymore
+
+			// Check that the WMCO deployment does not exist anymore
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-n", namespace).Execute()
 			o.Expect(err).To(o.HaveOccurred())
 		}()
 	}
-	// Make sure CSV exists
+
+	// Get the installed CSV name
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", wmcoDeployment, "-n", namespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	//  do not assert the following deletions, and depends on the finally getting deployment to assert the result.
+	// Attempt to delete the subscription, CSV, and operatorgroup
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "-n", namespace, csvName).Execute()
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
 }
 
-func installNewCatalogSource(oc *exutil.CLI, source string, catalogsource_file string, newIndex string, namespace string) {
+func installNewCatalogSource(oc *exutil.CLI, source string, catalogsource_file string, newIndex string) {
 	manifestFile, err := exutil.GenerateManifestFile(oc, "winc", catalogsource_file, map[string]string{"<new_source>": source, "<index_image>": newIndex})
 	o.Expect(err).NotTo(o.HaveOccurred(), "Could not determine mew catalogsource")
 
@@ -1213,7 +1298,7 @@ func isProxy(oc *exutil.CLI) bool {
 // the DaemonSet (or other manifests) required for installing CSI drivers in each different
 // platform are provided by the developers in the wmco repo, under the hack/manifests/csi folder.
 // To avoid copy-pasting all the manifest, we rely directly on those manifests by downloading them locally.
-func downloadWindowsCSIDriver(oc *exutil.CLI, fileName, iaasPlatform string) error {
+func downloadWindowsCSIDriver(fileName, iaasPlatform string) error {
 	driver_url := "https://raw.githubusercontent.com/openshift/windows-machine-config-operator/master/hack/manifests/csi/" + iaasPlatform + "/01-example-driver-daemonset.yaml"
 
 	resp, err := http.Get(driver_url)
@@ -1238,7 +1323,7 @@ func downloadWindowsCSIDriver(oc *exutil.CLI, fileName, iaasPlatform string) err
 func installWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 	tempFileName := "csi-driver-" + iaasPlatform + "-windows.yaml"
 	defer os.Remove(tempFileName)
-	err := downloadWindowsCSIDriver(oc, tempFileName, iaasPlatform)
+	err := downloadWindowsCSIDriver(tempFileName, iaasPlatform)
 	if err != nil {
 		return err
 	}
@@ -1272,7 +1357,7 @@ func installWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 func uninstallWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 	tempFileName := "csi-driver-" + iaasPlatform + "-windows.yaml"
 	defer os.Remove(tempFileName)
-	err := downloadWindowsCSIDriver(oc, tempFileName, iaasPlatform)
+	err := downloadWindowsCSIDriver(tempFileName, iaasPlatform)
 	if err != nil {
 		return err
 	}
@@ -1335,7 +1420,7 @@ func getEnvVarProxyMap(oc *exutil.CLI, replacement ...map[string]string) map[str
 	return clusterEnvVars
 }
 
-func checkProxyVarsExistsOnWindowsNode(oc *exutil.CLI, winInternalIP []string, wicdProxies map[string]interface{}, bastionHost string, privKey string, iaasPlatform string) {
+func checkProxyVarsExistsOnWindowsNode(winInternalIP []string, wicdProxies map[string]interface{}, bastionHost string, privKey string, iaasPlatform string) {
 	for _, winhost := range winInternalIP {
 		for key, proxy := range wicdProxies {
 			e2e.Logf(fmt.Sprintf("Check %v proxy exist on worker %v", key, winhost))
