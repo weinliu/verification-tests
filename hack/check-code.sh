@@ -53,14 +53,24 @@ mkdir -p /tmp/gopath
 export GOPATH=/tmp/gopath
 export GOLANGCI_LINT_CACHE=/tmp/.cache
 go mod tidy || true
-for f in $modified_files;
-do
-    if [ -e $f ]; then
-        echo $f
-        lint_check_result=$(golangci-lint run --timeout=10m0s --fast $f 2>&1 || true)
-        if [[ -n "${lint_check_result}" ]]; then
-            bad_golint_files="$bad_golint_files\n$lint_check_result";
+
+declare -a  modified_dirs
+
+for f in $modified_files; do
+    if [ -e "$f" ]; then
+        d=$(dirname "$f")
+        if ! echo "${modified_dirs[*]}" |  grep -q -E "${d}"; then
+            modified_dirs+=("$d")
         fi
+    fi
+done
+
+for i in "${!modified_dirs[@]}"; do
+    dir_name="${modified_dirs[$i]}"
+    echo "${dir_name}"
+    lint_check_result=$(golangci-lint run --timeout=10m0s --fast $dir_name 2>&1 || true)
+    if [[ -n "${lint_check_result}" ]]; then
+        bad_golint_files="$bad_golint_files\n$lint_check_result";
     fi
 done
 
@@ -68,8 +78,8 @@ if [[ -n "${bad_golint_files}" ]]; then
     echo "ERROR:"
     echo "golint detected following problems:"
     echo -e "${bad_golint_files}"
-    echo "you could install golangci-lint with \"go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1\""
-    echo "and then 'golangci-lint run --timeout=10m0s --fast [file_path]' to check it in your local env"
+    echo "you could install golangci-lint with \"go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2\""
+    echo "and then 'golangci-lint run --timeout=10m0s --fast [dir_path]' to check it in your local env"
 else
     echo "golint SUCCESS"
 fi

@@ -35,6 +35,7 @@ func GetLatest4PreviewImage(arch string) (latestImage string, err error) {
 	resp, err = http.Get(url[arch])
 	if err != nil {
 		err = fmt.Errorf("fail to get url %v, error: %v", url[arch], err)
+		return "", err
 	}
 	body, err = io.ReadAll(resp.Body)
 	defer resp.Body.Close()
@@ -42,7 +43,7 @@ func GetLatest4PreviewImage(arch string) (latestImage string, err error) {
 		err = fmt.Errorf("fail to parse the result, error: %v", err)
 	}
 	latestImage = gjson.Get(string(body), `pullSpec`).String()
-	return
+	return latestImage, err
 }
 
 // GetLatestNightlyImage to get the latest nightly OCP image from releasestream link
