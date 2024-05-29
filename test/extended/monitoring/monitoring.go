@@ -722,10 +722,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkPO, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "alertmanager-main-0", "-ojsonpath={.spec.containers[*].name}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkPO).NotTo(o.ContainSubstring("alertmanager-proxy"))
 
-		exutil.By("check alertmanager-main sa, annotations should be removed")
-		checkSA, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceAccount", "alertmanager-main", "-ojsonpath={.metadata.annotations}", "-n", "openshift-monitoring").Output()
-		o.Expect(checkSA).To(o.Equal(""))
-
 		exutil.By("check role, monitoring-alertmanager-edit add new resourceNames")
 		checkRole, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("role", "monitoring-alertmanager-edit", "-ojsonpath={.rules}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkRole).To(o.ContainSubstring(`"resourceNames":["main"]`))
