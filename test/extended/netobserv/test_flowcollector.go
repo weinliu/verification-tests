@@ -1117,7 +1117,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		ebpfAlertRuleName := "ebpf-agent-prom-alert"
 		ebpfRules, err := getConfiguredAlertRules(oc, ebpfAlertRuleName, namespace+"-privileged")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ebpfRules).To(o.ContainSubstring("NetObservAgentFlowsDropped"))
+		o.Expect(ebpfRules).To(o.ContainSubstring("NetObservDroppedFlows"))
 
 		// verify disable alerts feature
 		g.By("Verify alerts can be disabled")
@@ -1166,7 +1166,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for alerts to be active")
 		waitForAlertToBeActive(oc, "NetObservLokiError")
-		waitForAlertToBeActive(oc, "NetObservAgentFlowsDropped")
+		waitForAlertToBeActive(oc, "NetObservDroppedFlows")
 	})
 
 	g.It("NonPreRelease-Author:aramesha-High-64156-Verify IPFIX-exporter [Serial]", func() {
