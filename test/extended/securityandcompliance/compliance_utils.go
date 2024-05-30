@@ -967,10 +967,9 @@ func checkMetric(oc *exutil.CLI, metricString []string, url string) {
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		metricsLog, _ = exec.Command("bash", "-c", "cat "+output+" | grep compliance; rm -rf "+output).Output()
+		metricsLog, _ = exec.Command("bash", "-c", "cat "+output+" | grep =; rm -rf "+output).Output()
 		for _, metricStr := range metricString {
-			matched, errMatch := regexp.MatchString(metricStr, string(metricsLog))
-			if errMatch != nil || !matched {
+			if !strings.Contains(string(metricsLog), metricStr) {
 				return false, nil
 			}
 		}

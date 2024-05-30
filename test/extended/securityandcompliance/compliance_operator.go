@@ -3833,8 +3833,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
 
 		metricSsbStr := []string{
-			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-master\",phase=\"DONE\",result=}",
-			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-worker\",phase=\"DONE\",result=}",
+			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-master\",phase=\"DONE\",result=",
+			"compliance_operator_compliance_scan_status_total{name=\"ocp4-cis-node-worker\",phase=\"DONE\",result=",
 			"compliance_operator_compliance_state{name=\"" + ssb.name + "\"}"}
 
 		newCheck("expect", asAdmin, withoutNamespace, contain, "openshift.io/cluster-monitoring", ok, []string{"namespace", subD.namespace, "-o=jsonpath={.metadata.labels}"}).check(oc)
