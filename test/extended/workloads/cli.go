@@ -1761,7 +1761,7 @@ sudo tar -xvf %v -C /tmp/test68256`, sosreportNames[1])
 		for _, resource := range clusterResourceList {
 			_, explainErr, _ := oc.AsAdmin().WithoutNamespace().Run("explain").Args(resource).Outputs()
 			if explainErr != "" {
-				if strings.Contains(explainErr, "couldn't find resource") {
+				if strings.Contains(explainErr, "couldn't find resource") || strings.Contains(explainErr, "not found") {
 					e2e.Logf("Could not get the current crd %v, will skip and continue", resource)
 				} else {
 					e2e.Failf("Explain failed with the current resource ")
