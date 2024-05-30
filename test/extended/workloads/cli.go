@@ -2433,7 +2433,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 
 		exutil.By("Extract the darwin tools")
 		os.RemoveAll("/tmp/d71178")
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", payloadPullSpec, "--registry-config="+secretFile, "--command-os=darwin/arm64", "--tools", "--to=/tmp/d71178").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", payloadPullSpec, "--registry-config="+secretFile, "--command-os=darwin/arm64", "--tools", "--to=/tmp/d71178", "--insecure").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Make sure no mismatch for sha256sum")
@@ -2466,7 +2466,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(pullSpec).NotTo(o.BeEmpty())
 
 		exutil.By("Extract oc.rhel8 from ocp payload")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc.rhel8", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc.rhel8", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName, "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if _, statErr := os.Stat(extractTmpDirName + "/oc"); os.IsNotExist(statErr) {
 			e2e.Failf("Get extracted oc failed")
@@ -2475,7 +2475,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(removeErr).NotTo(o.HaveOccurred())
 
 		exutil.By("Extract oc.rhel9 from ocp payload")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc.rhel9", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc.rhel9", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName, "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if _, statErr := os.Stat(extractTmpDirName + "/oc"); os.IsNotExist(statErr) {
 			e2e.Failf("Get extracted oc failed")
@@ -2484,7 +2484,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(removeErr).NotTo(o.HaveOccurred())
 
 		exutil.By("Extract oc from ocp payload")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--to", extractTmpDirName, "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if _, statErr := os.Stat(extractTmpDirName + "/oc"); os.IsNotExist(statErr) {
 			e2e.Failf("Get extracted oc failed")
@@ -2493,11 +2493,11 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(removeErr).NotTo(o.HaveOccurred())
 
 		exutil.By("Get the oc-mirror image from ocp payload")
-		ocMirrorImage, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", `-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`).Outputs()
+		ocMirrorImage, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "info", pullSpec, "-a", extractTmpDirName+"/.dockerconfigjson", "--insecure", `-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Extract oc-mirror.rhel8")
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", ocMirrorImage, "-a", extractTmpDirName+"/.dockerconfigjson", "--path=/usr/bin/oc-mirror.rhel8:"+extractTmpDirName, "--confirm").Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", ocMirrorImage, "-a", extractTmpDirName+"/.dockerconfigjson", "--path=/usr/bin/oc-mirror.rhel8:"+extractTmpDirName, "--confirm", "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if _, statErr := os.Stat(extractTmpDirName + "/oc-mirror.rhel8"); os.IsNotExist(statErr) {
 			e2e.Failf("Get extracted oc-mirror.rhel8 failed")
@@ -2506,7 +2506,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(removeErr).NotTo(o.HaveOccurred())
 
 		exutil.By("Extract oc-mirror.rhel9")
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", ocMirrorImage, "-a", extractTmpDirName+"/.dockerconfigjson", "--path=/usr/bin/oc-mirror.rhel9:"+extractTmpDirName, "--confirm").Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("image").Args("extract", ocMirrorImage, "-a", extractTmpDirName+"/.dockerconfigjson", "--path=/usr/bin/oc-mirror.rhel9:"+extractTmpDirName, "--confirm", "--insecure").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if _, statErr := os.Stat(extractTmpDirName + "/oc-mirror.rhel9"); os.IsNotExist(statErr) {
 			e2e.Failf("Get extracted oc-mirror.rhel9 failed")
