@@ -3023,7 +3023,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(podLogStdout).To(o.ContainSubstring("kernel.pid_max = 181818"))
 		o.Expect(podLogStdout).NotTo(o.ContainSubstring("kernel.pid_max not equal 181818"))
 	})
-	g.It("Longduration-NonPreRelease-PreChkUpgrade-Author:liqcui-Medium-49618-Telco N-1 - Pre Check for PAO shipped with NTO to support upgrade.[Telco][Disruptive][Slow].", func() {
+	g.It("Longduration-NonPreRelease-PreChkUpgrade-Author:liqcui-Medium-49618-TELCO N-1 - Pre Check for PAO shipped with NTO to support upgrade.[Telco][Disruptive][Slow].", func() {
 
 		var (
 			paoBaseProfileMCP = exutil.FixturePath("testdata", "psap", "pao", "pao-baseprofile-mcp.yaml")
@@ -3172,7 +3172,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	})
 
-	g.It("Longduration-NonPreRelease-PstChkUpgrade-Author:liqcui-Medium-49618-Telco N-1 - Post Check for PAO shipped with NTO to support upgrade.[Telco][Disruptive][Slow].", func() {
+	g.It("Longduration-NonPreRelease-PstChkUpgrade-Author:liqcui-Medium-49618-TELCO N-1 - Post Check for PAO shipped with NTO to support upgrade.[Telco][Disruptive][Slow].", func() {
 
 		if !isNTO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
