@@ -1678,12 +1678,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listAclOutput).NotTo(o.BeEmpty())
 		e2e.Logf(listAclOutput)
-		aclMap := nbContructToMap(listAclOutput)
-		o.Expect(len(aclMap)).NotTo(o.Equal(0))
+		var aclMap map[string]string
+		var listPGCmd string
+		//Dual stack has two ACLs for policy and uuid of both are needed to get port group
+		if ipStackType == "dualstack" {
+			listAcls := strings.Split(listAclOutput, "\n\n")
+			aclMap = nbContructToMap(listAcls[0])
+			o.Expect(len(aclMap)).NotTo(o.Equal(0))
+			aclMap1 := nbContructToMap(listAcls[1])
+			o.Expect(len(aclMap1)).NotTo(o.Equal(0))
+			listPGCmd = fmt.Sprintf("ovn-nbctl find port-group acls='[%s, %s]'", aclMap["_uuid"], aclMap1["_uuid"])
+		} else {
+			aclMap = nbContructToMap(listAclOutput)
+			o.Expect(len(aclMap)).NotTo(o.Equal(0))
+			listPGCmd = fmt.Sprintf("ovn-nbctl find port-group acls='[%s]'", aclMap["_uuid"])
+		}
 		aclMap["name"] = aclName
 
 		exutil.By("Get the port group for the created policy")
-		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group acls='[%s]'", aclMap["_uuid"])
 		listPGOutput, listErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", listPGCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listPGOutput).NotTo(o.BeEmpty())
