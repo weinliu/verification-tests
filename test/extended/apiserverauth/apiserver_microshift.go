@@ -1370,8 +1370,8 @@ manifests:
 			noneProfileCm        = "my-test-none-profile-cm"
 			allRequestBodiesCm   = "my-test-allrequestbodies-profile-cm"
 			auditLogPath         = "/var/log/kube-apiserver/audit.log"
-			writeVerbs           = "create|delete|patch|update"
-			getVerbs             = "get|list|watch"
+			writeVerbs           = "(create|delete|patch|update)"
+			getVerbs             = "(get|list|watch)"
 			fqdnName             = getMicroshiftHostname(oc)
 		)
 
