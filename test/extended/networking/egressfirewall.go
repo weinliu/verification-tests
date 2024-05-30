@@ -138,6 +138,13 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			template:  egressFWTemplate,
 		}
 		egressFW2.createEgressFW2Object(oc)
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns1, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+		}
+		err = waitEgressFirewallApplied(oc, egressFW2.name, ns1)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Generate egress traffic which will hit the egressfirewall. \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
@@ -219,6 +226,13 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		}
 		egressFW1.createEgressFW2Object(oc)
 		defer egressFW1.deleteEgressFW2Object(oc)
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns1, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+		}
+		err = waitEgressFirewallApplied(oc, egressFW1.name, ns1)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Generate egress traffic which will hit the egressfirewall. \n")
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "curl -s www.redhat.com --connect-timeout 5")
@@ -272,6 +286,12 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		}
 		egressFW2.createEgressFW2Object(oc)
 		defer egressFW2.deleteEgressFW2Object(oc)
+		if ipStackType == "dualstack" {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns2, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+		}
+		err = waitEgressFirewallApplied(oc, egressFW2.name, ns2)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("12. Generate egress traffic which will hit the egressfirewall in ns2. \n")
 		_, err = e2eoutput.RunHostCmd(pod2.namespace, pod2.name, "curl -s www.redhat.com --connect-timeout 5")
