@@ -926,13 +926,6 @@ etcd:
 
 	// author: geliu@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Author:geliu-Critical-66829-Tuning etcd latency parameters etcd_heartbeat_interval and etcd_election_timeout. [Disruptive]", func() {
-
-		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if featureSet != "TechPreviewNoUpgrade" {
-			g.Skip("featureSet is not TechPreviewNoUpgradec, skip it!")
-		}
-
 		defer func() {
 			e2e.Logf("Patch etcd cluster:controlPlaneHardwareSpeed for recovery.")
 			patchPath1 := "{\"spec\":{\"controlPlaneHardwareSpeed\":null}}"
