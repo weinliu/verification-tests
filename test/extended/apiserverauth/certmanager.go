@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("ROSA-ConnectedOnly-Author:geliu-LEVEL0-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate", func() {
+	g.It("ROSA-ConnectedOnly-Author:geliu-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate", func() {
 		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	// This case contains three Polarion cases: 62063, 63325, and 63486. The root case is 62063.
-	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-LEVEL0-High-62063-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
+	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-High-62063-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
 		skipIfRouteUnreachable(oc)
 
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
