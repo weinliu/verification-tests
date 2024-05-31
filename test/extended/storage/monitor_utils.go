@@ -36,11 +36,20 @@ func newMonitor(oc *exutil.CLI) *monitor {
 }
 
 // Get a specified metric's value from prometheus
-func (mo *monitor) getSpecifiedMetricValue(metricName string, valueJSONPath string) (string, error) {
+func (mo *monitor) getSpecifiedMetricValue(metricName string, valueJSONPath string) (metricValue string, err error) {
 	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.token) + "\" " + prometheusQueryURL + metricName
-	respsonce, err := execCommandInSpecificPod(mo.ocClient, prometheusNamespace, "statefulsets/"+prometheusK8s, getCmd)
-	metricValue := gjson.Get(respsonce, valueJSONPath).String()
-	return metricValue, err
+	// Retry to avoid some network connection system issue
+	var responseContent string
+	wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+		responseContent, err = execCommandInSpecificPod(mo.ocClient, prometheusNamespace, "statefulsets/"+prometheusK8s, getCmd)
+		if err != nil {
+			e2e.Logf(`Get metric: %q *failed with* :"%v".`, metricName, err)
+			return false, err
+		}
+		return true, nil
+	})
+
+	return gjson.Get(responseContent, valueJSONPath).String(), err
 }
 
 // Waiting for a specified metric's value update to expected

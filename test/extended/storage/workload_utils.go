@@ -572,8 +572,12 @@ func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, 
 	wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
 		output, errInfo = oc.WithoutNamespace().Run("exec").Args(command1...).Output()
 		if errInfo != nil {
-			if strings.Contains(errInfo.Error(), "unable to upgrade connection: container not found") {
-				e2e.Logf(podName+"# "+command+" *failed with unable to upgrade connection, try again* :\"%v\".", errInfo)
+			// Retry to avoid system issues
+			if strings.Contains(errInfo.Error(), "unable to upgrade connection: container not found") ||
+				strings.Contains(errInfo.Error(), "Error from server: error dialing backend: EOF") ||
+				strings.Contains(errInfo.Error(), "Resource temporarily unavailable") ||
+				strings.Contains(errInfo.Error(), "error dialing backend") {
+				e2e.Logf(`Pod %q executed %q failed with:\n%v\n try again ...`, podName, command, errInfo)
 				return false, nil
 			}
 			e2e.Logf(podName+"# "+command+" *failed with* :\"%v\".", errInfo)

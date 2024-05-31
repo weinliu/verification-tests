@@ -29,12 +29,22 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 	// (normal projects mean projects that are not clusters default projects like: like "default", "openshift-xxx" et al)
 	// need extra configuration on 4.12+ ocp test clusters
 	// https://github.com/openshift/oc/blob/master/pkg/helpers/cmd/errors.go#L24-L29
-	stdOut, stdErr, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeHostName, executeOption, executeCmd...)
-	debugLogf("Executed \""+command+"\" on node \"%s\":\n*stdErr* :\"%s\"\n*stdOut* :\"%s\".", nodeHostName, stdErr, stdOut)
+	var stdOut, stdErr string
+	// Retry to avoid system issue: "error: unable to create the debug pod ..."
+	wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		stdOut, stdErr, err = exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeHostName, executeOption, executeCmd...)
+		debugLogf("Executed %q on node %q:\n*stdErr* :%q\nstdOut :%q\n*err*: %v", command, nodeHostName, stdErr, stdOut, err)
+		if err != nil {
+			e2e.Logf("Executed %q on node %q failed of %v", command, nodeHostName)
+			return false, nil
+		}
+		return true, nil
+	})
+
 	// Adapt Pod Security changed on k8s v1.23+
 	// https://kubernetes.io/docs/tutorials/security/cluster-level-pss/
 	// Ignore the oc debug node output warning info: "Warning: would violate PodSecurity "restricted:latest": host namespaces (hostNetwork=true, hostPID=true), ..."
-	if strings.ContainsAny(stdErr, "warning") {
+	if strings.Contains(strings.ToLower(stdErr), "warning") {
 		output = stdOut
 	} else {
 		output = strings.TrimSpace(strings.Join([]string{stdErr, stdOut}, "\n"))
