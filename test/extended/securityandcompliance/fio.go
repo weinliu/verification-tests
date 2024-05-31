@@ -90,7 +90,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	// It will cover test case: OCP-34388 & OCP-27760 , author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-WRS-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
 		g.By("Create fileintegrity")
 		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Longduration-NonPreRelease-CPaasrunOnly-WRS-Author:xiyuan-Critical-27599-check operator file-integrity-operator could run file integrity checks on the cluster nodes and shows relevant fileintegritynodestatuses [Slow][Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-CPaasrunOnly-WRS-Author:xiyuan-Critical-27599-check operator file-integrity-operator could run file integrity checks on the cluster nodes and shows relevant fileintegritynodestatuses [Slow][Serial]", func() {
 		g.By("trigger fileintegrity failure on node")
 		var filePath = "/root/test27599"
 		nodeName := getOneWorkerNodeName(oc)
@@ -195,7 +195,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-31979-the enabling debug flag of the logcollector should work [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-31979-the enabling debug flag of the logcollector should work [Serial]", func() {
 		g.By("Create fileintegrity with debug=false")
 		fi1.debug = false
 		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-31933-the disabling debug flag of the logcollector should work [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-31933-the disabling debug flag of the logcollector should work [Serial]", func() {
 		fi1.debug = true
 
 		g.By("Create fileintegrity with debug=true")
@@ -238,7 +238,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("StagerunBoth-NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
+	g.It("StagerunBoth-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without gracePeriod")
@@ -275,7 +275,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity")
@@ -308,7 +308,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without aide config")
@@ -331,7 +331,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-WRS-Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Slow][Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-WRS-Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Slow][Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without aide config")
@@ -393,7 +393,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
+	g.It("DEPRECATED-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity with aide config")
@@ -420,7 +420,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-High-33226-enable configuring tolerations in FileIntegrities [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-WRS-Author:xiyuan-High-33226-enable configuring tolerations in FileIntegrities [Disruptive]", func() {
 		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("Skipped: Skip test for SNO/Compact clusters")
 		}
@@ -480,7 +480,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-33254-enable configuring tolerations in FileIntegrities when there is more than one taint on one node [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-WRS-Author:xiyuan-Medium-33254-enable configuring tolerations in FileIntegrities when there is more than one taint on one node [Disruptive]", func() {
 		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("Skipped: Skip test for SNO/Compact clusters")
 		}
@@ -515,7 +515,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator [Serial]", func() {
 		SkipClustersWithRhelNodes(oc)
 
 		fi1.debug = false
@@ -552,7 +552,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("DEPRECATED-NonHyperShiftHOST-ARO-WRS-Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
+	g.It("DEPRECATED-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity with aide config and compare Aide-scan pod number and Node number")
@@ -583,7 +583,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-WRS-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Slow][Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Slow][Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without aide config")
@@ -645,7 +645,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-WRS-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity with md5 aide config")
@@ -694,7 +694,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-NonHyperShiftHOST-NonPreRelease-CPaasrunOnly-ConnectedOnly-WRS-Author:xiyuan-High-60960-check the initialDelay could work as expected [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonHyperShiftHOST-NonPreRelease-CPaasrunOnly-ConnectedOnly-WRS-Author:xiyuan-High-60960-check the initialDelay could work as expected [Serial]", func() {
 		var (
 			fioInitialdelayTemplate = filepath.Join(buildPruningBaseDir, "fileintegrity_initialdelay.yaml")
 			cmMaster                = "master-aide-conf"
@@ -775,7 +775,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-WRS-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
 		g.By("Label the namespace  !!!\n")
 		labelNameSpace(oc, sub.namespace, "openshift.io/cluster-monitoring=true")
 		fi1.debug = false

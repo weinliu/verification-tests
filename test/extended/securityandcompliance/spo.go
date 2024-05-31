@@ -123,15 +123,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-High-50078-Create two seccompprofiles with the same name in different namespaces", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-High-50078-Create two seccompprofiles with the same name in different namespaces", func() {
 		seccompP = seccompProfile{
 			name:      "sleep-sh-pod",
-			namespace: "spo-ns-1",
+			namespace: "spo-ns-1-" + getRandomString(),
 			template:  secProfileTemplate,
 		}
 		seccompP1 = seccompProfile{
 			name:      "sleep-sh-pod",
-			namespace: "spo-ns-2",
+			namespace: "spo-ns-2-" + getRandomString(),
 			template:  secProfileTemplate,
 		}
 
@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("StagerunBoth-ConnectedOnly-Author:xiyuan-High-49885-Check SeccompProfile stack working as expected", func() {
+	g.It("ROSA-ARO-OSD_CCS-StagerunBoth-ConnectedOnly-Author:xiyuan-High-49885-Check SeccompProfile stack working as expected", func() {
 		ns := "spo-" + getRandomString()
 		seccompP = seccompProfile{
 			name:      "sleep-sh-pod",
@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-StagerunBoth-Author:xiyuan-High-56704-Create a SelinuxProfile and apply it to pod", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-StagerunBoth-Author:xiyuan-High-56704-Create a SelinuxProfile and apply it to pod", func() {
 		ns := "nginx-deploy" + getRandomString()
 		selinuxProfileName := "nginx-secure"
 
@@ -259,7 +259,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50242-High-50174-check Log enricher based seccompprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50242-High-50174-check Log enricher based seccompprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -383,7 +383,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50262-High-50263-check Log enricher based selinuxprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50262-High-50263-check Log enricher based selinuxprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -508,7 +508,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-61609-High-61599-check enable memory optimization in spod could work for seccompprofiles/selinuxprofiles recording for pod [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-61609-High-61599-check enable memory optimization in spod could work for seccompprofiles/selinuxprofiles recording for pod [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -654,7 +654,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51391-Log based selinuxprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51391-Log based selinuxprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
 		ns1 := "do-record-" + getRandomString()
 		ns2 := "dont-record1-" + getRandomString()
 		ns3 := "dont-record2-" + getRandomString()
@@ -800,7 +800,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51392-Log based secompprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51392-Log based secompprofile recording could make use of webhookOptions object in webhooks [Slow][Disruptive]", func() {
 		ns1 := "do-record-" + getRandomString()
 		ns2 := "dont-record1-" + getRandomString()
 		ns3 := "dont-record2-" + getRandomString()
@@ -946,7 +946,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51405-Check profilebinding could make use of webhookOptions object in webhooks for seccompprofile [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-51405-Check profilebinding could make use of webhookOptions object in webhooks for seccompprofile [Disruptive]", func() {
 		ns1 := "do-binding-" + getRandomString()
 		ns2 := "dont-binding-" + getRandomString()
 		podBusyboxNs1 := "pod-busybox-ns1"
@@ -1048,7 +1048,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-50077-Check profilebinding working as expected for selinuxprofile", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-50077-Check profilebinding working as expected for selinuxprofile", func() {
 		ns1 := "do-binding-" + getRandomString()
 		ns2 := "dont-binding-" + getRandomString()
 		errorLoggerSelTemplate := filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger.yaml")
@@ -1132,7 +1132,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-51408-Check profilebinding could make use of webhookOptions object in webhooks for selinuxprofile [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Author:xiyuan-High-51408-Check profilebinding could make use of webhookOptions object in webhooks for selinuxprofile [Disruptive]", func() {
 		ns1 := "do-binding-" + getRandomString()
 		ns2 := "dont-binding-" + getRandomString()
 		errorLoggerSelTemplate := filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger.yaml")
@@ -1241,7 +1241,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-56130-Check the permissive boolean works for a selinuxprofile [Slow]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-High-56130-Check the permissive boolean works for a selinuxprofile [Slow]", func() {
 		ns := "permissive-test-" + getRandomString()
 		podEnforing := "pod-errorlogger-enforcing"
 		podPermissive := "pod-errorlogger-permissive"
@@ -1302,7 +1302,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61581-Verify a custom container-selinux policy templates could be used [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61581-Verify a custom container-selinux policy templates could be used [Serial]", func() {
 		ns := "net-container-policy-" + getRandomString()
 		selinuxProfileName := "net-container-policy"
 
@@ -1344,7 +1344,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-62986-Verify selinuxprofiles could inherit the custom selinuxprofiles from the same namespace", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Author:xiyuan-High-62986-Verify selinuxprofiles could inherit the custom selinuxprofiles from the same namespace", func() {
 		ns := "nginx-deploy" + getRandomString()
 		selinuxProfileName := "nginx-secure"
 		selinuxProfileInheritName := "nginx-secure-inherit"
@@ -1379,7 +1379,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61579-Set a custom priority class name for spod daemon pod [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61579-Set a custom priority class name for spod daemon pod [Serial]", func() {
 		var (
 			priorityClassTemplate = filepath.Join(buildPruningBaseDir, "priorityclass.yaml")
 			prioritym             = priorityClassDescription{
@@ -1418,7 +1418,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61580-Set a non-exist priority class name for spod daemon pod [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-61580-Set a non-exist priority class name for spod daemon pod [Serial]", func() {
 		var priorityClassNotExist = "priority-not-exist-" + getRandomString()
 
 		g.By("Check the default piorityClassName.. !!!\n")
@@ -1446,7 +1446,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: bgudi@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50222-check Log enricher based seccompprofile recording working as expected for job [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50222-check Log enricher based seccompprofile recording working as expected for job [Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingSeccom = profileRecordingDescription{
@@ -1522,7 +1522,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: minmli@redhat.com
-	g.It("Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
 		defer func() {
 			g.By("delete Security Profile Operator !!!")
 			cleanupObjectsIgnoreNotFound(oc,
@@ -1553,7 +1553,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: jkuriako@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:jkuriako-Medium-50264-Medium-50155-check Log enricher based selinuxrecording/seccompprofiles working as expected for replicaset [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:jkuriako-Medium-50264-Medium-50155-check Log enricher based selinuxrecording/seccompprofiles working as expected for replicaset [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -1718,7 +1718,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: bgudi@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -1850,7 +1850,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: jkuriako@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Longduration-Author:jkuriako-Critical-50254-check Log enricher based selinuxprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:jkuriako-Critical-50254-check Log enricher based selinuxprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingPod = profileRecordingDescription{
@@ -1909,7 +1909,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-Longduration-Author:xiyuan-Medium-61577-Customise the spo daemon resource requirements [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:xiyuan-Medium-61577-Customise the spo daemon resource requirements [Serial]", func() {
 		g.By("Check the default resource requirements for spod !!!\n")
 		assertEventMessageRegexpMatch(oc, "ephemeral-storage.*200Mi.*memory.*128Mi", "pod", "-l", "name=spod", "-n", subD.namespace,
 			`-o=jsonpath={.items[*].spec.containers[?(@.name=="security-profiles-operator")].resources.limits}`)
@@ -1938,7 +1938,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-56018-Verify the mergeStrategy wroks for log enricher based selinuxprofile recording for deployment [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Author:xiyuan-High-56018-Verify the mergeStrategy wroks for log enricher based selinuxprofile recording for deployment [Slow][Disruptive]", func() {
 		ns := "merge-strategy-" + getRandomString()
 		var (
 			profileRecordingDep = profileRecordingDescription{
@@ -2049,7 +2049,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"selinuxprofiles", profileRecordingDep.name + "-openshift", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
 	})
 
-	g.It("NonPreRelease-Author:xiyuan-Critical-51413-Verify restricting the allowed syscalls in seccomp profiles should work [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:xiyuan-Critical-51413-Verify restricting the allowed syscalls in seccomp profiles should work [Serial]", func() {
 		nsAllow := "do-allow-" + getRandomString()
 		nsDontAllow := "dont-allow-" + getRandomString()
 		seccompAllow := seccompProfile{
@@ -2096,7 +2096,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", seccompDontAllow.namespace, "--field-selector", "reason=ProfileNotAllowed", "-o=jsonpath={.items[*].message}")
 	})
 
-	g.It("NonPreRelease-Author:xiyuan-High-49877-Create a SeccompProfile and apply it to the pod", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:xiyuan-High-49877-Create a SeccompProfile and apply it to the pod", func() {
 		ns := "spo-test-" + getRandomString()
 		spWithoutMkidr := seccompProfile{
 			name:      "sp-not-allowed",
@@ -2159,7 +2159,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		}
 	})
 
-	g.It("NonPreRelease-Author:xiyuan-Critical-49870-Check profilebinding working as expected for seccompprofile", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:xiyuan-Critical-49870-Check profilebinding working as expected for seccompprofile", func() {
 		nsAllow := "do-allow-" + getRandomString()
 		nsDontAllow := "dont-allow-" + getRandomString()
 		podBusyboxAllow := "pod-busybox-allow"
@@ -2246,7 +2246,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 		}
 	})
 
-	g.It("NonPreRelease-Author:xiyuan-Critical-56443-Security Profiles Operator should not crash with non-operator seccomp profiles [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:xiyuan-Critical-56443-Security Profiles Operator should not crash with non-operator seccomp profiles [Slow][Disruptive]", func() {
 		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("Skipped: Skip test for SNO/Compact clusters")
 		}
@@ -2310,7 +2310,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-High-56012-Verify the mergeStrategy wroks for log enricher based seccompprofiles recording for deployment [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Author:xiyuan-High-56012-Verify the mergeStrategy wroks for log enricher based seccompprofiles recording for deployment [Slow][Disruptive]", func() {
 		ns := "merge-strategy-" + getRandomString()
 		var (
 			profileRecordingDep = profileRecordingDescription{
@@ -2442,7 +2442,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: bgudi@redhat.com
-	g.It("Author:bgudi-Low-49887-Set log verbosity for security profiles operator [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:bgudi-Low-49887-Set log verbosity for security profiles operator [Serial]", func() {
 		defer func() {
 			g.By("Cleanup.. !!!\n")
 			patch := fmt.Sprintf("{\"spec\":{\"verbosity\":0}}")
@@ -2474,7 +2474,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("CPaasrunOnly-Author:xiyuan-High-71797-security profiles operator should pass DAST test", func() {
+	g.It("ROSA-ARO-OSD_CCS-CPaasrunOnly-Author:xiyuan-High-71797-security profiles operator should pass DAST test", func() {
 		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_security-profiles-operator_v1beta1.yaml")
 		policyFile := filepath.Join(buildPruningBaseDir, "rapidast/customscan.policy")
 		_, err := rapidastScan(oc, oc.Namespace(), configFile, policyFile, "security-profiles-operator_v1beta1")
@@ -2483,7 +2483,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Oper
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Critical-50013-check Log enricher based seccompprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Author:xiyuan-Critical-50013-check Log enricher based seccompprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingPod = profileRecordingDescription{
