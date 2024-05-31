@@ -736,11 +736,18 @@ func (n *Node) UninstallRpm(rpmName string) (string, error) {
 
 // Reboot reboots the node after waiting 10 seconds. To know why look https://issues.redhat.com/browse/OCPBUGS-1306
 func (n *Node) Reboot() error {
-	logger.Infof("REBOOTING NODE %s !!", n.GetName())
-	out, err := n.DebugNodeWithChroot("sh", "-c", "sleep 10s && systemctl reboot")
+	afterSeconds := 1
+	logger.Infof("REBOOTING NODE %s  after %d seconds!!", n.GetName(), afterSeconds)
+
+	// In SNO we cannot trigger the reboot directly using a debug command (like: "sleep 10 && reboot"), because the debug pod will return a failure
+	// because we lose connectivity with the cluster when we reboot the only node in the cluster
+	// The solution is to schedule a reboot 1 second after the Reboot method is called, and wait 5 seconds to make sure that the reboot happened
+	out, err := n.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("systemd-run --on-active=%d --timer-property=AccuracySec=10ms reboot", afterSeconds))
 	if err != nil {
 		logger.Errorf("Error rebooting node %s:\n%s", n, out)
 	}
+
+	time.Sleep(time.Duration(afterSeconds) * time.Second) // we don't return the control of the program until we make sure that the timer for the reboot has expired
 	return err
 }
 

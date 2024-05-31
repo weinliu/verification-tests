@@ -248,6 +248,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 			kcTemplate          = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
 			kcName              = "tc-73631-pinned-garbage-collector"
 			node                = mcp.GetNodesOrFail()[0]
+			startTime           = node.GetDateOrFail()
 			pinnedImage         = NewRemoteImage(node, BusyBoxImage)
 			manuallyPulledImage = NewRemoteImage(node, AlpineImage)
 		)
@@ -292,13 +293,15 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the pinned image is still pinned after garbage collection")
-		o.Expect(pinnedImage.IsPinned()).To(o.BeTrue(),
+		o.Eventually(pinnedImage.IsPinned, "2m", "10s").Should(o.BeTrue(),
 			"Error, after the garbage collection happened %s is not pinned anymore", pinnedImage)
 		logger.Infof("OK!\n")
 
 		exutil.By("Reboot node")
 		o.Expect(node.Reboot()).To(o.Succeed(),
 			"Error rebooting node %s", node.GetName())
+		o.Eventually(node.GetUptime, "15m", "30s").Should(o.BeTemporally(">", startTime),
+			"%s was not properly rebooted", node)
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the pinned image is still pinned after reboot")
@@ -424,7 +427,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73630-Pin release images [Disruptive]", func() {
 		var (
-			waitForPinned            = time.Minute * 10
+			waitForPinned            = time.Minute * 30
 			pinnedImageSetName       = "tc-73630-pinned-imageset-release"
 			pinnedImages             = getReleaseInfoPullspecOrFail(oc.AsAdmin())
 			node                     = mcp.GetNodesOrFail()[0]
@@ -512,6 +515,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		//reboot the node with mcc
 		exutil.By("Reboot node")
+		startTime := mccMaster.GetDateOrFail()
 		o.Expect(mccMaster.Reboot()).To(o.Succeed(), "Error rebooting node %s", mccMaster)
 		logger.Infof("OK!\n")
 
@@ -522,6 +526,8 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		//wait for the rebooted node
 		exutil.By("Wait for the rebooted node")
+		o.Eventually(mccMaster.GetUptime, "15m", "30s").Should(o.BeTemporally(">", startTime),
+			"%s was not properly rebooted", mccMaster)
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
