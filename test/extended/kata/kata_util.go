@@ -90,7 +90,6 @@ var (
 	snooze       time.Duration = 2400
 	kataSnooze   time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
 	podSnooze    time.Duration = 600  // Peer Pods take longer than 2 minutes
-	defaultOpVer               = "1.5.0"
 	podRunState                = "Running"
 	featureLabel               = "feature.node.kubernetes.io/runtime.kata=true"
 	workerLabel                = "node-role.kubernetes.io/worker"
@@ -98,62 +97,50 @@ var (
 	customLabel                = "custom-label=test"
 )
 
-func ensureNamespaceIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, nsFile string) {
+func ensureNamespaceIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, nsFile string) (err error) {
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", sub.namespace, "--no-headers").Output()
 	if err != nil || strings.Contains(msg, "Error from server (NotFound)") {
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
 		if err != nil {
-			e2e.Logf("namespace issue %v %v", msg, err)
-		} else {
-			g.By("(0.1) Created namespace " + msg)
+			err = fmt.Errorf("namespace issue %v %v", msg, err)
 		}
 	}
+	return err
 }
 
-func ensureOperatorGroupIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, ogFile string) {
+func ensureOperatorGroupIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, ogFile string) (err error) {
 	msg, err := oc.AsAdmin().Run("get").Args("og", "-n", sub.namespace, "--no-headers").Output()
 	if err != nil || strings.Contains(msg, "No resources found in") {
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", sub.namespace).Output()
 		if err != nil {
-			e2e.Logf("og issue %v %v", msg, err)
-		} else {
-			g.By("(0.2) Created operatorgroup " + msg)
+			err = fmt.Errorf("og issue %v %v", msg, err)
 		}
 	}
-
+	return err
 }
 
-// author: tbuskey@redhat.com,abhbaner@redhat.com
-func subscribeFromTemplate(oc *exutil.CLI, sub SubscriptionDescription, subTemplate string) (msg string, err error) {
-	g.By(" (1) INSTALLING sandboxed-operator in '" + sub.namespace + "' namespace")
-	subFile := ""
-
-	g.By("(1.1) Creating subscription yaml from template")
-	subFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
-		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace, "-n", sub.namespace).OutputToFile(getRandomString() + "subscriptionFile.json")
-	// o.Expect(err).NotTo(o.HaveOccurred())
-	if err != nil || subFile != "" {
-		if !strings.Contains(subFile, "already exists") {
-			_, subFileExists := os.Stat(subFile)
-			if subFileExists != nil {
-				e2e.Logf("issue creating the subscription yaml %s, %v", subFile, err)
+func ensureOpenshiftSandboxedContainerOperatorIsSubscribed(oc *exutil.CLI, sub SubscriptionDescription, subTemplate string) (err error) {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
+	if err != nil || strings.Contains(msg, "Error from server (NotFound):") {
+		subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
+			"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace, "-n", sub.namespace).OutputToFile(getRandomString() + "subscriptionFile.json")
+		if err != nil || subFile != "" {
+			if !strings.Contains(subFile, "already exists") {
+				_, subFileExists := os.Stat(subFile)
+				if subFileExists != nil {
+					err = fmt.Errorf("ERROR creating the subscription yaml %s, %v", subFile, err)
+					return err
+				}
 			}
 		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
+		if err != nil || msg == "" {
+			err = fmt.Errorf("ERROR applying subscription %v: %v, %v", subFile, msg, err)
+			return err
+		}
 	}
-
-	g.By("(1.2) Applying subscription yaml")
-	// no need to check for an existing subscription
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
-	if err != nil || msg == "" {
-		e2e.Logf(" issue applying subscription %v: %v, %v", subFile, msg, err)
-	}
-
-	g.By("(1.3) Verify the operator finished subscribing")
-	msg, err = subscriptionIsFinished(oc, sub)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(msg).NotTo(o.BeEmpty())
-
-	return msg, err
+	_, err = subscriptionIsFinished(oc, sub)
+	return err
 }
 
 // author: tbuskey@redhat.com, abhbaner@redhat.com
@@ -477,7 +464,7 @@ func deleteDeployment(oc *exutil.CLI, deployNs, deployName string) bool {
 	return deleteKataResource(oc, "deploy", deployNs, deployName)
 }
 
-func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer string) {
+func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer string, minorVer int) {
 	jsonVersion, err := oc.AsAdmin().WithoutNamespace().Run("version").Args("-o", "json").Output()
 	if err != nil || jsonVersion == "" || !gjson.Get(jsonVersion, "openshiftVersion").Exists() {
 		e2e.Logf("Error: could not get oc version: %v %v", jsonVersion, err)
@@ -486,7 +473,8 @@ func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer
 	sa := strings.Split(clusterVersion, ".")
 	ocpMajorVer = sa[0]
 	ocpMinorVer = sa[1]
-	return ocpMajorVer, ocpMinorVer, clusterVersion
+	minorVer, _ = strconv.Atoi(ocpMinorVer)
+	return clusterVersion, ocpMajorVer, ocpMinorVer, minorVer
 }
 
 func waitForKataconfig(oc *exutil.CLI, kcName, opNamespace string) (msg string, err error) {

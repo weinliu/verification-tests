@@ -35,10 +35,12 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		redirectType               = "ImageTagMirrorSet"
 		redirectName               = "kata-brew-registry"
 		clusterVersion             string
+		cloudPlatform              string
+		configmapExists            bool
 		ocpMajorVer                string
 		ocpMinorVer                string
+		minorVer                   int
 		opNamespace                = "openshift-sandboxed-containers-operator"
-		workload                   = "have securityContext"
 		ppParam                    PeerpodParam
 		ppRuntimeClass             = "kata-remote"
 		ppSecretName               = "peer-pods-secret"
@@ -75,11 +77,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	testrun := TestRunDescription{
 		checked:            false,
-		operatorVer:        defaultOpVer,
+		operatorVer:        "1.5.3",
 		catalogSourceName:  subscription.catalogSourceName,
 		channel:            subscription.channel,
 		redirectNeeded:     false,
-		mustgatherImage:    "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.3",
+		mustgatherImage:    "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.5.3",
 		eligibility:        kataconfig.eligibility,
 		labelSingleNode:    false,
 		eligibleSingleNode: false,
@@ -94,65 +96,67 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// tag with [Slow][Serial][Disruptive] when deleting/recreating kataconfig
 
 		var (
-			err      error
-			msg      string
-			minorVer int
+			err error
+			msg string
 		)
 
-		// Log where & what we are running every time
-		cloudPlatform := getCloudProvider(oc)
-		ocpMajorVer, ocpMinorVer, clusterVersion = getClusterVersion(oc)
-		// 4.10 and earlier cannot have security context on pods or deployment
-		// defaultPod and defaultDeployment are global in kata.go
-		if ocpMajorVer == "4" {
-			minorVer, _ = strconv.Atoi(ocpMinorVer)
-			if minorVer <= 10 {
-				defaultDeployment = filepath.Join(testDataDir, "workload-deployment-nosecurityContext.yaml")
-				defaultPod = filepath.Join(testDataDir, "workload-pod-nosecurityContext.yaml")
-				workload = "do not have securityContext settings"
-			}
-		}
-		g.By(fmt.Sprintf("The current platform is %v. OCP %v.%v: %v\n Workloads %v", cloudPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
+		// run once on startup to populate vars, create ns, og, label nodes
+		// always log cluster setup on each test
+		if testrun.checked {
+			e2e.Logf("\n    Cluster: %v.%v on %v\n    configmapExists %v\n    testrun %v\n    subscription %v\n    kataconfig %v\n\n", ocpMajorVer, ocpMinorVer, cloudPlatform, configmapExists, testrun, subscription, kataconfig)
+		} else {
+			cloudPlatform = getCloudProvider(oc)
+			clusterVersion, ocpMajorVer, ocpMinorVer, minorVer = getClusterVersion(oc)
 
-		ensureNamespaceIsInstalled(oc, subscription, nsFile)
-
-		ensureOperatorGroupIsInstalled(oc, subscription, ogFile)
-
-		// testrun.checked, testrun.redirectNeeded and testrun.mustgatherImage are not in subscription or kataconfig
-		if !testrun.checked {
-			_, err = getTestRunParameters(oc, &subscription, &kataconfig, &testrun, testrunConfigmapNs, testrunConfigmapName)
+			configmapExists, err := getTestRunParameters(oc, &subscription, &kataconfig, &testrun, testrunConfigmapNs, testrunConfigmapName)
 			if err != nil {
 				// if there is an error, fail every test
-				e2e.Failf("ERROR: testrun configmap %v errors: %v\n%v", testrunConfigmapName, testrun, err)
+				e2e.Failf("ERROR: testrun configmap %v errors: %v\n%v %v", testrunConfigmapName, testrun, configmapExists, err)
 			}
+
+			e2e.Logf("\n    Cluster: %v.%v on %v\n    configmapExists %v\n    testrun %v\n    subscription %v\n    kataconfig %v\n\n", ocpMajorVer, ocpMinorVer, cloudPlatform, configmapExists, testrun, subscription, kataconfig)
+
+			testrun.checked = false // only set it true at the end
+
+			if testrun.redirectNeeded {
+				if ocpMajorVer == "4" && minorVer <= 12 {
+					redirectType = "ImageContentSourcePolicy"
+					redirectFile = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+				}
+				err = applyImageRedirect(oc, redirectFile, redirectType, redirectName)
+				o.Expect(err).NotTo(o.HaveOccurred(), err)
+			}
+
+			err = ensureNamespaceIsInstalled(oc, subscription, nsFile)
+			o.Expect(err).NotTo(o.HaveOccurred(), err)
+
+			err = ensureOperatorGroupIsInstalled(oc, subscription, ogFile)
+			o.Expect(err).NotTo(o.HaveOccurred(), err)
+
+			checkAndLabelCustomNodes(oc, testrun)
+			// o.Expect(err).NotTo(o.HaveOccurred(), err)
+
+			if kataconfig.eligibility {
+				labelEligibleNodes(oc, testrun)
+				// o.Expect(err).NotTo(o.HaveOccurred(), err)
+			}
+			testrun.checked = true
 		}
 
+		e2e.Logf("The current platform is %v. OCP %v.%v cluster version: %v", cloudPlatform, ocpMajorVer, ocpMinorVer, clusterVersion)
+
+		err = ensureOpenshiftSandboxedContainerOperatorIsSubscribed(oc, subscription, subTemplate)
+		o.Expect(err).NotTo(o.HaveOccurred(), err)
+		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
+
+		// Should be replaced with ensureKataconfigIsCreated
 		if checkKataInstalled(oc, subscription, kataconfig.name) {
 			msgSuccess := fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, kataconfig.name)
 			e2e.Logf(msgSuccess)
-			g.By(msgSuccess)
 			return
 		}
 
-		if testrun.redirectNeeded {
-			minorVer, _ = strconv.Atoi(ocpMinorVer)
-			if ocpMajorVer == "4" && minorVer <= 12 {
-				redirectType = "ImageContentSourcePolicy"
-				redirectFile = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
-			}
-			err = applyImageRedirect(oc, redirectFile, redirectType, redirectName)
-			o.Expect(err).NotTo(o.HaveOccurred(), err)
-		}
-
-		_, err = subscribeFromTemplate(oc, subscription, subTemplate)
-		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
-
-		if kataconfig.eligibility {
-			labelEligibleNodes(oc, testrun)
-		}
-
-		checkAndLabelCustomNodes(oc, testrun)
-
+		// should be ensurePeerPodSecrets & configmaps
 		//create peer pods secret and peer pods cm
 		if kataconfig.enablePeerPods {
 			msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
@@ -178,9 +182,14 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			}
 		}
 
+		// should check kataconfig here & already have checked subscription
+		// check kataconfig
+		// should be replaced with ensureKataconfigIsCreated()
 		msg, err = createKataConfig(oc, kataconfig, subscription)
+
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", kataconfig.name, msg, err)
 
+		// this should be a seperate day0 test for control pods
 		if kataconfig.enablePeerPods {
 			checkPeerPodControl(oc, opNamespace, podRunState)
 		}
@@ -365,7 +374,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			configFile      string
 			msg             string
 			err             error
-			kcTemplate      = filepath.Join(testDataDir, "kataconfig.yaml")
 			expectError     = "KataConfig instance already exists, refusing to create a duplicate"
 		)
 		g.By("Create 2nd kataconfig file")
@@ -996,7 +1004,6 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		if testrunUpgradeWithSubscription.redirectNeeded {
-			minorVer, _ := strconv.Atoi(ocpMinorVer)
 			if ocpMajorVer == "4" && minorVer <= 12 {
 				redirectType = "ImageContentSourcePolicy"
 				redirectFile = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
