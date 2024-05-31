@@ -129,24 +129,6 @@ const (
 	// ImageRegistryCertificatesFileName is the name of the image registry certificates. Example: /etc/docker/certs.d/mycertname/ca.crt
 	ImageRegistryCertificatesFileName = "ca.crt"
 
-	// OCBMachineConfigPoolLabel the label used to enable and disable the on-cluster build functionality in MCPs
-	OCBMachineConfigPoolLabel = "machineconfiguration.openshift.io/layering-enabled"
-
-	// OCBMachineOsBuilderLabel the label to identify the machine-os-builder pod
-	OCBMachineOsBuilderLabel = "k8s-app=machine-os-builder"
-
-	// OCBMachineOsBuilderContainer the name of the container running the controller in the machine-os-builder pod
-	OCBMachineOsBuilderContainer = "machine-os-builder"
-
-	// OCBConfigmapName is the name of the on-cluster-build-config configmap
-	OCBConfigmapName = "on-cluster-build-config"
-
-	// OCBDefaultBaseImagePullSecretName default value for the OCB image pull secret name
-	OCBDefaultBaseImagePullSecretName = "mco-global-pull-secret"
-
-	// OCBDefaultFinalImagePushSecretName default value for the OCB image pull secret name
-	OCBDefaultFinalImagePushSecretName = "mco-test-push-secret"
-
 	// SecurePort is the tls secured port to serve ignition configs
 	IgnitionSecurePort = 22623
 	// InsecurePort is the port to serve ignition configs w/o tls

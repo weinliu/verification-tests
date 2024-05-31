@@ -23,7 +23,7 @@ type PinnedImageSetList struct {
 	ResourceList
 }
 
-// NewPinnedImageSetList construct a new node list struct to handle all existing nodes
+// NewPinnedImageSetList construct a new PinnedImageSet list struct to handle all existing PinnedImageSet
 func NewPinnedImageSetList(oc *exutil.CLI) *PinnedImageSetList {
 	return &PinnedImageSetList{*NewResourceList(oc, "pinnedimageset")}
 }

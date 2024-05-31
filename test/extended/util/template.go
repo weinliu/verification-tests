@@ -68,7 +68,8 @@ func resourceFromTemplate(oc *CLI, create bool, returnError bool, namespace stri
 		return true, nil
 	})
 	if returnError && err != nil {
-		return fmt.Errorf("fail to process %v", parameters)
+		e2e.Logf("fail to process %v", parameters)
+		return err
 	}
 	AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
 
@@ -89,7 +90,8 @@ func resourceFromTemplate(oc *CLI, create bool, returnError bool, namespace stri
 		}
 	}
 	if returnError && resourceErr != nil {
-		return fmt.Errorf("fail to create/apply resource %v", resourceErr)
+		e2e.Logf("fail to create/apply resource %v", resourceErr)
+		return resourceErr
 	}
 	AssertWaitPollNoErr(resourceErr, fmt.Sprintf("fail to create/apply resource %v", resourceErr))
 	return nil

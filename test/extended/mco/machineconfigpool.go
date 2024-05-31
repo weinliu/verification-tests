@@ -255,16 +255,6 @@ func (mcp *MachineConfigPool) SetDefaultWaitingTime() {
 	mcp.MinutesWaitingPerNode = DefaultMinutesWaitingPerNode
 }
 
-// EnableOnClusterBuild() enables on-cluster build funcionality in this pool
-func (mcp *MachineConfigPool) EnableOnClusterBuild() error {
-	return mcp.AddLabel(OCBMachineConfigPoolLabel, "")
-}
-
-// DisableOnClusterBuild() disables on-cluster build funcionality in this pool
-func (mcp *MachineConfigPool) DisableOnClusterBuild() error {
-	return mcp.RemoveLabel(OCBMachineConfigPoolLabel)
-}
-
 // GetInternalIgnitionConfigURL return the internal URL used by the nodes in this pool to get the ignition config
 func (mcp *MachineConfigPool) GetInternalIgnitionConfigURL(secure bool) (string, error) {
 	var (
@@ -1156,6 +1146,11 @@ func (mcp *MachineConfigPool) WaitForRebooted() error {
 	return mcp.oc.WithoutNamespace().Run("adm").Args("wait-for-node-reboot", "nodes", "-l", "node-role.kubernetes.io/"+mcp.GetName()).Execute()
 }
 
+// GetLatestMachineOSBuild returns the latest MachineOSBuild created for this MCP
+func (mcp *MachineConfigPool) GetLatestMachineOSBuildOrFail() *MachineOSBuild {
+	return NewMachineOSBuild(mcp.oc, fmt.Sprintf("%s-%s-builder", mcp.GetName(), mcp.getConfigNameOfSpecOrFail()))
+}
+
 // GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time
 func (mcpl *MachineConfigPoolList) GetAll() ([]MachineConfigPool, error) {
 	mcpl.ResourceList.SortByTimestamp()
@@ -1268,11 +1263,11 @@ func CreateCustomMCP(oc *exutil.CLI, name string, numNodes int) (*MachineConfigP
 
 	workerNodes, err := wMcp.GetNodes()
 	if err != nil {
-		return nil, err
+		return NewMachineConfigPool(oc, name), err
 	}
 
 	if numNodes > len(workerNodes) {
-		return nil, fmt.Errorf("A %d nodes custom pool cannot be created because there are only %d nodes in the %s pool",
+		return NewMachineConfigPool(oc, name), fmt.Errorf("A %d nodes custom pool cannot be created because there are only %d nodes in the %s pool",
 			numNodes, len(workerNodes), wMcp.GetName())
 	}
 
@@ -1281,15 +1276,13 @@ func CreateCustomMCP(oc *exutil.CLI, name string, numNodes int) (*MachineConfigP
 
 // CreateCustomMCPByNodes creates a new MCP containing the nodes provided in the "nodes" parameter
 func CreateCustomMCPByNodes(oc *exutil.CLI, name string, nodes []Node) (*MachineConfigPool, error) {
-	exutil.By(fmt.Sprintf("Creating custom MachineConfigPool %s with %d nodes", name, len(nodes)))
+	customMcp := NewMachineConfigPool(oc, name)
 
 	err := NewMCOTemplate(oc, "custom-machine-config-pool.yaml").Create("-p", fmt.Sprintf("NAME=%s", name))
 	if err != nil {
 		logger.Errorf("Could not create a custom MCP for worker nodes with nodes %s", nodes)
-		return nil, err
+		return customMcp, err
 	}
-
-	customMcp := NewMachineConfigPool(oc, name)
 
 	for _, n := range nodes {
 		err := n.AddLabel(fmt.Sprintf("node-role.kubernetes.io/%s", name), "")
@@ -1303,16 +1296,14 @@ func CreateCustomMCPByNodes(oc *exutil.CLI, name string, nodes []Node) (*Machine
 	err = customMcp.WaitForMachineCount(expectedNodes, 5*time.Minute)
 	if err != nil {
 		logger.Errorf("The %s MCP is not reporting the expected machine count", customMcp.GetName())
-		return nil, err
+		return customMcp, err
 	}
 
 	err = customMcp.WaitForUpdatedStatus()
 	if err != nil {
 		logger.Errorf("The %s MCP is not updated", customMcp.GetName())
-		return nil, err
+		return customMcp, err
 	}
-
-	logger.Infof("OK!\n")
 
 	return customMcp, nil
 }

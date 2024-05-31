@@ -194,6 +194,32 @@ func (r Resource) String() string {
 	return fmt.Sprintf("<Kind: %s, Name: %s, Namespace: %s>", r.kind, r.name, r.namespace)
 }
 
+// HasOwnerOrFail returns true if the resource is owned by any other resource
+func (r Resource) HasOwner() (bool, error) {
+	firstOwner, err := r.Get(`{.metadata.ownerReferences[0]}`)
+	return firstOwner != "", err
+}
+
+// Logs exeucte the logs subcommand with using this resource
+func (r Resource) Logs(args ...string) (string, error) {
+	params := []string{}
+
+	if r.namespace != "" {
+		params = append([]string{"-n", r.namespace}, params...)
+	}
+
+	params = append(params, args...)
+	params = append(params, r.kind+"/"+r.name)
+
+	stdout, stderr, err := r.oc.WithoutNamespace().Run("logs").Args(params...).Outputs()
+	if err != nil {
+		logger.Errorf("Error getting %s logs.\nStdout:%s\nStderr:%s\nErr:%s", r, stdout, stderr, err)
+		return stdout + stderr, err
+	}
+
+	return stdout, err
+}
+
 // Patch patches the resource using the given patch type
 // The following patches are exactly the same patch but using different types, 'merge' and 'json'
 // --type merge -p '{"spec": {"selector": {"app": "frommergepatch"}}}'

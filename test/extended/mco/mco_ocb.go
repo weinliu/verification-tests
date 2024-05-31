@@ -2,7 +2,6 @@ package mco
 
 import (
 	"fmt"
-	"regexp"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -24,30 +23,27 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		if !exutil.IsTechPreviewNoUpgrade(oc) {
 			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
 		}
+
+		skipTestIfOCBIsEnabled(oc)
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-66567-OCB Wiring up Productionalized Build Controller [Disruptive]", func() {
-
-		infraMcpName := "infra"
-
-		exutil.By("Creating necessary resources to enable OCB functionality")
-
-		defer func() { _ = cleanOCBTestConfigResources(oc.AsAdmin()) }()
-		o.Expect(createOCBDefaultTestConfigResourcesFromPullSecret(oc.AsAdmin())).NotTo(o.BeNil(),
-			"Error creating the necessary CMs and Secrets to enable OCB functionality")
-
-		logger.Infof("OK!\n")
+	g.It("Author:sregidor-NonPreRelease-High-73494-OCB Wiring up Productionalized Build Controller. New 4.16 OCB API [Disruptive]", func() {
+		var (
+			infraMcpName = "infra"
+			moscName     = "tc-73494-infra"
+		)
 
 		exutil.By("Create custom infra MCP")
-		infraMcp := NewMachineConfigPool(oc.AsAdmin(), infraMcpName)
-		infraMcp.template = generateTemplateAbsolutePath("custom-machine-config-pool.yaml")
+		// We add no workers to the infra pool, it is not necessary
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), infraMcpName, 0)
 		defer infraMcp.delete()
-		infraMcp.create()
-
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new custom pool: %s", infraMcpName)
 		logger.Infof("OK!\n")
 
-		exutil.By("Label the infra MCP to enable the OCB functionality")
-		infraMcp.EnableOnClusterBuild()
+		exutil.By("Configure OCB functionality for the new infra MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), moscName, infraMcpName, nil)
+		defer mosc.CleanupAndDelete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the deployment machine-os-builder is created")
@@ -67,455 +63,141 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
-		exutil.By("Remove the OCB label from the infra pool")
-		infraMcp.DisableOnClusterBuild()
+		exutil.By("Check that the  machine-os-builder is using leader election without failing")
+		o.Expect(mOSBuilder.Logs()).To(o.And(
+			o.ContainSubstring("attempting to acquire leader lease openshift-machine-config-operator/machine-os-builder"),
+			o.ContainSubstring("successfully acquired lease openshift-machine-config-operator/machine-os-builder")),
+			"The machine os builder pod is not using the leader election without failures")
+		logger.Infof("OK!\n")
 
-		o.Eventually(mOSBuilder, "5m", "30s").ShouldNot(Exist(),
+		exutil.By("Check that a new build has been triggered")
+		o.Eventually(infraMcp.GetLatestMachineOSBuildOrFail(), "5m", "20s").Should(Exist(),
+			"No build was created when OCB was enabled")
+		mosb := infraMcp.GetLatestMachineOSBuildOrFail()
+		o.Eventually(mosb.GetPod).Should(Exist(),
+			"No build pod was created when OCB was enabled")
+		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
+			"MachineOSBuild didn't report that the build has begun")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build is successfully executed")
+		o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
+		o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
+		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Build was interrupted")
+		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
+		logger.Infof("Check that the build pod was deleted")
+		o.Eventually(mosb.GetPod, "2m", "20s").ShouldNot(Exist(), "Build pod was not cleaned")
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the MachineOSConfig resource")
+		o.Expect(mosc.CleanupAndDelete()).To(o.Succeed(), "Error removing %s", mosc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the OCB resources are cleaned up")
+		o.Eventually(mosb, "2m", "20s").ShouldNot(Exist(), "MachineSOBuild was not cleaned up")
+		o.Eventually(mOSBuilder, "2m", "30s").ShouldNot(Exist(),
 			"The machine-os-builder deployment was not removed when the infra pool was unlabeled")
+		for _, cm := range NewConfigMapList(oc, MachineConfigNamespace).GetAllOrFail() {
+			o.Expect(cm.GetName()).NotTo(o.ContainSubstring("rendered"),
+				"%s should have been garbage collected by OCB when the MOSC was deleted", cm)
+		}
 		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-66661-OCB validate configmap on-cluster-build-config [Disruptive]", func() {
-
-		var (
-			expectedErrorMessage string
-			ocpConfig            *OCBConfigMapValues
-			infraMcpName         = "infra"
-		)
-
-		// Make sure that no initial config is present
-		exutil.By("Clean OCB configuration")
-		logger.Infof("If there is any previous OCB configuraion resources, we clean them")
-		o.Expect(cleanOCBTestConfigResources(oc.AsAdmin())).To(o.Succeed(),
-			"Error cleaning the OCB config resources")
-		logger.Infof("OK!\n")
-
-		exutil.By("Create custom infra MCP")
-		infraMcp := NewMachineConfigPool(oc.AsAdmin(), infraMcpName)
-		infraMcp.template = generateTemplateAbsolutePath("custom-machine-config-pool.yaml")
-		defer infraMcp.delete()
-		infraMcp.create()
-
-		logger.Infof("OK!\n")
-
-		// NO CONFIGMAP
-		exutil.By("Check no configmap scenario")
-		ocpConfig = nil
-		expectedErrorMessage = regexp.QuoteMeta(`could not update Machine OS Builder deployment: on-cluster-build-config ConfigMap missing, did you create it?`)
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, "", expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		// MISSING KEYS
-		exutil.By("Check missing key in configmap: baseImagePullSecretName")
-		ocpConfig = &OCBConfigMapValues{
-			finalImagePushSecretName: PtrStr(OCBDefaultFinalImagePushSecretName),
-			finalImagePullspec:       PtrStr(DefaultLayeringQuayRepository),
-		}
-		expectedErrorMessage = regexp.QuoteMeta(`could not update Machine OS Builder deployment: missing required key "baseImagePullSecretName" in configmap on-cluster-build-config`)
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, "", expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check missing key in configmap: finalImagePushSecretName")
-		ocpConfig = &OCBConfigMapValues{
-			baseImagePullSecretName: PtrStr(OCBDefaultBaseImagePullSecretName),
-			finalImagePullspec:      PtrStr(DefaultLayeringQuayRepository),
-		}
-		expectedErrorMessage = regexp.QuoteMeta(`could not update Machine OS Builder deployment: missing required key "finalImagePushSecretName" in configmap on-cluster-build-config`)
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, "", expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check missing key in configmap: finalImagePullspec")
-		ocpConfig = &OCBConfigMapValues{
-			finalImagePushSecretName: PtrStr(OCBDefaultFinalImagePushSecretName),
-			baseImagePullSecretName:  PtrStr(OCBDefaultBaseImagePullSecretName),
-		}
-		expectedErrorMessage = regexp.QuoteMeta(`could not update Machine OS Builder deployment: missing required key "finalImagePullspec" in configmap on-cluster-build-config`)
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, "", expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		// EMPTY KEYS
-		exutil.By("Check empty key in configmap: baseImagePullSecretName")
-		ocpConfig = &OCBConfigMapValues{
-			baseImagePullSecretName:  PtrStr(""),
-			finalImagePushSecretName: PtrStr(OCBDefaultFinalImagePushSecretName),
-			finalImagePullspec:       PtrStr(DefaultLayeringQuayRepository),
-		}
-		expectedErrorMessage = regexp.QuoteMeta(`could not update Machine OS Builder deployment: key "baseImagePullSecretName" in configmap on-cluster-build-config has an empty value`)
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, "", expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check empty key in configmap: finalImagePushSecretName")
-		ocpConfig = &OCBConfigMapValues{
-			baseImagePullSecretName:  PtrStr(OCBDefaultBaseImagePullSecretName),
-			finalImagePushSecretName: PtrStr(""),
-			finalImagePullspec:       PtrStr(DefaultLayeringQuayRepository),
-		}
-		expectedErrorMessage = regexp.QuoteMeta(`could not update Machine OS Builder deployment: key "finalImagePushSecretName" in configmap on-cluster-build-config has an empty value`)
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, "", expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check empty key in configmap: finalImagePullspec")
-		ocpConfig = &OCBConfigMapValues{
-			baseImagePullSecretName:  PtrStr(OCBDefaultBaseImagePullSecretName),
-			finalImagePushSecretName: PtrStr(OCBDefaultFinalImagePushSecretName),
-			finalImagePullspec:       PtrStr(""),
-		}
-		expectedErrorMessage = regexp.QuoteMeta(`could not update Machine OS Builder deployment: key "finalImagePullspec" in configmap on-cluster-build-config has an empty value`)
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, "", expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		// SECRETS NOT FOUND
-		exutil.By("Check secret not found: baseImagePullSecretName")
-		ocpConfig = &OCBConfigMapValues{
-			baseImagePullSecretName:  PtrStr("fake-base-image-secret"),
-			finalImagePushSecretName: PtrStr(OCBDefaultFinalImagePushSecretName),
-			finalImagePullspec:       PtrStr(DefaultLayeringQuayRepository),
-		}
-		message := `could not update Machine OS Builder deployment: secret %s from on-cluster-build-config is not found. Did you use the right secret name?`
-
-		expectedErrorMessage = regexp.QuoteMeta(fmt.Sprintf(message, *ocpConfig.baseImagePullSecretName))
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, *ocpConfig.baseImagePullSecretName, expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check secret not found: finalImagePushSecretName")
-		ocpConfig = &OCBConfigMapValues{
-			baseImagePullSecretName:  PtrStr(OCBDefaultBaseImagePullSecretName),
-			finalImagePushSecretName: PtrStr("fake-final-image-secret"),
-			finalImagePullspec:       PtrStr(DefaultLayeringQuayRepository),
-		}
-		expectedErrorMessage = regexp.QuoteMeta(fmt.Sprintf(message, *ocpConfig.finalImagePushSecretName))
-		CheckOCBConfigError(oc.AsAdmin(), infraMcp, ocpConfig, *ocpConfig.finalImagePushSecretName, expectedErrorMessage)
-		logger.Infof("OK!\n")
-
-	})
-
-	g.It("Author:sregidor-NonPreRelease-High-66573-OCB configure image builder type for config map on-cluster-build-config [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Medium-73599-OCB Validate MachineOSConfig. New 41.6 OCB API [Disruptive]", func() {
 		var (
 			infraMcpName = "infra"
-			cm           = NewNamespacedResource(oc.AsAdmin(), "cm", MachineConfigNamespace, OCBConfigmapName)
-			MCOperator   = NewResource(oc.AsAdmin(), "ClusterOperator", "machine-config")
+			moscName     = "tc-73599-infra"
+			pushSpec     = fmt.Sprintf("%s/openshift-machine-config-operator/ocb-%s-image:latest", InternalRegistrySvcURL, infraMcpName)
+			pullSecret   = NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
+
+			fakePullSecretName         = "fake-pull-secret"
+			expectedWrongPullSecretMsg = fmt.Sprintf("could not update Machine OS Builder deployment: secret %s from on-cluster-build-config is not found. Did you use the right secret name?",
+				fakePullSecretName)
+			fakePushSecretName         = "fake-push-secret"
+			expectedWrongPushSecretMsg = fmt.Sprintf("could not update Machine OS Builder deployment: secret %s from on-cluster-build-config is not found. Did you use the right secret name?",
+				fakePushSecretName)
+
+			fakeBuilderType             = "FakeBuilderType"
+			expectedWrongBuilderTypeMsg = fmt.Sprintf(`Unsupported value: "%s": supported values: "PodImageBuilder"`, fakeBuilderType)
 		)
-		g.Skip("Test case skipped because of issues https://issues.redhat.com/browse/OCPBUGS-18991 and https://issues.redhat.com/browse/OCPBUGS-18955")
-
-		exutil.By("Creating necessary resources to enable OCB functionality")
-
-		defer func() { _ = cleanOCBTestConfigResources(oc.AsAdmin()) }()
-		o.Expect(createOCBDefaultTestConfigResourcesFromPullSecret(oc.AsAdmin())).NotTo(o.BeNil(),
-			"Error creating the necessary CMs and Secrets to enable OCB functionality")
-
-		logger.Infof("OK!\n")
 
 		exutil.By("Create custom infra MCP")
-		infraMcp := NewMachineConfigPool(oc.AsAdmin(), infraMcpName)
-		infraMcp.template = generateTemplateAbsolutePath("custom-machine-config-pool.yaml")
+		// We add no workers to the infra pool, it is not necessary
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), infraMcpName, 0)
 		defer infraMcp.delete()
-		infraMcp.create()
-
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new custom pool: %s", infraMcpName)
 		logger.Infof("OK!\n")
 
-		exutil.By("Label the infra MCP to enable the OCB functionality")
-		infraMcp.EnableOnClusterBuild()
+		exutil.By("Clone the pull-secret in MCO namespace")
+		clonnedSecret, err := CloneResource(pullSecret, "clonned-pull-secret-"+exutil.GetRandomString(), MachineConfigNamespace, nil)
+		defer clonnedSecret.Delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating the cluster's pull-secret in MCO namespace")
 		logger.Infof("OK!\n")
 
-		exutil.By("Check the default builder type")
-		o.Eventually(exutil.GetAllPodsWithLabel,
-			"5m", "1m").WithArguments(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel).ShouldNot(
-			o.BeEmpty(),
-			"The machine-os-builder pod was not started when the on-cluster-build functionality was enabled")
+		// Check behaviour when wrong pullSecret
+		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, fakePullSecretName, clonnedSecret.GetName(), pushSpec, nil,
+			expectedWrongPullSecretMsg,
+			"Check that MOSC using wrong pull secret are failing as expected")
 
-		mosBuilderPods, err := exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel)
-		mosBuilderPod := mosBuilderPods[0]
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the machine-os-builder pod")
-		logger.Infof("New machine-os-builder pod: %s", mosBuilderPod)
+		// Check behaviour when wrong pushSecret
+		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, clonnedSecret.GetName(), fakePushSecretName, pushSpec, nil,
+			expectedWrongPushSecretMsg,
+			"Check that MOSC using wrong push secret are failing as expected")
 
-		o.Eventually(exutil.GetSpecificPodLogs,
-			"5m", "1m").WithArguments(oc, MachineConfigNamespace, OCBMachineOsBuilderContainer, mosBuilderPod, "").Should(
-			o.ContainSubstring(`imageBuilderType not set, defaulting to "openshift-image-builder"`),
-			"The machine-os-builder pod is not reporting the use of the right builder type")
-		logger.Infof("OK!\n")
+		// Try to create a MOSC with a wrong pushSpec
+		logger.Infof("Create a MachineOSConfig resource with a wrong builder type")
 
-		exutil.By("Check the openshift-image-builder builder type")
-		logger.Infof("Set the openshift-image-builder builder type")
-		o.Expect(cm.Patch("merge", `{"data":{"imageBuilderType": "openshift-image-builder"}}`)).To(o.Succeed(),
-			"Error patching the on-cluster-build configmap")
+		err = NewMCOTemplate(oc, "generic-machine-os-config.yaml").Create("-p", "NAME="+moscName, "POOL="+infraMcpName, "PULLSECRET="+clonnedSecret.GetName(),
+			"PUSHSECRET="+clonnedSecret.GetName(), "PUSHSPEC="+pushSpec, "IMAGEBUILDERTYPE="+fakeBuilderType)
+		o.Expect(err).To(o.HaveOccurred(), "Expected oc command to fail, but it didn't")
+		o.Expect(err).To(o.BeAssignableToTypeOf(&exutil.ExitError{}), "Unexpected error while creating the new MOSC")
+		o.Expect(err.(*exutil.ExitError).StdErr).To(o.ContainSubstring(expectedWrongBuilderTypeMsg),
+			"MSOC creation using wrong image type builder should be forbidden")
 
-		logger.Infof("Checking that the machine-os-builder pod is restarted")
-		o.Eventually(exutil.GetAllPodsWithLabel,
-			"5m", "1m").WithArguments(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel).ShouldNot(
-			o.ContainElement(mosBuilderPod),
-			"The machine-os-builder pod was not restarted after the builder type was reconfigured")
-
-		mosBuilderPods, err = exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel)
-		mosBuilderPod = mosBuilderPods[0]
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the machine-os-builder pod")
-		logger.Infof("New machine-os-builder pod: %s", mosBuilderPod)
-
-		logger.Infof("Checking that the right builder type is reported in the machine-os-builder logs")
-
-		o.Eventually(exutil.GetSpecificPodLogs,
-			"5m", "1m").WithArguments(oc, MachineConfigNamespace, OCBMachineOsBuilderContainer, mosBuilderPod, "").Should(
-			o.ContainSubstring(`imageBuilderType set to "openshift-image-builder"`),
-			"The machine-os-builder pod is not reporting the use of the right builder type")
-		logger.Infof("OK!\n")
-
-		exutil.By("Check the custom-pod-builder builder type")
-		logger.Infof("Set the custom-pod-builder builder type")
-		o.Expect(cm.Patch("merge", `{"data":{"imageBuilderType": "custom-pod-builder"}}`)).To(o.Succeed(),
-			"Error patching the on-cluster-build configmap")
-
-		logger.Infof("Checking that the machine-os-builder pod is restarted")
-		o.Eventually(exutil.GetAllPodsWithLabel,
-			"5m", "1m").WithArguments(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel).ShouldNot(
-			o.ContainElement(mosBuilderPod),
-			"The machine-os-builder pod was not restarted after the builder type was reconfigured")
-
-		mosBuilderPods, err = exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, OCBMachineOsBuilderLabel)
-		mosBuilderPod = mosBuilderPods[0]
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the machine-os-builder pod")
-		logger.Infof("New machine-os-builder pod: %s", mosBuilderPod)
-
-		logger.Infof("Checking that the right builder type is reported in the machine-os-builder logs")
-
-		o.Eventually(exutil.GetSpecificPodLogs,
-			"5m", "1m").WithArguments(oc, MachineConfigNamespace, OCBMachineOsBuilderContainer, mosBuilderPod, "").Should(
-			o.ContainSubstring(`imageBuilderType set to "custom-pod-builder"`),
-			"The machine-os-builder pod is not reporting the use of the right builder type")
-		logger.Infof("OK!\n")
-
-		exutil.By("Check invalid builder type")
-		logger.Infof("Set the invalid builder type")
-		o.Expect(cm.Patch("merge", `{"data":{"imageBuilderType": "custom-pod-builder"}}`)).To(o.Succeed(),
-			"Error patching the on-cluster-build configmap")
-
-		o.Eventually(MCOperator, "5m", "1m").Should(
-			BeDegraded(),
-			"The machine-config ClusterOperator should become degraded when an invalid builder type is configured")
-		o.Eventually(MCOperator, "5m", "1m").Should(
-			HaveDegradedMessage(`invalid image builder type "test-builder", valid types: [custom-pod-builder openshift-image-builder]`),
-			"The machine-config ClusterOperator should become degraded when an invalid builder type is configured.\n%s", MCOperator.PrettyString())
-
-		logger.Infof("OK!\n")
+		logger.Infof("OK!")
 	})
 })
 
-// OCBConfigMapValues struct that stores the values to configure the OCB functionality in the "on-cluster-build-config" configmap
-type OCBConfigMapValues struct {
-	imageBuilderType,
-	baseImagePullSecretName,
-	finalImagePushSecretName,
-	finalImagePullspec *string
-}
-
-// CheckOCBConfigError validate the OCB configs in TC-66661
-func CheckOCBConfigError(oc *exutil.CLI, mcp *MachineConfigPool, ocbConfig *OCBConfigMapValues, removeSecretName, expectedErrorMessage string) {
-
-	MCOperator := NewResource(oc.AsAdmin(), "ClusterOperator", "machine-config")
-
-	if ocbConfig != nil {
-		o.Expect(createOCBTestConfigResourcesFromPullSecret(oc, *ocbConfig)).To(o.Succeed(),
-			"We could not create the resources for  configmap %v", *ocbConfig)
-	}
-
-	// Sometimes we need to remove a secret to check the error when a needed secret is not found
-	if removeSecretName != "" {
-		logger.Infof("Removing secret %s to force an error", removeSecretName)
-		secret := NewSecret(oc.AsAdmin(), MachineConfigNamespace, removeSecretName)
-		o.Expect(secret.Delete()).To(o.Succeed(),
-			"Error removing secret %s", secret)
-	}
-
-	o.Eventually(MCOperator, "5m", "20s").ShouldNot(BeDegraded(),
-		"The MachineConfigOperator is already degraded before starting to check the scenario")
-
-	defer func() {
-		_ = mcp.DisableOnClusterBuild()
-		_ = cleanOCBTestConfigResources(oc.AsAdmin())
-	}()
-
-	logger.Infof("Enable OCB functionality in MCP: %s", mcp.GetName())
-	mcp.EnableOnClusterBuild()
-
-	logger.Infof("Checking the MCO status")
-	o.Eventually(MCOperator, "1m", "20s").Should(BeDegraded(),
-		"The MachineConfigOperator resource should be degraded when the current configuration is applied")
-	o.Eventually(MCOperator, "1m", "20s").ShouldNot(BeAvailable(),
-		"The MachineConfigOperator resource should NOT be available when the current configuration is applied")
-
-	o.Eventually(MCOperator, "1m", "20s").Should(HaveDegradedMessage(o.MatchRegexp(expectedErrorMessage)),
-		"The MachineConfigOperator is not reporting the right Degraded message")
-	o.Eventually(MCOperator, "1m", "20s").Should(HaveAvailableMessage(o.MatchRegexp(expectedErrorMessage)),
-		"The MachineConfigOperator is not reporting the right Available message")
-}
-
-func cleanOCBTestConfigResources(oc *exutil.CLI) error {
-
-	var cmErr, pushErr, pullErr, errGetPull, errGetPush error
-
-	logger.Infof("Cleaning OCB test config resources")
-	cm := NewNamespacedResource(oc.AsAdmin(), "cm", MachineConfigNamespace, OCBConfigmapName)
-	if !cm.Exists() {
-		logger.Infof("The configmap %s does not exists. Nothing to clean.", OCBConfigmapName)
-		return nil
-	}
-
-	logger.Infof("CM: %s\n", cm.PrettyString())
-
-	pullSecretName, errGetPull := cm.Get(`{.data.baseImagePullSecretName}`)
-	if errGetPull != nil {
-		logger.Infof("Error getting OCB base image pull secret name. ERROR:%v", errGetPull)
-	}
-
-	if pullSecretName != "" {
-		pullSecret := NewSecret(oc.AsAdmin(), MachineConfigNamespace, pullSecretName)
-		if pullSecret.Exists() {
-			pullErr := pullSecret.Delete()
-			if pullErr != nil {
-				logger.Infof("Error deleting %s. ERROR: %v", pullSecret, pullErr)
-			}
-		} else {
-			logger.Infof("OCB base image pull secret name %s does not exist. Nothing to delete", pullSecretName)
-		}
-	}
-
-	pushSecretName, errGetPush := cm.Get(`{.data.finalImagePushSecretName}`)
-	if errGetPush != nil {
-		logger.Infof("Error getting OCB final image push secret name. ERROR: %v", errGetPush)
-	}
-
-	if pushSecretName != "" {
-		pushSecret := NewSecret(oc.AsAdmin(), MachineConfigNamespace, pushSecretName)
-		if pullSecretName != pushSecretName {
-			if pushSecret.Exists() {
-				pushErr := pushSecret.Delete()
-				if pushErr != nil {
-					logger.Infof("Error deleting push secret %s. ERROR: %v", pushSecret, pushErr)
-				}
-			} else {
-				logger.Infof("OCB final image push secret name %s does not exist. Nothing to delete", pushSecretName)
-			}
-
-		} else {
-			logger.Infof("Push secret is the same secret as pull secret, so we don't need to delete it")
-		}
-	}
-
-	cmErr = cm.Delete()
-	if cmErr != nil {
-		logger.Infof("Error deleting configmap %s. ERROR: %v", cm, cmErr)
-	}
-
-	if cmErr != nil || pushErr != nil || pullErr != nil || errGetPull != nil || errGetPush != nil {
-		return fmt.Errorf("There were errors while cleaning the OCB test config resources. Please, review the logs")
-	}
-
-	return nil
-}
-
-func createOCBDefaultTestConfigResourcesFromPullSecret(oc *exutil.CLI) (*OCBConfigMapValues, error) {
-	ocbConfig := newTestDefaultsOCBConfig()
-	return ocbConfig, createOCBTestConfigResourcesFromPullSecret(oc, *ocbConfig)
-}
-
-func createOCBTestConfigResourcesFromPullSecret(oc *exutil.CLI, ocbConfig OCBConfigMapValues) error {
-
-	logger.Infof("Creating OCB test config resources")
-
-	if ocbConfig.baseImagePullSecretName != nil && *ocbConfig.baseImagePullSecretName != "" {
-		logger.Infof("Create the OCB base image pull secret")
-		err := createOCBSecretFromPullSecret(oc, *ocbConfig.baseImagePullSecretName)
-		if err != nil {
-			logger.Infof("Error creating the OCB base image pull secret")
-			return err
-		}
-	} else {
-		logger.Infof("Skipping baseImagePullSecretName creation. Nil value provided")
-	}
-
-	if ocbConfig.finalImagePushSecretName != nil && *ocbConfig.finalImagePushSecretName != "" {
-		logger.Infof("Create the OCB final image push secret")
-		err := createOCBSecretFromPullSecret(oc, *ocbConfig.finalImagePushSecretName)
-		if err != nil {
-			logger.Infof("Error creating the OCB final image push secret")
-			return err
-		}
-	} else {
-		logger.Infof("Skipping finalImagePushSecretName creation. Nil value provided")
-	}
-
-	logger.Infof("Create the OCB on-cluster-build-config configmap")
-	err := createOCBConfigMap(oc, ocbConfig)
-	if err != nil {
-		logger.Infof("Error creating the OCB on-cluster-build-config configmap")
-		return err
-	}
-
-	return nil
-}
-
-func newTestDefaultsOCBConfig() *OCBConfigMapValues {
-	return &OCBConfigMapValues{
-		baseImagePullSecretName:  PtrStr(OCBDefaultBaseImagePullSecretName),
-		finalImagePushSecretName: PtrStr(OCBDefaultFinalImagePushSecretName),
-		finalImagePullspec:       PtrStr(DefaultLayeringQuayRepository),
+func skipTestIfOCBIsEnabled(oc *exutil.CLI) {
+	moscl := NewMachineOSConfigList(oc)
+	allMosc := moscl.GetAllOrFail()
+	if len(allMosc) != 0 {
+		moscl.PrintDebugCommand()
+		g.Skip(fmt.Sprintf("To run this test case we need that OCB is not enabled in any pool. At least %s OBC is enabled in this cluster.", allMosc[0]))
 	}
 }
 
-func createOCBConfigMap(oc *exutil.CLI, ocbConfig OCBConfigMapValues) error {
+func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, pullSecret, pushSecret, pushSpec string, containerFile []ContainerFile,
+	expectedMsg, stepMgs string) {
+	var (
+		machineConfigCO = NewResource(oc.AsAdmin(), "co", "machine-config")
+	)
 
-	cm := NewNamespacedResource(oc.AsAdmin(), "cm", MachineConfigNamespace, OCBConfigmapName)
-	if cm.Exists() {
-		logger.Infof("The %s configmap already exists. We proceed to delete it and recreate it.", OCBConfigmapName)
-		cm.DeleteOrFail()
-	}
+	exutil.By(stepMgs)
+	defer logger.Infof("OK!\n")
 
-	params := []string{cm.GetKind(), cm.GetName(), "-n", cm.GetNamespace()}
+	logger.Infof("Create a misconfiugred MOSC")
+	mosc, err := CreateMachineOSConfig(oc, moscName, poolName, pullSecret, pushSecret, pushSpec, containerFile)
+	defer mosc.Delete()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating MOSC with wrong pull secret")
+	logger.Infof("OK!")
 
-	if ocbConfig.finalImagePullspec != nil {
-		params = append(params, []string{"--from-literal", "finalImagePullspec=" + *ocbConfig.finalImagePullspec}...)
-	}
+	logger.Infof("Expect machine-config CO to be degraded")
+	o.Eventually(machineConfigCO, "5m", "20s").Should(BeDegraded(),
+		"%s should be degraded when a MOSC is configured with a wrong pull secret", machineConfigCO)
+	o.Eventually(machineConfigCO, "1m", "20s").Should(HaveConditionField("Degraded", "message", o.ContainSubstring(expectedMsg)),
+		"%s should be degraded when a MOSC is configured with a wrong pull secret", machineConfigCO)
+	logger.Infof("OK!")
 
-	if ocbConfig.imageBuilderType != nil {
-		params = append(params, []string{"--from-literal", "imageBuilderType=" + *ocbConfig.imageBuilderType}...)
-	}
+	logger.Infof("Delete the offending MOSC")
+	o.Expect(mosc.Delete()).To(o.Succeed(), "Error deleing the offendint MOSC %s", mosc)
+	logger.Infof("OK!")
 
-	if ocbConfig.baseImagePullSecretName != nil {
-		params = append(params, []string{"--from-literal", "baseImagePullSecretName=" + *ocbConfig.baseImagePullSecretName}...)
-	}
+	logger.Infof("CHeck that machine-config CO is not degraded anymore")
+	o.Eventually(machineConfigCO, "5m", "20s").ShouldNot(BeDegraded(),
+		"%s should stop being degraded when the offending MOSC is deleted", machineConfigCO)
 
-	if ocbConfig.finalImagePushSecretName != nil {
-		params = append(params, []string{"--from-literal", "finalImagePushSecretName=" + *ocbConfig.finalImagePushSecretName}...)
-	}
-
-	return oc.WithoutNamespace().Run("create").Args(params...).Execute()
-}
-
-func createOCBSecretFromPullSecret(oc *exutil.CLI, name string) error {
-	pullSecret := NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
-	tmpDir, err := pullSecret.Extract()
-	if err != nil {
-		return err
-	}
-
-	return createOCBSecret(oc, name, tmpDir+"/.dockerconfigjson")
-}
-
-func createOCBSecret(oc *exutil.CLI, name, dockerConfigFile string) error {
-
-	if name == "" {
-		return fmt.Errorf("Refuse to create a secret with an empty name")
-	}
-
-	secret := NewSecret(oc.AsAdmin(), MachineConfigNamespace, name)
-	if secret.Exists() {
-		logger.Infof("The %s secret already exists. We proceed to delete it and recreate it.", name)
-		secret.DeleteOrFail()
-	}
-
-	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "-n", MachineConfigNamespace,
-		"docker-registry", name, "--from-file=.dockerconfigjson="+dockerConfigFile).Execute()
 }
