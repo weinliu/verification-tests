@@ -688,14 +688,25 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "s3":
 		{
 			if exutil.IsWorkloadIdentityCluster(oc) {
-				iamClient := newIamClient()
-				stsClient := newStsClient()
+				region, err := exutil.GetAWSClusterRegion(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
+				iamClient := newIamClient(cfg)
+				stsClient := newStsClient(cfg)
+				awsAccountID, _ := getAwsAccount(stsClient)
+				oidcName, err := getOIDC(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				lokiIAMRoleName := l.name + "-" + exutil.GetRandomString()
+				roleArn := createIAMRoleForLokiSTSDeployment(iamClient, oidcName, awsAccountID, l.namespace, l.name, lokiIAMRoleName)
+				os.Setenv("LOKI_ROLE_NAME_ON_STS", lokiIAMRoleName)
+				patchLokiOperatorWithAWSRoleArn(oc, "loki-operator", loNS, roleArn)
 				var s3AssumeRoleName string
 				defer func() {
-					deleteIAMroleonAWS(s3AssumeRoleName)
+					deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
 				}()
 				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.name)
-				createObjectStorageSecretWithS3OnSTS(oc, stsClient, s3AssumeRoleArn, l)
+				createObjectStorageSecretWithS3OnSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName)
+				createObjectStorageSecretOnAWSSTSCluster(oc, region, l.storageSecret, l.bucketName, l.namespace)
 			} else {
 				cred := getAWSCredentialFromCluster(oc)
 				client := newS3Client(cred)
@@ -875,16 +886,21 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	case "s3":
 		{
 			if exutil.IsWorkloadIdentityCluster(oc) {
-				iamClient := newIamClient()
-				stsClient := newStsClient()
+				region, err := exutil.GetAWSClusterRegion(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
+				iamClient := newIamClient(cfg)
+				stsClient := newStsClient(cfg)
 				var s3AssumeRoleName string
 				defer func() {
-					deleteIAMroleonAWS(s3AssumeRoleName)
+					deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
 				}()
 				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.name)
-				if checkIfS3bucketExistsWithSTS(stsClient, s3AssumeRoleArn, l.bucketName) {
-					deleteS3bucketWithSTS(stsClient, s3AssumeRoleArn, l.bucketName)
+				if checkIfS3bucketExistsWithSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName) {
+					deleteS3bucketWithSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName)
 				}
+				deleteIAMroleonAWS(iamClient, os.Getenv("LOKI_ROLE_NAME_ON_STS"))
+				os.Unsetenv("LOKI_ROLE_NAME_ON_STS")
 			} else {
 				cred := getAWSCredentialFromCluster(oc)
 				client := newS3Client(cred)

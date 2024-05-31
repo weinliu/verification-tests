@@ -74,36 +74,27 @@ func getAwsAccount(stsClient *sts.Client) (string, string) {
 	return awsAccount, awsUserArn
 }
 
-func readDefaultSDKExternalConfigurations(ctx context.Context) (aws.Config, error) {
+func readDefaultSDKExternalConfigurations(ctx context.Context, region string) aws.Config {
 	cfg, err := awsConfig.LoadDefaultConfig(ctx,
-		awsConfig.WithRegion(os.Getenv("AWS_CLUSTER_REGION")),
+		awsConfig.WithRegion(region),
 	)
-	return cfg, err
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return cfg
 }
 
 // new AWS STS client
-func newStsClient() *sts.Client {
+func newStsClient(cfg aws.Config) *sts.Client {
 	if !checkAWSCredentials() {
 		g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
 	}
-	cfg, err := readDefaultSDKExternalConfigurations(context.TODO())
-	if err != nil {
-		e2e.Logf("failed to load AWS configuration, %v", err)
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
 	return sts.NewFromConfig(cfg)
 }
 
 // Create AWS IAM client
-func newIamClient() *iam.Client {
+func newIamClient(cfg aws.Config) *iam.Client {
 	if !checkAWSCredentials() {
 		g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
 	}
-	cfg, err := readDefaultSDKExternalConfigurations(context.TODO())
-	if err != nil {
-		e2e.Logf("failed to load AWS configuration, %v", err)
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
 	return iam.NewFromConfig(cfg)
 }
 
@@ -172,13 +163,7 @@ func createIAMRoleOnAWS(iamClient *iam.Client, trustPolicy string, roleName stri
 }
 
 // Deletes IAM role and attached policies
-func deleteIAMroleonAWS(roleName string) {
-	cfg, err := readDefaultSDKExternalConfigurations(context.Background())
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Create an IAM client
-	iamClient := iam.NewFromConfig(cfg)
-
+func deleteIAMroleonAWS(iamClient *iam.Client, roleName string) {
 	// List attached policies of the IAM role
 	listAttachedPoliciesOutput, err := iamClient.ListAttachedRolePolicies(context.TODO(), &iam.ListAttachedRolePoliciesInput{
 		RoleName: aws.String(roleName),
@@ -218,12 +203,7 @@ func deleteIAMroleonAWS(roleName string) {
 }
 
 // Create role_arn required for Loki deployment on STS clusters
-func createIAMRoleForLokiSTSDeployment(oc *exutil.CLI, lokiNamespace, lokiStackName, roleName string) string {
-	iamClient := newIamClient()
-	stsClient := newStsClient()
-	oidcName, e := getOIDC(oc)
-	o.Expect(e).NotTo(o.HaveOccurred())
-	AWSAccountID, _ := getAwsAccount(stsClient)
+func createIAMRoleForLokiSTSDeployment(iamClient *iam.Client, oidcName, awsAccountID, lokiNamespace, lokiStackName, roleName string) string {
 	policyArn := "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 
 	lokiTrustPolicy := `{
@@ -246,22 +226,18 @@ func createIAMRoleForLokiSTSDeployment(oc *exutil.CLI, lokiNamespace, lokiStackN
 			}
 		]
 	}`
-
-	lokiTrustPolicy = fmt.Sprintf(lokiTrustPolicy, AWSAccountID, oidcName, oidcName, lokiNamespace, lokiStackName, lokiNamespace, lokiStackName)
+	lokiTrustPolicy = fmt.Sprintf(lokiTrustPolicy, awsAccountID, oidcName, oidcName, lokiNamespace, lokiStackName, lokiNamespace, lokiStackName)
 	roleArn := createIAMRoleOnAWS(iamClient, lokiTrustPolicy, roleName, policyArn)
 	return roleArn
 }
 
-// Creates S3 bucket and Object Storage required for Loki with that bucket and region.
-func createObjectStorageSecretWithS3OnSTS(oc *exutil.CLI, stsClient *sts.Client, s3roleArn string, ls lokiStack) {
-
+// Creates S3 bucket using STS AssumeRole operation with Temporary credentials and session token
+func createObjectStorageSecretWithS3OnSTS(cfg aws.Config, stsClient *sts.Client, s3roleArn, bucketName string) {
 	// Check if bucket exists, if yes delete it
-	if checkIfS3bucketExistsWithSTS(stsClient, s3roleArn, ls.bucketName) {
+	if checkIfS3bucketExistsWithSTS(cfg, stsClient, s3roleArn, bucketName) {
 		e2e.Logf("Bucket already exists. Deleting bucket")
-		deleteS3bucketWithSTS(stsClient, s3roleArn, ls.bucketName)
+		deleteS3bucketWithSTS(cfg, stsClient, s3roleArn, bucketName)
 	}
-	cfg, err := readDefaultSDKExternalConfigurations(context.Background())
-	o.Expect(err).NotTo(o.HaveOccurred())
 
 	result, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
 		RoleArn:         &s3roleArn,
@@ -280,7 +256,7 @@ func createObjectStorageSecretWithS3OnSTS(oc *exutil.CLI, stsClient *sts.Client,
 
 	// Define the input for CreateBucket operation
 	createBucketInput := &s3.CreateBucketInput{
-		Bucket: aws.String(ls.bucketName),
+		Bucket: aws.String(bucketName),
 	}
 
 	// Check if the region is us-east-1, do not specify a location constraint
@@ -289,21 +265,18 @@ func createObjectStorageSecretWithS3OnSTS(oc *exutil.CLI, stsClient *sts.Client,
 			LocationConstraint: s3Types.BucketLocationConstraint(cfg.Region),
 		}
 	}
-
 	_, err = s3Client.CreateBucket(context.TODO(), createBucketInput)
-	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create bucket: "+ls.bucketName)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create bucket: "+bucketName)
+}
 
-	// Creating object storage secret
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", ls.storageSecret, "--from-literal=region="+cfg.Region, "--from-literal=bucketnames="+ls.bucketName, "--from-literal=audience=openshift", "-n", ls.namespace).Execute()
+// Creates Loki object storage secret on AWS STS cluster
+func createObjectStorageSecretOnAWSSTSCluster(oc *exutil.CLI, region, storageSecret, bucketName, namespace string) {
+	err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", storageSecret, "--from-literal=region="+region, "--from-literal=bucketnames="+bucketName, "--from-literal=audience=openshift", "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-// Function to check S3 bucket contents on STS cluster
-func validateS3contentsWithSTS(bucketName, s3roleArn string) {
-	stsClient := newStsClient()
-	cfg, err := readDefaultSDKExternalConfigurations(context.Background())
-	o.Expect(err).NotTo(o.HaveOccurred())
-
+// Function to check if tenant logs are present under the S3 bucket on STS cluster
+func validateS3contentsWithSTS(cfg aws.Config, stsClient *sts.Client, bucketName, s3roleArn string, tenants []string) {
 	// Assume the role to get temporary credentials
 	assumeRoleOutput, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
 		RoleArn:         aws.String(s3roleArn),
@@ -329,9 +302,11 @@ func validateS3contentsWithSTS(bucketName, s3roleArn string) {
 		}
 
 		for _, object := range listObjectsOutput.Contents {
-			if strings.Contains(*object.Key, "application") || strings.Contains(*object.Key, "infrastructure") || strings.Contains(*object.Key, "audit") || strings.Contains(*object.Key, "index") {
-				e2e.Logf("Logs " + *object.Key + " found under the bucket: " + bucketName)
-				return true, nil
+			for _, tenantName := range tenants {
+				if strings.Contains(*object.Key, tenantName) {
+					e2e.Logf("Logs " + *object.Key + " found under the bucket: " + bucketName)
+					return true, nil
+				}
 			}
 		}
 		e2e.Logf("Waiting for data to be available under bucket: " + bucketName)
@@ -388,10 +363,7 @@ func patchLokiOperatorWithAWSRoleArn(oc *exutil.CLI, packageName, lokiNamespace,
 }
 
 // Checks if a specific bucket exists under AWS S3 service
-func checkIfS3bucketExistsWithSTS(stsClient *sts.Client, s3assumeRoleArn string, bucketName string) bool {
-	cfg, err := readDefaultSDKExternalConfigurations(context.Background())
-	o.Expect(err).NotTo(o.HaveOccurred())
-
+func checkIfS3bucketExistsWithSTS(cfg aws.Config, stsClient *sts.Client, s3assumeRoleArn string, bucketName string) bool {
 	assumeRoleInput := &sts.AssumeRoleInput{
 		RoleArn:         &s3assumeRoleArn,
 		RoleSessionName: aws.String("checks3WithAssumeRole"),
@@ -428,10 +400,7 @@ func checkIfS3bucketExistsWithSTS(stsClient *sts.Client, s3assumeRoleArn string,
 }
 
 // Deletes a specific bucket's contents (if any) and the bucket itself within AWS S3
-func deleteS3bucketWithSTS(stsClient *sts.Client, s3assumeRoleArn string, bucketName string) {
-	cfg, err := readDefaultSDKExternalConfigurations(context.Background())
-	o.Expect(err).NotTo(o.HaveOccurred())
-
+func deleteS3bucketWithSTS(cfg aws.Config, stsClient *sts.Client, s3assumeRoleArn string, bucketName string) {
 	assumeRoleOutput, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
 		RoleArn:         aws.String(s3assumeRoleArn),
 		RoleSessionName: aws.String("AssumeRoleSession"),

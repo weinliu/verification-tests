@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,14 +57,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 
 	g.It("CPaasrunBoth-Author:kbharti-LEVEL0-Critical-71534-Verify CCO support on AWS STS cluster and forward logs to default Loki[Serial]", func() {
 		currentPlatform := exutil.CheckPlatform(oc)
-		if currentPlatform != "aws" {
+		if strings.ToLower(currentPlatform) != "aws" {
 			g.Skip("The platforn is not AWS. Skipping case..")
 		}
 
 		// Get region of the AWS Cluster
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		os.Setenv("AWS_CLUSTER_REGION", region)
 
 		g.By("Create log producer")
 		appNS := oc.Namespace()
@@ -85,12 +85,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 			bucketName:    "logging-loki-71534-" + getInfrastructureName(oc) + "-" + exutil.GetRandomString(),
 			template:      lokiStackTemplate,
 		}
-
-		exutil.By("Create loki role_arn and patch into Loki Operator configuration")
-		lokiIAMRoleName := ls.name + "-" + exutil.GetRandomString()
-		roleArn := createIAMRoleForLokiSTSDeployment(oc, ls.namespace, ls.name, lokiIAMRoleName)
-		defer deleteIAMroleonAWS(lokiIAMRoleName)
-		patchLokiOperatorWithAWSRoleArn(oc, "loki-operator", loNS, roleArn)
 
 		exutil.By("Deploy LokiStack")
 		defer ls.removeObjectStorage(oc)
@@ -134,14 +128,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		}
 
 		exutil.By("Validate that logs are sent to S3 bucket")
-		iamClient := newIamClient()
-		stsClient := newStsClient()
+		cfg := readDefaultSDKExternalConfigurations(context.Background(), region)
+		iamClient := newIamClient(cfg)
+		stsClient := newStsClient(cfg)
 		var s3AssumeRoleName string
 		defer func() {
-			deleteIAMroleonAWS(s3AssumeRoleName)
+			deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
 		}()
 		s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, ls.name)
-		validateS3contentsWithSTS(ls.bucketName, s3AssumeRoleArn)
+		validateS3contentsWithSTS(cfg, stsClient, ls.bucketName, s3AssumeRoleArn, []string{"application", "audit", "infrastructure"})
 	})
 
 	g.It("CPaasrunOnly-Author:kbharti-Critical-71773-Verify CCO support on Azure WIF cluster and forward logs to default Loki[Serial]", func() {
