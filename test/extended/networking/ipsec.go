@@ -113,7 +113,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			ipsecTunnel = "pluto-62-VM"
 			rightIP = "10.73.116.62"
 			rightIP2 = "10.73.116.54"
-			leftIP = "10.1.98.217"
+			leftIP = "10.1.105.3"
 			nodeCert = "left_server"
 			nodeCert2 = "left_server_54"
 			leftPublicIP = leftIP
@@ -515,8 +515,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		var (
 			policyName          = "ipsec-policy-tunnel-host2net-72829"
 			ipsecTunnel         = "plutoTunnelVM_host2net"
-			rightNetworkAddress = "10.1.98.0"
-			rightNetworkCidr    = "/24"
+			rightNetworkAddress = "10.1.105.0"
+			rightNetworkCidr    = "/23"
 		)
 
 		//need to populate host2net config on external host and defer to host2host
@@ -572,8 +572,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		var (
 			policyName          = "ipsec-policy-transport-host2net-72830"
 			ipsecTunnel         = "plutoTransportVM_host2net"
-			rightNetworkAddress = "10.1.98.0"
-			rightNetworkCidr    = "/24"
+			rightNetworkAddress = "10.1.105.0"
+			rightNetworkCidr    = "/23"
 		)
 
 		//need to populate host2net config on external host and defer to host2host
