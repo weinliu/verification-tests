@@ -14,7 +14,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-scheduling] Workloads", func() {
+var _ = g.Describe("[sig-scheduling] Workloads taints and toleration works well", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())

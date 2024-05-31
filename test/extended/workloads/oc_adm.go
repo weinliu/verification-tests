@@ -14,7 +14,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cli] Workloads", func() {
+var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 	defer g.GinkgoRecover()
 
 	var (

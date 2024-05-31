@@ -16,7 +16,7 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
-var _ = g.Describe("[sig-scheduling] Workloads", func() {
+var _ = g.Describe("[sig-scheduling] Workloads podTopologySpreadConstraints works well", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())

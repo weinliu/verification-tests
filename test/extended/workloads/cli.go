@@ -29,7 +29,7 @@ import (
 	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
-var _ = g.Describe("[sig-cli] Workloads", func() {
+var _ = g.Describe("[sig-cli] Workloads test oc works well", func() {
 	defer g.GinkgoRecover()
 
 	var (

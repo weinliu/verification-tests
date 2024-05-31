@@ -10,7 +10,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-apps] Workloads", func() {
+var _ = g.Describe("[sig-apps] Workloads test syncing the groups work well", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())

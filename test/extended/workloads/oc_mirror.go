@@ -27,7 +27,7 @@ import (
 	"github.com/containers/image/v5/types"
 )
 
-var _ = g.Describe("[sig-cli] Workloads", func() {
+var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 	defer g.GinkgoRecover()
 
 	var (

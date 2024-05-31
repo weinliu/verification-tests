@@ -13,7 +13,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-cli] Workloads", func() {
+var _ = g.Describe("[sig-cli] Workloads test credentials work well", func() {
 	defer g.GinkgoRecover()
 
 	var (

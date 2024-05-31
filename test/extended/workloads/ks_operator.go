@@ -19,7 +19,7 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
-var _ = g.Describe("[sig-apps] Workloads", func() {
+var _ = g.Describe("[sig-apps] Workloads test kubescheduler operator works well", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
