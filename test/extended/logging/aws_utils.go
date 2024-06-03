@@ -532,6 +532,7 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 			cw.awsRegion = "us-east-2"
 		}
 	}
+
 	if cw.stsSecretType == "" {
 		cw.stsSecretType = "CredentialsCreate"
 	}
@@ -548,15 +549,14 @@ func (cw *cloudwatchSpec) setGroupPrefix(groupPrefix string) {
 }
 
 func (cw *cloudwatchSpec) newCloudwatchClient() {
-	cfg, err := awsConfig.LoadDefaultConfig(context.TODO())
+	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(cw.awsRegion))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// Create a Cloudwatch service client
 	cw.cwClient = cloudwatchlogs.NewFromConfig(cfg)
-
 }
 
 func (cw *cloudwatchSpec) newIamClient() {
-	cfg, err := awsConfig.LoadDefaultConfig(context.TODO())
+	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(cw.awsRegion))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cw.iamClient = iam.NewFromConfig(cfg)
 }
