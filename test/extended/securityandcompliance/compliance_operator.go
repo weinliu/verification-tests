@@ -3702,7 +3702,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
-			ssbNerc = "stig-test" + getRandomString()
+			ssbNerc = "nerc-cip-test" + getRandomString()
 		)
 
 		defer func() {
@@ -4481,7 +4481,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
-			ssbNercCip = "nerc-cip-test" + getRandomString()
+			ssbModerate = "moderate-test" + getRandomString()
 		)
 
 		// checking all nodes are in Ready state before the test case starts
@@ -4495,7 +4495,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
 			removeLabelFromWorkerNode(oc, workerNodeName)
 			checkMachineConfigPoolStatus(oc, "worker")
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbNercCip, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbModerate, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
@@ -4512,7 +4512,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			g.By("Patch all complianceremediations to false .. !!!\n")
 			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
 			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
-			setApplyToFalseForAllCrs(oc, subD.namespace, ssbNercCip)
+			setApplyToFalseForAllCrs(oc, subD.namespace, ssbModerate)
 			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
 			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
 			checkMachineConfigPoolStatus(oc, ss.roles1)
@@ -4530,26 +4530,26 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Create scansettingbinding... !!!\n")
-		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbNercCip, "-S", ss.name, "profile/ocp4-moderate", "profile/ocp4-moderate-node", "-n", subD.namespace).Output()
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbModerate, "-S", ss.name, "profile/ocp4-moderate", "profile/ocp4-moderate-node", "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNercCip, ok, []string{"scansettingbinding", "-n", subD.namespace,
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbModerate, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbNercCip, subD.namespace, "DONE")
+		checkComplianceSuiteStatus(oc, ssbModerate, subD.namespace, "DONE")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
-		subD.complianceSuiteResult(oc, ssbNercCip, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
 
 		g.By("Trigger another round of rescan if needed !!!\n")
-		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-l", "compliance.openshift.io/suite="+ssbNercCip, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-l", "compliance.openshift.io/suite="+ssbModerate, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if crResult != "" {
 			checkMachineConfigPoolStatus(oc, ss.roles1)
-			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbNercCip, "-n", subD.namespace).Output()
+			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbModerate, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkComplianceSuiteStatus(oc, ssbNercCip, subD.namespace, "DONE")
-			subD.complianceSuiteResult(oc, ssbNercCip, "NON-COMPLIANT INCONSISTENT")
+			checkComplianceSuiteStatus(oc, ssbModerate, subD.namespace, "DONE")
+			subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
 		}
 
 		g.By("Check rules and remediation status !!!\n")
