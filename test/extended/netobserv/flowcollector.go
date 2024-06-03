@@ -149,7 +149,7 @@ func (flow *Flowcollector) waitForFlowcollectorReady(oc *exutil.CLI) {
 	waitUntilDaemonSetReady(oc, "netobserv-ebpf-agent", flow.Namespace+"-privileged")
 
 	// check plugin status
-	if flow.LokiEnable != "false" && flow.PluginEnable != "false" {
+	if flow.PluginEnable != "false" {
 		waitUntilDeploymentReady(oc, "netobserv-plugin", flow.Namespace)
 	}
 

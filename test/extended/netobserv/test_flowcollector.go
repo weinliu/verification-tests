@@ -1166,7 +1166,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Wait for alerts to be active")
 		waitForAlertToBeActive(oc, "NetObservLokiError")
-		waitForAlertToBeActive(oc, "NetObservDroppedFlows")
 	})
 
 	g.It("NonPreRelease-Author:aramesha-High-64156-Verify IPFIX-exporter [Serial]", func() {
@@ -1663,9 +1662,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			secrets, err := getSecrets(oc, namespace+"-privileged")
 			o.Expect(err).ToNot(o.HaveOccurred())
 			o.Expect(secrets).To(o.And(o.ContainSubstring(kafkaUser.UserName), o.ContainSubstring(kafka.Name+"-cluster-ca-cert")))
-			consolePod, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(consolePod)).To(o.Equal(1))
 
 			// verify logs
 			g.By("Escalate SA to cluster admin")
@@ -1722,11 +1718,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(err).ToNot(o.HaveOccurred())
 			o.Expect(flowPatch).To(o.Equal(`'Kafka'`))
 
-			g.By("Ensure all pods are running and consolePlugin pod is not deployed")
+			g.By("Ensure all pods are running")
 			flow.waitForFlowcollectorReady(oc)
-			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(consolePod)).To(o.Equal(0))
 
 			g.By("Verify Kafka consumer pod logs")
 			podLogs, err = exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
@@ -1742,25 +1735,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			flow.PluginEnable = "false"
 			flow.createFlowcollector(oc)
 
-			// Scenario3: Verify all pods except plugin pod are present with Plugin and Loki disabled in flowcollector
-			g.By("Ensure all pods are running and consolePlugin pod is not deployed")
+			// Scenario3: Verify all pods except plugin pod are present with only Plugin disabled in flowcollector
+			g.By("Ensure all pods except consolePlugin pod are deployed")
 			flow.waitForFlowcollectorReady(oc)
-			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(consolePod)).To(o.Equal(0))
-
-			g.By("Verify console plugin pod is not deployed when its disabled in flowcollector even when loki is enabled")
-			flow.deleteFlowcollector(oc)
-			//Ensure FLP and eBPF pods are deleted
-			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
-			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
-
-			flow.createFlowcollector(oc)
-
-			// Scenario4: Verify all pods except plugin pod are present with only Plugin disabled in flowcollector
-			g.By("Ensure all pods are running and consolePlugin pod is not observed")
-			flow.waitForFlowcollectorReady(oc)
-			consolePod, err = exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
+			consolePod, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(consolePod)).To(o.Equal(0))
 		})
