@@ -787,6 +787,23 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(strings.Contains(string(out), "Forbidden")).Should(o.BeTrue())
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-73288-Enable request headers flags for metrics server", func() {
+		exutil.By("Check metrics-server deployment exists")
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "metrics-server", "-n", "openshift-monitoring").Execute()
+		if err != nil {
+			e2e.Logf("Unable to find metrics-server deployment.")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check request headers flags for metrics server")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy/metrics-server", "-ojsonpath={.spec.template.spec.containers[?(@.name==\"metrics-server\")].args}", "-n", "openshift-monitoring").Output()
+		params := []string{"requestheader-client-ca-file", "requestheader-allowed-names", "requestheader-extra-headers-prefix", "requestheader-group-headers", "requestheader-username-headers"}
+		for _, param := range params {
+			o.Expect(output).To(o.ContainSubstring(param))
+		}
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
