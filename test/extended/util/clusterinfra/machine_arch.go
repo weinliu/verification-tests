@@ -129,8 +129,8 @@ func GetInstanceTypeValuesByProviderAndArch(cloudProvider PlatformType, arch arc
 		},
 		GCP: {
 			architecture.AMD64: {
-				"Standard_D4s_v3",
-				"Standard_D8s_v3",
+				"n2-standard-4",
+				"n2d-standard-4",
 			},
 			architecture.ARM64: {
 				"t2a-standard-4",
