@@ -55,6 +55,8 @@ type TestRunDescription struct {
 	eligibleSingleNode bool
 	runtimeClassName   string
 	enablePeerPods     bool
+	enableGPU          bool
+	podvmImageUrl      string
 }
 
 // If you changes this please make changes to func createPeerPodSecrets
@@ -1759,6 +1761,18 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 		errorMessage = fmt.Sprintf("enablePeerPods is missing from data\n%v", errorMessage)
 	}
 
+	if gjson.Get(configmapData, "enableGPU").Exists() {
+		testrun.enableGPU = gjson.Get(configmapData, "enableGPU").Bool()
+	} else {
+		errorMessage = fmt.Sprintf("enableGPU is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "podvmImageUrl").Exists() {
+		testrun.podvmImageUrl = gjson.Get(configmapData, "podvmImageUrl").String()
+	} else {
+		errorMessage = fmt.Sprintf("podvmImageUrl is missing from data\n%v", errorMessage)
+	}
+
 	if errorMessage != "" {
 		err = fmt.Errorf("%v", errorMessage)
 		// testrun.checked still == false. Setup is wrong & all tests will fail
@@ -1888,4 +1902,23 @@ func waitForPodsToTerminate(oc *exutil.CLI, namespace, listOfPods string) {
 	})
 	currentPods, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-o=jsonpath={.items..metadata.name}").Output()
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timeout waiting for a (%v) pods to terminate.  Current pods %v running", listOfPods, currentPods))
+}
+
+func patchPodvmEnableGPU(oc *exutil.CLI, opNamespace, cmName, enableGpu string) {
+	patchGPU := "{\"data\":{\"ENABLE_NVIDIA_GPU\":\"" + enableGpu + "\"}}"
+	msg, err := oc.AsAdmin().Run("patch").Args("configmap", cmName, "-n",
+		opNamespace, "--type", "merge", "--patch", patchGPU).Output()
+
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch ENABLE_NVIDIA_GPU to %v\n error: %v %v", enableGpu, msg, err))
+
+	currentGPU := getPodvmEnableGPU(oc, opNamespace, cmName)
+	o.Expect(currentGPU).To(o.Equal(enableGpu))
+}
+
+func getPodvmEnableGPU(oc *exutil.CLI, opNamespace, cmName string) (enGPU string) {
+	jsonpath := "-o=jsonpath={.data.ENABLE_NVIDIA_GPU}"
+	msg, err := oc.AsAdmin().Run("get").Args("configmap", cmName, "-n", opNamespace, jsonpath).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not find %v in %v\n Error: %v", jsonpath, cmName, err))
+	e2e.Logf("ENABLE_NVIDIA_GPU is %v", msg)
+	return msg
 }

@@ -20,6 +20,8 @@ objects:
       eligibleSingleNode: "${ELIGIBLESINGLENODE}"
       eligibility: "${ELIGIBILITY}"
       labelSingleNode: "${LABELSINGLENODE}"
+      enableGPU: "${ENABLENVIDIAGPU}"
+      podvmImageUrl: "${PODVMIMAGEURL}"
 
 # oc process --ignore-unknown-parameters=true -f configmap-input-template.yaml -p [name]=[value] [name]=[value] > osc-config.yaml...
 # oc apply -f osc-config.yaml
@@ -51,3 +53,7 @@ parameters:
     value: "false"
   - name: LABELSINGLENODE
     value: "false"
+  - name: ENABLENVIDIAGPU
+    value: "false"
+  - name: PODVMIMAGEURL
+    value: "https://raw.githubusercontent.com/bpradipt/sandboxed-containers-operator/pvm-img-fix/config/peerpods/podvm/"

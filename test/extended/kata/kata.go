@@ -87,6 +87,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		eligibleSingleNode: false,
 		runtimeClassName:   kataconfig.runtimeClassName,
 		enablePeerPods:     kataconfig.enablePeerPods,
+		enableGPU:          false,
+		podvmImageUrl:      "https://raw.githubusercontent.com/bpradipt/sandboxed-containers-operator/pvm-img-fix/config/peerpods/podvm/",
 	}
 
 	g.BeforeEach(func() {
@@ -180,8 +182,16 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			if err != nil {
 				e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)
 			}
-		}
 
+			//new flow for GPU prior to image building job
+			if testrun.enableGPU {
+				cmName := cloudPlatform + "-podvm-image-cm"
+				cmUrl := testrun.podvmImageUrl + cmName + ".yaml"
+				msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", cmUrl).Output()
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("issue applying podvm image configmap %v: %v, %v", cmUrl, msg, err))
+				patchPodvmEnableGPU(oc, opNamespace, cmName, "yes")
+			}
+		}
 		// should check kataconfig here & already have checked subscription
 		// check kataconfig
 		// should be replaced with ensureKataconfigIsCreated()
