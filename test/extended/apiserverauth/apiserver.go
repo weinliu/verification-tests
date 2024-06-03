@@ -6046,4 +6046,50 @@ EOF`, serverconf, fqdnName)
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Case failed ::  Audit events count is not greater than zero after login operation :: %v", auditEventCount))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Author:rgangwar-Medium-70369-[Apiserver] Use bound service account tokens when generating pull secrets.", func() {
+		var (
+			secretOutput string
+			randomSaAcc  = "test-" + exutil.GetRandomString()
+		)
+
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		exutil.By("1. Check if Image registry is enabled")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry.operator.openshift.io/cluster", "-o", `jsonpath='{.spec.managementState}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "Managed") {
+			g.Skip("Skipping case as registry is not enabled")
+		}
+
+		exutil.By("2. Create serviceAccount " + randomSaAcc)
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", randomSaAcc, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Check if Token Secrets of SA " + randomSaAcc + " are created.")
+		secretOutput = getResourceToBeReady(oc, asAdmin, withoutNamespace, "secrets", "-n", namespace, "-o", `jsonpath={range .items[*]}{.metadata.name}{" "}{end}`)
+		o.Expect(secretOutput).ShouldNot(o.BeEmpty())
+		o.Expect(secretOutput).ShouldNot(o.ContainSubstring("token"))
+		o.Expect(secretOutput).Should(o.ContainSubstring("dockercfg"))
+
+		exutil.By("4. Create a deployment that uses an image from the internal registry")
+		podTemplate := getTestDataFilePath("ocp-70369.yaml")
+		params := []string{"-n", namespace, "-f", podTemplate, "-p", fmt.Sprintf("NAMESPACE=%s", namespace), "SERVICE_ACCOUNT_NAME=" + randomSaAcc}
+		configFile := exutil.ProcessTemplate(oc, params...)
+		err = oc.AsAdmin().Run("create").Args("-f", configFile, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podName := getPodsList(oc.AsAdmin(), namespace)
+		o.Expect(podName).NotTo(o.BeEmpty())
+		exutil.AssertPodToBeReady(oc, podName[0], namespace)
+
+		exutil.By("5. Verify the `openshift.io/internal-registry-pull-secret-ref` annotation in the ServiceAccount")
+		serviceCaOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "pod", podName[0], "-n", namespace, "-o", `jsonpath={.spec.serviceAccount}`)
+		o.Expect(serviceCaOutput).Should(o.ContainSubstring(randomSaAcc))
+		imageSecretOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "pod", podName[0], "-n", namespace, "-o", `jsonpath={.spec.imagePullSecrets[*].name}`)
+		o.Expect(imageSecretOutput).Should(o.ContainSubstring(randomSaAcc + "-dockercfg"))
+		imageSaOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "sa", randomSaAcc, "-n", namespace, "-o", `jsonpath={.metadata.annotations.openshift\.io/internal-registry-pull-secret-ref}`)
+		o.Expect(imageSaOutput).Should(o.ContainSubstring(randomSaAcc + "-dockercfg"))
+	})
 })
