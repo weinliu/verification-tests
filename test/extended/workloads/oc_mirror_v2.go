@@ -240,6 +240,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		defer removeOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator")
 		installOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator", "rhsso-operator")
 	})
+
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-73377-support dry-run for v2 [Serial]", func() {
 		dirname := "/tmp/case73377"
 		defer os.RemoveAll(dirname)
@@ -480,5 +481,89 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 			}
 		}
 
+	})
+
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-72942-High-72918-High-72709-support max-nested-paths for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72942"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Get root ca")
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Use skopoe copy catalogsource to localhost")
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 --remove-signatures  --insecure-policy oci://%s", dirname+"/redhat-operator-index"))
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-72942")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-72942")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72942.yaml")
+
+		exutil.By("Start mirror2disk, checkpoint for 72947 and 72918")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
+
+		exutil.By("Start disk2mirror with max-nested-paths")
+		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName+"/test/72942", "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false", "--max-nested-paths", "2").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror still failed")
+
+		exutil.By("Check if net path is right in idms/itms file")
+		idmsTextContentStr := readFileContent("/tmp/case72942/working-dir/cluster-resources/idms-oc-mirror.yaml")
+		validateFileContent(idmsTextContentStr, "test/72942-albo-aws-load-balancer-operator-bundle", "operator")
+		validateFileContent(idmsTextContentStr, "test/72942-openshifttest-hello-openshift", "additionalimage")
+
+		itmsTextContentStr := readFileContent("/tmp/case72942/working-dir/cluster-resources/itms-oc-mirror.yaml")
+		validateFileContent(itmsTextContentStr, "test/72942-ubi8-ubi", "additionalimage")
+
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+		exutil.By("Check for the catalogsource pod status")
+		assertPodOutput(oc, "olm.catalogSource=cs-72942-catalog-v15", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-72942-redhat-redhat-operator-index-v4-15", "openshift-marketplace", "Running")
+
+		exutil.By("Checkpoint for 72709, validate the result for additional images")
+		_, outErr, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", dirname+"/.dockerconfigjson", serInfo.serviceName+"/test/72942-ubi8-ubi:latest", "--insecure").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(strings.Contains(outErr, "the image is a manifest list")).To(o.BeTrue())
+		_, outErr, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "--registry-config", dirname+"/.dockerconfigjson", serInfo.serviceName+"/test/72942-openshifttest-hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--insecure").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(strings.Contains(outErr, "the image is a manifest list")).To(o.BeTrue())
 	})
 })

@@ -2097,3 +2097,17 @@ func skopeExecute(skopeoCommand string) {
 	}
 	exutil.AssertWaitPollNoErr(waitErr, "max time reached but the skopeo copy still failed")
 }
+
+func readFileContent(filePath string) string {
+	bytesRead, err := ioutil.ReadFile(filePath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return string(bytesRead)
+}
+
+func validateFileContent(fileContent string, expectedStr string, resourceType string) {
+	if matched, _ := regexp.MatchString(expectedStr, fileContent); !matched {
+		e2e.Failf("Nest path for %s are not right", resourceType)
+	} else {
+		e2e.Logf("Nest paths for %s are set correctly", resourceType)
+	}
+}
