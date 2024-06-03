@@ -58,31 +58,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-44212-[CCM] The Kubelet and KCM cloud-provider should be external", func() {
-		SkipIfCloudControllerManagerNotDeployed(oc)
-		if iaasPlatform == clusterinfra.Azure {
-			g.By("Check if cloud-node-manager daemonset is deployed")
-			ds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(ds).To(o.ContainSubstring("azure-cloud-node-manager"))
-		}
-		g.By("Check if cloud-controller-manager deployment is deployed")
-		deploy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(deploy).To(o.ContainSubstring("cloud-controller-manager"))
-		g.By("Check if appropriate `--cloud-provider=external` set on kubelet and KCM")
-		masterkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-master-kubelet", "-o=jsonpath={.spec.config.systemd.units[1].contents}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(masterkubelet).To(o.ContainSubstring("cloud-provider=external"))
-		workerkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-worker-kubelet", "-o=jsonpath={.spec.config.systemd.units[1].contents}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(workerkubelet).To(o.ContainSubstring("cloud-provider=external"))
-		kcm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-controller-manager", "-o=jsonpath={.data.config\\.yaml}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(kcm).To(o.ContainSubstring("\"cloud-provider\":[\"external\"]"))
-	})
-
-	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-[CCM] 42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere)
 
@@ -512,5 +487,29 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.By("Wait the pod ready")
 		err = waitForPodWithLabelReady(oc, "hello-acr72120", "deployment=hello-acr")
 		exutil.AssertWaitPollNoErr(err, "the pod failed to be ready state within allowed time!")
+	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-74047-[CCM] The cloud-provider and cloud-config flags should be removed from KCM/KAS", func() {
+		SkipIfCloudControllerManagerNotDeployed(oc)
+		g.By("Check no `cloud-provider` and `cloud-config` set on KCM and KAS")
+		kapi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-apiserver", "-o=jsonpath={.data.config\\.yaml}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(kapi).NotTo(o.ContainSubstring("cloud-provider"))
+		o.Expect(kapi).NotTo(o.ContainSubstring("cloud-config"))
+		kcm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-controller-manager", "-o=jsonpath={.data.config\\.yaml}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(kcm).NotTo(o.ContainSubstring("cloud-provider"))
+		o.Expect(kcm).NotTo(o.ContainSubstring("cloud-config"))
+
+		g.By("Check no `cloud-config` set on kubelet, but `--cloud-provider=external` still set on kubelet")
+		masterkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-master-kubelet", "-o=jsonpath={.spec.config.systemd.units[1].contents}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(masterkubelet).To(o.ContainSubstring("cloud-provider=external"))
+		o.Expect(masterkubelet).NotTo(o.ContainSubstring("cloud-config"))
+		workerkubelet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineconfig/01-worker-kubelet", "-o=jsonpath={.spec.config.systemd.units[1].contents}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(workerkubelet).NotTo(o.ContainSubstring("cloud-config"))
+		o.Expect(workerkubelet).To(o.ContainSubstring("cloud-provider=external"))
 	})
 })
