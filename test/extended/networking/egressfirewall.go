@@ -1493,6 +1493,346 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 })
 
+var _ = g.Describe("[sig-networking] SDN egressfirewall-techpreview", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("networking-egressfirewall", exutil.KubeConfigPath())
+	g.BeforeEach(func() {
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
+		}
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVNK network plugin")
+		}
+
+		if checkProxy(oc) || checkDisconnect(oc) {
+			g.Skip("This is proxy/disconnect cluster, skip the test.")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "none")
+		if !(ipStackType == "ipv4single" || (acceptedPlatform && ipStackType == "dualstack")) {
+			g.Skip("This case should be run on UPI packet dualstack cluster or IPv4 cluster, skip other platform or network stack type.")
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Critical-73723-dnsName has wildcard in EgressFirewall rules.", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		efwSingle := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-wildcard.yaml")
+		efwDualstack := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-wildcard-dualstack.yaml")
+
+		exutil.By("Create egressfirewall file")
+		ns := oc.Namespace()
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			createResourceFromFile(oc, ns, efwDualstack)
+		} else {
+			createResourceFromFile(oc, ns, efwSingle)
+		}
+		efErr := waitEgressFirewallApplied(oc, "default", ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("Verify the allowed rules which match the wildcard take effect.")
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.google.com", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.redhat.com", false)
+
+		exutil.By("Update the domain name to a litlle bit long domain name.")
+		updateValue := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/dnsName\", \"value\":\"*.whatever.you.like.here.followed.by.svc-1.google.com\"}]"
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", updateValue).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efErr = waitEgressFirewallApplied(oc, "default", ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify the allowed rules which match the wildcard take effect.")
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "type.whatever.you.like.here.followed.by.svc-1.google.com", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.google.com", false)
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-73724-dnsName has same wildcard domain name in EgressFirewall rules in different namespaces.", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		efwSingle := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-wildcard.yaml")
+		efwDualstack := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-wildcard-dualstack.yaml")
+
+		exutil.By("Create a test pod in first namespace ")
+		ns1 := oc.Namespace()
+		pod1ns1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1ns1.createPingPod(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		exutil.By("Create a test pod in the second namespace ")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		pod1ns2 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns2,
+			template:  pingPodTemplate,
+		}
+		pod1ns2.createPingPod(oc)
+		waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
+
+		exutil.By("Create EgressFirewall in both namespaces ")
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			createResourceFromFile(oc, ns1, efwDualstack)
+			createResourceFromFile(oc, ns2, efwDualstack)
+		} else {
+			createResourceFromFile(oc, ns1, efwSingle)
+			createResourceFromFile(oc, ns2, efwSingle)
+		}
+		efErr := waitEgressFirewallApplied(oc, "default", ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+		efErr = waitEgressFirewallApplied(oc, "default", ns2)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify the allowed rules which match the wildcard take effect for both namespace.")
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.google.com", true)
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "www.google.com", true)
+
+		exutil.By("Verify other website which doesn't match the wildcard would be blocked")
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.redhat.com", false)
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "www.redhat.com", false)
+
+		exutil.By("Update the wildcard domain name to a different one in second namespace.")
+		updateValue := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/dnsName\", \"value\":\"*.redhat.com\"}]"
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns2, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", updateValue).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efErr = waitEgressFirewallApplied(oc, "default", ns2)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify the udpated rule taking effect in second namespace.")
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "www.google.com", false)
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "www.redhat.com", true)
+
+		exutil.By("Verify the egressfirewall rules in first namespace still works")
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.google.com", true)
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.redhat.com", false)
+
+		exutil.By("Remove egressfirewall in first namespace.")
+		removeResource(oc, true, true, "egressfirewall/default", "-n", ns1)
+
+		exutil.By("Verify no blocking for the destination domain names in first namespace")
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.google.com", true)
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.redhat.com", true)
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Critical-73719-Allowing access to DNS names even if the IP addresses associated with them changes. [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		efwSingle := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-specific-dnsname.yaml")
+		efwDualstack := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-specific-dnsname-dualstack.yaml")
+
+		exutil.By("Create an egressfirewall file")
+		ns := oc.Namespace()
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			createResourceFromFile(oc, ns, efwDualstack)
+		} else {
+			createResourceFromFile(oc, ns, efwSingle)
+		}
+		efErr := waitEgressFirewallApplied(oc, "default", ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("Verify the allowed rules take effect.")
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "registry-1.docker.io", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.facebook.com", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.redhat.com", false)
+
+		exutil.By("Verify dnsnameresolver contains the allowed dns names.")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnsnameresolver", "-n", "openshift-ovn-kubernetes", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The dnsnameresolver output is : \n %s ", output)
+		o.Expect(strings.Contains(output, "dnsName: www.facebook.com")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "dnsName: registry-1.docker.io")).To(o.BeTrue())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-73721-Medium-73722-Update domain name in EgressFirewall,EgressFirewall works after restart ovnkube-node pods. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		efwSingle := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-specific-dnsname.yaml")
+		efwDualstack := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-specific-dnsname-dualstack.yaml")
+
+		exutil.By("Create egressfirewall file")
+		ns := oc.Namespace()
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			createResourceFromFile(oc, ns, efwDualstack)
+		} else {
+			createResourceFromFile(oc, ns, efwSingle)
+		}
+		efErr := waitEgressFirewallApplied(oc, "default", ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("Update the domain name to a different one.")
+		updateValue := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/dnsName\", \"value\":\"www.redhat.com\"}]"
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns, "egressfirewall.k8s.ovn.org/default", "--type=json", "-p", updateValue).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efErr = waitEgressFirewallApplied(oc, "default", ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify the allowed rules take effect.")
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.redhat.com", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.facebook.com", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "registry-1.docker.io", false)
+
+		exutil.By("The dns names in dnsnameresolver get udpated as well.")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnsnameresolver", "-n", "openshift-ovn-kubernetes", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The dnsnameresolver output is : \n %s ", output)
+		o.Expect(strings.Contains(output, "dnsName: www.facebook.com")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "dnsName: www.redhat.com")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "dnsName: registry-1.docker.io")).NotTo(o.BeTrue())
+
+		exutil.By("Restart the ovnkube-node pod ")
+		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		podNode, err := exutil.GetPodNodeName(oc, pod1.namespace, pod1.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "app=ovnkube-node", "-n", "openshift-ovn-kubernetes", "--field-selector", "spec.nodeName="+podNode).Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Wait for ovnkube-node pods back up.")
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+
+		exutil.By("Verify the function still works")
+		efErr = waitEgressFirewallApplied(oc, "default", ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.redhat.com", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "www.facebook.com", true)
+		verifyDesitnationAccess(oc, pod1.name, pod1.namespace, "registry-1.docker.io", false)
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-73720-Same domain name in different namespaces should work correctly. [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		efwSingle := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-specific-dnsname.yaml")
+		efwDualstack := filepath.Join(buildPruningBaseDir, "egressfirewall/egressfirewall-specific-dnsname-dualstack.yaml")
+
+		exutil.By("Create test pod in first namespace")
+		ns1 := oc.Namespace()
+		pod1ns1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1ns1.createPingPod(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		exutil.By("Create test pod in second namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		pod1ns2 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns2,
+			template:  pingPodTemplate,
+		}
+		pod1ns2.createPingPod(oc)
+		waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
+
+		exutil.By("Create egressfirewall in both namespaces")
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			createResourceFromFile(oc, ns1, efwDualstack)
+			createResourceFromFile(oc, ns2, efwDualstack)
+		} else {
+			createResourceFromFile(oc, ns1, efwSingle)
+			createResourceFromFile(oc, ns2, efwSingle)
+		}
+		efErr := waitEgressFirewallApplied(oc, "default", ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+		efErr = waitEgressFirewallApplied(oc, "default", ns2)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify the allowed rules take effect on both namespaces")
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "registry-1.docker.io", true)
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.facebook.com", true)
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.redhat.com", false)
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "registry-1.docker.io", true)
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "www.facebook.com", true)
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "www.redhat.com", false)
+
+		exutil.By("Delete egressfirewall in second namespace")
+		removeResource(oc, true, true, "egressfirewall/default", "-n", ns2)
+
+		exutil.By("Verify the previous blocked dns name can be accessed.")
+		verifyDesitnationAccess(oc, pod1ns2.name, pod1ns2.namespace, "www.redhat.com", true)
+
+		exutil.By("Verify dnsnameresolver still contains the allowed dns names.")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnsnameresolver", "-n", "openshift-ovn-kubernetes", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The dnsnameresolver output is : \n %s ", output)
+		o.Expect(strings.Contains(output, "dnsName: www.facebook.com")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "dnsName: registry-1.docker.io")).To(o.BeTrue())
+
+		exutil.By("Verify egressfirewall in first namespace still works")
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "registry-1.docker.io", true)
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.facebook.com", true)
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.redhat.com", false)
+
+		exutil.By("Remove one domain name in first namespace")
+		if ipStackType == "dualstack" {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns1, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"registry-1.docker.io\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+		} else {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns1, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"registry-1.docker.io\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+		}
+		efErr = waitEgressFirewallApplied(oc, "default", ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify removed dns name will be blocked")
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "registry-1.docker.io", true)
+		verifyDesitnationAccess(oc, pod1ns1.name, pod1ns1.namespace, "www.facebook.com", false)
+
+		exutil.By("Verify removed dns name was removed from dnsnameresolver as well.")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("dnsnameresolver", "-n", "openshift-ovn-kubernetes", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The dnsnameresolver output is : \n %s ", output)
+		o.Expect(strings.Contains(output, "dnsName: www.facebook.com")).NotTo(o.BeTrue())
+		o.Expect(strings.Contains(output, "dnsName: registry-1.docker.io")).To(o.BeTrue())
+	})
+})
+
 var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
 	defer g.GinkgoRecover()
 

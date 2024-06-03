@@ -3766,3 +3766,23 @@ func getNetworkDiagnosticsAvailable(oc *exutil.CLI) string {
 	e2e.Logf("NetworkDiagnosticsAvailable status is %s", statusOutput)
 	return statusOutput
 }
+
+func verifyDesitnationAccess(oc *exutil.CLI, podName, podNS, domainName string, passOrFail bool) {
+	curlCmd := fmt.Sprintf("curl -s -I %s --connect-timeout 5 ", domainName)
+	if passOrFail {
+		_, err := e2eoutput.RunHostCmdWithRetries(podNS, podName, curlCmd, 10*time.Second, 20*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			curlCmd = fmt.Sprintf("curl -s -6 -I %s --connect-timeout 5", domainName)
+			_, err := e2eoutput.RunHostCmdWithRetries(podNS, podName, curlCmd, 10*time.Second, 20*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+	} else {
+		o.Eventually(func() error {
+			_, err := e2eoutput.RunHostCmd(podNS, podName, curlCmd)
+			return err
+		}, "20s", "10s").Should(o.HaveOccurred())
+	}
+}
