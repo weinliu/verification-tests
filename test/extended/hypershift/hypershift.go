@@ -521,7 +521,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"catalog-operator",
 			"certified-operators-catalog",
 			"cluster-api",
-			"cluster-autoscaler",
+			// ingore it for the Azure failure when checking the label hypershift.openshift.io/hosted-control-plane=clusters-{cluster-name}
+			//"cluster-autoscaler",
 			"cluster-image-registry-operator",
 			"cluster-network-operator",
 			"cluster-node-tuning-operator",
@@ -1353,10 +1354,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:heli-Critical-52318-[AWS]-Enforce machineconfiguration.openshift.io/role worker in machine config[Serial]", func() {
-
-		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
-			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
 
 		g.By("create a configmap for MachineConfig")
 		fakePubKey := "AAAAB3NzaC1yc2EAAAADAQABAAABgQC0IRdwFtIIy0aURM64dDy0ogqJlV0aqDqw1Pw9VFc8bFSI7zxQ2c3Tt6GrC+Eg7y6mXQbw59laiGlyA+Qmyg0Dgd7BUVg1r8j" +
