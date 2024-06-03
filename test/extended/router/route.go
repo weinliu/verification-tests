@@ -151,7 +151,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-NonPreRelease-Critical-53696-Route status should updates accordingly when ingress routes cleaned up [Disruptive]", func() {
+	g.It("Author:mjoseph-Critical-53696-Route status should updates accordingly when ingress routes cleaned up [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -164,22 +164,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		)
 
 		exutil.By("check the intial canary route status")
-		routerpods := getResourceName(oc, "openshift-ingress", "pods")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
 
 		exutil.By("shard the default ingress controller")
+		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
 		defer patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":\"shard\"}}}}")
-		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", routerpods)
-		newrouterpods := getResourceName(oc, "openshift-ingress", "pods")
+		// After patching the default congtroller generation should be +1
+		actualGenerationInt, _ := strconv.Atoi(actualGen)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+1))
 
 		exutil.By("check whether canary route status is cleared")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status", "default", true)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", true)
 
 		exutil.By("patch the controller back to default check the canary route status")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
-		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", newrouterpods)
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+2))
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
 
 		exutil.By("Create a shard ingresscontroller")
 		baseDomain := getBaseDomain(oc)
@@ -192,16 +193,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("patch the shard controller and check the canary route status")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"node-role.kubernetes.io/worker\":\"\"}}}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "ocp53696", false)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"ocp53696\")].conditions[*].status", "True", false)
 
 		exutil.By("delete the shard and check the status")
 		custContPod := getNewRouterPod(oc, ingctrl.name)
 		ingctrl.delete(oc)
 		err3 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+custContPod)
 		exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+custContPod))
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "ocp53696", true)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"ocp53696\")].conditions[*].status", "True", true)
 	})
 
 	// bugzilla: 2021446
