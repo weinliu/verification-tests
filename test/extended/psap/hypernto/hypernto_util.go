@@ -359,3 +359,14 @@ func AssertIfTunedIsReadyByNameInHostedCluster(oc *exutil.CLI, tunedeName string
 		return strings.Contains(tunedStatus, tunedeName)
 	}, 5*time.Second, time.Second).Should(o.BeTrue())
 }
+
+// fuction to check given string is in array or not
+func implStringArrayContains(stringArray []string, name string) bool {
+	// iterate over the array and compare given string to each element
+	for _, value := range stringArray {
+		if value == name {
+			return true
+		}
+	}
+	return false
+}

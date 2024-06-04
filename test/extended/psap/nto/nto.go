@@ -2426,7 +2426,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 		o.Expect(tunedPodName).NotTo(o.BeEmpty())
 
-		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
+		// //Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao-").Execute()
 
 		exutil.By("Label the node with node-role.kubernetes.io/worker-pao=")

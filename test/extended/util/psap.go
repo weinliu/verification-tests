@@ -634,27 +634,20 @@ func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationSe
 }
 
 // CreateCustomNodePoolInHypershift retrun custom nodepool yaml
-func CreateCustomNodePoolInHypershift(oc *CLI, cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, clustersNS string) {
+func CreateCustomNodePoolInHypershift(oc *CLI, cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, subnetID, clustersNS string) {
 
-	cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --namespace %s --render", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, clustersNS)
-	rawOutput, err := exec.Command("bash", "-c", cmdString).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if cloudProvider == "aws" && len(subnetID) == 0 {
+		cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --node-upgrade-type %s --namespace %s", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, clustersNS)
+		e2e.Logf("cmdString is %v )", cmdString)
+		_, err := exec.Command("bash", "-c", cmdString).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else if cloudProvider == "azure" {
 
-	//NTO required InPlace upgradeType
-	nodePoolYaml := strings.ReplaceAll(string(rawOutput), "upgradeType: Replace", "upgradeType: InPlace")
-
-	nodePoolNewB := []byte(nodePoolYaml)
-
-	newNodePoolFileName := filepath.Join(e2e.TestContext.OutputDir, "openshift-psap-qe-"+nodePoolName+"-new.yaml")
-	defer os.RemoveAll(newNodePoolFileName)
-	err = ioutil.WriteFile(newNodePoolFileName, nodePoolNewB, 0o644)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	nodePoolNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", "-n", clustersNS, "-oname").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	isMatch := strings.Contains(nodePoolNameList, nodePoolName)
-	if !isMatch {
-		ApplyOperatorResourceByYaml(oc, clustersNS, newNodePoolFileName)
+		cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --node-upgrade-type %s --subnet-id %s --namespace %s", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, subnetID, clustersNS)
+		_, err := exec.Command("bash", "-c", cmdString).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		e2e.Logf("Unsupported cloud provider is %v )", cloudProvider)
 	}
 }
 
