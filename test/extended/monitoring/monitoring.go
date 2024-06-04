@@ -2637,6 +2637,29 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-73834-trigger PrometheusOperatorRejectedResources alert [Serial]", func() {
+		var (
+			PrometheusOperatorRejectedResources = filepath.Join(monitoringBaseDir, "PrometheusOperatorRejectedResources.yaml")
+		)
+		exutil.By("delete uwm-config/cm-config at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		exutil.By("check the alert exist")
+		cmd := "-ojsonpath={.spec.groups[].rules[?(@.alert==\"PrometheusOperatorRejectedResources\")]}"
+		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "prometheus-operator-rules", cmd, "PrometheusOperatorRejectedResources", true)
+
+		exutil.By("trigger PrometheusOperatorRejectedResources alert")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		createResourceFromYaml(oc, ns, PrometheusOperatorRejectedResources)
+
+		exutil.By("check alert metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusOperatorRejectedResources"}'`, token, `PrometheusOperatorRejectedResources`, 3*uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
