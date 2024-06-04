@@ -1530,9 +1530,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author jfrancoa@redhat.com
 	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Serial][Disruptive]", func() {
+		//TODO remove this line as soon as OCPBUGS-23121 fixed
+		g.Skip("This test skipped due OCPBUGS-23121 isn't fixed yet")
 		if iaasPlatform == "none" {
 			g.Skip("platform none does not support changing namespace and scaling up machines")
 		}
+
 		customNamespace := "winc-namespace-test"
 		zone := getAvailabilityZone(oc)
 
