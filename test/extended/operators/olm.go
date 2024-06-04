@@ -185,7 +185,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		podMap := make(map[string]string)
 		podSlice := getProjectPods(oc, "openshift-marketplace")
 		for _, pod := range podSlice {
-			podMap[pod] = "openshift-marketplace"
+			// remove duplicates
+			if _, ok := podMap[pod]; !ok {
+				podMap[pod] = "openshift-marketplace"
+			}
 		}
 		podSlice1 := getProjectPods(oc, "openshift-operator-lifecycle-manager")
 		for _, pod := range podSlice1 {
@@ -193,7 +196,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			if strings.Contains(pod, "collect-profiles") {
 				continue
 			}
-			podMap[pod] = "openshift-operator-lifecycle-manager"
+			if _, ok := podMap[pod]; !ok {
+				podMap[pod] = "openshift-operator-lifecycle-manager"
+			}
 		}
 		for pod, project := range podMap {
 			podImageMap := GetPodImageAndPolicy(oc, pod, project)
