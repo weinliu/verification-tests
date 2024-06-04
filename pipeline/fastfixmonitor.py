@@ -375,6 +375,8 @@ if __name__ == "__main__":
     args=parser.parse_args()
 
     bc = BugzillaClient(args)
+    exit(0)
+    # because bugzilla is not used for OCP and api key of openshift-qe-notifier@bot.bugzilla.redhat.com expires
 
     if args.action == "id":
         print(bc.checkBug(args.bugid))
