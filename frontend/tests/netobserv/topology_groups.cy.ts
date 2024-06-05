@@ -97,8 +97,8 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
         })
         topologyPage.isViewRendered()
         // verify number of edges and nodes.
-        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 19)
-        cy.get('#drawer ' + topologySelectors.node).should('have.length', 16)
+        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 17)
+        cy.get('#drawer ' + topologySelectors.node).should('have.length', 15)
     })
 
     it("(OCP-53591, memodi) should verify resource scope", function () {
@@ -110,8 +110,8 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
         })
         topologyPage.isViewRendered()
         // verify number of edges and nodes.
-        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 46)
-        cy.get('#drawer ' + topologySelectors.node).should('have.length', 28)
+        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 48)
+        cy.get('#drawer ' + topologySelectors.node).should('have.length', 29)
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify group Nodes", function () {
@@ -129,7 +129,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bnamespaces'), { fixture: 'netobserv/flow_metrics_ghostsNS.json' })
         topologyPage.selectScopeGroup("resource", "hosts+namespaces")
         topologyPage.isViewRendered()
-        cy.get(topologySelectors.nGroups).should('have.length', 6)
+        cy.get(topologySelectors.nGroups).should('have.length', 10)
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify group Nodes+Owners", function () {
@@ -148,7 +148,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
     it("(OCP-53591, memodi, Network_Observability) should verify group NS+Owners", function () {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces%2Bowners'), { fixture: 'netobserv/flow_metrics_gNSOwners.json' })
         topologyPage.selectScopeGroup("resource", "namespaces+owners")
-        cy.get(topologySelectors.nGroups).should('have.length', 20)
+        cy.get(topologySelectors.nGroups).should('have.length', 18)
     })
 
     afterEach("test", function () {

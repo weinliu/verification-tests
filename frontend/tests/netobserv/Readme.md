@@ -18,3 +18,8 @@ To help with memory utilization when cypress tests are run, follow below guideli
 - [netflow_large_downloads.cy.ts](netflow_large_downloads.cy.ts) can be a flaky test because the download may not be fully completed before checking leading to incorrect counters
 - [workloads.cy.ts](workloads.cy.ts) can be a flaky test because the page may take a long time to load due to long loki queries.
 - [flowRTT.cy.ts](flowRTT.cy.ts) `Verify flowRTT panels` can be flaky because deffault flowRTT panels may not be rendered the first time overview page is visited by the tests
+
+## Topology tests API data
+- When topology tests fail with UI error `undefined` for topology view and if tests uses an API fixture data, it may be a sign the API data may need an update.
+- All API data are generated with Query Options `datasource=loki` and filter `Source Namespace="netobserv"` and `bnf=false`
+- Before updating the correctness conditions make sure it's not a actual bug in the code and the new views are actually correct.
