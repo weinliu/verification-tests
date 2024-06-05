@@ -16,6 +16,37 @@ class TestResult:
                 "DR_Testing","CFE","User_Interface_Cypress","Insights","Sample", "Cluster_Management_Service"
             ]
 
+    frameworkLabels = [
+        "DisconnectedOnly-",
+        "ConnectedOnly-",
+        "OSD_NONCCS-",
+        "OSD_CCS-",
+        "ARO-",
+        "ROSA-",
+        "HyperShiftMGMT-",
+        "NonHyperShiftHOST-",
+        "MicroShiftOnly-",
+        "MicroShiftBoth-",
+        "StagerunOnly-",
+        "StagerunBoth-",
+        "ProdrunOnly-",
+        "ProdrunBoth-",
+        "CPaasrunOnly-",
+        "CPaasrunBoth-",
+        "Smokerun-",
+        "VMonly-",
+        "Longduration-",
+        "NonPreRelease-",
+        "PreChkUpgrade-",
+        "PstChkUpgrade-",
+        "DEPRECATED-",
+        "Critical-",
+        "High-",
+        "Medium-",
+        "Low-",
+        "LEVEL0-"
+    ]
+
     coSubteamMap = {
             "authentication": "Authentication",
             "baremetal": "INSTALLER",
@@ -132,6 +163,9 @@ class TestResult:
                 casetitle = name.split(caseids[-1])[1]
                 if "[Suite:openshift/" in casetitle:
                     casetitle = casetitle.split("[Suite:openshift/")[0]
+
+                casetitle = self.combineTilteAndDescribe(casetitle, authorname, name, caseids)
+
                 for i in caseids:
                     id = "OCP-"+i[:-1]
                     if id in testsummary:
@@ -177,6 +211,9 @@ class TestResult:
                 casetitle = name.split(caseids[-1])[1].replace("'","")
                 if "[Suite:openshift/" in casetitle:
                     casetitle = casetitle.split("[Suite:openshift/")[0]
+
+                casetitle = self.combineTilteAndDescribe(casetitle, authorname, name, caseids)
+
                 if len(caseids) == 1:
                     case.setAttribute("name", "OCP-"+caseids[0][:-1]+":"+authorname+":" + scenario + ":" +casetitle)
                 else:
@@ -296,6 +333,17 @@ class TestResult:
                 writer.close()
 
 
+    def combineTilteAndDescribe(self, casetitle, author, name, caseids):
+        tmpTitle = casetitle
+        if author == "unknown":
+            tmpTitle = "NOAUTHOR please correct case " + tmpTitle
+        else:
+            casepre = name.replace("'","").split(caseids[-1])[0].split("Author:")[0]
+            for label in self.frameworkLabels:
+                casepre = casepre.replace(label, "")
+            tmpTitle = casepre + tmpTitle
+        return tmpTitle
+
     def getNames(self, name, subteam):
         names = []
         caseids = re.findall(r'\d{5,}-', name)
@@ -312,6 +360,9 @@ class TestResult:
             casetitle = name.split(caseids[-1])[1].replace("'","")
             if "[Suite:openshift/" in casetitle:
                 casetitle = casetitle.split("[Suite:openshift/")[0]
+
+            casetitle = self.combineTilteAndDescribe(casetitle, authorname, name, caseids)
+
             for i in caseids:
                 names.append("OCP-"+i[:-1]+":"+authorname+":" + subteam + ":"+casetitle)
         return names
