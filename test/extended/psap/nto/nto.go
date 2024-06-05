@@ -2,6 +2,7 @@ package nto
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -650,7 +651,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
 		exutil.By("Verified the cpu allow list in cgroup black list for tuned ...")
-		o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "tuned", nodeCPUCoresInt)).To(o.Equal(true))
+		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		versionReg := regexp.MustCompile(`4.12|4.13|4.14|4.15`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if versionReg.MatchString(clusterVersion) {
+			o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "openshift-tuned", nodeCPUCoresInt)).To(o.Equal(true))
+		} else {
+			o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "tuned", nodeCPUCoresInt)).To(o.Equal(true))
+		}
 
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
 		exutil.By("Verified the cpu allow list in cgroup black list for chronyd ...")
@@ -1304,7 +1312,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=kernel.pid_max", "SYSCTLVALUE1=1048575", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|active and recommended profile \(ips-host\) match`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -1346,7 +1354,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=868686", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|active and recommended profile \(ips-host\) match`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -2813,7 +2821,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(AssertTunedAppliedToNode(oc, tunedNodeName, "cpus=")).To(o.Equal(false))
 	})
 
-	g.It("ROSA--NonHyperShiftHOST-Author:liqcui-Medium-63223-NTO support tuning sysctl and kernel bools that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
+	g.It("ROSA-Author:liqcui-Medium-63223-NTO support tuning sysctl and kernel bools that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
 		//Only execute on ROSA hosted cluster
 		isROSA := isROSAHostedCluster(oc)
 		if !isROSA {
@@ -2933,6 +2941,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		if !isSNO {
 			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 		} else {
 			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())

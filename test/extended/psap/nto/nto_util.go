@@ -1084,23 +1084,29 @@ func getWorkerMachinesetName(oc *exutil.CLI, machineseetSN int) string {
 	return machinesetName
 }
 
-func choseOneWorkerNodeNotByMachineset(oc *exutil.CLI, choseBy int) {
+func choseOneWorkerNodeNotByMachineset(oc *exutil.CLI, choseBy int) string {
 	//0 means the first worker node, 1 means the last worker node
+	var tunedNodeName string
+	var err error
 	if choseBy == 0 {
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+		e2e.Logf("the tunedNodeName that we get inside choseOneWorkerNodeNotByMachineset when choseBy 0 is %v ", tunedNodeName)
 		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else if choseBy == 1 {
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
+		tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
+		e2e.Logf("the tunedNodeName that we get inside choseOneWorkerNodeNotByMachineset when choseBy 1 is %v ", tunedNodeName)
 		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
 		e2e.Logf("Invalid parameter for choseBy is %v ", choseBy)
 	}
+	return tunedNodeName
 }
 
-func choseOneWorkerNodeToRunCase(oc *exutil.CLI, choseBy int) (tunedNodeName string) {
+func choseOneWorkerNodeToRunCase(oc *exutil.CLI, choseBy int) string {
 	//Prior to choose worker nodes with machineset
+	var tunedNodeName string
 	if exutil.IsMachineSetExist(oc) {
 		machinesetName := getWorkerMachinesetName(oc, choseBy)
 		e2e.Logf("machinesetName is %v ", machinesetName)
@@ -1109,10 +1115,11 @@ func choseOneWorkerNodeToRunCase(oc *exutil.CLI, choseBy int) (tunedNodeName str
 			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
 			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 		} else {
-			choseOneWorkerNodeNotByMachineset(oc, choseBy)
+			tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, choseBy)
 		}
 	} else {
-		choseOneWorkerNodeNotByMachineset(oc, choseBy)
+		tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, choseBy)
+		e2e.Logf("the tunedNodeName that we get inside choseOneWorkerNodeToRunCase when choseBy %v is %v ", choseBy, tunedNodeName)
 	}
 	return tunedNodeName
 }
