@@ -1853,7 +1853,9 @@ func describeCheckEgressIPByKind(oc *exutil.CLI, kind string, kindName string) s
 
 func findUnUsedIPsOnNodeOrFail(oc *exutil.CLI, nodeName, cidr string, expectedNum int) []string {
 	freeIPs := findUnUsedIPsOnNode(oc, nodeName, cidr, expectedNum)
-	o.Expect(len(freeIPs) == expectedNum).Should(o.BeTrue())
+	if len(freeIPs) != expectedNum {
+		g.Skip("Did not get enough free IPs for the test, skip the test.")
+	}
 	return freeIPs
 }
 
