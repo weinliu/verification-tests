@@ -193,7 +193,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-huliu-High-72031-[Upgrade] Instances with custom DHCP option set should not block upgrade - AWs [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-Author:huliu-High-72031-[Upgrade] Instances with custom DHCP option set should not block upgrade - AWs [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		infrastructureName := clusterinfra.GetInfrastructureName(oc)
