@@ -359,6 +359,56 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		checkFixedAlert(oc, coMcp, expectedAlertName)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73841-KubeletHealthState alert [Disruptive]", func() {
+		var (
+			node                               = mcp.GetSortedNodesOrFail()[0]
+			fixed                              = false
+			expectedAlertName                  = "KubeletHealthState"
+			expectedAlertSeverity              = "warning"
+			expectedAlertAnnotationDescription = "Kubelet health failure threshold reached"
+			expectedAlertAnnotationSummary     = "This keeps track of Kubelet health failures, and tallys them. The warning is triggered if 2 or more failures occur."
+		)
+
+		exutil.By("Break kubelet")
+		// We stop the kubelet service to break the node and after 5 minutes we start it again to fix the node
+		go func() {
+			defer g.GinkgoRecover()
+			_, err := node.DebugNodeWithChroot("sh", "-c", "systemctl stop kubelet.service; sleep 300; systemctl start kubelet.service")
+			o.Expect(err).NotTo(o.HaveOccurred(),
+				"Error stopping and restarting kubelet in %s", node)
+			logger.Infof("Kubelet service has been restarted again")
+			fixed = true
+		}()
+		logger.Infof("OK!\n")
+
+		expectedAlertLabels := expectedAlertValues{
+			"severity": o.Equal(expectedAlertSeverity),
+		}
+
+		expectedAlertAnnotations := expectedAlertValues{
+			"description": o.MatchRegexp(expectedAlertAnnotationDescription),
+			"summary":     o.Equal(expectedAlertAnnotationSummary),
+		}
+
+		params := checkFiredAlertParams{
+			expectedAlertName:        expectedAlertName,
+			expectedAlertLabels:      expectedAlertLabels,
+			expectedAlertAnnotations: expectedAlertAnnotations,
+			pendingDuration:          0,
+			stillPresentDuration:     0, // We skip this validation to make the test faster
+		}
+		checkFiredAlert(oc, nil, params)
+
+		exutil.By("Wait for the kubelet service to be restarted")
+		o.Eventually(func() bool { return fixed }, "5m", "20s").Should(o.BeTrue(), "Kubelet service was not restarted")
+		o.Eventually(&node).Should(HaveConditionField("Ready", "status", TrueString), "Node %s didn't become ready after kubelet was restarted", node)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the alert is not triggered anymore")
+		checkFixedAlert(oc, mcp, expectedAlertName)
+		logger.Infof("OK!\n")
+	})
 })
 
 type expectedAlertValues map[string]types.GomegaMatcher
