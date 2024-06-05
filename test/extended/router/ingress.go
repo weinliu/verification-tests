@@ -119,19 +119,19 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		getRoutes(oc, project1)
 
 		exutil.By("check the domain name is present in 'foo-unsecure1' route details")
-		output := fetchJSONPathValue(oc, project1, "route/foo-unsecure1", ".spec")
+		output := getByJsonPath(oc, project1, "route/foo-unsecure1", "{.spec}")
 		o.Expect(output).Should(o.ContainSubstring(`"subdomain":"foo"`))
 
 		exutil.By("check the domain name is not present in 'foo-unsecure2' route details")
-		output = fetchJSONPathValue(oc, project1, "route/foo-unsecure2", ".spec")
+		output = getByJsonPath(oc, project1, "route/foo-unsecure2", "{.spec}")
 		o.Expect(output).NotTo(o.ContainSubstring("subdomain"))
 
 		exutil.By("check the domain name is present in 'foo-unsecure3' route details")
-		output = fetchJSONPathValue(oc, project1, "route/foo-unsecure3", ".spec")
+		output = getByJsonPath(oc, project1, "route/foo-unsecure3", "{.spec}")
 		o.Expect(output).Should(o.ContainSubstring(`"subdomain":"foo"`))
 
 		exutil.By("check the domain name is not present in 'foo-unsecure4' route details")
-		output = fetchJSONPathValue(oc, project1, "route/foo-unsecure4", ".spec")
+		output = getByJsonPath(oc, project1, "route/foo-unsecure4", "{.spec}")
 		o.Expect(output).NotTo(o.ContainSubstring("subdomain"))
 
 		// curling through default controller will not work for proxy cluster.
@@ -196,8 +196,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		getRoutes(oc, project2)
 
 		exutil.By("check whether required host is present in 'foobar-unsecure' route details")
-		waitForOutput(oc, project2, "route/foobar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"foobar.apps.%s"`, baseDomain))
-		waitForOutput(oc, project2, "route/foobar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"foobar.ocp51429.%s"`, baseDomain))
+		waitForOutput(oc, project2, "route/foobar-unsecure", "{.status.ingress}", fmt.Sprintf(`"host":"foobar.apps.%s"`, baseDomain))
+		waitForOutput(oc, project2, "route/foobar-unsecure", "{.status.ingress}", fmt.Sprintf(`"host":"foobar.ocp51429.%s"`, baseDomain))
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config in default controller")
 		searchOutput1 := pollReadPodData(oc, "openshift-ingress", defaultContPod, "cat haproxy.config", "foobar-unsecure")
@@ -279,8 +279,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		getRoutes(oc, project3)
 
 		exutil.By("check whether required host is present in alpha ingress controller domain")
-		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.apps.%s"`, baseDomain))
-		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.alpha-alpha-ocp51437.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", "{.status.ingress}", fmt.Sprintf(`"host":"bar.apps.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", "{.status.ingress}", fmt.Sprintf(`"host":"bar.alpha-alpha-ocp51437.%s"`, baseDomain))
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config of alpha controller")
 		searchOutput1 := pollReadPodData(oc, "openshift-ingress", custContPod1, "cat haproxy.config", "bar-unsecure")
@@ -303,8 +303,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check whether required host is present in beta ingress controller domain")
-		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.apps.%s"`, baseDomain))
-		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.beta-beta-ocp51437.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", "{.status.ingress}", fmt.Sprintf(`"host":"bar.apps.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", "{.status.ingress}", fmt.Sprintf(`"host":"bar.beta-beta-ocp51437.%s"`, baseDomain))
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config of beta controller")
 		searchOutput2 := pollReadPodData(oc, "openshift-ingress", custContPod2, "cat haproxy.config", "bar-unsecure")
@@ -336,8 +336,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		}
 
 		exutil.By("check the created time of svc router-default")
-		jsonPath := ".metadata.creationTimestamp"
-		svcCreatedTime1 := fetchJSONPathValue(oc, namespace, svcResource, jsonPath)
+		jsonPath := "{.metadata.creationTimestamp}"
+		svcCreatedTime1 := getByJsonPath(oc, namespace, svcResource, jsonPath)
 		o.Expect(svcCreatedTime1).NotTo(o.BeEmpty())
 
 		exutil.By("try to delete the svc router-default, should no errors")
@@ -346,12 +346,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("wait for new svc router-default is created")
-		jsonPath = ".metadata.name"
+		jsonPath = "{.metadata.name}"
 		waitForOutput(oc, namespace, svcResource, jsonPath, "router-default")
 
 		exutil.By("check the created time of the new svc router-default")
-		jsonPath = ".metadata.creationTimestamp"
-		svcCreatedTime2 := fetchJSONPathValue(oc, namespace, svcResource, jsonPath)
+		jsonPath = "{.metadata.creationTimestamp}"
+		svcCreatedTime2 := getByJsonPath(oc, namespace, svcResource, jsonPath)
 		o.Expect(svcCreatedTime2).NotTo(o.BeEmpty())
 		o.Expect(svcCreatedTime1).NotTo(o.Equal(svcCreatedTime2))
 	})
@@ -382,14 +382,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("try to create an external load balancer service and an internal load balancer service")
 		operateResourceFromFile(oc, "create", project1, lbServices)
-		waitForOutput(oc, project1, "service/"+externalSvc, ".metadata.name", externalSvc)
-		waitForOutput(oc, project1, "service/"+internalSvc, ".metadata.name", internalSvc)
+		waitForOutput(oc, project1, "service/"+externalSvc, "{.metadata.name}", externalSvc)
+		waitForOutput(oc, project1, "service/"+internalSvc, "{.metadata.name}", internalSvc)
 
 		exutil.By("check if the lb services have obtained the EXTERNAL-IPs")
 		regExp := "([0-9]+.[0-9]+.[0-9]+.[0-9]+)"
-		searchOutput1 := waitForRegexpOutput(oc, project1, "service/"+externalSvc, ".status.loadBalancer.ingress..ip", regExp)
+		searchOutput1 := waitForRegexpOutput(oc, project1, "service/"+externalSvc, "{.status.loadBalancer.ingress..ip}", regExp)
 		o.Expect(searchOutput1).NotTo(o.ContainSubstring("NotMatch"))
-		searchOutput2 := waitForRegexpOutput(oc, project1, "service/"+internalSvc, ".status.loadBalancer.ingress..ip", regExp)
+		searchOutput2 := waitForRegexpOutput(oc, project1, "service/"+internalSvc, "{.status.loadBalancer.ingress..ip}", regExp)
 		o.Expect(searchOutput2).NotTo(o.ContainSubstring("NotMatch"))
 	})
 
@@ -409,7 +409,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		addRoute := fmt.Sprintf("[{\"op\":\"add\", \"path\":\"/spec/componentRoutes\", \"value\":[{\"hostname\": \"1digit9.apps.%s\", \"name\": \"downloads\", \"namespace\": \"openshift-console\"}]}]}]", getBaseDomain(oc))
 		defer patchGlobalResourceAsAdmin(oc, resourceName, removeRoute)
 		patchGlobalResourceAsAdmin(oc, resourceName, addRoute)
-		waitForOutput(oc, "openshift-console", "route", ".items..metadata.name", "downloads-custom")
+		waitForOutput(oc, "openshift-console", "route", "{.items..metadata.name}", "downloads-custom")
 
 		exutil.By("Check the router pod and ensure the routes are loaded in haproxy.config")
 		podname := getNewRouterPod(oc, "default")
@@ -418,7 +418,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("Confirm from the component Route, the RFC complaint hostname")
 		cmd := fmt.Sprintf(`1digit9.apps.%s`, getBaseDomain(oc))
-		waitForOutput(oc, oc.Namespace(), "ingress.config.openshift.io/cluster", ".spec.componentRoutes[0].hostname", cmd)
+		waitForOutput(oc, oc.Namespace(), "ingress.config.openshift.io/cluster", "{.spec.componentRoutes[0].hostname}", cmd)
 	})
 
 	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-73619-Checking whether the ingress operator is enabled as optional component", func() {

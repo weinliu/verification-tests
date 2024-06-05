@@ -69,13 +69,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace1)
-		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", srvName)
+		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", srvName)
 
 		exutil.By("7. Create a edge route with the same hostname, but with different path " + path2 + " in the second ns")
 		err = oc.AsAdmin().Run("create").Args("route", "edge", "route-edge", "--service="+srvName, "--hostname="+routehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace2)
-		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", "route-edge")
+		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", "route-edge")
 
 		exutil.By("8 Check the custom router pod and ensure " + e2eTestNamespace1 + " http route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace1)
@@ -137,20 +137,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		err = oc.AsAdmin().Run("create").Args("route", "reencrypt", "route-reen", "--service="+srvName, "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace1)
-		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", "route-reen")
+		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", "route-reen")
 
 		exutil.By("7. Create a http route with the same hostname, but with different path " + path2 + " in the second ns")
 		err = oc.AsAdmin().Run("expose").Args("service", srvName, "--hostname="+routehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace2)
-		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", srvName)
+		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", srvName)
 
 		exutil.By("8 Check the custom router pod and ensure " + e2eTestNamespace1 + " route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace1)
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace1 + ":route-reen"))
 
 		exutil.By("9. Confirm the route in the second ns is shown as HostAlreadyClaimed")
-		waitForOutput(oc, e2eTestNamespace2, "route", ".items[*].status.ingress[?(@.routerName==\"ocp27595\")].conditions[*].reason", "HostAlreadyClaimed")
+		waitForOutput(oc, e2eTestNamespace2, "route", `{.items[*].status.ingress[?(@.routerName=="ocp27595")].conditions[*].reason}`, "HostAlreadyClaimed")
 	})
 
 	// Test case creater: hongli@redhat.com
@@ -306,7 +306,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		getRoutes(oc, project1)
 
 		exutil.By("5. Confirm the route status is 'RouteNotAdmitted' and confirm the route is not accessible")
-		getNamespaceRouteDetails(oc, project1, "service-unsecure", ".status.ingress[?(@.routerName==\"wildcard\")].conditions[*].reason", "RouteNotAdmitted", true)
+		getRouteDetails(oc, project1, "service-unsecure", `{.status.ingress[?(@.routerName=="wildcard")].conditions[*].reason}`, "RouteNotAdmitted", true)
 		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
 		iplist := getPodIP(oc, "openshift-ingress", custContPod)
 		curlCmd := fmt.Sprintf("curl --resolve %s:80:%s http://%s -I -k --connect-timeout 10", routehost, iplist[0], routehost)

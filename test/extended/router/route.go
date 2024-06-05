@@ -15,7 +15,7 @@ import (
 var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("route-whitelist", exutil.KubeConfigPath())
+	var oc = exutil.NewCLI("routes", exutil.KubeConfigPath())
 
 	// author: aiyengar@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-Medium-42230-route can be configured to whitelist more than 61 ips/CIDRs", func() {
@@ -164,7 +164,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		)
 
 		exutil.By("check the intial canary route status")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", false)
 
 		exutil.By("shard the default ingress controller")
 		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
@@ -175,12 +175,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+1))
 
 		exutil.By("check whether canary route status is cleared")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", true)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", true)
 
 		exutil.By("patch the controller back to default check the canary route status")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
 		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+2))
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", false)
 
 		exutil.By("Create a shard ingresscontroller")
 		baseDomain := getBaseDomain(oc)
@@ -193,22 +193,22 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("patch the shard controller and check the canary route status")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"node-role.kubernetes.io/worker\":\"\"}}}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"ocp53696\")].conditions[*].status", "True", false)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", false)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="ocp53696")].conditions[*].status}`, "True", false)
 
 		exutil.By("delete the shard and check the status")
 		custContPod := getNewRouterPod(oc, ingctrl.name)
 		ingctrl.delete(oc)
 		err3 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+custContPod)
 		exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+custContPod))
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"ocp53696\")].conditions[*].status", "True", true)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", false)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="ocp53696")].conditions[*].status}`, "True", true)
 	})
 
 	// bugzilla: 2021446
 	g.It("Author:mjoseph-High-55895-When canary route is not available, Ingress should be in degarded state	[Disruptive]", func() {
 		exutil.By("Check the intial canary route status")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", false)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", false)
 
 		exutil.By("Check the reachability of the canary route")
 		baseDomain := getBaseDomain(oc)
@@ -230,13 +230,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+1))
 
 		exutil.By("Check whether the canary route status cleared and confirm the route is not accessible")
-		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[?(@.routerName==\"default\")].conditions[*].status", "True", true)
+		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", true)
 		cmdOnPod = []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
 		adminRepeatCmd(oc, cmdOnPod, "503", 50)
 
 		// Wait may be about 300 seconds
 		exutil.By("Check the ingress operator status to confirm it is in degraded state cause by canary route")
-		jpath := ".status.conditions[*].message"
+		jpath := "{.status.conditions[*].message}"
 		waitForOutput(oc, "default", "co/ingress", jpath, "The \"default\" ingress controller reports Degraded=True")
 		waitForOutput(oc, "default", "co/ingress", jpath, "Canary route is not admitted by the default ingress controller")
 	})
@@ -247,7 +247,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-High-56240-Canary daemonset can schedule pods to both worker and infra nodes [Disruptive]", func() {
 		var (
 			infrastructureName = clusterinfra.GetInfrastructureName(oc)
-			machinSetName      = infrastructureName + "-56240"
+			machineSetName     = infrastructureName + "-56240"
 		)
 
 		exutil.By("Check the intial machines and canary pod details")
@@ -256,27 +256,27 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("Create a new machineset")
 		clusterinfra.SkipConditionally(oc)
-		ms := clusterinfra.MachineSetDescription{Name: machinSetName, Replicas: 1}
+		ms := clusterinfra.MachineSetDescription{Name: machineSetName, Replicas: 1}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		exutil.By("Update machineset to schedule infra nodes")
-		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", machinSetName, "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"taints\":null}}}}", "--type=merge").Output()
-		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
-		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", machinSetName, "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"metadata\":{\"labels\":{\"ingress\": \"true\", \"node-role.kubernetes.io/infra\": \"\"}}}}}}", "--type=merge").Output()
-		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
-		updatedMachineName := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset="+machinSetName)
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", machineSetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"taints":null}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/" + machineSetName + " patched"))
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", machineSetName, "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"metadata":{"labels":{"ingress": "true", "node-role.kubernetes.io/infra": ""}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/" + machineSetName + " patched"))
+		updatedMachineName := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset="+machineSetName)
 
 		exutil.By("Reschedule the running machineset with infra details")
 		clusterinfra.DeleteMachine(oc, updatedMachineName[0])
-		updatedMachineName1 := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset="+machinSetName)
+		updatedMachineName1 := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset="+machineSetName)
 
 		exutil.By("Check the canary deamonset is scheduled on infra node which is newly created")
 		// confirm the new machineset is already created
 		updatedMachineSetName := clusterinfra.ListWorkerMachineSetNames(oc)
-		checkGivenStringPresentOrNot(true, updatedMachineSetName, machinSetName)
+		checkGivenStringPresentOrNot(true, updatedMachineSetName, machineSetName)
 		// confirm infra node presence among the nodes
-		infraNode := searchStringUsingLabel(oc, "node", "node-role.kubernetes.io/infra", ".items[*].metadata.name")
+		infraNode := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/infra", "{.items[*].metadata.name}")
 		// confirm a canary pod got scheduled on to the infra node
 		searchInDescribeResource(oc, "node", infraNode, "canary")
 
@@ -286,7 +286,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(annotations).To(o.ContainSubstring(`openshift.io/node-selector":""`))
 
 		exutil.By("Confirming the canary daemonset has the default tolerations included for infra role")
-		tolerations := fetchJSONPathValue(oc, "openshift-ingress-canary", "daemonset/ingress-canary", ".spec.template.spec.tolerations")
+		tolerations := getByJsonPath(oc, "openshift-ingress-canary", "daemonset/ingress-canary", "{.spec.template.spec.tolerations}")
 		o.Expect(tolerations).To(o.ContainSubstring(`key":"node-role.kubernetes.io/infra`))
 
 		exutil.By("Tainting the infra nodes with 'NoSchedule' and confirm canary pods continues to remain up and functional on those nodes")

@@ -103,10 +103,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, patchScope)
 		// AWS needs user to delete the LoadBalancer service manually
 		if platformtype == "aws" {
-			waitForOutput(oc, "default", "co/ingress", ".status.conditions[?(@.type == \"Progressing\")].message", "To effectuate this change, you must delete the service")
+			waitForOutput(oc, "default", "co/ingress", `{.status.conditions[?(@.type == "Progressing")].message}`, "To effectuate this change, you must delete the service")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "service", "router-"+ingctrl.name).Execute()
 		}
-		waitForOutput(oc, "openshift-ingress-operator", "dnsrecords/"+dnsRecordName, ".metadata.generation", "2")
+		waitForOutput(oc, "openshift-ingress-operator", "dnsrecords/"+dnsRecordName, "{.metadata.generation}", "2")
 
 		exutil.By("Ensure the ingress LB is updated and the IP is not private")
 		externalLB, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "service", "router-"+ingctrl.name, "-o=jsonpath={.status.loadBalancer.ingress}").Output()

@@ -497,10 +497,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("Patch tuningOptions/maxConnections with null to the ingress-controller")
 		maxConnections := "null"
-		jpath := ".status.observedGeneration"
-		observedGen1 := fetchJSONPathValue(oc, "openshift-ingress", "deployment.apps/router-default", jpath)
+		jpath := "{.status.observedGeneration}"
+		observedGen1 := getByJsonPath(oc, "openshift-ingress", "deployment.apps/router-default", jpath)
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": "+maxConnections+"}}}")
-		observedGen2 := fetchJSONPathValue(oc, "openshift-ingress", "deployment.apps/router-default", jpath)
+		observedGen2 := getByJsonPath(oc, "openshift-ingress", "deployment.apps/router-default", jpath)
 		o.Expect(observedGen1).To(o.ContainSubstring(observedGen2))
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env in a route pod which shouldn't appear in it by default")

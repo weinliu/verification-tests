@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("Patch dns operator with worker as node selector in dns.operator default")
 		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
-		jsonPath := ".status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
+		jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
 		defer deleteDnsOperatorToRestore(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsWorkerNodeselector)
 		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
@@ -88,7 +88,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("Patch dns operator config with custom tolerations of dns pod, not to tolerate master node taints")
 		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
-		jsonPath := `.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status`
+		jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
 		defer deleteDnsOperatorToRestore(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterToleration)
 		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)

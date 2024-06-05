@@ -465,23 +465,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		srvPod := getPodName(oc, project1, "name=web-server-v4v6rc")[0]
 
 		exutil.By("check the services v4v6 addresses")
-		IPAddresses := fetchJSONPathValue(oc, project1, "service/"+unsecsvcName, ".spec.clusterIPs")
+		IPAddresses := getByJsonPath(oc, project1, "service/"+unsecsvcName, "{.spec.clusterIPs}")
 		o.Expect(IPAddresses).To(o.MatchRegexp(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`))
 		o.Expect(strings.Count(IPAddresses, ":") >= 2).To(o.BeTrue())
 
-		IPAddresses = fetchJSONPathValue(oc, project1, "service/"+secsvcName, ".spec.clusterIPs")
+		IPAddresses = getByJsonPath(oc, project1, "service/"+secsvcName, "{.spec.clusterIPs}")
 		o.Expect(IPAddresses).To(o.MatchRegexp(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`))
 		o.Expect(strings.Count(IPAddresses, ":") >= 2).To(o.BeTrue())
 
 		exutil.By("check the services names can be resolved to their v4v6 addresses")
-		IPAddress1 := fetchJSONPathValue(oc, project1, "service/"+unsecsvcName, ".spec.clusterIPs[0]")
-		IPAddress2 := fetchJSONPathValue(oc, project1, "service/"+unsecsvcName, ".spec.clusterIPs[1]")
+		IPAddress1 := getByJsonPath(oc, project1, "service/"+unsecsvcName, "{.spec.clusterIPs[0]}")
+		IPAddress2 := getByJsonPath(oc, project1, "service/"+unsecsvcName, "{.spec.clusterIPs[1]}")
 		cmdOnPod := []string{"-n", project1, srvPod, "--", "getent", "ahosts", unsecsvcName}
 		repeatCmd(oc, cmdOnPod, IPAddress1, 5)
 		repeatCmd(oc, cmdOnPod, IPAddress2, 5)
 
-		IPAddress1 = fetchJSONPathValue(oc, project1, "service/"+secsvcName, ".spec.clusterIPs[0]")
-		IPAddress2 = fetchJSONPathValue(oc, project1, "service/"+secsvcName, ".spec.clusterIPs[1]")
+		IPAddress1 = getByJsonPath(oc, project1, "service/"+secsvcName, "{.spec.clusterIPs[0]}")
+		IPAddress2 = getByJsonPath(oc, project1, "service/"+secsvcName, "{.spec.clusterIPs[1]}")
 		cmdOnPod = []string{"-n", project1, srvPod, "--", "getent", "ahosts", secsvcName}
 		repeatCmd(oc, cmdOnPod, IPAddress1, 5)
 		repeatCmd(oc, cmdOnPod, IPAddress2, 5)
@@ -498,8 +498,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(findAnnotation).To(o.ContainSubstring(`cluster-autoscaler.kubernetes.io/enable-ds-eviction":"true`))
 
 		// get the worker and master node name
-		masterNodes := searchStringUsingLabel(oc, "node", "node-role.kubernetes.io/master", ".items[*].metadata.name")
-		workerNodes := searchStringUsingLabel(oc, "node", "node-role.kubernetes.io/worker", ".items[*].metadata.name")
+		masterNodes := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/master", "{.items[*].metadata.name}")
+		workerNodes := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/worker", "{.items[*].metadata.name}")
 		masterNodeName := getRandomDNSPodName(strings.Split(masterNodes, " "))
 		workerNodeName := getRandomDNSPodName(strings.Split(workerNodes, " "))
 

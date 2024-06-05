@@ -194,7 +194,7 @@ func createResourceToNsFromTemplate(oc *exutil.CLI, ns string, parameters ...str
 func waitForCustomIngressControllerAvailable(oc *exutil.CLI, icname string) error {
 	e2e.Logf("check ingresscontroller if available")
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
-		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresscontroller", icname, "--namespace=openshift-ingress-operator", "-ojsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresscontroller", icname, "--namespace=openshift-ingress-operator", `-ojsonpath={.status.conditions[?(@.type=="Available")].status}`).Output()
 		e2e.Logf("the status of ingresscontroller is %v", status)
 		if err != nil || status == "" {
 			e2e.Logf("failed to get ingresscontroller %s: %v, retrying...", icname, err)
@@ -248,7 +248,7 @@ func ensureRouterDeployGenerationIs(oc *exutil.CLI, icName, expectGeneration str
 
 func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
-		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, `-ojsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}`).Output()
 		e2e.Logf("the Ready status of pod is %v", status)
 		if err != nil || status == "" {
 			e2e.Logf("failed to get pod status: %v, retrying...", err)
@@ -371,11 +371,11 @@ func setEnvVariable(oc *exutil.CLI, ns, resource, envstring string) {
 }
 
 // Generic function to collect resource values with jsonpath option
-func fetchJSONPathValue(oc *exutil.CLI, ns, resource, searchline string) string {
-	searchLine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, resource, "-o=jsonpath={"+searchline+"}").Output()
+func getByJsonPath(oc *exutil.CLI, ns, resource, jsonPath string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, resource, "-o=jsonpath="+jsonPath).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the searchline has result:%v", searchLine)
-	return searchLine
+	e2e.Logf("the output filtered by jsonpath is: %v", output)
+	return output
 }
 
 // getNodeNameByPod gets the pod located node's name
@@ -750,7 +750,7 @@ func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold int, totalWaitTime time.Duration) {
 	count := 0
 	printCount := 0
-	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
+	jsonPath := `-o=jsonpath={.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
 
 	e2e.Logf("waiting for CO %v back to normal status......", coName)
 	waitErr := wait.Poll(5*time.Second, totalWaitTime*time.Second, func() (bool, error) {
@@ -788,7 +788,7 @@ func ensureAllClusterOperatorsNormal(oc *exutil.CLI, waitTime time.Duration) {
 func checkAllClusterOperatorsStatus(oc *exutil.CLI) []string {
 	badOpList := []string{}
 	opList := getClusterOperators(oc)
-	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
+	jsonPath := `-o=jsonpath={.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
 	for _, operator := range opList {
 		searchLine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", operator, jsonPath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -819,7 +819,7 @@ func getAllLinuxNodes(oc *exutil.CLI) string {
 func forceOnlyOneDnsPodExist(oc *exutil.CLI) string {
 	ns := "openshift-dns"
 	dnsPodLabel := "dns.operator.openshift.io/daemonset-dns=default"
-	dnsNodeSelector := "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"ne-dns-testing\":\"true\"}}]"
+	dnsNodeSelector := `[{"op":"replace", "path":"/spec/nodePlacement/nodeSelector", "value":{"ne-dns-testing":"true"}}]`
 	// ensure no node with the label "ne-dns-testing=true"
 	oc.AsAdmin().WithoutNamespace().Run("label").Args("node", "-l", "ne-dns-testing=true", "ne-dns-testing-").Execute()
 	podList := getAllDNSPodsNames(oc)
@@ -870,7 +870,7 @@ func waitAllDNSPodsAppear(oc *exutil.CLI) {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the desired dns pod on node "+nodeName+"does not appear"))
 	}
 	for _, podName := range getAllDNSPodsNames(oc) {
-		waitForOutput(oc, "openshift-dns", "pod/"+podName, ".status.phase", "Running")
+		waitForOutput(oc, "openshift-dns", "pod/"+podName, "{.status.phase}", "Running")
 	}
 }
 
@@ -963,7 +963,7 @@ func waitDNSLogsAppear(oc *exutil.CLI, podList []string, searchStr string) strin
 
 func waitRouterLogsAppear(oc *exutil.CLI, routerpod, searchStr string) string {
 	result := ""
-	containerName := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, ".spec.containers[*].name")
+	containerName := getByJsonPath(oc, "openshift-ingress", "pod/"+routerpod, "{.spec.containers[*].name}")
 	logCmd := []string{routerpod, "-n", "openshift-ingress"}
 	if strings.Contains(containerName, "logs") {
 		logCmd = []string{routerpod, "-c", "logs", "-n", "openshift-ingress"}
@@ -1245,14 +1245,14 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 
 func patchAlboSubscriptionWithRoleArn(oc *exutil.CLI, ns string) {
 	e2e.Logf("patching the ALBO subcripton with Role ARN on STS cluster")
-	jsonPatch := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/config\",\"value\":{\"env\":[{\"name\":\"ROLEARN\",\"value\":%s}]}}]", os.Getenv("ALBO_ROLE_ARN"))
+	jsonPatch := fmt.Sprintf(`[{"op":"add","path":"/spec/config","value":{"env":[{"name":"ROLEARN","value":%s}]}}]`, os.Getenv("ALBO_ROLE_ARN"))
 	_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns, "sub/aws-load-balancer-operator", "-p", jsonPatch, "--type=json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func patchAlbControllerWithRoleArn(oc *exutil.CLI, ns string) {
 	e2e.Logf("patching the ALB Controller with Role ARN on STS cluster")
-	jsonPatch := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/credentialsRequestConfig\",\"value\":{\"stsIAMRoleARN\":%s}}]", os.Getenv("ALBC_ROLE_ARN"))
+	jsonPatch := fmt.Sprintf(`[{"op":"add","path":"/spec/credentialsRequestConfig","value":{"stsIAMRoleARN":%s}}]`, os.Getenv("ALBC_ROLE_ARN"))
 	_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns, "awsloadbalancercontroller/cluster", "-p", jsonPatch, "--type=json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
@@ -1457,11 +1457,11 @@ func unicastIPFailover(oc *exutil.CLI, ns, failoverName string) {
 }
 
 // this function is to obtain the route details based on namespaces
-func getNamespaceRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonSearchString, matchString string, noMatchIfPresent bool) {
+func getRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonPath, matchString string, noMatchIfPresent bool) {
 	e2e.Logf("polling for route details")
 	waitErr := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 		resourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "-n", namespace, resourceName,
-			"-ojsonpath={"+jsonSearchString+"}").Output()
+			"-ojsonpath="+jsonPath).Output()
 		if err != nil {
 			e2e.Logf("there is some execution error and it is  %v, retrying...", err)
 			return false, nil
@@ -1550,9 +1550,9 @@ func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, se
 }
 
 // this function check output of fetch command is polled
-func waitForOutput(oc *exutil.CLI, ns, resourceName, searchString, value string) {
+func waitForOutput(oc *exutil.CLI, ns, resourceName, jsonPath, value string) {
 	waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		sourceRange := fetchJSONPathValue(oc, ns, resourceName, searchString)
+		sourceRange := getByJsonPath(oc, ns, resourceName, jsonPath)
 		if strings.Contains(sourceRange, value) {
 			return true, nil
 		}
@@ -1562,10 +1562,10 @@ func waitForOutput(oc *exutil.CLI, ns, resourceName, searchString, value string)
 }
 
 // this function keep checking util the searching for the regular expression matches
-func waitForRegexpOutput(oc *exutil.CLI, ns, resourceName, searchString, regExpress string) string {
+func waitForRegexpOutput(oc *exutil.CLI, ns, resourceName, jsonPath, regExpress string) string {
 	result := "NotMatch"
 	wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		sourceRange := fetchJSONPathValue(oc, ns, resourceName, searchString)
+		sourceRange := getByJsonPath(oc, ns, resourceName, jsonPath)
 		searchRe := regexp.MustCompile(regExpress)
 		searchInfo := searchRe.FindStringSubmatch(sourceRange)
 		if len(searchInfo) > 0 {
@@ -1577,35 +1577,10 @@ func waitForRegexpOutput(oc *exutil.CLI, ns, resourceName, searchString, regExpr
 	return result
 }
 
-// this function check the polled output of config map
-func waitForConfigMapOutput(oc *exutil.CLI, ns, resourceName, searchString string) string {
-	var output string
-	var err error
-	waitErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, resourceName, "-ojsonpath={"+searchString+"}").Output()
-		if err != nil {
-			e2e.Logf("failed to get search string: %v, retrying...", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
-	return output
-}
-
-// this function search the polled output using label
-func searchStringUsingLabel(oc *exutil.CLI, resource, label, searchString string) string {
-	var output string
-	var err error
-	waitErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-l", label, "-ojsonpath={"+searchString+"}").Output()
-		if err != nil || output == "" {
-			e2e.Logf("failed to get output: %v, retrying...", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
+// this function get resource using label and filtered by jsonpath
+func getByLabelAndJsonPath(oc *exutil.CLI, resource, label, jsonPath string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-l", label, "-ojsonpath="+jsonPath).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	return output
 }
 
@@ -1668,8 +1643,8 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 
 // this function will check the status of dns record in ingress operator
 func checkDnsRecordStatusOfIngressOperator(oc *exutil.CLI, dnsRecordsName, statusToSearch, stringToCheck string) []string {
-	jsonPath := fmt.Sprintf(`.status.zones[*].conditions[*].%s`, statusToSearch)
-	status := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/"+dnsRecordsName, jsonPath)
+	jsonPath := fmt.Sprintf(`{.status.zones[*].conditions[*].%s}`, statusToSearch)
+	status := getByJsonPath(oc, "openshift-ingress-operator", "dnsrecords/"+dnsRecordsName, jsonPath)
 	statusList := strings.Split(status, " ")
 	for _, line := range statusList {
 		o.Expect(stringToCheck).To(o.ContainSubstring(line))
@@ -1680,7 +1655,7 @@ func checkDnsRecordStatusOfIngressOperator(oc *exutil.CLI, dnsRecordsName, statu
 // this function is to check whether the DNS Zone details are present in ingresss operator records
 func checkDnsRecordsInIngressOperator(oc *exutil.CLI, recordName, privateZoneId, publicZoneId string) {
 	// Collecting zone details from ingress operator
-	Zones := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/"+recordName, ".status.zones[*].dnsZone")
+	Zones := getByJsonPath(oc, "openshift-ingress-operator", "dnsrecords/"+recordName, "{.status.zones[*].dnsZone}")
 	// check the private and public zone detail are matching
 	o.Expect(Zones).To(o.ContainSubstring(privateZoneId))
 	if publicZoneId != "" {

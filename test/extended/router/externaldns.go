@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		o.Expect(ouputErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("sts:AssumeRole"))
 		// Getting the private zone id from dns config")
-		privateZoneId := fetchJSONPathValue(oc, "openshift-dns", "dns.config/cluster", ".spec.privateZone.id")
+		privateZoneId := getByJsonPath(oc, "openshift-dns", "dns.config/cluster", "{.spec.privateZone.id}")
 
 		exutil.By("2. Create External DNS Operator in the cluster")
 		createExternalDNSOperator(oc)

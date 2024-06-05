@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("check the annotation of nodeport service")
-		annotation := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-nodeport-ocp42276", ".metadata.annotations")
+		annotation := getByJsonPath(oc, "openshift-ingress", "svc/router-nodeport-ocp42276", "{.metadata.annotations}")
 		o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
 
 		// In IBM cloud and PowerVS the externalTrafficPolicy will be 'Cluster' for default LB service, so skipping the same
@@ -59,7 +59,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ingress", "service", "router-default", "-o=jsonpath={.spec.type}").Output()
 			// LB service is supported on public cloud platform like aws, gcp, azure and alibaba
 			if strings.Contains(output, "LoadBalancer") {
-				annotation = fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", ".metadata.annotations")
+				annotation = getByJsonPath(oc, "openshift-ingress", "svc/router-default", "{.metadata.annotations}")
 				o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
 			} else {
 				e2e.Logf("skip the default LB service checking part, since it is not supported on this cluster")
@@ -258,28 +258,28 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("patch custom ingress-controller1 with dnsManagementPolicy Unmanaged")
 		defer func() {
-			jsonpath := ".status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status"
-			patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"Managed\"}}}}")
+			jsonpath := `{.status.conditions[?(@.type=="DNSManaged")].status}{.status.conditions[?(@.type=="DNSReady")].status}`
+			patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, `{"spec":{"endpointPublishingStrategy":{"loadBalancer":{"dnsManagementPolicy":"Managed"}}}}`)
 			waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jsonpath, "TrueTrue")
-			jsonpath = ".spec.dnsManagementPolicy"
+			jsonpath = "{.spec.dnsManagementPolicy}"
 			waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jsonpath, "Managed")
 		}()
-		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"Unmanaged\"}}}}")
+		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, `{"spec":{"endpointPublishingStrategy":{"loadBalancer":{"dnsManagementPolicy":"Unmanaged"}}}}`)
 
 		exutil.By("check the dnsManagementPolicy value of ingress-controller1, which should be Unmanaged")
-		jpath := ".spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy"
+		jpath := "{.spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy}"
 		waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jpath, "Unmanaged")
 
 		exutil.By("check ingress-controller1's status")
-		jpath = ".status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status"
+		jpath = `{.status.conditions[?(@.type=="DNSManaged")].status}{.status.conditions[?(@.type=="DNSReady")].status}`
 		waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jpath, "FalseUnknown")
 
 		exutil.By("check the dnsManagementPolicy value of dnsrecord ocp54868cus1, which should be Unmanaged, too")
-		jpath = ".spec.dnsManagementPolicy"
+		jpath = "{.spec.dnsManagementPolicy}"
 		waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jpath, "Unmanaged")
 
 		exutil.By("check dnsrecord ocp54868cus1's status")
-		jpath = ".status.zones[0].conditions[0].status}{.status.zones[0].conditions[0].reason"
+		jpath = "{.status.zones[0].conditions[0].status}{.status.zones[0].conditions[0].reason}"
 		waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jpath, "UnknownUnmanagedDNS")
 
 		// there was a bug OCPBUGS-2247 in the below test step
@@ -384,7 +384,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring("ingresscontroller.operator.openshift.io/ocp55223 patched"))
 
 		exutil.By("Check the LB svc of the custom controller")
-		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `10.0.0.0/8`)
+		jsonPath := "{.spec.loadBalancerSourceRanges}"
+		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", jsonPath, `10.0.0.0/8`)
 
 		exutil.By("Patch the custom ingress-controller with more 'allowedSourceRanges' value")
 		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
@@ -393,9 +394,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring("ingresscontroller.operator.openshift.io/ocp55223 patched"))
 
 		exutil.By("Check the LB svc of the custom controller for additional values")
-		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `20.0.0.0/8`)
-		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `50.0.0.0/16`)
-		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `3dee:ef5::/12`)
+		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", jsonPath, `20.0.0.0/8`)
+		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", jsonPath, `50.0.0.0/16`)
+		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", jsonPath, `3dee:ef5::/12`)
 	})
 
 	// author: mjoseph@redhat.com
@@ -442,7 +443,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring("10.0.0.0/8"))
 
 		exutil.By("Check the annotation value in the allowedSourceRanges in the controller status")
-		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges", `10.0.0.0/8`)
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", "{.status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges}", `10.0.0.0/8`)
 
 		exutil.By("Patch the loadBalancerSourceRanges in the LB service")
 		patchResourceAsAdmin(oc, "openshift-ingress", "svc/router-ocp55341", "{\"spec\":{\"loadBalancerSourceRanges\":[\"30.0.0.0/16\"]}}")
@@ -451,10 +452,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		findAnnotation = getAnnotation(oc, "openshift-ingress", "svc", "router-ocp55341")
 		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/load-balancer-source-ranges"))
 		o.Expect(findAnnotation).To(o.ContainSubstring("10.0.0.0/8"))
-		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55341", ".spec.loadBalancerSourceRanges", `30.0.0.0/16`)
+		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55341", "{.spec.loadBalancerSourceRanges}", `30.0.0.0/16`)
 
 		exutil.By("Check the controller status and confirm the sourcerange value's precedence over the annotation")
-		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges", `30.0.0.0/16`)
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", "{.status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges}", `30.0.0.0/16`)
 	})
 
 	// author: mjoseph@redhat.com
@@ -543,8 +544,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		operateResourceFromFile(oc, "create", "openshift-ingress", scc)
 
 		exutil.By("check the allowPrivilegeEscalation in the router deployment, which should be true")
-		jsonPath := ".spec.template.spec.containers..securityContext.allowPrivilegeEscalation"
-		value := fetchJSONPathValue(oc, "openshift-ingress", "deployment/router-"+ingctrl.name, jsonPath)
+		jsonPath := "{.spec.template.spec.containers..securityContext.allowPrivilegeEscalation}"
+		value := getByJsonPath(oc, "openshift-ingress", "deployment/router-"+ingctrl.name, jsonPath)
 		o.Expect(value).To(o.ContainSubstring("true"))
 
 		exutil.By("get router pods and then delete one router pod")
@@ -596,12 +597,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags":"testqe"`))
 
 		exutil.By("Verify from the ingresscontroller status the operand is not upgradeable")
-		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].status", "False")
-		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", ".status.conditions[?(@.type==\"Upgradeable\")].reason", "OperandsNotUpgradeable")
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", `{.status.conditions[?(@.type=="Upgradeable")].status}`, "False")
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", `{.status.conditions[?(@.type=="Upgradeable")].reason}`, "OperandsNotUpgradeable")
 
 		exutil.By("Verify from the ingress operator status the controller is not upgradeable")
-		waitForOutput(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].status", "False")
-		waitForOutput(oc, "openshift-ingress", "co/ingress", ".status.conditions[?(@.type==\"Upgradeable\")].reason", "IngressControllersNotUpgradeable")
+		waitForOutput(oc, "openshift-ingress", "co/ingress", `{.status.conditions[?(@.type=="Upgradeable")].status}`, "False")
+		waitForOutput(oc, "openshift-ingress", "co/ingress", `{.status.conditions[?(@.type=="Upgradeable")].reason}`, "IngressControllersNotUpgradeable")
 	})
 
 	// author: shudili@redhat.com
@@ -644,10 +645,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-4", "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOutput(oc, project1, "route/unsrv-1", ".metadata.name", "unsrv-1")
-		waitForOutput(oc, project1, "route/unsrv-2", ".metadata.name", "unsrv-2")
-		waitForOutput(oc, project1, "route/unsrv-3", ".metadata.name", "unsrv-3")
-		waitForOutput(oc, project1, "route/unsrv-4", ".metadata.name", "unsrv-4")
+		waitForOutput(oc, project1, "route/unsrv-1", "{.metadata.name}", "unsrv-1")
+		waitForOutput(oc, project1, "route/unsrv-2", "{.metadata.name}", "unsrv-2")
+		waitForOutput(oc, project1, "route/unsrv-3", "{.metadata.name}", "unsrv-3")
+		waitForOutput(oc, project1, "route/unsrv-4", "{.metadata.name}", "unsrv-4")
 
 		exutil.By("Add labels to 3 routes")
 		err = oc.WithoutNamespace().Run("label").Args("route", "unsrv-1", "test=aaa", "-n", project1).Execute()
@@ -666,7 +667,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
 		exutil.By("Check if route unsrv-1 and unsrv-2 are admitted by the custom IC with In matchExpressions routeSelector, while route unsrv-3 and unsrv-4 not")
-		jsonPath := ".status.ingress[?(@.routerName==\"" + ingctrl.name + "\")].conditions[?(@.type==\"Admitted\")].status"
+		jsonPath := "{.status.ingress[?(@.routerName==\"" + ingctrl.name + "\")].conditions[?(@.type==\"Admitted\")].status}"
 		waitForOutput(oc, project1, "route/unsrv-1", jsonPath, "True")
 		waitForOutput(oc, project1, "route/unsrv-2", jsonPath, "True")
 		waitForOutput(oc, project1, "route/unsrv-3", jsonPath, "")
@@ -761,7 +762,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			nsSeqWt := indexWt + 1
 			err := waitForPodWithLabelReady(oc, nsWt, "name="+srvrcInfo)
 			exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time in project "+nsWt+"!")
-			waitForOutput(oc, nsWt, "route/shard-ns"+strconv.Itoa(nsSeqWt), ".metadata.name", "shard-ns"+strconv.Itoa(nsSeqWt))
+			waitForOutput(oc, nsWt, "route/shard-ns"+strconv.Itoa(nsSeqWt), "{.metadata.name}", "shard-ns"+strconv.Itoa(nsSeqWt))
 		}
 
 		exutil.By("Add labels to 3 projects")
@@ -781,7 +782,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
 		exutil.By("Check if route shard-ns1 and shard-ns2 are admitted by the custom IC with In matchExpressions namespaceSelector, while route shard-ns3 and shard-ns4 not")
-		jsonPath := ".status.ingress[?(@.routerName==\"" + ingctrl.name + "\")].conditions[?(@.type==\"Admitted\")].status"
+		jsonPath := "{.status.ingress[?(@.routerName==\"" + ingctrl.name + "\")].conditions[?(@.type==\"Admitted\")].status}"
 		waitForOutput(oc, project1, "route/shard-ns1", jsonPath, "True")
 		waitForOutput(oc, project2, "route/shard-ns2", jsonPath, "True")
 		waitForOutput(oc, project3, "route/shard-ns3", jsonPath, "")
@@ -920,10 +921,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"classicLoadBalancer\":{\"connectionIdleTimeout\":\"2m\"}}}}}}}")
 
 		exutil.By("Check the LB service and ensure the annotations are updated")
-		waitForOutput(oc, "openshift-ingress", "svc/router-"+ingctrl.name, ".metadata.annotations", `"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout":"120"`)
+		waitForOutput(oc, "openshift-ingress", "svc/router-"+ingctrl.name, "{.metadata.annotations}", `"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout":"120"`)
 
 		exutil.By("Check the connectionIdleTimeout value in the controller status")
-		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, ".status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout", "2m0s")
+		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, "{.status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout}", "2m0s")
 	})
 
 	g.It("Author:mjoseph-Medium-51256-cluster-ingress-operator does not accept negative value of AWS ELB idle Timeout option", func() {
@@ -956,7 +957,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout"))
 
 		exutil.By("Check the connectionIdleTimeout value is '0s' in the controller status")
-		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, ".status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout", "0s")
+		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, "{.status.endpointPublishingStrategy.loadBalancer.providerParameters.aws.classicLoadBalancer.connectionIdleTimeout}", "0s")
 	})
 
 	// OCPBUGS-853
@@ -1021,7 +1022,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("Patch defaultCertificate with custom secret to the IC")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"defaultCertificate\":{\"name\": \""+ingctrlCert+"\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		secret := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, ".spec.defaultCertificate.name")
+		secret := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, "{.spec.defaultCertificate.name}")
 		o.Expect(secret).To(o.ContainSubstring(ingctrlCert))
 
 		exutil.By("Check the router-certs in the openshift-config-managed namespace, the data is 1, which should not be increased")
@@ -1156,12 +1157,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(arn).To(o.ContainSubstring(privateZoneIAMRoleMatch[0]))
 
 		exutil.By("3. Check the default DNS management status")
-		dnsManagementPolicy := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/default-wildcard", ".spec.dnsManagementPolicy")
+		dnsManagementPolicy := getByJsonPath(oc, "openshift-ingress-operator", "dnsrecords/default-wildcard", "{.spec.dnsManagementPolicy}")
 		o.Expect("Managed").To(o.ContainSubstring(dnsManagementPolicy))
 
 		exutil.By("4. Collecting the public zone and private zone id from dns config")
-		privateZoneId := fetchJSONPathValue(oc, "openshift-dns", "dns.config/cluster", ".spec.privateZone.id")
-		publicZoneId := fetchJSONPathValue(oc, "openshift-dns", "dns.config/cluster", ".spec.publicZone.id")
+		privateZoneId := getByJsonPath(oc, "openshift-dns", "dns.config/cluster", "{.spec.privateZone.id}")
+		publicZoneId := getByJsonPath(oc, "openshift-dns", "dns.config/cluster", "{.spec.publicZone.id}")
 
 		exutil.By("5. Collecting zone details from default ingress controller and cross checking it wih dns config details")
 		checkDnsRecordsInIngressOperator(oc, "default-wildcard", privateZoneId, publicZoneId)
@@ -1184,9 +1185,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
 
 		exutil.By("8. Check the custom DNS management status")
-		dnsManagementPolicy1 := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/ocp64611external-wildcard", ".spec.dnsManagementPolicy")
+		dnsManagementPolicy1 := getByJsonPath(oc, "openshift-ingress-operator", "dnsrecords/ocp64611external-wildcard", "{.spec.dnsManagementPolicy}")
 		o.Expect("Managed").To(o.ContainSubstring(dnsManagementPolicy1))
-		dnsManagementPolicy2 := fetchJSONPathValue(oc, "openshift-ingress-operator", "dnsrecords/ocp64611clb-wildcard", ".spec.dnsManagementPolicy")
+		dnsManagementPolicy2 := getByJsonPath(oc, "openshift-ingress-operator", "dnsrecords/ocp64611clb-wildcard", "{.spec.dnsManagementPolicy}")
 		o.Expect("Managed").To(o.ContainSubstring(dnsManagementPolicy2))
 
 		exutil.By("9. Collecting zone details from custom ingress controller and cross checking it wih dns zone details")
@@ -1408,13 +1409,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		routehost := srvName + "-" + project1 + "." + ingctrl.domain
 		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOutput(oc, project1, "route", ".items[0].metadata.name", srvName)
+		waitForOutput(oc, project1, "route", "{.items[0].metadata.name}", srvName)
 
 		exutil.By("6. curl the route, and then check the rsyslogd pod's logs which should contain the new http request")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
-		jsonPath := ".subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port"
-		ep := fetchJSONPathValue(oc, project1, "endpoints/"+srvName, jsonPath)
+		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
+		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		output := ""
 		for i := 0; i < 6; i++ {
@@ -1458,7 +1459,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("2. Check if the a sidecar container with name 'logs' is deployed")
 		routerpod := getNewRouterPod(oc, ingctrl.name)
-		containerName := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, ".spec.containers[1].name")
+		containerName := getByJsonPath(oc, "openshift-ingress", "pod/"+routerpod, "{.spec.containers[1].name}")
 		o.Expect(containerName).To(o.ContainSubstring("logs"))
 
 		// check the function of logs to a sidecar container in the following steps by curl a route and check the router logs
@@ -1476,13 +1477,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		routehost := srvName + "-" + project1 + "." + ingctrl.domain
 		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOutput(oc, project1, "route", ".items[0].metadata.name", srvName)
+		waitForOutput(oc, project1, "route", "{.items[0].metadata.name}", srvName)
 
 		exutil.By("5. curl the route, and then check the router pod's logs which should contain the new http request")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
-		jsonPath := ".subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port"
-		ep := fetchJSONPathValue(oc, project1, "endpoints/"+srvName, jsonPath)
+		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
+		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		result := repeatCmd(oc, cmdOnPod, "200", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
@@ -1522,7 +1523,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
 		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOutput(oc, project1, "route/"+srvName, ".spec.host", routehost)
+		waitForOutput(oc, project1, "route/"+srvName, "{.spec.host}", routehost)
 
 		exutil.By("3. Label the namespace to 'namespace=router-test'")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", project1, "namespace=router-test").Execute()
@@ -1575,7 +1576,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
 		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOutput(oc, project1, "route/"+srvName, ".spec.host", routehost)
+		waitForOutput(oc, project1, "route/"+srvName, "{.spec.host}", routehost)
 
 		exutil.By("3. Label the route to 'route=router-test'")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("route", "service-unsecure", "route=router-test", "-n", project1).Execute()

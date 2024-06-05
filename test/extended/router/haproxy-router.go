@@ -119,18 +119,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("Check the configuration and router env for protocol TCP")
 		routerpod = getNewRouterPod(oc, ingctrl.name)
 		cmd := fmt.Sprintf("/usr/bin/env | grep %s", `ROUTER_USE_PROXY_PROTOCOL`)
-		jsonPath := ".spec.endpointPublishingStrategy.hostNetwork.protocol"
-		output := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jsonPath)
+		jsonPath := "{.spec.endpointPublishingStrategy.hostNetwork.protocol}"
+		output := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jsonPath)
 		o.Expect(output).To(o.ContainSubstring("TCP"))
 		err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ingctrl.namespace, routerpod, "--", "bash", "-c", cmd).Execute()
 		o.Expect(err).To(o.HaveOccurred())
 
 		exutil.By("Patch the hostNetwork ingresscontroller with protocol empty")
-		patchPath = "{\"spec\":{\"endpointPublishingStrategy\":{\"hostNetwork\":{\"protocol\": \"\"}}}}"
+		patchPath = `{"spec":{"endpointPublishingStrategy":{"hostNetwork":{"protocol": ""}}}}`
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
 
 		exutil.By("Check the configuration and router env for protocol empty")
-		output = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jsonPath)
+		output = getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jsonPath)
 		o.Expect(output).To(o.BeEmpty())
 		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ingctrl.namespace, routerpod, "--", "bash", "-c", cmd).Execute()
 		o.Expect(err).To(o.HaveOccurred())
@@ -357,8 +357,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("Patch ingresscontroller with negative values for the tuningOptions settings and check the ingress operator config post the change")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"-7s\",\"clientTimeout\": \"-33s\",\"serverFinTimeout\": \"-3s\",\"serverTimeout\": \"-27s\",\"tlsInspectDelay\": \"-11s\",\"tunnelTimeout\": \"-1h\"}}}")
-		output := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrl.name, ".spec.tuningOptions")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, `{"spec":{"tuningOptions" :{"clientFinTimeout": "-7s","clientTimeout": "-33s","serverFinTimeout": "-3s","serverTimeout": "-27s","tlsInspectDelay": "-11s","tunnelTimeout": "-1h"}}}`)
+		output := getByJsonPath(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrl.name, "{.spec.tuningOptions}")
 		o.Expect(output).To(o.ContainSubstring("{\"clientFinTimeout\":\"-7s\",\"clientTimeout\":\"-33s\",\"reloadInterval\":\"0s\",\"serverFinTimeout\":\"-3s\",\"serverTimeout\":\"-27s\",\"tlsInspectDelay\":\"-11s\",\"tunnelTimeout\":\"-1h\"}"))
 
 		exutil.By("Check the timeout option set in the haproxy pods post the changes applied")
@@ -715,7 +715,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		routehost := srvName + "-" + project1 + "." + ingctrl.domain
 		srvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Execute()
 		o.Expect(srvErr).NotTo(o.HaveOccurred())
-		waitForOutput(oc, project1, "route", ".items[0].metadata.name", srvName)
+		waitForOutput(oc, project1, "route", "{.items[0].metadata.name}", srvName)
 
 		exutil.By("curl a normal route from the client pod")
 		routestring := srvName + "-" + project1 + "." + ingctrl.name + "."
@@ -1284,7 +1284,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrlhp1.name, "1")
 
 		exutil.By("Patch the first custom IC with max replicas, so each node has a custom router pod ")
-		jpath := ".status.readyReplicas"
+		jpath := "{.status.readyReplicas}"
 		if workerNodeCount > 1 {
 			ingctrl1Resource := "ingresscontrollers/" + ingctrlhp1.name
 			patchResourceAsAdmin(oc, ingctrlhp1.namespace, ingctrl1Resource, "{\"spec\":{\"replicas\":"+strconv.Itoa(workerNodeCount)+"}}")
@@ -1298,7 +1298,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		err := waitForPodWithLabelAppear(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
 		exutil.AssertWaitPollNoErr(err, "router pod of the second custom IC does not appear  within allowed time!")
 		customICRouterPod := getPodName(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
-		checkPodMsg := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+customICRouterPod[0], ".status..message")
+		checkPodMsg := getByJsonPath(oc, "openshift-ingress", "pod/"+customICRouterPod[0], "{.status..message}")
 		o.Expect(checkPodMsg).To(o.ContainSubstring("node(s) didn't have free ports for the requested pod ports"))
 	})
 
@@ -1324,8 +1324,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("check the default value of .status.endpointPublishingStrategy.private.protocol, which should be TCP")
-		jpath := ".status.endpointPublishingStrategy.private.protocol"
-		protocol := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		jpath := "{.status.endpointPublishingStrategy.private.protocol}"
+		protocol := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring("TCP"))
 
 		exutil.By("patch the custom ingresscontroller with protocol proxy")
@@ -1334,8 +1334,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check the changed value of .endpointPublishingStrategy.private.protocol, which should be PROXY")
-		jpath = ".spec.endpointPublishingStrategy.private.protocol}{.status.endpointPublishingStrategy.private.protocol"
-		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		jpath = "{.spec.endpointPublishingStrategy.private.protocol}{.status.endpointPublishingStrategy.private.protocol}"
+		protocol = getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring("PROXYPROXY"))
 
 		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
@@ -1422,23 +1422,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("Check STATS_PORT env under a custom router pod, which should be 17936")
 		routerpod := getNewRouterPod(oc, ingctrlhp.name)
-		jsonPath = ".spec.containers[].env[?(@.name==\"STATS_PORT\")].value"
-		output := fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, jsonPath)
+		jsonPath = `{.spec.containers[].env[?(@.name=="STATS_PORT")].value}`
+		output := getByJsonPath(oc, "openshift-ingress", "pod/"+routerpod, jsonPath)
 		o.Expect(output).To(o.ContainSubstring("17936"))
 
 		exutil.By("Check http/https/metrics ports under a custom router pod, which should be 17080/17443/17936")
-		jsonPath = ".spec.containers[].ports[?(@.name==\"http\")].hostPort}-{.spec.containers[].ports[?(@.name==\"https\")].hostPort}-{.spec.containers[].ports[?(@.name==\"metrics\")].hostPort"
-		output = fetchJSONPathValue(oc, "openshift-ingress", "pod/"+routerpod, jsonPath)
+		jsonPath = `{.spec.containers[].ports[?(@.name=="http")].hostPort}-{.spec.containers[].ports[?(@.name=="https")].hostPort}-{.spec.containers[].ports[?(@.name=="metrics")].hostPort}`
+		output = getByJsonPath(oc, "openshift-ingress", "pod/"+routerpod, jsonPath)
 		o.Expect(output).To(o.ContainSubstring("17080-17443-17936"))
 
 		exutil.By("Check the custom router-internal service, make sure the targetPort of the metrics port is changed to metrics instead of port number 1936")
-		jsonPath = ".spec.ports[?(@.name==\"metrics\")].targetPort"
-		output = fetchJSONPathValue(oc, "openshift-ingress", "service/router-internal-"+ingctrlhp.name, jsonPath)
+		jsonPath = `{.spec.ports[?(@.name=="metrics")].targetPort}`
+		output = getByJsonPath(oc, "openshift-ingress", "service/router-internal-"+ingctrlhp.name, jsonPath)
 		o.Expect(output).To(o.ContainSubstring("metrics"))
 
 		exutil.By("Check http/https/metrics ports under the router endpoints, which should be 17080/17443/17936")
-		jsonPath = ".subsets[].ports[?(@.name==\"http\")].port}-{.subsets[].ports[?(@.name==\"https\")].port}-{.subsets[].ports[?(@.name==\"metrics\")].port"
-		output = fetchJSONPathValue(oc, "openshift-ingress", "endpoints/router-internal-"+ingctrlhp.name, jsonPath)
+		jsonPath = `{.subsets[].ports[?(@.name=="http")].port}-{.subsets[].ports[?(@.name=="https")].port}-{.subsets[].ports[?(@.name=="metrics")].port}`
+		output = getByJsonPath(oc, "openshift-ingress", "endpoints/router-internal-"+ingctrlhp.name, jsonPath)
 		o.Expect(output).To(o.ContainSubstring("17080-17443-17936"))
 	})
 
@@ -1464,20 +1464,19 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("check the default .spec.logging")
-		jpath := ".spec.logging"
-		logging := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		jpath := "{.spec.logging}"
+		logging := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(logging).To(o.ContainSubstring(""))
 
 		exutil.By("patch the custom ingresscontroller with .spec.logging.access.destination.container")
-		patchPath := "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"type\":\"Container\"}}}}}"
+		patchPath := `{"spec":{"logging":{"access":{"destination":{"type":"Container"}}}}}`
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check the .spec.logging")
-		logging = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		logging = getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		expLogStr := "\"logEmptyRequests\":\"Log\""
 		o.Expect(logging).To(o.ContainSubstring(expLogStr))
-
 	})
 
 	// Bug: 1967228
@@ -1675,8 +1674,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
 
 		exutil.By("start the service on the backend server port 10081 by socat command")
-		jsonPath := ".items[0].metadata.name"
-		srvPodName := fetchJSONPathValue(oc, project1, "pods", jsonPath)
+		jsonPath := "{.items[0].metadata.name}"
+		srvPodName := getByJsonPath(oc, project1, "pods", jsonPath)
 		cidr, errCidr := oc.AsAdmin().WithoutNamespace().Run("get").Args("network.config", "cluster", "-o=jsonpath={.spec.clusterNetwork[].cidr}").Output()
 		o.Expect(errCidr).NotTo(o.HaveOccurred())
 		// set ipv4 socat or ipv6 socat command on the server
@@ -1709,7 +1708,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// bugzilla: 1941592 1859134
 	g.It("Author:mjoseph-Medium-57406-HAProxyDown message only for pods and No reaper messages for zombie processes", func() {
 		exutil.By("Verify there will be precise message pointing to the  router nod, when HAProxy is down")
-		output := fetchJSONPathValue(oc, "openshift-ingress-operator", "PrometheusRule", ".items[0].spec.groups[0].rules[?(@.alert==\"HAProxyDown\")].annotations.message")
+		output := getByJsonPath(oc, "openshift-ingress-operator", "PrometheusRule", `{.items[0].spec.groups[0].rules[?(@.alert=="HAProxyDown")].annotations.message}`)
 		o.Expect(output).To(o.ContainSubstring(`HAProxy metrics are reporting that HAProxy is down on pod {{ $labels.namespace }} / {{ $labels.pod }}`))
 
 		exutil.By("Check the router pod logs and confirm there is no periodic reper error message  for zombie process")
@@ -1802,8 +1801,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be PROXY")
-		jpath := ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol"
-		protocol := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		jpath := "{.status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol}"
+		protocol := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring("PROXY"))
 
 		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
@@ -1821,8 +1820,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 		exutil.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be TCP")
-		jpath = ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol"
-		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		jpath = "{.status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol}"
+		protocol = getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring("TCP"))
 
 		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should not present")
@@ -1831,12 +1830,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(proxyEnv).NotTo(o.ContainSubstring("ROUTER_USE_PROXY_PROTOCOL"))
 
 		exutil.By("patch the custom ingresscontroller with protocol option omitted")
-		patchPath = "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"ibm\":{\"protocol\":\"\"}}}}}}"
+		patchPath = `{"spec":{"endpointPublishingStrategy":{"loadBalancer":{"providerParameters":{"ibm":{"protocol":""}}}}}}`
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
 
 		exutil.By(`check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be ""`)
-		jpath = ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm"
-		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		jpath = "{.status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm}"
+		protocol = getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring(`{}`))
 	})
 
@@ -1875,16 +1874,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(routeOutput).To(o.ContainSubstring("service-unsecure"))
 
 		exutil.By("Cross check the selector value of the 'service-unsecure' service")
-		jpath := ".spec.selector"
-		output := fetchJSONPathValue(oc, project1, "svc/service-unsecure", jpath)
+		jpath := "{.spec.selector}"
+		output := getByJsonPath(oc, project1, "svc/service-unsecure", jpath)
 		o.Expect(output).To(o.ContainSubstring(`"name":"web-server-rc"`))
 
 		exutil.By("Delete the service selector for the 'service-unsecure' service")
-		patchPath := "{\"spec\":{\"selector\":null}}"
+		patchPath := `{"spec":{"selector":null}}`
 		patchResourceAsAdmin(oc, project1, "svc/service-unsecure", patchPath)
 
 		exutil.By("Check the service config to confirm the value of the selector is empty")
-		output = fetchJSONPathValue(oc, project1, "svc/service-unsecure", jpath)
+		output = getByJsonPath(oc, project1, "svc/service-unsecure", jpath)
 		o.Expect(output).To(o.BeEmpty())
 
 		exutil.By("Check the router pod logs and confirm there is no reload error message")
@@ -3158,15 +3157,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring("Forbidden: the following headers may not be modified using this API: strict-transport-security, proxy, cookie, set-cookie"))
 
 		exutil.By("try to patch host header to a route")
-		hostHeader := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"host\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"www.neqe-test.com\"}}}]}}}}"
+		hostHeader := `{"spec": {"httpHeaders": {"actions": {"request": [{"name": "host", "action": {"type": "Set", "set": {"value": "www.neqe-test.com"}}}]}}}}`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", hostHeader, "--type=merge", "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		jpath := ".spec.httpHeaders.actions.request[?(@.name==\"host\")].action.set.value"
-		host := fetchJSONPathValue(oc, project1, "route/"+unsecsvcName, jpath)
+		jpath := `{.spec.httpHeaders.actions.request[?(@.name=="host")].action.set.value}`
+		host := getByJsonPath(oc, project1, "route/"+unsecsvcName, jpath)
 		o.Expect(host).To(o.ContainSubstring("www.neqe-test.com"))
 
 		exutil.By("try to patch strict-transport-security header to a route")
-		hstsHeader := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"strict-transport-security\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"max-age=31536000;includeSubDomains;preload\"}}}]}}}}"
+		hstsHeader := `{"spec": {"httpHeaders": {"actions": {"request": [{"name": "strict-transport-security", "action": {"type": "Set", "set": {"value": "max-age=31536000;includeSubDomains;preload"}}}]}}}}`
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/"+unsecsvcName, "-p", hstsHeader, "--type=merge", "-n", project1).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Forbidden: the following headers may not be modified using this API: strict-transport-security, proxy, cookie, set-cookie"))

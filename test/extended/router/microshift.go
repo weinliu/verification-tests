@@ -45,9 +45,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		routeNames := getResourceName(oc, e2eTestNamespace, "route")
 
 		exutil.By("check whether route details are present")
-		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], ".status.ingress[0].conditions[0].type", "Admitted")
-		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], ".status.ingress[0].host", "service-secure1-test.example.com")
-		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], ".spec.tls.termination", "reencrypt")
+		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.status.ingress[0].conditions[0].type}", "Admitted")
+		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.status.ingress[0].host}", "service-secure1-test.example.com")
+		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.spec.tls.termination}", "reencrypt")
 
 		exutil.By("check the reachability of the host in test pod")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
@@ -87,9 +87,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether passthrough route details are present")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", ".spec.tls.termination", "passthrough")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", ".status.ingress[0].host", passRoute)
-		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", ".status.ingress[0].conditions[0].type", "Admitted")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", "{.spec.tls.termination}", "passthrough")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", "{.status.ingress[0].host}", passRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod for passthrough route")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
@@ -107,9 +107,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether edge route details are present")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", ".spec.tls.termination", "edge")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", ".status.ingress[0].host", edgeRoute)
-		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", ".status.ingress[0].conditions[0].type", "Admitted")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", "{.spec.tls.termination}", "edge")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", "{.status.ingress[0].host}", edgeRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod for edge route")
 		curlCmd1 := fmt.Sprintf("curl --resolve %s:443:%s https://%s -I -k --connect-timeout 10", edgeRoute, routerPodIP, edgeRoute)
@@ -149,9 +149,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether http route details are present")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-http", ".spec.port.targetPort", "http")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-http", ".status.ingress[0].host", httpRoute)
-		waitForOutput(oc, e2eTestNamespace, "route/ms-http", ".status.ingress[0].conditions[0].type", "Admitted")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-http", "{.spec.port.targetPort}", "http")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-http", "{.status.ingress[0].host}", httpRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-http", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod for http route")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
@@ -169,9 +169,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether reen route details are present")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", ".spec.tls.termination", "reencrypt")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", ".status.ingress[0].host", reenRoute)
-		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", ".status.ingress[0].conditions[0].type", "Admitted")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", "{.spec.tls.termination}", "reencrypt")
+		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", "{.status.ingress[0].host}", reenRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod reen route")
 		curlCmd1 := fmt.Sprintf("curl --resolve %s:443:%s https://%s -I -k --connect-timeout 10", reenRoute, routerPodIP, reenRoute)
@@ -213,9 +213,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		routeNames := getResourceName(oc, e2eTestNamespace, "route")
 
 		exutil.By("check whether http route details are present")
-		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], ".spec.port.targetPort", "http")
-		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], ".status.ingress[0].host", httpRoute)
-		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], ".status.ingress[0].conditions[0].type", "Admitted")
+		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.spec.port.targetPort}", "http")
+		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.status.ingress[0].host}", httpRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod for http route")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
@@ -282,7 +282,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("5. expose an insecure/edge/REEN type routes with path " + path1 + " in the first ns")
 		err = oc.Run("expose").Args("service", unSecSvcName, "--hostname="+httpRoutehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", unSecSvcName)
+		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", unSecSvcName)
 
 		_, err = oc.WithoutNamespace().Run("create").Args("route", "edge", "route-edge", "--service="+unSecSvcName, "--hostname="+edgeRoute, "--path="+path1, "-n", e2eTestNamespace1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -299,7 +299,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("6. expose an insecure/edge/REEN type routes with path " + path2 + " in the second ns")
 		err = oc.Run("expose").Args("service", unSecSvcName, "--hostname="+httpRoutehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", unSecSvcName)
+		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", unSecSvcName)
 
 		_, err = oc.WithoutNamespace().Run("create").Args("route", "edge", "route-edge", "--service="+unSecSvcName, "--hostname="+edgeRoute, "--path="+path2, "-n", e2eTestNamespace2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -314,28 +314,28 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("route-reen"))
 
 		exutil.By("7.1. check the http route in the first ns should be adimitted")
-		jpath := ".status.ingress[0].conditions[0].status"
-		adtInfo := fetchJSONPathValue(oc, e2eTestNamespace1, "route/"+unSecSvcName, jpath)
+		jpath := "{.status.ingress[0].conditions[0].status}"
+		adtInfo := getByJsonPath(oc, e2eTestNamespace1, "route/"+unSecSvcName, jpath)
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("7.2. check the edge route in the first ns should be adimitted")
-		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace1, "route/route-edge", jpath)
+		adtInfo = getByJsonPath(oc, e2eTestNamespace1, "route/route-edge", jpath)
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("7.3. check the REEN route in the first ns should be adimitted")
-		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace1, "route/route-reen", jpath)
+		adtInfo = getByJsonPath(oc, e2eTestNamespace1, "route/route-reen", jpath)
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("8.1. check the http route in the second ns with the same hostname but with different path should be adimitted too")
-		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/"+unSecSvcName, jpath)
+		adtInfo = getByJsonPath(oc, e2eTestNamespace2, "route/"+unSecSvcName, jpath)
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("8.2. check the edge route in the second ns with the same hostname but with different path should be adimitted too")
-		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/route-edge", jpath)
+		adtInfo = getByJsonPath(oc, e2eTestNamespace2, "route/route-edge", jpath)
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("8.3. check the REEN route in the second ns with the same hostname but with different path should be adimitted too")
-		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/route-reen", jpath)
+		adtInfo = getByJsonPath(oc, e2eTestNamespace2, "route/route-reen", jpath)
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("9. curl the first HTTP route and check the result")
@@ -381,7 +381,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		httpRouteHost := unSecSvcName + "-" + "ocp73621." + "apps.example.com"
 
 		exutil.By("2. debug node to disable namespace ownership support by setting namespaceOwnership to Strict in the config.yaml file")
-		nodeName := fetchJSONPathValue(oc, "default", "nodes", ".items[0].metadata.name")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
 		creatFileCmdForDisabled := fmt.Sprintf(`
 if test -f /etc/microshift/config.yaml ; then
     cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup73621
@@ -429,12 +429,12 @@ fi
 		exutil.By("5. create a route with path " + path1 + " in the first ns")
 		extraParas := []string{"--hostname=" + httpRouteHost, "--path=" + path1}
 		createRoute(oc, e2eTestNamespace1, "http", "route-http", unSecSvcName, extraParas)
-		waitForOutput(oc, e2eTestNamespace1, "route", ".items[0].metadata.name", "route-http")
+		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", "route-http")
 
 		exutil.By("6. create a route with path " + path2 + " in the second ns")
 		extraParas = []string{"--hostname=" + httpRouteHost, "--path=" + path2}
 		createRoute(oc, e2eTestNamespace2, "http", "route-http", unSecSvcName, extraParas)
-		waitForOutput(oc, e2eTestNamespace2, "route", ".items[0].metadata.name", "route-http")
+		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", "route-http")
 
 		exutil.By("7. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be false")
 		routerPodName := getNewRouterPod(oc, "default")
@@ -442,10 +442,10 @@ fi
 		o.Expect(ownershipVal).To(o.ContainSubstring("false"))
 
 		exutil.By("8. check the two route with same hostname but with different path, one is adimitted, while the other isn't")
-		jpath := ".status.ingress[0].conditions[0].status"
-		adtInfo := fetchJSONPathValue(oc, e2eTestNamespace1, "route/route-http", jpath)
+		jpath := "{.status.ingress[0].conditions[0].status}"
+		adtInfo := getByJsonPath(oc, e2eTestNamespace1, "route/route-http", jpath)
 		o.Expect(adtInfo).To(o.Equal("True"))
-		adtInfo = fetchJSONPathValue(oc, e2eTestNamespace2, "route/route-http", jpath)
+		adtInfo = getByJsonPath(oc, e2eTestNamespace2, "route/route-http", jpath)
 		o.Expect(adtInfo).To(o.Equal("False"))
 
 		exutil.By("9. debug node to enable namespace ownership support by setting namespaceOwnership to InterNamespaceAllowed in the config.yaml file")
@@ -471,9 +471,9 @@ fi
 		)
 
 		exutil.By("Check the router-default service is a load balancer and has a load balancer ip")
-		svcType := fetchJSONPathValue(oc, "openshift-ingress", "service/router-default", ".spec.type")
+		svcType := getByJsonPath(oc, "openshift-ingress", "service/router-default", "{.spec.type}")
 		o.Expect(svcType).To(o.ContainSubstring("LoadBalancer"))
-		lbIPs := fetchJSONPathValue(oc, "openshift-ingress", "service/router-default", ".status.loadBalancer.ingress[0].ip")
+		lbIPs := getByJsonPath(oc, "openshift-ingress", "service/router-default", "{.status.loadBalancer.ingress[0].ip}")
 		o.Expect(len(lbIPs) > 4).To(o.BeTrue())
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its services resources")
@@ -501,8 +501,8 @@ fi
 		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, []string{"--hostname=" + edgeRouteHost})
 		createRoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, []string{"--hostname=" + passThRouteHost})
 		createRoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, []string{"--hostname=" + reenRouteHost})
-		waitForOutput(oc, e2eTestNamespace, "route/route-reen", ".status.ingress[0].conditions[0].status", "True")
-		output := fetchJSONPathValue(oc, e2eTestNamespace, "route", ".items[*].metadata.name")
+		waitForOutput(oc, e2eTestNamespace, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+		output := getByJsonPath(oc, e2eTestNamespace, "route", "{.items[*].metadata.name}")
 		o.Expect(output).Should(o.And(
 			o.ContainSubstring("route-http"),
 			o.ContainSubstring("route-edge"),
@@ -542,22 +542,22 @@ fi
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
-		nodeName := fetchJSONPathValue(oc, "default", "nodes", ".items[0].metadata.name")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
 		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, hostIPList := getValidInterfacesAndIPs(hostAddresses)
 
 		exutil.By("check the default load balancer ips of the router-default service, which should be all node's valid host ips")
-		lbIPs := fetchJSONPathValue(oc, "openshift-ingress", "service/router-default", ".status.loadBalancer.ingress[*].ip")
+		lbIPs := getByJsonPath(oc, "openshift-ingress", "service/router-default", "{.status.loadBalancer.ingress[*].ip}")
 		lbIPs = getSortedString(lbIPs)
 		hostIPs := getSortedString(hostIPList)
 		o.Expect(lbIPs).To(o.Equal(hostIPs))
 
 		exutil.By("check the default load balancer ports of the router-default service, which should be 80 for the unsecure http port and 443 for the seccure https port")
-		HTTPPort := fetchJSONPathValue(oc, "openshift-ingress", "service/router-default", `.spec.ports[?(@.name=="http")].port`)
-		o.Expect(HTTPPort).To(o.Equal("80"))
-		HTTPSPort := fetchJSONPathValue(oc, "openshift-ingress", "service/router-default", `.spec.ports[?(@.name=="https")].port`)
-		o.Expect(HTTPSPort).To(o.Equal("443"))
+		httpPort := getByJsonPath(oc, "openshift-ingress", "service/router-default", `{.spec.ports[?(@.name=="http")].port}`)
+		o.Expect(httpPort).To(o.Equal("80"))
+		httpsPort := getByJsonPath(oc, "openshift-ingress", "service/router-default", `{.spec.ports[?(@.name=="https")].port}`)
+		o.Expect(httpsPort).To(o.Equal("443"))
 
 		exutil.By("Deploy a backend pod and its services resources in the created ns")
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
@@ -576,8 +576,8 @@ fi
 		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, []string{"--hostname=" + edgeRouteHost})
 		createRoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, []string{"--hostname=" + passThRouteHost})
 		createRoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, []string{"--hostname=" + reenRouteHost})
-		waitForOutput(oc, e2eTestNamespace, "route/route-reen", ".status.ingress[0].conditions[0].status", "True")
-		output := fetchJSONPathValue(oc, e2eTestNamespace, "route", ".items[*].metadata.name")
+		waitForOutput(oc, e2eTestNamespace, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+		output := getByJsonPath(oc, e2eTestNamespace, "route", "{.items[*].metadata.name}")
 		o.Expect(output).Should(o.And(
 			o.ContainSubstring("route-http"),
 			o.ContainSubstring("route-edge"),
@@ -626,7 +626,7 @@ fi
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 
-		nodeName := fetchJSONPathValue(oc, "default", "nodes", ".items[0].metadata.name")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
 		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		intfaceList, hostIPList := getValidInterfacesAndIPs(hostAddresses)
@@ -674,16 +674,16 @@ fi
 
 		exutil.By("wait the check router-default service is updated and its load balancer ip is as same as configured in default.yaml")
 		regExp := "^" + randHostIP + "$"
-		searchOutput := waitForRegexpOutput(oc, "openshift-ingress", "service/router-default", ".status.loadBalancer.ingress[*].ip", regExp)
+		searchOutput := waitForRegexpOutput(oc, "openshift-ingress", "service/router-default", "{.status.loadBalancer.ingress[*].ip}", regExp)
 		o.Expect(searchOutput).To(o.Equal(randHostIP))
 
 		exutil.By("check service router-default's http port is changed to 10080 and its https port is changed to 10443")
-		jpath := ".spec.ports[?(@.name==\"http\")].port"
-		HTTPPort := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", jpath)
-		o.Expect(HTTPPort).To(o.Equal("10080"))
-		jpath = ".spec.ports[?(@.name==\"https\")].port"
-		HTTPSPort := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", jpath)
-		o.Expect(HTTPSPort).To(o.Equal("10443"))
+		jpath := `{.spec.ports[?(@.name=="http")].port}`
+		httpPort := getByJsonPath(oc, "openshift-ingress", "svc/router-default", jpath)
+		o.Expect(httpPort).To(o.Equal("10080"))
+		jpath = `{.spec.ports[?(@.name=="https")].port}`
+		httpsPort := getByJsonPath(oc, "openshift-ingress", "svc/router-default", jpath)
+		o.Expect(httpsPort).To(o.Equal("10443"))
 
 		exutil.By("Deploy a client pod, a backend pod and its services resources")
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
@@ -702,8 +702,8 @@ fi
 		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unsecsvcName, []string{"--hostname=" + edgeRouteHost})
 		createRoute(oc, e2eTestNamespace, "passthrough", "route-passth", secsvcName, []string{"--hostname=" + passThRouteHost})
 		createRoute(oc, e2eTestNamespace, "reencrypt", "route-reen", secsvcName, []string{"--hostname=" + reenRouteHost})
-		waitForOutput(oc, e2eTestNamespace, "route/route-reen", ".status.ingress[0].conditions[0].status", "True")
-		output := fetchJSONPathValue(oc, e2eTestNamespace, "route", ".items[*].metadata.name")
+		waitForOutput(oc, e2eTestNamespace, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+		output := getByJsonPath(oc, e2eTestNamespace, "route", "{.items[*].metadata.name}")
 		o.Expect(output).Should(o.And(
 			o.ContainSubstring("route-http"),
 			o.ContainSubstring("route-edge"),
@@ -741,7 +741,7 @@ fi
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 
-		nodeName := fetchJSONPathValue(oc, "default", "nodes", ".items[0].metadata.name")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
 		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, hostIPList := getValidInterfacesAndIPs(hostAddresses)
@@ -791,11 +791,11 @@ fi
 		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
 
 		exutil.By("check router-default load balancer is enabled")
-		waitForOutput(oc, "openshift-ingress", "service/router-default", ".spec.ports[?(@.name==\"http\")].port", "80")
-		lbIPs := fetchJSONPathValue(oc, "openshift-ingress", "service/router-default", ".status.loadBalancer.ingress[*].ip")
+		waitForOutput(oc, "openshift-ingress", "service/router-default", `{.spec.ports[?(@.name=="http")].port}`, "80")
+		lbIPs := getByJsonPath(oc, "openshift-ingress", "service/router-default", "{.status.loadBalancer.ingress[*].ip}")
 		lbIPs = getSortedString(lbIPs)
 		o.Expect(lbIPs).To(o.Equal(hostIPs))
-		HTTPSPort := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", ".spec.ports[?(@.name==\"https\")].port")
-		o.Expect(HTTPSPort).To(o.Equal("443"))
+		httpsPort := getByJsonPath(oc, "openshift-ingress", "svc/router-default", `{.spec.ports[?(@.name=="https")].port}`)
+		o.Expect(httpsPort).To(o.Equal("443"))
 	})
 })
