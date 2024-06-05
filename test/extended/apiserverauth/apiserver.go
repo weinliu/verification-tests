@@ -6092,4 +6092,84 @@ EOF`, serverconf, fqdnName)
 		imageSaOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "sa", randomSaAcc, "-n", namespace, "-o", `jsonpath={.metadata.annotations.openshift\.io/internal-registry-pull-secret-ref}`)
 		o.Expect(imageSaOutput).Should(o.ContainSubstring(randomSaAcc + "-dockercfg"))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-73853-[API-1361] [Apiserver] Update existing alert KubeAPIErrorBudgetBurn [Slow] [Disruptive]", func() {
+		var (
+			alertBudget          = "KubeAPIErrorBudgetBurn"
+			runbookBudgetURL     = "https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-apiserver-operator/KubeAPIErrorBudgetBurn.md"
+			alertTimeWarning     = "2m"
+			alertTimeCritical    = "15m"
+			alertTimeWarningExt  = "1h"
+			alertTimeCriticalExt = "3h"
+			severity             = []string{"critical", "critical"}
+			severityExtended     = []string{"warning", "warning"}
+		)
+		exutil.By("1. Check cluster with the following changes for existing alerts " + alertBudget + " have been applied.")
+		output, alertBasicErr := getResource(oc, asAdmin, withoutNamespace, "prometheusrule/kube-apiserver-slos-basic", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-basic")].rules[?(@.alert=="`+alertBudget+`")].labels.severity}'`)
+		o.Expect(alertBasicErr).NotTo(o.HaveOccurred())
+		chkStr := fmt.Sprintf("%s %s", severity[0], severity[1])
+		o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not have new alert %s with severity :: %s : %s", alertBudget, severity[0], severity[1]))
+		e2e.Logf("Have new alert %s with severity :: %s : %s", alertBudget, severity[0], severity[1])
+
+		outputExt, alertExtErr := getResource(oc, asAdmin, withoutNamespace, "prometheusrule/kube-apiserver-slos-extended", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-extended")].rules[?(@.alert=="`+alertBudget+`")].labels.severity}'`)
+		o.Expect(alertExtErr).NotTo(o.HaveOccurred())
+		chkExtStr := fmt.Sprintf("%s %s", severityExtended[0], severityExtended[1])
+		o.Expect(outputExt).Should(o.ContainSubstring(chkExtStr), fmt.Sprintf("Not have new alert %s with severity :: %s : %s", alertBudget, severityExtended[0], severityExtended[1]))
+		e2e.Logf("Have new alert %s with severity :: %s : %s", alertBudget, severityExtended[0], severityExtended[1])
+
+		e2e.Logf("Check reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical)
+		output, sevBasicErr := getResource(oc, asAdmin, withoutNamespace, "prometheusrule/kube-apiserver-slos-basic", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-basic")].rules[?(@.alert=="`+alertBudget+`")].for}'`)
+		o.Expect(sevBasicErr).NotTo(o.HaveOccurred())
+		chkStr = fmt.Sprintf("%s %s", alertTimeWarning, alertTimeCritical)
+		o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical))
+		e2e.Logf("Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical)
+
+		e2e.Logf("Check reduce severity to %s and %s for :: %s : %s", severityExtended[0], severityExtended[1], alertTimeWarningExt, alertTimeCriticalExt)
+		outputExtn, sevExtErr := getResource(oc, asAdmin, withoutNamespace, "prometheusrule/kube-apiserver-slos-extended", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-extended")].rules[?(@.alert=="`+alertBudget+`")].for}'`)
+		o.Expect(sevExtErr).NotTo(o.HaveOccurred())
+		chkStr = fmt.Sprintf("%s %s", alertTimeWarningExt, alertTimeCriticalExt)
+		o.Expect(outputExtn).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not Have reduce severity to %s and %s for :: %s : %s", severityExtended[0], severityExtended[1], alertTimeWarningExt, alertTimeCriticalExt))
+		e2e.Logf("Have reduce severity to %s and %s for :: %s : %s", severityExtended[0], severityExtended[1], alertTimeWarningExt, alertTimeCriticalExt)
+
+		e2e.Logf("Check a run book url for %s", alertBudget)
+		output = getResourceToBeReady(oc, asAdmin, withoutNamespace, "prometheusrule/kube-apiserver-slos-basic", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-basic")].rules[?(@.alert=="`+alertBudget+`")].annotations.runbook_url}'`)
+		o.Expect(output).Should(o.ContainSubstring(runbookBudgetURL), fmt.Sprintf("%s Runbook url not found :: %s", alertBudget, runbookBudgetURL))
+		e2e.Logf("Have a run book url for %s :: %s", alertBudget, runbookBudgetURL)
+
+		exutil.By("2. Test the " + alertBudget + "alert firing/pending")
+		e2e.Logf("Checking for available network interfaces on the master node")
+		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Master node is %v : ", masterNode)
+		cmd := `ifconfig | grep -oP '^(ens|eth)\w+:' | cut -d: -f1`
+		ethName, ethErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		o.Expect(ethErr).NotTo(o.HaveOccurred())
+		ethName = strings.TrimSpace(ethName)
+		o.Expect(ethName).ShouldNot(o.BeEmpty())
+		e2e.Logf("Found Ethernet :: %v", ethName)
+		e2e.Logf("Simulating network conditions: 50% packet loss on the master node")
+		defer func() {
+			cmd := fmt.Sprintf(`sudo tc qdisc del dev %s root`, ethName)
+			_, tcpErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+			o.Expect(tcpErr).NotTo(o.HaveOccurred())
+		}()
+		cmd = fmt.Sprintf(`sudo tc qdisc add dev %s root netem loss 50%%`, ethName)
+		_, tcpErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		o.Expect(tcpErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Check alert " + alertBudget + " firing/pending")
+		errWatcher := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 500*time.Second, false, func(cxt context.Context) (bool, error) {
+			alertOutput, _ := GetAlertsByName(oc, alertBudget)
+			alertName := gjson.Parse(alertOutput).String()
+			alertOutputWarning1 := gjson.Get(alertName, `data.alerts.#(labels.alertname=="`+alertBudget+`")#`).String()
+			alertOutputWarning2 := gjson.Get(alertOutputWarning1, `#(labels.severity=="`+severityExtended[0]+`").state`).String()
+			if strings.Contains(string(alertOutputWarning2), "pending") || strings.Contains(string(alertOutputWarning2), "firing") {
+				e2e.Logf("%s with %s is pending/firing", alertBudget, severityExtended[0])
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is not firing or pending", alertBudget, severityExtended[0]))
+	})
 })
