@@ -113,11 +113,11 @@ func (clusterextension *ClusterExtensionDescription) GetClusterExtensionMessage(
 func (clusterextension *ClusterExtensionDescription) GetBundleResource(oc *exutil.CLI) {
 	e2e.Logf("=========Get clusterextension %v BundleResource =========", clusterextension.Name)
 
-	installedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.installedBundle}")
+	installedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.installedBundle.name}")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterextension.InstalledBundle = installedBundle
 
-	resolvedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
+	resolvedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle.name}")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterextension.ResolvedBundle = resolvedBundle
 }

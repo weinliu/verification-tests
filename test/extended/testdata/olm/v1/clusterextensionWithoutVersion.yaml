@@ -1,0 +1,21 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: operator-without-channel-template
+objects:
+- apiVersion: olm.operatorframework.io/v1alpha1
+  kind: ClusterExtension
+  metadata:
+    name: "${NAME}"
+  spec:
+    installNamespace: "${INSTALLNAMESPACE}"
+    packageName: "${PACKAGE}"
+    channel: "${CHANNEL}"
+    upgradeConstraintPolicy: "${POLICY}"
+parameters:
+- name: NAME
+- name: INSTALLNAMESPACE
+- name: PACKAGE
+- name: CHANNEL
+- name: POLICY
+  value: "Enforce"

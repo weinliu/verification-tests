@@ -379,6 +379,166 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		}
 	})
 
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-High-74108-OLM v1 supports legacy upgrade edges", func() {
+		var (
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextensionWithoutVersion.yaml")
+			ns                       = "ns-74108"
+			catalog                  = olmv1util.CatalogDescription{
+				Name:     "catalog-74108",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm74108",
+				Template: catalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-74108",
+				InstallNamespace: ns,
+				PackageName:      "nginx74108",
+				Channel:          "candidate-v0.0",
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1) Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("2) Install clusterextension with channel candidate-v0.0")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.0.2"))
+
+		exutil.By("3) Attempt to update to channel candidate-v2.1 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v2.1"}}`)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			if strings.Contains(message, "error upgrading") {
+				e2e.Logf("status is %s", message)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+
+		exutil.By("4) Attempt to update to channel candidate-v0.1 with Enforce policy, that should success")
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v0.1"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if strings.Contains(clusterextension.ResolvedBundle, "0.1.0") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx74108 0.1.0 is not installed")
+
+		exutil.By("5) Attempt to update to channel candidate-v1.0 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.0"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			if strings.Contains(message, "error upgrading") {
+				e2e.Logf("status is %s", message)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+
+		exutil.By("6) update policy to Ignore, upgrade should success")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if strings.Contains(clusterextension.ResolvedBundle, "1.0.2") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx74108 1.0.2 is not installed")
+
+		exutil.By("7) Attempt to update to channel candidate-v1.1 with Enforce policy, that should success")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if strings.Contains(clusterextension.ResolvedBundle, "1.1.0") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx74108 0.1.0 is not installed")
+
+		exutil.By("8) Attempt to update to channel candidate-v1.2 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.2"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			if strings.Contains(message, "error upgrading") {
+				e2e.Logf("status is %s", message)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+
+		exutil.By("9) update policy to Ignore, upgrade should success")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if strings.Contains(clusterextension.ResolvedBundle, "1.2.0") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx74108 1.2.0 is not installed")
+
+		exutil.By("10) Attempt to update to channel candidate-v2.0 with Enforce policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v2.0"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			if strings.Contains(message, "error upgrading") {
+				e2e.Logf("status is %s", message)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+
+		exutil.By("11) Attempt to update to channel candidate-v2.1 with Enforce policy, that should success")
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v2.1"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if strings.Contains(clusterextension.ResolvedBundle, "2.1.1") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx74108 2.1.1 is not installed")
+
+		exutil.By("8) downgrade to version 1.0.1 with Ignore policy, that should work")
+		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.0","version":"1.0.1"}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			clusterextension.GetBundleResource(oc)
+			if strings.Contains(clusterextension.ResolvedBundle, "1.0.1") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "nginx74108 1.0.1 is not installed")
+
+	})
+
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-69193-OLMv1 major version zero", func() {
 		var (
