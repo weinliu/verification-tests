@@ -3507,14 +3507,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			g.By("Remove compliancesuite, machineconfig, machineconfigpool objects.. !!!\n")
 			removeLabelFromWorkerNode(oc, workerNodeName)
 			checkMachineConfigPoolStatus(oc, "worker")
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "75-"+csuiteD.scanname+"-audit-rules-dac-modification-chmod", "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "75-"+csuite.scanname+"-no-empty-passwords", "-n", subD.namespace, "--ignore-not-found").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "75-"+csuiteCD.scanname+"-chronyd-or-ntpd-specify-multiple-servers", "-n", subD.namespace, "--ignore-not-found").Execute()
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + csuiteD.name})
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + csuite.name})
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + csuiteCD.name})
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancesuite", csuiteD.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancesuite", csuite.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancesuite", csuiteCD.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", csuiteD.nodeSelector, "-n", subD.namespace, "--ignore-not-found").Execute()
+			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
 		}()
 
@@ -4030,7 +4031,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
+			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbCis})
 		}()
 		defer func() {
 			g.By("Remove lables for the worker nodes !!!\n")
@@ -4137,7 +4140,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
+			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbPci})
 		}()
 		defer func() {
 			g.By("Remove lables for the worker nodes !!!\n")
@@ -4243,7 +4248,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
+			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbHigh})
 		}()
 
 		defer func() {
@@ -4353,6 +4360,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
+			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
 			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbNercCip})
 		}()
@@ -4499,7 +4507,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
+			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbModerate})
 		}()
 
 		defer func() {
