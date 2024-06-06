@@ -1547,10 +1547,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: liangli@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:liangli-Critical-63535-Stop triggering rollout on labels/taint change[Serial]", func() {
-
-		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
-			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "aws")
 
 		caseID := "63535"
 		dir := "/tmp/hypershift" + caseID
