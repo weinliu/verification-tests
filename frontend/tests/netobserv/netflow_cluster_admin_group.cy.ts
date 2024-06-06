@@ -41,11 +41,10 @@ describe('(OCP-67617 Network_Observability) User in group with cluster-admin rol
         // remove user from cluster-admin group
         cy.adminCLI(`oc adm policy remove-cluster-role-from-group cluster-admin netobservadmins`)
         cy.visit('/netflow-traffic')
-        // skip overview check due to bug: NETOBSERV-1621
         // validate user is not able to access netflow traffic page
         // overview shows no panels
-        // cy.get('li.overviewTabButton').should('exist').click()
-        // cy.get("#overview-flex").should('not.exist')
+        cy.get('li.overviewTabButton').should('exist').click()
+        cy.get("#overview-flex").should('not.exist')
 
         // table view shows no grid
         cy.get('li.tableTabButton').should('exist').click()
