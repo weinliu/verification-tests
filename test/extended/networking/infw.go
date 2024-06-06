@@ -941,4 +941,80 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		CurlPod2PodFail(oc, oc.Namespace(), "hello-pod-client", oc.Namespace(), "hello-pod-server")
 
 	})
+
+	g.It("Author:anusaxen-High-73844-Check Ingress Node Firewall functionality for blocking SSH traffic [Serial]", func() {
+		var (
+			testDataDirInfw = exutil.FixturePath("testdata", "networking/ingressnodefirewall")
+			infwCRtemplate  = filepath.Join(testDataDirInfw, "infw.yaml")
+			infwCfgTemplate = filepath.Join(testDataDirInfw, "infw-config.yaml")
+		)
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+		if ipStackType == "dualstack" {
+			g.Skip("This case requires single stack cluster IPv4/IPv6")
+		}
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		g.By("create Ingress node firewall config")
+		infwCfg := infwConfigResource{
+			namespace: "openshift-ingress-node-firewall",
+			nodelabel: "node-role.kubernetes.io/worker",
+			template:  infwCfgTemplate,
+		}
+		infwCfg.createinfwConfig(oc)
+		waitforInfwDaemonsready(oc)
+
+		//get cluster default mgmt interface
+		primaryInf := getPrimaryNICname(oc)
+
+		infwCR_single := infwCResource{
+			name:          "infw-block-ssh",
+			primary_inf:   primaryInf,
+			nodelabel:     "node-role.kubernetes.io/worker",
+			src_cidr1:     "",
+			protocol_1:    "TCP",
+			protocoltype1: "tcp",
+			range_1:       "22", //ssh port
+			action_1:      "Deny",
+			protocoltype2: "tcp",
+			protocol_2:    "TCP",
+			range_2:       "22",
+			action_2:      "Allow",
+			template:      infwCRtemplate,
+		}
+
+		if ipStackType == "ipv6single" {
+			//ssh traffic coming towards any worker node should be blocked
+			infwCR_single.src_cidr1 = "::/0"
+			g.By("create Ingress node firewall Rule Custom Resource for IPv6 single stack")
+		} else {
+			//ssh traffic coming towards any worker node should be blocked
+			infwCR_single.src_cidr1 = "0.0.0.0/32"
+			g.By("create Ingress node firewall Rule Custom Resource for IPv4 single stack")
+		}
+		defer deleteinfwCR(oc, infwCR_single.name)
+		infwCR_single.createinfwCR(oc)
+
+		//Identify the first master node to act as ssh source fo worker node
+		firstMasterNode, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		sshcmd := "ssh -o ConnectTimeout=1 " + nodeList.Items[0].Name
+		err = sshRunCmd(firstMasterNode, "", sshcmd)
+		o.Expect(err).To(o.HaveOccurred())
+
+		//get corresponding infw daemon pod for targeted worker
+		infwDaemon := getinfwDaemonForNode(oc, nodeList.Items[0].Name)
+		//make sure events were logged for ssh Deny
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-node-firewall", infwDaemon, "-c", "events").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "ruleId 1 action Drop")).Should(o.BeTrue())
+		o.Expect(strings.Contains(output, "dstPort 22")).Should(o.BeTrue())
+
+	})
 })
