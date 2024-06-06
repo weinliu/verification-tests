@@ -9,6 +9,18 @@ const metricType = [
     "RTT"
 ]
 
+const flowRTTPanels = [
+    // below 2 panels should appear with the 'node_rtt_seconds' metric
+    "top-p50-srtt-per-node-(ms)-chart",
+    "top-p99-srtt-per-node-(ms)-chart",
+    // below 2 panels should appear with the 'namespace_rtt_seconds' metric
+    "top-p50-srtt-per-infra-namespace-(ms)-chart",
+    "top-p99-srtt-per-infra-namespace-(ms)-chart",
+    // below 2 panels should appear with the 'workload_rtt_seconds' metric
+    "top-p50-srtt-per-infra-workload-(ms)-chart",
+    "top-p99-srtt-per-infra-workload-(ms)-chart"
+]
+
 describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
@@ -61,6 +73,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         })
 
         cy.get('li#TimeFlowRttNs').click()
+        cy.byTestID("scope-dropdown").click().byTestID("host").click()
         cy.contains('Display options').should('exist').click()
 
         // validate edge labels shows flowRTT info
@@ -85,26 +98,7 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         // verify 'TCP latency,p99' panel
         cy.get('[data-test="tcp-latency,-p99-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // below 2 panels should appear with the flowcollector metric 'node_rtt_seconds'
-        // verify 'Top P50 sRTT per node (ms)' panel
-        cy.get('[data-test="top-p50-srtt-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Top P99 sRTT per node (ms)' panel
-        cy.get('[data-test="top-p99-srtt-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // below 2 panels should appear with the flowcollector metric 'namespace_rtt_seconds'
-        // verify 'Top P50 sRTT per infra namespace (ms)' panel
-        cy.get('[data-test="top-p50-srtt-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Top P99 sRTT per infra namespace (ms)' panel
-        cy.get('[data-test="top-p99-srtt-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // below 2 panels should appear with the flowcollector metric 'workload_rtt_seconds'
-        // verify 'Top P50 sRTT per infra workload (ms)' panel
-        cy.get('[data-test="top-p50-srtt-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Top P99 sRTT per infra workload (ms)' panel
-        cy.get('[data-test="top-p99-srtt-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.checkDashboards(flowRTTPanels)
     })
     after("Delete flowcollector", function () {
         Operator.deleteFlowCollector()

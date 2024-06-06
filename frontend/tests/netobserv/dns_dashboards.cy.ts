@@ -1,12 +1,27 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, querySumSelectors } from "../../views/netflow-page"
-import { dashboard, graphSelector } from "views/dashboards-page"
+import { dashboard } from "views/dashboards-page"
 
 const metricType = [
     "Bytes",
     "Packets",
     "DNS latencies"
+]
+
+const DNSPanels = [
+    // below 3 panels should appear with the 'node_dns_latency_seconds' metric
+    "top-p50-dns-latency-per-node-(ms)-chart",
+    "top-p99-dns-latency-per-node-(ms)-chart",
+    "dns-error-rate-per-node-chart",
+    // below 3 panels should appear with the 'namespace_dns_latency_seconds' metric
+    "top-p50-dns-latency-per-infra-namespace-(ms)-chart",
+    "top-p99-dns-latency-per-infra-namespace-(ms)-chart",
+    "dns-error-rate-per-infra-namespace-chart",
+    // below 3 panels should appear with the 'workload_dns_latency_seconds' metric
+    "top-p50-dns-latency-per-infra-workload-(ms)-chart",
+    "top-p99-dns-latency-per-infra-workload-(ms)-chart",
+    "dns-error-rate-per-infra-workload-chart"
 ]
 
 describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network_Observability'] }, function () {
@@ -111,6 +126,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         })
 
         cy.get('#DnsLatencyMs').click()
+        cy.byTestID("scope-dropdown").click().byTestID("host").click()
         cy.contains('Display options').should('exist').click()
 
         // validate edge labels shows DNS latency info
@@ -132,35 +148,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         dashboard.visit()
         dashboard.visitDashboard("netobserv-main")
 
-        // below 3 panels should appear with the flowcollector metric 'node_dns_latency_seconds'
-        // verify 'Top P50 DNS latency per node (ms)' panel
-        cy.get('[data-test="top-p50-dns-latency-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Top P99 DNS latency per node (ms)' panel
-        cy.get('[data-test="top-p99-dns-latency-per-node-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'DNS error rate per node' panel
-        cy.get('[data-test="dns-error-rate-per-node-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // below 3 panels should appear with the flowcollector metric 'namespace_dns_latency_seconds'
-        // verify 'Top P50 DNS latency per infra namespace (ms)' panel
-        cy.get('[data-test="top-p50-dns-latency-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Top P99 DNS latency per infra namespace (ms)' panel
-        cy.get('[data-test="top-p99-dns-latency-per-infra-namespace-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'DNS error rate per infra namespace' panel
-        cy.get('[data-test="dns-error-rate-per-infra-namespace-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // below 3 panels should appear with the flowcollector metric 'workload_dns_latency_seconds'
-        // verify 'Top P50 DNS latency per infra workload (ms)' panel
-        cy.get('[data-test="top-p50-dns-latency-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'Top P99 DNS latency per infra workload (ms)' panel
-        cy.get('[data-test="top-p99-dns-latency-per-infra-workload-(ms)-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // verify 'DNS error rate per infra workload' panel
-        cy.get('[data-test="dns-error-rate-per-infra-workload-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.checkDashboards(DNSPanels)
     })
 
     after("Delete flowcollector and DNS pods", function () {

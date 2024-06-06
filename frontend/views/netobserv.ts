@@ -70,7 +70,7 @@ export const Operator = {
             "workload_ingress_bytes_total",
             "workload_egress_bytes_total",
             "workload_ingress_packets_total",
-            "workload_egress_packets_total",
+            "workload_egress_packets_total"
         ]);
     },
     visitFlowcollector: () => {

@@ -6,20 +6,22 @@ const overviewPanels = [
     "total-egress-traffic-chart",
     "total-ingress-traffic-chart",
     "infra-egress-traffic-chart",
-    "apps-egress-traffic-chart",
-    "infra-ingress-traffic-chart",
-    "apps-ingress-traffic-chart",
-    "infra-egress-traffic-chart",
-    "apps-egress-traffic-chart"
+    "infra-ingress-traffic-chart"
 ]
 
 const trafficRatesPanels = [
-    "top-egress-traffic-per-node-chart",
-    "top-ingress-traffic-per-node-chart",
-    "top-egress-traffic-per-infra-namespace-chart",
-    "top-ingress-traffic-per-infra-namespace-chart",
-    "top-egress-traffic-per-infra-workload-chart",
-    "top-ingress-traffic-per-infra-workload-chart"
+    "top-egress-traffic-per-node-(bps)-chart",
+    "top-ingress-traffic-per-node-(bps)-chart",
+    "top-egress-traffic-per-node-(pps)-chart",
+    "top-ingress-traffic-per-node-(pps)-chart",
+    "top-egress-traffic-per-infra-namespace-(bps)-chart",
+    "top-ingress-traffic-per-infra-namespace-(bps)-chart",
+    "top-egress-traffic-per-infra-namespace-(pps)-chart",
+    "top-ingress-traffic-per-infra-namespace-(pps)-chart",
+    "top-egress-traffic-per-infra-workload-(bps)-chart",
+    "top-ingress-traffic-per-infra-workload-(bps)-chart",
+    "top-egress-traffic-per-infra-workload-(pps)-chart",
+    "top-ingress-traffic-per-infra-workload-(pps)-chart"
 ]
 
 describe('Network_Observability flow dashboards tests', { tags: ['Network_Observability'] }, function () {

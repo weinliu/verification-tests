@@ -3,6 +3,21 @@ import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, querySumSelectors } from "../../views/netflow-page"
 import { dashboard, graphSelector } from "views/dashboards-page"
 
+const PacketDropPanels = [
+     // below panel should appear with the 'node_drop_packets_total' metric
+    "top-drops-per-node-(pps)-chart",
+    // below panel should appear with the 'node_drop_bytes_total' metric
+    "top-drops-per-node-(bps)-chart",
+    // below panel should appear with the 'namespace_drop_packets_total' metric
+    "top-drops-per-infra-namespace-(pps)-chart",
+    // below panel should appear with the 'namespace_drop_bytes_total' metric
+    "top-drops-per-infra-namespace-(bps)-chart",
+    // below panel should appear with the 'workload_drop_packets_total' metric
+    "top-drops-per-infra-workload-(pps)-chart",
+    // below panel should appear with the 'workload_drop_bytes_total' metric
+    "top-drops-per-infra-workload-(bps)-chart"
+]
+
 describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags: ['Network_Observability'] }, function () {
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -90,17 +105,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags:
         // verify 'Drops' panel
         cy.get('[data-test="drops-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
 
-        // below panel should appear with the flowcollector metric 'namespace_drop_bytes_total'
-        // verify 'Top drops per node' panel
-        cy.get('[data-test="top-drops-per-node-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // below panel should appear with the flowcollector metric 'node_drop_bytes_total'
-        // verify 'Top drops per infra namespace' panel
-        cy.get('[data-test="top-drops-per-infra-namespace-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-
-        // below panel should appear with the flowcollector metric 'workload_drop_bytes_total'
-        // verify 'Top drops per infra workload' panel
-        cy.get('[data-test="top-drops-per-infra-workload-chart"]').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.checkDashboards(PacketDropPanels)
     })
 
     after("Delete flowcollector", function () {
