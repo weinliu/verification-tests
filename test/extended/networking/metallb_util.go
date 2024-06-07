@@ -449,12 +449,10 @@ func getNodeAnnouncingL2Service(oc *exutil.CLI, svcName string, namespace string
 
 func isPlatformSuitable(oc *exutil.CLI) bool {
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com") {
-		return true
-
+	if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
+		g.Skip("This case will only run on rdu1/rdu2 cluster , skip for other envrionment!!!")
 	}
-	return false
+	return true
 
 }
 
