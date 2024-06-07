@@ -340,7 +340,8 @@ class TestResult:
         else:
             casepre = name.replace("'","").split(caseids[-1])[0].split("Author:")[0]
             for label in self.frameworkLabels:
-                casepre = casepre.replace(label, "")
+                labelWithoutMinus = label.rstrip("-")
+                casepre = casepre.replace(label, "").replace(labelWithoutMinus, "")
             tmpTitle = casepre + tmpTitle
         return tmpTitle
 
