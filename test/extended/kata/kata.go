@@ -1519,10 +1519,13 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		podName := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
 
+		//get annotations from the live pod
+		podAnnotations, _ := oc.Run("get").Args("pods", podName, "-o=jsonpath={.metadata.annotations}", "-n", podNs).Output()
+		podCmd := []string{"-n", oc.Namespace(), podName, "--", "nproc"}
 		//check CPU available from the kata pod itself by nproc command:
-		actualCPU, err := oc.Run("rsh").Args(podName, "nproc").Output()
-		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to rsh to pod to run 'nproc'"))
-		strErr := fmt.Sprintf("Actual CPU count for the pod %v isn't matching expected %v", actualCPU, annotations["CPU"])
+		actualCPU, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(podCmd...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("'oc exec %v' Failed", podCmd))
+		strErr := fmt.Sprintf("Actual CPU count for the pod %v isn't matching expected %v full annotations:\n%v", actualCPU, annotations["CPU"], podAnnotations)
 		o.Expect(actualCPU).To(o.Equal(annotations["CPU"]), strErr)
 
 		//check MEMORY from the node running kata VM:
@@ -1530,7 +1533,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		cmd := "ps -ef | grep uuid | grep -v grep"
 		vmFlags, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bin/sh", "-c", cmd)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed debug node to get qemu instance options"))
-		strErr = fmt.Sprintf("VM flags for the pod doesn't contain expected %v", memoryOptions)
+		strErr = fmt.Sprintf("VM flags for the pod doesn't contain expected %v full annotations:\n%v", memoryOptions, podAnnotations)
 		o.Expect(vmFlags).To(o.ContainSubstring(memoryOptions), strErr)
 		g.By("SUCCESS - KATA pod with required VM instance size was launched")
 	})
