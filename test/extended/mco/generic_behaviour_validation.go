@@ -347,10 +347,6 @@ func (v *UpdateBehaviourValidator) checkDrainNodes() {
 }
 
 func (v *UpdateBehaviourValidator) checkRebootNodes() {
-	var (
-		skipRebootLogMsg = "skipping reboot"
-	)
-
 	// We could check the "Reboot" event in this function, but sometimes the events are not triggered and we don't know why
 	// Until events are not more stable we should not force even validation in ALL our tests, only in those that we want to expose to this instability
 	if v.RebootNodesShouldBeSkipped {
@@ -369,20 +365,10 @@ func (v *UpdateBehaviourValidator) checkRebootNodes() {
 			logger.Infof("Checking that node %s was NOT rebooted", node.GetName())
 			o.Expect(node.GetUptime()).Should(o.BeTemporally("<", v.startTime),
 				"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
-
-			o.Expect(
-				exutil.GetSpecificPodLogs(node.oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
-			).Should(o.ContainSubstring(skipRebootLogMsg),
-				"Error! The node %s was rebooted, but the reboot operation should have been skipped. Cannot find the 'skipping reboot' log msg", node.GetName())
 		} else {
 			logger.Infof("Checking that node %s was rebooted", node.GetName())
 			o.Expect(node.GetUptime()).Should(o.BeTemporally(">", v.startTime),
 				"The node %s must be rebooted, but it was not. Uptime date happened before the start config time.", node.GetName())
-
-			o.Expect(
-				exutil.GetSpecificPodLogs(node.oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
-			).ShouldNot(o.ContainSubstring(skipRebootLogMsg),
-				"Error! The node %s was NOT rebooted, logs are reporting a 'skipping reboot' message.", node.GetName())
 		}
 	}
 

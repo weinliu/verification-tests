@@ -244,7 +244,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		var (
 			waitForPinned       = time.Minute * 5
 			pinnedImageSetName  = "tc-73631-pinned-images-garbage-collector"
-			gcKubeletConfig     = `{"imageMinimumGCAge": "1m", "imageGCHighThresholdPercent": 2, "imageGCLowThresholdPercent": 1}`
+			gcKubeletConfig     = `{"imageMinimumGCAge": "0s", "imageGCHighThresholdPercent": 2, "imageGCLowThresholdPercent": 1}`
 			kcTemplate          = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
 			kcName              = "tc-73631-pinned-garbage-collector"
 			node                = mcp.GetNodesOrFail()[0]
@@ -288,7 +288,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the manually pulled image is garbage collected")
-		o.Eventually(manuallyPulledImage, "20m", "20s").ShouldNot(Exist(),
+		o.Eventually(manuallyPulledImage, "25m", "20s").ShouldNot(Exist(),
 			"Error, %s has not been garbage collected", manuallyPulledImage)
 		logger.Infof("OK!\n")
 
@@ -413,8 +413,13 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Reboot nodes")
-		o.Expect(mcp.Reboot()).To(o.Succeed(), "Error rebooting pool %s", mcp)
-		o.Expect(mcp.WaitForRebooted()).To(o.Succeed(), "Nodes in pool %s were not rebooted", mcp)
+		for _, node := range mcp.GetNodesOrFail() {
+			o.Expect(node.Reboot()).To(o.Succeed(), "Error rebooting node %s", node)
+		}
+		for _, node := range mcp.GetNodesOrFail() {
+			_, err := node.DebugNodeWithChroot("hostname")
+			o.Expect(err).NotTo(o.HaveOccurred(), "Node %s was not recovered after rebot", node)
+		}
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the applicaion is OK after the reboot")

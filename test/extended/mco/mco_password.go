@@ -55,6 +55,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		}
 
 		node := allCoreos[0]
+		startTime := node.GetDateOrFail()
 
 		exutil.By("Configure a password for 'core' user")
 		_, _ = node.GetDate() // for debugging purposes, it prints the node's current time in the logs
@@ -75,10 +76,11 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		podLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), `"drain\|reboot"`)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Errot getting the drain and reboot logs: %s", err)
 		logger.Infof("Pod logs to skip node drain and reboot:\n %v", podLogs)
-		o.Expect(podLogs).Should(
-			o.And(
-				o.ContainSubstring("Changes do not require drain, skipping"),
-				o.ContainSubstring("skipping reboot")))
+		o.Expect(podLogs).Should(o.ContainSubstring("Changes do not require drain, skipping"))
+
+		o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
+			"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+
 		logger.Infof("OK!\n")
 
 		exutil.By("Check events to make sure that drain and reboot events were not triggered")
@@ -311,7 +313,6 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		log, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), "")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(log).Should(o.ContainSubstring("Changes do not require drain, skipping"))
-		o.Expect(log).Should(o.ContainSubstring("skipping reboot"))
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that the node was NOT rebooted")
