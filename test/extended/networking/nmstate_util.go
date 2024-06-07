@@ -485,7 +485,7 @@ func verifyIPSecTunnelDown(oc *exutil.CLI, nodeName, src, dst, mode string) {
 
 // host2net tunnel will have network address in either src or dst from right side
 func verifyIPSecTunnelUphost2netTunnel(oc *exutil.CLI, nodeName, src, dst, mode string) {
-	cmd := fmt.Sprintf("ip xfrm policy get src %s/32 dst %s/24 dir out ; ip xfrm policy get src %s/24 dst %s/32 dir in  ", src, dst, dst, src)
+	cmd := fmt.Sprintf("ip xfrm policy get src %s/32 dst %s/23 dir out ; ip xfrm policy get src %s/23 dst %s/32 dir in  ", src, dst, dst, src)
 	ipXfrmPolicy, ipsecErr := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", cmd)
 	o.Expect(ipsecErr).NotTo(o.HaveOccurred())
 	o.Expect(strings.Contains(ipXfrmPolicy, mode)).Should(o.BeTrue())
