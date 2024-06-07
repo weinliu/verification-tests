@@ -68,7 +68,7 @@ if not modifedFiles:
 lines=[]
 for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
     print("Search the updated cases for "+filename)
-    diffcommands = f'git diff {commit1} {commit2} -- {filename.strip(os.linesep)} | grep -E "g.It|g.Describe"'
+    diffcommands = 'git diff {} {} -- {} | grep -E "g.It|g.Describe"'.format(commit1, commit2, filename.strip(os.linesep))
     # print(diffcommands)
     process = subprocess.Popen(diffcommands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
@@ -79,12 +79,12 @@ for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
                 # print(line)
                 lines.append(line)
         else:
-            print(f"Error occurred: {errs.decode('utf-8')}")
+            print("Error occurred: {}".format(errs.decode('utf-8')))
     except subprocess.TimeoutExpired:
         process.kill()
         raise Exception(diffcommands +" timeout")
 content = "\n".join(lines)
-print(f"{content}\n\n")
+print("{}\n\n".format(content))
 
 
 importance = ["Critical", "High", "Medium", "Low"]
@@ -97,8 +97,8 @@ desContent = patternDescribe.findall(content)
 
 displayDesc = "\n".join(desContent)
 displayIt = "\n".join(itContent)
-print(f"Des:\n{displayDesc} \n\n")
-print(f"it:\n{displayIt} \n\n")
+print("Des:\n{} \n\n".format(displayDesc))
+print("it:\n{} \n\n".format(displayIt))
 
 errList = []
 for des in desContent:
@@ -109,36 +109,53 @@ for des in desContent:
         # print(f"sig: {sig}, subTeam: {sub}")
 
         if not sig.strip("[]") in sigs:
-            errList.append(f"g.Describe sig: {sig} in \"{des}\" is not correct which is not in list\n")
+            errList.append("g.Describe sig: {} in \"{}\" is not correct which is not in list\n".format(sig, des))
 
         if not sub in subteam:
-            errList.append(f"g.Describe subteam: {sub} in \"{des}\" is not correct which is not in list\n")
+            errList.append("g.Describe subteam: {} in \"{}\" is not correct which is not in list\n".format(sub, des))
     else:
-        errList.append(f"the g.Describe \"{des}\" is less than two words\n")
+        errList.append("the g.Describe \"{}\" is less than two words\n".format(des))
 
-titelPatten = re.compile(r'g\.It\("([^"]*)')
+titlePatten = re.compile(r'g\.It\("([^"]*)')
+importancePatten = re.compile(r'(\w+)-(\d+)(-?)')
 for it in itContent:
     # print(f"the it:\n{it}")
     it=it.replace("'", "")
-    match = titelPatten.search(it)
+    match = titlePatten.search(it)
+
     if match:
         title = match.group(1)
+
         if not title.startswith("Author:"):
-            errList.append(f"g.It \"{title}\" does not start with Author:, please put it at the begining of the title\n")
+            errList.append("g.It \"{}\" does not start with \"Author:<your Kerberos ID>-\", please put it at the begining of the title\n".format(title))
+
         for sub in subteam:
             if sub in title:
-                errList.append(f"""g.It "{title}" has subteam {sub}, please remove it because it should be in g.Describe 
-even it is your own subteam because currently there is no way to check if it is your subteam or not. thanks to understand it \n""")
+                errList.append("g.It \"{}\" has subteam {}, please remove it because it should be in g.Describe even it is your own subteam because currently there is no way to check if it is your subteam or not. thanks to understand it \n".format(title, sub))
+
+        importances = importancePatten.finditer(title)        
+        mList = list(importances)
+        if len(mList) > 0:
+            for m in mList:
+                if not m.group(1) in importance:
+                    errList.append("g.It \"{}\" has wrong importance value {}\n".format(title, m.group(1)))
+                if len(m.group(2)) < 5:
+                    errList.append("g.It \"{}\" has wrong case id {}\n".format(title, m.group(2)))
+                if not m.group(3):
+                    errList.append("g.It \"{}\" has no \"-\" after case id {}\n".format(title, m.group(2)))
+        else:
+            errList.append("g.It \"{}\" has wrong importance format, please check it".format(title))
+
     else:
-        errList.append(f"the g.It has no case title, please check the title\n")
+        errList.append("the g.It has no case title, please check the title\n")
 
 if len(errList) > 0:
-    errList.append(f"""
+    errList.append("""
 Note:
 We know it is new rule and the existing code does not follow it.
 So, for existing code, you do not need dedicated PR to udpate g.Describe or g.It.
 Only when you modify the exiting g.Describe and g.It for some other reasons or make new g.Describe and g.It, please follow it.
 """)
     errs = "\n".join(errList)
-    print(f"\nthe errors: \n{errs}\n")
+    print("\nthe errors: \n{}\n".format(errs))
     exit(1)
