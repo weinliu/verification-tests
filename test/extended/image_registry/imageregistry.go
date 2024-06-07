@@ -654,7 +654,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(token).NotTo(o.BeEmpty())
 
 		g.By("Create a secret for user-defined route")
-		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "mysecret", "--docker-server="+userroute1, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
+		err = oc.NotShowInfo().WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "mysecret", "--docker-server="+userroute1, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Import an image")
@@ -713,7 +713,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(token).NotTo(o.BeEmpty())
 
 		g.By("Create a secret for user-defined route")
-		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "secret33051", "--docker-server="+host, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
+		err = oc.NotShowInfo().WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "secret33051", "--docker-server="+host, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Import image from an insecure registry directly without --insecure=true")
@@ -2842,7 +2842,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3")
 
 		g.By("Push image to private registry")
-		err = oc.AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "--auth-basic="+regUser+":"+regPass, "--to="+authFile, "--insecure", "-n", oc.Namespace()).Execute()
+		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "--auth-basic="+regUser+":"+regPass, "--to="+authFile, "--insecure", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		myimage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", myimage, "--insecure", "-a", authFile, "--keep-manifest-list=true", "--filter-by-os=.*").Execute()

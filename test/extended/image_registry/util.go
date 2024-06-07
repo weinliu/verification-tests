@@ -911,7 +911,7 @@ func saveImageRegistryAuth(oc *exutil.CLI, sa, regRoute, ns string) (string, err
 	tempDataFile := filepath.Join("/tmp/", fmt.Sprintf("ir-auth-%s", getRandomString()))
 	token, err := getSAToken(oc, sa, ns)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "--auth-basic=anyuser:"+token, "--to="+tempDataFile, "--insecure", "-n", ns).Execute()
+	err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "--auth-basic=anyuser:"+token, "--to="+tempDataFile, "--insecure", "-n", ns).Execute()
 	if err != nil {
 		e2e.Logf("Fail to login image registry: %v", err)
 		return tempDataFile, err
