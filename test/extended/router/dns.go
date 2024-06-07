@@ -957,4 +957,34 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
 	})
+
+	// Bug: 2095941, OCPBUGS-5943
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-63553-Annotation 'TopologyAwareHints' presents should not cause any pathological events", func() {
+		g.By("Pre-flight check number for worker nodes in the environment")
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 2 {
+			g.Skip("Skipping as we need atleast two worker nodes")
+		}
+
+		g.By("Check whether the topology-aware-hints annotation is auto set or not")
+		// Get a random worker node name and get the labels on it
+		workerNodes := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/worker", "{.items[*].metadata.name}")
+		workerNodeName := getRandomDNSPodName(strings.Split(workerNodes, " "))
+		nodeLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNodeName, "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Topology-aware hints annotation is supported on the nodes having the topology.kubernetes.io/zone label
+		if strings.Contains(nodeLabel, "topology.kubernetes.io/zone") {
+			findAnnotation := getAnnotation(oc, "openshift-dns", "svc", "dns-default")
+			o.Expect(findAnnotation).To(o.ContainSubstring(`"service.kubernetes.io/topology-aware-hints":"auto"`))
+		} else {
+			e2e.Logf("Skipping the topology-aware hints annotation check, since it is not supported on this cluster")
+		}
+
+		// OCPBUGS-5943
+		g.By("Check dns daemon set for minReadySeconds to 9, maxSurge to 10% and maxUnavailable to 0")
+		jsonPath := `{.spec.minReadySeconds}-{.spec.updateStrategy.rollingUpdate.maxSurge}-{.spec.updateStrategy.rollingUpdate.maxUnavailable}`
+		spec := getByJsonPath(oc, "openshift-dns", "daemonset/dns-default", jsonPath)
+		o.Expect(spec).To(o.ContainSubstring("9-10%-0"))
+	})
 })
