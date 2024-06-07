@@ -2683,18 +2683,36 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-47044-Verify the moderate profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-47044-High-74104-Verify the moderate profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
 		ssbModerate := "ssb-moderate-" + getRandomString()
 
-		g.By("Check moderate profiles .. !!!\n")
+		g.By("Check the annotations for all profiles exists .. !!!\n")
+		profiles, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "profile.compliance", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		profilesList := strings.Fields(profiles)
+		for _, profile := range profilesList {
+			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profile.compliance", profile, "-n", subD.namespace,
+				`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		}
+
+		g.By("Get guid for moderate profiles.. !!!\n")
 		subD.getProfileName(oc, "ocp4-moderate")
 		subD.getProfileName(oc, "ocp4-moderate-node")
 		subD.getProfileName(oc, "rhcos4-moderate")
+		ocp4ModerateGuid, errGetOcp4ModerateGuid := oc.AsAdmin().Run("get").Args("profile.compliance", "ocp4-moderate", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`).Output()
+		o.Expect(errGetOcp4ModerateGuid).NotTo(o.HaveOccurred())
+		ocp4ModerateNodeGuid, errGetOcp4ModerateNodeGuid := oc.AsAdmin().Run("get").Args("profile.compliance", "ocp4-moderate-node", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`).Output()
+		o.Expect(errGetOcp4ModerateNodeGuid).NotTo(o.HaveOccurred())
+		rhcos4ModerateGuid, errGetRhcos4ModerateGuid := oc.AsAdmin().Run("get").Args("profile.compliance", "rhcos4-moderate", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`).Output()
+		o.Expect(errGetRhcos4ModerateGuid).NotTo(o.HaveOccurred())
 
 		g.By("Create scansettingbinding... !!!\n")
 		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbModerate})
-		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbModerate, "profile/ocp4-moderate", "profile/ocp4-moderate-node", "profile/rhcos4-moderate", "-n", subD.namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_, errBind := OcComplianceCLI().Run("bind").Args("-N", ssbModerate, "profile/ocp4-moderate", "profile/ocp4-moderate-node", "profile/rhcos4-moderate", "-n", subD.namespace).Output()
+		o.Expect(errBind).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbModerate, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
@@ -2702,6 +2720,30 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbModerate, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbModerate, "2")
+
+		g.By("Check compliance scan should have labels with profile guid !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ocp4ModerateGuid, ok, []string{"scan", "ocp4-moderate", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ocp4ModerateNodeGuid, ok, []string{"scan", "ocp4-moderate-node-master", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ocp4ModerateNodeGuid, ok, []string{"scan", "ocp4-moderate-node-worker", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, rhcos4ModerateGuid, ok, []string{"scan", "rhcos4-moderate-master", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, rhcos4ModerateGuid, ok, []string{"scan", "rhcos4-moderate-worker", "-n", subD.namespace,
+			`-o=jsonpath={.metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+
+		g.By("Check rules  should have labels with profile guid !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ocp4ModerateGuid, ok, []string{"ccr", "-l", "compliance.openshift.io/scan-name=ocp4-moderate", "-n", subD.namespace,
+			`-o=jsonpath={.items[0].metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ocp4ModerateNodeGuid, ok, []string{"ccr", "-l", "compliance.openshift.io/scan-name=ocp4-moderate-node-master", "-n", subD.namespace,
+			`-o=jsonpath={.items[0].metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ocp4ModerateNodeGuid, ok, []string{"ccr", "-l", "compliance.openshift.io/scan-name=ocp4-moderate-node-worker", "-n", subD.namespace,
+			`-o=jsonpath={.items[0].metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, rhcos4ModerateGuid, ok, []string{"ccr", "-l", "compliance.openshift.io/scan-name=rhcos4-moderate-master", "-n", subD.namespace,
+			`-o=jsonpath={.items[0].metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, rhcos4ModerateGuid, ok, []string{"ccr", "-l", "compliance.openshift.io/scan-name=rhcos4-moderate-worker", "-n", subD.namespace,
+			`-o=jsonpath={.items[0].metadata.labels.compliance\.openshift\.io/profile-guid}`}).check(oc)
 
 		g.By("ocp-47044 The ocp4 moderate profiles perform scan as expected with default scanSettings... !!!\n")
 	})
