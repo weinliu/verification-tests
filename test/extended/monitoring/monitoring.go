@@ -2660,6 +2660,29 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusOperatorRejectedResources"}'`, token, `PrometheusOperatorRejectedResources`, 3*uwmLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-73805-trigger PrometheusRuleFailures alert [Serial]", func() {
+		var (
+			PrometheusRuleFailures = filepath.Join(monitoringBaseDir, "PrometheusRuleFailures.yaml")
+		)
+		exutil.By("delete uwm-config/cm-config and test alert at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PrometheusRule", "example-alert", "-n", "openshift-monitoring", "--ignore-not-found").Execute()
+
+		exutil.By("check the alert exist")
+		cmd := "-ojsonpath={.spec.groups[].rules[?(@.alert==\"PrometheusRuleFailures\")]}"
+		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "prometheus-k8s-prometheus-rules", cmd, "PrometheusRuleFailures", true)
+
+		exutil.By("trigger PrometheusRuleFailures alert")
+		createResourceFromYaml(oc, "openshift-monitoring", PrometheusRuleFailures)
+
+		exutil.By("check alert metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=sum(irate(container_network_receive_bytes_total{pod!=""}[5m])) BY (pod, interface) + on(pod, interface) group_left(network_name) pod_network_name_info'`, token, `"error":"found duplicate series for the match group`, uwmLoadTime)
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusRuleFailures"}'`, token, `PrometheusRuleFailures`, 3*uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
