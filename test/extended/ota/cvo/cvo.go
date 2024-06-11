@@ -1874,7 +1874,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		originalVolumes := gjson.Get(originalOutput, "volumes").Array()
 		ocJSONPatch(oc, "", fmt.Sprintf("scc/%s", scc), []JSONp{
-			{"remove", "/volumes/4", nil},
+			{"remove", "/volumes/0", nil},
 			{"add", "/volumes/0", "Test"},
 		})
 		o.Consistently(func() bool {
