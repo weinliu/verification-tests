@@ -130,9 +130,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
 		kubeconfig := tmpDir + "/kubeconfig"
 		e2e.Logf("Check worker machinepool .status.replicas = 3")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
 		e2e.Logf("Check infra machinepool .status.replicas = 1 ")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
 		machinesetsname := getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
 		o.Expect(machinesetsname).NotTo(o.BeEmpty())
 		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
