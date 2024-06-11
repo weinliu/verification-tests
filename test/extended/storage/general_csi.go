@@ -1195,7 +1195,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			exutil.By("# Get the volumename, volumeID")
 			volumeName := pvc.getVolumeName(oc)
-			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", volumeName).Execute()
 			volumeID := pvc.getVolumeID(oc)
 			defer deleteBackendVolumeByVolumeID(oc, volumeID)
 
