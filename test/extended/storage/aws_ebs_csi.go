@@ -11,6 +11,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -232,6 +233,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(resourceVersionOriErr).ShouldNot(o.HaveOccurred())
 
 		exutil.By("# Delete the cloud credential secret and wait aws-ebs-csi-driver-controller ready again ")
+		originSecretContent, getContentErr := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("get").Args("-n", "openshift-cluster-csi-drivers", "secret/ebs-cloud-credentials", "-ojson").Output()
+		o.Expect(getContentErr).ShouldNot(o.HaveOccurred())
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "secret/ebs-cloud-credentials", "openshift-cluster-csi-drivers") {
+				e2e.Logf("The CCO does not reconcile the storage credentials back, restore the origin credentials")
+				restoreErr := oc.AsAdmin().NotShowInfo().Run("apply").Args("-n", "openshift-cluster-csi-drivers", "-f", "-").InputString(originSecretContent).Execute()
+				o.Expect(restoreErr).ShouldNot(o.HaveOccurred())
+			}
+		}()
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-cluster-csi-drivers", "secret/ebs-cloud-credentials").Execute()).NotTo(o.HaveOccurred())
 
 		o.Eventually(func() string {
