@@ -612,4 +612,110 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 
 	})
 
+	// author: anusaxen@redhat.com
+	g.It("Author:ansaxen-Medium-73554-External Traffic should still be IPsec encrypted in presense of Admin Network Policy application at egress node [Disruptive]", func() {
+		var (
+			testID         = "73554"
+			testDataDir    = exutil.FixturePath("testdata", "networking")
+			banpCRTemplate = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-single-rule-template-node.yaml")
+			anpCRTemplate  = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-template-node.yaml")
+			matchLabelKey  = "kubernetes.io/metadata.name"
+		)
+
+		g.By("Add label to OCP egress node")
+		defer exutil.DeleteLabelFromNode(oc, rightNode, "team-")
+		exutil.AddLabelToNode(oc, rightNode, "team", "qe")
+
+		exutil.By("Create a Baseline Admin Network Policy with allow action")
+		banpCR := singleRuleBANPPolicyResourceNode{
+			name:       "default",
+			subjectKey: matchLabelKey,
+			subjectVal: "openshift-nmstate",
+			policyType: "egress",
+			direction:  "to",
+			ruleName:   "default-allow-egress",
+			ruleAction: "Allow",
+			ruleKey:    "node-role.kubernetes.io/worker",
+			template:   banpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banpCR.name)
+		banpCR.createSingleRuleBANPNode(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+
+		exutil.By("Verify ANP with different actions and priorities")
+		anpIngressRuleCR := singleRuleANPPolicyResourceNode{
+			name:       "anp-" + testID + "-1",
+			subjectKey: matchLabelKey,
+			subjectVal: "openshift-nmstate",
+			priority:   1,
+			policyType: "egress",
+			direction:  "to",
+			ruleName:   "node-as-egress-peer-" + testID,
+			ruleAction: "Allow",
+			ruleKey:    "team",
+			nodeKey:    "node-role.kubernetes.io/worker",
+			ruleVal:    "qe",
+			actionname: "egress",
+			actiontype: "Allow",
+			template:   anpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpIngressRuleCR.name)
+		anpIngressRuleCR.createSingleRuleANPNode(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpIngressRuleCR.name)).To(o.BeTrue())
+
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+		policyName := "ipsec-policy-transport-" + testID
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
+		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "ESP")).Should(o.BeTrue())
+		cmdTcpdump.Process.Kill()
+
+		exutil.By("Start tcpdump on ipsec right node again")
+		tcpdumpCmd2 := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
+		cmdTcpdump2, cmdOutput2, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd2).Background()
+		defer cmdTcpdump2.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking ssh between worker node and external host encrypted by ESP")
+		time.Sleep(5 * time.Second)
+		result, timeoutTestErr := accessEgressNodeFromIntSvcInstanceOnGCP(leftPublicIP, rightIP)
+		o.Expect(timeoutTestErr).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.Equal("0"))
+		cmdTcpdump2.Wait()
+		e2e.Logf("tcpdump for ssh is \n%s", cmdOutput2.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "ESP")).Should(o.BeTrue())
+	})
+
 })

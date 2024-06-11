@@ -50,6 +50,18 @@ type multiRuleBANPPolicyResource struct {
 	template    string
 }
 
+type singleRuleBANPPolicyResourceNode struct {
+	name       string
+	subjectKey string
+	subjectVal string
+	policyType string
+	direction  string
+	ruleName   string
+	ruleAction string
+	ruleKey    string
+	template   string
+}
+
 // Struct to create ANP with either ingress or egress rule
 // Match Label selector
 // egress to
@@ -65,6 +77,23 @@ type singleRuleANPPolicyResource struct {
 	ruleAction string
 	ruleKey    string
 	ruleVal    string
+	template   string
+}
+
+type singleRuleANPPolicyResourceNode struct {
+	name       string
+	subjectKey string
+	subjectVal string
+	priority   int32
+	policyType string
+	direction  string
+	ruleName   string
+	ruleAction string
+	ruleKey    string
+	nodeKey    string
+	ruleVal    string
+	actionname string
+	actiontype string
 	template   string
 }
 
@@ -131,6 +160,23 @@ func (banp *singleRuleBANPPolicyResource) createSingleRuleBANP(oc *exutil.CLI) {
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Baseline Admin Network Policy CR %v", banp.name))
 }
+
+func (banp *singleRuleBANPPolicyResourceNode) createSingleRuleBANPNode(oc *exutil.CLI) {
+	exutil.By("Creating single rule Baseline Admin Network Policy from template")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", banp.template, "-p", "NAME="+banp.name,
+			"SUBJECTKEY="+banp.subjectKey, "SUBJECTVAL="+banp.subjectVal,
+			"POLICYTYPE="+banp.policyType, "DIRECTION="+banp.direction,
+			"RULENAME="+banp.ruleName, "RULEACTION="+banp.ruleAction, "RULEKEY="+banp.ruleKey)
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Baseline Admin Network Policy CR %v", banp.name))
+}
+
 func (banp *multiRuleBANPPolicyResource) createMultiRuleBANP(oc *exutil.CLI) {
 	exutil.By("Creating Multi rule Baseline Admin Network Policy from template")
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
@@ -156,6 +202,22 @@ func (anp *singleRuleANPPolicyResource) createSingleRuleANP(oc *exutil.CLI) {
 			"POLICYTYPE="+anp.policyType, "DIRECTION="+anp.direction,
 			"SUBJECTKEY="+anp.subjectKey, "SUBJECTVAL="+anp.subjectVal,
 			"PRIORITY="+strconv.Itoa(int(anp.priority)), "RULENAME="+anp.ruleName, "RULEACTION="+anp.ruleAction, "RULEKEY="+anp.ruleKey, "RULEVAL="+anp.ruleVal)
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Admin Network Policy CR %v", anp.name))
+}
+
+func (anp *singleRuleANPPolicyResourceNode) createSingleRuleANPNode(oc *exutil.CLI) {
+	exutil.By("Creating Single rule Admin Network Policy from template for Node")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", anp.template, "-p", "NAME="+anp.name,
+			"POLICYTYPE="+anp.policyType, "DIRECTION="+anp.direction,
+			"SUBJECTKEY="+anp.subjectKey, "SUBJECTVAL="+anp.subjectVal,
+			"PRIORITY="+strconv.Itoa(int(anp.priority)), "RULENAME="+anp.ruleName, "RULEACTION="+anp.ruleAction, "RULEKEY="+anp.ruleKey, "NODEKEY="+anp.nodeKey, "RULEVAL="+anp.ruleVal, "ACTIONNAME="+anp.actionname, "ACTIONTYPE="+anp.actiontype)
 		if err1 != nil {
 			e2e.Logf("Error creating resource:%v, and trying again", err1)
 			return false, nil
