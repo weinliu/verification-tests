@@ -300,7 +300,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-LEVEL0-Critical-70627-[CCM] Service of type LoadBalancer can be created successful [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-LEVEL0-Critical-70627-[CCM] Service of type LoadBalancer can be created successful", func() {
 		clusterinfra.SkipForAwsOutpostCluster(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		if iaasPlatform == clusterinfra.AWS && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
@@ -310,8 +310,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
 		loadBalancerService := loadBalancerServiceDescription{
 			template:  loadBalancer,
-			name:      "svc-loadbalancer",
-			namespace: "default",
+			name:      "svc-loadbalancer-70627",
+			namespace: oc.Namespace(),
 		}
 		g.By("Create loadBalancerService")
 		defer loadBalancerService.deleteLoadBalancerService(oc)

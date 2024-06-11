@@ -127,7 +127,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-LEVEL0-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-LEVEL0-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		if iaasPlatform == clusterinfra.AWS && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
 			g.Skip("Skipped: There is no public subnet on AWS C2S/SC2S disconnected clusters!")
@@ -136,8 +136,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		loadBalancer := filepath.Join(ccmBaseDir, "svc-loadbalancer.yaml")
 		loadBalancerService := loadBalancerServiceDescription{
 			template:  loadBalancer,
-			name:      "svc-loadbalancer",
-			namespace: "default",
+			name:      "svc-loadbalancer-70626",
+			namespace: oc.Namespace(),
 		}
 		g.By("Create loadBalancerService")
 		defer loadBalancerService.deleteLoadBalancerService(oc)
