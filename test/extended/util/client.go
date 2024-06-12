@@ -346,6 +346,7 @@ func (c *CLI) SetupProject() {
 	DefaultServiceAccounts := []string{
 		"default",
 	}
+	roleBindingNames := []string{}
 	shouldCheckSecret := false
 	clusterVersion, err := c.AdminConfigClient().ConfigV1().ClusterVersions().Get(context.Background(), "version", metav1.GetOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -372,18 +373,21 @@ func (c *CLI) SetupProject() {
 		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
 			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityBuild)) {
 		DefaultServiceAccounts = append(DefaultServiceAccounts, "builder")
+		roleBindingNames = append(roleBindingNames, "system:image-builders")
 	}
 	if clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
 		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig) ||
 		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
 			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityDeploymentConfig)) {
 		DefaultServiceAccounts = append(DefaultServiceAccounts, "deployer")
+		roleBindingNames = append(roleBindingNames, "system:deployers")
 	}
 	if (clusterVersion.Status.Capabilities.KnownCapabilities == nil ||
 		!checkCapability(clusterVersion.Status.Capabilities.KnownCapabilities, configv1.ClusterVersionCapabilityImageRegistry) ||
 		(clusterVersion.Status.Capabilities.EnabledCapabilities != nil &&
 			checkCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, configv1.ClusterVersionCapabilityImageRegistry))) && !imageRegistryRemoved() {
 		shouldCheckSecret = true
+		roleBindingNames = append(roleBindingNames, "system:image-pullers")
 	}
 	for _, sa := range DefaultServiceAccounts {
 		e2e.Logf("Waiting for ServiceAccount %q to be provisioned...", sa)
@@ -395,7 +399,7 @@ func (c *CLI) SetupProject() {
 	cancel := func() {}
 	defer func() { cancel() }()
 	// Wait for default role bindings for those SAs
-	for _, name := range []string{"system:image-pullers", "system:image-builders", "system:deployers"} {
+	for _, name := range roleBindingNames {
 		e2e.Logf("Waiting for RoleBinding %q to be provisioned...", name)
 
 		ctx, cancel = watchtools.ContextWithOptionalTimeout(context.Background(), 3*time.Minute)
