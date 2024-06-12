@@ -566,4 +566,48 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(strings.Contains(outErr, "the image is a manifest list")).To(o.BeTrue())
 	})
+
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-72947-High-72948-support OCI filtering for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72947"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "50G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72948.yaml")
+
+		exutil.By("Use skopoe copy catalogsource to localhost")
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s --remove-signatures --insecure-policy", dirname+"/redhat-operator-index"))
+
+		exutil.By("Start mirror2mirror for oci operators")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+	})
 })
