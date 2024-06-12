@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -49,7 +50,7 @@ var (
 
 func checkSubscription(oc *exutil.CLI) (out string, err error) {
 	g.By("Check the state of Operator")
-	errCheck := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", subName, "-n", namespace, "-o=jsonpath={.status.state}").Output()
 		if strings.Contains(out, "NotFound") || strings.Contains(out, "No resources") || err != nil {
 			return false, err
@@ -66,7 +67,7 @@ func checkSubscription(oc *exutil.CLI) (out string, err error) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Check that ClusterServiceVersion " + csvName + " is finished")
-	errCheck = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterserviceversions", csvName, "-n", namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(out, "SucceededInstallSucceeded") == 0 {
@@ -79,13 +80,9 @@ func checkSubscription(oc *exutil.CLI) (out string, err error) {
 	return out, err
 }
 
-func createOperator(oc *exutil.CLI, csTemplate string, ogTemplate string, subTemplate string, nsTemplate string) {
+func createOperator(oc *exutil.CLI, ogTemplate string, subTemplate string, nsTemplate string) {
 	g.By("Create Namespace")
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", nsTemplate).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	g.By("Create Catalog Source")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", csTemplate).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Create Operator Group")
@@ -101,12 +98,11 @@ func createOperator(oc *exutil.CLI, csTemplate string, ogTemplate string, subTem
 	e2e.Logf("Output: %v", out)
 }
 func createObservabilityOperator(oc *exutil.CLI, oboBaseDir string) {
-	csTemplate := filepath.Join(oboBaseDir, "catalog-src.yaml")
 	ogTemplate := filepath.Join(oboBaseDir, "operator-group.yaml")
 	subTemplate := filepath.Join(oboBaseDir, "subscription.yaml")
 	nsTemplate := filepath.Join(oboBaseDir, "namespace.yaml")
 	g.By("Install Observability Operator")
-	createOperator(oc, csTemplate, ogTemplate, subTemplate, nsTemplate)
+	createOperator(oc, ogTemplate, subTemplate, nsTemplate)
 	g.By("create servicemonitor")
 	smTemplate := filepath.Join(oboBaseDir, "obo-service-monitor.yaml")
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", smTemplate).Output()
@@ -165,7 +161,7 @@ func checkMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, stack 
 		name = "example-app-monitoring-stack"
 	}
 	g.By("Check the state of MonitoringStack")
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", name, "-n", namespace, "-o=jsonpath={.status.conditions[*].reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(out, "MonitoringStackAvailable") {
@@ -184,7 +180,7 @@ func checkMonitoringStackPods(oc *exutil.CLI, stack string) {
 	if stack == "monitor_example_app" {
 		name = "example-app-monitoring-stack"
 	}
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "prometheus="+name, "-o=jsonpath={.items[*].status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if exutil.IsSNOCluster(oc) {
@@ -202,9 +198,9 @@ func checkMonitoringStackPods(oc *exutil.CLI, stack string) {
 }
 func checkOperatorPods(oc *exutil.CLI) {
 	g.By("Check " + namespace + " namespace pods liveliness")
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-o=jsonpath={.items[*].status.phase}").Output()
-		if strings.Compare(out, "Succeeded Running Running Running Running Running") == 0 {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-o", "jsonpath={.items[*].status.phase}").Output()
+		if strings.Compare(out, "Running Running Running Running") == 0 {
 			return true, nil
 		}
 		return false, err
@@ -236,7 +232,7 @@ func checkRemoteWriteConfig(oc *exutil.CLI, msD monitoringStackDescription) {
 	)
 
 	g.By("Check remote write config")
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", msD.name, "-n", msD.namespace, "-o=jsonpath={.spec.prometheusConfig.remoteWrite}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		actual = gjson.Parse(out).Value()
@@ -254,7 +250,7 @@ func checkMonitoringStackDetails(oc *exutil.CLI, msD monitoringStackDescription,
 	if stack == "rosa_mc" {
 		name = msD.name
 		g.By("Get clusterID and region")
-		errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", msD.name, "-n", msD.namespace, "-o=jsonpath={.spec.prometheusConfig.externalLabels.hypershift_cluster_id}{.spec.prometheusConfig.externalLabels.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Compare(out, msD.clusterID+msD.region) == 0 {
@@ -268,7 +264,7 @@ func checkMonitoringStackDetails(oc *exutil.CLI, msD monitoringStackDescription,
 		name = "hypershift-monitoring-stack"
 	}
 	g.By("Check status of MonitoringStack")
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("monitoringstack", name, "-n", namespace, "-o=jsonpath={.status.conditions[*].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(out, "False") {
@@ -301,8 +297,6 @@ func deleteOperator(oc *exutil.CLI) {
 	errSub := oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", subName, "-n", namespace).Execute()
 	g.By("Removing OperatorGroup " + ogName)
 	errOg := oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", ogName, "-n", namespace).Execute()
-	g.By("Removing CatalogSource " + csName)
-	errCs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("catalogsource", csName, "-n", namespace).Execute()
 	g.By("Removing Namespace " + namespace)
 	errNs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", namespace).Execute()
 	crds, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--api-group=monitoring.rhobs", "-o", "name").Output()
@@ -316,12 +310,11 @@ func deleteOperator(oc *exutil.CLI) {
 	o.Expect(errCsv).NotTo(o.HaveOccurred())
 	o.Expect(errSub).NotTo(o.HaveOccurred())
 	o.Expect(errOg).NotTo(o.HaveOccurred())
-	o.Expect(errCs).NotTo(o.HaveOccurred())
 	o.Expect(errNs).NotTo(o.HaveOccurred())
 }
 func checkRuleExists(oc *exutil.CLI, token, routeName, namespace, ruleName string) bool {
 	var rules []gjson.Result
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "-o=jsonpath={.spec.path}").Output()
 		if err != nil {
 			return false, nil
@@ -375,7 +368,7 @@ func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
 	g.By("Get SA token")
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	g.By("Check prometheus rules")
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrule", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(out, "alertmanager-rules") && strings.Contains(out, "prometheus-operator-rules") && strings.Contains(out, "prometheus-rules") && strings.Contains(out, "observability-operator-rules") {
@@ -385,7 +378,7 @@ func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Prometheus rules are not created in %v namespace", namespace))
 	g.By("Check Observability Operator Alertmanager Rules")
-	errCheck = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		IsAlertManagerRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-alertmanager-rules")
 		g.By("Check Observability Operator Prometheus Operator Rules")
 		IsPrometheusOperatorRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-prometheus-operator-rules")
@@ -440,7 +433,7 @@ func checkPodHealth(oc *exutil.CLI) {
 	)
 
 	g.By("Check remote write config")
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		g.By("Get the observability operator pod")
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "app.kubernetes.io/name=observability-operator", "-oname").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -480,7 +473,7 @@ func checkIfMetricValueExists(oc *exutil.CLI, token, url string, timeout time.Du
 		err error
 	)
 	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
-	err = wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		res, err = exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
 		val := gjson.Parse(res).Get("data.result.#.value").Array()
 		if err != nil || len(val) == 0 {
@@ -506,20 +499,28 @@ func createCustomMonitoringStack(oc *exutil.CLI, oboBaseDir string) {
 }
 func checkExampleAppStatus(oc *exutil.CLI, ns string) {
 	g.By("Check the status of Example App")
-	errCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		g.By("Get the pod name")
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "app=prometheus-example-app", "-oname").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			return false, nil
+		}
 		g.By("Check the status of pod")
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, "-n", ns, "-o=jsonpath={.status.phase}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			return false, nil
+		}
 		g.By("Check service is present")
 		svcName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, "-l", "app=prometheus-example-app", "-oname").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			return false, nil
+		}
 		e2e.Logf("Service: %v", svcName)
 		g.By("Check service monitor is present")
 		svMonName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("servicemonitor.monitoring.rhobs", "-n", ns, "-l", "k8s-app=prometheus-example-monitor", "-oname").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			return false, nil
+		}
 		e2e.Logf("Service Monitor: %v", svMonName)
 		if status != "Running" {
 			return false, nil

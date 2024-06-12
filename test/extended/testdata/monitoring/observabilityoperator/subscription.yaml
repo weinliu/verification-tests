@@ -7,8 +7,8 @@ metadata:
   name: observability-operator
   namespace: openshift-observability-operator
 spec:
-  channel: candidate
-  name: observability-operator
-  source: observability-operator-catalog
-  sourceNamespace: openshift-observability-operator
+  channel: development
+  name: cluster-observability-operator
+  source: qe-app-registry
+  sourceNamespace: openshift-marketplace
 
