@@ -494,9 +494,30 @@ func CreateMachinesetbyInstanceType(oc *CLI, machinesetName string, instanceType
 	newMachinesetYaml := regMachineSet.ReplaceAllString(machinesetYamlOutput, machinesetName)
 
 	//Change instanceType to g4dn.xlarge
-	regInstanceType := regexp.MustCompile(`instanceType:.*`)
-	newInstanceType := "instanceType: " + instanceType
-	newMachinesetYaml = regInstanceType.ReplaceAllString(newMachinesetYaml, newInstanceType)
+	iaasPlatform := CheckPlatform(oc)
+	if iaasPlatform == "aws" || iaasPlatform == "alibabacloud" {
+		regInstanceType := regexp.MustCompile(`instanceType:.*`)
+		e2e.Logf("instanceType is %v inside CreateMachinesetbyInstanceType", instanceType)
+		newInstanceType := "instanceType: " + instanceType
+		newMachinesetYaml = regInstanceType.ReplaceAllString(newMachinesetYaml, newInstanceType)
+	} else if iaasPlatform == "gcp" {
+		regInstanceType := regexp.MustCompile(`machineType:.*`)
+		e2e.Logf("machineType is %v inside CreateMachinesetbyInstanceType", instanceType)
+		newInstanceType := "machineType: " + instanceType
+		newMachinesetYaml = regInstanceType.ReplaceAllString(newMachinesetYaml, newInstanceType)
+	} else if iaasPlatform == "azure" {
+		regInstanceType := regexp.MustCompile(`vmSize:.*`)
+		e2e.Logf("vmSize is %v inside CreateMachinesetbyInstanceType", instanceType)
+		newInstanceType := "vmSize: " + instanceType
+		newMachinesetYaml = regInstanceType.ReplaceAllString(newMachinesetYaml, newInstanceType)
+	} else if iaasPlatform == "ibmcloud" {
+		regInstanceType := regexp.MustCompile(`profile:.*`)
+		e2e.Logf("profile is %v inside CreateMachinesetbyInstanceType", instanceType)
+		newInstanceType := "profile: " + instanceType
+		newMachinesetYaml = regInstanceType.ReplaceAllString(newMachinesetYaml, newInstanceType)
+	} else {
+		e2e.Logf("unsupported instance: %v", instanceType)
+	}
 
 	//Make sure the replicas is 1
 	regReplicas := regexp.MustCompile(`replicas:.*`)
@@ -884,6 +905,17 @@ func Is3MasterNoDedicatedWorkerNode(oc *CLI) bool {
 	return matchCount == 3
 }
 
+func converseInstanceType(currentInstanceType string, sSubString string, tSubString string) string {
+	var expectedInstanceType string
+	if strings.Contains(currentInstanceType, sSubString) {
+		expectedInstanceType = strings.ReplaceAll(currentInstanceType, sSubString, tSubString)
+
+	} else if strings.Contains(currentInstanceType, tSubString) {
+		expectedInstanceType = strings.ReplaceAll(currentInstanceType, tSubString, sSubString)
+	}
+	return expectedInstanceType
+}
+
 // SpecifyMachinesetWithDifferentInstanceType used for specify cpu type that different from default one
 func SpecifyMachinesetWithDifferentInstanceType(oc *CLI) string {
 
@@ -896,39 +928,42 @@ func SpecifyMachinesetWithDifferentInstanceType(oc *CLI) string {
 
 	switch iaasPlatform {
 	case "aws":
-		//we use m6i.xlarge as default instance type, if current machineset instanceType is "m6i.2xlarge", we use "m6i.xlarge"
-		expectedInstanceType = "m6i.2xlarge"
-		if strings.Contains(currentInstanceType, "2xlarge") {
+		//we use m6i.2xlarge as default instance type, if current machineset instanceType is "m6i.2xlarge", we use "m6i.xlarge"
+		expectedInstanceType = converseInstanceType(currentInstanceType, "2xlarge", "xlarge")
+		if len(expectedInstanceType) == 0 {
 			expectedInstanceType = "m6i.xlarge"
 		}
 	case "azure":
-		//we use Standard_DS2_v2 as default instance type, if current machineset instanceType is "Standard_DS2_v2", we use "Standard_DS3_v2"
-		expectedInstanceType = "Standard_DS2_v2"
-		if currentInstanceType == expectedInstanceType {
-			expectedInstanceType = "Standard_DS3_v2"
+		//we use Standard_DS3_v2 as default instance type, if current machineset instanceType is "Standard_DS3_v2", we use "Standard_DS2_v2"
+		expectedInstanceType = converseInstanceType(currentInstanceType, "DS3_v2", "DS2_v2")
+		if len(expectedInstanceType) == 0 {
+			expectedInstanceType = "Standard_DS2_v2"
 		}
 	case "gcp":
-		// we use n1-standard-2 as default instance type, if current machineset instanceType is "n1-standard-2", we use "n1-standard-4"
-		expectedInstanceType = "n1-standard-2"
-		if currentInstanceType == expectedInstanceType {
-			expectedInstanceType = "n1-standard-4"
+		// we use n1-standard-4 as default instance type, if current machineset instanceType is "n1-standard-4", we use "n1-standard-2"
+		expectedInstanceType = converseInstanceType(currentInstanceType, "standard-4", "standard-2")
+		if len(expectedInstanceType) == 0 {
+			expectedInstanceType = "n1-standard-2"
 		}
+		e2e.Logf("1 currentInstanceType is %v, expectedInstanceType is %v, ", currentInstanceType, expectedInstanceType)
+
 	case "ibmcloud":
-		//we use bx2-2x8 as default instance type, if current machineset instanceType is "bx2-2x8", we use "bx2d-4x16"
-		expectedInstanceType = "bx2-2x8"
-		if currentInstanceType == expectedInstanceType {
-			expectedInstanceType = "bx2d-4x16"
+		//we use bx2-4x16 as default instance type, if current machineset instanceType is "bx2-4x16", we use "bx2d-2x8"
+		expectedInstanceType = converseInstanceType(currentInstanceType, "4x16", "2x8")
+		if len(expectedInstanceType) == 0 {
+			expectedInstanceType = "bx2d-2x8"
 		}
 	case "alibabacloud":
-		//we use ecs.g6.large as default instance type, if current machineset instanceType is "ecs.g6.large", we use "ecs.g6.xlarge"
-		expectedInstanceType = "ecs.g6.large"
-		if currentInstanceType == expectedInstanceType {
-			expectedInstanceType = "ecs.g6.xlarge"
+		//we use ecs.g6.xlarge as default instance type, if current machineset instanceType is "ecs.g6.xlarge", we use "ecs.g6.large"
+		expectedInstanceType = converseInstanceType(currentInstanceType, "sxlarge", "large")
+		if len(expectedInstanceType) == 0 {
+			expectedInstanceType = "ecs.g6.large"
 		}
 	default:
 		e2e.Logf("Unsupported cloud provider specified, please check")
 		expectedInstanceType = ""
 	}
+	e2e.Logf("3 currentInstanceType is %v, expectedInstanceType is %v, ", currentInstanceType, expectedInstanceType)
 	return expectedInstanceType
 }
 

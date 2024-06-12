@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		e2e.Logf("Cloud provider is: %v", iaasPlatform)
-		ManualPickup = false
+		ManualPickup = true
 
 		podShippedFile = exutil.FixturePath("testdata", "psap", "nto", "pod-shipped.yaml")
 		podSysctlFile = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-pod.yaml")
@@ -1197,12 +1197,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
-		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		//Get the tuned pod name in the same node that labeled node
-		//tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		//Prior to choose worker nodes with machineset
+		if !isSNO {
+			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
 		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-rt", "worker-rt", 300)
@@ -1217,7 +1219,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create openshift-realtime profile")
-		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, ntoRealtimeFile)
+		//ocpArch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.nodeInfo.architecture}").Output()
+		// o.Expect(err).NotTo(o.HaveOccurred())
+		// if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", ntoRealtimeFile, "-p", "INCLUDE=openshift-node,realtime")
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -1395,9 +1400,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "performance-patch", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "performance", "--ignore-not-found").Execute()
 
-		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Prior to choose worker nodes with machineset
+		if !isSNO {
+			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -1409,7 +1419,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+		// if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+
+		ocpArch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.nodeInfo.architecture}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
 			//Only GCP and AWS support realtime-kenel
 			exutil.By("Apply performance profile")
 			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoPerformanceFile, "-p", "ISENABLED=true")
@@ -1422,7 +1436,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, paoNamespace, paoWorkerCnfMCPFile)
 
 		exutil.By("Assert if the MCP worker-cnf has been successfully applied ...")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 750)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 900)
 
 		exutil.By("Check if new NTO profile openshift-node-performance-performance was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node-performance-performance")
@@ -2389,14 +2403,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			paoBaseProfile    = exutil.FixturePath("testdata", "psap", "pao", "pao-baseprofile.yaml")
 			paoBaseQoSPod     = exutil.FixturePath("testdata", "psap", "pao", "pao-baseqos-pod.yaml")
 		)
+
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
+		}
+
 		// test requires NTO to be installed
 		isSNO := exutil.IsSNOCluster(oc)
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
-		}
-
-		if ManualPickup {
-			g.Skip("This is the test case that execute mannually in shared cluster ...")
 		}
 
 		skipPAODeploy := skipDeployPAO(oc)
@@ -2414,10 +2429,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 480)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("performanceprofile", "pao-baseprofile", "--ignore-not-found").Execute()
 
-		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		//Prior to choose worker nodes with machineset
+		if !isSNO {
+			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Get how many cpus on the specified worker node
 		exutil.By("Get how many cpus cores on the labeled worker node")
@@ -2442,7 +2461,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+		ocpArch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.nodeInfo.architecture}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
 			//Only GCP and AWS support realtime-kenel
 			exutil.By("Apply pao-baseprofile performance profile")
 			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoBaseProfile, "-p", "ISENABLED=true")
@@ -2509,7 +2530,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The settings of CPU Manager topologyManagerPolicy on labeled nodes: \n%v", topologyManagerConfOutput)
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+		if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
 			exutil.By("Check realTime kernel setting that created by PAO in labled node ")
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -2716,9 +2737,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
-		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Prior to choose worker nodes with machineset
+		if !isSNO {
+			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+		} else {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		//Get NTO Operator Pod Name
 		ntoOperatorPodName := getNTOOperatorPodName(oc, ntoNamespace)
@@ -2741,7 +2767,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create a new machineset with different instance type.")
 		newMachinesetInstanceType := exutil.SpecifyMachinesetWithDifferentInstanceType(oc)
+		e2e.Logf("4 newMachinesetInstanceType is %v, ", newMachinesetInstanceType)
 		o.Expect(newMachinesetInstanceType).NotTo(o.BeEmpty())
+
 		exutil.CreateMachinesetbyInstanceType(oc, "ocp-psap-qe-diffcpus", newMachinesetInstanceType)
 
 		exutil.By("Wait for new node is ready when machineset created")
@@ -3079,7 +3107,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 300)
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+		ocpArch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.nodeInfo.architecture}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
 			//Only GCP and AWS support realtime-kenel
 			exutil.By("Apply pao-baseprofile performance profile")
 			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoBaseProfile, "-p", "ISENABLED=true")
@@ -3145,7 +3175,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The settings of CPU Manager topologyManagerPolicy on labeled nodes: \n%v", topologyManagerConfOutput)
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+		if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
 			exutil.By("Check realTime kernel setting that created by PAO in labled node ")
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -3266,7 +3296,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The settings of CPU Manager topologyManagerPolicy on labeled nodes: \n%v", topologyManagerConfOutput)
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+		ocpArch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.nodeInfo.architecture}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
 			exutil.By("Check realTime kernel setting that created by PAO in labled node ")
 			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
