@@ -14,6 +14,7 @@ objects:
           template: ${NAME}-rhcos-generated-region-generated-zone
           server: ${VSPHERE_SERVER}
           diskGiB: ${{DISKGIB}}
+          cloneMode: ${CLONEMODE}
           datacenter: ${DATACENTER}
           datastore: ${DATASTORE}
           folder: ${FOLDER}
@@ -37,3 +38,4 @@ parameters:
 - name: MEMORYMIB
 - name: DISKGIB
 - name: NETWORKNAME
+- name: CLONEMODE
