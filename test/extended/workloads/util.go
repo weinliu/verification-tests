@@ -2111,3 +2111,34 @@ func validateFileContent(fileContent string, expectedStr string, resourceType st
 		e2e.Logf("Nest paths for %s are set correctly", resourceType)
 	}
 }
+
+// Since no regenerate the cache by default for oc-mirror , so add this function, just create all the resources and don't do packagemainifest check.
+func createCSAndISCPNoPackageCheck(oc *exutil.CLI, podLabel string, namespace string, expectedStatus string) {
+	var files []string
+	var yamlFiles []string
+
+	root := "oc-mirror-workspace"
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		e2e.Failf("Can't walk the oc-mirror-workspace directory")
+	}
+
+	for _, file := range files {
+		if matched, _ := regexp.MatchString("yaml", file); matched {
+			fmt.Println("file name is %v \n", file)
+			yamlFiles = append(yamlFiles, file)
+		}
+	}
+
+	for _, yamlFileName := range yamlFiles {
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", yamlFileName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exec.Command("bash", "-c", "cat "+yamlFileName).Output()
+	}
+
+	e2e.Logf("Check the version and item from catalogsource")
+	assertPodOutput(oc, "olm.catalogSource="+podLabel, namespace, expectedStatus)
+}

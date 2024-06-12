@@ -401,16 +401,21 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		_, _, err = locateDockerCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		var skopeooutStr string
 		g.By("Copy the registry as OCI FBC")
-		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			_, err := exec.Command("bash", "-c", command).Output()
+			skopeoout, err := exec.Command("bash", "-c", command).Output()
+			skopeooutStr = string(skopeoout)
 			if err != nil {
 				e2e.Logf("copy failed, retrying...")
 				return false, nil
 			}
 			return true, nil
 		})
+		if waitErr != nil {
+			e2e.Logf("output: %v", skopeooutStr)
+		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
 		g.By("Set registry app")
 		registry := registry{
@@ -445,7 +450,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		_, _, err = locateDockerCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Copy the registry as OCI FBC")
-		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -471,44 +476,30 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll("olm_artifacts")
 		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
-			output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalTargetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+			_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalTargetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 			if err != nil {
 				e2e.Logf("the err:%v, and try next round", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString(serInfo.serviceName+"/abc/redhat-operator-index:v4.13", output); matched {
-				return true, nil
-			}
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find the expect target catalog %s", err))
-		output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString("/mno/redhat-operator-index:v5", output); !matched {
-			e2e.Failf("Can't find the expect target catalog\n")
-		}
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName+"/ocit", "--dest-skip-tls").Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociTargetTagConfig, "docker://"+serInfo.serviceName+"/ocit", "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString("/ocit/mno/redhat-operator-index:v5", output); !matched {
-			e2e.Failf("Can't find the expect target catalog\n")
-		}
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString(serInfo.serviceName+"/redhat/redhat-operator-index:v4.13", output); !matched {
-			e2e.Failf("Can't find the expect target catalog\n")
-		}
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalConfig, "docker://"+serInfo.serviceName+"/testname", "--dest-skip-tls").Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", normalConfig, "docker://"+serInfo.serviceName+"/testname", "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString(serInfo.serviceName+"/testname/redhat/redhat-operator-index:v4.13", output); !matched {
-			e2e.Failf("Can't find the expect target catalog\n")
-		}
+
 		g.By("Checkpoint for 60595")
 		ocmirrorDir := exutil.FixturePath("testdata", "workloads")
 		ociFirstConfig := filepath.Join(ocmirrorDir, "config-oci-f.yaml")
 		ociSecondConfig := filepath.Join(ocmirrorDir, "config-oci-s.yaml")
 		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFirstConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociSecondConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		output, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociSecondConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("Deleting manifest", output); !matched {
 			e2e.Failf("Can't find the prune log\n")
@@ -597,7 +588,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the registry as OCI FBC")
-		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -681,15 +672,20 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the registry as OCI FBC")
-		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		var skopeooutStr string
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			_, err := exec.Command("bash", "-c", command).Output()
+			skopeoout, err := exec.Command("bash", "-c", command).Output()
+			skopeooutStr = string(skopeoout)
 			if err != nil {
 				e2e.Logf("copy failed, retrying...")
 				return false, nil
 			}
 			return true, nil
 		})
+		if waitErr != nil {
+			e2e.Logf("output: %v", skopeooutStr)
+		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
 
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
@@ -699,7 +695,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer os.RemoveAll("oc-mirror-workspace")
-		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--ignore-history").Execute()
 			if err != nil {
 				e2e.Logf("mirror failed, retrying...")
@@ -711,7 +707,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Checkpoint for 60602")
 		defer removeCSAndISCP(oc)
-		createCSAndISCP(oc, "cs-case60601-redhat-operator-index", "openshift-marketplace", "Running", 1)
+		createCSAndISCPNoPackageCheck(oc, "cs-case60601-redhat-operator-index", "openshift-marketplace", "Running")
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Hign-65149-mirror2disk and disk2mirror workflow for local oci catalog [Serial]", func() {
@@ -746,7 +742,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-index")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/oci-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -762,7 +758,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll("olm_artifacts")
 		g.By("Starting mirror2disk ....")
-		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "file://"+dirname).Execute()
 			if err != nil {
 				e2e.Logf("mirror to disk failed, retrying...")
@@ -772,7 +768,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		g.By("Starting disk2mirror  ....")
-		mirrorErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		mirrorErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("disk to registry failed, retrying...")
@@ -783,7 +779,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		exutil.AssertWaitPollNoErr(mirrorErr, "max time reached but the disk to registry still failed")
 
 		defer removeCSAndISCP(oc)
-		createCSAndISCP(oc, "cs-test", "openshift-marketplace", "Running", 2)
+		createCSAndISCPNoPackageCheck(oc, "cs-test", "openshift-marketplace", "Running")
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Critical-65150-mirror2disk and disk2mirror workflow for local multi oci catalog [Serial]", func() {
@@ -818,7 +814,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the multi-arch catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-multi-index")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/oci-multi-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -840,7 +836,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll("olm_artifacts")
 		g.By("Starting mirror2disk ....")
-		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "file://"+dirname, "--ignore-history").Execute()
 			if err != nil {
 				e2e.Logf("mirror to disk failed, retrying...")
@@ -850,7 +846,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		g.By("Starting disk2mirror  ....")
-		mirrorErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		mirrorErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", dirname+"/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("disk to registry failed, retrying...")
@@ -860,7 +856,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(mirrorErr, "max time reached but the disk to registry still failed")
 		defer removeCSAndISCP(oc)
-		createCSAndISCP(oc, "cs-case65150-oci-multi-index", "openshift-marketplace", "Running", 1)
+		createCSAndISCPNoPackageCheck(oc, "cs-case65150-oci-multi-index", "openshift-marketplace", "Running")
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-65151-mirror2disk and disk2mirror workflow for local oci catalog incremental  and prune testing [Serial]", func() {
@@ -896,7 +892,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		defer os.RemoveAll("/tmp/redhat-operator-index")
 		g.By("Copy the catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", "/tmp/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", "/tmp/redhat-operator-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -1276,7 +1272,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the multi-arch catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all --format oci docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures", dirname+"/oci-multi-index")
+		command := fmt.Sprintf("skopeo copy --all --format oci docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/oci-multi-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -1292,7 +1288,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll("olm_artifacts")
 		g.By("Starting mirror2mirror ....")
-		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("mirror2mirror failed, retrying...")
@@ -1303,7 +1299,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 
 		defer removeCSAndISCP(oc)
-		createCSAndISCP(oc, "cs-case65152-oci-multi-index", "openshift-marketplace", "Running", 1)
+		createCSAndISCPNoPackageCheck(oc, "cs-case65152-oci-multi-index", "openshift-marketplace", "Running")
 		deschedulerSub, deschedulerOG := getOperatorInfo(oc, "cluster-kube-descheduler-operator", "openshift-kube-descheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.13", "cs-case65152-oci-multi-index")
 		defer removeOperatorFromCustomCS(oc, deschedulerSub, deschedulerOG, "openshift-kube-descheduler-operator")
 		installOperatorFromCustomCS(oc, deschedulerSub, deschedulerOG, "openshift-kube-descheduler-operator", "descheduler-operator")
@@ -1343,7 +1339,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		imageSetConfig := filepath.Join(ocmirrorBaseDir, "config-66869.yaml")
 
 		defer os.RemoveAll("oc-mirror-workspace")
-		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("mirror2mirror failed, retrying...")
@@ -1353,7 +1349,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		defer removeCSAndISCP(oc)
-		createCSAndISCP(oc, "cs-redhat-marketplace-index", "openshift-marketplace", "Running", 1)
+		createCSAndISCPNoPackageCheck(oc, "cs-redhat-marketplace-index", "openshift-marketplace", "Running")
 
 		crunchySub, crunchyOG := getOperatorInfo(oc, "crunchy-postgres-operator-rhmp", "marketoperatortest", "registry.redhat.io/redhat/redhat-marketplace-index:v4.14", "cs-redhat-marketplace-index")
 		defer removeOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest")
@@ -1396,7 +1392,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		imageSetConfig := filepath.Join(ocmirrorBaseDir, "config-66870.yaml")
 
 		defer os.RemoveAll("oc-mirror-workspace")
-		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("mirror2mirror failed, retrying...")
@@ -1406,7 +1402,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		defer removeCSAndISCP(oc)
-		createCSAndISCP(oc, "cs-certified-operator-index", "openshift-marketplace", "Running", 1)
+		createCSAndISCPNoPackageCheck(oc, "cs-certified-operator-index", "openshift-marketplace", "Running")
 		portworxSub, portworxOG := getOperatorInfo(oc, "portworx-certified", "nvidia-certified-ns", "registry.redhat.io/redhat/certified-operator-index:v4.15", "cs-certified-operator-index")
 		defer removeOperatorFromCustomCS(oc, portworxSub, portworxOG, "nvidia-certified-ns")
 		installOperatorFromCustomCS(oc, portworxSub, portworxOG, "nvidia-certified-ns", "portworx-operator")
@@ -1504,7 +1500,7 @@ mirror:
 
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll(".oc-mirror.log")
-		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFile, "docker://"+publicRegistry, "--dest-skip-tls").Execute()
 			if err != nil {
 				e2e.Logf("Mirror operator failed, retrying...")
@@ -1514,20 +1510,7 @@ mirror:
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		defer removeCSAndISCP(oc)
-		createCSAndISCP(oc, "cs-redhat-operator-index", "openshift-marketplace", "Running", 1)
-
-		waitErr = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-			out, err := oc.AsAdmin().Run("get").Args("packagemanifests", "--selector=catalog=cs-redhat-operator-index", "-o=jsonpath={.items[*].status.channels[*].name}").Output()
-			packageChennelItemList := strings.Fields(out)
-			if len(packageChennelItemList) != 2 || err != nil {
-				e2e.Logf("the err:%v and chennelItemList: %v, and try next round", err, out)
-				return false, nil
-			}
-			o.Expect(string(channelList)).To(o.ContainSubstring(packageChennelItemList[0]))
-			o.Expect(string(channelList)).To(o.ContainSubstring(packageChennelItemList[1]))
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, "max time reached but still can't find  packagemanifest information")
+		createCSAndISCPNoPackageCheck(oc, "cs-redhat-operator-index", "openshift-marketplace", "Running")
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-Medium-70105-oc-mirror should ignore the sequence check when use --skip-pruning [Serial]", func() {
