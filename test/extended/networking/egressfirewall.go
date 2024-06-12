@@ -1491,6 +1491,166 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			o.Expect(result2).Should(o.BeFalse())
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-ConnectedOnly-Medium-67491-[FdpOvnOvs] EgressFirewall works with ANP, BANP and NP for egress traffic.", func() {
+		ipStackType := checkIPStackType(oc)
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "none")
+		if !(ipStackType == "ipv4single" || (acceptedPlatform && ipStackType == "dualstack")) {
+			g.Skip("This case should be run on UPI packet dualstack cluster or IPv4 cluster, skip other platform or network stack type.")
+		}
+
+		var (
+			testID                      = "67491"
+			testDataDir                 = exutil.FixturePath("testdata", "networking")
+			banpCRTemplate              = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-single-rule-cidr-template.yaml")
+			anpCRTemplate               = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-cidr-template.yaml")
+			pingPodTemplate             = filepath.Join(testDataDir, "ping-for-pod-template.yaml")
+			egressFWTemplate            = filepath.Join(testDataDir, "egressfirewall2-template.yaml")
+			ipBlockEgressTemplateSingle = filepath.Join(testDataDir, "networkpolicy/ipblock/ipBlock-egress-single-CIDR-template.yaml")
+			matchLabelKey               = "kubernetes.io/metadata.name"
+		)
+
+		exutil.By("Get test namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("4. Create a Baseline Admin Network Policy with deny action to cidr")
+		banpCR := singleRuleCIDRBANPPolicyResource{
+			name:       "default",
+			subjectKey: matchLabelKey,
+			subjectVal: ns,
+			ruleName:   "default-deny-to-" + ns,
+			ruleAction: "Deny",
+			cidr:       "0.0.0.0/0",
+			template:   banpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banpCR.name)
+		banpCR.createSingleRuleCIDRBANP(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+
+		exutil.By("Get one IP address for domain name www.google.com")
+		ipv4, ipv6 := getIPFromDnsName("www.google.com")
+		o.Expect(len(ipv4) == 0).NotTo(o.BeTrue())
+
+		exutil.By("Create an EgressFirewall \n")
+		egressFW := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Allow",
+			cidr:      ipv4 + "/32",
+			template:  egressFWTemplate,
+		}
+		egressFW.createEgressFW2Object(oc)
+		err = waitEgressFirewallApplied(oc, egressFW.name, ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify destination got blocked")
+		verifyDstIPAccess(oc, pod1.name, ns, ipv4, false)
+
+		exutil.By("Remove BANP")
+		removeResource(oc, true, true, "banp", banpCR.name)
+		verifyDstIPAccess(oc, pod1.name, ns, ipv4, true)
+
+		exutil.By("Create ANP with deny action to cidr")
+		anpCR := singleRuleCIDRANPPolicyResource{
+			name:       "anp-" + testID,
+			subjectKey: matchLabelKey,
+			subjectVal: ns,
+			priority:   10,
+			ruleName:   "allow-to-" + ns,
+			ruleAction: "Deny",
+			cidr:       "0.0.0.0/0",
+			template:   anpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpCR.name)
+		anpCR.createSingleRuleCIDRANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+
+		exutil.By("Verify destination got blocked")
+		verifyDstIPAccess(oc, pod1.name, ns, ipv4, false)
+
+		exutil.By("Remove ANP")
+		removeResource(oc, true, true, "anp", anpCR.name)
+		verifyDstIPAccess(oc, pod1.name, ns, ipv4, true)
+
+		exutil.By("Create Network Policy with limited access to cidr which is not same as egressfirewall")
+		npIPBlock := ipBlockCIDRsSingle{
+			name:      "ipblock-single-cidr-egress",
+			template:  ipBlockEgressTemplateSingle,
+			cidr:      "1.1.1.1/32",
+			namespace: ns,
+		}
+		npIPBlock.createipBlockCIDRObjectSingle(oc)
+		output, err = oc.AsAdmin().Run("get").Args("networkpolicy", "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("ipblock-single-cidr-egress"))
+
+		exutil.By("Verify destination got blocked")
+		verifyDstIPAccess(oc, pod1.name, ns, ipv4, false)
+
+		exutil.By("Remove network policy")
+		removeResource(oc, true, true, "-n", ns, "networkpolicy", npIPBlock.name)
+
+		if ipStackType == "dualstack" {
+			// Retest with ipv6 address
+			o.Expect(len(ipv6) == 0).NotTo(o.BeTrue())
+			exutil.By("Create ANP with deny action to ipv6 cidr")
+			banpCR.cidr = "::/0"
+			banpCR.createSingleRuleCIDRBANP(oc)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+
+			exutil.By("Update egressfirewall with ipv6 address")
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\""+ipv6+"/128\"}}]}}", "--type=merge").Execute()
+			o.Expect(errPatch).NotTo(o.HaveOccurred())
+
+			exutil.By("Verify destination got blocked")
+			verifyDstIPAccess(oc, pod1.name, ns, ipv6, false)
+
+			exutil.By("Remove BANP")
+			removeResource(oc, true, true, "banp", banpCR.name)
+			verifyDstIPAccess(oc, pod1.name, ns, ipv6, true)
+
+			exutil.By("Create ANP")
+			anpCR.cidr = "::/0"
+			anpCR.createSingleRuleCIDRANP(oc)
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+
+			exutil.By("Verify destination got blocked")
+			verifyDstIPAccess(oc, pod1.name, ns, ipv6, false)
+
+			exutil.By("Remove ANP")
+			removeResource(oc, true, true, "anp", anpCR.name)
+			verifyDstIPAccess(oc, pod1.name, ns, ipv6, true)
+
+			exutil.By("Create Network Policy")
+			npIPBlock.cidr = "2001::02/128"
+			npIPBlock.createipBlockCIDRObjectSingle(oc)
+			output, err = oc.AsAdmin().Run("get").Args("networkpolicy", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("ipblock-single-cidr-egress"))
+
+			exutil.By("Verify destination got blocked")
+			verifyDstIPAccess(oc, pod1.name, ns, ipv6, false)
+		}
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN egressfirewall-techpreview", func() {

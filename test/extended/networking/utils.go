@@ -3788,3 +3788,44 @@ func verifyDesitnationAccess(oc *exutil.CLI, podName, podNS, domainName string, 
 		}, "20s", "10s").Should(o.HaveOccurred())
 	}
 }
+
+// First ip is ipv4, secondary is ipv6.
+func getIPFromDnsName(dnsName string) (string, string) {
+	ips, err := net.LookupIP(dnsName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var ipv4, ipv6 string
+	for _, ip := range ips {
+		if ip.To4() != nil && ipv4 == "" {
+			ipv4 = ip.String()
+		} else if strings.Contains(ip.String(), ":") && ipv6 == "" {
+			ipv6 = ip.String()
+		}
+		if ipv4 != "" && ipv6 != "" {
+			break
+		}
+	}
+	e2e.Logf("The resovled IPv4, IPv6 address for dns name %s is %s,%s", dnsName, ipv4, ipv6)
+	return ipv4, ipv6
+}
+
+func verifyDstIPAccess(oc *exutil.CLI, podName, podNS, ip string, passOrFail bool) {
+	var curlCmd string
+	if strings.Contains(ip, ":") {
+		e2e.Logf("The IP %s is IPv6 address.", ip)
+		curlCmd = fmt.Sprintf("curl -s -6 -I [%s] --connect-timeout 5 ", ip)
+	} else {
+		e2e.Logf("The IP %s is IPv4 address.", ip)
+		curlCmd = fmt.Sprintf("curl -s -I %s --connect-timeout 5 ", ip)
+	}
+
+	if passOrFail {
+		_, err := e2eoutput.RunHostCmdWithRetries(podNS, podName, curlCmd, 10*time.Second, 20*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		o.Eventually(func() error {
+			_, err := e2eoutput.RunHostCmd(podNS, podName, curlCmd)
+			return err
+		}, "20s", "10s").Should(o.HaveOccurred())
+	}
+}

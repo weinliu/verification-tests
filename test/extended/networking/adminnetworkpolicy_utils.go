@@ -145,6 +145,31 @@ type replicationControllerPingPodResource struct {
 	template  string
 }
 
+// Struct to create BANP with either ingress and egress rule
+// Match cidr
+type singleRuleCIDRBANPPolicyResource struct {
+	name       string
+	subjectKey string
+	subjectVal string
+	ruleName   string
+	ruleAction string
+	cidr       string
+	template   string
+}
+
+// Struct to create ANP with either ingress or egress rule
+// Match cidr
+type singleRuleCIDRANPPolicyResource struct {
+	name       string
+	subjectKey string
+	subjectVal string
+	priority   int32
+	ruleName   string
+	ruleAction string
+	cidr       string
+	template   string
+}
+
 func (banp *singleRuleBANPPolicyResource) createSingleRuleBANP(oc *exutil.CLI) {
 	exutil.By("Creating single rule Baseline Admin Network Policy from template")
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
@@ -278,4 +303,34 @@ func (netpol *networkPolicyResource) createNetworkPolicy(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create networkpolicy %v", netpol.name))
+}
+
+func (banp *singleRuleCIDRBANPPolicyResource) createSingleRuleCIDRBANP(oc *exutil.CLI) {
+	exutil.By("Creating single rule Baseline Admin Network Policy from template")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", banp.template, "-p", "NAME="+banp.name,
+			"SUBJECTKEY="+banp.subjectKey, "SUBJECTVAL="+banp.subjectVal,
+			"RULENAME="+banp.ruleName, "RULEACTION="+banp.ruleAction, "CIDR="+banp.cidr)
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Baseline Admin Network Policy CR %v", banp.name))
+}
+
+func (anp *singleRuleCIDRANPPolicyResource) createSingleRuleCIDRANP(oc *exutil.CLI) {
+	exutil.By("Creating Single rule Admin Network Policy from template")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", anp.template, "-p", "NAME="+anp.name,
+			"SUBJECTKEY="+anp.subjectKey, "SUBJECTVAL="+anp.subjectVal,
+			"PRIORITY="+strconv.Itoa(int(anp.priority)), "RULENAME="+anp.ruleName, "RULEACTION="+anp.ruleAction, "CIDR="+anp.cidr)
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Admin Network Policy CR %v", anp.name))
 }
