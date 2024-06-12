@@ -512,4 +512,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(workerkubelet).NotTo(o.ContainSubstring("cloud-config"))
 		o.Expect(workerkubelet).To(o.ContainSubstring("cloud-provider=external"))
 	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-NonHyperShiftHOST-Low-70682-[CCM] Trust bundle CA configmap should have ownership annotations", func() {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "ccm-trusted-ca", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("Cloud Compute / Cloud Controller Manager"))
+	})
 })
