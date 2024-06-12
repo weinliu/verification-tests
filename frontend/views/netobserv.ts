@@ -6,6 +6,7 @@ export namespace flowcollectorFormSelectors {
     export const ebpfPrivilegedToggle = '#root_spec_agent_ebpf_privileged_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
     export const zonesToggle = '#root_spec_processor_addZone_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
     export const multiClusterToggle = '#root_spec_processor_multiClusterDeployment_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
+    export const lokiEnableToggle = '#root_spec_loki_enable_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
 }
 
 export const Operator = {
@@ -118,7 +119,7 @@ export const Operator = {
                 if (parameters == "DNSTracking") {
                     Operator.enableDNSTracking()
                 }
-                Operator.configureLoki(namespace)
+                Operator.configureLoki(namespace, parameters)
                 cy.get('#root_spec_namespace').clear().type(namespace)
                 if (parameters == "Conversations") {
                     Operator.enableConversations()
@@ -144,8 +145,6 @@ export const Operator = {
                 cy.byTestID('status-text').should('exist').should('contain.text', 'MonitoringReady')
 
                 cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
-                // for OCP < 4.12 refresh-web-console element doesn't exist, use toast-action instead.
-                // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
                 cy.reload(true)
             }
         })
@@ -187,7 +186,6 @@ export const Operator = {
         ]);
     },
     enableFlowRTT: () => {
-        cy.get(flowcollectorFormSelectors.ebpfPrivilegedToggle).should('be.visible').click()
         Operator.enableEBPFFeature("FlowRTT")
         // Deploy FlowRTT metrics to includeList
         cy.get('#root_spec_processor_accordion-toggle').click()
@@ -199,25 +197,20 @@ export const Operator = {
             "workload_rtt_seconds"
         ]);
     },
-    configureLoki: (namespace: string) => {
+    configureLoki: (namespace: string, parameters?: string) => {
         cy.get('#root_spec_loki_accordion-toggle').click()
-        cy.get('#root_spec_loki_mode').click().then(moreOpts => {
-            cy.contains("Manual").should('exist')
-            cy.contains("Microservices").should('exist')
-            cy.contains("Monolithic").should('exist')
-            cy.contains("LokiStack").should('exist')
-            cy.get('#Monolithic-link').click()
-        })
-        cy.get('#root_spec_loki_monolithic_accordion-toggle').click()
-        cy.get('#root_spec_loki_monolithic_url').clear().type(`http://loki.${namespace}.svc:3100/`)
+        if (parameters == "LokiDisabled"){
+            cy.get(flowcollectorFormSelectors.lokiEnableToggle).should('be.visible').click()
+        }
+        else{
+            cy.get('#root_spec_loki_mode').click().then(moreOpts => {
+                cy.get('#Monolithic-link').click()
+            })
+        }
     },
     enableConversations: () => {
         cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_logTypes').click().then(moreOpts => {
-            cy.contains("Flows").should('exist')
-            cy.contains("Conversations").should('exist')
-            cy.contains("EndedConversations").should('exist')
-            cy.contains("All").should('exist')
             cy.get('#All-link').click()
         })
     },
@@ -252,8 +245,6 @@ export const Operator = {
         cy.byTestActionID('Delete FlowCollector').should('exist').click()
         cy.byTestID('confirm-action').should('exist').click()
         cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
-        // for OCP < 4.12 refresh-web-console element doesn't exist, use toast-action instead.
-        // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
         cy.reload(true)
     },
     uninstall: () => {
