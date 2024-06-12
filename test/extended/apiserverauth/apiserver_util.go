@@ -1431,6 +1431,7 @@ type CertificateDetails struct {
 }
 
 func urlHealthCheck(fqdnName string, certPath string, returnValues []string) (*CertificateDetails, error) {
+	proxyURL := getProxyURL()
 	caCert, err := ioutil.ReadFile(certPath)
 	if err != nil {
 		return nil, fmt.Errorf("Error reading CA certificate: %v", err)
@@ -1444,6 +1445,7 @@ func urlHealthCheck(fqdnName string, certPath string, returnValues []string) (*C
 
 	// Create a custom transport with the CA certificate
 	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
 		TLSClientConfig: &tls.Config{
 			RootCAs: caCertPool,
 		},
