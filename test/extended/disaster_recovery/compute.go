@@ -64,6 +64,9 @@ func GetNodes(oc *exutil.CLI, label string) (ComputeNodes, func()) {
 	case "nutanix":
 		e2e.Logf("\n Nutanix is detected, running the case on nutanix\n")
 		return GetNutanixNodes(oc, label)
+	case "powervs":
+		e2e.Logf("\n IBM Powervs is detected, running the case on PowerVs\n")
+		return GetIBMPowerNodes(oc, label)
 	default:
 		g.Skip("Not support cloud provider for DR cases for now. Test cases should be run on IBM or vsphere or aws or gcp or openstack or azure or baremetal, skip for other platforms!!")
 	}

@@ -1,19 +1,31 @@
 package util
 
 import (
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
+	"strings"
 
+	v "github.com/IBM-Cloud/power-go-client/clients/instance"
+	ps "github.com/IBM-Cloud/power-go-client/ibmpisession"
+	ac "github.com/IBM-Cloud/power-go-client/power/models"
 	"github.com/IBM/go-sdk-core/v5/core"
 	"github.com/IBM/vpc-go-sdk/vpcv1"
 	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // IBMSession is an object representing an IBM session
 type IBMSession struct {
 	vpcv1 *vpcv1.VpcV1
+}
+
+type IBMPowerVsSession struct {
+	powerVsSession *v.IBMPIInstanceClient
 }
 
 // NewIBMSessionFromEnv creates a new IBM session from environment credentials
@@ -40,22 +52,34 @@ func NewIBMSessionFromEnv(ibmApiKey string) (*IBMSession, error) {
 
 // GetIBMCredentialFromCluster gets IBM credentials like ibmapikey, ibmvpc and ibmregion from cluster
 func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
-	var ibmClientID []byte
-	credential, getSecErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/qe-ibmcloud-creds", "-n", "kube-system", "-o=jsonpath={.data.apiKey}").Output()
-	if getSecErr != nil || credential == "" {
-		// get creds in prow ci
-		cmd := fmt.Sprintf("cat ${CLUSTER_PROFILE_DIR}/ibmcloud-api-key")
-		credentialApiKey, getSecErr := exec.Command("bash", "-c", cmd).Output()
-		credential = string(credentialApiKey)
-		if getSecErr != nil || credential == "" {
-			g.Skip("Failed to get credential to access IBM, skip the testing.")
+	var credential string
+	platform := CheckPlatform(oc)
+	switch {
+	case platform == "powervs":
+		credential, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/ibm-cloud-credentials", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.data.ibmcloud_api_key}").Output()
+		if credential == "" {
+			cmd := exec.Command("bash", "-c", "cat ${CLUSTER_PROFILE_DIR}/ibmcloud-api-key")
+			output, _ := cmd.Output()
+			credential = string(output)
+			if credential == "" {
+				g.Skip("Failed to get credential to access IBM, skip the testing.")
+			}
 		}
-	} else {
-		var err error
-		ibmClientID, err = base64.StdEncoding.DecodeString(credential)
-		if err != nil || string(ibmClientID) == "" {
-			return "", "", "", fmt.Errorf("Error decoding IBM credentials: %s", err)
+	default:
+		credential, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/qe-ibmcloud-creds", "-n", "kube-system", "-o=jsonpath={.data.apiKey}").Output()
+		if credential == "" {
+			cmd := exec.Command("bash", "-c", "cat ${CLUSTER_PROFILE_DIR}/ibmcloud-api-key")
+			output, _ := cmd.Output()
+			credential = string(output)
+			if credential == "" {
+				g.Skip("Failed to get credential to access IBM, skip the testing.")
+			}
 		}
+	}
+
+	ibmClientID, err := base64.StdEncoding.DecodeString(credential)
+	if err != nil || string(ibmClientID) == "" {
+		return "", "", "", fmt.Errorf("Error decoding IBM credentials: %s", err)
 	}
 
 	ibmRegion, regionErr := GetIBMRegion(oc)
@@ -67,7 +91,9 @@ func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
 	if ibmResourceGrpNameErr != nil {
 		return "", "", "", ibmResourceGrpNameErr
 	}
-
+	if CheckPlatform(oc) == "powervs" {
+		return string(ibmClientID), string(ibmRegion), string(ibmResourceGrpName), nil
+	}
 	return string(ibmClientID), string(ibmRegion), string(ibmResourceGrpName) + "-vpc", nil
 }
 
@@ -164,18 +190,123 @@ func SetVPCServiceURLForRegion(session *IBMSession, region string) error {
 
 // GetIBMRegion gets IBM cluster region
 func GetIBMRegion(oc *CLI) (string, error) {
-	ibmRegion, regionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("Infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.ibmcloud.location}").Output()
-	if regionErr != nil {
+	platformType := CheckPlatform(oc)
+	var ibmRegion string
+	var regionErr error
+
+	switch platformType {
+	case "ibmcloud":
+		ibmRegion, regionErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("Infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.ibmcloud.location}").Output()
+	case "powervs":
+		ibmRegion, regionErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("Infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.powervs.zone}").Output()
+	default:
+		return "", fmt.Errorf("Unsupported platform type: %s", platformType)
+	}
+
+	if regionErr != nil || ibmRegion == "" {
 		return "", regionErr
 	}
+
 	return ibmRegion, nil
 }
 
 // GetIBMResourceGrpName get IBM cluster resource group name
 func GetIBMResourceGrpName(oc *CLI) (string, error) {
-	ibmResourceGrpName, ibmResourceGrpNameErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("Infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.ibmcloud.resourceGroupName}").Output()
-	if ibmResourceGrpNameErr != nil {
+	platformType := CheckPlatform(oc)
+	var ibmResourceGrpName string
+	var ibmResourceGrpNameErr error
+	switch platformType {
+	case "ibmcloud":
+		ibmResourceGrpName, ibmResourceGrpNameErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("Infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.ibmcloud.resourceGroupName}").Output()
+	case "powervs":
+		ibmResourceGrpName, ibmResourceGrpNameErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("Infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.powervs}").Output()
+		if ibmResourceGrpNameErr == nil && ibmResourceGrpName != "" {
+			re := regexp.MustCompile(`a/([a-f0-9]+):`)
+			match := re.FindStringSubmatch(ibmResourceGrpName)
+			if len(match) < 2 {
+				e2e.Failf("Not able to get ResourceGrp name")
+			}
+			ibmResourceGrpName = match[1]
+		}
+	default:
+		return "", fmt.Errorf("Unsupported platform type: %s", platformType)
+	}
+
+	if ibmResourceGrpNameErr != nil || ibmResourceGrpName == "" {
 		return "", ibmResourceGrpNameErr
 	}
+
 	return ibmResourceGrpName, nil
+}
+
+// LoginIBMPowerVsCloud authenticates and returns a session for Powervs cloud
+func LoginIBMPowerVsCloud(apiKey, zone, userAccount string, cloudId string) (*IBMPowerVsSession, error) {
+	// Authenticator
+	authenticator := &core.IamAuthenticator{
+		ApiKey: apiKey,
+	}
+
+	// Create the session
+	options := &ps.IBMPIOptions{
+		Authenticator: authenticator,
+		Zone:          zone,
+		UserAccount:   userAccount,
+	}
+	session, err := ps.NewIBMPISession(options)
+	if err != nil {
+		return nil, err
+	}
+	// Create the instance client
+	powerClient := v.NewIBMPIInstanceClient(context.Background(), session, cloudId)
+	return &IBMPowerVsSession{powerVsSession: powerClient}, nil
+}
+
+// PerformInstanceActionOnPowerVs performs start or stop action on the instance
+func PerformInstanceActionOnPowerVs(powerClient *IBMPowerVsSession, instanceID, action string) error {
+	powerAction := &ac.PVMInstanceAction{
+		Action: core.StringPtr(action),
+	}
+	return powerClient.powerVsSession.Action(instanceID, powerAction)
+}
+
+// GetIBMPowerVsCloudID get powervsCloud Id
+func GetIBMPowerVsCloudID(oc *CLI, nodeName string) string {
+	jsonString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	type Data struct {
+		ProviderID string `json:"providerID"`
+	}
+
+	// Parse the JSON string into the defined struct
+	var data Data
+	err = json.Unmarshal([]byte(jsonString), &data)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Extract the ID part from the providerID field
+	parts := strings.Split(data.ProviderID, "/")
+	if len(parts) < 4 {
+		e2e.Failf("Invalid providerID format")
+
+	}
+	instanceID := parts[4]
+	return instanceID
+}
+
+// GetInstanceInfo retrieves information for the specified instance name
+func GetIBMPowerVsInstanceInfo(powerClient *IBMPowerVsSession, instanceName string) (string, string, error) {
+	// Get all instances
+	getAllResp, err := powerClient.powerVsSession.GetAll()
+	if err != nil {
+		return "", "", err
+	}
+
+	// Print instance information
+	for _, inst := range getAllResp.PvmInstances {
+		if *inst.ServerName == instanceName {
+			e2e.Logf("ID: %s, Name: %s, Status: %s\n", *inst.PvmInstanceID, *inst.ServerName, *inst.Status)
+			return *inst.PvmInstanceID, strings.ToLower(*inst.Status), nil
+		}
+	}
+
+	return "", "", nil
 }
