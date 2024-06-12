@@ -4585,6 +4585,62 @@ desiredState:
 		logger.Infof("OK\n")
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-73309-disable ipv6 on worker nodes[Disruptive]", func() {
+
+		var (
+			wMcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mcName    = "mco-tc-73309-disable-ipv6"
+			kernelArg = "ipv6.disable=1"
+
+			behaviourValidatorApply = UpdateBehaviourValidator{
+				Checkers: []Checker{
+					CommandOutputChecker{
+						Command:  []string{"cat", "/proc/cmdline"},
+						Matcher:  o.ContainSubstring(kernelArg),
+						ErrorMsg: fmt.Sprintf("The kernel argument to disable ipv6 %s was not properly applied", kernelArg),
+						Desc:     fmt.Sprintf("Check that the kernel argument to disable ipv6 %s was properly applied", kernelArg),
+					},
+				},
+			}
+			behaviourValidatorRemove = UpdateBehaviourValidator{
+				Checkers: []Checker{
+					CommandOutputChecker{
+						Command:  []string{"cat", "/proc/cmdline"},
+						Matcher:  o.Not(o.ContainSubstring(kernelArg)),
+						ErrorMsg: fmt.Sprintf("The kernel argument to disable ipv6 %s was not properly removed", kernelArg),
+						Desc:     fmt.Sprintf("Check that the kernel argument to disable ipv6 %s was properly removed", kernelArg),
+					},
+				},
+			}
+		)
+
+		if IsCompactOrSNOCluster(oc.AsAdmin()) {
+			g.Skip("This test case can only be executed in clusters with worker pool. Disable IPV6 is not supported in master nodes")
+		}
+
+		behaviourValidatorApply.Initialize(wMcp, nil)
+
+		exutil.By("Create a MC to disable ipv6 in worker pool")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.parameters = []string{fmt.Sprintf(`KERNEL_ARGS=["%s"]`, kernelArg)}
+		mc.skipWaitForMcp = true
+
+		defer mc.delete()
+		mc.create()
+		logger.Infof("OK!\n")
+
+		// Check that the MC is applied according to the expected behaviour
+		behaviourValidatorApply.Validate()
+
+		behaviourValidatorRemove.Initialize(wMcp, nil)
+
+		exutil.By("Create a MC to disable ipv6 in worker pool")
+		mc.deleteNoWait()
+		logger.Infof("OK!\n")
+
+		behaviourValidatorRemove.Validate()
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
