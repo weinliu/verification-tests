@@ -6,7 +6,6 @@ spec:
   config: '{
     "cniVersion": "0.3.1",
     "name": "ipvlan-host-local",
-    "master": "ens5",
     "type": "ipvlan",
     "ipam": {
       "type": "host-local",
