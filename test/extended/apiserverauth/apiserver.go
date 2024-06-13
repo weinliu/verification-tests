@@ -6172,4 +6172,91 @@ EOF`, serverconf, fqdnName)
 		})
 		exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is not firing or pending", alertBudget, severityExtended[0]))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-73949-[Apiserver] Update existing alert AuditLogError [Slow] [Disruptive]", func() {
+		var (
+			alertBudget      = "AuditLogError"
+			alertTimeWarning = "1m"
+			severity         = "warning"
+			namespace        = "openshift-kube-apiserver"
+			lockCmd          = `sudo chattr +i /var/log/audit; \
+				sudo chattr +i /var/log/audit/*; \
+				sudo chattr +i /var/log/openshift-apiserver; \
+				sudo chattr +i /var/log/openshift-apiserver/*; \
+				sudo chattr +i /var/log/kube-apiserver; \
+				sudo chattr +i /var/log/kube-apiserver/*`
+
+			unlockCmd = `sudo chattr -i /var/log/audit; \
+				sudo chattr -i /var/log/audit/*; \
+				sudo chattr -i /var/log/openshift-apiserver; \
+				sudo chattr -i /var/log/openshift-apiserver/*; \
+				sudo chattr -i /var/log/kube-apiserver; \
+				sudo chattr -i /var/log/kube-apiserver/*`
+		)
+
+		exutil.By("1. Check if the following changes for existing alerts " + alertBudget + " have been applied to the cluster.")
+		output, alertBasicErr := getResource(oc, asAdmin, withoutNamespace, "prometheusrule/audit-errors", "-n", namespace, "-o", `jsonpath='{.spec.groups[?(@.name=="apiserver-audit")].rules[?(@.alert=="`+alertBudget+`")].labels.severity}'`)
+		o.Expect(alertBasicErr).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(severity), fmt.Sprintf("New alert %s with severity :: %s does not exist", alertBudget, severity))
+		e2e.Logf("Have new alert %s with severity :: %s", alertBudget, severity)
+
+		e2e.Logf("Check reduce severity to %s for :: %s", severity, alertTimeWarning)
+		output, sevBasicErr := getResource(oc, asAdmin, withoutNamespace, "prometheusrule/audit-errors", "-n", namespace, "-o", `jsonpath='{.spec.groups[?(@.name=="apiserver-audit")].rules[?(@.alert=="`+alertBudget+`")].for}'`)
+		o.Expect(sevBasicErr).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(alertTimeWarning), fmt.Sprintf("Not Have reduce severity to %s for :: %s", severity, alertTimeWarning))
+		e2e.Logf("Have reduce severity to %s for :: %s", severity, alertTimeWarning)
+
+		exutil.By("2. Test the " + alertBudget + "alert firing/pending")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		defer func() {
+			for _, masterNode := range masterNodes {
+				e2e.Logf("Rollback permissions of auditLogs on the node :: %s", masterNode)
+				_, debugErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", unlockCmd)
+				o.Expect(debugErr).NotTo(o.HaveOccurred())
+			}
+
+			errWatcher := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 600*time.Second, false, func(cxt context.Context) (bool, error) {
+				alertOutput, _ := GetAlertsByName(oc, alertBudget)
+				alertName := gjson.Parse(alertOutput).String()
+				alertOutputWarning1 := gjson.Get(alertName, `data.alerts.#(labels.alertname=="`+alertBudget+`")#`).String()
+				alertOutputWarning2 := gjson.Get(alertOutputWarning1, `#(labels.severity=="`+severity+`").state`).String()
+				if !strings.Contains(string(alertOutputWarning2), "pending") && !strings.Contains(string(alertOutputWarning2), "firing") {
+					e2e.Logf("Alert %s is resolved and it is not pending/firing", alertBudget)
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is still firing or pending after issue resolved", alertBudget, severity))
+		}()
+
+		for _, masterNode := range masterNodes {
+			e2e.Logf("Changing permissions of auditLogs on the node :: %s", masterNode)
+			_, debugErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", lockCmd)
+			o.Expect(debugErr).NotTo(o.HaveOccurred())
+		}
+
+		e2e.Logf("Check if alert " + alertBudget + " is firing/pending")
+		errWatcher := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 1500*time.Second, false, func(cxt context.Context) (bool, error) {
+			oc.AsAdmin().WithoutNamespace().Run("new-project").Args("test-profile-cm-ocp73949", "--skip-config-write").Execute()
+			oc.WithoutNamespace().Run("delete").Args("project", "test-profile-cm-ocp73949", "--ignore-not-found").Execute()
+			for _, masterNode := range masterNodes {
+				exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=" + namespace}, "bash", "-c", `for i in {0..20}; do sudo echo 'test' >> /var/log/audit/audit.log;echo 'test';done`)
+			}
+			alertOutput, _ := GetAlertsByName(oc, alertBudget)
+			alertName := gjson.Parse(alertOutput).String()
+			alertOutputWarning1 := gjson.Get(alertName, `data.alerts.#(labels.alertname=="`+alertBudget+`")#`).String()
+			alertOutputWarning2 := gjson.Get(alertOutputWarning1, `#(labels.severity=="`+severity+`").state`).String()
+			if strings.Contains(string(alertOutputWarning2), "pending") || strings.Contains(string(alertOutputWarning2), "firing") {
+				e2e.Logf("%s with %s is pending/firing", alertBudget, severity)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is not firing or pending", alertBudget, severity))
+	})
+
 })
