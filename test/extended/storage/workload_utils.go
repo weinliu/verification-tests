@@ -1003,11 +1003,14 @@ func (dep *deployment) getSpecifiedJSONPathValue(oc *exutil.CLI, jsonPath string
 // Restart the Deployment by rollout restart
 func (dep *deployment) restart(oc *exutil.CLI) {
 	resourceVersionOri := dep.getSpecifiedJSONPathValue(oc, "{.metadata.resourceVersion}")
+	readyPodListOri := dep.getPodList(oc)
 	err := oc.WithoutNamespace().Run("rollout").Args("-n", dep.namespace, "restart", "deployment", dep.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Eventually(func() string {
-		return dep.getSpecifiedJSONPathValue(oc, "{.metadata.resourceVersion}")
-	}, defaultMaxWaitingTime, defaultMaxWaitingTime/defaultIterationTimes).ShouldNot(o.Equal(resourceVersionOri), "The deploymet resourceVersion doesn't update")
+	o.Eventually(func() bool {
+		currentResourceVersion := dep.getSpecifiedJSONPathValue(oc, "{.metadata.resourceVersion}")
+		currentReadyPodList := dep.getPodList(oc)
+		return currentResourceVersion != resourceVersionOri && len(sliceIntersect(readyPodListOri, currentReadyPodList)) == 0
+	}).WithTimeout(defaultMaxWaitingTime).WithPolling(defaultMaxWaitingTime/defaultIterationTimes).Should(o.BeTrue(), fmt.Sprintf("deployment %q restart failed", dep.name))
 	dep.waitReady(oc)
 	e2e.Logf("deployment/%s in namespace %s restart successfully", dep.name, dep.namespace)
 }
