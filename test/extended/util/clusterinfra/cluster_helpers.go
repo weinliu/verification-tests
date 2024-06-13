@@ -31,6 +31,7 @@ const (
 	None
 	BareMetal
 	Ovirt
+	PowerVS
 )
 
 const (
@@ -63,6 +64,8 @@ func FromString(platform string) PlatformType {
 		return BareMetal
 	case "ovirt":
 		return Ovirt
+	case "powervs":
+		return PowerVS
 	default:
 		e2e.Failf("Unknown platform %s", platform)
 	}

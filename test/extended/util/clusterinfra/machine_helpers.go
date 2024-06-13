@@ -232,6 +232,10 @@ func DeleteMachine(oc *exutil.CLI, machineName string) error {
 // WaitForMachinesRunning check if all the machines are Running in a MachineSet
 func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
+	if machineNumber >= 1 {
+		// Wait 180 seconds first, as exutil.WaitForMachinesRunning() uses total 960 seconds in wait.poll, it may not be enough for some platform(s)
+		time.Sleep(180 * time.Second)
+	}
 	pollErr := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", MachineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)

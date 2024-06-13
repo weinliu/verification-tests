@@ -2725,8 +2725,6 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
-		// Wait 180 seconds first, as exutil.WaitForMachinesRunning() uses total 960 seconds in wait.poll, it may not be enough for some platform(s)
-		time.Sleep(180 * time.Second)
 		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
 		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
 		nodeName0 := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
