@@ -48,7 +48,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ALBO should", func
 	})
 
 	// author: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-ConnectedOnly-Author:hongli-High-51189-Support aws-load-balancer-operator [Serial]", func() {
+	g.It("Author:hongli-ROSA-OSD_CCS-ConnectedOnly-LEVEL0-High-51189-Support aws-load-balancer-operator [Serial]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "awslb")
 			AWSLBController     = filepath.Join(buildPruningBaseDir, "awslbcontroller.yaml")

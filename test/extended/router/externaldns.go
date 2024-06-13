@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 	})
 
 	// author: hongli@redhat.com
-	g.It("ConnectedOnly-ROSA-OSD_CCS-Author:hongli-High-48138-Support External DNS on AWS platform", func() {
+	g.It("Author:hongli-ConnectedOnly-ROSA-OSD_CCS-LEVEL0-High-48138-Support External DNS on AWS platform", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
 			sampleAWS           = filepath.Join(buildPruningBaseDir, "sample-aws-rt.yaml")
