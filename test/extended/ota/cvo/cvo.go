@@ -1086,11 +1086,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: jiajliu@redhat.com
 	g.It("Author:jiajliu-Medium-47198-Techpreview operator will not be installed on a fresh installed", func() {
-		tpOperatorNames := []string{"cluster-api", "platform-operators-aggregated", "olm"}
+		tpOperatorNames := []string{"cluster-api", "olm"}
 		tpOperator := []map[string]string{
 			{"ns": "openshift-cluster-api", "co": tpOperatorNames[0]},
-			{"ns": "openshift-platform-operators", "co": tpOperatorNames[1]},
-			{"ns": "openshift-cluster-olm-operator", "co": tpOperatorNames[2]}}
+			{"ns": "openshift-cluster-olm-operator", "co": tpOperatorNames[1]}}
 
 		featuregate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
