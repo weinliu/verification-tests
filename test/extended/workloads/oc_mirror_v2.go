@@ -610,4 +610,34 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
 		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-72913-Respect archive max size for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72913"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72913.yaml")
+
+		exutil.By("Start mirror2disk with strict-archive")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		_, warningOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--strict-archive").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(strings.Contains(warningOutput, "maxArchiveSize 1G is too small compared to sizes of files")).To(o.BeTrue())
+
+		exutil.By("Start mirror2disk without strict-archive")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
+	})
 })
