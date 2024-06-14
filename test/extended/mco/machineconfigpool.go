@@ -483,7 +483,7 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 	pendingNodes := poolNodes
 	updatedNodes := []Node{}
 	immediate := false
-	err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
 		if degradederr != nil {
@@ -540,7 +540,7 @@ func (mcp *MachineConfigPool) GetCordonedNodes() []Node {
 	o.Expect(mcp.WaitForUpdatingStatus()).NotTo(o.HaveOccurred(), "Waiting for Updating status change failed")
 	// polling all nodes in this pool and check whether all cordoned nodes (SchedulingDisabled)
 	var allUpdatingNodes []Node
-	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 5*time.Minute, true, func(_ context.Context) (bool, error) {
 		nodes, nerr := mcp.GetNodes()
 		if nerr != nil {
 			return false, fmt.Errorf("Get all linux node failed, will try again in next run %v", nerr)
@@ -599,7 +599,7 @@ func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 	logger.Infof("Waiting %s for MCP %s status to be not degraded.", timeToWait, mcp.name)
 
 	immediate := false
-	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		stdout, err := mcp.GetDegradedStatus()
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)
@@ -633,7 +633,7 @@ func (mcp MachineConfigPool) waitForConditionStatus(condition, status string, ti
 
 	logger.Infof("Waiting %s for MCP %s condition %s to be %s", timeout, mcp.GetName(), condition, status)
 
-	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, immediate, func(_ context.Context) (bool, error) {
 		stdout, err := mcp.Get(`{.status.conditions[?(@.type=="` + condition + `")].status}`)
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)
@@ -659,7 +659,7 @@ func (mcp MachineConfigPool) WaitForMachineCount(expectedMachineCount int, timeT
 	logger.Infof("Waiting %s for MCP %s to report %d machine count.", timeToWait, mcp.GetName(), expectedMachineCount)
 
 	immediate := true
-	err := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		mCount, err := mcp.getMachineCount()
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)
@@ -685,7 +685,7 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	logger.Infof("Waiting %s for MCP %s to be completed.", timeToWait, mcp.name)
 
 	immediate := false
-	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
 		if degradederr != nil {
@@ -784,7 +784,7 @@ func (mcp *MachineConfigPool) waitForPinComplete(timeToWait time.Duration) error
 	logger.Infof("Waiting %s for MCP %s to complete pinned images.", timeToWait, mcp.name)
 
 	immediate := false
-	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		pinnedComplete, err := mcp.IsPinnedImagesComplete()
 		if err != nil {
 
@@ -827,7 +827,7 @@ func (mcp *MachineConfigPool) waitForPinApplied(timeToWait time.Duration) error 
 
 	immediate := true
 	pinnedStarted := false
-	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		pinnedComplete, err := mcp.IsPinnedImagesComplete()
 		if err != nil {
 			logger.Infof("Error getting pinned complete")
@@ -958,7 +958,7 @@ func (mcp *MachineConfigPool) SanityCheck() error {
 	var message string
 
 	immediate := true
-	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degraded, degradederr := mcp.GetDegradedStatus()
 		if degradederr != nil {

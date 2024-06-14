@@ -748,7 +748,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		exutil.By("check mcp status condition, expected: UPDATED=False && UPDATING=False")
 		var updated, updating string
 		immediate := false
-		pollerr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 10*time.Second, immediate, func(ctx context.Context) (bool, error) {
+		pollerr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 10*time.Second, immediate, func(_ context.Context) (bool, error) {
 			stdouta, erra := mcp.Get(`{.status.conditions[?(@.type=="Updated")].status}`)
 			stdoutb, errb := mcp.Get(`{.status.conditions[?(@.type=="Updating")].status}`)
 			updated = strings.Trim(stdouta, "'")
@@ -909,7 +909,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		var podLogs string
 		// Wait until trying drain for 6 times
 		immediate := false
-		waitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 15*time.Minute, immediate, func(ctx context.Context) (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 15*time.Minute, immediate, func(_ context.Context) (bool, error) {
 			logs, _ := mcc.GetFilteredLogsAsList(workerNode.GetName() + ".*Drain failed")
 			if len(logs) > 5 {
 				// Get only 6 lines to avoid flooding the test logs, ignore the rest if any.
@@ -930,7 +930,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(getTimeDifferenceInMinute(timestamps[3], timestamps[4])).Should(o.BeNumerically(">=", 1))
 
 		exutil.By("Check MCC logs to see the increase in the sleep interval b/w failed drains")
-		lWaitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 15*time.Minute, immediate, func(ctx context.Context) (bool, error) {
+		lWaitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 15*time.Minute, immediate, func(_ context.Context) (bool, error) {
 			logs, _ := mcc.GetFilteredLogsAsList(workerNode.GetName() + ".*Drain has been failing for more than 10 minutes. Waiting 5 minutes")
 			if len(logs) > 1 {
 				// Get only 2 lines to avoid flooding the test logs, ignore the rest if any.
@@ -4153,7 +4153,7 @@ nulla pariatur.`
 		skipTestIfImageContentSourcePolicyExists(oc.AsAdmin())
 		// If techpreview is enabled, then this behaviour is controlled by the new node disruption policy
 		if exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("featureSet: TechPreviewNoUpgrade is enabled. This test case cannot be executed with TechPreviewNoUpgrade becuase this behaviour is contrller by the new node disruption policy")
+			g.Skip("featureSet: TechPreviewNoUpgrade is enabled. This test case cannot be executed with TechPreviewNoUpgrade because this behaviour is contrller by the new node disruption policy")
 		}
 
 		exutil.By("Start capturing events and clean pods logs")
@@ -4734,7 +4734,7 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, node Node
 
 	exutil.By(fmt.Sprintf("Check %s in the machine config daemon", stepText))
 	var podOut string
-	if textToVerify.needBash {
+	if textToVerify.needBash { // nolint:all
 		podOut, err = exutil.RemoteShPodWithBash(oc, MachineConfigNamespace, node.GetMachineConfigDaemon(), cmd...)
 	} else if textToVerify.needChroot {
 		podOut, err = exutil.RemoteShPodWithChroot(oc, MachineConfigNamespace, node.GetMachineConfigDaemon(), cmd...)

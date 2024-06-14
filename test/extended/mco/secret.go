@@ -106,7 +106,7 @@ func waitUntilSecretHasStableValue(secret *Secret, data string, timeout, poll ti
 
 	immediate := true
 	waitErr := wait.PollUntilContextTimeout(context.TODO(), poll, timeout, immediate,
-		func(ctx context.Context) (bool, error) {
+		func(_ context.Context) (bool, error) {
 			val, err := secret.GetDataValue(data)
 
 			if val == oldVal && err == nil {

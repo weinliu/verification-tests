@@ -91,7 +91,7 @@ func (cc *ControllerConfig) GetImageRegistryBundle(bundleField string) (map[stri
 	parsedBundleData := gjson.Parse(bundleData)
 
 	var b64Err error
-	parsedBundleData.ForEach(func(index, item gjson.Result) bool {
+	parsedBundleData.ForEach(func(_, item gjson.Result) bool {
 		file := item.Get("file").String()
 		data64 := item.Get("data").String()
 

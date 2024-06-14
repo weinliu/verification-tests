@@ -108,7 +108,8 @@ func (c *SkopeoCLI) printCmd() string {
 // Args sets the additional arguments for the skopeo CLI command
 func (c *SkopeoCLI) Args(args ...string) *SkopeoCLI {
 	c.commandArgs = args
-	c.finalArgs = append(c.globalArgs, c.commandArgs...)
+	c.finalArgs = c.globalArgs
+	c.finalArgs = append(c.finalArgs, c.commandArgs...)
 
 	return c
 }

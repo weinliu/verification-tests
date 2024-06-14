@@ -372,7 +372,7 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 	var waitErr error
 	for _, ms := range allMs {
 		immediate := true
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 20*time.Minute, immediate, func(ctx context.Context) (bool, error) { return ms.GetIsReady(), nil })
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 20*time.Minute, immediate, func(_ context.Context) (bool, error) { return ms.GetIsReady(), nil })
 		if waitErr != nil {
 			logger.Errorf("MachineSet %s is not ready. Restoring original replicas.", ms.GetName())
 			for _, ms := range modifiedMSs {
@@ -402,7 +402,7 @@ func sortNodeList(nodes []Node) []Node {
 		lZone := lLabels.Get("topology.kubernetes.io/zone")
 		rZone := rLabels.Get("topology.kubernetes.io/zone")
 		// if both nodes have zone label, sort by zone, push nodes without label to end of list
-		if lZone.Exists() && rZone.Exists() {
+		if lZone.Exists() && rZone.Exists() { //nolint:all
 			if lZone.ToString() != rZone.ToString() {
 				return lZone.ToString() < rZone.ToString()
 			}
@@ -822,7 +822,7 @@ func waitForAllMCOPodsReady(oc *exutil.CLI, timeout time.Duration) error {
 	logger.Infof("Waiting for MCO pods to be runnging and ready in namespace %s", MachineConfigNamespace)
 	immediate := false
 	waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, timeout, immediate,
-		func(ctx context.Context) (bool, error) {
+		func(_ context.Context) (bool, error) {
 			status, err := NewNamespacedResourceList(oc.AsAdmin(), "pod", MachineConfigNamespace).
 				Get(`{.items[*].status.conditions[?(@.type=="Ready")].status}`)
 

@@ -65,7 +65,7 @@ func (mc *MachineConfig) create() {
 	mc.Create(params...)
 
 	immediate := false
-	pollerr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 1*time.Minute, immediate, func(ctx context.Context) (bool, error) {
+	pollerr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 1*time.Minute, immediate, func(_ context.Context) (bool, error) {
 		stdout, err := mc.Get(`{.metadata.name}`)
 		if err != nil {
 			logger.Errorf("the err:%v, and try next round", err)

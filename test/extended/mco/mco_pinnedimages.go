@@ -511,32 +511,32 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		wMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		//find the node with the machine-config-controller
+		// find the node with the machine-config-controller
 		exutil.By("Get the mcc node")
 		var mcc = NewController(oc.AsAdmin())
 		mccMaster, err := mcc.GetNode()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the node where the MCO controller is running")
 		logger.Infof("OK!\n")
 
-		//reboot the node with mcc
+		// reboot the node with mcc
 		exutil.By("Reboot node")
 		startTime := mccMaster.GetDateOrFail()
 		o.Expect(mccMaster.Reboot()).To(o.Succeed(), "Error rebooting node %s", mccMaster)
 		logger.Infof("OK!\n")
 
-		//delete the pinnedImageSet
+		// delete the pinnedImageSet
 		exutil.By("Delete the pinnedimageset")
 		o.Expect(pis.DeleteAndWait(waitForPinned)).NotTo(o.HaveOccurred(), "Error deleting pinnedimageset %s", pis)
 		logger.Infof("OK!\n")
 
-		//wait for the rebooted node
+		// wait for the rebooted node
 		exutil.By("Wait for the rebooted node")
 		o.Eventually(mccMaster.GetUptime, "15m", "30s").Should(o.BeTemporally(">", startTime),
 			"%s was not properly rebooted", mccMaster)
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		//check pinned imageset is deleted in all nodes in the pool
+		// check pinned imageset is deleted in all nodes in the pool
 		exutil.By("Check that the images are not pinned in all nodes in the pool")
 		for _, node := range allMasters {
 			ri := NewRemoteImage(node, pinnedImage)

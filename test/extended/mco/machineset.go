@@ -140,7 +140,7 @@ func (ms MachineSet) GetMachinesOrFail() []Machine {
 func (ms MachineSet) GetMachinesByPhase(phase string) ([]Machine, error) {
 	// add poller to check machine phase periodically.
 	machines := []Machine{}
-	pollerr := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 20*time.Second, true, func(ctx context.Context) (bool, error) {
+	pollerr := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 20*time.Second, true, func(_ context.Context) (bool, error) {
 		ml, err := ms.GetMachines()
 		if err != nil {
 			return false, err
@@ -199,7 +199,7 @@ func (ms MachineSet) WaitUntilReady(duration string) error {
 	}
 
 	immediate := false
-	pollerr := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, pDuration, immediate, func(ctx context.Context) (bool, error) {
+	pollerr := wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, pDuration, immediate, func(_ context.Context) (bool, error) {
 		return ms.GetIsReady(), nil
 	})
 
@@ -422,11 +422,12 @@ func getUserDataIgnitionVersionFromOCPVersion(baseImageVersion string) string {
 	   4.2: 2.2.0
 	   4.1: 2.2.0
 	*/
+
 	if CompareVersions(baseImageVersion, "<", "4.6") {
 		return "2.2.0"
-	} else if CompareVersions(baseImageVersion, "<", "4.10") {
-		return "3.1.0"
-	} else {
-		return "3.2.0"
 	}
+	if CompareVersions(baseImageVersion, "<", "4.10") {
+		return "3.1.0"
+	}
+	return "3.2.0"
 }
