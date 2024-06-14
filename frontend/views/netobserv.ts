@@ -119,8 +119,9 @@ export const Operator = {
                 if (parameters == "DNSTracking") {
                     Operator.enableDNSTracking()
                 }
-                Operator.configureLoki(namespace, parameters)
-                cy.get('#root_spec_namespace').clear().type(namespace)
+                if (parameters == "LokiDisabled") {
+                    Operator.disableLoki()
+                }
                 if (parameters == "Conversations") {
                     Operator.enableConversations()
                 }
@@ -197,16 +198,9 @@ export const Operator = {
             "workload_rtt_seconds"
         ]);
     },
-    configureLoki: (namespace: string, parameters?: string) => {
+    disableLoki: () => {
         cy.get('#root_spec_loki_accordion-toggle').click()
-        if (parameters == "LokiDisabled"){
-            cy.get(flowcollectorFormSelectors.lokiEnableToggle).should('be.visible').click()
-        }
-        else{
-            cy.get('#root_spec_loki_mode').click().then(moreOpts => {
-                cy.get('#Monolithic-link').click()
-            })
-        }
+        cy.get(flowcollectorFormSelectors.lokiEnableToggle).should('be.visible').click()
     },
     enableConversations: () => {
         cy.get('#root_spec_processor_accordion-toggle').click()
