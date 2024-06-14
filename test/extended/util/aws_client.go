@@ -116,6 +116,32 @@ func (a *AwsClient) GetAwsPublicSubnetID(clusterID string) (string, error) {
 	return *subnetID, err
 }
 
+// GetAwsPrivateSubnetIDs get private subnet IDs
+func (a *AwsClient) GetAwsPrivateSubnetIDs(vpcID string) ([]string, error) {
+	input := &ec2.DescribeSubnetsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []*string{aws.String(vpcID)},
+			},
+		},
+	}
+	subnetInfo, err := a.svc.DescribeSubnets(input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe subnets, %v", err)
+	}
+
+	var privateSubnetIDs []string
+	for _, subnet := range subnetInfo.Subnets {
+		if *subnet.MapPublicIpOnLaunch == false {
+			privateSubnetIDs = append(privateSubnetIDs, *subnet.SubnetId)
+			break
+		}
+	}
+
+	return privateSubnetIDs, nil
+}
+
 // GetAwsIntIPs get aws int ip
 func (a *AwsClient) GetAwsIntIPs(instanceID string) (map[string]string, error) {
 	filters := []*ec2.Filter{

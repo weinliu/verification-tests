@@ -2,6 +2,7 @@ package clusterinfrastructure
 
 import (
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,11 +20,14 @@ type ingressControllerDescription struct {
 }
 
 type loadBalancerServiceDescription struct {
-	template  string
-	name      string
-	subnet    string
-	label     string
-	namespace string
+	template      string
+	name          string
+	awssubnet     string
+	awslabel      string
+	gcptype       string
+	azureinternal bool
+	azuresubnet   string
+	namespace     string
 }
 
 type podDescription struct {
@@ -46,7 +50,7 @@ func (loadBalancerService *loadBalancerServiceDescription) createLoadBalancerSer
 	e2e.Logf("Creating loadBalancerService ...")
 	var err error
 	if strings.Contains(loadBalancerService.template, "annotations") {
-		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerService.template, "-p", "NAME="+loadBalancerService.name, "NAMESPACE="+loadBalancerService.namespace, "SUBNET="+loadBalancerService.subnet, "LABEL="+loadBalancerService.label)
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerService.template, "-p", "NAME="+loadBalancerService.name, "NAMESPACE="+loadBalancerService.namespace, "AWSSUBNET="+loadBalancerService.awssubnet, "AWSLABEL="+loadBalancerService.awslabel, "GCPTYPE="+loadBalancerService.gcptype, "AZUREINTERNAL="+strconv.FormatBool(loadBalancerService.azureinternal), "AZURESUNBET="+loadBalancerService.azuresubnet)
 	} else {
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", loadBalancerService.template, "-p", "NAME="+loadBalancerService.name, "NAMESPACE="+loadBalancerService.namespace)
 	}

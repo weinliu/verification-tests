@@ -346,7 +346,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		svcForSubnet := loadBalancerServiceDescription{
 			template:  svc,
 			name:      "test-subnet-annotation",
-			subnet:    subnetId,
+			awssubnet: subnetId,
 			namespace: lbNamespace,
 		}
 		defer svcForSubnet.deleteLoadBalancerService(oc)
@@ -379,8 +379,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		svcForLabel := loadBalancerServiceDescription{
 			template:  svc,
 			name:      "test-label-annotation",
-			subnet:    subnetId,
-			label:     "key1=value1",
+			awssubnet: subnetId,
+			awslabel:  "key1=value1",
 			namespace: lbNamespace,
 		}
 		defer svcForLabel.deleteLoadBalancerService(oc)
@@ -518,5 +518,65 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "ccm-trusted-ca", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("Cloud Compute / Cloud Controller Manager"))
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-NonHyperShiftHOST-High-73119-[CCM] Create Internal LB service on aws/gcp/azure", func() {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
+
+		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
+		svc := filepath.Join(ccmBaseDir, "svc-loadbalancer-with-annotations.yaml")
+		lbNamespace := "ns-73119"
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(lbNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(lbNamespace)
+		exutil.SetNamespacePrivileged(oc, lbNamespace)
+		svcForSubnet := loadBalancerServiceDescription{
+			template:  svc,
+			name:      "internal-lb-73119",
+			namespace: lbNamespace,
+		}
+		if iaasPlatform == clusterinfra.AWS {
+			exutil.By("Get worker private subnetID")
+			region, err := exutil.GetAWSClusterRegion(oc)
+			o.Expect(err).ShouldNot(o.HaveOccurred())
+			clusterinfra.GetAwsCredentialFromCluster(oc)
+			awsClient := exutil.InitAwsSessionWithRegion(region)
+			machineName := clusterinfra.ListMasterMachineNames(oc)[0]
+			instanceID, err := awsClient.GetAwsInstanceID(machineName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			subnetIds, err := awsClient.GetAwsPrivateSubnetIDs(vpcID)
+			o.Expect(subnetIds).ShouldNot(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred())
+			svcForSubnet.awssubnet = subnetIds[0]
+		}
+		if iaasPlatform == clusterinfra.GCP {
+			svcForSubnet.gcptype = "internal"
+		}
+		if iaasPlatform == clusterinfra.Azure {
+			defaultWorkerMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
+			subnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.subnet}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			svcForSubnet.azureinternal = true
+			svcForSubnet.azuresubnet = subnet
+		}
+
+		exutil.By("Create internal loadBalancerService")
+		defer svcForSubnet.deleteLoadBalancerService(oc)
+		svcForSubnet.createLoadBalancerService(oc)
+
+		g.By("Check External-IP assigned")
+		getLBSvcIP(oc, svcForSubnet)
+
+		exutil.By("Get the Interanl LB ingress ip or hostname")
+		// AWS, IBMCloud use hostname, other cloud platforms use ip
+		internalLB, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lbNamespace, "service", svcForSubnet.name, "-o=jsonpath={.status.loadBalancer.ingress}").Output()
+		e2e.Logf("the internal LB is %v", internalLB)
+		if iaasPlatform == clusterinfra.AWS {
+			o.Expect(internalLB).To(o.MatchRegexp(`"hostname":.*elb.*amazonaws.com`))
+		} else {
+			o.Expect(internalLB).To(o.MatchRegexp(`"ip":"10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"`))
+		}
 	})
 })

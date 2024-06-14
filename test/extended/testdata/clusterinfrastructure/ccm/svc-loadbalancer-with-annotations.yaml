@@ -11,8 +11,11 @@ objects:
       name: ${NAME}
       namespace: ${NAMESPACE}
       annotations:
-        service.beta.kubernetes.io/aws-load-balancer-subnets: ${SUBNET}
-        service.beta.kubernetes.io/aws-load-balancer-target-node-labels: ${LABEL}
+        service.beta.kubernetes.io/aws-load-balancer-subnets: ${AWSSUBNET}
+        service.beta.kubernetes.io/aws-load-balancer-target-node-labels: ${AWSLABEL}
+        cloud.google.com/load-balancer-type: ${GCPTYPE}
+        service.beta.kubernetes.io/azure-load-balancer-internal: ${AZUREINTERNAL}
+        service.beta.kubernetes.io/azure-load-balancer-internal-subnet: ${AZURESUBNET}
     spec:
       ports:
       - name: http
@@ -25,6 +28,9 @@ objects:
 parameters:
 - name: NAME
 - name: NAMESPACE
-- name: SUBNET
-- name: LABEL
+- name: AWSSUBNET
+- name: AWSLABEL
+- name: GCPTYPE
+- name: AZUREINTERNAL
+- name: AZURESUBNET
 
