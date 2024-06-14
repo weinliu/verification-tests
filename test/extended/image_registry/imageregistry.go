@@ -1485,6 +1485,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:jitli-LEVEL0-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials", func() {
 
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Create route to expose the registry")
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
@@ -1795,6 +1801,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-49455-disableRedirect should work when image registry configured object storage", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Get registry storage info")
 		storagetype, _ := getRegistryStorageConfig(oc)
 		if storagetype == "pvc" || storagetype == "emptyDir" {
@@ -2205,10 +2217,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-VMonly-Author:xiuwang-Critical-10904-Support unauthenticated with registry-admin role", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Add registry-admin role to a project")
 		oc.SetupProject()
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-admin", "-z", "test-registry-admin", "-n", oc.Namespace()).Execute()
-		err := oc.AsAdmin().Run("create").Args("sa", "test-registry-admin", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().Run("create").Args("sa", "test-registry-admin", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-admin", "-z", "test-registry-admin", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2325,10 +2343,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-VMonly-Author:xiuwang-Low-11314-Support unauthenticated with registry-viewer role", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Add registry-viewer role to a project")
 		oc.SetupProject()
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-viewer", "-z", "test-registry-viewer", "-n", oc.Namespace()).Execute()
-		err := oc.AsAdmin().Run("create").Args("sa", "test-registry-viewer", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().Run("create").Args("sa", "test-registry-viewer", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-viewer", "-z", "test-registry-viewer", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2445,9 +2469,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:jitli-Medium-11252-ImageRegistry Check the registry-admin permission", func() {
 
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Add registry-admin role to a project")
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-admin", oc.Username(), "-n", oc.Namespace()).Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-admin", oc.Username(), "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-admin", oc.Username(), "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the user policy")
@@ -2760,9 +2790,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Create signature file")
 		var signFile = `'{"schemaVersion": 2,"type":"atomic","name":"digestid","content": "MjIK"}'`
-		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "ho12958:latest", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "ho12958:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ho12958", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2860,6 +2896,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-10909-Add/update/remove signatures to the images", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		var (
 			signFile = filepath.Join(imageRegistryBaseDir, "imagesignature.yaml")
 			signsrc  = signatureSource{
@@ -2871,7 +2913,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			}
 		)
 		g.By("Create imagestreamimport")
-		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "skopeo:latest", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "skopeo:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2965,8 +3007,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-18984-Request to view all imagestreams via registry catalog api [Serial]", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Tag an imagestream under project")
-		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "test18984:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "test18984:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test18984", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())

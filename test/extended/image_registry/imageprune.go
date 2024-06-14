@@ -676,9 +676,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-11332-Admin can understand/manage image use and prune unreferenced image", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
+
 		g.By("Create imagestream")
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/deployment-example@sha256:9d29ff0fdbbec33bb4eebb0dbe0d0f3860a856987e5481bb0fc39f3aba086184", "deployment-example:latest", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -700,9 +707,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-LEVEL0-Critical-12400-Prune images by command 'oc adm prune images' [Serial]", func() {
+		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against a Hypershift external OIDC cluster")
+		}
 		g.By("Create imagestream")
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		token, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
