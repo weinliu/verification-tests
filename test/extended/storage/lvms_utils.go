@@ -282,24 +282,21 @@ func getLVMSUsableDiskCountFromWorkerNodes(oc *exutil.CLI) map[string]int64 {
 	return freeWorkerDiskCount
 }
 
+// Get the list of unused block devices/disks from given node
+func getUnusedBlockDevicesFromNode(oc *exutil.CLI, nodeName string) (deviceList []string) {
+	listDeviceCmd := "echo $(lsblk --fs --json | jq -r '.blockdevices[] | select(.children == null and .fstype == null) | .name')"
+	output, err := execCommandInSpecificNode(oc, nodeName, listDeviceCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	deviceList = strings.Fields(output)
+	return deviceList
+}
+
 // Creates a sofwtare RAID Level-1 disk using two disks/block devices available on a node
 func createRAIDLevel1Disk(oc *exutil.CLI, nodeName string, raidDiskName string) {
-	var deviceList []string
-	output, err := execCommandInSpecificNode(oc, nodeName, "lsblk | grep disk | awk '{print $1}'")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	diskList := strings.Fields(output)
-	for _, diskName := range diskList {
-		output, _ := execCommandInSpecificNode(oc, nodeName, "blkid /dev/"+diskName)
-		if len(strings.TrimSpace(output)) == 0 { // Unused free disk does not return any output
-			deviceList = append(deviceList, "/dev/"+diskName)
-		}
-		if len(deviceList) > 1 { // need only two disks/block devices
-			break
-		}
-	}
-	o.Expect(len(deviceList) < 2).NotTo(o.BeTrue())
-	raidCreateCmd := "yes | mdadm --create /dev/" + raidDiskName + " --level=1 --raid-devices=2 --assume-clean " + deviceList[0] + " " + deviceList[1]
-	checkRaidStatCmd := "cat /proc/mdstat | grep " + raidDiskName
+	deviceList := getUnusedBlockDevicesFromNode(oc, nodeName)
+	o.Expect(len(deviceList) < 2).NotTo(o.BeTrue(), "Worker node: "+nodeName+" doesn't have at least two unused block devices/disks")
+	raidCreateCmd := "yes | mdadm --create /dev/" + raidDiskName + " --level=1 --raid-devices=2 --assume-clean " + "/dev/" + deviceList[0] + " " + "/dev/" + deviceList[1]
+	checkRaidStatCmd := "cat /proc/mdstat"
 	cmdOutput, _err := execCommandInSpecificNode(oc, nodeName, raidCreateCmd)
 	o.Expect(_err).NotTo(o.HaveOccurred())
 	o.Expect(cmdOutput).To(o.ContainSubstring("mdadm: array /dev/" + raidDiskName + " started"))
@@ -316,7 +313,7 @@ func removeRAIDLevelDisk(oc *exutil.CLI, nodeName string, raidDiskName string) {
 	output, err := execCommandInSpecificNode(oc, nodeName, "lsblk | grep disk | awk '{print $1}'")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	diskList := strings.Fields(output)
-	cmdOutput, _err := execCommandInSpecificNode(oc, nodeName, checkRaidStatCmd+" | grep "+raidDiskName)
+	cmdOutput, _err := execCommandInSpecificNode(oc, nodeName, checkRaidStatCmd)
 	o.Expect(_err).NotTo(o.HaveOccurred())
 	for _, diskName := range diskList {
 		output, _ := execCommandInSpecificNode(oc, nodeName, "blkid /dev/"+diskName)
