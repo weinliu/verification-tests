@@ -1,3 +1,4 @@
+import { Pages } from "./pages";
 export const Deployment = {
   checkAlert: () => {
     cy.get('h4')
@@ -19,5 +20,10 @@ export const Deployment = {
   },
   checkDetailItem: (key, value) => {
     cy.contains('dt', `${key}`).next({timeout: 60000}).should('contain', `${value}`);
+  },
+  createDeploymentFromForm: (projectName, deploymentName) => {
+    Pages.gotoCreateDeploymentFormView(`${projectName}`);
+    cy.get('input[label="Name"]').type(`${deploymentName}`);
+    cy.byTestID('save-changes').click();
   }
 }

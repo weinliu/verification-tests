@@ -132,5 +132,10 @@ export const Pages = {
   gotoVolumeSnapshotDetailPage: (namespace ,vs_name) => {
     cy.visit(`/k8s/ns/${namespace}/snapshot.storage.k8s.io~v1~VolumeSnapshot/${vs_name}`);
     cy.get('[data-test-section-heading="VolumeSnapshot details"]').should('exist');
+  },
+  addLabelFromResourcePage: (label) => {
+    cy.byTestID('Labels-details-item__edit-button').click();
+    cy.get('#tags-input').type(`${label}`);
+    cy.byTestID('confirm-action').click();
   }
 }
