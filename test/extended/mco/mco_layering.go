@@ -477,6 +477,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		)
 
+		mMcp.SetWaitingTimeForExtensionsChange()
+		wMcp.SetWaitingTimeForExtensionsChange()
 		defer mMcp.waitForComplete()
 		defer wMcp.waitForComplete()
 

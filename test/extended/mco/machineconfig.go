@@ -84,6 +84,10 @@ func (mc *MachineConfig) create() {
 		if mc.GetKernelTypeSafe() != "" {
 			mcp.SetWaitingTimeForKernelChange() // Since we configure a different kernel we wait longer for completion
 		}
+
+		if mc.HasExtensionsSafe() {
+			mcp.SetWaitingTimeForExtensionsChange() // Since we configure extra extension we need to wait longer for completion
+		}
 		mcp.waitForComplete()
 	}
 
@@ -128,6 +132,11 @@ func (mc *MachineConfig) GetAuthorizedKeysByUser(user string) (string, error) {
 // Get the kernelType configured in this MC. If any arror happens it returns an empty string
 func (mc *MachineConfig) GetKernelTypeSafe() string {
 	return mc.GetSafe(`{.spec.kernelType}`, "")
+}
+
+// HasExtensionsSafe  returns true if the MC has any extension configured
+func (mc *MachineConfig) HasExtensionsSafe() bool {
+	return mc.GetSafe(`{.spec.extensions}`, "[]") != "[]"
 }
 
 // GetAuthorizedKeysByUserAsList returns the authorizedkeys that this MC defines for the given user as a list of strings

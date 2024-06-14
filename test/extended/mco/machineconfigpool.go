@@ -250,6 +250,11 @@ func (mcp *MachineConfigPool) SetWaitingTimeForKernelChange() {
 	mcp.MinutesWaitingPerNode = DefaultMinutesWaitingPerNode + KernelChangeIncWait
 }
 
+// SetWaitingTimeForExtensionsChange increases the time that the MCP will wait for the update to be executed
+func (mcp *MachineConfigPool) SetWaitingTimeForExtensionsChange() {
+	mcp.MinutesWaitingPerNode = DefaultMinutesWaitingPerNode + ExtensionsChangeIncWait
+}
+
 // SetDefaultWaitingTime restore the default waiting time that the MCP will wait for the update to be executed
 func (mcp *MachineConfigPool) SetDefaultWaitingTime() {
 	mcp.MinutesWaitingPerNode = DefaultMinutesWaitingPerNode

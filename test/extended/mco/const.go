@@ -123,6 +123,9 @@ const (
 	// KernelChangeIncWait exta minutes that MCPs will wait per node if we change the kernel in a configuration
 	KernelChangeIncWait = 5
 
+	// ExtensionsChangeIncWait exta minutes that MCPs will wait per node if we change the extensions in a configuration
+	ExtensionsChangeIncWait = 5
+
 	// ImageRegistryCertificatesDir is the path were the image registry certificates will be stored in a node. Example: /etc/docker/certs.d/mycertname/ca.crt
 	ImageRegistryCertificatesDir = "/etc/docker/certs.d"
 

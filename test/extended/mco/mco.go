@@ -281,6 +281,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			}
 		)
 
+		mcp.SetWaitingTimeForExtensionsChange()
 		behaviourValidator.Initialize(mcp, nil)
 
 		exutil.By("Create a MC to deploy a usbguard extension")
@@ -4721,7 +4722,7 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, node Node
 	mc := NewMachineConfig(oc.AsAdmin(), mcName, node.GetPrimaryPoolOrFail().GetName()).SetMCOTemplate(mcTemplate)
 	defer mc.delete()
 	// TODO: When we extract the "mcp.waitForComplete" from the "create" method, we need to take into account that if
-	// we are configuring a rt-kernel we need to wait longer.
+	// we are configuring a rt-kernel we need to wait longer. Same for extensions, we need to wait longer if an extension is configured.
 	mc.create()
 	logger.Infof("Machine config is created successfully!")
 
