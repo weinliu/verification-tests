@@ -114,10 +114,16 @@ func (clusterextension *ClusterExtensionDescription) GetBundleResource(oc *exuti
 	e2e.Logf("=========Get clusterextension %v BundleResource =========", clusterextension.Name)
 
 	installedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.installedBundle.name}")
+	if err != nil {
+		Get(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterextension.InstalledBundle = installedBundle
 
 	resolvedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle.name}")
+	if err != nil {
+		Get(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterextension.ResolvedBundle = resolvedBundle
 }
