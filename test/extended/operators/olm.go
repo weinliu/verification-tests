@@ -3666,11 +3666,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.By("1) Start to subscribe the learn operator")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		catsrcName := "qe-app-registry"
+		if isPresentResource(oc, asAdmin, withoutNamespace, present, "catsrc", "auto-release-app-registry", "-n", "openshift-marketplace") {
+			catsrcName = "auto-release-app-registry"
+		}
 		oc.SetupProject()
 		sub := subscriptionDescription{
 			subName:                "sub-22070",
 			namespace:              "openshift-operators",
-			catalogSourceName:      "qe-app-registry",
+			catalogSourceName:      catsrcName,
 			catalogSourceNamespace: "openshift-marketplace",
 			channel:                "beta",
 			ipApproval:             "Automatic",
@@ -5818,7 +5822,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			sub = subscriptionDescription{
 				subName:                "sub-24917",
 				namespace:              oc.Namespace(),
-				catalogSourceName:      "qe-app-registry",
+				catalogSourceName:      "",
 				catalogSourceNamespace: "openshift-marketplace",
 				ipApproval:             "Automatic",
 				channel:                "beta",
@@ -5827,10 +5831,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:               subTemplate,
 			}
 		)
+		catsrcName := "qe-app-registry"
+		if isPresentResource(oc, asAdmin, withoutNamespace, present, "catsrc", "auto-release-app-registry", "-n", "openshift-marketplace") {
+			catsrcName = "auto-release-app-registry"
+		}
 		// project and its resource are deleted automatically when out of It, so no need defer or AfterEach
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
+		sub.catalogSourceName = catsrcName
 
 		exutil.By("Create og")
 		defer og.delete(itName, dr)
