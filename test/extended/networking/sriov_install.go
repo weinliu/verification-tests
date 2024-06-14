@@ -53,7 +53,11 @@ var _ = g.Describe("[sig-networking] SDN sriov installation", func() {
 			targetNamespaces: opNamespace,
 			template:         operatorGroupTemplate,
 		}
-
+		catalogSource := getOperatorSource(oc, "openshift-marketplace")
+		if catalogSource == "" {
+			g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+		}
+		sub.catalog = catalogSource
 		operatorInstall(oc, sub, ns, og)
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		exutil.By("SUCCESS - sriov operator installed")

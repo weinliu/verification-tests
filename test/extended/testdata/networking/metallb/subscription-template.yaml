@@ -11,9 +11,10 @@ objects:
   spec:
     name: "${OPERATORNAME}"
     channel: stable
-    source: qe-app-registry
+    source: "${CATALOGSOURCE}"
     sourceNamespace: openshift-marketplace
 parameters:
 - name: OPERATORNAME
 - name: SUBSCRIPTIONNAME
 - name: NAMESPACE
+- name: CATALOGSOURCE

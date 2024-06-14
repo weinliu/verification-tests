@@ -749,3 +749,16 @@ func getInterfaceMac(oc *exutil.CLI, namespace, podName, interfaceName string) s
 	podInterfaceMac = strings.TrimSpace(podInterfaceMac)
 	return podInterfaceMac
 }
+
+// get the catlogsource name
+func getOperatorSource(oc *exutil.CLI, namespace string) string {
+	catalogSourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(catalogSourceNames, "auto-release-app-registry") {
+		return "auto-release-app-registry"
+	} else if strings.Contains(catalogSourceNames, "qe-app-registry") {
+		return "qe-app-registry"
+	} else {
+		return ""
+	}
+}

@@ -40,6 +40,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 			name:         "ingress-node-firewall-sub",
 			namespace:    opNamespace,
 			operatorName: opName,
+			catalog:      "qe-app-registry",
 			template:     subscriptionTemplate,
 		}
 		ns := namespaceResource{
@@ -52,6 +53,11 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 			targetNamespaces: opNamespace,
 			template:         operatorGroupTemplate,
 		}
+		catalogSource := getOperatorSource(oc, "openshift-marketplace")
+		if catalogSource == "" {
+			g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+		}
+		sub.catalog = catalogSource
 		operatorInstall(oc, sub, ns, og)
 		g.By("Making sure CRDs are also installed")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
@@ -61,7 +67,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		o.Expect(strings.Contains(output, "ingressnodefirewalls.ingressnodefirewall.openshift.io")).To(o.BeTrue())
 	})
 
-	g.It("StagerunBoth-Author:anusaxen-High-61481-Ingress Node Firewall Operator Installation ", func() {
+	g.It("Author:anusaxen-High-61481-LEVEL0-StagerunBoth-Ingress Node Firewall Operator Installation ", func() {
 		g.By("Checking Ingress Node Firewall operator and CRDs installation")
 		e2e.Logf("Operator install and CRDs check successfull!")
 		g.By("SUCCESS -  Ingress Node Firewall operator and CRDs installed")

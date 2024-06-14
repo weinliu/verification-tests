@@ -66,7 +66,11 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 			targetNamespaces: opNamespace,
 			template:         operatorGroupTemplate,
 		}
-
+		catalogSource := getOperatorSource(oc, "openshift-marketplace")
+		if catalogSource == "" {
+			g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+		}
+		sub.catalog = catalogSource
 		operatorInstall(oc, sub, ns, og)
 		g.By("Making sure CRDs are successfully installed")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
@@ -81,7 +85,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("StagerunBoth-Author:asood-High-43074-MetalLB-Operator installation ", func() {
+	g.It("Author:asood-LEVEL0-StagerunBoth-High-43074-MetalLB-Operator installation ", func() {
 		g.By("Checking metalLB operator installation")
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		g.By("SUCCESS - MetalLB operator installed")

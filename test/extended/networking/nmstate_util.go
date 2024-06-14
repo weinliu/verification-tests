@@ -356,7 +356,6 @@ func installNMstateOperator(oc *exutil.CLI) {
 	)
 
 	e2e.Logf("Check catalogsource and install nmstate operator.")
-	preCheckforRegistry(oc)
 
 	namespaceTemplate := generateTemplateAbsolutePath("namespace-template.yaml")
 	operatorGroupTemplate := generateTemplateAbsolutePath("operatorgroup-template.yaml")
@@ -370,6 +369,11 @@ func installNMstateOperator(oc *exutil.CLI) {
 		catalogNamespace: "openshift-marketplace",
 		template:         subscriptionTemplate,
 	}
+	catalogSource := getOperatorSource(oc, "openshift-marketplace")
+	if catalogSource == "" {
+		g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+	}
+	sub.catalog = catalogSource
 	ns := namespaceResource{
 		name:     opNamespace,
 		template: namespaceTemplate,
