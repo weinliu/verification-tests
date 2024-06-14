@@ -81,8 +81,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "none")) || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on GCP/BBM cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") || !strings.Contains(networkType, "ovn")) {
+			g.Skip("Test cases should be run on GCP/BJBM/RDU2 cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 
 		ipsecState := checkIPsec(oc)
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		case "none":
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 			if err != nil || !(strings.Contains(msg, "bm2-zzhao")) {
-				g.Skip("This case needs to be run local BBM cluster or gcp, skip other platforms!!!")
+				g.Skip("This case needs to be run local BBM cluster, gcp or RDU2 setup, skip other platforms!!!")
 			}
 			ipsecTunnel = "pluto-62-VM"
 			rightIP = "10.73.116.62"
@@ -118,6 +118,20 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			nodeCert2 = "left_server_54"
 			leftPublicIP = leftIP
 			platformvar = "bjbm"
+
+		case "baremetal":
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+			if err != nil || !(strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
+				g.Skip("This case needs to be run on gcp, local BBM or RDU2 cluster, skip other platforms!!!")
+			}
+			ipsecTunnel = "pluto-rdu2-VM"
+			rightIP = "192.168.111.23"
+			rightIP2 = "192.168.111.24"
+			leftIP = "10.1.105.3"
+			nodeCert = "proxy_cert"  //on RDU2 setup, since nodes are NAT'd and not accessible from ext VM, IPsec tunnels terminates at proxies and proxy reinitiate tunnels with worker nodes
+			nodeCert2 = "proxy_cert" //so both nodes will have same proxy_cert with extSAN of proxy IP
+			leftPublicIP = leftIP
+			platformvar = "rdu2"
 		}
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -131,9 +145,9 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		}
 
 		//With 4.15+, filter the cluster by checking if existing ipsec config on external host.
-		err = sshRunCmd(leftPublicIP, "core", "sudo cat /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		err = sshRunCmd(leftPublicIP, "core", "sudo ls -l /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
 		if err != nil {
-			g.Skip("No IPSEC configuration on external host, skip the test!!")
+			g.Skip("No IPSEC configurations on external host, skip the test!!")
 		}
 
 		//check if IPsec packages are present on the cluster
@@ -147,8 +161,11 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		installNMstateOperator(oc)
 	})
 
-	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-67472-Transport tunnel can be setup for IPSEC NS, [Disruptive]", func() {
+	// author: anusaxen@redhat.com
+	g.It("Author:anusaxen-High-74222-[rdu2cluster] Transport tunnel can be setup for IPSEC NS in NAT env, [Serial][Disruptive]", func() {
+		if platformvar != "rdu2" {
+			g.Skip("This case is only applicable to RDU2 cluster, skipping this testcase.")
+		}
 		exutil.By("Configure nmstate ipsec policy")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -157,6 +174,108 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		}
 		defer deleteNMStateCR(oc, nmstateCR)
 		createNMstateCR(oc, nmstateCR)
+
+		//need to populate host2host transport config on external host
+		defer func() {
+			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := applyConfigTypeExtHost(leftPublicIP, "host2hostTransportRDU2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		policyName := "ipsec-policy-transport-74222"
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s udp port 4500 and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by UDP-encap")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode, "bash", "-c", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "UDP-encap")).Should(o.BeTrue())
+	})
+
+	g.It("Author:anusaxen-High-74223-[rdu2cluster] Tunnel mode can be setup for IPSEC NS in NAT env, [Serial][Disruptive]", func() {
+		if platformvar != "rdu2" {
+			g.Skip("This case is only applicable to RDU2 cluster, skipping this testcase.")
+		}
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		//need to populate host2host RDU2 tunnel config on external host
+		defer func() {
+			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := applyConfigTypeExtHost(leftPublicIP, "host2hostTunnelRDU2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		policyName := "ipsec-policy-transport-74223"
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
+		configIPSecNMSatePolicy(oc, policyName, rightIP2, rightNode2, ipsecTunnel, leftIP, nodeCert2, "tunnel")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode2, rightIP2, leftIP, "tunnel")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode2)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode2)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s udp port 4500 and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by UDP-encap")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode2, "bash", "-c", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "UDP-encap")).Should(o.BeTrue())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-67472-Transport tunnel can be setup for IPSEC NS, [Serial][Disruptive]", func() {
+		if platformvar == "rdu2" {
+			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+		}
+		exutil.By("Configure nmstate ipsec policy")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
 		policyName := "ipsec-policy-transport-67472"
 		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
 		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
@@ -168,40 +287,30 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
 		phyInf, nicError := getSnifPhyInf(oc, rightNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
-		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
 		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 		time.Sleep(5 * time.Second)
 		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
-		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
-		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode, "bash", "-c", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdTcpdump.Wait()
 		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
 		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
 		cmdTcpdump.Process.Kill()
-
-		exutil.By("Start tcpdump on ipsec right node again")
-		tcpdumpCmd2 := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
-		cmdTcpdump2, cmdOutput2, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd2).Background()
-		defer cmdTcpdump2.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("Checking ssh between worker node and external host encrypted by ESP")
-		time.Sleep(5 * time.Second)
-		result, timeoutTestErr := accessEgressNodeFromIntSvcInstanceOnGCP(leftPublicIP, rightIP)
-		o.Expect(timeoutTestErr).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.Equal("0"))
-		cmdTcpdump2.Wait()
-		e2e.Logf("tcpdump for ssh is \n%s", cmdOutput2.String())
-		o.Expect(cmdOutput2.String()).To(o.ContainSubstring("ESP"), cmdOutput2.String())
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-67473-Service nodeport can be accessed with ESP encrypted, [Disruptive]", func() {
+	g.It("Author:huirwang-High-67473-Service nodeport can be accessed with ESP encrypted, [Serial][Disruptive]", func() {
+		if platformvar == "rdu2" {
+			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+		}
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -216,6 +325,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		}
 		defer deleteNMStateCR(oc, nmstateCR)
 		createNMstateCR(oc, nmstateCR)
+
 		policyName := "ipsec-policy-67473"
 		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
 		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
@@ -255,10 +365,11 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		phyInf, nicError := getSnifPhyInf(oc, rightNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
-		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
 		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 
 		exutil.By("Checking the traffic is encrypted by ESP when curl NodePort service from external host")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, "test-service", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
@@ -273,7 +384,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Longduration-NonPreRelease-Medium-67474-Medium-69176-IPSec tunnel can be up after restart IPSec service or restart node,  [Disruptive]", func() {
+	g.It("Author:huirwang-Longduration-NonPreRelease-Medium-67474-Medium-69176-IPSec tunnel can be up after restart IPSec service or restart node, [Serial][Disruptive]", func() {
+		if platformvar == "rdu2" {
+			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+		}
 		exutil.By("Configure nmstate ipsec policy")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -282,6 +396,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		}
 		defer deleteNMStateCR(oc, nmstateCR)
 		createNMstateCR(oc, nmstateCR)
+
 		policyName := "ipsec-policy-transport-69176"
 		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
 		configIPSecNMSatePolicy(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, nodeCert, "transport")
@@ -309,28 +424,34 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 			return ipsecErr == nil && strings.Contains(ipXfrmPolicy, "transport")
 		}, "300s", "30s").Should(o.BeTrue(), "IPSec tunnel connection was not restored.")
 
-		exutil.By("Start tcpdump for ipsec on right node")
-		ns := oc.Namespace()
+		exutil.By("Start tcpdump on ipsec right node")
 		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
 		phyInf, nicError := getSnifPhyInf(oc, rightNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
+		ns := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns)
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
-		cmdTcpdump, cmdOutput, _, _ := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 		time.Sleep(5 * time.Second)
-		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
-		err := sshRunCmd(leftPublicIP, "core", pingCmd)
+		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode, "bash", "-c", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdTcpdump.Wait()
-		e2e.Logf("tcpdump output for ping is \n%s", cmdOutput.String())
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
 		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+		cmdTcpdump.Process.Kill()
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-67475-Be able to access hostnetwork pod with traffic encrypted,  [Disruptive]", func() {
+	g.It("Author:huirwang-High-67475-Be able to access hostnetwork pod with traffic encrypted,  [Serial][Disruptive]", func() {
+		if platformvar == "rdu2" {
+			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+		}
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			hostPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")
@@ -371,11 +492,12 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		phyInf, nicError := getSnifPhyInf(oc, rightNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
-		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -nni %s esp and dst %s", phyInf, leftIP)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
 		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 		exutil.By("Checking the traffic is encrypted by ESP when curl hostpod from external host")
 		time.Sleep(5 * time.Second)
 		curlCmd := fmt.Sprintf("curl %s:%s &", rightIP, "8080")
@@ -387,7 +509,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-69178-High-38873-Tunnel mode can be setup for IPSec NS,IPSec NS tunnel can be teared down by nmstate config. [Disruptive]", func() {
+	g.It("Author:huirwang-High-69178-High-38873-Tunnel mode can be setup for IPSec NS,IPSec NS tunnel can be teared down by nmstate config. [Serial][Disruptive]", func() {
+		if platformvar == "rdu2" {
+			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+		}
 		exutil.By("Configure nmstate ipsec policy")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -412,20 +537,23 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		e2e.Logf("Trying to get physical interface on the node,%s", rightNode2)
 		phyInf, nicError := getSnifPhyInf(oc, rightNode2)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
-		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
-		cmdTcpdump, cmdOutput, _, _ := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 		time.Sleep(5 * time.Second)
 		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
-		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP2)
-		err := sshRunCmd(leftPublicIP, "core", pingCmd)
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode2, "bash", "-c", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdTcpdump.Wait()
 		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
 		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+		cmdTcpdump.Process.Kill()
 
 		exutil.By("Remove IPSec interface")
 		removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
@@ -447,7 +575,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	})
 
 	//author: anusaxen@redhat.com
-	g.It("Author:anusaxen-Longduration-NonPreRelease-High-71465-Multiplexing Tunnel and Transport type IPsec should work with external host. [Disruptive]", func() {
+	g.It("Author:anusaxen-Longduration-NonPreRelease-High-71465-Multiplexing Tunnel and Transport type IPsec should work with external host. [Serial][Disruptive]", func() {
+		if platformvar == "rdu2" {
+			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+		}
 		exutil.By("Configure nmstate ipsec policies for both Transport and Tunnel Type")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -499,9 +630,9 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	})
 
 	//author: anusaxen@redhat.com
-	g.It("Author:anusaxen-High-72829-Tunnel mode can be setup for IPSec NS - Host2Net [Disruptive]", func() {
+	g.It("Author:anusaxen-High-72829-Tunnel mode can be setup for IPSec NS - Host2Net [Serial][Disruptive]", func() {
 		if platformvar != "bjbm" {
-			g.Skip("This case is only applicable to local Beijing BareMetal cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to local BJBM BareMetal cluster, skipping this testcase.")
 		}
 		exutil.By("Configure nmstate ipsec policy for host2net Tunnel Type")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -515,16 +646,16 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		var (
 			policyName          = "ipsec-policy-tunnel-host2net-72829"
 			ipsecTunnel         = "plutoTunnelVM_host2net"
-			rightNetworkAddress = "10.1.105.0"
+			rightNetworkAddress = "10.1.104.0" //RHEL VM has network address of 10.1.104.0 with IP eth0 IP 10.1.105.3/23
 			rightNetworkCidr    = "/23"
 		)
 
-		//need to populate host2net config on external host and defer to host2host
+		//need to populate host2net tunnel config on external host
 		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2host")
+			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err := applyConfigTypeExtHost(leftPublicIP, "host2net")
+		err := applyConfigTypeExtHost(leftPublicIP, "host2netBJBM")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
@@ -537,7 +668,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		e2e.Logf("Trying to get physical interface on the node,%s", rightNode2)
 		phyInf, nicError := getSnifPhyInf(oc, rightNode2)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
-		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
 		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
@@ -546,19 +678,77 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 		time.Sleep(5 * time.Second)
 		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
-		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP2)
-		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode2, "bash", "-c", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdTcpdump.Wait()
 		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
 		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+		cmdTcpdump.Process.Kill()
 
 	})
 
 	//author: anusaxen@redhat.com
-	g.It("Author:anusaxen-High-72830-Transport mode can be setup for IPSec NS - Host2Net [Disruptive]", func() {
+	g.It("Author:anusaxen-High-74221-[rdu2cluster] Tunnel mode can be setup for IPSec NS in NAT env - Host2Net [Serial][Disruptive]", func() {
+		if platformvar != "rdu2" {
+			g.Skip("This case is only applicable to local RDU2 BareMetal cluster, skipping this testcase.")
+		}
+		exutil.By("Configure nmstate ipsec policy for host2net Tunnel Type")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		var (
+			policyName          = "ipsec-policy-tunnel-host2net-74221"
+			ipsecTunnel         = "plutoTunnelVM_host2net"
+			rightNetworkAddress = "10.1.104.0" ////RHEL VM has network address of 10.1.104.0 with eth0 IP 10.1.105.3/23
+			rightNetworkCidr    = "/23"
+		)
+
+		//need to populate host2net tunnel RDU2 config on external host
+		defer func() {
+			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := applyConfigTypeExtHost(leftPublicIP, "host2netTunnelRDU2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
+		configIPSecNMSatePolicyHost2net(oc, policyName, rightIP2, rightNode2, ipsecTunnel, leftIP, rightNetworkAddress, rightNetworkCidr, nodeCert2, "tunnel")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUphost2netTunnel(oc, rightNode2, rightIP2, rightNetworkAddress, "tunnel")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode2)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode2)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s udp port 4500 and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by UDP-encap")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode2, "bash", "-c", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "UDP-encap")).Should(o.BeTrue())
+	})
+
+	//author: anusaxen@redhat.com
+	g.It("Author:anusaxen-High-72830-Transport mode can be setup for IPSec NS - Host2Net [Serial][Disruptive]", func() {
 		if platformvar != "bjbm" {
-			g.Skip("This case is only applicable to local Beijing BareMetal cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to local BJBM BareMetal cluster, skipping this testcase.")
 		}
 		exutil.By("Configure nmstate ipsec policies for both Transport and Tunnel Type")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -572,16 +762,16 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		var (
 			policyName          = "ipsec-policy-transport-host2net-72830"
 			ipsecTunnel         = "plutoTransportVM_host2net"
-			rightNetworkAddress = "10.1.105.0"
+			rightNetworkAddress = "10.1.104.0" //RHEL VM has network address of 10.1.104.0 with IP eth0 IP 10.1.105.3/23
 			rightNetworkCidr    = "/23"
 		)
 
-		//need to populate host2net config on external host and defer to host2host
+		//need to populate host2net transport config on external host
 		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2host")
+			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err := applyConfigTypeExtHost(leftPublicIP, "host2net")
+		err := applyConfigTypeExtHost(leftPublicIP, "host2netBJBM")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
@@ -594,7 +784,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
 		phyInf, nicError := getSnifPhyInf(oc, rightNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
-		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
 		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
@@ -603,13 +794,70 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
 		time.Sleep(5 * time.Second)
 		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
-		pingCmd := fmt.Sprintf("ping -c4 %s &", rightIP)
-		err = sshRunCmd(leftPublicIP, "core", pingCmd)
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode, "bash", "-c", pingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdTcpdump.Wait()
 		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
 		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
+		cmdTcpdump.Process.Kill()
+	})
 
+	//author: anusaxen@redhat.com
+	g.It("Author:anusaxen-High-74220-[rdu2cluster] Transport mode can be setup for IPSec NS in NAT env - Host2Net [Serial][Disruptive]", func() {
+		if platformvar != "rdu2" {
+			g.Skip("This case is only applicable to local RDU2 BareMetal cluster, skipping this testcase.")
+		}
+		exutil.By("Configure nmstate ipsec policy for host2net Transport Type")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		createNMstateCR(oc, nmstateCR)
+
+		var (
+			policyName          = "ipsec-policy-transport-host2net-74220"
+			ipsecTunnel         = "plutoTransportVM_host2net"
+			rightNetworkAddress = "10.1.104.0" //RHEL VM has network address of 10.1.104.0 with IP eth0 IP 10.1.105.3/23
+			rightNetworkCidr    = "/23"
+		)
+
+		//need to populate host2net transport RDU2 config on external host
+		defer func() {
+			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := applyConfigTypeExtHost(leftPublicIP, "host2netTransportRDU2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
+		configIPSecNMSatePolicyHost2net(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, rightNetworkAddress, rightNetworkCidr, nodeCert, "transport")
+
+		exutil.By("Checking ipsec session was established between worker node and external host")
+		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
+
+		exutil.By("Start tcpdump on ipsec right node")
+		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
+		phyInf, nicError := getSnifPhyInf(oc, rightNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s udp port 4500 and dst %s", phyInf, leftIP)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+		exutil.By("Checking icmp between worker node and external host encrypted by UDP-encap")
+		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
+		_, err = exutil.DebugNodeWithChroot(oc, rightNode, "bash", "-c", pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "UDP-encap")).Should(o.BeTrue())
 	})
 
 	// author: anusaxen@redhat.com

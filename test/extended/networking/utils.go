@@ -3712,13 +3712,33 @@ func getIPv4AndIPWithPrefixForNICOnNode(oc *exutil.CLI, node, nic string) (strin
 // this func might be scaled up in future if we comes down to support net2net as well
 func applyConfigTypeExtHost(leftPublicIP, configType string) error {
 	switch configType {
-	case "host2host":
+	case "host2hostBJBM":
 		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2host.conf.bak /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
 		if err != nil {
 			return fmt.Errorf("Could not apply host2host config. Check External Host %v", err)
 		}
-	case "host2net":
+	case "host2netBJBM":
 		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2net.conf.bak /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		if err != nil {
+			return fmt.Errorf("Could not apply host2net config. Check External Host %v", err)
+		}
+	case "host2hostTransportRDU2":
+		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2host_transport.conf.bak.rdu2 /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		if err != nil {
+			return fmt.Errorf("Could not apply host2host config. Check External Host %v", err)
+		}
+	case "host2hostTunnelRDU2":
+		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2host_tunnel.conf.bak.rdu2 /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		if err != nil {
+			return fmt.Errorf("Could not apply host2host config. Check External Host %v", err)
+		}
+	case "host2netTransportRDU2":
+		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2net_transport.conf.rdu2 /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
+		if err != nil {
+			return fmt.Errorf("Could not apply host2net config. Check External Host %v", err)
+		}
+	case "host2netTunnelRDU2":
+		err := sshRunCmd(leftPublicIP, "core", "sudo cp /home/core/nstest_host2net_tunnel.conf.rdu2 /etc/ipsec.d/nstest.conf && sudo systemctl restart ipsec")
 		if err != nil {
 			return fmt.Errorf("Could not apply host2net config. Check External Host %v", err)
 		}
