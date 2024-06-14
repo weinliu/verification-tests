@@ -303,15 +303,16 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		_, caPath, err := createCA(createTmpDir(), "newcert.pem")
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new random certificate")
 
-		cert, err := os.ReadFile(caPath)
+		bcert, err := os.ReadFile(caPath)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error reading the new random certificate")
+		cert := string(bcert)
 		logger.Infof("OK!\n")
 
 		exutil.By("Create the MachineConfig with the new certificate")
 		file := ign32File{
 			Path: filePath,
 			Contents: ign32Contents{
-				Source: GetBase64EncodedFileSourceContent(string(cert)),
+				Source: GetBase64EncodedFileSourceContent(cert),
 			},
 			Mode: PtrTo(mode),
 		}
@@ -333,6 +334,9 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		o.Eventually(certRemote, "5m", "20s").Should(Exist(),
 			"The file %s does not exist in the node %s after applying the configuration", certRemote.fullPath, node.GetName())
+
+		o.Eventually(certRemote, "5m", "20s").Should(exutil.Secure(HaveContent(o.ContainSubstring(cert))),
+			"%s doesn't have the expected content. It doesn't include the configured certificate", certRemote)
 
 		o.Eventually(objsignCABundleRemote, "5m", "20s").Should(Exist(),
 			"The file %s does not exist in the node %s after applying the configuration", certRemote.fullPath, node.GetName())
@@ -359,15 +363,15 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		// Check that the MC is removed according to the expected behaviour
 		behaviourValidator.Validate()
 
-		exutil.By("Check that the certificate file is now empty and the cluster was updated with update-ca-trust")
+		exutil.By("Check that the openshift-config-user-ca-bundle.crt file does not include the certificate anymore and the nodes were updated with update-ca-trust")
 		// The file is not removed, it is always present but with empty content
-		o.Eventually(certRemote.Read, "5m", "20s").Should(exutil.Secure(HaveContent(o.BeEmpty())),
-			"The file %s does not exist in the node %s after applying the configuration", certRemote.fullPath, node.GetName())
+		o.Eventually(certRemote.Read, "5m", "20s").ShouldNot(exutil.Secure(HaveContent(o.ContainSubstring(cert))),
+			"The certificate has been removed, but %s still contains the certificate", certRemote.fullPath, node.GetName())
 		o.Eventually(objsignCABundleRemote, "5m", "20s").Should(Exist(),
 			"The file %s does not exist in the node %s but it should exist after removing the configuration", certRemote.fullPath, node.GetName())
 
-		o.Expect(objsignCABundleRemote.Read()).NotTo(exutil.Secure(HaveContent(o.ContainSubstring(certRemote.GetTextContent()))),
-			"In node %s: The the content of the file %s should have been removed from the file %s. Command 'update-ca-trust' was not executed by MCD after removing the MC",
+		o.Expect(objsignCABundleRemote.Read()).NotTo(exutil.Secure(HaveContent(o.ContainSubstring(cert))),
+			"In node %s: The the certificate should have been removed from the file %s. Command 'update-ca-trust' was not executed by MCD after removing the MC",
 			node.GetName(), certRemote.fullPath, objsignCABundleRemote.fullPath)
 		logger.Infof("OK!\n")
 	})
