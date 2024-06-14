@@ -2181,6 +2181,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 
 		exutil.By("9. Check egressIP assigned in the second object.\n")
 		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip2.name)
+
 		o.Expect(len(egressIPMaps2)).Should(o.Equal(1), "EgressIP object should get one applied item, but actually not.")
 
 	})
@@ -5063,6 +5064,110 @@ var _ = g.Describe("[sig-networking] OVN EgressIP on rosa", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get either EgressIP %s or %s in tcpdump", freeIPs[0], freeIPs[1]))
+	})
+
+})
+
+var _ = g.Describe("[sig-networking] SDN StressTest ", func() {
+	//This case will only be run in perf stress ci which can be deployed for scale number pods for stress testing.
+	defer g.GinkgoRecover()
+
+	var (
+		egressNodeLabel = "k8s.ovn.org/egress-assignable"
+		oc              = exutil.NewCLI("networking-egressip-stress-"+getRandomString(), exutil.KubeConfigPath())
+	)
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-NonHyperShiftHOST-Longduration-NonPreRelease-High-73694-No stale snat rules left after egressIP failover. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
+
+		exutil.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+
+		exutil.By("2 Apply EgressLabel Key to one node. \n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
+
+		exutil.By("3. create new namespace\n")
+		ns1 := oc.Namespace()
+
+		exutil.By("4. Apply label to namespace\n")
+		scalePodNum := "800"
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("5. Create test pods and scale test pods to 800 \n")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas="+scalePodNum, "-n", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		exutil.By("6. Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		egressip1 := egressIPResource1{
+			name:      "egressip-73694",
+			template:  egressIP1Template,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject1(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/egressip-73694", "-p", "{\"spec\":{\"egressIPs\":[\""+freeIPs[0]+"\"]}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		for i := 0; i < 2; i++ {
+			//Reboot egress node for 2 times
+			exutil.By("Get current egress node and failover node")
+			egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+			currentEgressNode := egressIPMaps[0]["node"]
+			var nextEgressNode string
+			if currentEgressNode == egressNodes[0] {
+				nextEgressNode = egressNodes[1]
+			} else {
+				nextEgressNode = egressNodes[0]
+			}
+
+			exutil.By("5.Reboot egress node.\n")
+			defer checkNodeStatus(oc, currentEgressNode, "Ready")
+			rebootNode(oc, currentEgressNode)
+			checkNodeStatus(oc, currentEgressNode, "NotReady")
+			checkNodeStatus(oc, currentEgressNode, "Ready")
+			err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+			exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+			exutil.By("5. Check EgressIP assigned to the second egress node.\n")
+			o.Eventually(func() bool {
+				egressIPMaps = getAssignedEIPInEIPObject(oc, egressip1.name)
+				return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == nextEgressNode
+			}, "300s", "10s").Should(o.BeTrue(), "egressIP was not migrated to second egress node after unlabel first egress node!!")
+
+			exutil.By("6. Check snat in northdb. \n")
+			ovnPod := ovnkubeNodePod(oc, nextEgressNode)
+			newSnatCmd := "ovn-nbctl --format=csv find nat external_ids:name=" + egressip1.name + " | grep " + nextEgressNode + " | wc -l"
+			o.Eventually(func() bool {
+				output, cmdErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnPod, "ovn-controller", newSnatCmd)
+				e2e.Logf("The snat rules for egressIP related to %s number is %s", nextEgressNode, output)
+				return cmdErr == nil && output == scalePodNum
+			}, "120s", "10s").Should(o.BeTrue(), "The command check result in ovndb is not expected!")
+
+			staleSnatCmd := "ovn-nbctl --format=csv find nat external_ids:name=" + egressip1.name + " | grep " + currentEgressNode + " | wc -l"
+			o.Eventually(func() bool {
+				output, cmdErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnPod, "ovn-controller", staleSnatCmd)
+				e2e.Logf("The snat rules for egressIP related to %s number is %s", currentEgressNode, output)
+				return cmdErr == nil && output == "0"
+			}, "120s", "10s").Should(o.BeTrue(), "The command check result in ovndb is not expected!")
+		}
 	})
 
 })
