@@ -3,9 +3,11 @@ package node
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +15,8 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/pretty"
+	"github.com/tidwall/sjson"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -224,6 +228,11 @@ type triggerAuthenticationDescription struct {
 	secretname string
 	namespace  string
 	template   string
+}
+
+type ImgConfigContDescription struct {
+	name     string
+	template string
 }
 
 func (cpuPerfProfile *cpuPerfProfile) create(oc *exutil.CLI) {
@@ -2178,4 +2187,145 @@ func deleteProject(oc *exutil.CLI, namespace string) {
 func (triggerAuthentication *triggerAuthenticationDescription) create(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", triggerAuthentication.template, "-p", "SECRET_NAME="+triggerAuthentication.secretname, "NAMESPACE="+triggerAuthentication.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//this function is to  [MCO] change container registry config
+
+func checkImageConfigUpdatedAsExpected(oc *exutil.CLI) {
+
+	buildPruningBaseDir := exutil.FixturePath("testdata", "node")
+	ImageconfigContTemp := filepath.Join(buildPruningBaseDir, "image-config.json")
+	currentResourceVersion, getRvErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config", "cluster", "-ojsonpath={.metadata.resourceVersion}").Output()
+	o.Expect(getRvErr).NotTo(o.HaveOccurred())
+
+	if currentResourceVersion != "" {
+		testImageConfigJSONByte, readFileErr := ioutil.ReadFile(ImageconfigContTemp)
+		o.Expect(readFileErr).NotTo(o.HaveOccurred())
+		testImageConfigJSON, err := sjson.Set(string(testImageConfigJSONByte), `metadata.resourceVersion`, currentResourceVersion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		path := filepath.Join(e2e.TestContext.OutputDir, "new-imageConfig"+"-"+getRandomString()+".json")
+		o.Expect(ioutil.WriteFile(path, pretty.Pretty([]byte(testImageConfigJSON)), 0644)).NotTo(o.HaveOccurred())
+		e2e.Logf("The new ImageConfig is %s", path)
+		ImageconfigContTemp = path
+	}
+
+	imgfile, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ImageconfigContTemp).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("\n Image File status is %v", imgfile)
+
+	//for checking machine config
+
+	waitErr0 := wait.Poll(30*time.Second, 1*time.Minute, func() (bool, error) {
+		mc, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", "--sort-by=metadata.creationTimestamp").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Machine configs are:\n %s", mc)
+		oc.NotShowInfo()
+		if strings.Contains(string(mc), "rendered") {
+			e2e.Logf(" New render configs are generated. \n")
+			return true, nil
+		}
+		e2e.Logf(" New render configs are not generated. \n")
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr0, "New Renders are not expected")
+
+	//waiting for mcp to get updated
+
+	exutil.By("Check mcp finish rolling out")
+	oc.NotShowInfo()
+	mcpName := "worker"
+	mcpName2 := "master"
+	err3 := checkMachineConfigPoolStatus(oc, mcpName)
+	exutil.AssertWaitPollNoErr(err3, "macineconfigpool worker update failed")
+	err4 := checkMachineConfigPoolStatus(oc, mcpName2)
+	exutil.AssertWaitPollNoErr(err4, "macineconfigpool master update failed")
+
+	//for checking machine config pool
+
+	mcp, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp").Output()
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	e2e.Logf("\n Machine config pools are:\n %s", mcp)
+
+	nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(nodeErr).NotTo(o.HaveOccurred())
+	e2e.Logf("\nNode Names are %v", nodeName)
+	nodes := strings.Fields(nodeName)
+
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+
+		nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodes[0], "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode %s Status is %s\n", nodes[0], nodeStatus)
+
+		if nodeStatus == "True" {
+			registrieslist, err4 := exutil.DebugNodeWithChroot(oc, nodes[0], "cat", "/etc/containers/registries.conf.d/01-image-searchRegistries.conf")
+			o.Expect(err4).NotTo(o.HaveOccurred())
+			e2e.Logf("\nImage Registry list is %v", registrieslist)
+
+			o.Expect(strings.TrimSpace(registrieslist)).NotTo(o.BeEmpty())
+			if strings.Contains((registrieslist), "qe.quay.io") {
+				e2e.Logf(" Configuration has been changed successfully. \n")
+				return true, nil
+			}
+			e2e.Logf(" Changes has not been made. \n")
+			return false, nil
+		}
+		e2e.Logf("\n NODES ARE NOT READY\n ")
+		return false, nil
+	})
+
+	exutil.AssertWaitPollNoErr(waitErr, "Registry List is not expected")
+
+}
+
+func createImageConfigWIthExportJSON(oc *exutil.CLI, originImageConfigJSON string) {
+	var (
+		err              error
+		finalJSONContent string
+	)
+
+	currentResourceVersion, getRvErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config", "cluster", "-ojsonpath={.metadata.resourceVersion}").Output()
+	o.Expect(getRvErr).NotTo(o.HaveOccurred())
+	finalJSONContent, err = sjson.Set(originImageConfigJSON, `metadata.resourceVersion`, currentResourceVersion)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	path := filepath.Join(e2e.TestContext.OutputDir, "restored-imageConfig"+"-"+getRandomString()+".json")
+	o.Expect(ioutil.WriteFile(path, pretty.Pretty([]byte(finalJSONContent)), 0644)).NotTo(o.HaveOccurred())
+	e2e.Logf("The restored ImageConfig is %s", path)
+	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", path).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The ImageConfig restored successfully")
+
+}
+func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
+	return wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		gottenStatus := getCoStatus(oc, coName, expectedStatus)
+		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+		if eq {
+			eq := reflect.DeepEqual(expectedStatus, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+			if eq {
+				// For True False False, we want to wait some bit more time and double check, to ensure it is stably healthy
+				time.Sleep(100 * time.Second)
+				gottenStatus := getCoStatus(oc, coName, expectedStatus)
+				eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+				if eq {
+					e2e.Logf("Given operator %s becomes available/non-progressing/non-degraded", coName)
+					return true, nil
+				}
+			} else {
+				e2e.Logf("Given operator %s becomes %s", coName, gottenStatus)
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+}
+func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
+	newStatusToCompare := make(map[string]string)
+	for key := range statusToCompare {
+		args := fmt.Sprintf(`-o=jsonpath={.status.conditions[?(.type == '%s')].status}`, key)
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", args, coName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newStatusToCompare[key] = status
+	}
+	return newStatusToCompare
 }

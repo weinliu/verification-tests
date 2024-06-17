@@ -55,7 +55,12 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		genericDeploymentTemp     = filepath.Join(buildPruningBaseDir, "generic-deployment.yaml")
 		podDevFuseTemp            = filepath.Join(buildPruningBaseDir, "pod-dev-fuse.yaml")
 		podCpuLoadBalanceTemp     = filepath.Join(buildPruningBaseDir, "pod-cpu-load-balance.yaml")
+		ImageconfigContTemp       = filepath.Join(buildPruningBaseDir, "image-config.json")
 
+		ImgConfCont = ImgConfigContDescription{
+			name:     "",
+			template: ImageconfigContTemp,
+		}
 		podDevFuse70987 = podDevFuseDescription{
 			name:      "",
 			namespace: "",
@@ -753,7 +758,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	//author: asahay@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:asahay-LEVEL0-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive][Slow]", func() {
+	g.It("Author:asahay-NonHyperShiftHOST-NonPreRelease-Longduration-LEVEL0-High-52472-update runtimeRequestTimeout parameter using KubeletConfig CR [Disruptive][Slow]", func() {
 
 		oc.SetupProject()
 		runtimeTimeout.name = "kubeletconfig-52472"
@@ -784,7 +789,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 	//author :asahay@redhat.com
 
-	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:asahay-High-45436-Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
+	g.It("Author:asahay-NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-High-45436-Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
 
 		upgradeMachineconfig1.name = "max-pod"
 		upgradeMachineconfig2.name = "max-pod-1"
@@ -806,7 +811,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:asahay-High-45436-post check Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
+	g.It("Author:asahay-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-High-45436-post check Upgrading a cluster by making sure not keep duplicate machine config when it has multiple kubeletconfig [Disruptive][Slow]", func() {
 		upgradeMachineconfig1.name = "max-pod"
 		defer func() {
 			g.By("Delete the KubeletConfig")
@@ -918,6 +923,37 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
+	g.It("Author:asahay-NonHyperShiftHOST-Longduration-NonPreRelease-High-44820-change container registry config [Serial][Slow]", func() {
+		ImgConfCont.name = "cluster"
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		exutil.By("Verifying Config Changes in Image Registry")
+
+		exutil.By("#. Copy and save existing CRD configuration in JSON format")
+		originImageConfigJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config", "cluster", "-o", "json").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		e2e.Logf("\n Original Image Configuration  %v", originImageConfigJSON)
+		defer func() {
+			exutil.By("restore original ImageConfig")
+			createImageConfigWIthExportJSON(oc, originImageConfigJSON) // restore original yaml
+
+			exutil.By("Check mcp finish updating")
+			err := checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "Worker MCP is not updated")
+			err = checkMachineConfigPoolStatus(oc, "master")
+			exutil.AssertWaitPollNoErr(err, "Master MCP is not updated")
+
+			exutil.By("Check the openshift-apiserver operator status")
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
+			exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator does not become available in 480 seconds")
+
+			exutil.By("Check the image-registry operator status")
+			err = waitCoBecomes(oc, "image-registry", 480, expectedStatus1)
+			exutil.AssertWaitPollNoErr(err, "image-registry operator does not become available in 480 seconds")
+		}()
+
+		checkImageConfigUpdatedAsExpected(oc)
+
+	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:minmli-High-57401-Create ImageDigestMirrorSet successfully [Disruptive][Slow]", func() {
 		//If a cluster contains any ICSP or IDMS, it will skip the case
@@ -975,7 +1011,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.AssertWaitPollNoErr(err, "check signature configuration failed")
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:asahay-Medium-62746-A default SYSTEM_RESERVED_ES value is applied if it is empty [Disruptive][Slow]", func() {
+	g.It("Author:asahay-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-62746-A default SYSTEM_RESERVED_ES value is applied if it is empty [Disruptive][Slow]", func() {
 
 		exutil.By("set SYSTEM_RESERVED_ES as empty")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -1470,12 +1506,12 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		createKedaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("StagerunBoth-Author:weinliu-High-52383-Keda Install", func() {
+	g.It("Author:weinliu-StagerunBoth-High-52383-Keda Install", func() {
 		g.By("CMA (Keda) operator has been installed successfully")
 	})
 
 	// author: weinliu@redhat.com
-	g.It("StagerunBoth-Author:weinliu-High-62570-Verify must-gather tool works with CMA", func() {
+	g.It("Author:weinliu-StagerunBoth-High-62570-Verify must-gather tool works with CMA", func() {
 		var (
 			mustgatherName = "mustgather" + getRandomString()
 			mustgatherDir  = "/tmp/" + mustgatherName
@@ -1579,7 +1615,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 	})
 
 	// author: weinliu@redhat.com
-	g.It("ConnectedOnly-Author:weinliu-Critical-52385-Automatically scaling pods based on Prometheus metrics[Serial]", func() {
+	g.It("Author:weinliu-ConnectedOnly-Critical-52385-Automatically scaling pods based on Prometheus metrics[Serial]", func() {
 		exutil.By("Create a kedacontroller with default template")
 		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default52384.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
@@ -1717,7 +1753,7 @@ var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
 		createVpaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("DEPRECATED-StagerunBoth-Author:weinliu-High-60991-VPA Install", func() {
+	g.It("Author:weinliu-DEPRECATED-StagerunBoth-High-60991-VPA Install", func() {
 		g.By("VPA operator is installed successfully")
 	})
 	// author: weinliu@redhat.com
@@ -1776,7 +1812,7 @@ var _ = g.Describe("[sig-node] NODE Install and verify Cluster Resource Override
 	})
 	// author: asahay@redhat.com
 
-	g.It("StagerunBoth-Author:asahay-High-27070-Cluster Resource Override Operator. [Serial]", func() {
+	g.It("Author:asahay-StagerunBoth-High-27070-Cluster Resource Override Operator. [Serial]", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterResourceOverride", "cluster", "-n", "clusterresourceoverride-operator").Execute()
 		createCRClusterresourceoverride(oc)
 		var err error
