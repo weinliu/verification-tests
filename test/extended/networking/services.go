@@ -1311,6 +1311,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		if !acceptedPlatform {
 			g.Skip("Test cases should be run on GCP, Azure, skip for other platforms or other network plugin!!")
 		}
+		// skip if no spec.publicZone specified in dns.config
+		// the private cluster will be skipped as well
+		// refer to https://issues.redhat.com/browse/OCPQE-22704
+		dnsPublicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config/cluster", "-ojsonpath={.spec.publicZone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if dnsPublicZone == "" {
+			g.Skip("Skip for the platforms that no dns publicZone specified")
+		}
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1334,7 +1342,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			template:              genericServiceTemplate,
 		}
 
-		// For GCP/Azure, create a loadbalancer service first to get LB service's hostname or LB ip address, then derive its subnet to be used in step 3,
+		// For GCP/Azure, create a loadbalancer service first to get LB service's LB ip address, then derive its subnet to be used in step 3,
 		exutil.By("2. For public cloud platform, create a loadBalancer service first\n")
 		svc.createServiceFromParams(oc)
 		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename).Output()
