@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/ci/tests-private-builder:4.16 AS builder
+FROM registry.ci.openshift.org/ci/tests-private-builder:4.17 AS builder
 RUN mkdir -p /go/src/github.com/openshift/openshift-tests-private
 WORKDIR /go/src/github.com/openshift/openshift-tests-private
 COPY . .
@@ -18,7 +18,7 @@ RUN mkdir -p /tmp/opmbuild && cd /tmp/opmbuild && pwd && \
     cd $opmdir && make build/opm && cp ./bin/opm /tmp/opm
 FROM registry.ci.openshift.org/ci/rosa-aws-cli:latest as rosacli
 
-FROM registry.ci.openshift.org/ci/tests-private-base:4.16
+FROM registry.ci.openshift.org/ci/tests-private-base:4.17
 COPY --from=builder /tmp/build/extended-platform-tests /usr/bin/
 COPY --from=builder /tmp/build/handleresult.py /usr/bin/
 COPY --from=builder /tmp/opm /usr/bin/

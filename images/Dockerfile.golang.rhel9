@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/ci/tests-private-builder-rhel9:4.16 AS builder
+FROM registry.ci.openshift.org/ci/tests-private-builder-rhel9:4.17 AS builder
 RUN mkdir -p /go/src/github.com/openshift/openshift-tests-private
 WORKDIR /go/src/github.com/openshift/openshift-tests-private
 COPY . .
@@ -8,7 +8,7 @@ RUN make go-mod-tidy; \
     cp /go/src/github.com/openshift/openshift-tests-private/pipeline/handleresult.py /tmp/build/handleresult.py; \
     cp /go/src/github.com/openshift/openshift-tests-private/bin/extended-platform-tests /tmp/build/extended-platform-tests
 
-FROM registry.ci.openshift.org/ci/tests-private-base-rhel9:4.16
+FROM registry.ci.openshift.org/ci/tests-private-base-rhel9:4.17
 COPY --from=builder /tmp/build/extended-platform-tests /usr/bin/
 COPY --from=builder /tmp/build/handleresult.py /usr/bin/
 RUN MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/candidate && \
