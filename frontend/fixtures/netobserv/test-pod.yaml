@@ -21,7 +21,7 @@ spec:
       - sh
       - -c
       - "curl -kIL https://52.200.142.250 --output /tmp/test ;"
-    image: quay.io/openshifttest/hello-openshift:multiarch
+    image: quay.io/openshifttest/hello-openshift:1.2.0
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
