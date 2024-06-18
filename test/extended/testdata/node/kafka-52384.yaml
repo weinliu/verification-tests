@@ -22,7 +22,7 @@ spec:
         port: 9093
         type: internal
         tls: true
-    version: 3.5.0
+    version: 3.6.0
     replicas: 3
   entityOperator:
     topicOperator: {}
