@@ -1044,8 +1044,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
-	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-Medium-47033-If an egress node is NotReady traffic is still load balanced between available egress nodes. [Disruptive]", func() {
+	// author: jechen@redhat.com
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-Longduration-NonPreRelease-Medium-47033-If an egress node is NotReady traffic is still load balanced between available egress nodes. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -1202,6 +1202,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var vspObj *exutil.Vmware
 		var vspClient *govmomi.Client
 		var nutanixClient *exutil.NutanixClient
+		var ibmPowerVsSession *exutil.IBMPowerVsSession
+		var ibmPowerVsInstance *ibmPowerVsInstance
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected \n")
@@ -1264,6 +1266,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 			defer startInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
 			stopInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
+		case "powervs":
+			e2e.Logf("\n Powervs is detected, stop the instance %v on powervs now \n", nodeToBeShutdown)
+			ibmApiKey, ibmRegion, ibmVpcName, credErr := exutil.GetIBMCredentialFromCluster(oc)
+			o.Expect(credErr).NotTo(o.HaveOccurred())
+			cloudID := exutil.GetIBMPowerVsCloudID(oc, nodeToBeShutdown)
+			ibmPowerVsSession, err = exutil.LoginIBMPowerVsCloud(ibmApiKey, ibmRegion, ibmVpcName, cloudID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ibmPowerVsInstance = newIBMPowerInstance(oc, ibmPowerVsSession, ibmRegion, ibmVpcName, nodeToBeShutdown)
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			defer ibmPowerVsInstance.Start()
+			err = ibmPowerVsInstance.Stop()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1350,6 +1365,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "nutanix":
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 			startInstanceOnNutanix(nutanixClient, nodeToBeShutdown)
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+		case "powervs":
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			err = ibmPowerVsInstance.Start()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")

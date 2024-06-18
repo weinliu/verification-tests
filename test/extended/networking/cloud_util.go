@@ -40,6 +40,13 @@ type tcpdumpDaemonSet struct {
 	template     string
 }
 
+type ibmPowerVsInstance struct {
+	instance
+	ibmRegion     string
+	ibmVpcName    string
+	clientPowerVs *exutil.IBMPowerVsSession
+}
+
 func (ds *tcpdumpDaemonSet) createTcpdumpDS(oc *exutil.CLI) error {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ds.template, "-p", "NAME="+ds.name, "NAMESPACE="+ds.namespace, "NODELABEL="+ds.nodeLabel, "LABELKEY="+ds.labelKey, "INF="+ds.phyInterface, "DSTPORT="+strconv.Itoa(ds.dstPort), "HOST="+ds.dstHost)
@@ -1353,4 +1360,41 @@ func checkDisconnect(oc *exutil.CLI) bool {
 
 	e2e.Logf("Successfully connected to the public Internet from the cluster.")
 	return false
+}
+
+// get ibm powervs instance for an OCP node
+func newIBMPowerInstance(oc *exutil.CLI, clientPowerVs *exutil.IBMPowerVsSession, ibmRegion, ibmVpcName, nodeName string) *ibmPowerVsInstance {
+	return &ibmPowerVsInstance{
+		instance: instance{
+			nodeName: nodeName,
+			oc:       oc,
+		},
+		clientPowerVs: clientPowerVs,
+		ibmRegion:     ibmRegion,
+		ibmVpcName:    ibmVpcName,
+	}
+}
+
+// start the ibm powervs instancce
+func (ibmPws *ibmPowerVsInstance) Start() error {
+	instanceID, status, idErr := exutil.GetIBMPowerVsInstanceInfo(ibmPws.clientPowerVs, ibmPws.nodeName)
+	o.Expect(idErr).NotTo(o.HaveOccurred())
+	e2e.Logf("\n The ibmPowervs instance %s is currently in state: %s \n", ibmPws.nodeName, status)
+	if status == "active" {
+		e2e.Logf("The node is already in active state, no need to start it again\n")
+		return nil
+	}
+	return exutil.PerformInstanceActionOnPowerVs(ibmPws.clientPowerVs, instanceID, "start")
+}
+
+// stop the ibm powervs instance
+func (ibmPws *ibmPowerVsInstance) Stop() error {
+	instanceID, status, idErr := exutil.GetIBMPowerVsInstanceInfo(ibmPws.clientPowerVs, ibmPws.nodeName)
+	o.Expect(idErr).NotTo(o.HaveOccurred())
+	e2e.Logf("\n The ibmPowervs instance %s is currently in state: %s \n", ibmPws.nodeName, status)
+	if status == "shutoff" {
+		e2e.Logf("The node is already in shutoff state, no need to stop it again\n")
+		return nil
+	}
+	return exutil.PerformInstanceActionOnPowerVs(ibmPws.clientPowerVs, instanceID, "stop")
 }
