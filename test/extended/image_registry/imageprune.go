@@ -229,7 +229,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			limitsrc             = limitSource{
 				name:      "52705-image-limit-range",
 				namespace: "",
-				size:      "1Mi",
+				size:      "3Mi",
 				template:  limitFile,
 			}
 		)
