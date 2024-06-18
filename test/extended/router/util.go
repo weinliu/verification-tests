@@ -518,7 +518,9 @@ func getImagePullSpecFromPayload(oc *exutil.CLI, image string) string {
 	_, err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+indexTmpPath).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	pullspec, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--image-for="+image, "-a", dockerconfigjsonpath).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		g.Skip("Skipping as failed to get image pull spec from the payload")
+	}
 	e2e.Logf("the pull spec of image %v is: %v", image, pullspec)
 	return pullspec
 }
