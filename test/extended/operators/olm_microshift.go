@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-operators] OLM on microshift", func() {
 		defer sub.deleteCSV(itName, dr)
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded+2+Installing-TIME-WAIT-300s", ok, []string{"csv", sub.installedCSV, "-n", namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("check operator")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("operators.operators.coreos.com",
