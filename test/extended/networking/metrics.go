@@ -882,7 +882,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
 	})
 
-	g.It("NonPreRelease-Longduration-Author:qiowang-Medium-64077-Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
+	g.It("Author:qiowang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-64077-Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
 		var (
 			metricName = "ovnkube_controller_ipsec_enabled"
 		)
@@ -895,12 +895,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip the testing in the ipsec enabled clusters!!!")
 		}
 
-		e2e.Logf("1. Enable IPsec at runtime")
+		exutil.By("1. Enable IPsec at runtime")
 		defer configIPSecAtRuntime(oc, "disabled")
 		enableErr := configIPSecAtRuntime(oc, "full")
 		o.Expect(enableErr).NotTo(o.HaveOccurred())
 
-		e2e.Logf("2. Check metrics for IPsec enabled/disabled after enabling at runtime")
+		exutil.By("2. Check metrics for IPsec enabled/disabled after enabling at runtime")
 		prometheusURL := "localhost:29103/metrics"
 		containerName := "kube-rbac-proxy-node"
 		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
@@ -915,11 +915,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		})
 		exutil.AssertWaitPollNoErr(ipsecEnabled, fmt.Sprintf("Fail to get metric when enabled IPSec and the error is:%s", ipsecEnabled))
 
-		e2e.Logf("3. Disable IPsec at runtime")
+		//Add one more step check to cover bug https://issues.redhat.com/browse/OCPBUGS-29305
+		exutil.By("3. Verify no openssl error in ipsec pods ds")
+		output, ipsecDSErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "ovn-ipsec-host", "-n", "openshift-ovn-kubernetes", "-o", "yaml").Output()
+		o.Expect(ipsecDSErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "checkedn")).NotTo(o.BeTrue())
+		o.Expect(strings.Contains(output, "checkend")).To(o.BeTrue())
+
+		exutil.By("4. Disable IPsec at runtime")
 		disableErr := configIPSecAtRuntime(oc, "disabled")
 		o.Expect(disableErr).NotTo(o.HaveOccurred())
 
-		e2e.Logf("4. Check metrics for IPsec enabled/disabled after disabling at runtime")
+		exutil.By("5. Check metrics for IPsec enabled/disabled after disabling at runtime")
 		ovnMasterPodName = getOVNKMasterOVNkubeNode(oc)
 		e2e.Logf("The expected value of the %s is 0", metricName)
 		ipsecDisabled := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
