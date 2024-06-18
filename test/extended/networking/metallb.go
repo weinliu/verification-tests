@@ -1739,4 +1739,143 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		}
 
 	})
+
+	//https://issues.redhat.com/browse/OCPBUGS-14769
+	g.It("Author:asood-High-64809-ovnkube-node sends netlink delete request deleting conntrack entries for API redirect iptables rule [Serial]", func() {
+		var (
+			ns                   string
+			namespaces           []string
+			serviceSelectorKey   = "environ"
+			serviceSelectorValue = [1]string{"Test"}
+			namespaceLabelKey    = "region"
+			namespaceLabelValue  = [1]string{"NA"}
+			interfaces           = [3]string{"br-ex", "eno1", "eno2"}
+			workers              []string
+			ipaddresspools       []string
+			testID               = "64809"
+		)
+
+		exutil.By("0. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU2 cluster , skip for other envrionment!!!")
+		}
+		exutil.By("1. Get API VIP for cluster and Node hosting the VIP")
+		apiVIP := GetAPIVIPOnCluster(oc)
+		if apiVIP == "" {
+			g.Skip("This case requires API VIP to configured on the cluster")
+		}
+		apiVIPNode := FindIngressVIPNode(oc, apiVIP)
+		if apiVIPNode == "" {
+			g.Skip("This case requires API VIP to configured on the cluster on one of nodes, found none")
+		}
+		e2e.Logf("API VIP %s on the cluster is configured on %s", apiVIP, apiVIPNode)
+
+		exutil.By("2. Obtain the masters, workers and namespace")
+		//Two worker nodes needed to create l2advertisement object
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes")
+		}
+		for i := 0; i < 2; i++ {
+			workers = append(workers, workerList.Items[i].Name)
+		}
+		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		ns = oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test"+testID)
+
+		exutil.By("3. Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
+		}
+		defer deleteMetalLBCR(oc, metallbCR)
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("2. Create IP addresspool")
+		ipAddresspoolTemplate := filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+		ipAddresspool := ipAddressPoolResource{
+			name:                      "ipaddresspool-l2",
+			namespace:                 opNamespace,
+			addresses:                 l2Addresses[0][:],
+			namespaces:                namespaces[:],
+			priority:                  10,
+			avoidBuggyIPs:             true,
+			autoAssign:                true,
+			serviceLabelKey:           serviceSelectorKey,
+			serviceLabelValue:         serviceSelectorValue[0],
+			serviceSelectorKey:        serviceSelectorKey,
+			serviceSelectorOperator:   "In",
+			serviceSelectorValue:      serviceSelectorValue[:],
+			namespaceLabelKey:         namespaceLabelKey,
+			namespaceLabelValue:       namespaceLabelValue[0],
+			namespaceSelectorKey:      namespaceLabelKey,
+			namespaceSelectorOperator: "In",
+			namespaceSelectorValue:    namespaceLabelValue[:],
+			template:                  ipAddresspoolTemplate,
+		}
+		defer deleteIPAddressPool(oc, ipAddresspool)
+		result = createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)
+		o.Expect(result).To(o.BeTrue())
+		ipaddresspools = append(ipaddresspools, ipAddresspool.name)
+
+		exutil.By("3. Create L2Advertisement")
+		l2AdvertisementTemplate := filepath.Join(testDataDir, "l2advertisement-template.yaml")
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv",
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddresspools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: workers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer deleteL2Advertisement(oc, l2advertisement)
+		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
+		o.Expect(result).To(o.BeTrue())
+		conntrackRulesCmd := fmt.Sprintf("conntrack -E -o timestamp | grep %s | grep DESTROY | grep -v CLOSE | grep 6443 | grep ESTABL", apiVIP)
+		cmdContrackRulesdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+apiVIPNode, "--", "chroot", "/host", "bash", "-c", conntrackRulesCmd).Background()
+		defer cmdContrackRulesdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Create LoadBalancer services using Layer 2 addresses")
+		loadBalancerServiceTemplate := filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+		svc := loadBalancerServiceResource{
+			name:                          "",
+			namespace:                     ns,
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			allocateLoadBalancerNodePorts: false,
+			externaltrafficpolicy:         "Cluster",
+			template:                      loadBalancerServiceTemplate,
+		}
+
+		for i := 0; i < 10; i++ {
+			svc.name = "hello-world-" + testID + "-" + strconv.Itoa(i)
+			exutil.By(fmt.Sprintf("Create a service %s with ExtenalTrafficPolicy Cluster", svc.name))
+			result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+			o.Expect(result).To(o.BeTrue())
+			exutil.By(fmt.Sprintf("Validate LoadBalancer service %s", svc.name))
+			err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+			e2e.Logf("LB service created with IP %s", svcIP)
+			result = validateService(oc, masterNodeList[0], svcIP)
+			o.Expect(result).To(o.BeTrue())
+			exutil.By(fmt.Sprintf("DeleteLoadBalancer service %s", svc.name))
+			removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+
+		}
+		e2e.Logf("Conntrack rules output \n%s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "")).Should(o.BeTrue())
+
+	})
 })

@@ -3849,3 +3849,15 @@ func verifyDstIPAccess(oc *exutil.CLI, podName, podNS, ip string, passOrFail boo
 		}, "20s", "10s").Should(o.HaveOccurred())
 	}
 }
+
+// Function to obtain API VIP on BM cluster
+func GetAPIVIPOnCluster(oc *exutil.CLI) string {
+	apiVIP := ""
+	var err error
+	o.Eventually(func() error {
+		apiVIP, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.baremetal.apiServerInternalIP}").Output()
+		return err
+	}, "60s", "5s").ShouldNot(o.HaveOccurred())
+
+	return apiVIP
+}
