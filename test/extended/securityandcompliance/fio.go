@@ -90,7 +90,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 	})
 
 	// It will cover test case: OCP-34388 & OCP-27760 , author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
+	g.It("Author:xiyuan-LEVEL0-NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
 		g.By("Create fileintegrity")
 		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
