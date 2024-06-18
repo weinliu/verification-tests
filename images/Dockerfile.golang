@@ -7,44 +7,36 @@ RUN make go-mod-tidy; \
     mkdir -p /tmp/build; \
     cp /go/src/github.com/openshift/openshift-tests-private/pipeline/handleresult.py /tmp/build/handleresult.py; \
     cp /go/src/github.com/openshift/openshift-tests-private/bin/extended-platform-tests /tmp/build/extended-platform-tests
-RUN mkdir -p /tmp/opmbuild && cd /tmp/opmbuild && pwd && \
-    MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/candidate && \
-    curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/ -o ocp.html && curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp-dev-preview/ -o pre.html && \
-    ecver=$(grep -E "<a href=\"candidate-4\.16" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
-    if [ "V${ecver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp-dev-preview/${ecver}; fi && \
-    rcgaver=$(grep -E "<a href=\"4\.16" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${rcgaver}V" && \
-    if [ "V${rcgaver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${rcgaver}; fi && \
-    curl -s -k -L ${CLIENTURL}/opm-src.tar.gz -o opm-src.tar.gz  &&  tar -vzxf opm-src.tar.gz && opmdir=$(find ./ -type d -name "operator-framework-olm*") && \
-    cd $opmdir && make build/opm && cp ./bin/opm /tmp/opm
 FROM registry.ci.openshift.org/ci/rosa-aws-cli:latest as rosacli
 
 FROM registry.ci.openshift.org/ci/tests-private-base:4.17
 COPY --from=builder /tmp/build/extended-platform-tests /usr/bin/
 COPY --from=builder /tmp/build/handleresult.py /usr/bin/
-COPY --from=builder /tmp/opm /usr/bin/
 COPY --from=rosacli /usr/bin/rosa /usr/bin/
 RUN MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/candidate && \
     curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/ -o ocp.html && curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp-dev-preview/ -o pre.html && \
-    ecver=$(grep -E "<a href=\"candidate-4\.16" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
+    ecver=$(grep -E "<a href=\"candidate-4\.17" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
     if [ "V${ecver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp-dev-preview/${ecver}; fi && \
-    rcgaver=$(grep -E "<a href=\"4\.16" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${rcgaver}V" && \
+    rcgaver=$(grep -E "<a href=\"4\.17" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${rcgaver}V" && \
     if [ "V${rcgaver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${rcgaver}; fi && \
-    curl -s -k -L ${CLIENTURL}/openshift-client-linux-amd64-rhel8.tar.gz -o openshift-client-linux.tar.gz && \
+    curl -s -k -L ${CLIENTURL}/openshift-client-linux-amd64-rhel9.tar.gz -o openshift-client-linux.tar.gz && \
     curl -s -k -L ${CLIENTURL}/opm-linux.tar.gz -o opm-linux.tar.gz  && \
-    curl -s -k -L ${CLIENTURL}/oc-mirror.tar.gz -o oc-mirror.tar.gz && \
+    curl -s -k -L ${CLIENTURL}/oc-mirror.rhel9.tar.gz -o oc-mirror.tar.gz && \
     tar -C /usr/bin -xzvf openshift-client-linux.tar.gz && rm -fr openshift-client-linux.tar.gz && \
-    # tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz && \
+    tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz && \
     opm version && \
     tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
     SDKURL=${MIRRORURL}/x86_64/clients/operator-sdk/pre-release && \
     curl -s -k -L ${MIRRORURL}/x86_64/clients/operator-sdk/ -o sdk.html && \
-    optsdkver=$(grep -E "<a href=\"4\.16" sdk.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo ${optsdkver} && \
+    optsdkver=$(grep -E "<a href=\"4\.17" sdk.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo ${optsdkver} && \
     if [ "V${optsdkver}V" != "VV"  ]; then SDKURL=${MIRRORURL}/x86_64/clients/operator-sdk/${optsdkver}; fi && \
     curl -s -k -L ${SDKURL}/operator-sdk-linux-x86_64.tar.gz -o opt-sdk.tar.gz && \
     tar -C ./ -xzvf opt-sdk.tar.gz && mv ./x86_64/operator-sdk /usr/bin && rm -fr opt-sdk.tar.gz ./x86_64 && \
+    opm version && oc-mirror --help && operator-sdk version && \
     echo "try to install binary used by the cases" && oc version --client && \
     oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hypershift && mv hypershift /usr/bin/ && chmod 755 /usr/bin/hypershift && \
     oc image extract quay.io/openshifttest/oc-compliance:latest --file /tmp/oc-compliance && mv oc-compliance /usr/bin/ && chmod 755 /usr/bin/oc-compliance && \
+    hypershift version && rosa -h && oc-compliance -h && \
     oc image extract quay.io/openshifttest/openshift4-tools:v2 --file=/tmp/OpenShift4-tools.tar && tar -C /opt -xf OpenShift4-tools.tar && rm -fr OpenShift4-tools.tar && \
     curl -s -L https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz -o govc_Linux_x86_64.tar.gz && tar -C /usr/bin/ -xvf govc_Linux_x86_64.tar.gz govc && rm -f govc_Linux_x86_64.tar.gz && \
     rm -rf /usr/bin/oc /usr/bin/kubectl
