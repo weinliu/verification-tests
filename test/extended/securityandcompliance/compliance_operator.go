@@ -63,6 +63,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		wordpressRouteYAML               string
 		resourceQuotaYAML                string
 		tprofileHypershfitTemplate       string
+		tprofileSingleVariableTemplate   string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
 		serviceYAML                      string
@@ -88,6 +89,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		tprofileManualRuleTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-manual-rule.yaml")
 		tprofileTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile.yaml")
 		tprofileHypershfitTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-hypershift.yaml")
+		tprofileSingleVariableTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-single-variable.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
 		scansettingTemplate = filepath.Join(buildPruningBaseDir, "scansetting.yaml")
 		scansettingLimitTemplate = filepath.Join(buildPruningBaseDir, "scansettingLimit.yaml")
@@ -3956,6 +3958,79 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NonCompliant", ok, []string{"PrometheusRule", "compliance", "-n", subD.namespace, "-ojsonpath={.spec.groups[0].rules[0].alert}"}).check(oc)
 
 		g.By("ocp-43072 The metrics and alerts are getting reported for Compliance Operator error ... !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-Medium-74227-Add a whitelist of namespaces for rule ocp4-cis-configure-network-policies-namespaces [Serial]", func() {
+		var (
+			tprofileD = tailoredProfileDescription{
+				name:      "tp-single-rule-" + getRandomString(),
+				namespace: subD.namespace,
+				extends:   "ocp4-cis",
+				varname:   "ocp4-var-network-policies-namespaces-exempt-regex",
+				value:     "",
+				template:  tprofileSingleVariableTemplate,
+			}
+			ssb = scanSettingBindingDescription{
+				name:            "manual-rule-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "TailoredProfile",
+				profilename1:    tprofileD.name,
+				profilename2:    "ocp4-cis",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			nsTest1 = "ns-74227-" + getRandomString()
+			nsTest2 = "ns-74227-" + getRandomString()
+		)
+
+		defer func() {
+			g.By("Remove ssb and tailoredprofile... !!!\n")
+			cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name},
+				objectTableRef{"tailoredprofile", subD.namespace, tprofileD.name},
+				objectTableRef{"ns", nsTest1, nsTest1},
+				objectTableRef{"ns", nsTest2, nsTest2})
+		}()
+
+		g.By("Set value for tprofileD .. !!!\n")
+		errGetNs1 := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", nsTest1).Execute()
+		o.Expect(errGetNs1).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, nsTest1, ok, []string{"ns", nsTest1, "-n", nsTest1, "-o=jsonpath={.metadata.name}"}).check(oc)
+		errGetNs2 := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", nsTest2).Execute()
+		o.Expect(errGetNs2).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, nsTest2, ok, []string{"ns", nsTest2, "-n", nsTest2, "-o=jsonpath={.metadata.name}"}).check(oc)
+		nonControlNamespacesList := getNonControlNamespacesWithoutStatusChecking(oc)
+		length := len(nonControlNamespacesList)
+		for i, ns := range nonControlNamespacesList {
+			if i == length-1 {
+				tprofileD.value = tprofileD.value + ns
+			} else {
+				tprofileD.value = tprofileD.value + ns + "|"
+			}
+		}
+
+		g.By("Create the tailoredprofile !!!\n")
+		tprofileD.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", subD.namespace, tprofileD.name,
+			"-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+
+		g.By("Verify the rule status through compliancecheckresult and value through apiservers cluster object... !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			tprofileD.name + "-configure-network-policies-namespaces", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
+			"ocp4-cis" + "-configure-network-policies-namespaces", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+
+		g.By("The compliance operator supports remediation templating by setting custom variables in the tailored profile... !!!\n")
 	})
 
 	// author: pdhamdhe@redhat.com

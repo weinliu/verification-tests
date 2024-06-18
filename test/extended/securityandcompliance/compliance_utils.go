@@ -793,6 +793,15 @@ func getNonControlNamespaces(oc *exutil.CLI, status string) []string {
 	return projectList
 }
 
+func getNonControlNamespacesWithoutStatusChecking(oc *exutil.CLI) []string {
+	e2e.Logf("Get the all non-control plane namespaces without status check... !!\n")
+	projects, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("projects", "--no-headers", "--all-namespaces", "-n", oc.Namespace()).OutputToFile(getRandomString() + "project.json")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	result, _ := exec.Command("bash", "-c", "cat "+projects+" | awk '{print $1}'| grep -Ev \"default|kube-|openshift\"; rm -rf "+projects).Output()
+	projectList := strings.Fields(string(result))
+	return projectList
+}
+
 func checkRulesExistInComplianceCheckResult(oc *exutil.CLI, cisRlueList []string, namespace string) {
 	ccr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
