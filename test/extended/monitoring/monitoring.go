@@ -2683,6 +2683,32 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusRuleFailures"}'`, token, `PrometheusRuleFailures`, 3*uwmLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-73804-trigger TargetDown alert [Serial]", func() {
+		var (
+			exampleApp = filepath.Join(monitoringBaseDir, "example-app.yaml")
+		)
+		exutil.By("delete uwm-config/cm-config and example-app at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment/prometheus-example-app", "service/prometheus-example-app", "servicemonitor/prometheus-example-monitor", "-n", "openshift-monitoring", "--ignore-not-found").Execute()
+
+		exutil.By("check the alert exist")
+		cmd := "-ojsonpath={.spec.groups[].rules[?(@.alert==\"TargetDown\")]}"
+		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "cluster-monitoring-operator-prometheus-rules", cmd, "TargetDown", true)
+
+		exutil.By("trigger TargetDown alert")
+		createResourceFromYaml(oc, "openshift-monitoring", exampleApp)
+		//% oc patch ServiceMonitor/prometheus-example-monitor -n openshift-monitoring --type json -p '[{"op": "add", "path": "/spec/endpoints/0/scheme", "value": "https"}]'
+		patchConfig := `[{"op": "add", "path": "/spec/endpoints/0/scheme", "value":"https"}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("servicemonitor", "prometheus-example-monitor", "-p", patchConfig, "--type=json", "-n", "openshift-monitoring").Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("check alert metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="TargetDown",job="prometheus-example-app"}'`, token, `"alertname":"TargetDown"`, 3*uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
