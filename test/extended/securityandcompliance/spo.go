@@ -17,7 +17,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-isc] Security_and_Compliance The Security_Profiles_Operator", func() {
+var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator The Security_Profiles_Operator", func() {
 	defer g.GinkgoRecover()
 
 	var (

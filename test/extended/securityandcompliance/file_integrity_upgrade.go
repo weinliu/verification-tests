@@ -2,10 +2,11 @@ package securityandcompliance
 
 import (
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -13,7 +14,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check for file integrity operator upgrade", func() {
+var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator Pre-check and post-check for file integrity operator upgrade", func() {
 	defer g.GinkgoRecover()
 	const (
 		ns1 = "openshift-file-integrity"

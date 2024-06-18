@@ -10,7 +10,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin makes compliance operator easy to use", func() {
+var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The OC Compliance plugin makes compliance operator easy to use", func() {
 	defer g.GinkgoRecover()
 
 	var (

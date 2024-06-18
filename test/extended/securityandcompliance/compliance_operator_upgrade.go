@@ -12,7 +12,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check for compliance operator upgrade", func() {
+var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator Pre-check and post-check for compliance operator upgrade", func() {
 	defer g.GinkgoRecover()
 	const (
 		coNamspace = "openshift-compliance"

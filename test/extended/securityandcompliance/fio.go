@@ -18,7 +18,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO within a namespace", func() {
+var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an end user handle FIO within a namespace", func() {
 	defer g.GinkgoRecover()
 
 	var (
