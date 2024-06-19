@@ -1,6 +1,7 @@
 package apiserverauth
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -758,6 +759,122 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if !strings.Contains(challenge3, "test-example.com") || err != nil {
 			e2e.Failf("challenge3 has not output as expected.")
 		}
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-High-74267-Route TLS secret can be managed by cert-manager", func() {
+		const (
+			appImage        = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+			serviceName     = "hello-openshift"
+			routeType       = "edge"
+			routeName       = "myroute"
+			certName        = "myroute-cert"
+			secretName      = "myroute-tls"
+			issuerName      = "default-selfsigned"
+			podName         = "exec-curl-helper"
+			secretMountPath = "/tmp"
+		)
+
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("Skipping as current cluster is not TechPreviewNoUpgrade")
+		}
+
+		exutil.By("create a testing App")
+		err := oc.Run("new-app").Args(appImage).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, oc.Namespace(), 10*time.Second, 120*time.Second)
+
+		exutil.By("specify the host name")
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hostName := getRandomString(4) + "." + ingressDomain
+
+		exutil.By("create an edge Route for it")
+		err = oc.Run("create").Args("route", routeType, routeName, "--service", serviceName, "--hostname", hostName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create an issuer")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
+		err = oc.Run("create").Args("-f", issuerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+		exutil.By("create a certificate")
+		certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned-route.yaml")
+		params := []string{"-f", certFile, "-p", "ISSUER_NAME=" + issuerName, "CERT_NAME=" + certName, "SECRET_NAME=" + secretName, "DNS_NAME=" + hostName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+
+		// store the initial cert expire time for verifying renewal in the end
+		initialExpireTime, _ := getCertificateExpireTime(oc, oc.Namespace(), secretName)
+		e2e.Logf("certificate initial expire time: %v ", initialExpireTime)
+
+		exutil.By("grant the router service account access to load secret")
+		rbacFile := filepath.Join(buildPruningBaseDir, "rbac-secret-reader.yaml")
+		params = []string{"-f", rbacFile, "-p", "SECRET_NAME=" + secretName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		exutil.By("patch the issued certificate secret to the Route")
+		patchPath := `{"spec":{"tls":{"externalCertificate":{"name":"` + secretName + `"}}}}`
+		err = oc.AsAdmin().Run("patch").Args("route", routeName, "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create a helper pod to mount the TLS secret")
+		podFile := filepath.Join(buildPruningBaseDir, "exec-curl-helper.yaml")
+		params = []string{"-f", podFile, "-p", "POD_NAME=" + podName, "SECRET_NAME=" + secretName, "SECRET_MOUNT_PATH=" + secretMountPath}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, oc.Namespace(), 10*time.Second, 120*time.Second)
+
+		exutil.By("validate the certificate in the helper pod")
+		cmd := fmt.Sprintf(`curl -v -sS --cacert %s/ca.crt https://%s`, secretMountPath, hostName)
+
+		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := exutil.RemoteShPod(oc, oc.Namespace(), podName, "sh", "-c", cmd)
+			if strings.Contains(output, "200 OK") && strings.Contains(output, "CN="+hostName) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for curl validation succeeded")
+
+		exutil.By("verify if the certificate in secret was renewed")
+		var currentExpireTime time.Time
+		statusErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+			currentExpireTime, err = getCertificateExpireTime(oc, oc.Namespace(), secretName)
+			if err != nil {
+				e2e.Logf("got error in func 'getCertificateExpireTime':\n%v", err)
+				return false, nil
+			}
+
+			// returns Ture if currentExpireTime > initialExpireTime, indicates cert got renewed.
+			if currentExpireTime.After(initialExpireTime) {
+				return true, nil
+			}
+			return false, nil
+		})
+		e2e.Logf("certificate current expire time: %v ", currentExpireTime)
+		exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for certificate in secret to be renewed")
+
+		exutil.By("check the route is indeed serving with renewed(unexpired) certificate")
+		statusErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := exutil.RemoteShPod(oc, oc.Namespace(), podName, "sh", "-c", cmd)
+			if strings.Contains(output, "200 OK") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for route serving certificate renewed")
 	})
 
 	// author: yuewu@redhat.com

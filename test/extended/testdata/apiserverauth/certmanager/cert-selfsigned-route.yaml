@@ -1,0 +1,26 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: cert-selfsigned-route-template
+objects:
+  - apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: "${CERT_NAME}"
+    spec:
+      commonName: "${DNS_NAME}"
+      dnsNames:
+        - "${DNS_NAME}"
+      usages:
+        - server auth
+      issuerRef:
+        kind: Issuer
+        name: "${ISSUER_NAME}"
+      secretName: "${SECRET_NAME}"
+      duration: 1h
+      renewBefore: 58m
+parameters:
+  - name: ISSUER_NAME
+  - name: CERT_NAME
+  - name: SECRET_NAME
+  - name: DNS_NAME

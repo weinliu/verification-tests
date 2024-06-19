@@ -299,6 +299,60 @@ func createCertificate(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
 }
 
+// waitForResourceReadiness polls the status of the object and returns no error once Ready.
+// 'namespace' could be an empty string to indicate not to specify the namespace.
+// 'resourceType' is applicable to 'Certificate', 'Issuer' and 'ClusterIssuer'.
+func waitForResourceReadiness(oc *exutil.CLI, namespace, resourceType, resourceName string, interval, timeout time.Duration) error {
+	args := []string{resourceType, resourceName}
+	if len(namespace) > 0 {
+		args = append(args, "-n="+namespace)
+	}
+
+	statusErr := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, false, func(ctx context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
+		if strings.Contains(output, "True") {
+			return true, nil
+		}
+		return false, nil
+	})
+	return statusErr
+}
+
+// dumpResource dumps the resource for debugging.
+// 'parameter' could be any additional args you want to specify, like "-o=yaml" or "-o=jsonpath={.status}".
+func dumpResource(oc *exutil.CLI, namespace, resourceType, resourceName, parameter string) {
+	args := []string{resourceType, resourceName, parameter}
+	if len(namespace) > 0 {
+		args = append(args, "-n="+namespace)
+	}
+
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
+	e2e.Logf("Dumping the %s '%s' with parameter '%s':\n%s", resourceType, resourceName, parameter, output)
+}
+
+// getCertificateExpireTime returns the TLS secret's cert expire time.
+func getCertificateExpireTime(oc *exutil.CLI, namespace string, secretName string) (time.Time, error) {
+	// get certificate data from secret
+	tlsCrtData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", namespace, "-o=jsonpath={.data.tls\\.crt}").Output()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get secret '%s'", secretName)
+	}
+	if len(tlsCrtData) == 0 {
+		return time.Time{}, fmt.Errorf("empty TLS data in secret '%s'", secretName)
+	}
+
+	// parse certificate using x509 lib
+	tlsCrtBytes, _ := base64.StdEncoding.DecodeString(tlsCrtData)
+	block, _ := pem.Decode(tlsCrtBytes)
+	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse certificate: %v", err)
+	}
+
+	expireTime := parsedCert.NotAfter
+	return expireTime, nil
+}
+
 // Check and verify issued certificate's subject CN (Common Name) content.
 func verifyCertificate(oc *exutil.CLI, certName string, namespace string) {
 	e2e.Logf("Check if certificate secret is non-null.")
