@@ -27,4 +27,20 @@ describe('features for get started resources', () => {
       }
     });
   });
+
+  it('(OCP-73803,yapei,UserInterface)Add user-impersonation to QuickStart and new langs to ExploreAdminFeatures',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+    Overview.goToDashboard();
+    cy.get('button[data-test~="user-impersonation"]').as('user-impersonate-button').should('exist');
+    cy.get('@user-impersonate-button').click();
+    cy.get('[data-test="quickstart drawer"]').should('exist');
+    cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`, {failOnNonZeroExit: false}).then((result) => {
+      if (result.stdout.includes('lightspeed')) {
+        Overview.ExploreNewFeature('OpenShift LightSpeed','OpenShift LightSpeed Operator');
+      } else {
+	      cy.get('a[data-test~="new-translations"]')
+          .should('have.attr', 'href')
+          .and('equal', '/user-preferences/language')
+      }
+    });
+  });
 })
