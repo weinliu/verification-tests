@@ -252,6 +252,15 @@ type kubeletKillerPod struct {
 	template  string
 }
 
+type httpserverPodResourceNode struct {
+	name          string
+	namespace     string
+	containerport int32
+	hostport      int32
+	nodename      string
+	template      string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -3860,4 +3869,44 @@ func GetAPIVIPOnCluster(oc *exutil.CLI) string {
 	}, "60s", "5s").ShouldNot(o.HaveOccurred())
 
 	return apiVIP
+}
+
+func (pod *httpserverPodResourceNode) createHttpservePodNodeByAdmin(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "CONTAINERPORT="+strconv.Itoa(int(pod.containerport)), "HOSTPORT="+strconv.Itoa(int(pod.hostport)), "NODENAME="+pod.nodename)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+// CurlPod2NodePass checks connectivity from a pod to node that has httpserverPod on it
+func CurlPod2NodePass(oc *exutil.CLI, namespaceSrc, podNameSrc, namespaceDst, nodeNameDst, DstHostPort string) {
+	nodeIP2, nodeIP1 := getNodeIP(oc, nodeNameDst)
+	if nodeIP2 != "" {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP1, DstHostPort))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP2, DstHostPort))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP1, DstHostPort))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+// CurlPod2PodFail ensures no connectivity from pod to node that has httpserverPod on it
+func CurlPod2NodeFail(oc *exutil.CLI, namespaceSrc, podNameSrc, namespaceDst, nodeNameDst, DstHostPort string) {
+	nodeIP2, nodeIP1 := getNodeIP(oc, nodeNameDst)
+	if nodeIP2 != "" {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP1, DstHostPort))
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP2, DstHostPort))
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP1, DstHostPort))
+		o.Expect(err).To(o.HaveOccurred())
+	}
 }

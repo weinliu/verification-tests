@@ -2093,6 +2093,347 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}, "300s", "10s").Should(o.BeTrue(), "lr-policy-list for the egressip is not deleted!!")
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-ConnectedOnly-Longduration-NonPreRelease-High-74241-Egress traffic works with ANP, BANP with Egress IP by nodeSelector.[Serial][Disruptive]", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			egressIP2Template         = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			pingPodNodeTemplate       = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			httpserverPodNodeTemplate = filepath.Join(buildPruningBaseDir, "httpserverPod-specific-node-template.yaml")
+			banpTemplate              = filepath.Join(buildPruningBaseDir+"/adminnetworkpolicy", "banp-single-rule-template-node.yaml")
+			anpTemplate               = filepath.Join(buildPruningBaseDir+"/adminnetworkpolicy", "anp-single-rule-template-node.yaml")
+			matchLabelKey             = "kubernetes.io/metadata.name"
+			hellopods                 []string
+			containerport             int32 = 30001
+			hostport                  int32 = 30003
+		)
+
+		exutil.By("\n 1. Get two worker nodes that are in same subnet, they will be used as egress-assignable nodes, get a third node as non-egress node\n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		workers := egressNodes
+
+		// find a non-egress node, append to workers list, so that first two nodes in workers list are egress nodes, third node in workers is non-egress node
+		for _, node := range nodeList.Items {
+			if !contains(egressNodes, node.Name) {
+				workers = append(workers, node.Name)
+				break
+			}
+		}
+
+		// There is some strange behavior using tcpdump method to verify EIP with BANP/ANP node peer in place, use ipecho method to verify egressIP for now, will add tcpdump method when it is sorted out
+		if !ok || egressNodes == nil || len(egressNodes) < 2 || len(workers) < 3 || flag != "ipecho" {
+			g.Skip("Test requires 3 nodes, two of them are in same subnet, the prerequirement was not fullfilled, skip the case!!")
+		}
+
+		exutil.By("2. Set up egressIP.")
+		exutil.By("2.1. Apply EgressLabel Key to first egress node.")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel, "true")
+
+		exutil.By("2.2. Create an egressip object")
+		freeIPs := findFreeIPs(oc, egressNodes[0], 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+
+		egressip1 := egressIPResource1{
+			name:          "egressip-74241",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "company",
+			nsLabelValue:  "redhat",
+			podLabelKey:   "color",
+			podLabelValue: "green",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+		o.Expect(egressIPMaps1[0]["node"]).Should(o.Equal(workers[0]))
+		o.Expect(egressIPMaps1[0]["egressIP"]).Should(o.Equal(freeIPs[0]))
+
+		exutil.By("2.3. After egressIP is assigned to workers[0], apply EgressLabel Key to workers[1], prepare it to be used for egressIP failover in step 7.")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[1], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[1], egressNodeLabel, "true")
+
+		exutil.By("2.4 Obtain a namespace as subjectNS, label subjectNS to match namespaceSelector in egressIP object\n")
+		subjectNS := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", subjectNS, "company-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", subjectNS, "company=redhat").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.5 Create 4 ping pods in subjectNS, hello-pod0 on workers[0], hello-pod1 and hello-pod2 on workers[1], hello-pod3 on workers[2]\n")
+		exutil.By("Only label hello-pod0 and hello-pod1 with label that matching podSelector in egressIP object\n")
+		for i := 0; i < 2; i++ {
+			pod := pingPodResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: subjectNS,
+				nodename:  workers[i], // create pod on egressnodes[0] and egressnodes[1]
+				template:  pingPodNodeTemplate,
+			}
+			pod.createPingPodNode(oc)
+			waitPodReady(oc, subjectNS, pod.name)
+			defer exutil.LabelPod(oc, subjectNS, pod.name, "color-")
+			err = exutil.LabelPod(oc, subjectNS, pod.name, "color=green")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			hellopods = append(hellopods, pod.name)
+		}
+		for i := 2; i < 4; i++ {
+			pod := pingPodResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: subjectNS,
+				nodename:  workers[i-1], // create pod on egressnodes[1] and non-egressnode
+				template:  pingPodNodeTemplate,
+			}
+			pod.createPingPodNode(oc)
+			waitPodReady(oc, subjectNS, pod.name)
+			hellopods = append(hellopods, pod.name)
+		}
+
+		worker1NodeIP := getNodeIPv4(oc, subjectNS, workers[1])
+		worker2NodeIP := getNodeIPv4(oc, subjectNS, workers[2])
+
+		exutil.By("3.3 Verify egressIP works as expected from each hello-pod\n")
+		switch flag {
+		case "ipecho":
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[0], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[1], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[2], ipEchoURL, true, worker1NodeIP)
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[3], ipEchoURL, true, worker2NodeIP)
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("4 Create a targetNS, check healthiness of egress traffic to targeted nodes before applying BANP/ANP")
+		exutil.By("4.1 Create a second namespace as targetNS, create 2 httpserverPods, one on each of workers[1] and workers[2]")
+		oc.SetupProject()
+		targetNS := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, targetNS)
+		for i := 0; i < 2; i++ {
+			httpserverPod := httpserverPodResourceNode{
+				name:          "httpserverpod" + strconv.Itoa(i),
+				namespace:     targetNS,
+				containerport: containerport,
+				hostport:      hostport,
+				nodename:      workers[i+1], // create test pod on egressnode2 and non-egressnode
+				template:      httpserverPodNodeTemplate,
+			}
+			httpserverPod.createHttpservePodNodeByAdmin(oc)
+			waitPodReady(oc, targetNS, httpserverPod.name)
+		}
+
+		exutil.By("4.3 Verify egress traffic to target nodes from subjectNS to targetNS before applying BANP or ANP\n")
+		for i := 0; i < 4; i++ {
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("5. Apply BANP with single rule to deny egress traffic to node\n")
+		banp := singleRuleBANPPolicyResourceNode{
+			name:       "default",
+			subjectKey: matchLabelKey,
+			subjectVal: subjectNS,
+			policyType: "egress",
+			direction:  "to",
+			ruleName:   "default-egress",
+			ruleAction: "Deny",
+			ruleKey:    "department",
+			template:   banpTemplate,
+		}
+
+		defer removeResource(oc, true, true, "banp", banp.name)
+		banp.createSingleRuleBANPNode(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banp.name)).To(o.BeTrue())
+
+		exutil.By("5.1. Patch change BANP to use matchExpression for nodeSelector with In operator and value: dev, so that workers[1] will be matched node, workers[2] is not\n")
+		patchBANP := `[{"op": "replace", "path": "/spec/egress/0/to/0/nodes/matchExpressions/0/operator", "value": "In"},{"op": "add", "path": "/spec/egress/0/to/0/nodes/matchExpressions/0/values", "value": ["dev", "it"]}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		banpOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baselineadminnetworkpolicy.policy.networking.k8s.io/default", "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nBANP egress rule after step 5.1: %s\n", banpOutput)
+
+		exutil.By("5.2. Apply workers[1] and workers[2] with different labels so that only workers[1] matches the nodeSelector in BANP\n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[1], "department")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[1], "department", "dev")
+
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[2], "department")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[2], "department", "qe")
+
+		exutil.By("5.3. With BANP in place, verify egress traffic to external still works as expected\n")
+		switch flag {
+		case "ipecho":
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[0], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[1], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[2], ipEchoURL, true, worker1NodeIP)
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[3], ipEchoURL, true, worker2NodeIP)
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("5.4. With BANP in place, verify egress traffic from subjectNS to node peers as expected\n")
+		for i := 0; i < 4; i++ {
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("6. Apply ANP with two rules for egress traffic to node peer\n")
+		anp := singleRuleANPPolicyResourceNode{
+			name:       "anp-74241",
+			subjectKey: matchLabelKey,
+			subjectVal: subjectNS,
+			priority:   10,
+			policyType: "egress",
+			direction:  "to",
+			ruleName:   "node-as-egress-peer-74241",
+			ruleAction: "Allow",
+			ruleKey:    "department",
+			nodeKey:    "department",
+			ruleVal:    "dev",
+			actionname: "egress",
+			actiontype: "Deny",
+			template:   anpTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anp.name)
+		anp.createSingleRuleANPNode(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anp.name)).To(o.BeTrue())
+		patchANP := `[{"op": "replace", "path": "/spec/egress/1/to/0/nodes/matchExpressions/0/operator", "value": "In"},{"op": "add", "path": "/spec/egress/1/to/0/nodes/matchExpressions/0/values", "value": ["qe"]}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy/"+anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy.policy.networking.k8s.io/"+anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP egress rule after step 6: %s\n", anpOutput)
+
+		exutil.By("6.1. With BANP/ANP in place, verify egress traffic to external still works as expected\n")
+		switch flag {
+		case "ipecho":
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[0], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[1], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[2], ipEchoURL, true, worker1NodeIP)
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[3], ipEchoURL, true, worker2NodeIP)
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("6.2. With BANP/ANP in place, verify egress traffic from subjectNS to each node peer as expected\n")
+		for i := 0; i < 4; i++ {
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("7. Unlabel egress-assignable label from current egressNode (workers[0]) to force egressIP failover to the 2nd egressNode (workers[1])\n")
+		exutil.By("7.1. Verify egressIP failed over to 2nd egressNode which is workers[1] \n")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel)
+
+		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+		o.Expect(egressIPMaps1[0]["node"]).Should(o.Equal(workers[1]))
+		o.Expect(egressIPMaps1[0]["egressIP"]).Should(o.Equal(freeIPs[0]))
+
+		exutil.By("7.2. After egressIP failover, with BANP/ANP in place, Verify egress traffic to external works as expected \n")
+		switch flag {
+		case "ipecho":
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[0], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[1], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[2], ipEchoURL, true, worker1NodeIP)
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[3], ipEchoURL, true, worker2NodeIP)
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("7.3. After egressIP failover, and with BANP/ANP in place, Verify egress traffic from subjectNS to each node peer as expected \n")
+		for i := 0; i < 4; i++ {
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("8. Patch change ANP 2nd rule so that egress traffic to workers[2] with NotIn operator and values:[qe, it]\n")
+		patchANP = `[{"op": "replace", "path": "/spec/egress/1/to/0/nodes/matchExpressions/0/operator", "value": "NotIn"},{"op": "add", "path": "/spec/egress/1/to/0/nodes/matchExpressions/0/values", "value": ["qe", "it"]}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy/"+anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy.policy.networking.k8s.io/"+anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP egress rule after step 8: %s\n", anpOutput)
+
+		exutil.By("8.1. After egressIP failover, with BANP+ANP in place and ANP 2nd rule updated, Verify egress traffic to external works as expected \n")
+		switch flag {
+		case "ipecho":
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[0], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[1], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[2], ipEchoURL, true, worker1NodeIP)
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[3], ipEchoURL, true, worker2NodeIP)
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("8.2. After egressIP failover, with BANP+ANP in place, and ANP 2nd rule updated, Verify egress traffic from subjectNS to node peers work as expected \n")
+		for i := 0; i < 4; i++ {
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("9. Flip action in 1st rule in ANP from Allow to Pass, flip action in 2nd rule in ANP from Deny to Allow\n")
+		patchANP = `[{"op": "replace", "path": "/spec/egress/0/action", "value": "Pass"}, {"op": "replace", "path": "/spec/egress/1/action", "value": "Allow"}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy/"+anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy.policy.networking.k8s.io/"+anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP egress rule after step 9: %s\n", anpOutput)
+
+		exutil.By("9.1. Verify egress traffic to external works as expected after flipping actions in both ANP rules\n")
+		switch flag {
+		case "ipecho":
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[0], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[1], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[2], ipEchoURL, true, worker1NodeIP)
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[3], ipEchoURL, true, worker2NodeIP)
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("9.2. Verify egress traffic from subjectNS to node peers as expected after flipping actions in both ANP rules\n")
+		for i := 0; i < 4; i++ {
+			//Curl to nodeB should fail because of Deny rule in BANP after Pass rule in ANP
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("10. Delete ANP and update BANP to use NotIn operator with values:[qe,it]\n")
+		removeResource(oc, true, true, "anp", anp.name)
+		patchBANP = `[{"op": "replace", "path": "/spec/egress/0/to/0/nodes/matchExpressions/0/operator", "value": "NotIn"}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy.policy.networking.k8s.io/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		banpOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("baselineadminnetworkpolicy.policy.networking.k8s.io/default", "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n BANP egress rule after step 10: %s\n", banpOutput)
+
+		exutil.By("10.1. Verify egress traffic to external works as expected after update to BANP\n")
+		switch flag {
+		case "ipecho":
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[0], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[1], ipEchoURL, true, freeIPs[0])
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[2], ipEchoURL, true, worker1NodeIP)
+			verifyEgressIPWithIPEcho(oc, subjectNS, hellopods[3], ipEchoURL, true, worker2NodeIP)
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		exutil.By("10.2. Verify egress traffic to node peers work as expected after update to BANP\n")
+		for i := 0; i < 4; i++ {
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+		}
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
