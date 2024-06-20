@@ -175,6 +175,29 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		logger.Infof("Using pool %s for testing", mcp.GetName())
 
+		exutil.By("Getting initial status")
+		rfUserCA := NewRemoteFile(mcp.GetNodesOrFail()[0], userCABundleCertFile)
+		o.Expect(rfUserCA.Fetch()).To(o.Succeed(), "Error getting the initial user CA bundle content")
+		initialUserCAContent := rfUserCA.GetTextContent()
+
+		rfCloudCA := NewRemoteFile(mcp.GetNodesOrFail()[0], kubeCloudCertFile)
+		o.Expect(rfCloudCA.Fetch()).To(o.Succeed(), "Error getting the initial cloud CA bundle content")
+		initialCloudCAContent := rfCloudCA.GetTextContent()
+
+		defer func() {
+			exutil.By("Checking that the user CA bundle file content was properly restored when the configuration was removed")
+			o.Eventually(rfUserCA, "5m", "20s").Should(exutil.Secure(HaveContent(initialUserCAContent)),
+				"The user CA bundle file content was not restored after the configuration was removed")
+			logger.Infof("OK!\n")
+
+			exutil.By("Checking that the cloud CA bundle file content was properly restored when the configuration was removed")
+			o.Eventually(rfCloudCA, "5m", "20s").Should(exutil.Secure(HaveContent(initialCloudCAContent)),
+				"The cloud CA bundle file content was not restored after the configuration was removed")
+			logger.Infof("OK!\n")
+		}()
+
+		logger.Infof("OK!\n")
+
 		// Create a new config map and configure the proxy additional trusted CA if necessary
 		proxyConfigMapName := proxy.GetOrFail(`{.spec.trustedCA.name}`)
 		if proxyConfigMapName == "" {
@@ -238,6 +261,11 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		logger.Infof("OK!\n")
 
+		exutil.By(fmt.Sprintf(`Check that the "%s" is CA trusted. Command update-ca-trust was executed when the file was added`, userCABundleCertFile))
+		o.Eventually(BundleFileIsCATrusted, "5m", "20s").WithArguments(userCABundleCertFile, mcp.GetNodesOrFail()[0]).Should(
+			o.BeTrue(), "The %s file was not ca-trusted. It seems that the update-ca-trust command was not executed after updating the file", userCABundleCertFile)
+		logger.Infof("OK!\n")
+
 		exutil.By(fmt.Sprintf(`Check that the "%s" is in the ignition config`, kubeCloudCertFile))
 		kubeCloudCertContent, err := kubeCloudManagedConfigMap.GetDataValue("ca-bundle.pem")
 		if err != nil {
@@ -266,12 +294,12 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 			logger.Infof("Check that the file has the right content in the nodes")
 			EventuallyFileExistsInNode(kubeCloudCertFile, kubeCloudCertContent, mcp.GetNodesOrFail()[0], "3m", "20s")
+
 		} else {
 			logger.Infof("No KubeCloud cert was configured and it was not possible to define a new one, we skip the cloudCA validation")
 		}
 
 		logger.Infof("OK!\n")
-
 	})
 
 	g.It("Author:rioliu-NonHyperShiftHOST-NonPreRelease-Longduration-High-71991-post action of user-ca-bundle change will skip drain,reboot and restart crio service [Disruptive]", func() {
@@ -492,4 +520,35 @@ func EventuallyFileExistsInNode(filePath, expectedContent string, node Node, tim
 	}, timeout, poll).
 		Should(o.Succeed(),
 			"The file %s in node %s does not contain the expected certificate.", rfCert.GetFullPath(), node.GetName())
+}
+
+// BundleFileIsCATrusted check that the provided bundle file is included in file /etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem which means that it is ca-trusted
+func BundleFileIsCATrusted(bundleFile string, node Node) (bool, error) {
+	var (
+		objsignCABundlePemPath = "/etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem"
+		objsignCABundleRemote  = NewRemoteFile(node, objsignCABundlePemPath)
+
+		bundleRemote = NewRemoteFile(node, bundleFile)
+	)
+
+	if !bundleRemote.Exists() {
+		return false, fmt.Errorf("File %s does not exist", bundleRemote.GetFullPath())
+	}
+
+	if !objsignCABundleRemote.Exists() {
+		return false, fmt.Errorf("File %s does not exist", objsignCABundleRemote.GetFullPath())
+	}
+
+	err := bundleRemote.Fetch()
+	if err != nil {
+		return false, err
+	}
+
+	err = objsignCABundleRemote.Fetch()
+	if err != nil {
+		return false, err
+	}
+
+	// The new certificate should be included in the /etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem file when we execute the update-ca-trust command
+	return strings.Contains(objsignCABundleRemote.GetTextContent(), bundleRemote.GetTextContent()), nil
 }
