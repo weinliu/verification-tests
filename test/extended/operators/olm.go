@@ -14201,7 +14201,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.By("1) check if uses the ImageStream resource")
-		controlProject := fmt.Sprintf("clusters-%s", guestClusterName)
+		controlProject := exutil.GetHyperShiftHostedClusterNameSpace(oc)
 		isOutput, err := oc.AsAdmin().Run("get").Args("is", "catalogs", "-n", controlProject, "-o", "yaml").Output()
 		if err != nil {
 			e2e.Failf("Fail to get cronjob in project: %s, error:%v", controlProject, err)
