@@ -6142,7 +6142,7 @@ EOF`, serverconf, fqdnName)
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Master node is %v : ", masterNode)
-		cmd := `ifconfig | grep -oP '^(ens|eth)\w+:' | cut -d: -f1`
+		cmd := `ls /sys/class/net |grep -oP '^(ens|eth)\w+'`
 		ethName, ethErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(ethErr).NotTo(o.HaveOccurred())
 		ethName = strings.TrimSpace(ethName)
@@ -6259,4 +6259,81 @@ EOF`, serverconf, fqdnName)
 		exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is not firing or pending", alertBudget, severity))
 	})
 
+	// author: kewang@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:kewang-High-73880-[Apiserver] Alert KubeAggregatedAPIErrors [Slow] [Disruptive]", func() {
+		var (
+			kubeAlert1      = "KubeAggregatedAPIErrors"
+			kubeAlert2      = "KubeAggregatedAPIDown"
+			alertSeverity   = "warning"
+			timeSleep       = 720
+			isAlert1Firing  bool
+			isAlert1Pending bool
+			isAlert2Firing  bool
+			isAlert2Pending bool
+		)
+
+		exutil.By("1. Set network latency to simulate network failure in one master node")
+		e2e.Logf("Checking one available network interface on the master node")
+		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Master node is %v : ", masterNode)
+		cmd := `ls /sys/class/net |grep -oP '^(ens|eth)\w+'`
+		ethName, ethErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		o.Expect(ethErr).NotTo(o.HaveOccurred())
+		ethName = strings.TrimSpace(ethName)
+		o.Expect(ethName).ShouldNot(o.BeEmpty())
+		e2e.Logf("Found Ethernet :: %v", ethName)
+
+		e2e.Logf("Add latency to network on the master node")
+		channel := make(chan string)
+		go func() {
+			cmdStr := fmt.Sprintf(`tc qdisc add dev %s root netem delay 2000ms; sleep %v; tc qdisc del dev %s root`, ethName, timeSleep, ethName)
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", fmt.Sprintf("nodes/%s", masterNode), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Output()
+			e2e.Logf("Output:%s", output)
+			channel <- output
+		}()
+		defer func() {
+			receivedMsg := <-channel
+			e2e.Logf("ReceivedMsg:%s", receivedMsg)
+		}()
+
+		exutil.By("2. Check if alerts " + kubeAlert1 + " and " + kubeAlert2 + " are firing/pending")
+
+		checkAlert := func(alertData, alertName, alertState string) bool {
+			alertPath := `data.alerts.#(labels.alertname=="` + alertName + `" and .state =="` + alertState + `")#`
+			return gjson.Get(alertData, alertPath).Exists()
+		}
+
+		watchAlerts := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeSleep)*time.Second, false, func(cxt context.Context) (bool, error) {
+			alertOutput, _ := GetAlertsByName(oc, kubeAlert1)
+			if alertOutput == "" {
+				return false, nil
+			}
+			alertData := gjson.Parse(alertOutput).String()
+			if !isAlert1Pending && checkAlert(alertData, kubeAlert1, "pending") {
+				isAlert1Pending = true
+				e2e.Logf("%s with %s is pending", kubeAlert1, alertSeverity)
+			}
+			if checkAlert(alertData, kubeAlert1, "firing") {
+				isAlert1Firing = true
+				e2e.Logf("%s with %s is firing", kubeAlert1, alertSeverity)
+			}
+
+			if !isAlert2Pending && checkAlert(alertData, kubeAlert2, "pending") {
+				isAlert2Pending = true
+				e2e.Logf("%s with %s is pending", kubeAlert2, alertSeverity)
+			}
+			if checkAlert(alertData, kubeAlert2, "firing") {
+				isAlert2Firing = true
+				e2e.Logf("%s with %s is firing", kubeAlert2, alertSeverity)
+			}
+
+			if isAlert1Firing && isAlert2Firing {
+				e2e.Logf("%s and %s with %s both are firing", kubeAlert1, kubeAlert2, alertSeverity)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(watchAlerts, fmt.Sprintf("%s and %s with %s are not firing or pending", kubeAlert1, kubeAlert2, alertSeverity))
+	})
 })
