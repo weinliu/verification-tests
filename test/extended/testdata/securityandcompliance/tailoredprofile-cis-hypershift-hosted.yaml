@@ -71,8 +71,6 @@ objects:
       rationale: This rule is being checked on the Management cluster
     - name: ocp4-controller-insecure-port-disabled
       rationale: This rule is being checked on the Management cluster
-    - name: ocp4-controller-rotate-kubelet-server-certs
-      rationale: This rule is being checked on the Management cluster
     - name: ocp4-controller-secure-port
       rationale: This rule is being checked on the Management cluster
     - name: ocp4-controller-service-account-ca
