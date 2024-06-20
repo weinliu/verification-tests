@@ -1878,4 +1878,176 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		o.Expect(strings.Contains(cmdOutput.String(), "")).Should(o.BeTrue())
 
 	})
+
+	g.It("Author:qiowang-High-46652-Verify LoadBalancer service can be created running at Layer 3 using BGP peering with BFD profile [Serial]", func() {
+		var (
+			workers                     []string
+			ipaddresspools              []string
+			bgpPeers                    []string
+			namespaces                  []string
+			expectedHostPrefixes        []string
+			bgpPassword                 string
+			expectedAddress1            = "10.10.10.1"
+			bfdEnabled                  = "yes"
+			serviceSelectorKey          = "environ"
+			serviceSelectorValue        = [1]string{"Test"}
+			namespaceLabelKey           = "region"
+			namespaceLabelValue         = [1]string{"NA"}
+			BFDProfileTemplate          = filepath.Join(testDataDir, "bfdprofile-template.yaml")
+			metallbCRTemplate           = filepath.Join(testDataDir, "metallb-cr-template.yaml")
+			ipAddresspoolTemplate       = filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+			BGPPeerTemplate             = filepath.Join(testDataDir, "bgppeer-template.yaml")
+			bgpAdvertisementTemplate    = filepath.Join(testDataDir, "bgpadvertisement-template.yaml")
+			loadBalancerServiceTemplate = filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+		)
+
+		exutil.By("0. Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
+		}
+		//Two worker nodes needed to create BGP Advertisement object
+		workerList, getWorkersErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(getWorkersErr).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("These cases can only be run on cluster that has at least two worker nodes")
+		}
+		for i := 0; i < 2; i++ {
+			workers = append(workers, workerList.Items[i].Name)
+		}
+
+		exutil.By("1. Create BFD profile")
+		BFDProfileCR := bfdProfileResource{
+			name:                 "bfd-profile-46652",
+			namespace:            opNamespace,
+			detectMultiplier:     37,
+			echoMode:             true,
+			echoReceiveInterval:  38,
+			echoTransmitInterval: 39,
+			minimumTtl:           10,
+			passiveMode:          true,
+			receiveInterval:      35,
+			transmitInterval:     35,
+			template:             BFDProfileTemplate,
+		}
+		defer removeResource(oc, true, true, "bfdprofile", BFDProfileCR.name, "-n", BFDProfileCR.namespace)
+		o.Expect(createBFDProfileCR(oc, BFDProfileCR)).To(o.BeTrue())
+
+		exutil.By("2. Set up upstream/external BGP router, enable BFD")
+		suffix := getRandomString()
+		bgpRouterNamespaceWithSuffix := bgpRouterNamespace + "-" + suffix
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(bgpRouterNamespaceWithSuffix)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", bgpRouterPodName, "-n", bgpRouterNamespaceWithSuffix, "--ignore-not-found").Execute()
+		bgpPassword = ""
+		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix, bgpPassword, bfdEnabled, BFDProfileCR.name)).To(o.BeTrue())
+
+		exutil.By("3. Create MetalLB CR")
+		metallbCR := metalLBCRResource{
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
+		}
+		defer deleteMetalLBCR(oc, metallbCR)
+		o.Expect(createMetalLBCR(oc, metallbCR, metallbCRTemplate)).To(o.BeTrue())
+
+		exutil.By("4. Create IP addresspool")
+		ns := oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test46652")
+		ipAddresspool := ipAddressPoolResource{
+			name:                      "ipaddresspool-bgp-46652",
+			namespace:                 opNamespace,
+			addresses:                 bgpAddresses[0][:],
+			namespaces:                namespaces,
+			priority:                  10,
+			avoidBuggyIPs:             true,
+			autoAssign:                true,
+			serviceLabelKey:           serviceSelectorKey,
+			serviceLabelValue:         serviceSelectorValue[0],
+			serviceSelectorKey:        serviceSelectorKey,
+			serviceSelectorOperator:   "In",
+			serviceSelectorValue:      serviceSelectorValue[:],
+			namespaceLabelKey:         namespaceLabelKey,
+			namespaceLabelValue:       namespaceLabelValue[0],
+			namespaceSelectorKey:      namespaceLabelKey,
+			namespaceSelectorOperator: "In",
+			namespaceSelectorValue:    namespaceLabelValue[:],
+			template:                  ipAddresspoolTemplate,
+		}
+		defer deleteIPAddressPool(oc, ipAddresspool)
+		result := createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)
+		o.Expect(result).To(o.BeTrue())
+		ipaddresspools = append(ipaddresspools, ipAddresspool.name)
+
+		exutil.By("5. Create BGP Peer")
+		BGPPeerCR := bgpPeerResource{
+			name:          "peer-64500",
+			namespace:     opNamespace,
+			holdTime:      "30s",
+			keepAliveTime: "10s",
+			password:      "",
+			myASN:         myASN,
+			peerASN:       peerASN,
+			peerAddress:   peerIPAddress,
+			template:      BGPPeerTemplate,
+		}
+		defer deleteBGPPeer(oc, BGPPeerCR)
+		o.Expect(createBGPPeerCR(oc, BGPPeerCR)).To(o.BeTrue())
+		bgpPeers = append(bgpPeers, BGPPeerCR.name)
+
+		exutil.By("6. Patch the BGPPeer with BFD Profile")
+		patchBFDProfile := fmt.Sprintf("{\"spec\":{\"bfdProfile\": \"%s\"}}", BFDProfileCR.name)
+		patchResourceAsAdmin(oc, "bgppeer/"+BGPPeerCR.name, patchBFDProfile, "metallb-system")
+
+		exutil.By("7. Create BGP Advertisement")
+		bgpAdvertisement := bgpAdvertisementResource{
+			name:                  "bgp-adv-46652",
+			namespace:             opNamespace,
+			aggregationLength:     32,
+			aggregationLengthV6:   128,
+			communities:           bgpCommunties[:],
+			ipAddressPools:        ipaddresspools[:],
+			nodeSelectorsKey:      "kubernetes.io/hostname",
+			nodeSelectorsOperator: "In",
+			nodeSelectorValues:    workers[:],
+			peer:                  bgpPeers[:],
+			template:              bgpAdvertisementTemplate,
+		}
+		defer deleteBGPAdvertisement(oc, bgpAdvertisement)
+		o.Expect(createBGPAdvertisementCR(oc, bgpAdvertisement)).To(o.BeTrue())
+
+		exutil.By("8. Check BGP Session between speakers and Router")
+		o.Expect(checkBGPSessions(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+
+		exutil.By("9. Check BFD Session is up")
+		o.Expect(checkBFDSessions(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+
+		exutil.By("10. Create a service")
+		svc := loadBalancerServiceResource{
+			name:                          "hello-world-46652",
+			namespace:                     ns,
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceTemplate,
+		}
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)).To(o.BeTrue())
+		statusErr := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s 's External IP for OCP-46652 test case is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())
+		masterNodeList, getMastersErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getMastersErr).NotTo(o.HaveOccurred())
+		result = validateService(oc, masterNodeList[0], svcIP)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("11. Verify route is advertised")
+		expectedHostPrefixes = append(expectedHostPrefixes, expectedAddress1+"/32")
+		o.Expect(verifyHostPrefixAdvertised(oc, bgpRouterNamespaceWithSuffix, expectedHostPrefixes)).To(o.BeTrue())
+	})
 })

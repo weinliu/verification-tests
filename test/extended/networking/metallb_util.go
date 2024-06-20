@@ -776,9 +776,43 @@ func createBFDProfileCR(oc *exutil.CLI, bfdProfile bfdProfileResource) (status b
 		"MINIMUMTTL="+strconv.Itoa(int(bfdProfile.minimumTtl)), "PASSIVEMODE="+strconv.FormatBool(bfdProfile.passiveMode),
 		"RECEIVEINTERVAL="+strconv.Itoa(int(bfdProfile.receiveInterval)), "TRANSMITINTERVAL="+strconv.Itoa(int(bfdProfile.transmitInterval)))
 	if err != nil {
-		e2e.Logf(fmt.Sprintf("Error creating BGP advertisement %v", err))
+		e2e.Logf(fmt.Sprintf("Error creating BFD profile %v", err))
 		return false
 	}
 	return true
 
+}
+func checkBFDSessions(oc *exutil.CLI, ns string) (status bool) {
+	cmd := []string{"-n", ns, bgpRouterPodName, "--", "vtysh", "-c", "show bfd peers brief"}
+	errCheck := wait.Poll(60*time.Second, 120*time.Second, func() (bool, error) {
+		e2e.Logf("Checking status of BFD session")
+		bfdOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
+		o.Expect(bfdOutput).NotTo(o.BeEmpty())
+		if err != nil {
+			return false, nil
+		}
+		if strings.Contains(bfdOutput, "down") {
+			e2e.Logf("Failed to establish BFD session between router and speakers, Trying again")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "Establishing BFD session between router and speakers timed out")
+	e2e.Logf("BFD session established")
+	return true
+}
+func verifyHostPrefixAdvertised(oc *exutil.CLI, ns string, expectedHostPrefixes []string) bool {
+	e2e.Logf("Checking host prefix")
+	cmd := []string{"-n", ns, bgpRouterPodName, "--", "vtysh", "-c", "show ip route bgp"}
+	routeOutput, routeErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
+	o.Expect(routeErr).NotTo(o.HaveOccurred())
+	for _, hostPrefix := range expectedHostPrefixes {
+		if strings.Contains(routeOutput, hostPrefix) {
+			e2e.Logf("Found host prefix %s", hostPrefix)
+		} else {
+			e2e.Logf("Failed to found host prefix %s", hostPrefix)
+			return false
+		}
+	}
+	return true
 }
