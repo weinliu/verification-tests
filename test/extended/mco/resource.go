@@ -183,6 +183,16 @@ func (r *Resource) DeleteOrFail() {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// GetSpecOrFail returns the resource's spec as a JSON string
+func (r Resource) GetSpecOrFail() string {
+	return r.GetOrFail(`{.spec}`)
+}
+
+// SetSpec replace the current resource's spec with the provided JSON string spec
+func (r Resource) SetSpec(spec string) error {
+	return r.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+spec+`}]`)
+}
+
 // Exists returns true if the resource exists and false if not
 func (r *Resource) Exists() bool {
 	_, err := r.Get("{.}")

@@ -290,8 +290,9 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
 
 		var (
-			ms        = NewMachineSetList(oc, MachineAPINamespace).GetAllOrFail()[0]
-			newMsName = ms.GetName() + "-tc-71871"
+			machineConfiguration = GetMachineConfiguration(oc.AsAdmin())
+			ms                   = NewMachineSetList(oc, MachineAPINamespace).GetAllOrFail()[0]
+			newMsName            = ms.GetName() + "-tc-71871"
 
 			alertFiredAfter                    = 30 * time.Minute
 			expectedAlertName                  = "MCCBootImageUpdateError"
@@ -299,6 +300,14 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 			expectedAlertAnnotationDescription = fmt.Sprintf("The boot images of Machineset %s could not be updated. For more details check MachineConfigController pod logs: oc logs -n openshift-machine-config-operator -f $(oc get pod -o name -l='k8s-app=machine-config-controller' -n openshift-machine-config-operator) | grep machine_set", newMsName)
 			expectedAlertAnnotationSummary     = "Triggers when machineset boot images could not be updated"
 		)
+
+		exutil.By("Opt-in boot images update")
+		defer machineConfiguration.SetSpec(machineConfiguration.GetSpecOrFail())
+		o.Expect(
+			machineConfiguration.SetAllManagedBootImagesConfig(),
+		).To(o.Succeed(), "Error configuring ALL managedBootImages in the 'cluster' MachineConfiguration resource")
+		logger.Infof("OK!\n")
+
 		exutil.By("Duplicate an existing machineset")
 		newMs, err := ms.Duplicate(newMsName)
 		defer newMs.Delete()

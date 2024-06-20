@@ -251,15 +251,7 @@ func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
 func (ms MachineSet) SetCoreOsBootImage(coreosBootImage string) error {
 	// the coreOs boot image is stored differently in the machineset spec depending on the platform
 	// currently we only support testing the coresOs boot image in GCP platform.
-	patchCoreOsBootImagePath := ""
-	switch p := exutil.CheckPlatform(ms.oc); p {
-	case AWSPlatform:
-		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/ami/id"
-	case GCPPlatform:
-		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/disks/0/image"
-	default:
-		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP and AWS platforms")
-	}
+	patchCoreOsBootImagePath := GetCoreOSBootImagePath(exutil.CheckPlatform(ms.oc))
 
 	return ms.Patch("json", fmt.Sprintf(`[{"op": "add", "path": "%s", "value": "%s"}]`,
 		patchCoreOsBootImagePath, coreosBootImage))
@@ -430,4 +422,18 @@ func getUserDataIgnitionVersionFromOCPVersion(baseImageVersion string) string {
 		return "3.1.0"
 	}
 	return "3.2.0"
+}
+
+func GetCoreOSBootImagePath(platform string) string {
+	patchCoreOsBootImagePath := ""
+	switch platform {
+	case AWSPlatform:
+		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/ami/id"
+	case GCPPlatform:
+		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/disks/0/image"
+	default:
+		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP and AWS platforms")
+	}
+
+	return patchCoreOsBootImagePath
 }
