@@ -90,7 +90,7 @@ print("{}\n\n".format(content))
 importance = ["Critical", "High", "Medium", "Low"]
 
 patternDescribe = re.compile(r'^\+.*g\.Describe\("([^"]+)"', re.MULTILINE)
-patternIt = re.compile('\n\+\s+g.It\(\".*\"')
+patternIt = re.compile('\+\s+g.It\(\".*\"')
 
 itContent = patternIt.findall(content)
 desContent = patternDescribe.findall(content)
