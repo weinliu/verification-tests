@@ -215,7 +215,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			nonBootableImage = "quay.io/openshifttest/hello-openshift:1.2.0"
 			layeringMcName   = "not-bootable-image-tc54052"
 
-			expectedNDMessage = ".*failed to update OS to " + regexp.QuoteMeta(nonBootableImage+" : error running rpm-ostree rebase") + ".*ostree.bootable.*"
+			expectedNDMessage = ".*failed to update OS to " + regexp.QuoteMeta(nonBootableImage) + ".*error running rpm-ostree rebase.*ostree.bootable.*"
 			expectedNDReason  = "1 nodes are reporting degraded status on sync"
 		)
 
