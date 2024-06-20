@@ -88,12 +88,12 @@ func (pis PinnedImageSet) DeleteAndWait(waitingTime time.Duration) error {
 		return nil
 	}
 
-	err := pis.Delete()
+	pools, err := pis.GetPools()
 	if err != nil {
 		return err
 	}
 
-	pools, err := pis.GetPools()
+	err = pis.Delete()
 	if err != nil {
 		return err
 	}

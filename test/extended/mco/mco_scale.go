@@ -382,7 +382,10 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		initialNumMsNodes := len(ms.GetNodesOrFail())
 
 		logger.Infof("Scaling up machineset %s by %d", ms.GetName(), numNewNodes)
-		defer func() { _ = ms.ScaleTo(initialNumMsNodes) }()
+		defer func() {
+			_ = ms.ScaleTo(initialNumMsNodes)
+			wMcp.waitForComplete()
+		}()
 		o.Expect(ms.ScaleTo(initialNumMsNodes+numNewNodes)).NotTo(
 			o.HaveOccurred(),
 			"Error scaling up MachineSet %s", ms.GetName())
