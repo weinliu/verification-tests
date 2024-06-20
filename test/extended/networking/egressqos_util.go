@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -147,5 +148,49 @@ func startCurlTraffic(oc *exutil.CLI, ns string, pod string, dstip string, dstpo
 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(outPut).Should(o.ContainSubstring("Hello OpenShift"))
+
+}
+
+func chkEgressQosStatus(oc *exutil.CLI, ns string) {
+	nodeList, err := exutil.GetAllNodes(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	outPut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressqos", "default", "-n", ns, "-o", "yaml").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, nodeName := range nodeList {
+		subString := "Ready-In-Zone-" + nodeName
+		o.Expect(strings.Contains(outPut, subString)).To(o.BeTrue())
+	}
+}
+
+func getEgressQosAddSet(oc *exutil.CLI, node string, ns string) []string {
+	//get ovnkube pod of this node
+	podName, err := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", node)
+
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nsFilter := "external-ids:k8s.ovn.org/name=" + ns
+	//cmd := "ovn-nbctl find address_set external-ids:k8s.ovn.org/owner-type=EgressQoS " + nsFilter
+	//output, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", podName, "ovn-controller", cmd)
+	output, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-ovn-kubernetes", podName, "ovn-nbctl", "find", "address_set",
+		"external-ids:k8s.ovn.org/owner-type=EgressQoS", nsFilter).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).NotTo(o.BeEmpty())
+	e2e.Logf("The egressqos addresset output is %v", output)
+
+	re := regexp.MustCompile(`\"(\d+.\d+.\d+.\d+)\"`)
+	addrList := re.FindAllString(output, -1)
+	e2e.Logf("The ip addresses which matched egressqos rules are %v", addrList)
+	return addrList
+}
+
+func chkAddSet(oc *exutil.CLI, podname string, ns string, iplist []string, expect bool) {
+	podIP := getPodIPv4(oc, ns, podname)
+	re := regexp.MustCompile(podIP)
+	ipStr := strings.Join(iplist, " ")
+	matchRes := re.MatchString(ipStr)
+	if expect {
+		o.Expect(matchRes).To(o.BeTrue())
+	} else {
+		o.Expect(matchRes).To(o.BeFalse())
+	}
 
 }
