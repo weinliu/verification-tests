@@ -515,7 +515,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			o.And(
 				o.ContainSubstring("/etc/containers/registries.conf: changes made are safe to skip drain"),
 				o.ContainSubstring("Changes do not require drain, skipping"),
-				o.MatchRegexp("crio (config|service) reloaded successfully!")))
+				o.MatchRegexp(MCDCrioReloadedRegexp)))
 
 		o.Expect(workerNode.GetUptime()).Should(o.BeTemporally("<", startTime),
 			"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", workerNode.GetName())
@@ -562,7 +562,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			o.And(
 				o.ContainSubstring("requesting cordon and drain via annotation to controller"),
 				o.ContainSubstring("drain complete"),
-				o.MatchRegexp("crio (config|service) reloaded successfully")))
+				o.MatchRegexp(MCDCrioReloadedRegexp)))
 
 		o.Expect(workerNode.GetUptime()).Should(o.BeTemporally("<", removeTime),
 			"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", workerNode.GetName())
@@ -719,7 +719,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		// check whether crio.service is reloaded in 4.6+ env
 		if CompareVersions(cv, ">", "4.6") {
 			logger.Infof("cluster version is > 4.6, need to check crio service is reloaded or not")
-			o.Expect(podLogs).Should(o.MatchRegexp("crio (config|service) reloaded successfully"))
+			o.Expect(podLogs).Should(o.MatchRegexp(MCDCrioReloadedRegexp))
 		}
 
 	})
@@ -1455,7 +1455,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(log).Should(o.ContainSubstring("/etc/machine-config-daemon/no-reboot/containers-gpg.pub"))
 		o.Expect(log).Should(o.ContainSubstring("Changes do not require drain, skipping"))
-		o.Expect(log).Should(o.MatchRegexp("crio (config|service) reloaded successfully"))
+		o.Expect(log).Should(o.MatchRegexp(MCDCrioReloadedRegexp))
 
 		o.Expect(workerNode.GetUptime()).Should(o.BeTemporally("<", startTime),
 			"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", workerNode.GetName())
@@ -1490,7 +1490,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(log).Should(o.ContainSubstring("/etc/containers/policy.json"))
 		o.Expect(log).Should(o.ContainSubstring("Changes do not require drain, skipping"))
-		o.Expect(log).Should(o.MatchRegexp("crio (config|service) reloaded successfully"))
+		o.Expect(log).Should(o.MatchRegexp(MCDCrioReloadedRegexp))
 
 		o.Expect(workerNode.GetUptime()).Should(o.BeTemporally("<", startTime),
 			"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", workerNode.GetName())
@@ -3050,7 +3050,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 
 		exutil.By("Check logs to verify that crio service was reloaded.")
-		o.Expect(log).Should(o.MatchRegexp("crio (config|service) reloaded successfully"))
+		o.Expect(log).Should(o.MatchRegexp(MCDCrioReloadedRegexp))
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that the node was NOT rebooted")
@@ -3137,7 +3137,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 
 		exutil.By("Check logs to verify that crio service was reloaded.")
-		o.Expect(log).Should(o.MatchRegexp("crio (config|service) reloaded successfully"))
+		o.Expect(log).Should(o.MatchRegexp(MCDCrioReloadedRegexp))
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that the node was NOT rebooted")
@@ -4189,7 +4189,7 @@ nulla pariatur.`
 			exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
 		).Should(o.And(
 			o.ContainSubstring("Drain was skipped for this image registry update due to the configmap image-registry-override-drain being present. This may not be a safe change"),
-			o.MatchRegexp("crio (config|service) reloaded successfully")),
+			o.MatchRegexp(MCDCrioReloadedRegexp)),
 			"The right actions could not be found in the logs. No drain should happen, no reboot should happen and crio should be restarted")
 		logger.Infof("OK!\n")
 
@@ -4240,7 +4240,7 @@ nulla pariatur.`
 			exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
 		).Should(o.And(
 			o.ContainSubstring("Drain was skipped for this image registry update due to the configmap image-registry-override-drain being present. This may not be a safe change"),
-			o.MatchRegexp("crio (config|service) reloaded successfully")),
+			o.MatchRegexp(MCDCrioReloadedRegexp)),
 			"The right actions could not be found in the logs. No drain should happen, no reboot should happen and crio should be restarted")
 		logger.Infof("OK!\n")
 
@@ -5000,7 +5000,7 @@ func checkMirrorRemovalDefaultEvents(node Node, removeTime time.Time) {
 		o.And(
 			o.ContainSubstring("requesting cordon and drain via annotation to controller"),
 			o.ContainSubstring("drain complete"),
-			o.MatchRegexp("crio (config|service) reloaded successfully")))
+			o.MatchRegexp(MCDCrioReloadedRegexp)))
 
 	o.Expect(node.GetUptime()).Should(o.BeTemporally("<", removeTime),
 		"The node %s must NOT be rebooted after removing the configuration, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
