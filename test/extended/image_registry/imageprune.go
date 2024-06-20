@@ -246,8 +246,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create project limit for image")
 		limitsrc.namespace = oc.Namespace()
 		limitsrc.create(oc)
-		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "system:image-pruner", "-z", "default", "-n", oc.Namespace()).Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "system:image-pruner", "-z", "default", "-n", oc.Namespace()).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", "-z", "default", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", "-z", "default", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get external registry host")
