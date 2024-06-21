@@ -308,7 +308,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-55345-Drop ACL for EgressFirewall should have priority lower than allow ACL despite being last in the chain.", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-ConnectedOnly-High-55345-[FdpOvnOvs] Drop ACL for EgressFirewall should have priority lower than allow ACL despite being last in the chain.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -380,7 +380,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-59709-No duplicate egressfirewall rules in the OVN Northbound database after restart OVN master pod. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-ConnectedOnly-High-59709-[FdpOvnOvs] No duplicate egressfirewall rules in the OVN Northbound database after restart OVN master pod. [Disruptive]", func() {
 		//This is from bug https://issues.redhat.com/browse/OCPBUGS-811
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -874,7 +874,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-61176-High-61177-EgressFirewall should work with namespace that is longer than forth-three characters even after restart. [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-High-61176-High-61177-[FdpOvnOvs] EgressFirewall should work with namespace that is longer than forth-three characters even after restart. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")

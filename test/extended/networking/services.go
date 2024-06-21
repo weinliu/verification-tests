@@ -26,7 +26,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	var oc = exutil.NewCLI("networking-services", exutil.KubeConfigPath())
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-50347-internalTrafficPolicy set Local for pod/node to service access", func() {
+	g.It("Author:huirwang-High-50347-[FdpOvnOvs] internalTrafficPolicy set Local for pod/node to service access", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -129,7 +129,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-50348-internalTrafficPolicy set Local for pod/node to service access with hostnetwork pod backend. [Serial]", func() {
+	g.It("Author:huirwang-High-50348-[FdpOvnOvs] internalTrafficPolicy set Local for pod/node to service access with hostnetwork pod backend. [Serial]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			hostNetworkPodTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")

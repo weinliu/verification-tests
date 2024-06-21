@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:anusaxen-High-55144-Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
+	g.It("Author:anusaxen-NonHyperShiftHOST-NonPreRelease-High-55144-[FdpOvnOvs] Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
 		exutil.By("it's for bug 2042516")
 		var desiredMode string
 		networkType := exutil.CheckNetworkType(oc)
