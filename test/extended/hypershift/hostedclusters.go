@@ -190,6 +190,10 @@ func (h *hostedCluster) getAzureDiskSizeGBByNodePool(nodePool string) string {
 	return doOcpReq(h.oc, OcpGet, false, "nodepools", "-n", h.namespace, nodePool, `-ojsonpath={.spec.platform.azure.diskSizeGB}`)
 }
 
+func (h *hostedCluster) getAzureSubnetId() string {
+	return doOcpReq(h.oc, OcpGet, false, "hc", h.name, "-n", h.namespace, "-o=jsonpath={.spec.platform.azure.subnetID}")
+}
+
 func (h *hostedCluster) pollGetNodePoolReplicas() func() string {
 	return func() string {
 		value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepools", "-n", h.namespace, `-ojsonpath={.items[*].status.replicas}`).Output()

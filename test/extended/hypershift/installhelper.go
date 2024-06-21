@@ -324,38 +324,45 @@ func (receiver *installHelper) extractAzureCredentials() {
 }
 
 func (receiver *installHelper) hyperShiftInstall() {
-	var bashClient = NewCmdClient().WithShowInfo(true)
-	var cmd string
+	cmd := "hypershift install "
+
+	// Build up the platform-related part of the installation command
 	switch receiver.iaasPlatform {
 	case "aws":
 		e2e.Logf("Config AWS Bucket")
 		credsPath := receiver.newAWSS3Client()
 		receiver.createAWSS3Bucket()
-		cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s ", receiver.bucketName, credsPath, receiver.region)
 
-		//publicAndPrivate
+		// OIDC
+		cmd += fmt.Sprintf("--oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s ", receiver.bucketName, credsPath, receiver.region)
+
+		// Private clusters
 		if receiver.installType == PublicAndPrivate || receiver.installType == Private {
 			privateCred := getAWSPrivateCredentials(credsPath)
-			cmd = cmd + fmt.Sprintf(" --private-platform AWS --aws-private-creds %s --aws-private-region=%s ", privateCred, receiver.region)
+			cmd += fmt.Sprintf(" --private-platform AWS --aws-private-creds %s --aws-private-region=%s ", privateCred, receiver.region)
 		}
 
 		if receiver.externalDNS {
-			cmd = cmd + fmt.Sprintf(" --external-dns-provider=aws --external-dns-credentials=%s --external-dns-domain-filter=%s ", receiver.dir+"/credentials", HyperShiftExternalDNS)
+			cmd += fmt.Sprintf(" --external-dns-provider=aws --external-dns-credentials=%s --external-dns-domain-filter=%s ", receiver.dir+"/credentials", HyperShiftExternalDNS)
 		}
-
-		//only for 4.14 or above
-		cmd = cmd + " --enable-defaulting-webhook=true"
-
 	case "azure":
 		e2e.Logf("extract Azure Credentials")
 		receiver.extractAzureCredentials()
-		cmd = "hypershift install --enable-defaulting-webhook=true"
-	default:
 	}
-	o.Expect(cmd).ShouldNot(o.BeEmpty())
+
+	// Ensure the HO's version aligns with the MC's version
+	xyVersion, _, err := exutil.GetClusterVersion(receiver.oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd += fmt.Sprintf("--hypershift-image quay.io/hypershift/hypershift-operator:%s ", xyVersion)
+
+	// Enable defaulting webhook for 4.14 and above
+	cmd += "--enable-defaulting-webhook=true "
+
 	e2e.Logf("run hypershift install command: %s", cmd)
-	_, err := bashClient.Run(cmd).Output()
+	bashClient := NewCmdClient().WithShowInfo(true)
+	_, err = bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
+
 	e2e.Logf("check hyperShift operator install")
 	o.Eventually(func() string {
 		value, er := receiver.oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "hypershift", "--ignore-not-found", "-l", "app=operator", `-ojsonpath='{.items[].status.conditions[?(@.type=="Ready")].status}`).Output()
@@ -430,7 +437,7 @@ func (receiver *installHelper) createAzureHostedClusters(createCluster *createCl
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	e2e.Logf("check azure HostedClusters ready")
 	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
-	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "azure HostedClusters install error")
+	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.BeTrue(), "azure HostedClusters install error")
 	infraID, err := cluster.getInfraID()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	createCluster.InfraID = infraID
@@ -454,7 +461,7 @@ func (receiver *installHelper) createAWSHostedClustersRender(createCluster *crea
 
 	e2e.Logf("check AWS HostedClusters ready")
 	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
-	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "AWS HostedClusters install error")
+	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.BeTrue(), "AWS HostedClusters install error")
 	infraID, err := cluster.getInfraID()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	createCluster.InfraID = infraID

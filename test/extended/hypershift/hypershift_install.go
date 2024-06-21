@@ -44,7 +44,7 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
+	"github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
@@ -532,9 +532,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.hyperShiftInstall()
 
 		exutil.By("create HostedClusters")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		createCluster := installHelper.createClusterAzureCommonBuilder().
 			withName("hypershift-" + caseID).
-			withNodePoolReplicas(2)
+			withNodePoolReplicas(2).
+			withReleaseImage(release)
 		defer installHelper.destroyAzureHostedClusters(createCluster)
 		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
 
@@ -560,28 +563,39 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.hyperShiftInstall()
 
 		exutil.By("create HostedClusters")
+		release, err := exutil.GetReleaseImage(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		createCluster := installHelper.createClusterAzureCommonBuilder().
 			withName("hypershift-" + caseID).
 			withNodePoolReplicas(1).
-			withRootDiskSize(64)
+			withRootDiskSize(64).
+			withReleaseImage(release)
 		defer installHelper.destroyAzureHostedClusters(createCluster)
 		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
 
 		exutil.By("Check the disk size for the nodepool '" + hostedCluster.name + "'")
 		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(hostedCluster.name)).Should(o.ContainSubstring("64"))
 
+		exutil.By("Get subnet ID of the hosted cluster")
+		subnetId := hostedCluster.getAzureSubnetId()
+		e2e.Logf("Found subnet ID = %s", subnetId)
+
 		exutil.By("create nodepool and check root-disk-size (default 120)")
-		nodePool1 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
-			WithName(hostedCluster.name + "-1")
-		installHelper.createAzureNodePool(nodePool1)
-		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool1.Name)).Should(o.ContainSubstring("120"))
+		np1Name := hostedCluster.name + "-1"
+		NewAzureNodePool(np1Name, hostedCluster.name, oc.Namespace()).
+			WithNodeCount(ptr.To(1)).
+			WithSubnetId(subnetId).
+			CreateAzureNodePool()
+		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(np1Name)).Should(o.ContainSubstring("120"))
 
 		exutil.By("create nodepool and check root-disk-size (256)")
-		nodePool2 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
-			WithName(hostedCluster.name + "-2").
-			WithRootDiskSize(256)
-		installHelper.createAzureNodePool(nodePool2)
-		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool2.Name)).Should(o.ContainSubstring("256"))
+		np2Name := hostedCluster.name + "-2"
+		NewAzureNodePool(np2Name, hostedCluster.name, oc.Namespace()).
+			WithNodeCount(ptr.To(1)).
+			WithRootDiskSize(ptr.To(256)).
+			WithSubnetId(subnetId).
+			CreateAzureNodePool()
+		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(np2Name)).Should(o.ContainSubstring("256"))
 
 		exutil.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)

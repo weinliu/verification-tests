@@ -1185,7 +1185,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npWithExistingSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
 		}()
 
-		NewAWSNodePool(npWithExistingSG, hostedcluster.name, hostedcluster.namespace).WithNodeCount(&npCount).WithSecuritygroupID(groupID).CreateAWSNodePool()
+		NewAWSNodePool(npWithExistingSG, hostedcluster.name, hostedcluster.namespace).WithNodeCount(&npCount).WithSecurityGroupID(groupID).CreateAWSNodePool()
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npWithExistingSG), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npWithExistingSG))
 
 		queryJson = fmt.Sprintf(`-ojsonpath={.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].spec.template.spec.additionalSecurityGroups}`, hostedcluster.namespace, npWithExistingSG)
@@ -1651,7 +1651,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			WithNodeCount(&npNumReplicas).
 			WithReleaseImage(releaseImage).
 			WithInstanceType(npInstanceType).
-			WithSecuritygroupID(defaultSgId).
+			WithSecurityGroupID(defaultSgId).
 			CreateAWSNodePool()
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, DefaultTimeout/10).Should(o.BeTrue(), fmt.Sprintf("failed waiting for NodePool/%s to be ready", npName))
 

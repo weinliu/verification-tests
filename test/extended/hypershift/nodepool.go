@@ -8,24 +8,40 @@ import (
 )
 
 type NodePool struct {
-	Name        string `param:"name"`
-	ClusterName string `param:"cluster-name"`
-	Namespace   string `param:"namespace"`
-	//root-disk-size is for azure only, will op it later and move it to azureNodePool
-	RootDiskSize    *int   `param:"root-disk-size"`
+	ClusterName     string `param:"cluster-name"`
+	Name            string `param:"name"`
+	Namespace       string `param:"namespace"`
 	NodeCount       *int   `param:"node-count"`
+	NodeUpgradeType string `param:"node-upgrade-type"`
 	ReleaseImage    string `param:"release-image"`
-	SecuritygroupId string `param:"securitygroup-id"`
 }
 
-func (c *NodePool) WithName(name string) *NodePool {
-	c.Name = name
-	return c
+func NewNodePool(clusterName, name, namespace string) *NodePool {
+	return &NodePool{
+		ClusterName: clusterName,
+		Name:        name,
+		Namespace:   namespace,
+	}
 }
 
-func (c *NodePool) WithRootDiskSize(RootDiskSize int) *NodePool {
-	c.RootDiskSize = &RootDiskSize
-	return c
+func (np *NodePool) WithName(name string) *NodePool {
+	np.Name = name
+	return np
+}
+
+func (np *NodePool) WithNodeCount(nodeCount *int) *NodePool {
+	np.NodeCount = nodeCount
+	return np
+}
+
+func (np *NodePool) WithNodeUpgradeType(nodeUpgradeType string) *NodePool {
+	np.NodeUpgradeType = nodeUpgradeType
+	return np
+}
+
+func (np *NodePool) WithReleaseImage(releaseImage string) *NodePool {
+	np.ReleaseImage = releaseImage
+	return np
 }
 
 type AWSNodePool struct {
@@ -37,7 +53,6 @@ type AWSNodePool struct {
 	RootVolumeType  string `param:"root-volume-type"`
 	SecurityGroupID string `param:"securitygroup-id"`
 	SubnetID        string `param:"subnet-id"`
-	NodeUpgradeType string `param:"node-upgrade-type"`
 }
 
 func NewAWSNodePool(name, clusterName, namespace string) *AWSNodePool {
@@ -57,6 +72,21 @@ func (a *AWSNodePool) WithInstanceProfile(profile string) *AWSNodePool {
 
 func (a *AWSNodePool) WithInstanceType(instanceType string) *AWSNodePool {
 	a.InstanceType = instanceType
+	return a
+}
+
+func (a *AWSNodePool) WithNodeCount(nodeCount *int) *AWSNodePool {
+	a.NodeCount = nodeCount
+	return a
+}
+
+func (a *AWSNodePool) WithNodeUpgradeType(nodeUpgradeType string) *AWSNodePool {
+	a.NodeUpgradeType = nodeUpgradeType
+	return a
+}
+
+func (a *AWSNodePool) WithReleaseImage(releaseImage string) *AWSNodePool {
+	a.ReleaseImage = releaseImage
 	return a
 }
 
@@ -84,32 +114,47 @@ func (a *AWSNodePool) WithSubnetID(subnetID string) *AWSNodePool {
 	return a
 }
 
-func (a *AWSNodePool) WithNodeCount(nodeCount *int) *AWSNodePool {
-	a.NodeCount = nodeCount
-	return a
-}
-
-func (a *AWSNodePool) WithReleaseImage(releaseImage string) *AWSNodePool {
-	a.ReleaseImage = releaseImage
-	return a
-}
-
-func (a *AWSNodePool) WithSecuritygroupID(securitygroupID string) *AWSNodePool {
-	a.SecuritygroupId = securitygroupID
-	return a
-}
-
-func (a *AWSNodePool) WithNodeUpgradeType(nodeUpgradeType string) *AWSNodePool {
-	a.NodeUpgradeType = nodeUpgradeType
-	return a
-}
-
 func (a *AWSNodePool) CreateAWSNodePool() {
 	gCreateNodePool[*AWSNodePool]("aws", a)
 }
 
+type AzureNodePool struct {
+	NodePool
+	RootDiskSize *int   `param:"root-disk-size"`
+	SubnetId     string `param:"subnet-id"`
+}
+
+func NewAzureNodePool(name, clusterName, namespace string) *AzureNodePool {
+	return &AzureNodePool{
+		NodePool: NodePool{
+			Name:        name,
+			Namespace:   namespace,
+			ClusterName: clusterName,
+		},
+	}
+}
+
+func (a *AzureNodePool) WithSubnetId(subnetId string) *AzureNodePool {
+	a.SubnetId = subnetId
+	return a
+}
+
+func (a *AzureNodePool) WithRootDiskSize(rootDiskSize *int) *AzureNodePool {
+	a.RootDiskSize = rootDiskSize
+	return a
+}
+
+func (a *AzureNodePool) WithNodeCount(nodeCount *int) *AzureNodePool {
+	a.NodeCount = nodeCount
+	return a
+}
+
+func (a *AzureNodePool) CreateAzureNodePool() {
+	gCreateNodePool[*AzureNodePool]("azure", a)
+}
+
 // gCreateNodePool creates a nodepool for different platforms,
-// nodepool C should be one kind of nodepools. e.g. *AWSNodePool *azureNodePool
+// nodepool C should be one kind of nodepools. e.g. *AWSNodePool *AzureNodePool
 func gCreateNodePool[C any](platform string, nodepool C) {
 	vars, err := parse(nodepool)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
