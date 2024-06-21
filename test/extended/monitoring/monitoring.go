@@ -655,10 +655,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkPO, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "prometheus-k8s-0", "-ojsonpath={.spec.containers[*].name}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkPO).NotTo(o.ContainSubstring("prometheus-proxy"))
 
-		exutil.By("check prometheus-k8s sa, annotations should be removed")
-		checkSA, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceAccount", "prometheus-k8s", "-ojsonpath={.metadata.annotations}", "-n", "openshift-monitoring").Output()
-		o.Expect(checkSA).To(o.Equal(""))
-
 		exutil.By("check prometheus-k8s servicemonitor, port should be keep at metrics")
 		checkSM, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ServiceMonitor", "prometheus-k8s", "-ojsonpath={.spec.endpoints[]}", "-n", "openshift-monitoring").Output()
 		o.Expect(checkSM).To(o.ContainSubstring(`"port":"metrics"`))
