@@ -358,6 +358,28 @@ func (n Node) GetBootedOsTreeDeployment(asJSON bool) (string, error) {
 
 }
 
+// GetCurrentBootOSImage returns the osImage currently used to boot the node
+func (n Node) GetCurrentBootOSImage() (string, error) {
+	deployment, err := n.GetBootedOsTreeDeployment(true)
+	if err != nil {
+		return "", fmt.Errorf("Error getting the rpm-ostree status value.\n%s", err)
+	}
+
+	containerRef, jerr := JSON(deployment).GetSafe("container-image-reference")
+	if jerr != nil {
+		return "", fmt.Errorf("We cant get 'container-image-reference' from the deployment status. Wrong rpm-ostree status!.\n%s\n%s", jerr, deployment)
+	}
+
+	logger.Infof("Current booted container-image-reference: %s", containerRef)
+
+	imageSplit := strings.SplitN(containerRef.ToString(), ":", 2)
+	if len(imageSplit) != 2 {
+		return "", fmt.Errorf("Wrong container-image-reference in deployment:\n%s\n%s", err, deployment)
+	}
+
+	return imageSplit[1], nil
+}
+
 // IsCordoned returns true if the node is cordoned
 func (n *Node) IsCordoned() (bool, error) {
 	key, err := n.Get(`{.spec.taints[?(@.key=="node.kubernetes.io/unschedulable")].key}`)
@@ -1282,13 +1304,6 @@ func quietRecoverNamespaceRestricted(oc *exutil.CLI, namespace string) error {
 
 	logger.Debugf("Recovering namespace %s from privileged", namespace)
 	return exutil.RecoverNamespaceRestricted(oc, namespace)
-}
-
-// removeDateFromRpmOstreeStatus removes the date section of the rpm-ostree statu
-func removeDateFromRpmOstreeStatus(rpmOstreeStatus string) string {
-	// this regexp matches string with format similar to: (2023-03-16T14:46:22Z)
-	m1 := regexp.MustCompile(`\([\-:\dTZ]*\)`)
-	return m1.ReplaceAllString(rpmOstreeStatus, "")
 }
 
 // BreakRebootInNode break the reboot process in a node, so that errors will happen when the node is rebooted

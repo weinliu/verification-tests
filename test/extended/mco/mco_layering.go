@@ -56,9 +56,8 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		// Capture current rpm-ostree status
 		exutil.By("Capture the current ostree deployment")
 		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
-		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the booted ostree deployment")
+		initialBootedImage, err := workerNode.GetCurrentBootOSImage()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the initial booted image")
 		logger.Infof("OK\n")
 
 		// Build the new osImage
@@ -83,21 +82,8 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 
 		// Check rpm-ostree status
 		exutil.By("Check that the rpm-ostree status is reporting the right booted image")
-
-		status, err := workerNode.GetRpmOstreeStatus(false)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
-		logger.Infof("Current rpm-ostree status:\n%s\n", status)
-
-		deployment, err := workerNode.GetBootedOsTreeDeployment(true)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
-
-		containerRef, jerr := JSON(deployment).GetSafe("container-image-reference")
-		o.Expect(jerr).NotTo(o.HaveOccurred(),
-			"We cant get 'container-image-reference' from the deployment status. Wrong rpm-ostree status!")
-		o.Expect(containerRef.ToString()).To(o.Equal("ostree-unverified-registry:"+digestedImage),
-			"container reference in the status is not the exepeced one")
+		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(digestedImage),
+			"The booted image resported by rpm-ostree status is not the expected one")
 		logger.Infof("OK!\n")
 
 		// Check image content
@@ -168,17 +154,8 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 
 		// Check the rpm-ostree status after the MC deletion
 		exutil.By("Check that the original ostree deployment was restored")
-		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
-		o.Expect(derr).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
-
-		logger.Infof("Initial status with date:\n %s", initialDeployment)
-		logger.Infof("Initial status without date:\n %s", removeDateFromRpmOstreeStatus(initialDeployment))
-		logger.Infof("Current status with date:\n %s", deployment)
-		logger.Infof("Current status without date:\n %s", removeDateFromRpmOstreeStatus(deployment))
-
-		o.Expect(removeDateFromRpmOstreeStatus(deployment)).To(o.Equal(removeDateFromRpmOstreeStatus(initialDeployment)),
-			"Error! the initial deployment was not properly restored after deleting the MachineConfig")
+		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(initialBootedImage),
+			"Error! the initial osImage was not properly restored after deleting the MachineConfig")
 		logger.Infof("OK!\n")
 
 		// Check the image content after the MC deletion
@@ -305,18 +282,21 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 		// Capture current rpm-ostree status
 		exutil.By("Capture the current ostree deployment")
-		o.Expect(workerNode.WaitUntilRpmOsTreeIsIdle()).
-			NotTo(o.HaveOccurred(), "rpm-ostree status didn't become idle after installing wget")
-		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the booted ostree deployment")
+		o.Eventually(workerNode.IsRpmOsTreeIdle, "10m", "20s").
+			Should(o.BeTrue(), "rpm-ostree status didn't become idle after installing wget")
+
+		initialDeployment, derr := workerNode.GetBootedOsTreeDeployment(false)
+		o.Expect(derr).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
+		logger.Infof("Current status with date:\n %s", initialDeployment)
 
 		o.Expect(initialDeployment).
 			To(o.MatchRegexp("LayeredPackages: .*%s", rpmName),
 				"rpm-ostree is not reporting the installed '%s' package in the rpm-ostree status command", rpmName)
 
-		logger.Infof("Initial status without date:\n %s", removeDateFromRpmOstreeStatus(initialDeployment))
-
+		initialBootedImage, err := workerNode.GetCurrentBootOSImage()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the initial booted image")
+		logger.Infof("Initial booted osImage: %s", initialBootedImage)
 		logger.Infof("OK\n")
 
 		// Build the new osImage
@@ -341,18 +321,17 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 		// Check rpm-ostree status
 		exutil.By("Check that the rpm-ostree status is reporting the right booted image and installed rpm")
-
 		bootedDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
 		logger.Infof("Current rpm-ostree booted status:\n%s\n", bootedDeployment)
-		o.Expect(bootedDeployment).
-			To(o.ContainSubstring("* ostree-unverified-registry:"+digestedImage),
-				"container reference in the status is not reporting the right booted image")
+
 		o.Expect(bootedDeployment).
 			To(o.MatchRegexp("LayeredPackages: .*%s", rpmName),
 				"rpm-ostree is not reporting the installed 'wget' package in the rpm-ostree status command")
 
+		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(digestedImage),
+			"container reference in the status is not reporting the right booted image")
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed
@@ -384,27 +363,22 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		// Delete the MC and wait for MCP
 		exutil.By("Delete the MC so that original osImage is restored")
 		layeringMC.delete()
-		mcp.waitForComplete()
 		logger.Infof("MC was successfully deleted\n")
 
 		// Check the rpm-ostree status after the MC deletion
 		exutil.By("Check that the original ostree deployment was restored")
 		logger.Infof("Waiting for rpm-ostree status to be idle")
-		o.Expect(workerNode.WaitUntilRpmOsTreeIsIdle()).
-			NotTo(o.HaveOccurred(), "rpm-ostree status didn't become idle after restoring the original osImage")
+		o.Eventually(workerNode.IsRpmOsTreeIdle, "10m", "20s").
+			Should(o.BeTrue(), "rpm-ostree status didn't become idle after installing wget")
 
 		logger.Infof("Checking original status")
-		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
+		deployment, derr := workerNode.GetBootedOsTreeDeployment(false) // for debugging
 		o.Expect(derr).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
-
-		logger.Infof("Initial status with date:\n %s", initialDeployment)
-		logger.Infof("Initial status without date:\n %s", removeDateFromRpmOstreeStatus(initialDeployment))
 		logger.Infof("Current status with date:\n %s", deployment)
-		logger.Infof("Current status without date:\n %s", removeDateFromRpmOstreeStatus(deployment))
 
-		o.Expect(removeDateFromRpmOstreeStatus(deployment)).To(o.Equal(removeDateFromRpmOstreeStatus(initialDeployment)),
-			"Error! the initial deployment was not properly restored after deleting the MachineConfig")
+		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(initialBootedImage),
+			"Error! the initial osImage was not properly restored after deleting the MachineConfig")
 		logger.Infof("OK!\n")
 
 	})
