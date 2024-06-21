@@ -32,6 +32,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	var ocppreversion = "4.15"
 	var upstream = false
 
+	g.BeforeEach(func() {
+		g.Skip("OperatorSDK is deprecated since OCP 4.16, so skip it")
+	})
+
 	// author: jfan@redhat.com
 	g.It("VMonly-Author:jfan-High-37465-SDK olm improve olm related sub commands", func() {
 
