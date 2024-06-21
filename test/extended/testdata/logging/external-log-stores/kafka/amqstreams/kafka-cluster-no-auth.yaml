@@ -61,6 +61,6 @@ parameters:
 - name: NAMESPACE
   value: "amq-aosqe"
 - name: VERSION
-  value: "3.5.0"
+  value: "3.7.0"
 - name: MESSAGE_VERSION
-  value: "3.5.0"
+  value: "3.7.0"

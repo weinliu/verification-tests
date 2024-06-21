@@ -443,15 +443,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ls.waitForLokiStackToBeReady(oc)
 
+			lokiSecret := resource{"secret", "lokistack-gateway", loggingNS}
+			defer lokiSecret.clear(oc)
+			ls.createSecretFromGateway(oc, lokiSecret.name, lokiSecret.namespace, "")
+
 			g.By("create clusterlogforwarder/instance")
 			lokiGatewaySVC := ls.name + "-gateway-http." + ls.namespace + ".svc:8080"
 			clf := clusterlogforwarder{
 				name:         "instance",
 				namespace:    loggingNS,
-				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "lokistack_gateway_https_no_secret.yaml"),
+				templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "lokistack_gateway_https_secret.yaml"),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "GATEWAY_SVC="+lokiGatewaySVC)
+			clf.create(oc, "GATEWAY_SVC="+lokiGatewaySVC, "SECRET_NAME="+lokiSecret.name)
 
 			// deploy collector pods
 			g.By("deploy collector pods")
@@ -468,6 +472,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
 			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cl.namespace)
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+
+			// create a new secret to include the token and use the new secret in collector pods
+			lokiGatewaySecret := resource{"secret", "lokistack-gateway-secret", loggingNS}
+			defer lokiGatewaySecret.clear(oc)
+			ls.createSecretFromGateway(oc, lokiGatewaySecret.name, lokiGatewaySecret.namespace, bearerToken)
+			clf.update(oc, clf.templateFile, "GATEWAY_SVC="+lokiGatewaySVC, "SECRET_NAME="+lokiGatewaySecret.name)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			//check logs in loki stack
 			g.By("check logs in loki")

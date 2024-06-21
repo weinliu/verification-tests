@@ -972,6 +972,24 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+func (l lokiStack) createSecretFromGateway(oc *exutil.CLI, name, namespace, token string) {
+	dirname := "/tmp/" + oc.Namespace() + getRandomString()
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+l.name+"-gateway-ca-bundle", "-n", l.namespace, "--keys=service-ca.crt", "--confirm", "--to="+dirname).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if token != "" {
+		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=ca-bundle.crt="+dirname+"/service-ca.crt", "--from-literal=token="+token).Execute()
+	} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=ca-bundle.crt="+dirname+"/service-ca.crt").Execute()
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+}
+
 func grantLokiPermissionsToSA(oc *exutil.CLI, rbacName, sa, ns string) {
 	rbac := exutil.FixturePath("testdata", "logging", "lokistack", "loki-rbac.yaml")
 	file, err := processTemplate(oc, "-f", rbac, "-p", "NAME="+rbacName, "-p", "SA="+sa, "NAMESPACE="+ns)

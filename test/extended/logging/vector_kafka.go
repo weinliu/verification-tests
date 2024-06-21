@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			kafka := resource{"kafka", kafkaClusterName, amqNS}
 			kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
 			defer kafka.clear(oc)
-			kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.5.0", "MESSAGE_VERSION=3.5.0")
+			kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.7.0", "MESSAGE_VERSION=3.7.0")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// create topics
 			topicNames := []string{"topic-logging-app", "topic-logging-infra", "topic-logging-audit"}
@@ -362,13 +362,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
 				kafka := resource{"kafka", kafkaClusterName, amq.Namespace}
 				kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
-				//defer kafka.clear(oc)
-				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.5.0", "MESSAGE_VERSION=3.5.0")
+				defer kafka.clear(oc)
+				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.7.0", "MESSAGE_VERSION=3.7.0")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				// create topics
 				topicTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
 				topic := resource{"Kafkatopic", topicName, amq.Namespace}
-				//defer topic.clear(oc)
+				defer topic.clear(oc)
 				err = topic.applyFromTemplate(oc, "-n", topic.namespace, "-f", topicTemplate, "-p", "NAME="+topic.name, "CLUSTER_NAME="+kafka.name, "NAMESPACE="+topic.namespace)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				// wait for kafka cluster to be ready
@@ -378,7 +378,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for _, ns := range []string{amqNs1, amqNs2} {
 				consumerTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "topic-consumer.yaml")
 				consumer := resource{"job", topicName + "-consumer", ns}
-				//defer consumer.clear(oc)
+				defer consumer.clear(oc)
 				err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+topicName, "CLUSTER_NAME="+kafkaClusterName)
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
