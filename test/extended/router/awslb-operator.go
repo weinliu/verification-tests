@@ -48,7 +48,31 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ALBO should", func
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-ROSA-OSD_CCS-ConnectedOnly-LEVEL0-High-51189-Support aws-load-balancer-operator [Serial]", func() {
+	g.It("Author:hongli-ROSA-OSD_CCS-ConnectedOnly-LEVEL0-High-51189-Install aws-load-balancer-operator and controller [Serial]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "awslb")
+			AWSLBController     = filepath.Join(buildPruningBaseDir, "awslbcontroller.yaml")
+			operandCRName       = "cluster"
+			operandPodLabel     = "app.kubernetes.io/name=aws-load-balancer-operator"
+		)
+
+		g.By("Ensure the operartor pod is ready")
+		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorPodLabel)
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the aws-load-balancer-operator pod is not ready"))
+
+		g.By("Create CR AWSLoadBalancerController")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("awsloadbalancercontroller", operandCRName).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", AWSLBController).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if exutil.IsSTSCluster(oc) {
+			patchAlbControllerWithRoleArn(oc, operatorNamespace)
+		}
+		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandPodLabel)
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the aws-load-balancer controller pod is not ready"))
+	})
+
+	// author: hongli@redhat.com
+	g.It("Author:hongli-ROSA-OSD_CCS-ConnectedOnly-Medium-51191-Provision ALB by creating an ingress [Serial]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "awslb")
 			AWSLBController     = filepath.Join(buildPruningBaseDir, "awslbcontroller.yaml")
@@ -92,6 +116,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ALBO should", func
 		output, err := oc.Run("get").Args("ingress").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingress-test"))
-		waitForLoadBalancerProvision(oc, oc.Namespace(), "ingress-test")
+		// ALB provision relies on the number of subnets (should >=2)
+		internalSubnets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("awsloadbalancercontroller/cluster", "-ojsonpath={.status.subnets.internal}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The discovered subnets are: %v", internalSubnets)
+		if len(internalSubnets) > 1 {
+			waitForLoadBalancerProvision(oc, oc.Namespace(), "ingress-test")
+		} else {
+			output, err := oc.Run("describe").Args("ingress", "ingress-test").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Number of subnets doesn't meet the requirement, see event of ingress: %v", output)
+		}
 	})
 })
