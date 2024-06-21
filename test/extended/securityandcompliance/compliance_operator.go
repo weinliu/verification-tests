@@ -46,6 +46,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		scansettingSingleTemplate        string
 		scansettingbindingTemplate       string
 		scansettingbindingSingleTemplate string
+		sccTemplate                      string
 		profilebundleTemplate            string
 		pvExtractPodTemplate             string
 		storageClassTemplate             string
@@ -63,7 +64,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		wordpressRouteYAML               string
 		resourceQuotaYAML                string
 		tprofileHypershfitTemplate       string
-		tprofileSingleVariableTemplate   string
+		tprofileTwoVariablesTemplate     string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
 		serviceYAML                      string
@@ -89,13 +90,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		tprofileManualRuleTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-manual-rule.yaml")
 		tprofileTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile.yaml")
 		tprofileHypershfitTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-hypershift.yaml")
-		tprofileSingleVariableTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-single-variable.yaml")
+		tprofileTwoVariablesTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-two-variables.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
 		scansettingTemplate = filepath.Join(buildPruningBaseDir, "scansetting.yaml")
 		scansettingLimitTemplate = filepath.Join(buildPruningBaseDir, "scansettingLimit.yaml")
 		scansettingSingleTemplate = filepath.Join(buildPruningBaseDir, "scansettingsingle.yaml")
 		scansettingbindingTemplate = filepath.Join(buildPruningBaseDir, "scansettingbinding.yaml")
 		scansettingbindingSingleTemplate = filepath.Join(buildPruningBaseDir, "oc-compliance-scansettingbinding.yaml")
+		sccTemplate = filepath.Join(buildPruningBaseDir, "scc.yaml")
 		profilebundleTemplate = filepath.Join(buildPruningBaseDir, "profilebundle.yaml")
 		pvExtractPodTemplate = filepath.Join(buildPruningBaseDir, "pvextractpod.yaml")
 		storageClassTemplate = filepath.Join(buildPruningBaseDir, "storage_class.yaml")
@@ -3961,18 +3963,21 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-Medium-74227-Add a whitelist of namespaces for rule ocp4-cis-configure-network-policies-namespaces [Serial]", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-Medium-74227-Medium-74437-Test variables ocp4-var-network-policies-namespaces-exempt-regex and ocp4-var-sccs-with-allowed-capabilities-regex [Serial]", func() {
 		var (
-			tprofileD = tailoredProfileDescription{
-				name:      "tp-single-rule-" + getRandomString(),
+			sccName   = "scc-test-" + getRandomString()
+			tprofileD = tailoredProfileTwoVarsDescription{
+				name:      "tp-variables-" + getRandomString(),
 				namespace: subD.namespace,
 				extends:   "ocp4-cis",
-				varname:   "ocp4-var-network-policies-namespaces-exempt-regex",
-				value:     "",
-				template:  tprofileSingleVariableTemplate,
+				varname1:  "ocp4-var-network-policies-namespaces-exempt-regex",
+				value1:    "",
+				varname2:  "ocp4-var-sccs-with-allowed-capabilities-regex",
+				value2:    "",
+				template:  tprofileTwoVariablesTemplate,
 			}
 			ssb = scanSettingBindingDescription{
-				name:            "manual-rule-" + getRandomString(),
+				name:            "variables-test-" + getRandomString(),
 				namespace:       subD.namespace,
 				profilekind1:    "TailoredProfile",
 				profilename1:    tprofileD.name,
@@ -3988,11 +3993,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			g.By("Remove ssb and tailoredprofile... !!!\n")
 			cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name},
 				objectTableRef{"tailoredprofile", subD.namespace, tprofileD.name},
+				objectTableRef{"scc", subD.namespace, sccName},
 				objectTableRef{"ns", nsTest1, nsTest1},
 				objectTableRef{"ns", nsTest2, nsTest2})
 		}()
 
-		g.By("Set value for tprofileD .. !!!\n")
+		g.By("Set value1 for tprofileD .. !!!\n")
 		errGetNs1 := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", nsTest1).Execute()
 		o.Expect(errGetNs1).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, nsTest1, ok, []string{"ns", nsTest1, "-n", nsTest1, "-o=jsonpath={.metadata.name}"}).check(oc)
@@ -4003,14 +4009,23 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		length := len(nonControlNamespacesList)
 		for i, ns := range nonControlNamespacesList {
 			if i == length-1 {
-				tprofileD.value = tprofileD.value + ns
+				tprofileD.value1 = tprofileD.value1 + ns
 			} else {
-				tprofileD.value = tprofileD.value + ns + "|"
+				tprofileD.value1 = tprofileD.value1 + ns + "|"
 			}
 		}
 
+		g.By("Set value2 for tprofileD .. !!!\n")
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sccTemplate, "-p", "NAME="+sccName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defaultValue, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("variable", "-n", subD.namespace, tprofileD.varname2, "-o=jsonpath={.value}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		tprofileD.value2 = defaultValue + "|^" + sccName + "$"
+
 		g.By("Create the tailoredprofile !!!\n")
-		tprofileD.create(oc)
+		errApply := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofileD.template, "-p", "NAME="+tprofileD.name, "NAMESPACE="+tprofileD.namespace,
+			"EXTENDS="+tprofileD.extends, "VARNAME1="+tprofileD.varname1, "VALUE1="+tprofileD.value1, "VARNAME2="+tprofileD.varname2, "VALUE2="+tprofileD.value2)
+		o.Expect(errApply).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", subD.namespace, tprofileD.name,
 			"-o=jsonpath={.status.state}"}).check(oc)
 
@@ -4029,8 +4044,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			tprofileD.name + "-configure-network-policies-namespaces", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
 			"ocp4-cis" + "-configure-network-policies-namespaces", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			tprofileD.name + "-scc-limit-container-allowed-capabilities", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
+			"ocp4-cis" + "-scc-limit-container-allowed-capabilities", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
-		g.By("The compliance operator supports remediation templating by setting custom variables in the tailored profile... !!!\n")
+		g.By("Medium-74227-Medium-74437-Test variables ocp4-var-network-policies-namespaces-exempt-regex and ocp4-var-sccs-with-allowed-capabilities-regex done... !!!\n")
 	})
 
 	// author: pdhamdhe@redhat.com

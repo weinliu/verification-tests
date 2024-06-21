@@ -109,6 +109,17 @@ type tailoredProfileWithoutVarDescription struct {
 	template     string
 }
 
+type tailoredProfileTwoVarsDescription struct {
+	name      string
+	namespace string
+	extends   string
+	varname1  string
+	value1    string
+	varname2  string
+	value2    string
+	template  string
+}
+
 type objectTableRef struct {
 	kind      string
 	namespace string
