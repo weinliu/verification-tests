@@ -6260,7 +6260,7 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: kewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:kewang-High-73880-[Apiserver] Alert KubeAggregatedAPIErrors [Slow] [Disruptive]", func() {
+	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73880-[Apiserver] Alert KubeAggregatedAPIErrors [Slow] [Disruptive]", func() {
 		var (
 			kubeAlert1      = "KubeAggregatedAPIErrors"
 			kubeAlert2      = "KubeAggregatedAPIDown"
@@ -6335,5 +6335,61 @@ EOF`, serverconf, fqdnName)
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(watchAlerts, fmt.Sprintf("%s and %s with %s are not firing or pending", kubeAlert1, kubeAlert2, alertSeverity))
+	})
+
+	// author: kewang@redhat.com
+	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73879-[Apiserver] Alert KubeAPIDown [Slow] [Disruptive]", func() {
+		var (
+			kubeAlert     = "KubeAPIDown"
+			alertSeverity = "critical"
+			timeSleep     = 300
+		)
+
+		exutil.By("1. Drop tcp packet to 6443 port to simulate network failure in all master nodes")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		cmdStr := fmt.Sprintf(
+			`iptables -A OUTPUT -p tcp --dport 6443 -j DROP; 
+			iptables -A INPUT -p tcp --dport 6443 -j DROP; 
+			sleep %v; 
+			iptables -D INPUT -p tcp --dport 6443 -j DROP; 
+			iptables -D OUTPUT -p tcp --dport 6443 -j DROP`,
+			timeSleep,
+		)
+		for _, masterNode := range masterNodes {
+			cmdDump, _, _, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", fmt.Sprintf("nodes/%s", masterNode), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Background()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer cmdDump.Process.Kill()
+		}
+
+		exutil.By("2. Check if the alert " + kubeAlert + " is pending")
+		time.Sleep(30 * time.Second)
+		watchAlert := wait.PollUntilContextTimeout(context.Background(), 6*time.Second, 300*time.Second, true, func(cxt context.Context) (bool, error) {
+			alertOutput, err := GetAlertsByName(oc, kubeAlert)
+			if err != nil || len(alertOutput) == 0 {
+				return false, nil
+			}
+			alertData := gjson.Parse(alertOutput).String()
+			alertItem := gjson.Get(alertData, `data.alerts.#(labels.alertname=="`+kubeAlert+`")#`).String()
+			if len(alertItem) == 0 {
+				return false, nil
+			}
+			e2e.Logf("Alert %s info:：%s", kubeAlert, alertItem)
+			alertState := gjson.Get(alertItem, `#(labels.severity=="`+alertSeverity+`").state`).String()
+			if alertState == "pending" {
+				e2e.Logf("State of the alert %s with Severity %s:：%s", kubeAlert, alertSeverity, alertState)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(watchAlert, fmt.Sprintf("%s with %s is not firing or pending", kubeAlert, alertSeverity))
+
+		// Wait for the cluster to automatically recover and do health check
+		err := clusterOperatorHealthcheck(oc, 360, tmpdir)
+		if err != nil {
+			e2e.Logf("Cluster operators health check failed. Abnormality found in cluster operators.")
+		}
 	})
 })
