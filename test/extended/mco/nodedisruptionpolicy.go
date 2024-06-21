@@ -11,6 +11,7 @@ import (
 // NodeDisruptionPolicy, represents content of machineconfigurations.operator.openshift.io/cluster
 type NodeDisruptionPolicy struct {
 	Resource `json:"-"`
+	Snapshot string    `json:"-"`
 	Files    []*Policy `json:"files,omitempty"`
 	Units    []*Policy `json:"units,omitempty"`
 	SSHKey   *Policy   `json:"sshkey,omitempty"`
@@ -37,7 +38,9 @@ type Service struct {
 
 // NewNodeDisruptionPolicy constructor of NodeDisruptionPolicy
 func NewNodeDisruptionPolicy(oc *exutil.CLI) *NodeDisruptionPolicy {
-	return &NodeDisruptionPolicy{Resource: *NewResource(oc.AsAdmin(), "machineconfigurations.operator.openshift.io", "cluster")}
+	ndp := NodeDisruptionPolicy{Resource: *NewResource(oc.AsAdmin(), "machineconfigurations.operator.openshift.io", "cluster")}
+	ndp.Snapshot = ndp.GetOrFail("{.spec.nodeDisruptionPolicy}")
+	return &ndp
 }
 
 // NewPolicyWithParams constructor of Policy
@@ -115,7 +118,11 @@ func (ndp NodeDisruptionPolicy) IsUpdated() (bool, error) {
 
 // Rollback rollback the spec to the original values, it should be called in defer block
 func (ndp NodeDisruptionPolicy) Rollback() {
-	ndp.Patch("json", fmt.Sprintf(`[{"op": "replace", "path": "/spec", "value": %s}]`, ndp.GetOrFail("{.spec}")))
+	if ndp.Snapshot != "" {
+		ndp.Patch("json", fmt.Sprintf(`[{"op": "replace", "path": "/spec/nodeDisruptionPolicy", "value": %s}]`, ndp.Snapshot))
+	} else {
+		ndp.Patch("json", `[{"op": "remove", "path": "/spec/nodeDisruptionPolicy"}]`)
+	}
 }
 
 // AddFilePolicy add file based policy
