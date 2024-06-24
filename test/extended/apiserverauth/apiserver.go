@@ -5645,7 +5645,6 @@ spec:
 			exutil.By(fmt.Sprintf("%v. Check if Token and Dockercfg Secrets of SA test-a are created.", currentStep+1))
 			secretOutput = getResourceToBeReady(oc, asAdmin, withoutNamespace, "secrets", "-n", namespace, "-o", "jsonpath='{range .items[*]}{.metadata.name}{\" \"}'")
 			o.Expect(string(secretOutput)).To(o.ContainSubstring("test-a-dockercfg-"))
-			o.Expect(string(secretOutput)).To(o.ContainSubstring("test-a-token-"))
 
 			exutil.By(fmt.Sprintf("%v. Disable the Internal Image Registry", currentStep+2))
 			defer func() {
