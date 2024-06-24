@@ -77,5 +77,11 @@ export const userPreferences = {
     cy.get('input#default-language-checkbox').uncheck();
     cy.get('button[id="console.preferredLanguage"]').click();
     return cy.get('button[role="option"]');
+  },
+  chooseDifferentLanguage: (lang: string) => {
+    cy.visit('/user-preferences/language');
+    cy.get('input#default-language-checkbox').uncheck();
+    cy.get('button[id="console.preferredLanguage"]').click();
+    cy.byButtonText(lang).click({force: true});
   }
 }

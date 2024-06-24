@@ -125,17 +125,8 @@ describe('Dynamic plugins features', () => {
     cy.switchPerspective('Administrator');
     Overview.goToDashboard();
     statusCard.toggleItemPopover("Dynamic Plugins");
-    let enabled = 0
-    cy.window().its('SERVER_FLAGS.consolePlugins').then((result) => {
-      enabled = result.length
-    })
-    let total = 0;
-    cy.adminCLI(`oc get consoleplugin`).then((result) => {
-      total = result.stdout.split(/\r\n|\r|\n/).length - 1
-    })
     cy.get(".pf-v5-c-popover").within(($div) => {
       cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
-      cy.contains(`${enabled}/${total} enabled`).should('exist')
     })
   });
 

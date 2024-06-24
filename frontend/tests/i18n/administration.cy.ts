@@ -1,5 +1,6 @@
 import { DetailsPageSelector } from '../../upstream/views/details-page';
 import { listPage, ListPageSelector } from '../../upstream/views/list-page';
+import { userPreferences } from '../../views/user-preferences';
 
 describe('Administration pages pesudo translation', () => {
   before(() => {
@@ -14,6 +15,8 @@ describe('Administration pages pesudo translation', () => {
 
   it('(OCP-35766,yapei,UserInterface) administration pages pesudo translation', {tags: ['e2e','admin','@osd-ccs']}, () => {
     cy.log('cluster settings details pesudo translation');
+    //workaround OCPBUGS-30218 Console’s pseudolocalization not working
+    userPreferences.chooseDifferentLanguage('English');
     cy.visit('/settings/cluster?pseudolocalization=true&lng=en');
     cy.get('.co-cluster-settings__section', {timeout: 40000});
     cy.get('.co-cluster-settings').isPseudoLocalized();
