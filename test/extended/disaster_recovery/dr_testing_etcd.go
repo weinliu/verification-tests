@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-Longduration-NonPreRelease-Critical-23803-Restoring back to a previous cluster state in ocp v4 [Disruptive][Slow]", func() {
+	g.It("Author:yinzhou-LEVEL0-Longduration-NonPreRelease-Critical-23803-Restoring back to a previous cluster state in ocp v4 [Disruptive][Slow]", func() {
 		privateKeyForBastion := os.Getenv("SSH_CLOUD_PRIV_KEY")
 		if privateKeyForBastion == "" {
 			g.Skip("Failed to get the private key, skip the cases!!")
