@@ -245,6 +245,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-68821-OLMv1 Supports Version Ranges during Installation", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                                       = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate                               = filepath.Join(baseDir, "catalog.yaml")
@@ -314,6 +315,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-69196-OLMv1 Supports Version Ranges during clusterextension upgrade", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
@@ -381,6 +383,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-74108-OLM v1 supports legacy upgrade edges", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
@@ -541,6 +544,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-69193-OLMv1 major version zero", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
@@ -650,6 +654,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-70719-OLMv1 Upgrade non-zero major version", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
@@ -761,6 +766,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-70723-OLMv1 downgrade version", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
