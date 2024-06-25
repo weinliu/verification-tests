@@ -14,6 +14,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1055,11 +1056,11 @@ func checkAlert(oc *exutil.CLI, alertString string, timeout time.Duration) {
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	url := getAlertManager(oc)
 	alertName := "NonCompliant"
-	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq '.data[] | select(.labels.alertname == \"%s\")'", token, url, alertName)
+	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts", token, url)
 	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
 		alerts, err := exec.Command("bash", "-c", alertCMD).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString(alertString, string(alerts)); matched {
+		if strings.Contains(gjson.Get(string(alerts), "data.#.labels.alertname").String(), alertName) && strings.Contains(gjson.Get(string(alerts), "data.#(labels.alertname="+alertName+").annotations.description").String(), alertString) {
 			return true, nil
 		}
 		return false, nil
