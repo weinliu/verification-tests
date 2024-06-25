@@ -307,7 +307,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("MicroShiftOnly-Author:weliang-Medium-60550-Pod should be accessible via node ip and host port", func() {
+	g.It("Author:weliang-Medium-60550-[MicroShiftOnly] Pod should be accessible via node ip and host port", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "hostport-pod.yaml")
@@ -1234,7 +1234,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-72796-Multus CNI bridge with host-local", func() {
+	g.It("Author:weliang-Medium-72796-[MicroShiftOnly] Multus CNI bridge with host-local. [Disruptive]", func() {
 		var (
 			nadName              = "bridge-host-local"
 			caseID               = "72796"
@@ -1318,7 +1318,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv6, interfaceName, pod2Name)
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-72797-Multus CNI bridge with static", func() {
+	g.It("Author:weliang-Medium-72797-[MicroShiftOnly] Multus CNI bridge with static. [Disruptive]", func() {
 		var (
 			nadName              = "bridge-static"
 			caseID               = "72797"
@@ -1374,7 +1374,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::100")).Should(o.BeTrue())
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-72798-Multus CNI bridge with dhcp", func() {
+	g.It("Author:weliang-Medium-72798-[MicroShiftOnly] Multus CNI bridge with dhcp. [Disruptive]", func() {
 		var (
 			nadName              = "bridge-dhcp"
 			caseID               = "72798"
@@ -1454,7 +1454,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv6, interfaceName, pod2Name)
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-72799-Multus CNI macvlan/bridge with host-local", func() {
+	g.It("Author:weliang-Medium-72799-[MicroShiftOnly] Multus CNI macvlan/bridge with host-local. [Disruptive]", func() {
 		var (
 			nadName              = "macvlan-bridge-host-local"
 			caseID               = "72799"
@@ -1538,7 +1538,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv6, interfaceName, pod2Name)
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-72904-Multus CNI macvlan/bridge with static", func() {
+	g.It("Author:weliang-Medium-72904-[MicroShiftOnly] Multus CNI macvlan/bridge with static. [Disruptive]", func() {
 		var (
 			nadName              = "macvlan-bridge-static"
 			caseID               = "72904"
@@ -1594,7 +1594,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::100")).Should(o.BeTrue())
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73082-Multus CNI macvlan/private with host-local", func() {
+	g.It("Author:weliang-Medium-73082-[MicroShiftOnly] Multus CNI macvlan/private with host-local. [Disruptive]", func() {
 		var (
 			nadName              = "macvlan-private-host-local"
 			caseID               = "73082"
@@ -1674,7 +1674,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod2Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73083-Multus CNI macvlan/private with static", func() {
+	g.It("Author:weliang-Medium-73083-[MicroShiftOnly] Multus CNI macvlan/private with static. [Disruptive]", func() {
 		var (
 			nadName              = "macvlan-private-static"
 			caseID               = "73083"
@@ -1730,7 +1730,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::100")).Should(o.BeTrue())
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73084-Multus CNI macvlan/vepa with static", func() {
+	g.It("Author:weliang-Medium-73084-[MicroShiftOnly] Multus CNI macvlan/vepa with static. [Disruptive]", func() {
 		var (
 			nadName              = "macvlan-vepa-static"
 			caseID               = "73084"
@@ -1786,7 +1786,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::100")).Should(o.BeTrue())
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73085-Multus CNI macvlan/vepa with host-local", func() {
+	g.It("Author:weliang-Medium-73085-[MicroShiftOnly] Multus CNI macvlan/vepa with host-local. [Disruptive]", func() {
 		var (
 			nadName              = "macvlan-vepa-host-local"
 			caseID               = "73085"
@@ -1866,7 +1866,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod2Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73086-Multus CNI ipvlan/l2 with static", func() {
+	g.It("Author:weliang-Medium-73086-[MicroShiftOnly] Multus CNI ipvlan/l2 with static. [Disruptive]", func() {
 		var (
 			nadName              = "ipvlan-l2-static"
 			caseID               = "73086"
@@ -1924,7 +1924,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::100")).Should(o.BeTrue())
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73087-Multus CNI ipvlan/l2 with host-local", func() {
+	g.It("Author:weliang-Medium-73087-[MicroShiftOnly] Multus CNI ipvlan/l2 with host-local. [Disruptive]", func() {
 		var (
 			nadName              = "ipvlan-l2-host-local"
 			caseID               = "73087"
@@ -2008,7 +2008,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv6, interfaceName, pod2Name)
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73098-Multus CNI ipvlan/l3 with host-local. [Disruptive]", func() {
+	g.It("Author:weliang-Medium-73098-[MicroShiftOnly] Multus CNI ipvlan/l3 with host-local. [Disruptive]", func() {
 		var (
 			nadName              = "ipvlan-l3-host-local"
 			caseID               = "73098"
@@ -2092,7 +2092,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv6, interfaceName, pod2Name)
 	})
 
-	g.It("MicroShiftOnly-Author:weliang-Medium-73099-Multus CNI ipvlan/l3 with static. [Disruptive]", func() {
+	g.It("Author:weliang-Medium-73099-[MicroShiftOnly] Multus CNI ipvlan/l3 with static. [Disruptive]", func() {
 		var (
 			nadName              = "ipvlan-l3-static"
 			caseID               = "73099"
