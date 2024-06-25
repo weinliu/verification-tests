@@ -1125,9 +1125,10 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.By("Check the container_network* metrics report well")
 		podNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", livenessProbeTermP68184.name, "-o=jsonpath={.spec.nodeName}", "-n", livenessProbeTermP68184.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("podNode is :%v", podNode)
 		var cmdOut1 string
 		var cmdOut2 string
-		waitErr := wait.Poll(30*time.Second, 1*time.Minute, func() (bool, error) {
+		waitErr := wait.Poll(20*time.Second, 70*time.Second, func() (bool, error) {
 			cmd1 := fmt.Sprintf(`oc get --raw /api/v1/nodes/%v/proxy/metrics/cadvisor  | grep container_network_transmit | grep %v`, podNode, livenessProbeTermP68184.name)
 			cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
