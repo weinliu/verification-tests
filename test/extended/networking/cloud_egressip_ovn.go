@@ -2434,6 +2434,331 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-ConnectedOnly-Longduration-NonPreRelease-High-67489-Egress traffic works with ANP, BANP and NP with Egress IP by cidrSelector.[Serial][Disruptive]", func() {
+		var (
+			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
+			egressIP2Template           = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			pingPodTemplate             = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			testPodFile                 = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			banpTemplate                = filepath.Join(buildPruningBaseDir+"/adminnetworkpolicy", "banp-single-rule-cidr-template.yaml")
+			anpTemplate                 = filepath.Join(buildPruningBaseDir+"/adminnetworkpolicy", "anp-multi-rule-cidr-template.yaml")
+			ipBlockEgressTemplateSingle = filepath.Join(buildPruningBaseDir+"/networkpolicy/ipblock", "ipBlock-egress-single-CIDR-template.yaml")
+			matchLabelKey               = "kubernetes.io/metadata.name"
+			cidrs                       []string
+			dstHost                     = nslookDomainName("ifconfig.me")
+		)
+
+		// egressIP to two external CIDRs will be verified in this test, will use ipecho method to verify first one, tcpdump method to verify 2nd one, ipecho capability on the cluster is required
+		if flag != "ipecho" {
+			g.Skip("Test prerequirement was not fullfilled, skip the case!!")
+		}
+
+		exutil.By("0. Two external network CIDRs will be used to test egressIP, one is CIDR for ipecho server, another is the CIDR for test runner \n")
+		ipechoServerNetwork := strings.Split(ipEchoURL, ":")[0] + "/32"
+		cidrs = append(cidrs, ipechoServerNetwork)
+		cidrs = append(cidrs, dstHost+"/32")
+		e2e.Logf("\n external network CIDRs to be tested: %s\n", cidrs)
+
+		exutil.By("1. Get schedulale nodes, label one node as egress assignable node\n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
+
+		exutil.By("2.1. Create an egressip object \n")
+		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+
+		egressip1 := egressIPResource1{
+			name:          "egressip-67489",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "company",
+			nsLabelValue:  "redhat",
+			podLabelKey:   "color",
+			podLabelValue: "green",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+		o.Expect(egressIPMaps1[0]["node"]).Should(o.Equal(nodeList.Items[0].Name))
+		o.Expect(egressIPMaps1[0]["egressIP"]).Should(o.Equal(freeIPs[0]))
+
+		exutil.By("2.2 Obtain a namespace as subjectNS, label subjectNS to match namespaceSelector in egressIP object \n")
+		subjectNS := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", subjectNS, "company-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", subjectNS, "company=redhat").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.3 Create a ping pod in subjectNS, label the pod to match podSelector in egressIP object \n")
+		pingpod := pingPodResource{
+			name:      "hello-pod",
+			namespace: subjectNS,
+			template:  pingPodTemplate,
+		}
+		pingpod.createPingPod(oc)
+		waitPodReady(oc, pingpod.namespace, pingpod.name)
+		defer exutil.LabelPod(oc, subjectNS, pingpod.name, "color-")
+		err = exutil.LabelPod(oc, subjectNS, pingpod.name, "color=green")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create a second namespace as targetNS, create a test pod in the targetNS \n")
+		oc.SetupProject()
+		targetNS := oc.Namespace()
+		createResourceFromFile(oc, targetNS, testPodFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=1", "-n", targetNS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, targetNS, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "Test pod with label name=test-pods not ready")
+		testpods := getPodName(oc, targetNS, "name=test-pods")
+
+		exutil.By("Before applying BANP/NP/ANP, check healthiness of egress traffic to two external CIDRS, as well as to targetedNS on pod2pod and pod2svc \n")
+		exutil.By("3.1 Verify egress traffic to external CIDR0 should be allowed \n")
+		verifyEgressIPWithIPEcho(oc, subjectNS, pingpod.name, ipEchoURL, true, freeIPs[0])
+
+		exutil.By("3.2 Verify egress traffic to external CIDR1 should be allowed \n")
+		exutil.By("Create tcpdumpDS using external CIDR1 \n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump", "true")
+		primaryInf, infErr := getSnifPhyInf(oc, nodeList.Items[0].Name)
+		o.Expect(infErr).NotTo(o.HaveOccurred())
+		defer deleteTcpdumpDS(oc, "tcpdump-67489", subjectNS)
+		tcpdumpDS, snifErr := createSnifferDaemonset(oc, subjectNS, "tcpdump-67489", "tcpdump", "true", dstHost, primaryInf, 80)
+		o.Expect(snifErr).NotTo(o.HaveOccurred())
+		egressErr := verifyEgressIPinTCPDump(oc, pingpod.name, subjectNS, freeIPs[0], dstHost, subjectNS, tcpdumpDS.name, true)
+		o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s in tcpdump", freeIPs[0]))
+
+		exutil.By("3.3. Verify pod2pod and pod2svc egress traffic to targetNS should be allowed \n")
+		CurlPod2PodPass(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcPass(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("4. Apply BANP with single rule to deny egress traffic to cidr 0.0.0.0/0 \n")
+		banp := singleRuleCIDRBANPPolicyResource{
+			name:       "default",
+			subjectKey: matchLabelKey,
+			subjectVal: subjectNS,
+			ruleName:   "egress-to-cidr",
+			ruleAction: "Deny",
+			cidr:       "0.0.0.0/0",
+			template:   banpTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banp.name)
+		banp.createSingleRuleCIDRBANP(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banp.name)).To(o.BeTrue())
+
+		banpOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baselineadminnetworkpolicy.policy.networking.k8s.io/default", "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nBANP egress rule after step 4: %s\n", banpOutput)
+
+		exutil.By("4.1. With BANP in place, verify egress traffic to external CIDR0 should be blocked \n")
+		sourceIP, err := execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..2}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).To(o.BeEmpty())
+
+		exutil.By("4.2. With BANP in place, Verify egress traffic to external CIDR1 should be blocked \n")
+		egressipErr := wait.Poll(12*time.Second, 60*time.Second, func() (bool, error) {
+			randomStr, url := getRequestURL(dstHost)
+			_, err := execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..2}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if checkMatchedIPs(oc, subjectNS, tcpdumpDS.name, randomStr, egressIPMaps1[0]["egressIP"], false) != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to verify egress traffic to external CIDR1 is blocked:%v", egressipErr))
+
+		exutil.By("4.3. With BANP in place, verify pod2pod and pod2svc egress traffic to targetNS should be blocked \n")
+		CurlPod2PodFail(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcFail(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("5. Update BANP rule to deny the network to external CIDR0 only\n")
+		patchBANP := fmt.Sprintf("[{\"op\": \"replace\", \"path\": \"/spec/egress/0/to/0/networks/0\", \"value\": %s}]", cidrs[0])
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy.policy.networking.k8s.io/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		banpOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("baselineadminnetworkpolicy.policy.networking.k8s.io/default", "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n BANP egress rule after update of step 5: %s\n", banpOutput)
+
+		exutil.By("5.1. After BANP update, verify egress traffic to external CIDR0 should be blocked \n")
+		sourceIP, err = execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..2}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).To(o.BeEmpty())
+
+		exutil.By("5.2. After BANP update, verify egress traffic to external CIDR1 should be allowed \n")
+		egressErr = verifyEgressIPinTCPDump(oc, pingpod.name, subjectNS, freeIPs[0], dstHost, subjectNS, tcpdumpDS.name, true)
+		o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s in tcpdump", freeIPs[0]))
+
+		exutil.By("5.3. After BANP update, verify pod2pod and pod2svc egress traffic should be allowed \n")
+		CurlPod2PodPass(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcPass(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("6. Create a NP to Allow to external CIDR0 \n")
+		np := ipBlockCIDRsSingle{
+			name:      "ipblock-single-cidr-egress",
+			template:  ipBlockEgressTemplateSingle,
+			cidr:      cidrs[0],
+			namespace: subjectNS,
+		}
+		np.createipBlockCIDRObjectSingle(oc)
+		output, err = oc.AsAdmin().Run("get").Args("networkpolicy", "-n", subjectNS).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("ipblock-single-cidr-egress"))
+
+		exutil.By("6.1. With BANP+NP in place, verify egress traffic to external CIDR0 should be allowed \n")
+		verifyEgressIPWithIPEcho(oc, subjectNS, pingpod.name, ipEchoURL, true, freeIPs[0])
+
+		exutil.By("6.2. With BANP+NP in place, verify egress traffic to external CIDR1 should be blocked \n")
+		egressipErr = wait.Poll(12*time.Second, 60*time.Second, func() (bool, error) {
+			randomStr, url := getRequestURL(dstHost)
+			_, err := execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..2}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if checkMatchedIPs(oc, subjectNS, tcpdumpDS.name, randomStr, egressIPMaps1[0]["egressIP"], false) != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to verify traffic to external CIDR1:%v", egressipErr))
+
+		exutil.By("6.3. With BANP+NP in place, verify pod2pod and pod2svc egress traffic should be blocked \n")
+		CurlPod2PodFail(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcFail(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("7. Apply ANP with 2 rules, first rule to deny egress to external CIDR0, 2nd rule to allow egress to external CIDR1 \n")
+		anp := MultiRuleCIDRANPPolicyResource{
+			name:        "anp-67489",
+			subjectKey:  matchLabelKey,
+			subjectVal:  subjectNS,
+			priority:    10,
+			ruleName1:   "egress-to-cidr0",
+			ruleAction1: "Deny",
+			cidr1:       cidrs[0],
+			ruleName2:   "egress-to-cidr1",
+			ruleAction2: "Allow",
+			cidr2:       cidrs[1],
+			template:    anpTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anp.name)
+		anp.createMultiRuleCIDRANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anp.name)).To(o.BeTrue())
+
+		anpOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy.policy.networking.k8s.io/"+anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP egress rule after step 7: %s\n", anpOutput)
+
+		exutil.By("7.1 With BANP+NP+ANP, verify egress traffic to external CIDR0 should be blocked \n")
+		sourceIP, err = execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..2}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).To(o.BeEmpty())
+
+		exutil.By("7.2. With BANP+NP+ANP, verify egress traffic to external CIDR1 should be allowed \n")
+		egressErr = verifyEgressIPinTCPDump(oc, pingpod.name, subjectNS, freeIPs[0], dstHost, subjectNS, tcpdumpDS.name, true)
+		o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s in tcpdump", freeIPs[0]))
+
+		exutil.By("7.3. With BANP+NP+ANP, verify pod2pod and pod2svc egress traffic should be blocked due to NP \n")
+		CurlPod2PodFail(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcFail(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("8. Flip action for ANP 1st rule from Deny to Allow, flip action for ANP 2nd rule from Allow to Deny \n")
+		patchANP := `[{"op": "replace", "path": "/spec/egress/0/action", "value": "Allow"},{"op": "replace", "path": "/spec/egress/1/action", "value": "Deny"}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy/"+anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy.policy.networking.k8s.io/"+anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP egress rule after step 8: %s\n", anpOutput)
+
+		exutil.By("8.1 After flipping ANP rules, verify egress traffic to external CIDR0 should be allowed \n")
+		verifyEgressIPWithIPEcho(oc, subjectNS, pingpod.name, ipEchoURL, true, freeIPs[0])
+
+		exutil.By("8.2. After flipping ANP rules, verify egress traffic to external CIDR1 should be blocked \n")
+		egressipErr = wait.Poll(12*time.Second, 60*time.Second, func() (bool, error) {
+			randomStr, url := getRequestURL(dstHost)
+			_, err := execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..2}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if checkMatchedIPs(oc, subjectNS, tcpdumpDS.name, randomStr, egressIPMaps1[0]["egressIP"], false) != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to verify egress traffic to external CIDR1 is blocked:%v", egressipErr))
+
+		exutil.By("8.3. After flipping ANP rules, verify pod2pod and pod2svc egress traffic should be denied due to NP \n")
+		CurlPod2PodFail(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcFail(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("9. Update ANP first rule to Allow 0.0.0.0/0 \n")
+		patchANP = `[{"op": "replace", "path": "/spec/egress/0/to/0/networks/0", "value": "0.0.0.0/0"}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy/"+anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy.policy.networking.k8s.io/"+anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP egress rule after step 9: %s\n", anpOutput)
+
+		exutil.By("9.1. After ANP first rule cidr update, verify egress traffic to external CIDR0 should be allowed \n")
+		verifyEgressIPWithIPEcho(oc, subjectNS, pingpod.name, ipEchoURL, true, freeIPs[0])
+
+		exutil.By("9.2. After ANP first rule cidr update, verify egress traffic to external CIDR1 should be allowed \n")
+		egressErr = verifyEgressIPinTCPDump(oc, pingpod.name, subjectNS, freeIPs[0], dstHost, subjectNS, tcpdumpDS.name, true)
+		o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s in tcpdump", freeIPs[0]))
+
+		exutil.By("9.3. After ANP first rule cidr update, verify pod2pod and pod2svc egress traffic should be allowed \n")
+		CurlPod2PodPass(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcPass(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("10. Flip action for ANP first rule from Allow to Pass\n")
+		patchANP = `[{"op": "replace", "path": "/spec/egress/0/action", "value": "Pass"}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy/"+anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpOutput, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy.policy.networking.k8s.io/"+anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP egress rule after step 10: %s\n", anpOutput)
+
+		exutil.By("10.1. Verify egress traffic to external CIDR0 should be allowed because CIDR0 is in allowed ipvlock of NP \n")
+		verifyEgressIPWithIPEcho(oc, subjectNS, pingpod.name, ipEchoURL, true, freeIPs[0])
+
+		exutil.By("10.2. Verify egress traffic to external CIDR1 should be blocked because CIDR1 is not in allowed ipblock of NP \n")
+		egressipErr = wait.Poll(12*time.Second, 60*time.Second, func() (bool, error) {
+			randomStr, url := getRequestURL(dstHost)
+			_, err := execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..2}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if checkMatchedIPs(oc, subjectNS, tcpdumpDS.name, randomStr, egressIPMaps1[0]["egressIP"], false) != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to verify egress traffic to external CIDR1 is blocked:%v", egressipErr))
+
+		exutil.By("10.3. Verify pod2pod and pod2svc egress traffic should be denied due to NP \n")
+		CurlPod2PodFail(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcFail(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+		exutil.By("11. Delete network policy created in step 6\n")
+		removeResource(oc, true, true, "networkpolicy", np.name, "-n", np.namespace)
+
+		exutil.By("11.1. After deleting NP, verify egress traffic to external CIDR0 should be blocked \n")
+		sourceIP, err = execCommandInSpecificPod(oc, subjectNS, pingpod.name, "for i in {1..3}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).To(o.BeEmpty())
+
+		exutil.By("11.2. After deleting NP, verify egress traffic to external CIDR1 should be allowed \n")
+		egressErr = verifyEgressIPinTCPDump(oc, pingpod.name, subjectNS, freeIPs[0], dstHost, subjectNS, tcpdumpDS.name, true)
+		o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s in tcpdump", freeIPs[0]))
+
+		exutil.By("11.3. After deleting NP, verify pod2pod and pod2svc egress traffic should be allowed \n")
+		CurlPod2PodPass(oc, subjectNS, pingpod.name, targetNS, testpods[0])
+		CurlPod2SvcPass(oc, subjectNS, targetNS, pingpod.name, "test-service")
+
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {

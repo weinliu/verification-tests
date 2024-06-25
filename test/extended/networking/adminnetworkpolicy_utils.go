@@ -170,6 +170,22 @@ type singleRuleCIDRANPPolicyResource struct {
 	template   string
 }
 
+// Struct to create ANP with multiple rules either ingress or egress direction
+// Match cidr
+type MultiRuleCIDRANPPolicyResource struct {
+	name        string
+	subjectKey  string
+	subjectVal  string
+	priority    int32
+	ruleName1   string
+	ruleAction1 string
+	cidr1       string
+	ruleName2   string
+	ruleAction2 string
+	cidr2       string
+	template    string
+}
+
 func (banp *singleRuleBANPPolicyResource) createSingleRuleBANP(oc *exutil.CLI) {
 	exutil.By("Creating single rule Baseline Admin Network Policy from template")
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
@@ -326,6 +342,22 @@ func (anp *singleRuleCIDRANPPolicyResource) createSingleRuleCIDRANP(oc *exutil.C
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", anp.template, "-p", "NAME="+anp.name,
 			"SUBJECTKEY="+anp.subjectKey, "SUBJECTVAL="+anp.subjectVal,
 			"PRIORITY="+strconv.Itoa(int(anp.priority)), "RULENAME="+anp.ruleName, "RULEACTION="+anp.ruleAction, "CIDR="+anp.cidr)
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Admin Network Policy CR %v", anp.name))
+}
+
+func (anp *MultiRuleCIDRANPPolicyResource) createMultiRuleCIDRANP(oc *exutil.CLI) {
+	exutil.By("Creating multi-rules Admin Network Policy from template")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", anp.template, "-p", "NAME="+anp.name,
+			"SUBJECTKEY="+anp.subjectKey, "SUBJECTVAL="+anp.subjectVal,
+			"PRIORITY="+strconv.Itoa(int(anp.priority)), "RULENAME1="+anp.ruleName1, "RULEACTION1="+anp.ruleAction1, "CIDR1="+anp.cidr1,
+			"RULENAME2="+anp.ruleName2, "RULEACTION2="+anp.ruleAction2, "CIDR2="+anp.cidr2)
 		if err1 != nil {
 			e2e.Logf("Error creating resource:%v, and trying again", err1)
 			return false, nil
