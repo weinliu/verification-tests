@@ -4360,8 +4360,8 @@ desiredState:
 			}
 			nodeUpdate, err := node.DebugNodeWithChroot("grep", "-E", cmd, file) // To get nodeUpdate frequencies value
 			o.Expect(err).NotTo(o.HaveOccurred(), "Error getting nodeupdate frequencies for %s", node.GetName())
-			o.Expect(nodeUpdate).To(o.ContainSubstring(`"nodeStatusUpdateFrequency": "10s"`), "Value for 'nodeStatusUpdateFrequency' is not same as expected.")
-			o.Expect(nodeUpdate).To(o.ContainSubstring(`"nodeStatusReportFrequency": "5m0s"`), "Value for 'nodeStatusReportFrequency' is not same as expected.")
+			o.Expect(nodeUpdate).To(o.Or(o.ContainSubstring(`"nodeStatusUpdateFrequency": "10s"`), o.ContainSubstring(`nodeStatusUpdateFrequency: 10s`)), "Value for 'nodeStatusUpdateFrequency' is not same as expected.")
+			o.Expect(nodeUpdate).To(o.Or(o.ContainSubstring(`"nodeStatusReportFrequency": "5m0s"`), o.ContainSubstring(`nodeStatusReportFrequency: 5m0s`)), "Value for 'nodeStatusReportFrequency' is not same as expected.")
 			logger.Infof("node/%s %s", node, nodeUpdate)
 		}
 	})
