@@ -403,7 +403,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		maxPods, err := workerNode.DebugNodeWithChroot("cat", "/etc/kubernetes/kubelet.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(maxPods).Should(o.ContainSubstring("\"maxPods\": 500"))
+		o.Expect(maxPods).Should(o.Or(o.ContainSubstring("\"maxPods\": 500"), o.ContainSubstring("maxPods: 500")))
 		logger.Infof("Max pods are verified in the worker node!")
 	})
 
@@ -4047,7 +4047,7 @@ nulla pariatur.`
 		o.Expect(
 			NewRemoteFile(wMcp.GetNodesOrFail()[0], kubeletConfPath).Read(),
 		).To(
-			HaveContent(o.ContainSubstring(`"kubeAPIBurst": 7000`)),
+			HaveContent(o.Or(o.ContainSubstring(`"kubeAPIBurst": 7000`), o.ContainSubstring(`kubeAPIBurst: 7000`))),
 		)
 		logger.Infof("OK!\n")
 
@@ -4055,8 +4055,8 @@ nulla pariatur.`
 		o.Expect(
 			NewRemoteFile(infraMcp.GetNodesOrFail()[0], kubeletConfPath).Read(),
 		).To(o.And(
-			HaveContent(o.ContainSubstring(`"kubeAPIBurst": 9000`)),
-			o.Not(HaveContent(o.ContainSubstring(`"kubeAPIBurst": 8000`))),
+			HaveContent(o.Or(o.ContainSubstring(`"kubeAPIBurst": 9000`), o.ContainSubstring(`kubeAPIBurst: 9000`))),
+			o.Not(HaveContent(o.Or(o.ContainSubstring(`"kubeAPIBurst": 8000`), o.ContainSubstring(`kubeAPIBurst: 8000`)))),
 		))
 		logger.Infof("OK!\n")
 	})
