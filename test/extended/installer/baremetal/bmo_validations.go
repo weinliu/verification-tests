@@ -25,8 +25,8 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 	// author: jhajyahy@redhat.com
 	g.It("Author:jhajyahy-Medium-66490-Allow modification of BMC address after installation [Disruptive]", func() {
 		g.By("Running oc patch bmh -n openshift-machine-api master-00")
-		bmhName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[0].metadata.name}").Output()
-		bmcAddressOrig, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[2].spec.bmc.address}").Output()
+		bmhName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
+		bmcAddressOrig, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[4].spec.bmc.address}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		patchConfig := `[{"op": "replace", "path": "/spec/bmc/address", "value":"redfish-virtualmedia://10.1.234.25/redfish/v1/Systems/System.Embedded.1"}]`
 		out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bmh", "-n", machineAPINamespace, bmhName, "--type=json", "-p", patchConfig).Output()
@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
-		bmcAddress, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[2].spec.bmc.address}").Output()
+		bmcAddress, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[4].spec.bmc.address}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(bmcAddress).To(o.ContainSubstring("redfish-virtualmedia://10.1.234.25/redfish/v1/Systems/System.Embedded.1"))
 
