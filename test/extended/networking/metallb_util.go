@@ -389,12 +389,6 @@ func validateService(oc *exutil.CLI, curlHost string, svcExternalIP string) bool
 
 }
 
-func deleteMetalLBCR(oc *exutil.CLI, rs metalLBCRResource) {
-	e2e.Logf("delete %s %s in namespace %s", "metallb", rs.name, rs.namespace)
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("metallb", rs.name, "-n", rs.namespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
 func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string, arpReuests int) (string, bool) {
 	defInterface, intErr := getDefaultInterface(oc)
 	o.Expect(intErr).NotTo(o.HaveOccurred())
@@ -469,11 +463,6 @@ func createIPAddressPoolCR(oc *exutil.CLI, ipAddresspool ipAddressPoolResource, 
 	return true
 
 }
-func deleteIPAddressPool(oc *exutil.CLI, rs ipAddressPoolResource) {
-	e2e.Logf("delete %s %s in namespace %s", "ipaddresspool", rs.name, rs.namespace)
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ipaddresspool", rs.name, "-n", rs.namespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
 
 func createL2AdvertisementCR(oc *exutil.CLI, l2advertisement l2AdvertisementResource, l2AdvertisementTemplate string) (status bool) {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", l2advertisement.template, "-p", "NAME="+l2advertisement.name, "NAMESPACE="+l2advertisement.namespace,
@@ -485,12 +474,6 @@ func createL2AdvertisementCR(oc *exutil.CLI, l2advertisement l2AdvertisementReso
 	}
 	return true
 
-}
-
-func deleteL2Advertisement(oc *exutil.CLI, rs l2AdvertisementResource) {
-	e2e.Logf("delete %s %s in namespace %s", "l2advertisement", rs.name, rs.namespace)
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("l2advertisement", rs.name, "-n", rs.namespace, "--ignore-not-found=true").Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func getLoadBalancerSvcNodePort(oc *exutil.CLI, namespace string, svcName string) string {
@@ -655,12 +638,6 @@ func createBGPPeerCR(oc *exutil.CLI, bgppeer bgpPeerResource) (status bool) {
 
 }
 
-func deleteBGPPeer(oc *exutil.CLI, rs bgpPeerResource) {
-	e2e.Logf("Delete %s %s in namespace %s", "bgppeer", rs.name, rs.namespace)
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("bgppeer", rs.name, "-n", rs.namespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
 func createBGPAdvertisementCR(oc *exutil.CLI, bgpAdvertisement bgpAdvertisementResource) (status bool) {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bgpAdvertisement.template, "-p", "NAME="+bgpAdvertisement.name, "NAMESPACE="+bgpAdvertisement.namespace,
 		"AGGREGATIONLENGTH="+strconv.Itoa(int(bgpAdvertisement.aggregationLength)), "AGGREGATIONLENGTHV6="+strconv.Itoa(int(bgpAdvertisement.aggregationLengthV6)),
@@ -675,11 +652,7 @@ func createBGPAdvertisementCR(oc *exutil.CLI, bgpAdvertisement bgpAdvertisementR
 	return true
 
 }
-func deleteBGPAdvertisement(oc *exutil.CLI, rs bgpAdvertisementResource) {
-	e2e.Logf("Delete %s %s in namespace %s", "bgpadvertisement", rs.name, rs.namespace)
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("bgpadvertisement", rs.name, "-n", rs.namespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
+
 func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason string) (bool, string) {
 	fieldSelectorArgs := fmt.Sprintf("reason=%s,involvedObject.kind=Service,involvedObject.name=%s", reason, svcName)
 	result := false
