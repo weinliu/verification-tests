@@ -1,3 +1,4 @@
+import { Pages } from "views/pages";
 import {operatorHubPage, OperatorHubSelector, Operand, installedOperatorPage} from "../../views/operator-hub-page";
 import { listPage } from "upstream/views/list-page";
 
@@ -197,5 +198,26 @@ describe('Operator Hub tests', () => {
       .then((output) => {
         expect(output.stdout).to.include(nodeOS);
     })
+  });
+
+  it('(OCP-71516,xiyuzhao,UserInterface) Add TLSProfiles and tokenAuthGCP annotation to Infrastructures features filter section', {tags: ['e2e','admin']}, () => {
+    cy.checkClusterType('isGCPCluster').then(value => {
+      if (value === false) {
+        cy.log('This is not a GCP Platform, Skip the case!!');
+        this.skip();
+      }
+    })
+    // Check the new annotation is listed on the Infrastructure filter list
+    Pages.gotoOperatorHubPage();
+    operatorHubPage.checkInfraFeaturesCheckbox("configurable-tls-ciphers");
+    operatorHubPage.checkInfraFeaturesCheckbox("auth-token-gcp");
+    // Check the annotation is added for the Operator
+    cy.visit('/operatorhub/all-namespaces?details-item=kiali-operator-custom-catalogsource-openshift-marketplace')
+    cy.contains('h5', 'Infrastructure features')
+      .parent()
+      .within(() => {
+        cy.contains('div', 'Auth Token GCP').should('exist');
+        cy.contains('div', 'Configurable TLS ciphers').should('exist');
+      });
   });
 })

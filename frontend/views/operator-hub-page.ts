@@ -33,6 +33,16 @@ export const operatorHubPage = {
       .find('[type="checkbox"]')
       .check();
   },
+  checkInfraFeaturesCheckbox: (name: string) => {
+    cy.get('form[data-test-group-name="infraFeatures"]')
+      .then($btn => {
+        const hasMoreButton = $btn.find('button:contains("more")').length > 0;
+        if (hasMoreButton) {
+          cy.wrap($btn).find('button').contains('more').click();
+        }
+        cy.wrap($btn).find(`[data-test="infraFeatures-${name}"] [type="checkbox"]`).check();
+      })
+  },
   filter: (name: string) => {
     cy.get('input[type="text"]')
       .clear()

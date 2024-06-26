@@ -120,6 +120,13 @@ export const Pages = {
   gotoMCPDetailsPage: (mcpname: string) => {
     cy.visit(`/k8s/cluster/machineconfiguration.openshift.io~v1~MachineConfigPool/${mcpname}`)
   },
+  gotoOperatorHubPage: (namespace: string = 'all-namespaces') => {
+    const url = namespace === 'all-namespaces' ?
+      '/operatorhub/all-namespaces':
+      `/operatorhub/ns/${namespace}`;
+    cy.visit(url);
+    cy.get('.co-catalog-page__num-items', {timeout: 120000}).should('exist');
+  },
   gotoInstalledOperatorPage: (namespace: string = 'all-namespaces') => {
     const url = namespace === 'all-namespaces' ?
       '/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion':

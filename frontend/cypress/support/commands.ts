@@ -15,6 +15,9 @@ declare global {
             hasWindowsNode();
             isEdgeCluster();
             isAWSSTSCluster();
+            isAzureWIFICluster();
+            isClusterType(commandName, credentialMode: string, infraPlatform: string, authIssuer: string);
+            checkClusterType(commandName);
             isPlatformSuitableForNMState();
             isManagedCluster();
             cliLoginAzureExternalOIDC();
@@ -99,7 +102,7 @@ Cypress.Commands.add("cliLogout", () => {
   });
 });
 const AzureLoginFlowOnPage = ()=>{
-  const sentArgs = {username: Cypress.env('LOGIN_USER'), password: Cypress.env('LOGIN_PASSWD'), email: Cypress.env('LOGIN_USER_EMAIL')}; 
+  const sentArgs = {username: Cypress.env('LOGIN_USER'), password: Cypress.env('LOGIN_PASSWD'), email: Cypress.env('LOGIN_USER_EMAIL')};
   cy.origin('https://login.microsoftonline.com', { args: sentArgs },
   ({ username, password, email }) => {
     cy.wait(5000);
@@ -155,7 +158,7 @@ Cypress.Commands.add("uiLoginAzureExternalOIDC", () => {
               }
             });
           });
-        }  
+        }
       });
     }
   });
@@ -264,6 +267,37 @@ Cypress.Commands.add("isAzureWIFICluster", (credentialMode: string, infraPlatfor
     cy.log('Not Azure WIFI cluster, skip!');
     return cy.wrap(false);
   }
+});
+Cypress.Commands.add("isClusterType", (commandName, credentialMode: string, infraPlatform: string, authIssuer: string) => {
+  if (commandName === 'isGCPCluster') {
+    if (credentialMode === '' && infraPlatform === 'GCP' && authIssuer === '') {
+      cy.log('Testing on GCP cluster!');
+      return cy.wrap(true);
+    } else {
+      cy.log('Not GCP cluster, skip!');
+      return cy.wrap(false);
+    }
+  }
+});
+Cypress.Commands.add("checkClusterType", (commandName) => {
+  const kubeconfig = Cypress.env('KUBECONFIG_PATH');
+  let credentialMode: string;
+  let infraPlatform: string;
+  let authIssuer: string;
+
+  cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${kubeconfig}`).then(result => {
+    credentialMode = result.stdout.trim();
+    return cy.exec(`oc get infrastructure cluster --template={{.status.platform}} --kubeconfig=${kubeconfig}`);
+  }).then(result => {
+    infraPlatform = result.stdout.trim();
+    return cy.exec(`oc get authentication cluster --template={{.spec.serviceAccountIssuer}} --kubeconfig=${kubeconfig}`);
+  }).then(result => {
+    authIssuer = result.stdout.trim();
+    cy.log(`platform: ${infraPlatform} #########`);
+    cy.log(`credentialMode: ${credentialMode} #########`);
+    cy.log(`authIssuer: ${authIssuer} #########`);
+    return cy.isClusterType(commandName,credentialMode, infraPlatform, authIssuer);
+  });
 });
 
 Cypress.Commands.add("isPlatformSuitableForNMState", () => {
