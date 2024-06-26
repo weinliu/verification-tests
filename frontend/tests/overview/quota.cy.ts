@@ -5,15 +5,17 @@ describe('quota related feature', () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI(`oc new-project test-ocp52470`);
     cy.adminCLI(`oc label namespace test-ocp52470 test=ocp52470`);
+    cy.adminCLI(`oc apply -f fixtures/ocp-52470-cm.yaml -n test-ocp52470`);
     cy.adminCLI(`oc create resourcequota quota1 --hard=pods=4,requests.cpu=1,limits.cpu=2,limits.memory=1Gi,services=3,requests.nvidia.com/gpu=5,requests.storage=88,persistentvolumeclaims=10 -n test-ocp52470`);
-    cy.adminCLI(`oc create resourcequota quota2 --hard=configmaps=4,openshift.io/imagestreams=8,secrets=4 -n test-ocp52470`);
+    cy.adminCLI(`oc create resourcequota quota2 --hard=configmaps=2,openshift.io/imagestreams=8,secrets=7 -n test-ocp52470`);
     cy.adminCLI(`oc create clusterresourcequota testcrq1 --hard=services=10 --project-label-selector='test=ocp52470'`);
-    cy.adminCLI(`oc create clusterresourcequota testcrq2 --hard=secrets=6,configmaps=3,pods=6,limits.memory=200Mi,requests.storage=50Gi --project-label-selector='test=ocp52470'`);
+    cy.adminCLI(`oc create clusterresourcequota testcrq2 --hard=secrets=7,configmaps=2,pods=6,limits.memory=200Mi,requests.storage=50Gi --project-label-selector='test=ocp52470'`);
 
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
   after(() => {
+    cy.adminCLI(`oc delete resourcequota quota1 quota2 -n test-ocp52470`);
     cy.adminCLI(`oc delete project test-ocp52470`);
     cy.adminCLI(`oc delete clusterresourcequota testcrq1 testcrq2`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
