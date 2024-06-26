@@ -1982,8 +1982,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
-		curlHTTPRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--connect-timeout", "10"}
-		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--connect-timeout", "10"}
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routeHost + ":80:" + podIP
+		curlHTTPRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
+		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
