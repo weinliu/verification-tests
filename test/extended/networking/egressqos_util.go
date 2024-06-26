@@ -20,6 +20,22 @@ type egressQosResource struct {
 	tempfile  string
 	kind      string
 }
+type networkingRes struct {
+	name      string
+	namespace string
+	tempfile  string
+	kind      string
+}
+
+// create networking resource
+func (rs *networkingRes) create(oc *exutil.CLI, parameters ...string) {
+
+	paras := []string{"-f", rs.tempfile, "--ignore-unknown-parameters=true", "-p"}
+	for _, para := range parameters {
+		paras = append(paras, para)
+	}
+	exutil.ApplyNsResourceFromTemplate(oc, rs.namespace, paras...)
+}
 
 // delete egressqos resource
 func (rs *egressQosResource) delete(oc *exutil.CLI) {
@@ -124,6 +140,32 @@ func chkDSCPinPkts(a *exutil.AwsClient, oc *exutil.CLI, publicIP string, pktfile
 	return true
 }
 
+func chkDSCPandEIPinPkts(a *exutil.AwsClient, oc *exutil.CLI, publicIP string, pktfile string, dscp int, egressip string) bool {
+	command := "sudo podman exec -- dscpecho cat " + fmt.Sprintf("%s", pktfile)
+	outPut, err := runSSHCmdOnAWS(publicIP, command)
+
+	if err != nil {
+		e2e.Logf("Failed to run %v: %v", command, outPut)
+		return false
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Captured packets are %s", outPut)
+	tosHex := dscpDecConvertToHex(dscp)
+	dscpString := "tos 0x" + tosHex
+
+	if !strings.Contains(outPut, dscpString) {
+		e2e.Logf("Captured packets doesn't contain dscp value %s", dscpString)
+		return false
+	}
+
+	if !strings.Contains(outPut, egressip) {
+		e2e.Logf("Captured packets doesn't contain egressip %s", egressip)
+		return false
+	}
+	e2e.Logf("Captured packets contains dscp value %s or egressip %v", dscpString, egressip)
+	return true
+}
+
 func rmPktsFile(a *exutil.AwsClient, oc *exutil.CLI, publicIP string, pktfile string) {
 	command := "sudo podman exec -- dscpecho rm " + fmt.Sprintf("%s", pktfile)
 	outPut, err := runSSHCmdOnAWS(publicIP, command)
@@ -168,8 +210,6 @@ func getEgressQosAddSet(oc *exutil.CLI, node string, ns string) []string {
 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nsFilter := "external-ids:k8s.ovn.org/name=" + ns
-	//cmd := "ovn-nbctl find address_set external-ids:k8s.ovn.org/owner-type=EgressQoS " + nsFilter
-	//output, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", podName, "ovn-controller", cmd)
 	output, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-ovn-kubernetes", podName, "ovn-nbctl", "find", "address_set",
 		"external-ids:k8s.ovn.org/owner-type=EgressQoS", nsFilter).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

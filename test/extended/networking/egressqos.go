@@ -9,15 +9,17 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
 	defer g.GinkgoRecover()
 	var (
-		dscpSvcIP   string
-		dscpSvcPort = "9096"
-		a           *exutil.AwsClient
-		oc          = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		dscpSvcIP         string
+		externalPrivateIP string
+		dscpSvcPort       = "9096"
+		a                 *exutil.AwsClient
+		oc                = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
 	)
 
 	g.BeforeEach(func() {
@@ -46,7 +48,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				if !ok {
 					e2e.Logf("no public IP found for Int Svc instance")
 				}
+				privateIP, ok1 := ips["privateIP"]
+				if !ok1 {
+					e2e.Logf("no private IP found for Int Svc instance")
+				}
 				dscpSvcIP = publicIP
+				externalPrivateIP = privateIP
 				err = installDscpServiceOnAWS(a, oc, publicIP)
 				if err != nil {
 					e2e.Logf("No dscp-echo service installed on the bastion host, %v", err)
@@ -582,6 +589,96 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		chkAddSet(oc, testPod2.name, ns, addSet1, false)
 		chkAddSet(oc, testPod1.name, ns, addSet2, false)
 		chkAddSet(oc, testPod2.name, ns, addSet2, true)
+
+	})
+
+	// author: yingwang@redhat.com
+	g.It("Author:yingwang-NonHyperShiftHOST-ConnectedOnly-Medium-73642-Egress traffic with EgressIP and EgressQos applied can work fine.[Disruptive]", func() {
+		exutil.By("1) ############## create egressqos and egressip #################")
+
+		var (
+			dstCIDR          = externalPrivateIP + "/" + "32"
+			dscpValue        = 40
+			pktFile          = getRandomString() + "pcap.txt"
+			networkBaseDir   = exutil.FixturePath("testdata", "networking")
+			egressBaseDir    = filepath.Join(networkBaseDir, "egressqos")
+			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-template.yaml")
+			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
+			egressIPTemplate = filepath.Join(networkBaseDir, "egressip-config2-template.yaml")
+			egressNodeLabel  = "k8s.ovn.org/egress-assignable"
+			podLabelKey      = "color"
+			podLabelValue    = "blue"
+			nodeLabelKey     = "name"
+			nodeLabelValue   = "test"
+		)
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		workers := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker")
+
+		exutil.By("Apply label to namespace\n")
+		nsLabel := nodeLabelKey + "=" + nodeLabelValue
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name-").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, nsLabel).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an egressip object\n")
+
+		exutil.By("Apply EgressLabel Key to one node.")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel, "true")
+
+		freeIPs := findFreeIPs(oc, workers[0], 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+
+		egressip := networkingRes{
+			name:      "egressip-" + getRandomString(),
+			namespace: ns,
+			kind:      "egressip",
+			tempfile:  egressIPTemplate,
+		}
+
+		defer removeResource(oc, true, true, "egressip", egressip.name)
+		egressip.create(oc, "NAME="+egressip.name, "EGRESSIP1="+freeIPs[0], "NSLABELKEY="+nodeLabelKey, "NSLABELVALUE="+nodeLabelValue,
+			"PODLABELKEY="+podLabelKey, "PODLABELVALUE="+podLabelValue)
+
+		verifyExpectedEIPNumInEIPObject(oc, egressip.name, 1)
+
+		egressQos := networkingRes{
+			name:      "default",
+			namespace: ns,
+			kind:      "egressqos",
+			tempfile:  egressQosTmpFile,
+		}
+
+		testPod := networkingRes{
+			name:      "test-pod",
+			namespace: ns,
+			kind:      "pod",
+			tempfile:  testPodTmpFile,
+		}
+		//create egressqos
+		defer removeResource(oc, true, true, "egressqos", egressQos.name, "-n", egressQos.namespace)
+		egressQos.create(oc, "NAME="+egressQos.name, "NAMESPACE="+egressQos.namespace, "CIDR1="+"0.0.0.0/0", "CIDR2="+dstCIDR)
+
+		defer removeResource(oc, true, true, "pod", testPod.name, "-n", testPod.namespace)
+		testPod.create(oc, "NAME="+testPod.name, "NAMESPACE="+testPod.namespace)
+
+		errPodRdy := waitForPodWithLabelReady(oc, ns, "name="+testPod.name)
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("testpod isn't ready"))
+
+		podLable := podLabelKey + "=" + podLabelValue
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", testPod.name, "-n", testPod.namespace, podLable).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2) ####### Check dscp value of egress traffic   ##########")
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile)
+
+		startCurlTraffic(oc, testPod.namespace, testPod.name, externalPrivateIP, dscpSvcPort)
+		// the first matched egressqos rule and egressip can take effect
+		chkRes := chkDSCPandEIPinPkts(a, oc, dscpSvcIP, pktFile, dscpValue, freeIPs[0])
+		o.Expect(chkRes).Should(o.BeTrue())
 
 	})
 
