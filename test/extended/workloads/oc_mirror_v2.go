@@ -206,7 +206,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73452.yaml")
 
 		exutil.By("Skopeo oci to localhost")
-		command := fmt.Sprintf("skopeo copy docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s  --remove-signatures", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
