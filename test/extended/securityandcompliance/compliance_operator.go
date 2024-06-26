@@ -6456,6 +6456,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 			startingCSV:            "",
 			currentCSV:             "",
 			installedCSV:           "",
+			platform:               "HyperShift",
 			template:               subCoHypershiftHostedTemplate,
 			singleNamespace:        true,
 		}
@@ -6582,5 +6583,205 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 		}
 
 		g.By("ocp-63795 Scan hosted cluster for ocp4-pci-dss and ocp4-pci-dss-node profiles on hypershift hosted cluster... !!!\n")
+	})
+})
+
+var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_operator The Compliance Operator on ROSA hcp cluster", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                            = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir           string
+		og                            operatorGroupDescription
+		ogCoTemplate                  string
+		scansettingbindingTemplate    string
+		sub                           subscriptionDescription
+		subCoHypershiftHostedTemplate string
+		subRosaHcpTemplate            string
+		subwithPlatformEnv            subscriptionDescription
+	)
+
+	g.BeforeEach(func() {
+		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
+		ogCoTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
+		scansettingbindingTemplate = filepath.Join(buildPruningBaseDir, "scansettingbinding.yaml")
+		subRosaHcpTemplate = filepath.Join(buildPruningBaseDir, "subscription_rosa_hcp.yaml")
+		subCoHypershiftHostedTemplate = filepath.Join(buildPruningBaseDir, "subscription_hypershift_env.yaml")
+
+		og = operatorGroupDescription{
+			name:      "openshift-compliance",
+			namespace: "openshift-compliance",
+			template:  ogCoTemplate,
+		}
+		sub = subscriptionDescription{
+			subName:                "compliance-operator",
+			namespace:              "openshift-compliance",
+			channel:                "stable",
+			ipApproval:             "Automatic",
+			operatorPackage:        "compliance-operator",
+			catalogSourceName:      "redhat-operators",
+			catalogSourceNamespace: "openshift-marketplace",
+			startingCSV:            "",
+			currentCSV:             "",
+			installedCSV:           "",
+			template:               subRosaHcpTemplate,
+			singleNamespace:        true,
+		}
+		subwithPlatformEnv = subscriptionDescription{
+			subName:                "compliance-operator",
+			namespace:              "openshift-compliance",
+			channel:                "stable",
+			ipApproval:             "Automatic",
+			operatorPackage:        "compliance-operator",
+			catalogSourceName:      "redhat-operators",
+			catalogSourceNamespace: "openshift-marketplace",
+			startingCSV:            "",
+			currentCSV:             "",
+			installedCSV:           "",
+			platform:               "rosa",
+			template:               subCoHypershiftHostedTemplate,
+			singleNamespace:        true,
+		}
+
+		g.By("Skip test when precondition not meet !!!")
+		exutil.SkipNoOLMCore(oc)
+		SkipNonRosaHcpCluster(oc)
+		sub.skipMissingCatalogsources(oc)
+		architecture.SkipNonAmd64SingleArch(oc)
+		SkipMissingDefaultSC(oc)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-High-74182-Install CO without PLATFORM setting in sub and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node profiles on a Rosa hcp cluster [Serial]", func() {
+		var ssb = scanSettingBindingDescription{
+			name:            "test-cis-" + getRandomString(),
+			namespace:       sub.namespace,
+			profilekind1:    "Profile",
+			profilename1:    "ocp4-pci-dss-node",
+			profilename2:    "ocp4-cis-node",
+			scansettingname: "default",
+			template:        scansettingbindingTemplate,
+		}
+
+		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
+		defer cleanupObjects(oc, objectTableRef{"profilebundle", sub.namespace, "ocp4"},
+			objectTableRef{"profilebundle", sub.namespace, "rhcos4"},
+			objectTableRef{"ns", sub.namespace, sub.namespace})
+		createComplianceOperator(oc, sub, og)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.spec.config.env}"}).check(oc)
+
+		g.By("Check the pb and ss status !!! ")
+		sub.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
+		sub.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "[\"worker\"]", ok, []string{"ss", "default", "-n",
+			sub.namespace, "-o=jsonpath={.roles}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"scansetting", "default-auto-apply", "-n", sub.namespace}).check(oc)
+
+		g.By("Check only nodes profiles available.. !!!\n")
+		allProfiles := []string{
+			"ocp4-cis-node",
+			"ocp4-cis-node-1-4",
+			"ocp4-cis-node-1-5",
+			"ocp4-high-node",
+			"ocp4-high-node-rev-4",
+			"ocp4-moderate-node",
+			"ocp4-moderate-node-rev-4",
+			"ocp4-nerc-cip-node",
+			"ocp4-pci-dss-node",
+			"ocp4-pci-dss-node-3-2",
+			"ocp4-stig-node",
+			"ocp4-stig-node-v1r1",
+			"rhcos4-e8",
+			"rhcos4-high",
+			"rhcos4-high-rev-4",
+			"rhcos4-moderate",
+			"rhcos4-moderate-rev-4",
+			"rhcos4-nerc-cip",
+			"rhcos4-stig",
+			"rhcos4-stig-v1r1"}
+		for _, profile := range allProfiles {
+			sub.getProfileName(oc, profile)
+		}
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"profile", "ocp4-cis", "-n", ssb.namespace}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", sub.namespace, ssb.name})
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result !!!\n")
+		assertCompliancescanDone(oc, sub.namespace, "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", ssb.namespace)
+		sub.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+		sub.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+
+		g.By("ocp-74182 Install CO without PLATFORM setting in sub and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node profiles on a Rosa hcp cluster finished... !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-Medium-73945-Install CO with PLATFORM set to rosa and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node [Serial]", func() {
+		var ssb = scanSettingBindingDescription{
+			name:            "test-cis-" + getRandomString(),
+			namespace:       subwithPlatformEnv.namespace,
+			profilekind1:    "Profile",
+			profilename1:    "ocp4-pci-dss-node",
+			profilename2:    "ocp4-cis-node",
+			scansettingname: "default",
+			template:        scansettingbindingTemplate,
+		}
+
+		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
+		defer cleanupObjects(oc, objectTableRef{"profilebundle", subwithPlatformEnv.namespace, "ocp4"},
+			objectTableRef{"profilebundle", subwithPlatformEnv.namespace, "rhcos4"},
+			objectTableRef{"ns", sub.namespace, subwithPlatformEnv.namespace})
+		createComplianceOperator(oc, subwithPlatformEnv, og)
+		newCheck("expect", asAdmin, withoutNamespace, contain, subwithPlatformEnv.platform, ok, []string{"sub", subwithPlatformEnv.subName, "-n", subwithPlatformEnv.namespace, "-o=jsonpath={.spec.config.env}"}).check(oc)
+
+		g.By("Check the pb and ss status !!! ")
+		subwithPlatformEnv.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
+		subwithPlatformEnv.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "[\"worker\"]", ok, []string{"ss", "default", "-n",
+			ssb.namespace, "-o=jsonpath={.roles}"}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"ss", "default-auto-apply", "-n", ssb.namespace}).check(oc)
+
+		g.By("Check only nodes profiles available.. !!!\n")
+		allProfiles := []string{
+			"ocp4-cis-node",
+			"ocp4-cis-node-1-4",
+			"ocp4-cis-node-1-5",
+			"ocp4-high-node",
+			"ocp4-high-node-rev-4",
+			"ocp4-moderate-node",
+			"ocp4-moderate-node-rev-4",
+			"ocp4-nerc-cip-node",
+			"ocp4-pci-dss-node",
+			"ocp4-pci-dss-node-3-2",
+			"ocp4-stig-node",
+			"ocp4-stig-node-v1r1",
+			"rhcos4-e8",
+			"rhcos4-high",
+			"rhcos4-high-rev-4",
+			"rhcos4-moderate",
+			"rhcos4-moderate-rev-4",
+			"rhcos4-nerc-cip",
+			"rhcos4-stig",
+			"rhcos4-stig-v1r1"}
+		for _, profile := range allProfiles {
+			subwithPlatformEnv.getProfileName(oc, profile)
+		}
+		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"profile", "ocp4-cis", "-n", ssb.namespace}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", sub.namespace, ssb.name})
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result !!!\n")
+		assertCompliancescanDone(oc, sub.namespace, "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", ssb.namespace)
+		sub.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+		sub.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+
+		g.By("ocp-73945 Install CO with PLATFORM set to rosa and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node profiles on a Rosa hcp cluster finished... !!!\n")
 	})
 })

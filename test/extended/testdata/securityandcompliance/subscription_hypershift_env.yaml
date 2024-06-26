@@ -19,7 +19,7 @@ objects:
         node-role.kubernetes.io/worker: ""
       env:
       - name: PLATFORM
-        value: "HyperShift"
+        value: "${PLATFORM}"
 
 parameters:
 - name: SUBNAME
@@ -30,4 +30,5 @@ parameters:
 - name: SOURCENAME
 - name: SOURCENAMESPACE
 - name: STARTINGCSV
+- name: PLATFORM
 

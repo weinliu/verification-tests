@@ -238,6 +238,12 @@ func IsHypershiftHostedCluster(oc *CLI) bool {
 	return strings.Compare(topology, "External") == 0
 }
 
+// IsRosaCluster
+func IsRosaCluster(oc *CLI) bool {
+	product, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterclaims/product.open-cluster-management.io", "-o=jsonpath={.spec.value}").Output()
+	return strings.Compare(product, "ROSA") == 0
+}
+
 // IsSTSCluster determines if an AWS cluster is using STS
 func IsSTSCluster(oc *CLI) bool {
 	return IsWorkloadIdentityCluster(oc)

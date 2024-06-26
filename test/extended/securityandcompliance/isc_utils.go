@@ -48,6 +48,7 @@ type subscriptionDescription struct {
 	startingCSV            string
 	currentCSV             string
 	installedCSV           string
+	platform               string
 	template               string
 	singleNamespace        bool
 	ipCsv                  string
@@ -473,6 +474,13 @@ func SkipMissingDefaultSC(oc *exutil.CLI) {
 	}
 }
 
+// SkipNonRosaHcpCluster means to skip test when test cluster is not ROSA HCP
+func SkipNonRosaHcpCluster(oc *exutil.CLI) {
+	if !exutil.IsRosaCluster(oc) || !exutil.IsHypershiftHostedCluster(oc) {
+		g.Skip("Skip since it is NOT a ROSA HCP cluster")
+	}
+}
+
 // SkipMissingRhcosWorkers mean to skip test for env without rhcos workers. The Compliance Operator is available for rhcos deployments only.
 func SkipMissingRhcosWorkers(oc *exutil.CLI) {
 	rhcosWorkerNodesNumber := getNodeNumberPerLabel(oc, "node.openshift.io/os_id=rhcos,node-role.kubernetes.io/worker=")
@@ -573,7 +581,7 @@ func createSubscription(oc *exutil.CLI, subD subscriptionDescription) {
 	})
 	if err != nil {
 		subFile, errApply := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
-			"OPERATORNAME="+subD.operatorPackage, "SOURCENAME="+subD.catalogSourceName, "SOURCENAMESPACE="+subD.catalogSourceNamespace, "STARTINGCSV="+subD.startingCSV, "-n", subD.namespace).OutputToFile(getRandomString() + "sub.json")
+			"OPERATORNAME="+subD.operatorPackage, "SOURCENAME="+subD.catalogSourceName, "SOURCENAMESPACE="+subD.catalogSourceNamespace, "STARTINGCSV="+subD.startingCSV, "PLATFORM="+subD.platform, "-n", subD.namespace).OutputToFile(getRandomString() + "sub.json")
 		e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
 		o.Expect(errApply).NotTo(o.HaveOccurred())
 		msg, errCreate := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
