@@ -196,6 +196,13 @@ func (b *OsImageBuilderInNode) buildImage() error {
 	podmanCLI := container.NewPodmanCLI()
 	buildPath := filepath.Dir(b.remoteDockerfile)
 	podmanCLI.ExecCommandPath = buildPath
+
+	logger.Infof("Copy the /etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt file to the build dir, so that it can be used if needed")
+	_, err = b.node.DebugNodeWithChroot("cp", "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt", buildPath)
+	if err != nil {
+		return err
+	}
+
 	buildCommand := "NO_PROXY=" + b.noProxy + " HTTPS_PROXY=" + b.httpsProxy + " HTTP_PROXY=" + b.httpProxy + " podman build " + buildPath + " --tag " + b.osImage + " --authfile " + b.remoteDockerConfig
 	logger.Infof("Executing build command: %s", buildCommand)
 

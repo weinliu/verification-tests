@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-mco] MCO Layering", func() {
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and rpm [Disruptive]", func() {
 
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
-
+		// Because of https proxies using their own user-ca certificate, we need to take into account the openshift-config-user-ca-bundle.crt file
 		dockerFileCommands := `
 RUN mkdir /etc/tc_54085 && chmod 3770 /etc/tc_54085 && ostree container commit
 
@@ -48,7 +48,11 @@ RUN echo 'Test case 54085 test file' > /etc/tc54085.txt && chmod 5400 /etc/tc540
 
 RUN echo 'echo "Hello world"' > /usr/bin/tc54085_helloworld && chmod 5770 /usr/bin/tc54085_helloworld && ostree container commit
 
-RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/tailscale.repo && \
+COPY openshift-config-user-ca-bundle.crt /etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt
+
+RUN update-ca-trust && \
+    rm /etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt && \
+    cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/tailscale.repo && \
     rpm-ostree install tailscale && rpm-ostree cleanup -m && \
     systemctl enable tailscaled && \
     ostree container commit
@@ -440,6 +444,9 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			rpmName            = "zsh"
 			extensionRpmName   = "usbguard"
 			dockerFileCommands = fmt.Sprintf(`
+COPY openshift-config-user-ca-bundle.crt /etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt
+RUN update-ca-trust && \
+    rm /etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt
 RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.stream.centos.org/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\nproxy='$HTTPS_PROXY'\n\n' > /etc/yum.repos.d/centos.repo && \
     rpm-ostree install %s && \
     rpm-ostree cleanup -m && \
