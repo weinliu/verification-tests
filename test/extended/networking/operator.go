@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(getPodNameErr2).NotTo(o.HaveOccurred())
 		o.Expect(alerterPodName2).NotTo(o.BeEmpty())
 		waitPodReady(oc, namespace, alerterPodName2)
-		podLogs, getLogErr := checkLogMessageInPod(oc, namespace, "iptables-alerter", alerterPodName2, ns+"/"+testPodName)
+		podLogs, getLogErr := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "iptables-alerter", alerterPodName2, ns+"/"+testPodName)
 		o.Expect(getLogErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The log is : %s", podLogs)
 		o.Expect(strings.Contains(podLogs, "Logging event for "+ns+"/"+testPodName+" which has iptables rules")).Should(o.BeTrue())
