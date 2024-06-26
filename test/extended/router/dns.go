@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -959,32 +960,43 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 	})
 
 	// Bug: 2095941, OCPBUGS-5943
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-63553-Annotation 'TopologyAwareHints' presents should not cause any pathological events", func() {
-		g.By("Pre-flight check number for worker nodes in the environment")
-		workerNodeCount, _ := exactNodeDetails(oc)
-		if workerNodeCount < 2 {
-			g.Skip("Skipping as we need atleast two worker nodes")
-		}
-
-		g.By("Check whether the topology-aware-hints annotation is auto set or not")
-		// Get a random worker node name and get the labels on it
-		workerNodes := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/worker", "{.items[*].metadata.name}")
-		workerNodeName := getRandomDNSPodName(strings.Split(workerNodes, " "))
-		nodeLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNodeName, "-o=jsonpath={.metadata.labels}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// Topology-aware hints annotation is supported on the nodes having the topology.kubernetes.io/zone label
-		if strings.Contains(nodeLabel, "topology.kubernetes.io/zone") {
-			findAnnotation := getAnnotation(oc, "openshift-dns", "svc", "dns-default")
-			o.Expect(findAnnotation).To(o.ContainSubstring(`"service.kubernetes.io/topology-aware-hints":"auto"`))
-		} else {
-			e2e.Logf("Skipping the topology-aware hints annotation check, since it is not supported on this cluster")
-		}
-
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-High-63553-Annotation 'TopologyAwareHints' presents should not cause any pathological events", func() {
 		// OCPBUGS-5943
-		g.By("Check dns daemon set for minReadySeconds to 9, maxSurge to 10% and maxUnavailable to 0")
+		exutil.By("Check dns daemon set for minReadySeconds to 9, maxSurge to 10% and maxUnavailable to 0")
 		jsonPath := `{.spec.minReadySeconds}-{.spec.updateStrategy.rollingUpdate.maxSurge}-{.spec.updateStrategy.rollingUpdate.maxUnavailable}`
 		spec := getByJsonPath(oc, "openshift-dns", "daemonset/dns-default", jsonPath)
 		o.Expect(spec).To(o.ContainSubstring("9-10%-0"))
+
+		exutil.By("Check whether the topology-aware-hints annotation is auto set or not")
+		// Get all dns pods then check the resident nodes labels one by one
+		// search unique `topology.kubernetes.io/zone` info on worker nodes
+		zoneList := []string{}
+		for _, dnsPod := range getAllDNSPodsNames(oc) {
+			node := getByJsonPath(oc, "openshift-dns", "pod/"+dnsPod, "{.spec.nodeName}")
+			labels := getByJsonPath(oc, "default", "node/"+node, "{.metadata.labels}")
+			// excluding the master nodes
+			if strings.Contains(labels, "node-role.kubernetes.io/master") || strings.Contains(labels, "node-role.kubernetes.io/control-plane") {
+				continue
+			}
+			zoneInfo := getByJsonPath(oc, "default", "node/"+node, `{.metadata.labels.topology\.kubernetes\.io/zone}`)
+			// set zone as invalid if no zone label or its value is ""
+			if zoneInfo == "" {
+				zoneList = append(zoneList, "Invalid")
+				break
+			}
+			if !slices.Contains(zoneList, zoneInfo) {
+				e2e.Logf("new zone is found: %v", zoneInfo)
+				zoneList = append(zoneList, zoneInfo)
+			}
+		}
+		e2e.Logf("all found zones are: %v", zoneList)
+
+		// Topology-aware hints annotation present only if all nodes having the topology.kubernetes.io/zone label and from at least two zones
+		findAnnotation := getAnnotation(oc, "openshift-dns", "svc", "dns-default")
+		if slices.Contains(zoneList, "Invalid") || len(zoneList) < 2 {
+			o.Expect(findAnnotation).NotTo(o.ContainSubstring(`"service.kubernetes.io/topology-aware-hints":"auto"`))
+		} else {
+			o.Expect(findAnnotation).To(o.ContainSubstring(`"service.kubernetes.io/topology-aware-hints":"auto"`))
+		}
 	})
 })
