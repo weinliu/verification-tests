@@ -5599,13 +5599,17 @@ spec:
 				e2e.Logf("Checking permissions for directory: %s on node %s", directory, masterNode)
 				masterNodeOutput, checkFileErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 				o.Expect(checkFileErr).NotTo(o.HaveOccurred())
+
+				// Filter out the specific warning from the output
 				lines := strings.Split(string(masterNodeOutput), "\n")
 				cleanedLines := make([]string, 0, len(lines))
 
 				for _, line := range lines {
-					cleanedLine := strings.TrimSpace(line)
-					if cleanedLine != "" {
-						cleanedLines = append(cleanedLines, cleanedLine)
+					if !strings.Contains(line, "Warning: metadata.name: this is used in the Pod's hostname") {
+						cleanedLine := strings.TrimSpace(line)
+						if cleanedLine != "" {
+							cleanedLines = append(cleanedLines, cleanedLine)
+						}
 					}
 				}
 
