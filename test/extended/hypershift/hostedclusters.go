@@ -8,16 +8,21 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/storage/names"
+	"k8s.io/client-go/util/retry"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -1139,4 +1144,183 @@ func (h *hostedCluster) getEtcdEndpointDbStatsByIdx(idx int) (dbSize, dbSizeInUs
 func (h *hostedCluster) getEtcdDiscoveryEndpointForClientReqByIdx(idx int) string {
 	hcpNs := h.getHostedComponentNamespace()
 	return fmt.Sprintf("etcd-%d.%s.%s.svc:%s", idx, etcdDiscoverySvcNameForHostedCluster, hcpNs, etcdClientReqPort)
+}
+
+func (h *hostedCluster) checkHCSpecForAzureEtcdEncryption(expected azureKMSKey, isBackupKey bool) {
+	keyPath := "activeKey"
+	if isBackupKey {
+		keyPath = "backupKey"
+	}
+
+	keyName := doOcpReq(h.oc, OcpGet, true, "hc", h.name, "-n", h.namespace,
+		fmt.Sprintf("-o=jsonpath={.spec.secretEncryption.kms.azure.%s.keyName}", keyPath))
+	o.Expect(keyName).To(o.Equal(expected.keyName))
+	keyVaultName := doOcpReq(h.oc, OcpGet, true, "hc", h.name, "-n", h.namespace,
+		fmt.Sprintf("-o=jsonpath={.spec.secretEncryption.kms.azure.%s.keyVaultName}", keyPath))
+	o.Expect(keyVaultName).To(o.Equal(expected.keyVaultName))
+	keyVersion := doOcpReq(h.oc, OcpGet, true, "hc", h.name, "-n", h.namespace,
+		fmt.Sprintf("-o=jsonpath={.spec.secretEncryption.kms.azure.%s.keyVersion}", keyPath))
+	o.Expect(keyVersion).To(o.Equal(expected.keyVersion))
+}
+
+func (h *hostedCluster) checkKASEncryptionConfiguration() {
+	kasSecretEncryptionConfigSecret := doOcpReq(h.oc, OcpExtract, true,
+		fmt.Sprintf("secret/%s", kasEncryptionConfigSecretName), "-n", h.getHostedComponentNamespace(), "--to", "-")
+	o.Expect(kasSecretEncryptionConfigSecret).To(o.And(
+		o.ContainSubstring("secrets"),
+		o.ContainSubstring("configmaps"),
+		o.ContainSubstring("routes"),
+		o.ContainSubstring("oauthaccesstokens"),
+		o.ContainSubstring("oauthauthorizetokens"),
+	))
+}
+
+func (h *hostedCluster) checkSecretEncryptionDecryption(isEtcdEncrypted bool) {
+	var (
+		secretName  = fmt.Sprintf("etcd-encryption-%s", strings.ToLower(exutil.RandStrDefault()))
+		secretNs    = "default"
+		secretKey   = "foo"
+		secretValue = "bar"
+	)
+
+	e2e.Logf("Creating secret/%s within ns/%s of the hosted cluster", secretName, secretNs)
+	doOcpReq(h.oc.AsGuestKubeconf(), OcpCreate, true, "secret", "generic", secretName,
+		"-n", secretNs, fmt.Sprintf("--from-literal=%s=%s", secretKey, secretValue))
+
+	e2e.Logf("Checking secret decryption")
+	decryptedSecretContent := doOcpReq(h.oc.AsGuestKubeconf(), OcpExtract, true,
+		fmt.Sprintf("secret/%s", secretName), "-n", secretNs, "--to", "-")
+	o.Expect(decryptedSecretContent).To(o.And(
+		o.ContainSubstring(secretKey),
+		o.ContainSubstring(secretValue),
+	))
+
+	// Unencrypted secrets look like the following:
+	// /kubernetes.io/secrets/default/test-secret.<secret-content>
+	// Encrypted secrets look like the following:
+	// /kubernetes.io/secrets/default/test-secret.k8s:enc:kms:v1:<EncryptionConfiguration-provider-name>:.<encrypted-content>
+	if !isEtcdEncrypted {
+		return
+	}
+	e2e.Logf("Checking ETCD encryption")
+	etcdCmd := fmt.Sprintf("%s --endpoints %s get /kubernetes.io/secrets/%s/%s | hexdump -C | awk -F '|' '{print $2}' OFS= ORS=",
+		etcdCmdPrefixForHostedCluster, etcdLocalClientReqEndpoint, secretNs, secretName)
+	encryptedSecretContent, err := exutil.RemoteShPodWithBashSpecifyContainer(h.oc, h.getHostedComponentNamespace(),
+		"etcd-0", "etcd", etcdCmd)
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get encrypted secret content within ETCD")
+	o.Expect(encryptedSecretContent).NotTo(o.BeEmpty(), "obtained empty encrypted secret content")
+	o.Expect(encryptedSecretContent).NotTo(o.ContainSubstring(secretValue))
+
+	e2e.Logf("Deleting secret")
+	_ = h.oc.AsGuestKubeconf().Run(OcpDelete).Args("secret", secretName, "-n", secretNs).Execute()
+}
+
+// Health checks an HC on Azure with ETCD encryption
+func (h *hostedCluster) checkAzureEtcdEncryption(activeKey azureKMSKey, backupKey *azureKMSKey) {
+	e2e.Logf("Checking hc.spec.secretEncryption.kms.azure.activeKey")
+	h.checkHCSpecForAzureEtcdEncryption(activeKey, false)
+	if backupKey != nil {
+		e2e.Logf("Checking hc.spec.secretEncryption.kms.azure.backupKey")
+		h.checkHCSpecForAzureEtcdEncryption(*backupKey, true)
+	}
+
+	e2e.Logf("Checking the ValidAzureKMSConfig condition of the hc")
+	validAzureKMSConfigStatus := doOcpReq(h.oc, OcpGet, true, "hc", h.name, "-n", h.namespace,
+		`-o=jsonpath={.status.conditions[?(@.type == "ValidAzureKMSConfig")].status}`)
+	o.Expect(validAzureKMSConfigStatus).To(o.Equal("True"))
+
+	e2e.Logf("Checking KAS EncryptionConfiguration")
+	h.checkKASEncryptionConfiguration()
+
+	e2e.Logf("Checking secret encryption/decryption within the hosted cluster")
+	h.checkSecretEncryptionDecryption(true)
+}
+
+func (h *hostedCluster) waitForKASDeployUpdate(ctx context.Context, oldResourceVersion string) {
+	kasDeployKindAndName := "deploy/kube-apiserver"
+	err := exutil.WaitForResourceUpdate(ctx, h.oc, DefaultTimeout/20, DefaultTimeout,
+		kasDeployKindAndName, h.getHostedComponentNamespace(), oldResourceVersion)
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to wait for KAS deployment to be updated")
+}
+
+func (h *hostedCluster) waitForKASDeployReady(ctx context.Context) {
+	kasDeployName := "kube-apiserver"
+	exutil.WaitForDeploymentsReady(ctx, func(ctx context.Context) (*appsv1.DeploymentList, error) {
+		return h.oc.AdminKubeClient().AppsV1().Deployments(h.getHostedComponentNamespace()).List(ctx, metav1.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector("metadata.name", kasDeployName).String(),
+		})
+	}, exutil.IsDeploymentReady, LongTimeout, LongTimeout/20, true)
+}
+
+func (h *hostedCluster) patchAzureKMS(activeKey, backupKey *azureKMSKey) {
+	patch, err := getHCPatchForAzureKMS(activeKey, backupKey)
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get HC patch Azure KMS")
+	doOcpReq(h.oc, OcpPatch, true, "hc", "-n", h.namespace, h.name, "--type=merge", "-p", patch)
+}
+
+func (h *hostedCluster) removeAzureKMSBackupKey() {
+	doOcpReq(h.oc, OcpPatch, true, "hc", h.name, "-n", h.namespace, "--type=json",
+		"-p", `[{"op": "remove", "path": "/spec/secretEncryption/kms/azure/backupKey"}]`)
+}
+
+// Re-encode all secrets within a hosted cluster namespace
+func (h *hostedCluster) encodeSecretsNs(ctx context.Context, ns string) {
+	guestKubeClient := h.oc.GuestKubeClient()
+	secrets, err := guestKubeClient.CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to list secrets")
+
+	backoff := wait.Backoff{Steps: 10, Duration: 1 * time.Second}
+	for _, secret := range secrets.Items {
+		err = retry.RetryOnConflict(backoff, func() error {
+			// Fetch the latest version of the secret
+			latestSecret, getErr := guestKubeClient.CoreV1().Secrets(ns).Get(ctx, secret.Name, metav1.GetOptions{})
+			if getErr != nil {
+				return getErr
+			}
+			// Update the secret with the modified version
+			_, updateErr := guestKubeClient.CoreV1().Secrets(ns).Update(ctx, latestSecret, metav1.UpdateOptions{})
+			return updateErr
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to update secret with retry")
+	}
+}
+
+// Re-encode all secrets within the hosted cluster
+func (h *hostedCluster) encodeSecrets(ctx context.Context) {
+	namespaces, err := h.oc.GuestKubeClient().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to list namespaces")
+	for _, ns := range namespaces.Items {
+		h.encodeSecretsNs(ctx, ns.Name)
+	}
+}
+
+// Re-encode all configmaps within a hosted cluster namespace
+func (h *hostedCluster) encodeConfigmapsNs(ctx context.Context, ns string) {
+	guestKubeClient := h.oc.GuestKubeClient()
+	configmaps, err := guestKubeClient.CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to list configmaps")
+
+	backoff := wait.Backoff{Steps: 10, Duration: 1 * time.Second}
+	for _, configmap := range configmaps.Items {
+		err = retry.RetryOnConflict(backoff, func() error {
+			// Fetch the latest version of the configmap
+			latestConfigmap, getErr := guestKubeClient.CoreV1().ConfigMaps(ns).Get(ctx, configmap.Name, metav1.GetOptions{})
+			if getErr != nil {
+				return getErr
+			}
+			// Update the configmap with the modified version
+			_, updateErr := guestKubeClient.CoreV1().ConfigMaps(ns).Update(ctx, latestConfigmap, metav1.UpdateOptions{})
+			return updateErr
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to update configmap with retry")
+	}
+}
+
+// Re-encode all configmaps within the hosted cluster
+func (h *hostedCluster) encodeConfigmaps(ctx context.Context) {
+	namespaces, err := h.oc.GuestKubeClient().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to list namespaces")
+	for _, ns := range namespaces.Items {
+		h.encodeConfigmapsNs(ctx, ns.Name)
+	}
 }

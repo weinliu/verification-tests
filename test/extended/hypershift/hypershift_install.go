@@ -20,6 +20,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/aws/aws-sdk-go/service/route53"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
@@ -2933,5 +2937,158 @@ spec:
 			_, stderr, err := oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("hc", hc.name, "-n", hc.namespace).Outputs()
 			return err != nil && strings.Contains(stderr, "NotFound")
 		}).WithTimeout(DefaultTimeout).WithPolling(DefaultTimeout / 10).Should(o.BeTrue())
+	})
+
+	/*
+		Day-1 creation is covered by CI. This test case focuses on day-2 key rotation.
+		Test run duration: ~55min
+	*/
+	g.It("Author:fxie-Longduration-NonPreRelease-Critical-73944-[HyperShiftINSTALL] AZURE Etcd Encryption [Serial]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "azure")
+		if exutil.IsWorkloadIdentityCluster(oc) {
+			g.Skip("This test case requires root credentials, skipping")
+		}
+
+		var (
+			resourceNamePrefix = getResourceNamePrefix()
+			activeKeyName      = fmt.Sprintf("%s-active-key", resourceNamePrefix)
+			backupKeyName      = fmt.Sprintf("%s-backup-key", resourceNamePrefix)
+			hcName             = fmt.Sprintf("%s-hc", resourceNamePrefix)
+			kvName             = fmt.Sprintf("%s-kv", resourceNamePrefix)
+			rgName             = fmt.Sprintf("%s-rg", resourceNamePrefix)
+			tmpDir             = path.Join("/tmp", "hypershift", resourceNamePrefix)
+		)
+
+		e2e.Logf("Getting Azure root credentials from MC")
+		azCreds := exutil.NewEmptyAzureCredentials()
+		err := azCreds.GetFromClusterAndDecode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to get Azure root credentials from MC")
+
+		exutil.By("Creating a resource group to hold the keyvault")
+		azClientSet := exutil.NewAzureClientSetWithRootCreds(oc)
+		_, err = azClientSet.GetResourceGroupClient(nil).CreateOrUpdate(context.Background(), rgName,
+			armresources.ResourceGroup{Location: to.Ptr(azCreds.AzureRegion)}, nil)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("failed to create resource group %s", rgName))
+		defer func() {
+			err = azClientSet.DeleteResourceGroup(context.Background(), rgName)
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to delete resource group")
+		}()
+
+		e2e.Logf("Getting object ID of the service principal")
+		var spObjectId string
+		spObjectId, err = azClientSet.GetServicePrincipalObjectId(context.Background(), azCreds.AzureClientID)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to get object ID of service principal")
+
+		exutil.By("Creating a keyvault to hold the keys")
+		accessPolicies := []*armkeyvault.AccessPolicyEntry{
+			{
+				TenantID: to.Ptr(azCreds.AzureTenantID),
+				ObjectID: to.Ptr(spObjectId),
+				Permissions: &armkeyvault.Permissions{
+					Keys: []*armkeyvault.KeyPermissions{
+						to.Ptr(armkeyvault.KeyPermissionsDecrypt),
+						to.Ptr(armkeyvault.KeyPermissionsEncrypt),
+						to.Ptr(armkeyvault.KeyPermissionsCreate),
+						to.Ptr(armkeyvault.KeyPermissionsGet),
+					},
+				},
+			},
+		}
+		kvParams := armkeyvault.VaultCreateOrUpdateParameters{
+			Location: to.Ptr(azCreds.AzureRegion),
+			Properties: &armkeyvault.VaultProperties{
+				SKU: &armkeyvault.SKU{
+					Name:   to.Ptr(armkeyvault.SKUNameStandard),
+					Family: to.Ptr(armkeyvault.SKUFamilyA),
+				},
+				TenantID:              to.Ptr(azCreds.AzureTenantID),
+				AccessPolicies:        accessPolicies,
+				EnablePurgeProtection: to.Ptr(true),
+				// Minimize this for a minimal chance of keyvault name collision
+				SoftDeleteRetentionInDays: to.Ptr[int32](7),
+			},
+		}
+		poller, err := azClientSet.GetVaultsClient(nil).BeginCreateOrUpdate(context.Background(), rgName,
+			kvName, kvParams, nil)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("failed to create keyvalut %s", kvName))
+		_, err = poller.PollUntilDone(context.Background(), nil)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to poll for the termination of keyvault creation")
+
+		exutil.By("Creating keys within the keyvault")
+		keyParams := armkeyvault.KeyCreateParameters{
+			Properties: &armkeyvault.KeyProperties{
+				// RSA or EC: software-protected
+				// RSA-HSM or EC-HSM: hardware-protected
+				Kty: to.Ptr(armkeyvault.JSONWebKeyTypeRSA),
+			},
+		}
+		createActiveKeyResp, err := azClientSet.GetKeysClient(nil).CreateIfNotExist(context.Background(), rgName,
+			kvName, activeKeyName, keyParams, nil)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to create active key")
+		createBackupKeyResp, err := azClientSet.GetKeysClient(nil).CreateIfNotExist(context.Background(), rgName,
+			kvName, backupKeyName, keyParams, nil)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to create backup key")
+
+		e2e.Logf("Parsing key URIs")
+		var activeKey, backupKey azureKMSKey
+		activeKey, err = parseAzureVaultKeyURI(*createActiveKeyResp.Properties.KeyURIWithVersion)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to parse active key URI")
+		backupKey, err = parseAzureVaultKeyURI(*createBackupKeyResp.Properties.KeyURIWithVersion)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to parse backup key URI")
+
+		e2e.Logf("Create temporary directory")
+		o.Expect(os.MkdirAll(tmpDir, 0755)).NotTo(o.HaveOccurred(), "failed to create temporary directory")
+		defer func() {
+			o.Expect(os.RemoveAll(tmpDir)).NotTo(o.HaveOccurred(), "failed to remote temporary directory")
+		}()
+
+		exutil.By("Installing Hypershift Operator")
+		installHelper := installHelper{oc: oc, dir: tmpDir, iaasPlatform: iaasPlatform}
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		exutil.By("Creating hosted cluster")
+		var release string
+		release, err = exutil.GetReleaseImage(oc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to get release image")
+		createCluster := installHelper.createClusterAzureCommonBuilder().
+			withName(hcName).
+			withNodePoolReplicas(1).
+			withReleaseImage(release).
+			withEncryptionKeyId(*createActiveKeyResp.Properties.KeyURIWithVersion)
+		defer installHelper.destroyAzureHostedClusters(createCluster)
+		hc := installHelper.createAzureHostedClusters(createCluster)
+
+		e2e.Logf("Extracting kubeconfig of the hosted cluster")
+		installHelper.createHostedClusterKubeconfig(createCluster, hc)
+		hc.oc.SetGuestKubeconf(hc.hostedClustersKubeconfigFile)
+
+		exutil.By("Specifying a backup key on the HC")
+		kasResourceVersion := doOcpReq(oc, OcpGet, true, "deploy/kube-apiserver",
+			"-n", hc.getHostedComponentNamespace(), "-o=jsonpath={.metadata.resourceVersion}")
+		hc.patchAzureKMS(nil, &backupKey)
+		hc.waitForKASDeployUpdate(context.Background(), kasResourceVersion)
+		hc.waitForKASDeployReady(context.Background())
+		hc.checkAzureEtcdEncryption(activeKey, &backupKey)
+
+		exutil.By("Swapping active & backup key")
+		kasResourceVersion = doOcpReq(oc, OcpGet, true, "deploy/kube-apiserver",
+			"-n", hc.getHostedComponentNamespace(), "-o=jsonpath={.metadata.resourceVersion}")
+		hc.patchAzureKMS(&backupKey, &activeKey)
+		hc.waitForKASDeployUpdate(context.Background(), kasResourceVersion)
+		hc.waitForKASDeployReady(context.Background())
+		hc.checkAzureEtcdEncryption(backupKey, &activeKey)
+
+		exutil.By("Re-encoding all Secrets & ConfigMaps using the current active key")
+		hc.encodeSecrets(context.Background())
+		hc.encodeConfigmaps(context.Background())
+
+		exutil.By("Remove the backup key from HC")
+		kasResourceVersion = doOcpReq(oc, OcpGet, true, "deploy/kube-apiserver",
+			"-n", hc.getHostedComponentNamespace(), "-o=jsonpath={.metadata.resourceVersion}")
+		hc.removeAzureKMSBackupKey()
+		hc.waitForKASDeployUpdate(context.Background(), kasResourceVersion)
+		hc.waitForKASDeployReady(context.Background())
+		hc.checkAzureEtcdEncryption(backupKey, nil)
 	})
 })

@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -261,4 +262,28 @@ func ocAction(oc *CLI, action string, asAdmin, withoutNamespace bool, parameters
 		return oc.Run(action).Args(parameters...).Output()
 	}
 	return "", nil
+}
+
+// WaitForResourceUpdate waits for the resourceVersion of a resource to be updated
+func WaitForResourceUpdate(ctx context.Context, oc *CLI, interval, timeout time.Duration, kindAndName, namespace, oldResourceVersion string) error {
+	args := []string{kindAndName}
+	if len(namespace) > 0 {
+		args = append(args, "-n", namespace)
+	}
+	args = append(args, "-o=jsonpath={.metadata.resourceVersion}")
+	return wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (done bool, err error) {
+		resourceVersion, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Outputs()
+		if err != nil {
+			e2e.Logf("Error getting current resourceVersion: %v", err)
+			return false, nil
+		}
+		if len(resourceVersion) == 0 {
+			return false, errors.New("obtained empty resourceVersion")
+		}
+		if resourceVersion == oldResourceVersion {
+			e2e.Logf("resourceVersion unchanged, keep polling")
+			return false, nil
+		}
+		return true, nil
+	})
 }

@@ -512,3 +512,9 @@ func getTestCaseIDs() (testCaseIDs []string) {
 	o.Expect(testCaseIDs).NotTo(o.BeEmpty())
 	return testCaseIDs
 }
+
+// getResourceNamePrefix generates a cloud resource name prefix by concatenating the first test case ID
+// with a random string. The resulting string is safe to use as a prefix for cloud resource names.
+func getResourceNamePrefix() string {
+	return fmt.Sprintf("ocp%s-%s", getTestCaseIDs()[0], strings.ToLower(exutil.RandStrDefault()))
+}

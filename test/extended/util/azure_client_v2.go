@@ -7,9 +7,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-
-	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	msgraphsdkgo "github.com/microsoftgraph/msgraph-sdk-go"
+
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	o "github.com/onsi/gomega"
@@ -22,9 +24,12 @@ type AzureClientSet struct {
 	tokenCredential azcore.TokenCredential
 
 	// Clients
-	resourceGroupsClient           *armresources.ResourceGroupsClient
 	capacityReservationGroupClient *armcompute.CapacityReservationGroupsClient
 	capacityReservationsClient     *armcompute.CapacityReservationsClient
+	graphServiceClient             *msgraphsdkgo.GraphServiceClient
+	keysClient                     *armkeyvault.KeysClient
+	resourceGroupsClient           *armresources.ResourceGroupsClient
+	vaultsClient                   *armkeyvault.VaultsClient
 }
 
 func NewAzureClientSet(subscriptionId string, tokenCredential azcore.TokenCredential) *AzureClientSet {
@@ -74,6 +79,37 @@ func (cs *AzureClientSet) GetCapacityReservationsClient(options *arm.ClientOptio
 		cs.capacityReservationsClient = capacityReservationsClient
 	}
 	return cs.capacityReservationsClient
+}
+
+// GetVaultsClient gets the vaults client from AzureClientSet, constructs it if necessary.
+func (cs *AzureClientSet) GetVaultsClient(options *arm.ClientOptions) *armkeyvault.VaultsClient {
+	if cs.vaultsClient == nil {
+		vaultsClient, err := armkeyvault.NewVaultsClient(cs.SubscriptionID, cs.tokenCredential, options)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cs.vaultsClient = vaultsClient
+	}
+	return cs.vaultsClient
+}
+
+// GetKeysClient gets the keys client from AzureClientSet, constructs it if necessary.
+func (cs *AzureClientSet) GetKeysClient(options *arm.ClientOptions) *armkeyvault.KeysClient {
+	if cs.keysClient == nil {
+		keysClient, err := armkeyvault.NewKeysClient(cs.SubscriptionID, cs.tokenCredential, options)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cs.keysClient = keysClient
+	}
+	return cs.keysClient
+}
+
+// GetGraphServiceClient gets the graph service client from AzureClientSet, constructs it if necessary.
+// Pass a nil slice to use the default scope.
+func (cs *AzureClientSet) GetGraphServiceClient(scopes []string) *msgraphsdkgo.GraphServiceClient {
+	if cs.graphServiceClient == nil {
+		graphServiceClient, err := msgraphsdkgo.NewGraphServiceClientWithCredentials(cs.tokenCredential, scopes)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cs.graphServiceClient = graphServiceClient
+	}
+	return cs.graphServiceClient
 }
 
 // CreateCapacityReservationGroup create a capacity reservation group
@@ -164,4 +200,28 @@ func (cs *AzureClientSet) DeleteCapacityReservation(ctx context.Context, capacit
 	}
 	e2e.Logf("Capacity Reservation deleted successfully")
 	return nil
+}
+
+func (cs *AzureClientSet) DeleteResourceGroup(ctx context.Context, rgName string) error {
+	poller, err := cs.GetResourceGroupClient(nil).BeginDelete(ctx, rgName, nil)
+	if err != nil {
+		return err
+	}
+	_, err = poller.PollUntilDone(ctx, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cs *AzureClientSet) GetServicePrincipalObjectId(ctx context.Context, appId string) (string, error) {
+	sp, err := cs.GetGraphServiceClient(nil).ServicePrincipalsWithAppId(&appId).Get(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get service principal: %v", err)
+	}
+	objectId := sp.GetId()
+	if objectId == nil {
+		return "", fmt.Errorf("object ID is nil")
+	}
+	return *objectId, nil
 }

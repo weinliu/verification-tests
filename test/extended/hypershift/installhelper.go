@@ -49,6 +49,7 @@ type createCluster struct {
 	ExternalDnsDomain              string                `param:"external-dns-domain"`
 	ReleaseImage                   string                `param:"release-image"`
 	ResourceGroupTags              string                `param:"resource-group-tags"`
+	EncryptionKeyId                string                `param:"encryption-key-id"`
 }
 
 type infra struct {
@@ -130,6 +131,11 @@ func (c *createCluster) withSSHKey(SSHKey string) *createCluster {
 
 func (c *createCluster) withInfraID(InfraID string) *createCluster {
 	c.InfraID = InfraID
+	return c
+}
+
+func (c *createCluster) withEncryptionKeyId(encryptionKeyId string) *createCluster {
+	c.EncryptionKeyId = encryptionKeyId
 	return c
 }
 

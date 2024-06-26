@@ -24,7 +24,12 @@ func WaitForDeploymentsReady(ctx context.Context, listDeployments func(ctx conte
 			e2e.Logf("Error listing deployments: %v, keep polling", err)
 			return false
 		}
+		if len(deployList.Items) == 0 {
+			e2e.Logf("No deployments found, keep polling")
+			return false
+		}
 		for _, deploy := range deployList.Items {
+			e2e.Logf("Waiting for deployment %s", deploy.Name)
 			if isDeploymentReady(&deploy) {
 				continue
 			}

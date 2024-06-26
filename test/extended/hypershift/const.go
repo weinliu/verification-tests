@@ -22,6 +22,7 @@ const (
 	OcpCreate   OcpClientVerb = "create"
 	OcpLabel    OcpClientVerb = "label"
 	OcpTaint    OcpClientVerb = "taint"
+	OcpExtract  OcpClientVerb = "extract"
 
 	//NodepoolNameSpace is the namespace where the nodepool CR is always created
 	NodepoolNameSpace           = "clusters"
@@ -194,6 +195,11 @@ const (
 	etcdDiscoverySvcNameForHostedCluster = "etcd-discovery"
 	etcdClientReqPort                    = "2379"
 	etcdLocalClientReqEndpoint           = "localhost:" + etcdClientReqPort
+)
+
+// kas
+const (
+	kasEncryptionConfigSecretName = "kas-secret-encryption-config"
 )
 
 // Enum for hosted cluster service
