@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -631,7 +632,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 
 		g.By("Update machineset with invalid storage account")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://invalid.blob.core.windows.net"}}}}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":2,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://invalid.blob.core.windows.net"}}}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 	})
@@ -1233,7 +1234,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterinfra.SkipConditionally(oc)
 
 		g.By("Create a new machineset")
-		machinesetName := "machineset-73851"
+		machinesetName := infrastructureName + "-73851"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
@@ -1256,5 +1257,110 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		taints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.taints}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(taints).ShouldNot(o.ContainSubstring("uninitialized"))
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-73668-[MAPI] Create machineset with Reserved Capacity [Disruptive]", func() {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
+		skipTestIfSpotWorkers(oc)
+		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureCloudName == "AzureStackCloud" || azureCloudName == "AzureUSGovernmentCloud" {
+			g.Skip("Skip for ASH and azure Gov due to no zone for ash, and for USGov it's hard to getclient with baseURI!")
+		}
+
+		exutil.By("Create a machineset")
+		machinesetName := infrastructureName + "-73668"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		ms.CreateMachineSet(oc)
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if zone == "" {
+			g.Skip("Zone doesn't exist, capacity reservation group cannot be set on a virtual machine which is part of an availability set!")
+		}
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		machineType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.vmSize}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create capacityReservationGroup and capacityReservation")
+		resourceGroup, err := exutil.GetAzureCredentialFromCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		capacityReservationGroupName := "capacityReservationGroup73668"
+		capacityReservationName := "capacityReservation73668"
+		azClientSet := exutil.NewAzureClientSetWithRootCreds(oc)
+		capacityReservationGroup, err := azClientSet.CreateCapacityReservationGroup(context.Background(), capacityReservationGroupName, resourceGroup, region, zone)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(capacityReservationGroup).NotTo(o.BeEmpty())
+		err = azClientSet.CreateCapacityReservation(context.Background(), capacityReservationGroupName, capacityReservationName, region, resourceGroup, machineType, zone)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			ms.DeleteMachineSet(oc)
+			clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+			azClientSet.DeleteCapacityReservation(context.Background(), capacityReservationGroupName, capacityReservationName, resourceGroup)
+			azClientSet.DeleteCapacityReservationGroup(context.Background(), capacityReservationGroupName, resourceGroup)
+		}()
+
+		exutil.By("Patch machineset with valid capacityReservationGroupID")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"capacityReservationGroupID": "`+capacityReservationGroup+`"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		exutil.By("Check machine with capacityReservationGroupID")
+		capacityReservationGroupID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.capacityReservationGroupID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(capacityReservationGroupID).Should(o.ContainSubstring("capacityReservationGroups"))
+
+		exutil.By("Patch machineset with empty capacityReservationGroupID and set replicas to 2")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":2,"template":{"spec":{"providerSpec":{"value":{ "capacityReservationGroupID": ""}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
+
+		exutil.By("Check machine without capacityReservationGroupID")
+		machine := clusterinfra.GetLatestMachineFromMachineSet(oc, machinesetName)
+		capacityReservationGroupID, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machine, "-n", "openshift-machine-api", "-o=jsonpath={.spec.providerSpec.value.capacityReservationGroupID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(capacityReservationGroupID).To(o.BeEmpty())
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-73669-[MAPI] Webhook validation for Reserved Capacity [Disruptive]", func() {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
+		skipTestIfSpotWorkers(oc)
+		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureCloudName == "AzureStackCloud" || azureCloudName == "AzureUSGovernmentCloud" {
+			g.Skip("Skip for ASH and azure Gov due to no zone for ash, and for USGov it's hard to getclient with baseURI!")
+		}
+
+		exutil.By("Create a machineset ")
+		machinesetName := infrastructureName + "-73669"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if zone == "" {
+			g.Skip("Zone doesn't exist, capacity reservation group cannot be set on a virtual machine which is part of an availability set!")
+		}
+
+		exutil.By("Patch machineset that the value of capacityReservationGroupID does not start with /")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{ "capacityReservationGroupID": "subscriptions/53b8f551-f0fc-4bea-8cba-6d1fefd54c8a/resourceGroups/ZHSUN-AZ9-DVD88-RG/providers/Microsoft.Compute/capacityReservationGroups/zhsun-capacity"}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("must start with '/'"))
+
+		exutil.By("Patch machineset with invalid subscriptions")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{ "capacityReservationGroupID": "/subscrip/53b8f551-f0fc-4bea-8cba-6d1fefd54c8a/resourceGroups/ZHSUN-AZ9-DVD88-RG/providers/Microsoft.Compute/capacityReservationGroups/zhsun-capacity"}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("capacityReservationGroupID: Invalid value"))
+
+		exutil.By("Patch machineset with invalid resourceGroups")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{ "capacityReservationGroupID": "/subscriptions/53b8f551-f0fc-4bea-8cba-6d1fefd54c8a/resource/ZHSUN-AZ9-DVD88-RG/providers/Microsoft.Compute/capacityReservationGroups/zhsun-capacity"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+
+		exutil.By("Patch machineset with invalid capacityReservationGroups")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":2,"template":{"spec":{"providerSpec":{"value":{ "capacityReservationGroupID": "/subscriptions/53b8f551-f0fc-4bea-8cba-6d1fefd54c8a/resourceGroups/ZHSUN-AZ9-DVD88-RG/providers/Microsoft.Compute/capacityReservation/zhsun-capacity"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 	})
 })

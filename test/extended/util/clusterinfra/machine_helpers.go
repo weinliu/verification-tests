@@ -272,17 +272,20 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 
 // WaitForMachineFailed check if all the machines are Failed in a MachineSet
 func WaitForMachineFailed(oc *exutil.CLI, machineSetName string) {
-	e2e.Logf("Wait for machine to go into Failed phase")
+	e2e.Logf("Wait for machines to go into Failed phase")
+	machineNames := GetMachineNamesFromMachineSet(oc, machineSetName)
 	err := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()
-		if output != "Failed" {
-			e2e.Logf("machine is not in Failed phase and waiting up to 30 seconds ...")
-			return false, nil
+		for _, machine := range machineNames {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machine, "-n", "openshift-machine-api", "-o=jsonpath={.status.phase}").Output()
+			if output != "Failed" {
+				e2e.Logf("machine %s is not in Failed phase and waiting up to 30 seconds ...", machine)
+				return false, nil
+			}
 		}
-		e2e.Logf("machine is in Failed phase")
+		e2e.Logf("machines are in Failed phase")
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Check machine phase failed")
+	exutil.AssertWaitPollNoErr(err, "Check machines phase failed")
 }
 
 // WaitForMachineProvisioned check if all the machines are Provisioned in a MachineSet
