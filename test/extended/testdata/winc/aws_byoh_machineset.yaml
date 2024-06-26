@@ -49,12 +49,19 @@ spec:
             availabilityZone: <zone>
             region: us-east-2
           securityGroups:
-          - filters:
+            - filters:
+              - name: tag:Name
+                values:
+                - <infrastructureID>-node
+            - filters:
+              - name: tag:Name
+                values:
+                - <infrastructureID>-lb
+          subnet:
+            filters:
             - name: tag:Name
               values:
-              - <infrastructureID>-worker-sg
-          subnet:
-            id: <subnet>
+              - <infrastructureID>-subnet-private-<zone>
           tags:
           - name: kubernetes.io/cluster/<infrastructureID>
             value: owned

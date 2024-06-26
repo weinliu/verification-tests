@@ -531,13 +531,11 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fi
 			o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch region from the existing machineset")
 		}
 		zone := getAvailabilityZone(oc)
-		subnet := getAWSSubnetID(oc)
 		manifestFile, err := exutil.GenerateManifestFile(
 			oc, "winc", fileName, map[string]string{"<name>": machineSetName},
 			map[string]string{"<infrastructureID>": infrastructureID},
 			map[string]string{"<region>": region}, map[string]string{"<zone>": zone},
 			map[string]string{"<windows_image_with_container_runtime_installed>": imageID},
-			map[string]string{"<subnet>": subnet},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(manifestFile)
@@ -1439,13 +1437,6 @@ func getAvailabilityZone(oc *exutil.CLI) string {
 	}
 	zone, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 	return string(zone)
-}
-
-func getAWSSubnetID(oc *exutil.CLI) string {
-	subnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].spec.providerSpec.value.subnet.id}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch subnet from the existing machineset")
-
-	return string(subnet)
 }
 
 func readCertificateContent(path string) (string, error) {

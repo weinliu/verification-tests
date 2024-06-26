@@ -46,11 +46,18 @@ spec:
             region: <region>
           securityGroups:
             - filters:
-                - name: tag:Name
-                  values:
-                    - <infrastructureID>-worker-sg
+              - name: tag:Name
+                values:
+                - <infrastructureID>-node
+            - filters:
+              - name: tag:Name
+                values:
+                - <infrastructureID>-lb       
           subnet:
-            id: <subnet>
+            filters:
+            - name: tag:Name
+              values:
+              - <infrastructureID>-subnet-private-<zone>
           tags:
             - name: kubernetes.io/cluster/<infrastructureID>
               value: owned
