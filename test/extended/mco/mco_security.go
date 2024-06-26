@@ -1,6 +1,8 @@
 package mco
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -549,6 +551,55 @@ func BundleFileIsCATrusted(bundleFile string, node Node) (bool, error) {
 		return false, err
 	}
 
-	// The new certificate should be included in the /etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem file when we execute the update-ca-trust command
-	return strings.Contains(objsignCABundleRemote.GetTextContent(), bundleRemote.GetTextContent()), nil
+	bundleCerts, err := splitBundleCertificates([]byte(bundleRemote.GetTextContent()))
+	if err != nil {
+		return false, err
+	}
+
+	objsignCABundleCerts, err := splitBundleCertificates([]byte(objsignCABundleRemote.GetTextContent()))
+	if err != nil {
+		return false, err
+	}
+
+	// The new certificates should be included in the /etc/pki/ca-trust/extracted/pem/objsign-ca-bundle.pem file when we execute the update-ca-trust command
+	for _, bundleCert := range bundleCerts {
+		found := false
+		for _, objsignCert := range objsignCABundleCerts {
+			if bundleCert.Equal(objsignCert) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// splitBundleCertificates reads a pem bundle and returns a slice with all the certificates contained in this pem bundle
+func splitBundleCertificates(pemBundle []byte) ([]*x509.Certificate, error) {
+
+	certsList := []*x509.Certificate{}
+	for {
+		block, rest := pem.Decode(pemBundle)
+		if block == nil {
+			return nil, fmt.Errorf("failed to parse certificate PEM:\n%s", string(pemBundle))
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+
+		certsList = append(certsList, cert)
+		pemBundle = rest
+		if len(rest) == 0 {
+			break
+		}
+
+	}
+
+	return certsList, nil
 }
