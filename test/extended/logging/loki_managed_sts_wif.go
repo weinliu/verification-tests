@@ -1,9 +1,7 @@
 package logging
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -58,17 +56,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 	g.It("CPaasrunBoth-Author:kbharti-LEVEL0-Critical-71534-Verify CCO support on AWS STS cluster and forward logs to default Loki[Serial]", func() {
 		currentPlatform := exutil.CheckPlatform(oc)
 		if strings.ToLower(currentPlatform) != "aws" {
-			g.Skip("The platforn is not AWS. Skipping case..")
+			g.Skip("The platform is not AWS. Skipping case..")
 		}
-
-		// Get region of the AWS Cluster
-		region, err := exutil.GetAWSClusterRegion(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create log producer")
 		appNS := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err = oc.WithoutNamespace().Run("new-app").Args("-n", appNS, "-f", jsonLogFile).Execute()
+		err := oc.WithoutNamespace().Run("new-app").Args("-n", appNS, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeName, err := genLinuxAuditLogsOnWorker(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -127,23 +121,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 			lc.waitForLogsAppearByKey(logType, "log_type", logType)
 		}
 
-		exutil.By("Validate that logs are sent to S3 bucket")
-		cfg := readDefaultSDKExternalConfigurations(context.Background(), region)
-		iamClient := newIamClient(cfg)
-		stsClient := newStsClient(cfg)
-		var s3AssumeRoleName string
-		defer func() {
-			deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
-		}()
-		s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, ls.name)
-		validateS3contentsWithSTS(cfg, stsClient, ls.bucketName, s3AssumeRoleArn, []string{"application", "audit", "infrastructure"})
+		exutil.By("Validate that log streams are pushed to S3 bucket")
+		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
 	})
 
 	g.It("CPaasrunOnly-Author:kbharti-Critical-71773-Verify CCO support on Azure WIF cluster and forward logs to default Loki[Serial]", func() {
 
 		currentPlatform := exutil.CheckPlatform(oc)
 		if strings.ToLower(currentPlatform) != "azure" {
-			g.Skip("The platforn is not Azure. Skipping case..")
+			g.Skip("The platform is not Azure. Skipping case..")
 		}
 
 		exutil.By("Deploy LokiStack")
@@ -199,7 +185,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 			lc.waitForLogsAppearByKey(logType, "log_type", logType)
 		}
 
-		exutil.By("Validate log streams in blob container referenced under object storage secret")
-		validateAzureContainerContents(oc, os.Getenv("LOKI_OBJECT_STORAGE_STORAGE_ACCOUNT"), ls.bucketName, []string{"application", "audit", "infrastructure"})
+		exutil.By("Validate log streams are pushed to external Azure Blob container")
+		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
 	})
 })

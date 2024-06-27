@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -24,6 +25,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/iam/v1"
+	"google.golang.org/api/iterator"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -282,7 +284,8 @@ func getGCPAudience(providerName string) (string, error) {
 }
 
 func generateServiceAccountNameForGCS(clusterName string) string {
-	name := clusterName + "-logging-" + getRandomString()
+	// Service Account should be between 6-30 characters long
+	name := clusterName + getRandomString()
 	return name
 }
 
@@ -1541,4 +1544,95 @@ func validateCredentialsRequestGenerationOnSTS(oc *exutil.CLI, lokiStackName, lo
 	serviceAccountNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest", lokiStackName, "-n", lokiNamespace, `-o=jsonpath={.spec.serviceAccountNames}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(serviceAccountNames).Should(o.Equal(fmt.Sprintf(`["%s","%s-ruler"]`, lokiStackName, lokiStackName)))
+}
+
+// Function to check if tenant logs are present under the Google Cloud Storage bucket.
+// Returns success if any one of the tenants under tenants[] are found.
+func validatesIfLogsArePushedToGCSBucket(bucketName string, tenants []string) {
+	// Create a new GCS client
+	client, err := storage.NewClient(context.Background())
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create GCS client")
+
+	// Get a reference to the bucket
+	bucket := client.Bucket(bucketName)
+
+	// Create a query to list objects in the bucket
+	query := &storage.Query{}
+
+	// List objects in the bucket and check for tenant object
+	err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
+		itr := bucket.Objects(context.Background(), query)
+		for {
+			objAttrs, err := itr.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return false, err
+			}
+			for _, tenantName := range tenants {
+				if strings.Contains(objAttrs.Name, tenantName) {
+					e2e.Logf("Logs " + objAttrs.Name + " found under the bucket: " + bucketName)
+					return true, nil
+				}
+			}
+		}
+		e2e.Logf("Waiting for data to be available under bucket: " + bucketName)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Timed out...No data is available under the bucket: "+bucketName)
+}
+
+// Global function to check if logs are pushed to external storage.
+// Currently supports Amazon S3, Azure Blob Storage and Google Cloud Storage bucket.
+func (l lokiStack) validateExternalObjectStorageForLogs(oc *exutil.CLI, tenants []string) {
+	switch l.storageType {
+	case "s3":
+		{
+			// For Amazon S3
+			var s3Client *s3.Client
+			if exutil.IsSTSCluster(oc) {
+				region, err := exutil.GetAWSClusterRegion(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
+				s3Client = s3.NewFromConfig(cfg)
+			} else {
+				cred := getAWSCredentialFromCluster(oc)
+				s3Client = newS3Client(cred)
+			}
+			validatesIfLogsArePushedToS3Bucket(s3Client, l.bucketName, tenants)
+		}
+	case "azure":
+		{
+			// For Azure Container Storage
+			var accountName string
+			var err error
+			_, storageAccountURISuffix := getStorageAccountURISuffixAndEnvForAzure(oc)
+			if exutil.IsSTSCluster(oc) {
+				accountName = os.Getenv("LOKI_OBJECT_STORAGE_STORAGE_ACCOUNT")
+			} else {
+				_, err = exutil.GetAzureCredentialFromCluster(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				accountName, _, err = exutil.GetAzureStorageAccountFromCluster(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			validatesIfLogsArePushedToAzureContainer(storageAccountURISuffix, accountName, l.bucketName, tenants)
+		}
+	case "gcs":
+		{
+			// For Google Cloud Storage Bucket
+			validatesIfLogsArePushedToGCSBucket(l.bucketName, tenants)
+		}
+
+	case "swift":
+		{
+			e2e.Logf("Currently swift is not supported")
+			// TODO swift code here
+		}
+	default:
+		{
+			e2e.Logf("Currently minio is not supported")
+			// TODO minio code here
+		}
+	}
 }

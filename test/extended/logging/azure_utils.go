@@ -235,10 +235,11 @@ func performManagedIdentityAndSecretSetupForAzureWIF(oc *exutil.CLI, lokistackNa
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-// Check logs under the container used/referenced under the loki object storage secret.
-func validateAzureContainerContents(oc *exutil.CLI, storageAccountName, containerName string, tenants []string) {
+// Function to check if tenant logs are present under the Azure blob Container.
+// Use getStorageAccountURISuffixAndEnvForAzure() to get the storage account URI suffix.
+// Returns success if any one of the tenants under tenants[] are found.
+func validatesIfLogsArePushedToAzureContainer(storageAccountURISuffix, storageAccountName, containerName string, tenants []string) {
 	cred := createNewDefaultAzureCredential()
-	_, storageAccountURISuffix := getStorageAccountURISuffixAndEnvForAzure(oc)
 	// Create a new Blob service client
 	serviceClient, err := azblob.NewClient("https://"+storageAccountName+storageAccountURISuffix, cred, nil)
 	o.Expect(err).NotTo(o.HaveOccurred(), "failed to create service client..")

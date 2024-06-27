@@ -275,25 +275,11 @@ func createObjectStorageSecretOnAWSSTSCluster(oc *exutil.CLI, region, storageSec
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-// Function to check if tenant logs are present under the S3 bucket on STS cluster
-func validateS3contentsWithSTS(cfg aws.Config, stsClient *sts.Client, bucketName, s3roleArn string, tenants []string) {
-	// Assume the role to get temporary credentials
-	assumeRoleOutput, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
-		RoleArn:         aws.String(s3roleArn),
-		RoleSessionName: aws.String("AssumeRoleSession"),
-	})
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Creating S3 client with assumed role
-	s3Client := s3.NewFromConfig(cfg, func(options *s3.Options) {
-		options.Credentials = awsCred.NewStaticCredentialsProvider(
-			*assumeRoleOutput.Credentials.AccessKeyId,
-			*assumeRoleOutput.Credentials.SecretAccessKey,
-			*assumeRoleOutput.Credentials.SessionToken,
-		)
-	})
+// Function to check if tenant logs are present under the S3 bucket.
+// Returns success if any one of the tenants under tenants[] are found.
+func validatesIfLogsArePushedToS3Bucket(s3Client *s3.Client, bucketName string, tenants []string) {
 	// Poll to check contents of the s3 bucket
-	err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
 		listObjectsOutput, err := s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 			Bucket: aws.String(bucketName),
 		})
