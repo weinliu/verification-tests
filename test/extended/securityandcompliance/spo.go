@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -1710,7 +1711,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podPort, err := oc.AsAdmin().Run("get").Args("pod", "-n", subD.namespace, podName, "-o=jsonpath={.spec.containers[?(@.name==\"security-profiles-operator\")].env[?(@.name==\"SPO_PROFILING_PORT\")].value}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		url = fmt.Sprintf("http://[%v]:%v/debug/pprof/heap", podIP, podPort)
+		ip := net.ParseIP(podIP)
+		if ip.To4() == nil {
+			podIP = "[" + podIP + "]"
+		}
+		url = fmt.Sprintf("http://%v:%v/debug/pprof/heap", podIP, podPort)
 		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-i", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(string(output), keywords)).To(o.BeTrue())
