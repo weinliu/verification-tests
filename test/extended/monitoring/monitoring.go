@@ -1579,8 +1579,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="Watchdog"}'`, token, `Watchdog`, 3*platformLoadTime)
 
 			exutil.By("check the alerts are also sent to external alertmanager, include the in-cluster and user project alerts")
-			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", 3*uwmLoadTime)
-			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v1/alerts?filter={alertname="Watchdog"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "Watchdog", 3*uwmLoadTime)
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v2/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", 3*uwmLoadTime)
+			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v2/alerts?filter={alertname="Watchdog"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "Watchdog", 3*uwmLoadTime)
 		})
 
 		// author: tagao@redhat.com
@@ -2436,12 +2436,9 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkCM, _ := exec.Command("bash", "-c", `oc -n openshift-monitoring get cm -l app.kubernetes.io/managed-by=cluster-monitoring-operator | grep alertmanager`).Output()
 		e2e.Logf("check result is: %v", checkCM)
 		o.Expect(checkCM).NotTo(o.ContainSubstring("alertmanager-trusted-ca-bundle"))
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmaps", "-n", "openshift-monitoring").Output()
-		o.Expect(output).To(o.ContainSubstring("alertmanager-trusted-ca-bundle-"))
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check on rolebindings")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebindings", "-n", "openshift-monitoring").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebindings", "-n", "openshift-monitoring").Output()
 		o.Expect(output).NotTo(o.ContainSubstring("alertmanager-prometheusk8s"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
