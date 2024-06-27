@@ -1254,3 +1254,175 @@ var _ = g.Describe("[sig-networking] SDN nmstate functional", func() {
 		exutil.AssertWaitPollNoErr(vlanInfo2, "Fail to reactive vlan with the original ip addresses")
 	})
 })
+
+var _ = g.Describe("[sig-networking] SDN nmstate-operator upgrade", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                   = exutil.NewCLI("networking-nmstate", exutil.KubeConfigPath())
+		opNamespace          = "openshift-nmstate"
+		opName               = "kubernetes-nmstate-operator"
+		policyNamePreUpgrade = "bond-policy-54077"
+		policyNamePstUpgrade = "vlan-policy-54077"
+		bondInfName          = "bond54077"
+		bondPort1            = "dummy5"
+		bondPort2            = "dummy6"
+		vlanBaseInf          = "dummy7"
+		bondPolicyTemplate   = generateTemplateAbsolutePath("bond-policy-template.yaml")
+		vlanPolicyTemplate   = generateTemplateAbsolutePath("vlan-policy-template.yaml")
+	)
+
+	g.BeforeEach(func() {
+		g.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitableForNMState(oc)) {
+			g.Skip("Skipping for unsupported platform!")
+		}
+	})
+
+	g.It("Author:qiowang-NonHyperShiftHOST-PreChkUpgrade-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
+		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		nodeName := nodeList[0]
+
+		exutil.By("1. install knmstate operator")
+		installNMstateOperator(oc)
+
+		exutil.By("2. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("3. Creating bond on node")
+		exutil.By("3.1 Configure NNCP for creating bond")
+		bondPolicy := bondPolicyResource{
+			name:       policyNamePreUpgrade,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  bondInfName,
+			descr:      "create bond",
+			port1:      bondPort1,
+			port2:      bondPort2,
+			state:      "up",
+			template:   bondPolicyTemplate,
+		}
+		configErr := configBond(oc, bondPolicy)
+		o.Expect(configErr).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2 Verify the policy is applied")
+		nncpErr := checkNNCPStatus(oc, policyNamePreUpgrade, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr, "policy applied failed")
+
+		exutil.By("3.3 Verify the status of enactments is updated")
+		nnceName := nodeName + "." + policyNamePreUpgrade
+		nnceErr := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr, "status of enactments updated failed")
+
+		exutil.By("3.4 Verify the bond is up and active on the node")
+		ifaceList, ifaceErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceList, bondPolicy.ifacename)).Should(o.BeTrue())
+
+		exutil.By("3.5 Verify the created bond found in node network state")
+		ifaceState, nnsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="`+bondPolicy.ifacename+`")].state}`).Output()
+		o.Expect(nnsErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceState, "up")).Should(o.BeTrue())
+	})
+
+	g.It("Author:qiowang-NonHyperShiftHOST-PstChkUpgrade-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
+		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		nodeName := nodeList[0]
+		defer removeResource(oc, true, true, "nmstate", "nmstate", "-n", opNamespace)
+		defer deleteNNCP(oc, policyNamePreUpgrade)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, bondInfName) {
+				cmd := "nmcli con delete " + bondInfName + "; nmcli con delete " + bondPort1 + "; nmcli con delete " + bondPort2
+				exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmd)
+			}
+		}()
+
+		exutil.By("1. Check NMState CSV is upgraded")
+		majorVer, _, verErr := exutil.GetClusterVersion(oc)
+		o.Expect(verErr).NotTo(o.HaveOccurred())
+		e2e.Logf("ocp major version: %s", majorVer)
+		csvOutput, csvErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", opNamespace).Output()
+		o.Expect(csvErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(csvOutput, opName+"."+majorVer)).Should(o.BeTrue())
+
+		exutil.By("2. Check NMState CRs are running")
+		result, crErr := checkNmstateCR(oc, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "check nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("3. Check NNCP created before upgrade is still Available")
+		exutil.By("3.1 Verify the policy is Available")
+		nncpErr1 := checkNNCPStatus(oc, policyNamePreUpgrade, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+
+		exutil.By("3.2 Verify the status of enactments is Available")
+		nnceName1 := nodeName + "." + policyNamePreUpgrade
+		nnceErr1 := checkNNCEStatus(oc, nnceName1, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+
+		exutil.By("3.3 Verify the bond is up and active on the node")
+		ifaceList1, ifaceErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceList1, bondInfName)).Should(o.BeTrue())
+
+		exutil.By("3.4 Verify the created bond found in node network state")
+		ifaceState1, nnsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="`+bondInfName+`")].state}`).Output()
+		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceState1, "up")).Should(o.BeTrue())
+
+		exutil.By("4. Create new NNCP after upgrade")
+		exutil.By("4.1 Configure NNCP for creating vlan")
+		vlanPolicy := vlanPolicyResource{
+			name:       policyNamePstUpgrade,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  vlanBaseInf + ".101",
+			descr:      "create vlan",
+			baseiface:  vlanBaseInf,
+			vlanid:     101,
+			state:      "up",
+			template:   vlanPolicyTemplate,
+		}
+		defer deleteNNCP(oc, policyNamePstUpgrade)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, vlanPolicy.ifacename) {
+				cmd := `nmcli con delete ` + vlanPolicy.ifacename + `; nmcli con delete ` + vlanPolicy.baseiface
+				exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmd)
+			}
+		}()
+		configErr1 := vlanPolicy.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		exutil.By("4.2 Verify the policy is applied")
+		nncpErr2 := checkNNCPStatus(oc, policyNamePstUpgrade, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+
+		exutil.By("4.3 Verify the status of enactments is updated")
+		nnceName2 := nodeName + "." + policyNamePstUpgrade
+		nnceErr2 := checkNNCEStatus(oc, nnceName2, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+
+		exutil.By("4.4 Verify the vlan is up and active on the node")
+		ifaceList2, ifaceErr2 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceList2, vlanPolicy.ifacename)).Should(o.BeTrue())
+
+		exutil.By("4.5 Verify the created vlan found in node network state")
+		ifaceState2, nnsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="`+vlanPolicy.ifacename+`")].state}`).Output()
+		o.Expect(nnsErr2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceState2, "up")).Should(o.BeTrue())
+	})
+})

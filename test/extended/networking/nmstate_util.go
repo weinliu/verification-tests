@@ -143,7 +143,12 @@ func createNMStateCR(oc *exutil.CLI, nmstatecr nmstateCRResource, namespace stri
 		return false, err
 	}
 
-	err = waitForPodWithLabelReady(oc, namespace, "component=kubernetes-nmstate-handler")
+	result, err := checkNmstateCR(oc, namespace)
+	return result, err
+}
+
+func checkNmstateCR(oc *exutil.CLI, namespace string) (bool, error) {
+	err := waitForPodWithLabelReady(oc, namespace, "component=kubernetes-nmstate-handler")
 	if err != nil {
 		e2e.Logf("nmstate-handler Pods did not transition to ready state %v", err)
 		return false, err
