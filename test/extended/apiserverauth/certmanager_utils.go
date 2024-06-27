@@ -377,6 +377,15 @@ func verifyCertificate(oc *exutil.CLI, certName string, namespace string) {
 	}
 }
 
+// constructDNSName constructs a DNS name from the given base name with a random prefix for testing usage
+func constructDNSName(base string) string {
+	dnsName := getRandomString(4) + "." + base
+	if len(dnsName) > 63 {
+		g.Skip("Skip for the DNS name has more than 63 bytes, otherwise the admission webhook would deny the request")
+	}
+	return dnsName
+}
+
 // Skip case if HTTP and HTTPS route are unreachable.
 func skipIfRouteUnreachable(oc *exutil.CLI) {
 	e2e.Logf("Detect if using a private cluster.")

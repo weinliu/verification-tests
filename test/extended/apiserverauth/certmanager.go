@@ -105,12 +105,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}()
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
-		randomStr := getRandomString(4)
-		dnsName := randomStr + "." + dnsZone
-		if len(dnsName) > 63 {
-			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
-		}
-		e2e.Logf("dnsName=%s", dnsName)
+		dnsName := constructDNSName(dnsZone)
 		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -198,11 +193,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("As the normal user, create certificate.")
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}", "--context=admin").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("ingressDomain=%s", ingressDomain)
-		dnsName := "t." + ingressDomain
-		if len(dnsName) > 63 {
-			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
-		}
+		dnsName := constructDNSName(ingressDomain)
 		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
 		sedCmd := fmt.Sprintf(`sed -i 's/DNS_NAME/%s/g' %s`, dnsName, certHTTP01File)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
@@ -392,9 +383,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		oc.SetupProject()
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("ingressDomain=%s", ingressDomain)
-		randomStr := getRandomString(4)
-		dnsName := randomStr + "." + ingressDomain
+		dnsName := constructDNSName(ingressDomain)
 		certTemplate := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -528,12 +517,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer ready timeout.")
 
 		exutil.By("Create the certificate.")
-		randomStr := getRandomString(4)
-		dnsName := randomStr + "." + dnsZone
-		if len(dnsName) > 63 {
-			g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
-		}
-		e2e.Logf("dnsName=%s", dnsName)
+		dnsName := constructDNSName(dnsZone)
 		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -622,12 +606,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, "cert-manager", 10*time.Second, 120*time.Second)
 
 			exutil.By("Create a new certificate.")
-			randomStr = getRandomString(4)
-			dnsName = randomStr + "." + dnsZone
-			if len(dnsName) > 63 {
-				g.Skip("Skip testcase for length of dnsName is beyond 63, and result in err:Failed to create Order, NewOrder request did not include a SAN short enough to fit in CN!!!!")
-			}
-			e2e.Logf("dnsName=%s", dnsName)
+			dnsName := constructDNSName(dnsZone)
 			certTemplate = filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
 			params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -787,7 +766,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		exutil.By("specify the host name")
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		hostName := getRandomString(4) + "." + ingressDomain
+		hostName := constructDNSName(ingressDomain)
 
 		exutil.By("create an edge Route for it")
 		err = oc.Run("create").Args("route", routeType, routeName, "--service", serviceName, "--hostname", hostName).Execute()
