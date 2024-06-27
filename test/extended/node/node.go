@@ -1497,17 +1497,18 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		oc                        = exutil.NewCLI("keda-operator", exutil.KubeConfigPath())
 		cmaKedaControllerTemplate string
 		buildPruningBaseDir       = exutil.FixturePath("testdata", "node")
+		sub                       subscriptionDescription
 	)
 	g.BeforeEach(func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "node")
 		cmaKedaControllerTemplate = filepath.Join(buildPruningBaseDir, "cma-keda-controller-template.yaml")
-		exutil.SkipMissingQECatalogsource(oc)
+		sub.skipMissingCatalogsources(oc)
 		createKedaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("Author:weinliu-StagerunBoth-High-52383-Keda Install", func() {
+	g.It("Author:weinliu-Level0-StagerunBoth-High-52383-Keda Install", func() {
 		g.By("CMA (Keda) operator has been installed successfully")
 	})
 

@@ -7,5 +7,5 @@ spec:
   channel: stable
   installPlanApproval: Automatic
   name: openshift-custom-metrics-autoscaler-operator
-  source: qe-app-registry
+  source: redhat-operators
   sourceNamespace: openshift-marketplace

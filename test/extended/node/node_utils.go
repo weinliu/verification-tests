@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/pretty"
@@ -233,6 +234,10 @@ type triggerAuthenticationDescription struct {
 type ImgConfigContDescription struct {
 	name     string
 	template string
+}
+
+type subscriptionDescription struct {
+	catalogSourceName string
 }
 
 func (cpuPerfProfile *cpuPerfProfile) create(oc *exutil.CLI) {
@@ -2328,4 +2333,20 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 		newStatusToCompare[key] = status
 	}
 	return newStatusToCompare
+}
+
+// this function is to check qe-app-registry exists if not then use redhat-operators else skip the testcase
+func (sub *subscriptionDescription) skipMissingCatalogsources(oc *exutil.CLI) {
+	output, errQeReg := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if errQeReg != nil && strings.Contains(output, "NotFound") {
+		output, errRed := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "redhat-operators").Output()
+		if errRed != nil && strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsources not available")
+		} else {
+			o.Expect(errRed).NotTo(o.HaveOccurred())
+		}
+		sub.catalogSourceName = "redhat-operators"
+	} else {
+		o.Expect(errQeReg).NotTo(o.HaveOccurred())
+	}
 }
