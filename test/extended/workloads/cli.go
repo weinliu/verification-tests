@@ -2052,6 +2052,11 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 
 		//checkpoint for OCPBUGS-24375, oc process command succeed while running it with a template file cross namespace
 		oc.SetupProject()
+		_, templateErr, _ := oc.WithoutNamespace().Run("get").Args("template", "httpd-example", "-n", "openshift").Outputs()
+		if strings.Contains(templateErr, "not found") {
+			g.Skip("Can't find the template, skip checkpoint for OCPBUGS-24375.")
+		}
+
 		tmeFile2, err := oc.WithoutNamespace().Run("get").Args("template", "httpd-example", "-n", "openshift", "-o", "yaml").OutputToFile("httpdexampleT.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("process").Args("-f", tmeFile2).Execute()
