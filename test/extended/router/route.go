@@ -214,8 +214,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		baseDomain := getBaseDomain(oc)
 		operatorPod := getPodName(oc, "openshift-ingress-operator", " ")
 		routehost := "canary-openshift-ingress-canary.apps." + baseDomain
-		cmdOnPod := []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "200 OK", 30)
+		cmdOnPod := []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-k", "https://" + routehost, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, cmdOnPod, "Healthcheck requested", 30)
 
 		exutil.By("Patch the ingress controller and deleting the canary route")
 		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
