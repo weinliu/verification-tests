@@ -1,5 +1,6 @@
 import { guidedTour } from "upstream/views/guided-tour";
 import { operatorHubPage } from "views/operator-hub-page";
+import { Pages } from "views/pages";
 
 describe('Operators Installed nonlatest operator test', () => {
   const params ={
@@ -40,7 +41,7 @@ describe('Operators Installed nonlatest operator test', () => {
       });
     };
 
-    operatorHubPage.goTo();
+    Pages.gotoOperatorHubPage();
     operatorHubPage.checkSourceCheckBox("red-hat");
     cy.get('input[type="text"]').clear().type(params.operatorName + "{enter}");
     cy.get('[role="gridcell"]').within(() => {
@@ -87,7 +88,7 @@ describe('Operators Installed nonlatest operator test', () => {
     cy.contains('View Operator').should('be.visible');
 
     // Check the Upgrade available for the operator in Installed Operator page
-    cy.visit(`/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage();
     cy.byTestID('name-filter-input').clear().type("binding")
       .should(() => expect(Cypress.$(`[data-test="status-text"]`).length).to.eq(1))
       .then(() => {
@@ -99,7 +100,7 @@ describe('Operators Installed nonlatest operator test', () => {
           .should('include','InstallPlan');
     })
     // Check the operator subcription page have a new section 'Installed Operator'
-    operatorHubPage.goToWithNamespace(params.ns);
+    Pages.gotoOperatorHubPage(params.ns)
     operatorHubPage.checkSourceCheckBox("red-hat");
     cy.get('input[type="text"]').clear().type(params.operatorName + "{enter}");
     cy.get('[role="gridcell"]').within(() => {

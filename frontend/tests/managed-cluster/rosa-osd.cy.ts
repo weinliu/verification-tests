@@ -1,6 +1,5 @@
 import { guidedTour } from '../../upstream/views/guided-tour';
 import { Pages } from '../../views/pages';
-import { installedOperatorPage } from '../../views/operator-hub-page';
 
 describe("Features on managed cluster such as ROSA/OSD", () => {
   before( () => {
@@ -37,7 +36,7 @@ describe("Features on managed cluster such as ROSA/OSD", () => {
     cy.get('a').should('not.contain', 'Learn more about');
 
     //hide operators help link
-    installedOperatorPage.goToWithNS('default');
+    Pages.gotoInstalledOperatorPage('default');
     cy.get('a').should('not.contain', 'Understanding Operators');
 
     //hide networkpolicy help link

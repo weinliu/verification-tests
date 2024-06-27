@@ -1,6 +1,7 @@
 import { listPage } from "upstream/views/list-page";
 import { operatorHubPage } from "../../views/operator-hub-page";
 import { guidedTour } from './../../upstream/views/guided-tour';
+import { Pages } from "views/pages";
 
 describe('Operators Installed page test', () => {
   const params ={
@@ -22,8 +23,7 @@ describe('Operators Installed page test', () => {
     cy.adminCLI(`oc label namespace ${params.specialNs} pod-security.kubernetes.io/audit=privileged --overwrite`);
     cy.adminCLI(`oc label namespace ${params.specialNs} pod-security.kubernetes.io/warn=privileged --overwrite`);
     cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`);
-    cy.visit('/k8s/ns/openshift-marketplace/operators.coreos.com~v1alpha1~CatalogSource/custom-catalogsource');
-    cy.get('[data-test-selector="details-item-value__Status"]', {timeout: 120000 }).should('contain.text', 'READY');
+    Pages.gotoCatalogSourcePage();
     operatorHubPage.installOperator(params.sonarqube, params.csName, params.specialNs);
     cy.get('[aria-valuetext="Loading..."]', {timeout: 120000 }).should('exist');
     operatorHubPage.installOperator(params.infinispan, params.csName);
@@ -47,7 +47,7 @@ describe('Operators Installed page test', () => {
   });
 
   it('(OCP-54975,xiyuzhao,UserInterface) Check OCP console works when copied CSVs are disabled',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
-    cy.visit(`/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage();
     operatorHubPage.checkOperatorStatus('Sonarqube Operator', 'Succeed');
     operatorHubPage.checkOperatorStatus('Infinispan Operator', 'Succeed');
     /* 1. Check the default value for the Flag is false
@@ -77,7 +77,7 @@ describe('Operators Installed page test', () => {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
         cy.visit(`/k8s/cluster/user.openshift.io~v1~User/${Cypress.env('LOGIN_USERNAME')}/roles`)
         cy.get('[data-test="msg-box-title"]').should('contain.text','Restricted Access');
-        cy.visit(`/k8s/ns/${params.ns54975}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+        Pages.gotoInstalledOperatorPage(params.ns54975);
         cy.get(`[data-test-id="resource-title"]`, { timeout: 15000 }).should('contain.text',"Installed Operators");
         listPage.filter.byName('sonarqube');
         listPage.rows.shouldNotExist(`Sonarqube Operator`);
@@ -95,7 +95,7 @@ describe('Operators Installed page test', () => {
     cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     /*' Scription' Tab is exist for the operator installed in the All namespace
        Page is Restricted Access */
-    cy.visit(`/k8s/ns/${params.specialNs}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage(params.specialNs)
     cy.get('[data-test-operator-row="Infinispan Operator"]', {timeout: 120000 }).click();
     cy.get('[data-test-id="horizontal-link-Subscription"]')
       .as('subscriptionTab')
@@ -104,7 +104,7 @@ describe('Operators Installed page test', () => {
     cy.get('[data-test="msg-box-title"]').should('contain.text','Restricted Access');
     /* Check 'Scription' Tab is visible to normal user for operator installed in specific namespace
        User who has authority is able to check the installPlan and CatalogSource info */
-    cy.visit(`/k8s/ns/${params.specialNs}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage(params.specialNs)
     cy.get('[data-test-operator-row="Sonarqube Operator"]', {timeout: 120000 }).click();
     cy.get('@subscriptionTab').should('exist').click();
     cy.get('[title="InstallPlan"]')

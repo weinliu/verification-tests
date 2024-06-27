@@ -8,8 +8,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`);
-    cy.visit('/k8s/ns/openshift-marketplace/operators.coreos.com~v1alpha1~CatalogSource/custom-catalogsource');
-    cy.contains('READY').should('exist');
+    Pages.gotoCatalogSourcePage();
   });
 
   after(() => {
@@ -67,12 +66,12 @@ describe('Operators related features', () => {
     operatorHubPage.installOperator('etcd', 'community-operators', 'test-ocp40457');
     cy.wait(20000);
     operatorHubPage.installOperator('argocd-operator', 'custom-catalogsource', 'test-ocp40457');
-    cy.visit(`/k8s/ns/test-ocp40457/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage('test-ocp40457')
     operatorHubPage.checkOperatorStatus('etcd', 'Succeed');
     operatorHubPage.checkOperatorStatus('Argo CD', 'Succeed');
     operatorHubPage.removeOperator('Argo CD');
     operatorHubPage.installOperator('cockroachdb', 'community-operators', 'test-ocp40457');
-    cy.visit(`/k8s/ns/test-ocp40457/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage('test-ocp40457')
     operatorHubPage.checkOperatorStatus('CockroachDB Helm Operator', 'Succeed');
   });
 
@@ -84,7 +83,7 @@ describe('Operators related features', () => {
       subscriptionName: "businessautomation-operator"
     }
     const uninstallOperatorCheckOperand = (ns: string, condition: string) => {
-      cy.visit(`/k8s/ns/${ns}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+      Pages.gotoInstalledOperatorPage(ns);
       listPage.rows.clickKebabAction(testParams.operatorName,"Uninstall Operator");
       cy.contains('Operand instances').should(condition);
     };
@@ -95,7 +94,7 @@ describe('Operators related features', () => {
       cy.adminCLI(`oc new-project ${ns}`)
       operatorHubPage.installOperator(testParams.subscriptionName,'redhat-operators', ns);
       cy.get('[aria-valuetext="Loading..."]').should('exist');
-      cy.visit(`/k8s/ns/${ns}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+      Pages.gotoInstalledOperatorPage(`${ns}`);
       operatorHubPage.checkOperatorStatus(testParams.operatorName, 'Succeed');
       cy.adminCLI(`oc apply -f ./fixtures/operators/businessautomation-opreand.yaml -n ${ns}`)
         .its('stdout')

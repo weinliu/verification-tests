@@ -1,4 +1,5 @@
 import { operatorHubPage } from "../views/operator-hub-page"
+import { Pages } from "./pages"
 
 export const project = "netobserv"
 
@@ -39,7 +40,7 @@ export const Operator = {
         // don't install operator if its already installed
         cy.get("div.loading-box").should('be.visible').then(loading => {
             if (Cypress.$('td[role="gridcell"]').length == 0) {
-                operatorHubPage.goTo()
+                Pages.gotoOperatorHubPage();
                 const catalogSourceSelectorCheckbox = `input[title="${catalogSourceDisplayName}"]`
                 cy.get(catalogSourceSelectorCheckbox).check()
                 operatorHubPage.install(Operator.name(), true)

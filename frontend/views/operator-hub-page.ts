@@ -1,15 +1,7 @@
 import { listPage } from "../upstream/views/list-page";
 import { helperfuncs } from 'views/utils';
+import { Pages } from "./pages";
 export const operatorHubPage = {
-  goTo: () => {
-    cy.visit('/operatorhub/all-namespaces');
-    // the operator hub page is loaded when the count is displayed
-    cy.get('.co-catalog-page__num-items', {timeout: 120000}).should('exist');
-  },
-  goToWithNamespace: (ns: string) => {
-    cy.visit(`/operatorhub/ns/${ns}`);
-    cy.get('.co-catalog-page__num-items').should('exist')
-  },
   getAllTileLabels: () => {
     return cy.get('.pf-v5-c-badge')
   },
@@ -67,8 +59,7 @@ export const operatorHubPage = {
     cy.byTestID('Enable-radio-input').click()
     cy.byTestID('install-operator').trigger('click')
     cy.get('#operator-install-page').should('exist')
-
-    cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')
+    Pages.gotoInstalledOperatorPage();
 
     cy.contains(name).parents('tr').within(() => {
       cy.byTestID("status-text", { timeout: 30000 }).should('have.text', "Succeeded")
@@ -313,12 +304,5 @@ export const Operand = {
         const sortedNames = [...namesArray].sort((a, b) => b.localeCompare(a));
         cy.wrap(namesArray).should('deep.equal', sortedNames);
       });
-  }
-}
-
-export const installedOperatorPage = {
-  goToWithNS: (ns: string) => {
-    cy.visit(`/k8s/ns/${ns}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-    cy.contains('Installed Operators').should('exist');
   }
 }

@@ -1,6 +1,6 @@
-import { listPage } from "upstream/views/list-page";
 import { operatorHubPage } from "../../views/operator-hub-page";
 import { guidedTour } from './../../upstream/views/guided-tour';
+import { Pages } from "views/pages";
 
 describe('Operators Installed page test', () => {
   const params ={
@@ -8,7 +8,7 @@ describe('Operators Installed page test', () => {
     'project':'open-cluster-management',
     'advancedCluster': 'advanced-cluster-management'
   }
-  
+
   before(() => {
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
@@ -25,7 +25,7 @@ describe('Operators Installed page test', () => {
 
     operatorHubPage.installOperator(`${params.advancedCluster}`,`${params.catalog}`);
     cy.get('[aria-valuetext="Loading..."]').should('exist');
-    cy.visit(`/k8s/ns/${params.project}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage(params.project);
     operatorHubPage.checkOperatorStatus('Advanced Cluster Management for Kubernetes', 'Succeeded');
     });
 

@@ -120,6 +120,10 @@ export const Pages = {
   gotoMCPDetailsPage: (mcpname: string) => {
     cy.visit(`/k8s/cluster/machineconfiguration.openshift.io~v1~MachineConfigPool/${mcpname}`)
   },
+  gotoCatalogSourcePage: () => {
+    cy.visit('/k8s/ns/openshift-marketplace/operators.coreos.com~v1alpha1~CatalogSource/custom-catalogsource');
+    cy.contains('READY', {timeout: 120000 }).should('exist');
+  },
   gotoOperatorHubPage: (namespace: string = 'all-namespaces') => {
     const url = namespace === 'all-namespaces' ?
       '/operatorhub/all-namespaces':
@@ -132,6 +136,7 @@ export const Pages = {
       '/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion':
       `/k8s/ns/${namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`;
     cy.visit(url);
+    cy.contains('Installed Operators').should('exist');
   },
   gotoVolumeSnapshotListPage: (namespace: string) => {
     cy.visit(`/k8s/ns/${namespace}/snapshot.storage.k8s.io~v1~VolumeSnapshot`);

@@ -1,4 +1,5 @@
 import { Operand,operatorHubPage } from "views/operator-hub-page"
+import { Pages } from "views/pages";
 
 describe('Display All Namespace Operands for Global Operators', () => {
   let csvname;
@@ -17,7 +18,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     // Base data for case OCP-68180 & OCP-50153
     operatorHubPage.installOperator(params.operatorPkgName, "redhat-operators");
     cy.get('[aria-valuetext="Loading..."]').should('exist');
-    cy.visit('/k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion');
+    Pages.gotoInstalledOperatorPage();
     operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeeded');
     cy.adminCLI(`oc create -f ./fixtures/operators/amqstreams-opreand-kafka.yaml -n ${params.ns68180}`);
     cy.adminCLI(`oc get clusterserviceversion -o=jsonpath='{.items[*].metadata.name}'`).then((result) => {

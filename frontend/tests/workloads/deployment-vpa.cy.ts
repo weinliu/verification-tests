@@ -1,7 +1,8 @@
 import { guidedTour } from "upstream/views/guided-tour";
 import { testName } from '../../upstream/support';
 import { Deployment } from 'views/deployment';
-import { operatorHubPage, installedOperatorPage } from 'views/operator-hub-page';
+import { operatorHubPage } from 'views/operator-hub-page';
+import { Pages } from "views/pages";
 describe('deployment vpa related feature', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
@@ -24,7 +25,7 @@ describe('deployment vpa related feature', () => {
     cy.visit(`k8s/ns/${testName}/deployments/testd`);
     Deployment.checkDetailItem('VerticalPodAutoscaler', 'No VerticalPodAutoscaler');
     cy.wait(30000);
-    installedOperatorPage.goToWithNS(`openshift-vertical-pod-autoscaler`)
+    Pages.gotoInstalledOperatorPage(`openshift-vertical-pod-autoscaler`)
     operatorHubPage.checkOperatorStatus(`VerticalPodAutoscaler`, 'Succeeded')
     cy.adminCLI(`oc create -f ./fixtures/deployments/testvpa.yaml -n ${testName}`);
     cy.adminCLI(`oc get verticalpodautoscaler -n ${testName}`).then(result => { expect(result.stdout).contain("examplevpa")})

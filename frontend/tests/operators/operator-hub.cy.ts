@@ -28,7 +28,7 @@ describe('Operator Hub tests', () => {
   it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     const queryCatalogSource = `oc get catalogsource custom-catalogsource -n openshift-marketplace -o jsonpath={.status.connectionState.lastObservedState}`;
     cy.checkCommandResult(queryCatalogSource, 'READY', { retries: 6, interval: 10000 }).then(() => {
-      operatorHubPage.goTo();
+      Pages.gotoOperatorHubPage();
       operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG);
       OperatorHubSelector.SOURCE_MAP.forEach((operatorSource, operatorSourceLabel) => {
         operatorHubPage.checkSourceCheckBox(operatorSourceLabel);
@@ -48,7 +48,7 @@ describe('Operator Hub tests', () => {
     const allOperatorsList = ['infinispan','argocd', 'etcd'];
     let includedOperatorsList = ['infinispan'];
     let excludedOperatorsList = [];
-    operatorHubPage.goTo();
+    Pages.gotoOperatorHubPage();
     operatorHubPage.checkSourceCheckBox("custom-auto-source");
     cy.adminCLI(`oc get node --selector node-role.kubernetes.io/worker= --show-labels`).then((result) =>{
       if(result.stdout.search('kubernetes.io/arch=arm64') != -1) includedOperatorsList.push('etcd');
@@ -96,11 +96,11 @@ describe('Operator Hub tests', () => {
       csvName: 'Infinispan Operator'
     }
     cy.cliLogin();
-    cy.createProjectWithCLI(`${params.ns}`);
-    operatorHubPage.installOperator(`${params.operatorName}`, `${testParams.catalogName}`,`${params.ns}`);
-    installedOperatorPage.goToWithNS(`${params.ns}`)
-    operatorHubPage.checkOperatorStatus(`${params.csvName}`, 'Succeeded')
-    operatorHubPage.goToWithNamespace(`${params.ns}`);
+    cy.createProjectWithCLI(params.ns);
+    operatorHubPage.installOperator(params.operatorName, testParams.catalogName,params.ns);
+    Pages.gotoInstalledOperatorPage(params.ns)
+    operatorHubPage.checkOperatorStatus(params.csvName, 'Succeeded')
+    Pages.gotoOperatorHubPage(params.ns)
     operatorHubPage.checkInstallStateCheckBox('installed')
     operatorHubPage.filter('infinispan');
     cy.get('[class*="card__footer"] span').should('contain.text', "Installed");
@@ -124,7 +124,7 @@ describe('Operator Hub tests', () => {
   it('(OCP-54037,yapei,UserInterface) Affinity definition support',{tags: ['e2e','admin','@osd-ccs']}, ()=> {
     cy.createProject(testParams.testNamespace);
     operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
-    cy.visit(`/k8s/ns/${testParams.testNamespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
+    Pages.gotoInstalledOperatorPage(testParams.testNamespace)
     operatorHubPage.checkOperatorStatus('Sonarqube Operator', 'Installing');
     cy.visit(`/k8s/ns/${testParams.testNamespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/sonarqube-operator.v0.0.6/sonarsource.parflesh.github.io~v1alpha1~SonarQube`)
     cy.byTestID('item-create').click();
@@ -176,7 +176,7 @@ describe('Operator Hub tests', () => {
     });
     /* Aqua operator has label operatorframework.io/os.windows: supported
         which means it will only shown on OperatorHub page when node os has windows type */
-    operatorHubPage.goTo();
+    Pages.gotoOperatorHubPage();
     operatorHubPage.checkSourceCheckBox("custom-auto-source");
     cy.wrap(nodeOS).then(()=> {
       if(nodeOS.includes('windows')) {
