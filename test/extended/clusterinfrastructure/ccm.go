@@ -3,6 +3,7 @@ package clusterinfrastructure
 import (
 	"encoding/base64"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -578,5 +579,36 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		} else {
 			o.Expect(internalLB).To(o.MatchRegexp(`"ip":"10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"`))
 		}
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-70621-[CCM]cloud-controller-manager should be Upgradeable is True when Degraded is False [Disruptive]", func() {
+		ccm, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager").Output()
+		if !strings.Contains(ccm, "cloud-controller-manager") {
+			g.Skip("This case is not executable when cloud-controller-manager CO is absent")
+		}
+		e2e.Logf("Delete cm to make co cloud-controller-manager Degraded=True")
+		cloudProviderConfigCMFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "cloud-provider-config", "-n", "openshift-config", "-oyaml").OutputToFile("70621-cloud-provider-config-cm.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "cloud-provider-config", "-n", "openshift-config").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			os.Remove(cloudProviderConfigCMFile)
+		}()
+		defer func() {
+			e2e.Logf("Recreate the deleted cm to recover cluster, cm kube-cloud-config can be recreated by cluster")
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", cloudProviderConfigCMFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			state, checkClusterOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o", "jsonpath={.status.conditions[?(@.type==\"Degraded\")].status}{.status.conditions[?(@.type==\"Upgradeable\")].status}").Output()
+			o.Expect(checkClusterOperatorConditionErr).NotTo(o.HaveOccurred())
+			o.Expect(state).To(o.ContainSubstring("FalseTrue"))
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "kube-cloud-config", "-n", "openshift-config-managed").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Co cloud-controller-manager Degraded=True, Upgradeable=false")
+		state, checkClusterOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o", "jsonpath={.status.conditions[?(@.type==\"Degraded\")].status}{.status.conditions[?(@.type==\"Upgradeable\")].status}").Output()
+		o.Expect(checkClusterOperatorConditionErr).NotTo(o.HaveOccurred())
+		o.Expect(state).To(o.ContainSubstring("TrueFalse"))
 	})
 })
