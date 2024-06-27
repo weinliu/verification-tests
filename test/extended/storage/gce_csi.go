@@ -359,4 +359,60 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	g.It("Author:chaoyang-NonHyperShiftHOST-OSD_CCS-High-54403-[GCE-PD-CSI] Clone a region disk from zone disk", func() {
+
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+
+			storageClassParameters = map[string]string{
+
+				"type":             "pd-standard",
+				"replication-type": "regional-pd"}
+
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
+
+		exutil.By("Create pvc with the storageclass which set zone disk parameter")
+		pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, "pd.csi.storage.gke.io")
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		exutil.By("Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		exutil.By("Write file to volume")
+		podOri.checkMountedVolumeCouldRW(oc)
+
+		exutil.By("Create a clone pvc with storageclass set the parameter regional-pd")
+		storageClassClone := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("pd.csi.storage.gke.io"))
+		storageClassClone.createWithExtraParameters(oc, extraParameters)
+		defer storageClassClone.deleteAsAdmin(oc)
+
+		exutil.By("Create pod with the cloned pvc and wait for the pod ready")
+		//rigion disk capacity must greater than 200Gi
+		pvcClonecapacity := "200Gi"
+
+		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassClone.name), setPersistentVolumeClaimDataSourceName(pvcOri.name), setPersistentVolumeClaimCapacity(pvcClonecapacity))
+		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
+
+		pvcClone.createWithCloneDataSource(oc)
+		defer pvcClone.deleteAsAdmin(oc)
+		podClone.create(oc)
+		defer podClone.deleteAsAdmin(oc)
+		podClone.waitReady(oc)
+
+		exutil.By("Check the file exist in cloned volume")
+		podClone.checkMountedVolumeDataExist(oc, true)
+
+	})
+
 })
