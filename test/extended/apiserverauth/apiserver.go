@@ -2474,14 +2474,7 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
-		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
-		isExternalOIDCCluster, odcErr := exutil.IsExternalOIDCCluster(oc)
-		o.Expect(odcErr).NotTo(o.HaveOccurred())
-		if isExternalOIDCCluster {
-			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
-		}
-
-		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -2839,13 +2832,6 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-16295-[origin_platformexp_329] 3.7 User can expose the environment variables to pods", func() {
-		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
-		isExternalOIDCCluster, odcErr := exutil.IsExternalOIDCCluster(oc)
-		o.Expect(odcErr).NotTo(o.HaveOccurred())
-		if isExternalOIDCCluster {
-			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
-		}
-
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -2944,14 +2930,7 @@ spec:
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
-		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
-		isExternalOIDCCluster, odcErr := exutil.IsExternalOIDCCluster(oc)
-		o.Expect(odcErr).NotTo(o.HaveOccurred())
-		if isExternalOIDCCluster {
-			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
-		}
-
-		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5073,14 +5052,7 @@ spec:
 
 	// author: kewang@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11797-[Apiserver] Image with single or multiple layer(s) sumed up size slightly exceed the openshift.io/image-size will push failed", func() {
-		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
-		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if isExternalOIDCCluster {
-			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
-		}
-
-		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5166,14 +5138,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
-		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
-		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if isExternalOIDCCluster {
-			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
-		}
-
-		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5342,14 +5307,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12263-[Apiserver] When exceed openshift.io/images will ban to create image reference or push image to project", func() {
-		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
-		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if isExternalOIDCCluster {
-			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
-		}
-
-		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
@@ -5536,14 +5494,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12158-[Apiserver] Specify ResourceQuota on project", func() {
-		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
-		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if isExternalOIDCCluster {
-			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
-		}
-
-		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
