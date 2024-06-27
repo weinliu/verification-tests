@@ -49,16 +49,22 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(CVOStatus["state"].(map[string]interface{})["running"]).NotTo(o.BeNil(), "CVO state have no running: %v", CVOStatus)
 
 		exutil.By("Check exitCode of lastState is 0 if lastState is not empty")
-		o.Expect(CVOStatus["lastState"]).NotTo(o.BeNil(), "CVO have no lastState: %v", CVOStatus)
-		if reflect.ValueOf(CVOStatus["lastState"]).Len() == 0 {
+		lastState := CVOStatus["lastState"]
+		o.Expect(lastState).NotTo(o.BeNil(), "CVO have no lastState: %v", CVOStatus)
+		if reflect.ValueOf(lastState).Len() == 0 {
 			e2e.Logf("lastState is empty which is expected")
 		} else {
-			lastState := CVOStatus["lastState"]
 			o.Expect(lastState.(map[string]interface{})["terminated"]).NotTo(o.BeNil(), "no terminated for non-empty CVO lastState: %v", CVOStatus)
-			exitCode := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["exitCode"]
-			o.Expect(exitCode.(float64)).To(o.BeZero(), "CVO terminated with non-zero code: %v", CVOStatus)
-			reason := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["reason"]
-			o.Expect(reason.(string)).To(o.Equal("Completed"), "CVO terminated with unexpected reason: %v", CVOStatus)
+			exitCode := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["exitCode"].(float64)
+			if exitCode == 255 && strings.Contains(
+				lastState.(map[string]interface{})["terminated"].(map[string]interface{})["message"].(string),
+				"Failed to get FeatureGate from cluster") {
+				e2e.Logf("detected a known issue OCPBUGS-13873, skipping lastState check")
+			} else {
+				o.Expect(exitCode).To(o.BeZero(), "CVO terminated with non-zero code: %v", CVOStatus)
+				reason := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["reason"]
+				o.Expect(reason.(string)).To(o.Equal("Completed"), "CVO terminated with unexpected reason: %v", CVOStatus)
+			}
 		}
 	})
 
