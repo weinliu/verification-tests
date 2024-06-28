@@ -6,7 +6,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN misc", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-ipv6", exutil.KubeConfigPath())

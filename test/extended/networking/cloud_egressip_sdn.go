@@ -19,7 +19,7 @@ import (
 	"github.com/vmware/govmomi"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN openshift-sdn egressip", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -3296,7 +3296,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 })
 
-var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
+var _ = g.Describe("[sig-networking] SDN openshift-sdn egressip Basic", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())

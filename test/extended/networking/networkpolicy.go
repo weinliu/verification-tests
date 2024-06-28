@@ -21,7 +21,7 @@ import (
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-networkpolicy", exutil.KubeConfigPath())

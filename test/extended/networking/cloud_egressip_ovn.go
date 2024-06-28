@@ -22,7 +22,7 @@ import (
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -5538,7 +5538,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {
 
 })
 
-var _ = g.Describe("[sig-networking] OVN EgressIP on rosa", func() {
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP on rosa", func() {
 
 	defer g.GinkgoRecover()
 
@@ -5754,7 +5754,7 @@ var _ = g.Describe("[sig-networking] OVN EgressIP on rosa", func() {
 
 })
 
-var _ = g.Describe("[sig-networking] SDN StressTest ", func() {
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP StressTest ", func() {
 	//This case will only be run in perf stress ci which can be deployed for scale number pods for stress testing.
 	defer g.GinkgoRecover()
 

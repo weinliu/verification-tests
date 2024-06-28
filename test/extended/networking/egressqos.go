@@ -12,7 +12,7 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN egressqos", func() {
 	defer g.GinkgoRecover()
 	var (
 		dscpSvcIP         string

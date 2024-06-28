@@ -14,7 +14,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-networking] SDN nmstate installation", func() {
+var _ = g.Describe("[sig-networking] SDN nmstate-operator installation", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate installation", func() {
 	})
 })
 
-var _ = g.Describe("[sig-networking] SDN nmstate functional", func() {
+var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 	defer g.GinkgoRecover()
 
 	var (

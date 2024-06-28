@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN CNO", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-operator", exutil.KubeConfigPath())

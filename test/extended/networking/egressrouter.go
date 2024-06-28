@@ -17,7 +17,7 @@ import (
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
-var _ = g.Describe("[sig-networking] SDN", func() {
+var _ = g.Describe("[sig-networking] SDN ovn-kubernetes egressrouter", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-egressrouter", exutil.KubeConfigPath())
@@ -257,7 +257,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 })
 
-var _ = g.Describe("[sig-networking] SDN egressrouter", func() {
+var _ = g.Describe("[sig-networking] SDN openshift-sdn egressrouter", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-sdn-egressrouter", exutil.KubeConfigPath())

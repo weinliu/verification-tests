@@ -15,7 +15,7 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
-var _ = g.Describe("[sig-networking] SDN network.node-identity", func() {
+var _ = g.Describe("[sig-networking] SDN node-identity", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -175,7 +175,7 @@ var _ = g.Describe("[sig-networking] SDN network.node-identity", func() {
 
 })
 
-var _ = g.Describe("[sig-networking] SDN node", func() {
+var _ = g.Describe("[sig-networking] SDN node-identity", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("node", exutil.KubeConfigPath())
