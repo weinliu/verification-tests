@@ -221,6 +221,7 @@ RUN update-ca-trust && \
 			yumRepoTemplate = generateTemplateAbsolutePath("centos.repo")
 			yumRepoFile     = "/etc/yum.repos.d/tc-54159-centos.repo"
 			proxy           = NewResource(oc.AsAdmin(), "proxy", "cluster")
+			workerNode      = NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 		)
 
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
@@ -228,9 +229,15 @@ RUN update-ca-trust && \
 		dockerFileCommands := `
 RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && chmod 1755 /usr/bin/tc_54159_rpm_and_osimage
 `
+		// Build the new osImage
+		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
+		digestedImage, berr := osImageBuilder.CreateAndDigestOsImage()
+		o.Expect(berr).NotTo(o.HaveOccurred(),
+			"Error creating the new osImage")
+		logger.Infof("OK\n")
+
 		// Install rpm in first worker node
 		exutil.By("Installing rpm package in first working node")
-		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 
 		logger.Infof("Copy yum repo to node")
 		o.Expect(workerNode.CopyFromLocal(yumRepoTemplate, yumRepoFile)).
@@ -301,13 +308,6 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		initialBootedImage, err := workerNode.GetCurrentBootOSImage()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the initial booted image")
 		logger.Infof("Initial booted osImage: %s", initialBootedImage)
-		logger.Infof("OK\n")
-
-		// Build the new osImage
-		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
-		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error creating the new osImage")
 		logger.Infof("OK\n")
 
 		// Create MC and wait for MCP
@@ -705,6 +705,9 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54915-Configure kerneltype while using a custom osImage [Disruptive]", func() {
+		// Due to https://issues.redhat.com/browse/OCPBUGS-31255 in this test case pools will be degraded intermittently. They will be degraded and automatically fixed in a few minutes/seconds
+		// Because of that we need to use WaitForUpdatedStatus instead of waitForComplete, since WaitForUpdatedStatus will not fail if a pool is degraded for just a few minutes but the configuration is applied properly
+
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE, architecture.ARM64)
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
 
@@ -725,8 +728,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		mMcp.SetWaitingTimeForKernelChange()
 		wMcp.SetWaitingTimeForKernelChange()
-		defer mMcp.waitForComplete()
-		defer wMcp.waitForComplete()
+		defer mMcp.WaitForUpdatedStatus()
+		defer wMcp.WaitForUpdatedStatus()
 
 		// Create a MC to use realtime kernel in the worker pool
 		exutil.By("Create machine config to enable RT kernel in worker pool")
@@ -752,8 +755,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		// Wait for the pools to be updated
 		exutil.By("Wait for pools to be updated after applying the new realtime kernel")
-		wMcp.waitForComplete()
-		mMcp.waitForComplete()
+		wMcp.WaitForUpdatedStatus()
+		mMcp.WaitForUpdatedStatus()
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is active in worker nodes
@@ -800,8 +803,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		// Wait for the pools to be updated
 		exutil.By("Wait for pools to be updated after applying the new osImage")
-		wMcp.waitForComplete()
-		mMcp.waitForComplete()
+		wMcp.WaitForUpdatedStatus()
+		mMcp.WaitForUpdatedStatus()
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed in worker node
@@ -870,8 +873,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		// Wait for the pools to be updated
 		exutil.By("Wait for pools to be updated after deleting the realtime kernel configs")
-		wMcp.waitForComplete()
-		mMcp.waitForComplete()
+		wMcp.WaitForUpdatedStatus()
+		mMcp.WaitForUpdatedStatus()
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is not active in worker nodes anymore
