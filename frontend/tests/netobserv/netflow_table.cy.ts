@@ -204,7 +204,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
 
         // Verify SrcPort doesnt not have text loki for all rows
         cy.get('[data-test-td-column-id=SrcPort]').each((td) => {
-            cy.get('[data-test-td-column-id=SrcPort] > div > div > span').should('not.contain.text', 'loki (3100)')
+            cy.get('[data-test-td-column-id=SrcPort] > div > div').should('not.contain.text', 'loki (3100)')
         })
 
         cy.get(':nth-child(1) > .pf-c-chip-group__label').click()
@@ -212,7 +212,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
 
         // Verify SrcPort has text loki for all rows
         cy.get('[data-test-td-column-id=SrcPort]').each((td) => {
-            cy.get('[data-test-td-column-id=SrcPort] > div > div > span').should('contain.text', 'loki (3100)')
+            cy.get('[data-test-td-column-id=SrcPort] > div > div').should('contain.text', 'loki (3100)')
         })
 
         netflowPage.clearAllFilters()

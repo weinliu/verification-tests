@@ -80,22 +80,6 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
                     cy.byTestID('25').should('exist').click()
                 })
             })
-
-            // verify single focus graph toggle
-            cy.get('#focus-switch').check()
-            // verify 'Top 5 average bytes rates' panel is in focus
-            cy.get('#overview-absolute-graph').contains('Top 5 average bytes rates');
-            cy.get('[data-test-metrics]').its('length').should('gt', 0);
-
-            // verify other panels are scrollable on the right
-            for (let i = 0; i < overviewSelectors.defaultPanels.length; i++) {
-                cy.get('#overview-graph-list').contains(overviewSelectors.defaultPanels[i])
-            }
-
-            // uncheck single focus toggle and verify panels
-            cy.get('#focus-switch').check()
-            cy.checkPanel(overviewSelectors.defaultPanels)
-            cy.checkPanelsNum();
         })
     })
 
@@ -116,6 +100,26 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
     })
 
     it("(OCP-54839, aramesha, Network_Observability) should validate panels", { tags: ['@smoke'] }, function () {
+        cy.showAdvancedOptions().then(views => {
+            cy.contains('Display options').should('exist').click()
+            
+            // verify single focus graph toggle
+            cy.get('#focus-switch').check()
+            // verify 'Top 5 average bytes rates' panel is in focus
+            cy.get('#overview-absolute-graph').contains('Top 5 average bytes rates');
+            cy.get('[data-test-metrics]').its('length').should('gt', 0);
+
+            // verify other panels are scrollable on the right
+            for (let i = 0; i < overviewSelectors.defaultPanels.length; i++) {
+                cy.get('#overview-graph-list').contains(overviewSelectors.defaultPanels[i])
+            }
+
+            // uncheck single focus toggle and verify panels
+            cy.get('#focus-switch').check()
+            cy.checkPanel(overviewSelectors.defaultPanels)
+            cy.checkPanelsNum();
+        })
+
         // open panels modal
         cy.openPanelsModal();
 
