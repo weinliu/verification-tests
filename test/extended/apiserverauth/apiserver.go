@@ -6395,4 +6395,35 @@ EOF`, serverconf, fqdnName)
 			e2e.Logf("Cluster operators health check failed. Abnormality found in cluster operators.")
 		}
 	})
+
+	// author: kewang@redhat.com
+	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-High-74460-[Apiserver] Enabling TechPreviewNoUpgrade featureset cannot be undone", func() {
+		const (
+			featurePatch1      = `[{"op": "replace", "path": "/spec/featureSet", "value": "TechPreviewNoUpgrade"}]`
+			featurePatch2      = `[{"op": "replace", "path": "/spec/featureSet", "value": "CustomNoUpgrade"}]`
+			invalidFeatureGate = `[{"op": "remove", "path": "/spec/featureSet"}]`
+		)
+
+		exutil.By("1. Check if the TechPreviewNoUpgrade feature set is already enabled")
+		featureTech, err := getResource(oc, asAdmin, withoutNamespace, "featuregate/cluster", "-o", `jsonpath='{.spec.featureSet}'`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if featureTech != `'TechPreviewNoUpgrade'` {
+			g.Skip("The TechPreviewNoUpgrade feature set of the cluster is not enabled, skip execution!")
+		}
+		e2e.Logf("The %s feature set has been enabled!", featureTech)
+
+		exutil.By("2. Try to change the feature set value, it should cannot be changed")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featurePatch1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring(`no change`), "Expected no change when patching with TechPreviewNoUpgrade")
+
+		out, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featurePatch2).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring("invalid"), "Expected 'invalid' in output when patching with CustomNoUpgrade")
+
+		out, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", invalidFeatureGate).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring("invalid"), "Expected 'invalid' in output when removing the featuregate")
+	})
 })
