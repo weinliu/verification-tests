@@ -84,7 +84,7 @@ describe('Operators Installed nonlatest operator test', () => {
 
     // Customer bug: check operator can be installed successfully after manual approve
     cy.get('[id="operator-install-page"]', { timeout: 120000 }).should('exist');
-    cy.contains('Approve').click();
+    cy.contains('Approve', { timeout: 120000 }).click();
     cy.contains('View Operator').should('be.visible');
 
     // Check the Upgrade available for the operator in Installed Operator page
