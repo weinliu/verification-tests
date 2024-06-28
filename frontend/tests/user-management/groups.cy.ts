@@ -21,6 +21,7 @@ describe('Group tests', () => {
     cy.adminCLI(`oc delete clusterrolebinding ${clusterrb_name}`);
     cy.adminCLI(`oc delete clusterrole ${clusterrole_name}`);
     cy.adminCLI(`oc delete group ${groupName}`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OCP-72434,yapei,UserInterface)Add Impersonate Group action to Groups list and details', {tags: ['e2e','admin']}, () => {

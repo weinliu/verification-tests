@@ -19,7 +19,7 @@ describe('node logs related features', () => {
 
   it('(OCP-43996,yapei,UserInterface) View Master and Worker Node Logs', {tags: ['e2e','admin']}, () => {
     cy.log('view master node logs');
-    cy.visit('/k8s/cluster/nodes?rowFilter-node-role=master');
+    cy.visit('/k8s/cluster/nodes?rowFilter-node-role=control-plane');
     listPage.rows.shouldBeLoaded();
     listPage.rows.clickFirstLinkInFirstRow();
     detailsPage.isLoaded();
