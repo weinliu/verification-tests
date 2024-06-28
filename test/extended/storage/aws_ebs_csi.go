@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("# Get the origin aws-ebs-csi-driver-controller pod name")
 		defer waitCSOhealthy(oc.AsAdmin())
-		awsEbsCsiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"), setDeploymentReplicasNo("2"))
+		awsEbsCsiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"))
 		originPodList := awsEbsCsiDriverController.getPodList(oc.AsAdmin())
 		resourceVersionOri, resourceVersionOriErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment", "aws-ebs-csi-driver-controller", "-n", "openshift-cluster-csi-drivers", "-o=jsonpath={.metadata.resourceVersion}").Output()
 		o.Expect(resourceVersionOriErr).ShouldNot(o.HaveOccurred())
@@ -254,7 +254,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitCSOhealthy(oc.AsAdmin())
 		newPodList := awsEbsCsiDriverController.getPodList(oc.AsAdmin())
 
-		exutil.By("#check pods are different with original pods")
+		exutil.By("# Check pods are different with original pods")
 		o.Expect(len(sliceIntersect(originPodList, newPodList))).Should(o.Equal(0))
 
 		exutil.By("# Create new project for the scenario")

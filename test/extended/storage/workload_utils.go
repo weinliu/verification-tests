@@ -939,6 +939,7 @@ func (dep *deployment) getPodList(oc *exutil.CLI) (podList []string) {
 	if !strings.Contains(dep.applabel, "=") {
 		selectorLabel = "app=" + dep.applabel
 	}
+	dep.replicasno = dep.getReplicasNum(oc)
 	o.Eventually(func() bool {
 		podListStr, _ := oc.WithoutNamespace().Run("get").Args("pod", "-n", dep.namespace, "-l", selectorLabel, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
 		podList = strings.Fields(podListStr)
