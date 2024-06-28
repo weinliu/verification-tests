@@ -44,6 +44,34 @@ sigs = [
     "sig-windows"
 ]
 
+frameworkLabels = [
+    "DisconnectedOnly",
+    "ConnectedOnly",
+    "OSD_NONCCS",
+    "OSD_CCS",
+    "ARO",
+    "ROSA",
+    "HyperShiftMGMT",
+    "NonHyperShiftHOST",
+    "StressTest",
+    "MicroShiftOnly",
+    "MicroShiftBoth",
+    "StagerunOnly",
+    "StagerunBoth",
+    "ProdrunOnly",
+    "ProdrunBoth",
+    "CPaasrunOnly",
+    "CPaasrunBoth",
+    "Smokerun",
+    "VMonly",
+    "Longduration",
+    "NonPreRelease",
+    "PreChkUpgrade",
+    "PstChkUpgrade",
+    "DEPRECATED",
+    "WRS"
+]
+
 # get the updated content
 commitAuthor = os.popen('git log -n 1 --pretty=format:"%an"', 'r').read()
 print("author is ", commitAuthor)
@@ -135,14 +163,26 @@ for it in itContent:
 
         importances = importancePatten.finditer(title)        
         mList = list(importances)
+        correctCaseID = True
         if len(mList) > 0:
             for m in mList:
                 if not m.group(1) in importance:
                     errList.append("g.It \"{}\" has wrong importance value {}\n".format(title, m.group(1)))
                 if len(m.group(2)) < 5:
                     errList.append("g.It \"{}\" has wrong case id {}\n".format(title, m.group(2)))
+                    correctCaseID = False
                 if not m.group(3):
                     errList.append("g.It \"{}\" has no \"-\" after case id {}\n".format(title, m.group(2)))
+                    correctCaseID = False
+            if correctCaseID:
+                caseids = re.findall(r'\d{5,}-', title)
+                if len(caseids) == 0:
+                    errList.append("g.It \"{}\" has no case id\n".format(title))
+                else:
+                    titleDescription = title.split(caseids[-1])[1]
+                    for frameworkLabel in frameworkLabels:
+                        if frameworkLabel in titleDescription:
+                            errList.append("case title \"{}\" has framework label \"{}\", and it should in framework labels parts of title, not in title description\n".format(titleDescription, frameworkLabel))
         else:
             errList.append("g.It \"{}\" has wrong importance format, please check it".format(title))
 
