@@ -184,36 +184,14 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, "the kubelet is not recovered to normal")
 		}
+		defer checkOperator(oc, "etcd")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": null}}")).Execute()
+		g.By("Turn off quorum guard to ensure revision rollouts of static pods")
+		errGrd := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": {\"useUnsupportedUnsafeNonHANonProductionUnstableEtcd\": true}}}")).Execute()
+		o.Expect(errGrd).NotTo(o.HaveOccurred())
 
-		g.By("Force etcd redeployment")
-		t := time.Now()
-		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"forceRedeploymentReason\": \"recovery-%s\"}}", t.Format("2006-01-02 15:05:05"))).Execute()
-			if err != nil {
-				e2e.Logf("Fail to force the etcd redeployment, error: %s. Trying again", err)
-				return false, nil
-			}
-			return true, nil
-
-		})
-		exutil.AssertWaitPollNoErr(err, "Failed to force etcd deployment")
 		waitForOperatorRestart(oc, "etcd")
-
-		g.By("Force the Kubernetes API server redeployment")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"forceRedeploymentReason\": \"recovery-%s\"}}", t.Format("2006-01-02 15:05:05"))).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOperatorRestart(oc, "kube-apiserver")
-
-		g.By("Force the Kubernetes controller manager redeployment")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubecontrollermanager", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"forceRedeploymentReason\": \"recovery-%s\"}}", t.Format("2006-01-02 15:05:05"))).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOperatorRestart(oc, "kube-controller-manager")
-
-		g.By("Force the Kubernetes scheduler redeployment")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"forceRedeploymentReason\": \"recovery-%s\"}}", t.Format("2006-01-02 15:05:05"))).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForOperatorRestart(oc, "kube-scheduler")
-
 	})
 	// author: geliu@redhat.com
 	g.It("Author:geliu-NonPreRelease-Longduration-Critical-50205-lost master can be replaced by new one with machine config recreation in ocp 4.x [Disruptive][Slow]", func() {
