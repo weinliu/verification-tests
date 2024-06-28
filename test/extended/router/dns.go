@@ -372,7 +372,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		// To find the SRV record
 		digOutput4, err4 := oc.AsAdmin().Run("exec").Args("-n", "openshift-ingress-operator", ingressContPod[0], "--", "dig",
-			"+short", "_8080-tcp._tcp.ingress-canary.openshift-ingress-canary.svc.cluster.local", "SRV").Output()
+			"+short", "_8443-tcp._tcp.ingress-canary.openshift-ingress-canary.svc.cluster.local", "SRV").Output()
 		o.Expect(err4).NotTo(o.HaveOccurred())
 		o.Expect(digOutput4).To(o.ContainSubstring("ingress-canary.openshift-ingress-canary.svc.cluster.local."))
 
