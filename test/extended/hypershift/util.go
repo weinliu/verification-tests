@@ -381,13 +381,13 @@ func getAWSPrivateCredentials(defaultCredPaths ...string) string {
 	g.GinkgoHelper()
 
 	// Always prefer environment variable override
-	if envOverride := os.Getenv(AWS_HYPERSHIFT_PRIVATE_SECRET_FILE); envOverride != "" {
+	if envOverride := os.Getenv(AWSHyperShiftPrivateSecretFile); envOverride != "" {
 		return envOverride
 	}
 
 	// Running in Prow
 	if exutil.GetTestEnv().IsRunningInProw() {
-		return filepath.Join(os.Getenv("CLUSTER_PROFILE_DIR"), ".awscred")
+		return DefaultAWSHyperShiftPrivateSecretFile
 	}
 
 	// Try default paths

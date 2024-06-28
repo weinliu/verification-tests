@@ -127,10 +127,11 @@ const (
 )
 
 const (
-	//default private secret credential file location, in prow the private credential will be mount to this file
+	// DefaultAWSHyperShiftPrivateSecretFile is the location where AWS private credentials are mounted in Prow CI
 	DefaultAWSHyperShiftPrivateSecretFile = "/etc/hypershift-pool-aws-credentials/awsprivatecred"
-	//we can overwrite the default secret credential file by this env
-	AWS_HYPERSHIFT_PRIVATE_SECRET_FILE = "AWS_HYPERSHIFT_PRIVATE_SECRET_FILE"
+
+	// AWSHyperShiftPrivateSecretFile is the environment variable for the AWS private credentials file path
+	AWSHyperShiftPrivateSecretFile = "AWS_HYPERSHIFT_PRIVATE_SECRET_FILE"
 )
 
 // external dns for qe
