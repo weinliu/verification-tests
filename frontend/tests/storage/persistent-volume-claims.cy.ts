@@ -18,11 +18,17 @@ describe('PVC tests', () => {
   });
 
   after(() => {
-    cy.adminCLI(`oc delete sc ${test_sc_name}`);
-    cy.adminCLI(`oc delete project ${project_name}`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user}`,{failOnNonZeroExit: false});
+    cy.adminCLI(`oc delete sc ${test_sc_name}`,{failOnNonZeroExit: false});
+    cy.adminCLI(`oc delete project ${project_name}`,{failOnNonZeroExit: false});
   });
 
-  it('(OCP-72032,yapei,UserInterface)Cross storage class clone and restore', {tags:['e2e','admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-72032,yapei,UserInterface)Cross storage class clone and restore', {tags:['e2e','admin','@rosa','@osd-ccs']}, function() {
+    cy.isEFSDeployed().then(result => {
+      if (result === true) {
+        this.skip();
+      }
+    });
     const query_pvc = `oc get pvc ${pvc_name} -n ${project_name} -o jsonpath={.status.phase}`;
     const query_snapshot = `oc get volumesnapshot ${pvc_name}-snapshot -n ${project_name} -o jsonpath={.status.readyToUse}`;
     // create PVC and make sure its Bound
@@ -62,6 +68,6 @@ describe('PVC tests', () => {
         const sc_list = Cypress._.map(Cypress.$.makeArray($els), 'innerText');
         expect(sc_list).not.to.include(test_sc_provisioner);
       })
-    })
+    });
   })
 })

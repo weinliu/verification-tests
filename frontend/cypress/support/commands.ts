@@ -18,6 +18,7 @@ declare global {
             isAzureWIFICluster();
             isClusterType(commandName, credentialMode: string, infraPlatform: string, authIssuer: string);
             checkClusterType(commandName);
+            isEFSDeployed();
             isPlatformSuitableForNMState();
             isManagedCluster();
             cliLoginAzureExternalOIDC();
@@ -298,6 +299,17 @@ Cypress.Commands.add("checkClusterType", (commandName) => {
     cy.log(`authIssuer: ${authIssuer} #########`);
     return cy.isClusterType(commandName,credentialMode, infraPlatform, authIssuer);
   });
+});
+
+Cypress.Commands.add("isEFSDeployed", () => {
+  cy.adminCLI('oc get sc').then(result => {
+    if (result.stdout.includes('efs.csi.aws.com')) {
+      cy.log('EFS deployed, it do not support volumesnapshot, skipping')
+      return cy.wrap(true);
+    } else {
+      return cy.wrap(false);
+    }
+  })
 });
 
 Cypress.Commands.add("isPlatformSuitableForNMState", () => {
