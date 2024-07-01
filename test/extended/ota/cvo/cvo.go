@@ -948,31 +948,60 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:jiajliu-Medium-41736-cvo alert ClusterOperatorDown on unavailable operators [Disruptive][Slow]", func() {
-		exutil.By("Check trustedCA in a live cluster.")
-		valueProxyTrustCA, err := oc.AsAdmin().WithoutNamespace().Run("get").
-			Args("proxy", "cluster", "-o=jsonpath={.spec.trustedCA.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		operator := "image-registry"
+		namespaceCCO := "openshift-cloud-credential-operator"
 
-		exutil.By("Enable ClusterOperatorDown alert")
-		_, err = ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", "osus-ca"}})
+		exutil.By("Cordon master nodes")
+		masterNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to get node list: %v", err)
+		nodeList := strings.Fields(masterNodes)
 		defer func() {
-			out, err := ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
-			o.Expect(err).NotTo(o.HaveOccurred(), out)
+			e2e.Logf("Restore master node in defer")
+			oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "-l", "node-role.kubernetes.io/master=").Execute()
+			for _, node := range nodeList {
+				err = wait.PollUntilContextTimeout(context.Background(), 1*time.Minute, 5*time.Minute, true, func(context.Context) (bool, error) {
+					nodeReady, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
+					if err != nil || nodeReady != "True" {
+						e2e.Logf("error: %v; node %s status: %s", err, node, nodeReady)
+						return false, nil
+					}
+					return true, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "timeout to restore node!")
+			}
+			e2e.Logf("Restore operator in defer if it's not avalable after uncordon")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", "app=cloud-credential-operator", "-n", namespaceCCO).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred(), "fail to delete cco pod: %v", err)
+			err = wait.PollUntilContextTimeout(context.Background(), 1*time.Minute, 5*time.Minute, true, func(context.Context) (bool, error) {
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", operator).Output()
+				matched, _ := regexp.MatchString("True.*False.*False", output)
+				if err != nil || !matched {
+					e2e.Logf("error:%; operator status: %s", err, output)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "timeout to restore operator!")
 		}()
-		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", "-l", "node-role.kubernetes.io/master=").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to cordon master node: %v", err)
+		exutil.By("Delete namespace openshift-image-registry")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", "openshift-image-registry").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to delete namespace: %v", err)
 
 		exutil.By("Check ClusterOperatorDown condition...")
-		if err = waitForCondition(oc, 60, 480, "False",
-			"get", "co", "machine-config", "-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}"); err != nil {
+		if err = waitForCondition(oc, 60, 900, "False",
+			"get", "co", operator, "-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}"); err != nil {
 			//dump contents to log
-			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-config", "-o", "yaml").Execute()
-			exutil.AssertWaitPollNoErr(err, "machine-config operator is not down in 8m")
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", operator, "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s operator is not down in 15m", operator))
 		}
 
 		exutil.By("Check ClusterOperatorDown alert is fired correctly")
 		var alertDown map[string]interface{}
-		err = wait.Poll(100*time.Second, 600*time.Second, func() (bool, error) {
-			alertDown = getAlertByName(oc, "ClusterOperatorDown", "machine-config")
+		err = wait.Poll(2*time.Minute, 10*time.Minute, func() (bool, error) {
+			alertDown = getAlertByName(oc, "ClusterOperatorDown", operator)
 			if alertDown == nil || alertDown["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDown to be triggered and fired...")
 				return false, nil
@@ -982,18 +1011,22 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(alertDown["annotations"].(map[string]interface{})["summary"].(string)).
 				To(o.ContainSubstring("Cluster operator has not been available for 10 minutes."))
 			o.Expect(alertDown["annotations"].(map[string]interface{})["description"].(string)).
-				To(o.ContainSubstring("The machine-config operator may be down or disabled"))
+				To(o.ContainSubstring(fmt.Sprintf("The %s operator may be down or disabled", operator)))
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ClusterOperatorDown alert is not fired in 10m: %v", alertDown))
 
 		exutil.By("Disable ClusterOperatorDown alert")
-		_, err = ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
-		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Uncordon master node")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "-l", "node-role.kubernetes.io/master=").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to uncordon master node: %v", err)
+		e2e.Logf("Restart cco pod")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", "app=cloud-credential-operator", "-n", namespaceCCO).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to delete cco pod: %v", err)
 
 		exutil.By("Check alert is disabled")
-		exutil.AssertWaitPollNoErr(wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			alertDown = getAlertByName(oc, "ClusterOperatorDown", "machine-config")
+		exutil.AssertWaitPollNoErr(wait.Poll(1*time.Minute, 5*time.Minute, func() (bool, error) {
+			alertDown = getAlertByName(oc, "ClusterOperatorDown", operator)
 			e2e.Logf("Waiting for alert being disabled...")
 			return alertDown == nil, nil
 		}), fmt.Sprintf("alert is not disabled: %v", alertDown))
