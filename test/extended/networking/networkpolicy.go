@@ -1803,6 +1803,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		exutil.By("Access the route before network policy creation")
 		routeCurlOutput, svcErr := exec.Command("bash", "-c", "curl -sI "+svcRoute).Output()
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
+		e2e.Logf(fmt.Sprintf("Output of route access \n %s", routeCurlOutput))
 		o.Expect(strings.Contains(string(routeCurlOutput), "200 OK")).To(o.BeTrue())
 
 		exutil.By("Create a network policy in namespace")
@@ -1811,7 +1812,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("allow-from-all-namespaces"))
 
-		exutil.By("Access the route before network policy creation")
+		exutil.By("Access the route after network policy creation")
 		routeCurlOutput, svcErr = exec.Command("bash", "-c", "curl -sI "+svcRoute).Output()
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(string(routeCurlOutput), "200 OK")).To(o.BeTrue())
