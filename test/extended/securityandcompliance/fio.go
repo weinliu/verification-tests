@@ -3,6 +3,7 @@ package securityandcompliance
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
@@ -774,8 +776,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		fileintegrityWorker.assertNodesConditionNotEmpty(oc)
 	})
 
-	//author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
+	//author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-NonPreRelease-CPaasrunOnly-High-43136-Medium-55781-Check FIO metrics and alerting [Serial][Slow]", func() {
+		var alerts []byte
+		var errAlert error
+
 		g.By("Label the namespace  !!!\n")
 		labelNameSpace(oc, sub.namespace, "openshift.io/cluster-monitoring=true")
 		fi1.debug = false
@@ -804,12 +809,60 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 
+		g.By("Check metrics available")
 		metricsErr := []string{"file_integrity_operator_daemonset_update_total{operation=\"update\"}", "file_integrity_operator_node_failed{node=\"" + nodeName + "\"}",
 			"file_integrity_operator_node_status_total{condition=\"Failed\",node=\"" + nodeName + "\"}"}
 		url := fmt.Sprintf("https://metrics." + sub.namespace + ".svc:8585/metrics-fio")
 		checkMetric(oc, metricsErr, url)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "file-integrity", ok, []string{"PrometheusRule", "-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NodeHasIntegrityFailure", ok, []string{"PrometheusRule", "file-integrity", "-n", sub.namespace, "-ojsonpath={.spec.groups[0].rules[0].alert}"}).check(oc)
+
+		g.By("Curl from the service endpoint")
+		podName, err := oc.AsAdmin().Run("get").Args("pods", "-n", sub.namespace, "-l", "name=file-integrity-operator", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podIP, errGet := oc.AsAdmin().Run("get").Args("pod", "-n", sub.namespace, "-l", "name=file-integrity-operator", "-o=jsonpath={.items[0].status.podIP}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		urlMetrics := "http://" + podIP + ":8383/metrics"
+		output, errCurl := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", sub.namespace, "-c", "file-integrity-operator", podName, "--", "curl", "-H", "-ks", urlMetrics).OutputToFile(getRandomString() + "isc-fio-metrics.json")
+		o.Expect(errCurl).NotTo(o.HaveOccurred())
+		defer exec.Command("rm", output).Output()
+		result, errCommand := exec.Command("bash", "-c", "cat "+output+" | grep fileintegrity-controller").Output()
+		o.Expect(errCommand).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(result), `controller_runtime_max_concurrent_reconciles{controller="fileintegrity-controller"}`)).To(o.BeTrue())
+
+		g.By("Check there is NodeHasIntegrityFailure alert")
+		integrityFailureAlertName := "NodeHasIntegrityFailure"
+		alertManagerUrl := getAlertManager(oc)
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		alertManagerVersion, errGetAlertmanagerVersion := getAlertmanagerVersion(oc)
+		o.Expect(errGetAlertmanagerVersion).NotTo(o.HaveOccurred())
+		alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/%s/alerts", token, alertManagerUrl, alertManagerVersion)
+		gjsonQueryAlertName, gjsonQueryAlertNameEqual, errGetAlertQueries := getAlertQueries(oc)
+		o.Expect(errGetAlertQueries).NotTo(o.HaveOccurred())
+		errIntegrityFailureAlert := wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
+			alerts, errAlert = exec.Command("bash", "-c", alertCMD).Output()
+			o.Expect(errAlert).NotTo(o.HaveOccurred())
+			if strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertName).String(), integrityFailureAlertName) && strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertNameEqual+integrityFailureAlertName+").labels.node").String(), nodeName) {
+				return true, nil
+			}
+			return false, nil
+		})
+		if errIntegrityFailureAlert != nil {
+			e2e.Logf("The alert is: %s", string(alerts))
+		}
+		o.Expect(errIntegrityFailureAlert).NotTo(o.HaveOccurred())
+
+		g.By("Check there is no TargetDown alert")
+		targetDownAlertName := "TargetDown"
+		errGet = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+			alerts, err := exec.Command("bash", "-c", alertCMD).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertName).String(), targetDownAlertName) && strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertNameEqual+targetDownAlertName+").labels.namespace").String(), sub.namespace) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollWithErr(errGet, "The timeout err is expected")
 	})
 
 	// author: xiyuan@redhat.com

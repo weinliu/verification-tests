@@ -1056,11 +1056,15 @@ func checkAlert(oc *exutil.CLI, alertString string, timeout time.Duration) {
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	url := getAlertManager(oc)
 	alertName := "NonCompliant"
-	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts", token, url)
+	alertManagerVersion, errGetAlertmanagerVersion := getAlertmanagerVersion(oc)
+	o.Expect(errGetAlertmanagerVersion).NotTo(o.HaveOccurred())
+	gjsonQueryAlertName, gjsonQueryAlertNameEqual, errGetAlertQueries := getAlertQueries(oc)
+	o.Expect(errGetAlertQueries).NotTo(o.HaveOccurred())
+	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/%s/alerts", token, url, alertManagerVersion)
 	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
 		alerts, err := exec.Command("bash", "-c", alertCMD).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(gjson.Get(string(alerts), "data.#.labels.alertname").String(), alertName) && strings.Contains(gjson.Get(string(alerts), "data.#(labels.alertname="+alertName+").annotations.description").String(), alertString) {
+		if strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertName).String(), alertName) && strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertNameEqual+alertName+").annotations.description").String(), alertString) {
 			return true, nil
 		}
 		return false, nil

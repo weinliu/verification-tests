@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -632,6 +634,40 @@ func getLinuxWorkerCount(oc *exutil.CLI) int {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeCount := int(strings.Count(workerNodeDetails, "Ready")) + int(strings.Count(workerNodeDetails, "NotReady"))
 	return nodeCount
+}
+
+func getAlertmanagerVersion(oc *exutil.CLI) (string, error) {
+	version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-ojsonpath={.status.desired.version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	major := strings.Split(version, ".")[0]
+	minor := strings.Split(version, ".")[1]
+	minorInt, err := strconv.Atoi(minor)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	switch {
+	case major == "4" && minorInt >= 17:
+		return "v2", nil
+	case major == "4" && minorInt < 17:
+		return "v1", nil
+	default:
+		return "", errors.New("Unknown version " + major + "." + minor)
+	}
+}
+
+func getAlertQueries(oc *exutil.CLI) (string, string, error) {
+	version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-ojsonpath={.status.desired.version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	major := strings.Split(version, ".")[0]
+	minor := strings.Split(version, ".")[1]
+	minorInt, err := strconv.Atoi(minor)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	switch {
+	case major == "4" && minorInt >= 17:
+		return "#.labels.alertname", "#(labels.alertname=", nil
+	case major == "4" && minorInt < 17:
+		return "data.#.labels.alertname", "data.#(labels.alertname=", nil
+	default:
+		return "", "", errors.New("Unknown version " + major + "." + minor)
+	}
 }
 
 // create job for rapiddast test
