@@ -564,7 +564,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-High-37121-High-61422-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-High-37121-High-61422-High-66790-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "cis-test" + getRandomString(),
@@ -603,6 +603,26 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-cis-node-master-file-permissions-etcd-pki-cert-files",
 				"ocp4-cis-node-master-file-permissions-openshift-pki-cert-files",
 				"ocp4-cis-node-master-file-permissions-openshift-pki-key-files",
+				"ocp4-cis-node-master-file-permissions-controller-manager-kubeconfig",
+				"ocp4-cis-node-master-file-permissions-etcd-data-dir",
+				"ocp4-cis-node-master-file-permissions-etcd-data-files",
+				"ocp4-cis-node-master-file-permissions-etcd-member",
+				"ocp4-cis-node-master-file-permissions-kube-apiserver",
+				"ocp4-cis-node-master-file-permissions-kube-controller-manager",
+				"ocp4-cis-node-master-file-permissions-kubelet-conf",
+				"ocp4-cis-node-master-file-permissions-master-admin-kubeconfigs",
+				"ocp4-cis-node-master-file-permissions-multus-conf",
+				"ocp4-cis-node-master-file-permissions-ovs-conf-db",
+				"ocp4-cis-node-master-file-permissions-ovs-conf-db-lock",
+				"ocp4-cis-node-master-file-permissions-ovs-pid",
+				"ocp4-cis-node-master-file-permissions-ovs-sys-id-conf",
+				"ocp4-cis-node-master-file-permissions-ovs-vswitchd-pid",
+				"ocp4-cis-node-master-file-permissions-ovsdb-server-pid",
+				"ocp4-cis-node-master-file-permissions-scheduler",
+				"ocp4-cis-node-master-file-permissions-scheduler-kubeconfig",
+				"ocp4-cis-node-master-file-permissions-worker-ca",
+				"ocp4-cis-node-master-file-permissions-worker-kubeconfig",
+				"ocp4-cis-node-master-file-permissions-worker-service",
 				"ocp4-cis-node-master-kubelet-enable-streaming-connections",
 				"ocp4-cis-node-master-kubelet-configure-event-creation",
 				"ocp4-cis-node-master-kubelet-configure-tls-cipher-suites",
@@ -618,6 +638,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-memory-available",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-nodefs-available",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree"}
+			cniConfFilePermissionRule = "ocp4-cis-node-master-file-permissions-cni-conf"
 		)
 
 		g.By("Check default profiles name ocp4-cis .. !!!\n")
@@ -658,6 +679,26 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersionSuffix15.name, "2")
 
 		g.By("Check ccr should exist and pass by default.. !!!\n")
+		for _, ccrShouldPass := range ccrsShouldPass {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", ccrShouldPass, "-n", ssb.namespace,
+				"-o=jsonpath={.status}"}).check(oc)
+		}
+
+		g.By("Check cni rule.. !!!\n")
+		version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-ojsonpath={.status.desired.version}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		major := strings.Split(version, ".")[0]
+		minor := strings.Split(version, ".")[1]
+		ocpVersion := major + "." + minor
+		switch {
+		case ocpVersion == "4.16", ocpVersion == "4.17":
+			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", cniConfFilePermissionRule, "-n", ssb.namespace,
+				"-o=jsonpath={.status}"}).check(oc)
+		case ocpVersion == "4.12", ocpVersion == "4.13", ocpVersion == "4.14", ocpVersion == "4.15":
+		default:
+			e2e.Logf("skip test for rule %s", cniConfFilePermissionRule)
+		}
+
 		for _, ccrShouldPass := range ccrsShouldPass {
 			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", ccrShouldPass, "-n", ssb.namespace,
 				"-o=jsonpath={.status}"}).check(oc)
