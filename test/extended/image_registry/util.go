@@ -1409,3 +1409,9 @@ func getTimeDifferenceInMinute(oldTimestamp, newTimestamp string) float64 {
 	newTime := time.Date(y, m, d, newTimeHour, newTimeMinute, newTimeSecond, newTimeNanoSecond, time.UTC)
 	return newTime.Sub(oldTime).Minutes()
 }
+
+func validateResourceEnv(oc *exutil.CLI, namespace, resource, value string) {
+	result, err := oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "-n", namespace, resource, "--list").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(result, value)).To(o.BeTrue())
+}

@@ -4763,52 +4763,81 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(getTimeDifferenceInMinute(startTime[0], endTime[0])).Should(o.BeNumerically("<", 0.1))
 	})
 
-	g.It("NonHyperShiftHOST-Author:xiuwang-Critical-73444-azure-path-fix support auth via account key without clientID [Disruptive]", func() {
-		exutil.SkipIfPlatformTypeNot(oc, "Azure")
-		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(credType, "Manual") {
-			g.Skip("Skip test on azure sts cluster")
+	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-73769-Add chunksize for s3 api compatible object storage - TP [Disruptive]", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
 		}
-
-		g.By("Check image-registry-private-configuration-user secret")
+		g.By("Add chunkSizeMiB parameter")
 		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/image-registry-private-configuration-user", "-n", "openshift-image-registry").Execute()
-		if err != nil {
-			g.By("Extract image-registry-private-configuration secret")
-			tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ir-%s", getRandomString()))
-			err := os.Mkdir(tempDataDir, 0o755)
-			if err != nil {
-				e2e.Logf("Fail to create directory: %v", err)
-			}
-			defer os.RemoveAll(tempDataDir)
-			err = oc.AsAdmin().Run("extract").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry", "--confirm", "--to="+tempDataDir).Execute()
+		defer func() {
+			g.By("Recover image registry change")
+			err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":null}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			g.By("Create user provide secret image-registry-private-configuration-user with same content of image-registry-private-configuration")
-			defer func() {
-				g.By("Remove image-registry-private-configuration-user secret")
-				err = oc.AsAdmin().Run("delete").Args("secret/image-registry-private-configuration-user", "-n", "openshift-image-registry").Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}()
-			err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "generic", "image-registry-private-configuration-user", "--from-file="+tempDataDir+"/REGISTRY_STORAGE_AZURE_ACCOUNTKEY", "-n", "openshift-image-registry").Execute()
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
 			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-		g.By("Check azure path fix job")
-		clientID, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("job/azure-path-fix", "-o=jsonpath={.spec.template.spec.containers[0].env[?(@.name==\"AZURE_CLIENT_ID\")].value}", "-n", "openshift-image-registry").Output()
+		}()
+		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":10}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(clientID).To(o.BeEmpty())
-		err = wait.Poll(20*time.Second, 1*time.Minute, func() (bool, error) {
-			status, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("job/azure-path-fix", "-o=jsonpath={.status.conditions[?(@.type==\"Complete\")].status}", "-n", "openshift-image-registry").Output()
-			if err != nil {
-				return false, err
-			}
-			if status == "True" {
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		validateResourceEnv(oc, "openshift-image-registry", "deployment.apps/image-registry", "REGISTRY_STORAGE_S3_CHUNKSIZE=10485760")
+		g.By("Check if push successfully when push large image")
+		localImageName := "FROM quay.io/openshifttest/busybox:multiarch\nRUN dd if=/dev/urandom of=/bigfile bs=1M count=1024"
+		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", localImageName, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check the build logs")
+		logInfo = "Successfully pushed image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/busybox"
+		err = wait.Poll(2*time.Minute, 10*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("bc/busybox", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, logInfo) {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "azure-path-fix pod is error with image-registry-private-configuration-user secret.")
+		exutil.AssertWaitPollNoErr(err, "Failed to push large image")
+	})
+
+	g.It("Author:xiuwang-NonHyperShiftHOST-Low-73770-chunksize neigative test - TP [Disruptive]", func() {
+		g.By("Check if the cluster is TechPreviewNoUpgrade")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
+		}
+		g.By("Set chunkSizeMiB to not allow value ")
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			g.By("Recover image registry change")
+			err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":null}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":4}}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "Invalid value: 4")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "spec.storage.s3.chunkSizeMiB in body should be greater than or equal to 5")).To(o.BeTrue())
+		output, err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":5125}}}}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "Invalid value: 5125")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "spec.storage.s3.chunkSizeMiB in body should be less than or equal to 5120")).To(o.BeTrue())
+		g.By("Add chunkSizeMiB to boundary value")
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":5}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		validateResourceEnv(oc, "openshift-image-registry", "deployment.apps/image-registry", "REGISTRY_STORAGE_S3_CHUNKSIZE=5242880")
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":5120}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		validateResourceEnv(oc, "openshift-image-registry", "deployment.apps/image-registry", "REGISTRY_STORAGE_S3_CHUNKSIZE=5368709120")
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"chunkSizeMiB":2148}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		validateResourceEnv(oc, "openshift-image-registry", "deployment.apps/image-registry", "REGISTRY_STORAGE_S3_CHUNKSIZE=2252341248")
 	})
 })
