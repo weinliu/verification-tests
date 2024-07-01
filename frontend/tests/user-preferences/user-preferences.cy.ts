@@ -149,7 +149,7 @@ describe('user preferences related features', () => {
   });
 
   it('(OCP-72562,yapei,UserInterface)Add French and Spanish language support', {tags: ['e2e','@osd-ccs','@rosa']}, () => {
-    const expectedLanguages = ['English', 'Español', 'Français', '한국어', '日本語', '中文'];
+    const expectedLanguages = ['English', 'Español - Spanish', 'Français - French', '한국어 - Korean', '日本語 - Japanese', '中文 - Chinese (Simplified)'];
     userPreferences.navToGeneralUserPreferences();
     userPreferences.getLanguageOptions()
       .then(($els) => {
