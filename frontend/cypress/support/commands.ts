@@ -21,6 +21,7 @@ declare global {
             isEFSDeployed();
             isPlatformSuitableForNMState();
             isManagedCluster();
+            isIPICluster();
             cliLoginAzureExternalOIDC();
             uiLoginAzureExternalOIDC();
             uiLogoutAzureExternalOIDC();
