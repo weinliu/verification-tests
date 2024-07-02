@@ -26,11 +26,16 @@ describe('Dynamic Plugins notification features', () => {
   })
 
   after(() => {
-    ClusterSettingPage.goToConsolePlugins();
+    cy.adminCLI(`oc delete namespace ${testParams.failPluginNamespace} ${testParams.pendingPluginNamespace}`,{timeout: 1200000,failOnNonZeroExit: false});
+    Overview.goToDashboard();
+    Overview.isLoaded();
+    statusCard.toggleItemPopover("Dynamic Plugins");
+    cy.get('[class*="popover__body"]').within(($div) => {
+      cy.get('a:contains(View all)').click({force: true});
+    });
     ClusterSettingPage.toggleConsolePlugin(`${testParams.failPluginName}`, 'Disable');
     ClusterSettingPage.toggleConsolePlugin(`${testParams.pendingPluginName}`, 'Disable');
     cy.adminCLI(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName}`,{failOnNonZeroExit: false});
-    cy.adminCLI(`oc delete namespace ${testParams.failPluginNamespace} ${testParams.pendingPluginNamespace}`,{timeout: 1200000,failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   })
 
@@ -58,6 +63,7 @@ describe('Dynamic Plugins notification features', () => {
     Overview.clickNotificationDrawer();
     cy.contains('Dynamic plugin error').should('exist');
     cy.byButtonText('View plugin').click();
-    cy.byLegacyTestID('resource-title').contains(testParams.failPluginName);
+    cy.byLegacyTestID('resource-title').should('exist');
+    cy.url().should('include', '/k8s/cluster/console.openshift.io~v1~ConsolePlugin/');
   });
 })

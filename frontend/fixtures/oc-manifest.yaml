@@ -75,22 +75,25 @@ spec:
   type: ClusterIP
   sessionAffinity: None
 ---
-apiVersion: console.openshift.io/v1alpha1
+apiVersion: console.openshift.io/v1
 kind: ConsolePlugin
 metadata:
   name: console-demo-plugin
 spec:
   displayName: 'OpenShift Console Demo Plugin'
-  service:
-    name: console-demo-plugin
-    namespace: console-demo-plugin
-    port: 9001
-    basePath: '/'
-  proxy:
-  - type: Service
-    alias: demoplugin
+  backend:
     service:
-      name: thanos-querier
-      namespace: openshift-monitoring
-      port: 9091
-      authorize: true
+      name: console-demo-plugin
+      namespace: console-demo-plugin
+      port: 9001
+      basePath: '/'
+    type: Service
+  proxy:
+  - alias: demoplugin
+    endpoint:
+      service:
+        name: thanos-querier
+        namespace: openshift-monitoring
+        port: 9091
+        authorize: true
+      type: Service

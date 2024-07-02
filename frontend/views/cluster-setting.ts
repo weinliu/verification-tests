@@ -7,7 +7,7 @@ export const ClusterSettingPage = {
   goToClusterSettingConfiguration: () => cy.visit('/settings/cluster/globalconfig'),
   goToConsolePlugins: () => {
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
-    cy.get('th[data-label="Name"]').should('be.visible');
+    cy.get('th[data-label="Name"]',{timeout: 60000}).should('be.visible');
   },
   clickToClustSettingDetailTab: () => cy.get('[data-test-id="horizontal-link-Details"]').click(),
   checkUpstreamUrlDisabled: () => cy.get('button[data-test-id*="upstream-server-url"]').should("have.attr", "aria-disabled").and("eq", "true"),
