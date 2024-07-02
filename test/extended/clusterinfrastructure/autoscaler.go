@@ -22,7 +22,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAS", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc                        = exutil.NewCLI("cluster-autoscaler-operator", exutil.KubeConfigPath())
@@ -60,7 +60,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-43174-ClusterAutoscaler CR could be deleted with foreground deletion", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-43174-ClusterAutoscaler CR could be deleted with foreground deletion", func() {
 		_, err := oc.AdminAPIExtensionsV1Client().CustomResourceDefinitions().Get(context.TODO(),
 			"clusterautoscalers.autoscaling.openshift.io", metav1.GetOptions{})
 		if err != nil && apierrors.IsNotFound(err) {
@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(out).NotTo(o.ContainSubstring("default"))
 	})
 	//author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-Low-45430-MachineSet scaling from 0 should be evaluated correctly for the new or changed instance types [Serial][Slow][Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Longduration-NonPreRelease-Low-45430-MachineSet scaling from 0 should be evaluated correctly for the new or changed instance types [Serial][Slow][Disruptive]", func() {
 		machinesetName := infrastructureName + "-45430"
 		machineAutoscaler = machineAutoscalerDescription{
 			name:           "machineautoscaler-45430",
@@ -123,7 +123,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-44816-Cluster version operator could remove unrecognized volume mounts [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-44816-Cluster version operator could remove unrecognized volume mounts [Disruptive]", func() {
 		//As cluster-autoscaler-operator deployment will be synced by cvo, so we don't need defer to resotre autoscaler deployment
 		g.By("Update cluster-autoscaler-operator deployment's volumeMounts")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("deploy/cluster-autoscaler-operator", "-n", machineAPINamespace, "-p", `[{"op": "add", "path": "/spec/template/spec/containers/0/volumeMounts/0","value":{"mountPath":"/etc/cluster-autoscaler-operator-invalid/service-ca","name":"cert","readOnly":true}}]`, "--type=json").Execute()
@@ -154,7 +154,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-47656-[CAO] Cluster autoscaler could scale down based on scale down utilization threshold [Slow][Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-47656-Cluster autoscaler could scale down based on scale down utilization threshold [Slow][Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		machinesetName := infrastructureName + "-47656"
 		utilThreshold := "0.08"
@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	//author: miyadav
-	g.It("NonHyperShiftHOST-Author:miyadav-Critical-53080-[clusterautoscaler] Add verbosity option to autoscaler CRD [Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Critical-53080-Add verbosity option to autoscaler CRD [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterAutoscalerTemplate = filepath.Join(autoscalerBaseDir, "clusterautoscalerverbose.yaml")
 		clusterAutoscaler = clusterAutoscalerDescription{
@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-44051-ClusterAutoscalerUnableToScaleCPULimitReached alert should be filed when cpu resource is not enough[Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-44051-ClusterAutoscalerUnableToScaleCPULimitReached alert should be filed when cpu resource is not enough[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 
 		g.By("Create a new machineset")
@@ -302,7 +302,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-44211-ClusterAutoscalerUnableToScaleMemoryLimitReached alert should be filed when memory resource is not enough[Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-44211-ClusterAutoscalerUnableToScaleMemoryLimitReached alert should be filed when memory resource is not enough[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 
 		g.By("Create a new machineset")
@@ -339,7 +339,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-37854-Autoscaler will scale down the nodegroup that has Failed machine when maxNodeProvisionTime is reached[Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-37854-Autoscaler will scale down the nodegroup that has Failed machine when maxNodeProvisionTime is reached[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.OpenStack, clusterinfra.VSphere)
 		g.By("Create a new machineset")
@@ -406,7 +406,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-28876-Machineset should have relevant annotations to support scale from/to zero[Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-28876-Machineset should have relevant annotations to support scale from/to zero[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure)
 		g.By("Create a new machineset")
@@ -447,7 +447,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-22038-[CAO] Cluster-autoscaler should support scale machinset from/to 0 [Serial][Slow][Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-High-22038-Cluster-autoscaler should support scale machinset from/to 0 [Serial][Slow][Disruptive]", func() {
 		machinesetName := infrastructureName + "-22038"
 		machineAutoscaler = machineAutoscalerDescription{
 			name:           "machineautoscaler-22038",
@@ -485,7 +485,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Medium-66157-Cluster Autoscaler Operator should inject unique labels on Nutanix platform", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Medium-66157-Cluster Autoscaler Operator should inject unique labels on Nutanix platform", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
 		exutil.By("Create clusterautoscaler")
 		clusterAutoscaler.createClusterAutoscaler(oc)
@@ -523,7 +523,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-64869-[CAO] autoscaler can predict the correct machineset to scale up/down to allocate a particular arch [Serial][Slow][Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-64869-autoscaler can predict the correct machineset to scale up/down to allocate a particular arch [Serial][Slow][Disruptive]", func() {
 		architecture.SkipNonMultiArchCluster(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure)
 		clusterinfra.SkipConditionally(oc)
@@ -596,7 +596,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-Medium-73113-[CAO] Update CAO to add upstream scale from zero annotations[Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Medium-73113-Update CAO to add upstream scale from zero annotations[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.OpenStack, clusterinfra.Nutanix, clusterinfra.IBMCloud)
 		g.By("Create a new machineset")
@@ -629,7 +629,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-73120-[CAO] Cluster autoscaler support least-waste expander option to decide which machineset to expand [Serial][Slow][Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-73120-Cluster autoscaler support least-waste expander option to decide which machineset to expand [Serial][Slow][Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure)
 
@@ -713,7 +713,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-73446-[CAO] Cluster autoscaler support priority expander option to decide which machineset to expand [Serial][Slow][Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-73446-Cluster autoscaler support priority expander option to decide which machineset to expand [Serial][Slow][Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure)
 

@@ -13,7 +13,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc                             = exutil.NewCLI("capi-machines", exutil.KubeConfigPath())
@@ -295,7 +295,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-51071-[CAPI] Create machineset with CAPI on aws [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-High-51071-Create machineset with CAPI on aws [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
@@ -314,7 +314,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		capiMachineSetAWS.createCapiMachineSet(oc)
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-High-53100-[CAPI] Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-High-53100-Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		skipForCAPINotExist(oc)
@@ -335,7 +335,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-medium-55205-[CAPI] Webhook validations for CAPI [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-55205-Webhook validations for CAPI [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP)
 		skipForCAPINotExist(oc)
@@ -356,7 +356,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-high-69188-[CAPI] cluster object can be deleted in non-cluster-api namespace [Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-High-69188-cluster object can be deleted in non-cluster-api namespace [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP)
 		skipForCAPINotExist(oc)
 		g.By("Create cluster object in namespace other than openshift-cluster-api")
@@ -368,7 +368,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-62928-[CAPI] Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-62928-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
@@ -395,7 +395,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		capiMachineSetAWS.createCapiMachineSet(oc)
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:miyadav-High-72433-[CAPI] Create machineset with CAPI on vsphere [Disruptive][Slow]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-NonPreRelease-Longduration-High-72433-Create machineset with CAPI on vsphere [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSphere)
 		skipForCAPINotExist(oc)

@@ -8,13 +8,13 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("mapi-operator", exutil.KubeConfigPath())
 	)
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Medium-46078-Signal when mao no-op in the clusterOperator status conditions", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Medium-46078-Signal when mao no-op in the clusterOperator status conditions", func() {
 		g.By("watch the message from machine-api(mapi) clusteroperator ")
 		if clusterinfra.CheckPlatform(oc) == clusterinfra.None {
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-api", "-o=jsonpath={.status.conditions}").Output()

@@ -15,7 +15,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("machine-proxy-cluster", exutil.KubeConfigPath())
@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-High-37384-Machine API components should honour cluster wide proxy settings", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-High-37384-Machine API components should honour cluster wide proxy settings", func() {
 		g.By("Check if it's a proxy cluster")
 		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-Low-34718-Node labels and Affinity definition in PV should match", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Low-34718-Node labels and Affinity definition in PV should match", func() {
 		miscBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "misc")
 		pvcTemplate := filepath.Join(miscBaseDir, "pvc34718.yaml")
 		podTemplate := filepath.Join(miscBaseDir, "pod34718.yaml")
@@ -89,35 +89,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			}
 		}
 	})
-	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Medium-63778-cloud-controller-manager should be Upgradeable is True on None clusters", func() {
-		exutil.SkipIfPlatformTypeNot(oc, "None")
-		g.By("Check Upgradeable status is True")
-		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "cloud-controller-manager", `-o=jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(status, "True") != 0 {
-			e2e.Failf("Upgradeable status is not True")
-		}
 
-	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Critical-69189-Cluster machine approver metrics should only be available via https", func() {
-		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "app=machine-approver", "-n", "openshift-cluster-machine-approver").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(podName) == 0 {
-			g.Skip("Skip for no pod!")
-		}
-		url_http := "http://127.0.0.0:9191/metrics"
-		url_https := "https://127.0.0.0:9192/metrics"
-
-		curlOutputHttp, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_http).Output()
-		o.Expect(curlOutputHttp).To(o.ContainSubstring("Connection refused"))
-
-		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_https).Output()
-		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
-	})
-	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-High-60147-[clusterInfra] check machineapi and clusterautoscaler as optional operator", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-High-60147-[clusterInfra] check machineapi and clusterautoscaler as optional operator", func() {
 		g.By("Check capability shows operator is optional")
 		capability, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -143,22 +117,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	})
 
-	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-69871-Cloud Controller Manager Operator metrics should only be available via https", func() {
-		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "k8s-app=cloud-manager-operator", "-n", "openshift-cloud-controller-manager-operator").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		url_http := "http://127.0.0.0:9257/metrics"
-		url_https := "https://127.0.0.0:9258/metrics"
-
-		curlOutputHttp, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cloud-controller-manager-operator", "-i", "--", "curl", url_http).Output()
-		o.Expect(curlOutputHttp).To(o.ContainSubstring("Connection refused"))
-
-		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cloud-controller-manager-operator", "-i", "--", "curl", url_https).Output()
-		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
-	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-High-54053-Implement tag categories cache for MAPI vsphere provider [Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-High-54053-Implement tag categories cache for MAPI vsphere provider [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSphere)
 
@@ -179,21 +139,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(machineControllerLog, "categories cache miss, trying to find category by name, it might take time") || strings.Contains(machineControllerLog, "found cached category id value")).To(o.BeTrue())
 	})
-	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Low-70124-system:openshift:kube-controller-manager:gce-cloud-provider referencing non existing serviceAccount", func() {
-		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding", "system:openshift:kube-controller-manager:gce-cloud-provider").Output()
-		o.Expect(err).To(o.HaveOccurred())
 
-		platformType := clusterinfra.CheckPlatform(oc)
-		if platformType == clusterinfra.GCP {
-			sa, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "cloud-provider", "-n", "kube-system").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(sa, "cloud-provider")).To(o.BeTrue())
-		} else {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "cloud-provider", "-n", "kube-system").Output()
-			o.Expect(err).To(o.HaveOccurred())
-		}
-	})
 	// author: miyadav@redhat.com
 	g.It("Author:miyadav-Medium-29351-Use oc explain to see detailed documentation of the resources", func() {
 		_, err := oc.AdminAPIExtensionsV1Client().CustomResourceDefinitions().Get(context.TODO(), "machines.machine.openshift.io", metav1.GetOptions{})

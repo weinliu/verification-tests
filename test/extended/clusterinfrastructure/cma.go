@@ -12,7 +12,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CMA", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("cluster-machine-approver", exutil.KubeConfigPath())
@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-Medium-45420-Cluster Machine Approver should use leader election [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Medium-45420-Cluster Machine Approver should use leader election [Disruptive]", func() {
 		attemptAcquireLeaderLeaseStr := "attempting to acquire leader lease openshift-cluster-machine-approver/cluster-machine-approver-leader..."
 		acquiredLeaseStr := "successfully acquired lease openshift-cluster-machine-approver/cluster-machine-approver-leader"
 
@@ -70,7 +70,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-64165-[csr] Bootstrap kubelet client cert should include system:serviceaccounts group", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-64165-Bootstrap kubelet client cert should include system:serviceaccounts group", func() {
 		csrs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", "-o=jsonpath={.items[*].metadata.name}", "--field-selector", "spec.signerName=kubernetes.io/kube-apiserver-client-kubelet").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if csrs != "" {
@@ -81,5 +81,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				o.Expect(strings.Contains(csrGroups, "\"system:serviceaccounts\",\"system:serviceaccounts:openshift-machine-config-operator\",\"system:authenticated\"")).To(o.BeTrue())
 			}
 		}
+	})
+
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-NonHyperShiftHOST-Critical-69189-Cluster machine approver metrics should only be available via https", func() {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "app=machine-approver", "-n", "openshift-cluster-machine-approver").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(podName) == 0 {
+			g.Skip("Skip for no pod!")
+		}
+		url_http := "http://127.0.0.0:9191/metrics"
+		url_https := "https://127.0.0.0:9192/metrics"
+
+		curlOutputHttp, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_http).Output()
+		o.Expect(curlOutputHttp).To(o.ContainSubstring("Connection refused"))
+
+		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_https).Output()
+		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
 	})
 })

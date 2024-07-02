@@ -18,7 +18,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc                 = exutil.NewCLI("machine-api-operator", exutil.KubeConfigPath())
@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-45772-MachineSet selector is immutable", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-45772-MachineSet selector is immutable", func() {
 		g.By("Create a new machineset")
 		clusterinfra.SkipConditionally(oc)
 		machinesetName := infrastructureName + "-45772"
@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-45377-Enable accelerated network via MachineSets on azure [Disruptive]", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
@@ -83,7 +83,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-46967-Implement Ephemeral OS Disks - OS cache placement on Azure [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-46967-Implement Ephemeral OS Disks - OS cache placement on azure [Disruptive]", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
@@ -122,7 +122,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-46303-Availability sets could be created when needed for Azure [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-46303-Availability sets could be created when needed for azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		defaultWorkerMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
@@ -165,7 +165,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-47177-Medium-47201-[MDH] Machine Deletion Hooks appropriately block lifecycle phases [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-47177-Medium-47201-[MDH] Machine Deletion Hooks appropriately block lifecycle phases [Disruptive]", func() {
 		g.By("Create a new machineset with lifecycle hook")
 		clusterinfra.SkipConditionally(oc)
 		machinesetName := infrastructureName + "-47177-47201"
@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-47230-[MDH] Negative lifecycle hook validation [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-47230-[MDH] Negative lifecycle hook validation [Disruptive]", func() {
 		g.By("Create a new machineset")
 		clusterinfra.SkipConditionally(oc)
 		machinesetName := infrastructureName + "-47230"
@@ -253,7 +253,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-44977-Machine with GPU is supported on gcp [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-44977-Machine with GPU is supported on gcp [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		architecture.SkipArchitectures(oc, architecture.ARM64)
@@ -295,7 +295,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-48363-Machine providerID should be consistent with node providerID", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-48363-Machine providerID should be consistent with node providerID", func() {
 		g.By("Check machine providerID and node providerID are consistent")
 		clusterinfra.SkipConditionally(oc)
 		machineList := clusterinfra.ListAllMachineNames(oc)
@@ -313,7 +313,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
@@ -343,7 +343,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		clusterinfra.SkipForAwsOutpostCluster(oc)
@@ -373,7 +373,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-33040-Required configuration should be added to the ProviderSpec to enable spot instances - Azure [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-High-33040-Required configuration should be added to the ProviderSpec to enable spot instances - azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
@@ -404,7 +404,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48594-AWS EFA network interfaces should be supported via machine api [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-48594-AWS EFA network interfaces should be supported via machine api [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
@@ -433,7 +433,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48595-Negative validation for AWS NetworkInterfaceType [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-48595-Negative validation for AWS NetworkInterfaceType [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
@@ -463,7 +463,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-49827-Ensure pd-balanced disk is supported on GCP via machine api [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-49827-Ensure pd-balanced disk is supported on GCP via machine api [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		g.By("Create a new machineset")
@@ -490,7 +490,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-50731-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-50731-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		g.By("Create a new machineset")
@@ -525,7 +525,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-37915-Creating machines using KMS keys from AWS [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-37915-Creating machines using KMS keys from AWS [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		clusterinfra.SkipForAwsOutpostCluster(oc)
@@ -561,7 +561,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-52471-Enable configuration of boot diagnostics when creating VMs on Azure [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-52471-Enable configuration of boot diagnostics when creating VMs on azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 
@@ -603,7 +603,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-52473-Webhook validations for Azure boot diagnostics [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-52473-Webhook validations for azure boot diagnostics [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 
@@ -638,7 +638,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Low-36489-Machineset creation when publicIP:true in disconnected or normal (stratergy private or public) Azure,Aws,Gcp enviroment [Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Low-36489-Machineset creation when publicIP:true in disconnected or normal (stratergy private or public) azure,aws,gcp enviroment [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.AWS, clusterinfra.GCP)
 		g.By("Create a new machineset")
@@ -679,7 +679,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-51013-machine api should issue client cert when AWS DNS suffix missing [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-51013-machine api should issue client cert when AWS DNS suffix missing [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
@@ -717,7 +717,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-59718-[Nutanix] Support bootType categories and project fields of NutanixMachineProviderConfig [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-59718-[Nutanix] Support bootType categories and project fields of NutanixMachineProviderConfig [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
 		g.By("Create a new machineset")
@@ -743,7 +743,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-59760-Create confidential compute VMs on GCP [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-59760-Create confidential compute VMs on GCP [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		//We should enable this case when Google provide this support for their ARM Machines
@@ -784,7 +784,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-Medium-57438-Add support to Shielded VMs on GCP [Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-57438-Add support to Shielded VMs on GCP [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		architecture.SkipArchitectures(oc, architecture.ARM64)
@@ -811,7 +811,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-48464-Dedicated tenancy should be exposed on aws providerspec [Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Longduration-NonPreRelease-High-48464-Dedicated tenancy should be exposed on aws providerspec [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		clusterinfra.SkipForAwsOutpostCluster(oc)
@@ -838,7 +838,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-39639-host-based disk encryption at VM on Azure platform	[Disruptive]", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Longduration-NonPreRelease-High-39639-host-based disk encryption at VM on azure platform	[Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		g.By("Create a new machineset")
@@ -860,7 +860,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-32269-Implement validation/defaulting for AWS [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-32269-Implement validation/defaulting for AWS [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		mapiBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "mapi")
@@ -917,7 +917,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-37497-ClusterInfrastructure Dedicated Spot Instances could be created [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-37497-ClusterInfrastructure Dedicated Spot Instances could be created [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
@@ -936,7 +936,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-64909-AWS Placement group support for MAPI [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-64909-AWS Placement group support for MAPI [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
@@ -962,7 +962,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(placementGroupName).Should(o.Equal("pgcluster"))
 	})
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-LEVEL0-Critical-25436-Scale up/scale down the cluster by changing the replicas of the machineSet [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-LEVEL0-Critical-25436-Scale up/scale down the cluster by changing the replicas of the machineSet [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack, clusterinfra.Ovirt)
 		g.By("Create a new machineset")
@@ -980,7 +980,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: dtobolik@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:dtobolik-Medium-66866-AWS machineset support for multiple AWS security groups [Disruptive][Slow]", func() {
+	g.It("Author:dtobolik-NonHyperShiftHOST-NonPreRelease-Medium-66866-AWS machineset support for multiple AWS security groups [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
@@ -1022,7 +1022,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-33058-Implement defaulting machineset values for azure [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-33058-Implement defaulting machineset values for azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
@@ -1060,7 +1060,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-46966-Validation webhook check for gpus on GCP [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-46966-Validation webhook check for gpus on GCP [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		skipTestIfSpotWorkers(oc)
@@ -1130,7 +1130,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-30379-New machine can join cluster when VPC has custom DHCP option set [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-High-30379-New machine can join cluster when VPC has custom DHCP option set [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
@@ -1180,7 +1180,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-73762-New machine can join cluster when VPC has custom DHCP option set containing multiple domain names [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-73762-New machine can join cluster when VPC has custom DHCP option set containing multiple domain names [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
@@ -1230,7 +1230,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-73851-Node shouldn't have uninitialized taint [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-High-73851-Node shouldn't have uninitialized taint [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 
 		g.By("Create a new machineset")
@@ -1260,7 +1260,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-73668-[MAPI] Create machineset with Reserved Capacity [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-73668-Create machineset with Reserved Capacity [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		skipTestIfSpotWorkers(oc)
 		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
@@ -1324,7 +1324,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-Medium-73669-[MAPI] Webhook validation for Reserved Capacity [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-73669-Webhook validation for Reserved Capacity [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		skipTestIfSpotWorkers(oc)
 		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()

@@ -15,7 +15,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("metrics", exutil.KubeConfigPath())
@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-45499-mapi_current_pending_csr should reflect real pending CSR count", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-45499-mapi_current_pending_csr should reflect real pending CSR count", func() {
 		g.By("Check the MAPI pending csr count, metric only fires if there are MAPI specific CSRs pending")
 		csrsName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:zhsun-Medium-43764-MachineHealthCheckUnterminatedShortCircuit alert should be fired when a MHC has been in a short circuit state [Serial][Slow][Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-43764-MachineHealthCheckUnterminatedShortCircuit alert should be fired when a MHC has been in a short circuit state [Serial][Slow][Disruptive]", func() {
 		g.By("Create a new machineset")
 		clusterinfra.SkipConditionally(oc)
 		infrastructureName := clusterinfra.GetInfrastructureName(oc)
@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:huliu-High-36989-mapi_instance_create_failed metrics should work [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-NonPreRelease-Longduration-High-36989-mapi_instance_create_failed metrics should work [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		var patchstr string
 		platform := clusterinfra.CheckPlatform(oc)
@@ -159,7 +159,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-25615-Medium-37264-Machine metrics should be collected [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-High-25615-Medium-37264-Machine metrics should be collected [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		g.By("Create a new machineset")

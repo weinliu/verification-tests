@@ -12,7 +12,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("cluster-api-operator", exutil.KubeConfigPath())
@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-51061-Enable cluster API with feature gate [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-High-51061-Enable cluster API with feature gate [Disruptive]", func() {
 		g.By("Check if cluster api on this platform is supported")
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP)
 
@@ -68,7 +68,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(secret).To(o.ContainSubstring("worker-user-data"))
 	})
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-Medium-51141-[CAPI] worker-user-data secret should be synced up [Disruptive]", func() {
+	g.It("Author:zhsun-Medium-51141-worker-user-data secret should be synced up [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSphere)
 		skipForCAPINotExist(oc)
 
@@ -90,7 +90,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: dtobolik@redhat.com
-	g.It("NonHyperShiftHOST-Author:dtobolik-Medium-61980-[CAPI] Workload annotation missing from deployments", func() {
+	g.It("Author:dtobolik-NonHyperShiftHOST-Medium-61980-Workload annotation missing from deployments", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSphere)
 		skipForCAPINotExist(oc)
 
@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71695-[CAPI] Core CAPI CRDs not deployed on unsupported platforms even when explicitly needed by other operators", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Medium-71695-Core CAPI CRDs not deployed on unsupported platforms even when explicitly needed by other operators", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.AlibabaCloud, clusterinfra.IBMCloud, clusterinfra.Nutanix)
 		skipForCAPINotExist(oc)
 
@@ -132,7 +132,7 @@ machinesets.cluster.x-k8s.io`
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Medium-71913-[capi] Promote CAPI IPAM CRDs to GA", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Medium-71913-Promote CAPI IPAM CRDs to GA", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.AlibabaCloud, clusterinfra.IBMCloud, clusterinfra.Nutanix)
 
 		expectedCRDs := `ipaddressclaims.ipam.cluster.x-k8s.io
@@ -149,7 +149,7 @@ ipaddresses.ipam.cluster.x-k8s.io`
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Critical-73620-[CAPI] terminationMessagePolicy should be FallbackToLogsOnError", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Critical-73620-terminationMessagePolicy should be FallbackToLogsOnError", func() {
 		skipForCAPINotExist(oc)
 		podNames, err := exutil.GetAllPods(oc, "openshift-cluster-api")
 		if err != nil {

@@ -10,7 +10,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc           = exutil.NewCLI("cluster-baremetal-operator", exutil.KubeConfigPath())
@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		iaasPlatform = clusterinfra.CheckPlatform(oc)
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Critical-29147-Check that all the baremetalhosts are up and running", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Critical-29147-Check that all the baremetalhosts are up and running", func() {
 		g.By("Check if baremetal cluster")
 		if !(iaasPlatform == clusterinfra.BareMetal) {
 			e2e.Logf("Cluster is: %s", iaasPlatform.String())
@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Critical-32198-Verify all master bmh are 'externally provisioned'", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Critical-32198-Verify all master bmh are 'externally provisioned'", func() {
 		g.By("Check if baremetal cluster")
 		if !(iaasPlatform == clusterinfra.BareMetal) {
 			e2e.Logf("Cluster is: %s", iaasPlatform.String())

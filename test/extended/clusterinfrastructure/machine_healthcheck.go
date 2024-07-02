@@ -11,7 +11,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI MHC", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("machine-healthcheck", exutil.KubeConfigPath())
@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-Low-45343-[MHC] - nodeStartupTimeout in MachineHealthCheck should revert back to default [Flaky]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Low-45343-nodeStartupTimeout in MachineHealthCheck should revert back to default [Flaky]", func() {
 		g.By("Get the default nodeStartupTimeout")
 		nodeStartupTimeoutBeforeUpdate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMHC, "machine-api-termination-handler", "-o=jsonpath={.spec.nodeStartupTimeout}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

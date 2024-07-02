@@ -16,7 +16,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc           = exutil.NewCLI("cloud-controller-manager", exutil.KubeConfigPath())
@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-42927-[CCM] CCM should honour cluster wide proxy settings", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-42927-CCM should honour cluster wide proxy settings", func() {
 		g.By("Check if it's a proxy cluster")
 		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -52,14 +52,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-43307-[CCM] cloud-controller-manager clusteroperator should be in Available state", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-43307-cloud-controller-manager clusteroperator should be in Available state", func() {
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/cloud-controller-manager", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-[CCM] 42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere)
 
 		g.By("Check if cloud-config cm is copied to openshift-cloud-controller-manager namespace")
@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Medium-63829-[CCM] Target workload annotation should be present in deployments of ccm	", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Medium-63829-Target workload annotation should be present in deployments of ccm	", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		checkDeployments := []struct {
 			namespace  string
@@ -102,7 +102,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("NonHyperShiftHOST-Author:miyadav-Critical-64657-[CCM] Alibaba clusters are TechPreview and should not be upgradeable", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Critical-64657-Alibaba clusters are TechPreview and should not be upgradeable", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AlibabaCloud)
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		g.By("Check cluster is TechPreview and should not be upgradeable")
@@ -113,7 +113,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-Medium-70019-[CCM]Security Group and rules resource should be deleted when deleting a Ingress Controller", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Medium-70019-Security Group and rules resource should be deleted when deleting a Ingress Controller", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		// skip on UPI because there is a bug: https://issues.redhat.com/browse/OCPBUGS-8213
 		clusterinfra.SkipConditionally(oc)
@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-Medium-70296-[CCM] AWS should not use external-cloud-volume-plugin post CSI migration", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Medium-70296-AWS should not use external-cloud-volume-plugin post CSI migration", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		cmKubeControllerManager, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "config", "-n", "openshift-kube-controller-manager", "-o=yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -189,7 +189,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-LEVEL0-Critical-70618-[CCM] The new created nodes should be added to load balancer [Disruptive][Slow]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-LEVEL0-Critical-70618-The new created nodes should be added to load balancer [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		var newNodeNames []string
@@ -255,7 +255,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-70620-[CCM] Region and zone labels should be available on the nodes", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-70620-Region and zone labels should be available on the nodes", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.OpenStack)
 		if iaasPlatform == clusterinfra.Azure {
 			azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
@@ -270,7 +270,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-High-70744-[CCM] Pull images from ECR repository [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-High-70744-Pull images from ECR repository [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		clusterinfra.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
@@ -301,7 +301,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-LEVEL0-Critical-70627-[CCM] Service of type LoadBalancer can be created successful", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-LEVEL0-Critical-70627-Service of type LoadBalancer can be created successful", func() {
 		clusterinfra.SkipForAwsOutpostCluster(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		if iaasPlatform == clusterinfra.AWS && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
@@ -323,7 +323,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-71492-[CCM] Create CLB service on aws outposts cluster [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-71492-Create CLB service on aws outposts cluster [Disruptive]", func() {
 		clusterinfra.SkipForNotAwsOutpostMixedCluster(oc)
 		exutil.By("1.1Get regular worker public subnetID")
 		region, err := exutil.GetAWSClusterRegion(oc)
@@ -405,7 +405,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-72119-[CCM] Pull images from GCR repository should succeed [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-72119-Pull images from GCR repository should succeed [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		g.By("Create a new project for testing")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "hello-gcr72119").Execute()
@@ -420,7 +420,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Author:huliu-Medium-70689-[CCM] CCM pods should restart to react to changes after credentials update [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Medium-70689-CCM pods should restart to react to changes after credentials update [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSphere, clusterinfra.OpenStack)
 		var secretName, jsonString, patchPath, podLabel string
 		if iaasPlatform == clusterinfra.VSphere {
@@ -454,7 +454,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-72120-[CCM] Pull images from ACR repository should succeed [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-72120-Pull images from ACR repository should succeed [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
 		o.Expect(azureErr).NotTo(o.HaveOccurred())
@@ -491,7 +491,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-74047-[CCM] The cloud-provider and cloud-config flags should be removed from KCM/KAS", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-74047-The cloud-provider and cloud-config flags should be removed from KCM/KAS", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		g.By("Check no `cloud-provider` and `cloud-config` set on KCM and KAS")
 		kapi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-apiserver", "-o=jsonpath={.data.config\\.yaml}").Output()
@@ -515,14 +515,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-Low-70682-[CCM] Trust bundle CA configmap should have ownership annotations", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Low-70682-Trust bundle CA configmap should have ownership annotations", func() {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "ccm-trusted-ca", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("Cloud Compute / Cloud Controller Manager"))
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-High-73119-[CCM] Create Internal LB service on aws/gcp/azure", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-73119-Create Internal LB service on aws/gcp/azure", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
@@ -582,7 +582,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-Medium-70621-[CCM]cloud-controller-manager should be Upgradeable is True when Degraded is False [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-70621-cloud-controller-manager should be Upgradeable is True when Degraded is False [Disruptive]", func() {
 		ccm, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager").Output()
 		if !strings.Contains(ccm, "cloud-controller-manager") {
 			g.Skip("This case is not executable when cloud-controller-manager CO is absent")
@@ -610,5 +610,47 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		state, checkClusterOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o", "jsonpath={.status.conditions[?(@.type==\"Degraded\")].status}{.status.conditions[?(@.type==\"Upgradeable\")].status}").Output()
 		o.Expect(checkClusterOperatorConditionErr).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.ContainSubstring("TrueFalse"))
+	})
+
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-NonHyperShiftHOST-Medium-63778-cloud-controller-manager should be Upgradeable is True on None clusters", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "None")
+		g.By("Check Upgradeable status is True")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "cloud-controller-manager", `-o=jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(status, "True") != 0 {
+			e2e.Failf("Upgradeable status is not True")
+		}
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-69871-Cloud Controller Manager Operator metrics should only be available via https", func() {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "k8s-app=cloud-manager-operator", "-n", "openshift-cloud-controller-manager-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		url_http := "http://127.0.0.0:9257/metrics"
+		url_https := "https://127.0.0.0:9258/metrics"
+
+		curlOutputHttp, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cloud-controller-manager-operator", "-i", "--", "curl", url_http).Output()
+		o.Expect(curlOutputHttp).To(o.ContainSubstring("Connection refused"))
+
+		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cloud-controller-manager-operator", "-i", "--", "curl", url_https).Output()
+		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
+	})
+
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-NonHyperShiftHOST-Low-70124-system:openshift:kube-controller-manager:gce-cloud-provider referencing non existing serviceAccount", func() {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding", "system:openshift:kube-controller-manager:gce-cloud-provider").Output()
+		o.Expect(err).To(o.HaveOccurred())
+
+		platformType := clusterinfra.CheckPlatform(oc)
+		if platformType == clusterinfra.GCP {
+			sa, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "cloud-provider", "-n", "kube-system").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(sa, "cloud-provider")).To(o.BeTrue())
+		} else {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sa", "cloud-provider", "-n", "kube-system").Output()
+			o.Expect(err).To(o.HaveOccurred())
+		}
 	})
 })

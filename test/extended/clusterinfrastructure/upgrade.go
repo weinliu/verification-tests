@@ -11,7 +11,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure Upgrade", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc           = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PreChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-PreChkUpgrade-Medium-41804-Spot/preemptible instances should not block upgrade - azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-Medium-41804-Spot/preemptible instances should not block upgrade - azure [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
 		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-61086-[Upgrade] Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Medium-61086-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		historyVersions := getClusterHistoryVersions(oc)
@@ -99,7 +99,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:huliu-Medium-62265-[Upgrade] Ensure controlplanemachineset is generated automatically after upgrade", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Medium-62265-Ensure controlplanemachineset is generated automatically after upgrade", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		cpmsOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:zhsun-LEVEL0-Critical-22612-[Upgrade] Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-LEVEL0-Critical-22612-Cluster could scale up/down after upgrade [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack)
 		g.By("Create a new machineset")
@@ -127,7 +127,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-LEVEL0-Critical-70626-[Upgrade] Service of type LoadBalancer can be created successful after upgrade", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-LEVEL0-Critical-70626-Service of type LoadBalancer can be created successful after upgrade", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		if iaasPlatform == clusterinfra.AWS && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
 			g.Skip("Skipped: There is no public subnet on AWS C2S/SC2S disconnected clusters!")
@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PreChkUpgrade-Author:huliu-High-72031-[Upgrade] Instances with custom DHCP option set should not block upgrade - AWS [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-PreChkUpgrade-High-72031-Instances with custom DHCP option set should not block upgrade - AWS [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 
@@ -193,7 +193,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-Author:huliu-High-72031-[Upgrade] Instances with custom DHCP option set should not block upgrade - AWs [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-High-72031-Instances with custom DHCP option set should not block upgrade - AWs [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		infrastructureName := clusterinfra.GetInfrastructureName(oc)

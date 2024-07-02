@@ -26,7 +26,7 @@ const (
 	getCPMSAvailabilityZonesJSONCon   = "getCPMSAvailabilityZonesJSON"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI CPMS", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc                         = exutil.NewCLI("control-plane-machineset", exutil.KubeConfigPath())
@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		iaasPlatform = clusterinfra.CheckPlatform(oc)
 	})
 
-	g.It("NonHyperShiftHOST-Author:zhsun-High-56086-[CPMS] Controlplanemachineset should be created by default", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-56086-Controlplanemachineset should be created by default", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.Nutanix, clusterinfra.VSphere)
 
@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53320-[CPMS] Owner reference could be added/removed to control plan machines [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-53320-Owner reference could be added/removed to control plan machines [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 
@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53081-[CPMS] Finalizer should be added to control plan machineset [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-53081-Finalizer should be added to control plan machineset [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		g.By("Check finalizer is added to controlplanemachineset")
@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-53610-[CPMS] Operator control-plane-machine-set should be in Available state and report version information", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-High-53610-Operator control-plane-machine-set should be in Available state and report version information", func() {
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.versions[0].version}").Output()
@@ -138,7 +138,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy update instance type [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-53323-Implement update logic for RollingUpdate CPMS strategy update instance type [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
@@ -189,7 +189,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy update some field [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-53323-Implement update logic for RollingUpdate CPMS strategy update some field [Disruptive]", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
 		clusterinfra.SkipConditionally(oc)
@@ -233,7 +233,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55631-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete a master machine [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-55631-Implement update logic for RollingUpdate CPMS strategy - Delete a master machine [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
@@ -262,7 +262,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-54005-[CPMS] Control plane machine set OnDelete update strategies - update instance type [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-54005-Control plane machine set OnDelete update strategies - update instance type [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
@@ -318,7 +318,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-54005-[CPMS] Control plane machine set OnDelete update strategies - update some field [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-54005-Control plane machine set OnDelete update strategies - update some field [Disruptive]", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
 		clusterinfra.SkipConditionally(oc)
@@ -372,7 +372,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-55724-[CPMS] Control plane machine set OnDelete update strategies - Delete/Add a failureDomain [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-55724-Control plane machine set OnDelete update strategies - Delete/Add a failureDomain [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
@@ -447,7 +447,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-55725-[CPMS] Control plane machine set OnDelete update strategies - Delete a master machine [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-55725-Control plane machine set OnDelete update strategies - Delete a master machine [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
@@ -484,7 +484,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53328-[CPMS] It doesn't rearrange the availability zones if the order of the zones isn't matching in the CPMS and the Control Plane [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-53328-It doesn't rearrange the availability zones if the order of the zones isn't matching in the CPMS and the Control Plane [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
@@ -517,7 +517,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-54895-[CPMS] CPMS generator controller will create a new CPMS if a CPMS is removed from cluster [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-54895-CPMS generator controller will create a new CPMS if a CPMS is removed from cluster [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
@@ -576,7 +576,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-52587-[CPMS] Webhook validations for CPMS resource [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-52587-Webhook validations for CPMS resource [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
 		g.By("Update CPMS name")
@@ -599,7 +599,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55485-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete/Add a failureDomain [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-55485-Implement update logic for RollingUpdate CPMS strategy - Delete/Add a failureDomain [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
@@ -661,7 +661,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-70442-[CPMS] A warning should be shown when removing the target pools from cpms [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-70442-A warning should be shown when removing the target pools from cpms [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 
