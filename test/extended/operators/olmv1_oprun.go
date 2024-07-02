@@ -30,6 +30,17 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		}
 	})
 
+	// author: jiazha@redhat.com
+	g.It("Author:jiazha-Medium-74638-Apply hypershift cluster-profile for ibm-cloud-managed", func() {
+		ibmCloudManaged, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("olm.operator.openshift.io", "cluster", `-o=jsonpath={.metadata.annotations.include\.release\.openshift\.io/ibm-cloud-managed}`).Output()
+		if err != nil {
+			e2e.Failf("fail to get include.release.openshift.io/ibm-cloud-managed annotation:%v, error:%v", ibmCloudManaged, err)
+		}
+		if ibmCloudManaged != "true" {
+			e2e.Failf("the include.release.openshift.io/ibm-cloud-managed(%s) is not true", ibmCloudManaged)
+		}
+	})
+
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
 		// oc.SetupProject() // it is example if the case need temp project. here it does not need it, so comment it.
