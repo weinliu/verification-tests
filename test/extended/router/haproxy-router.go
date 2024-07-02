@@ -1338,6 +1338,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		protocol = getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jpath)
 		o.Expect(protocol).To(o.ContainSubstring("PROXYPROXY"))
 
+		exutil.By("check the custom ingresscontroller's status, which should indicate that PROXY protocol is enabled")
+		jsonPath := "{.status.endpointPublishingStrategy}"
+		status := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jsonPath)
+		o.Expect(status).To(o.ContainSubstring(`{"private":{"protocol":"PROXY"},"type":"Private"}`))
+
+		exutil.By("check the private deployment, which should have PROXY protocol enabled")
+		jsonPath = `{.spec.template.spec.containers[0].env[?(@.name=="ROUTER_USE_PROXY_PROTOCOL")]}`
+		proxyProtocol := getByJsonPath(oc, "openshift-ingress", "deployments/router-"+ingctrl.name, jsonPath)
+		o.Expect(proxyProtocol).To(o.ContainSubstring(`{"name":"ROUTER_USE_PROXY_PROTOCOL","value":"true"}`))
+
 		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
 		routerpod := getNewRouterPod(oc, ingctrl.name)
 		proxyEnv := readRouterPodEnv(oc, routerpod, "ROUTER_USE_PROXY_PROTOCOL")
