@@ -276,7 +276,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		updatedMachineSetName := clusterinfra.ListWorkerMachineSetNames(oc)
 		checkGivenStringPresentOrNot(true, updatedMachineSetName, machineSetName)
 		// confirm infra node presence among the nodes
-		infraNode := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/infra", "{.items[*].metadata.name}")
+		infraNode := getByLabelAndJsonPath(oc, "default", "node", "node-role.kubernetes.io/infra", "{.items[*].metadata.name}")
 		// confirm a canary pod got scheduled on to the infra node
 		searchInDescribeResource(oc, "node", infraNode, "canary")
 

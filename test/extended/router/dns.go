@@ -17,7 +17,7 @@ import (
 
 var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func() {
 	defer g.GinkgoRecover()
-	var oc = exutil.NewCLI("coredns-upstream-resolvers-log", exutil.KubeConfigPath())
+	var oc = exutil.NewCLI("coredns", exutil.KubeConfigPath())
 	// author: shudili@redhat.com
 	g.It("Author:shudili-Critical-46868-Configure forward policy for CoreDNS flag [Disruptive]", func() {
 		var (
@@ -378,7 +378,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		// bug:- 1884053
 		exutil.By("Check Readiness probe configured to use the '/ready' path")
-		dnsPodName2 := getRandomDNSPodName(podList)
+		dnsPodName2 := getRandomElementFromList(podList)
 		output2, err4 := oc.AsAdmin().Run("get").Args("pod/"+dnsPodName2, "-n", "openshift-dns", "-o=jsonpath={.spec.containers[0].readinessProbe.httpGet}").Output()
 		o.Expect(err4).NotTo(o.HaveOccurred())
 		o.Expect(output2).To(o.ContainSubstring(`"path":"/ready"`))
@@ -494,15 +494,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("Check whether the dns pods eviction annotation is set or not")
 		podList := getAllDNSPodsNames(oc)
-		dnsPodName := getRandomDNSPodName(podList)
+		dnsPodName := getRandomElementFromList(podList)
 		findAnnotation := getAnnotation(oc, "openshift-dns", "po", dnsPodName)
 		o.Expect(findAnnotation).To(o.ContainSubstring(`cluster-autoscaler.kubernetes.io/enable-ds-eviction":"true`))
 
 		// get the worker and master node name
-		masterNodes := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/master", "{.items[*].metadata.name}")
-		workerNodes := getByLabelAndJsonPath(oc, "node", "node-role.kubernetes.io/worker", "{.items[*].metadata.name}")
-		masterNodeName := getRandomDNSPodName(strings.Split(masterNodes, " "))
-		workerNodeName := getRandomDNSPodName(strings.Split(workerNodes, " "))
+		masterNodes := getByLabelAndJsonPath(oc, "default", "node", "node-role.kubernetes.io/master", "{.items[*].metadata.name}")
+		workerNodes := getByLabelAndJsonPath(oc, "default", "node", "node-role.kubernetes.io/worker", "{.items[*].metadata.name}")
+		masterNodeName := getRandomElementFromList(strings.Split(masterNodes, " "))
+		workerNodeName := getRandomElementFromList(strings.Split(workerNodes, " "))
 
 		exutil.By("Apply NoSchedule taint to worker node and confirm the dns pod is not scheduled")
 		defer deleteTaint(oc, "node", workerNodeName, "dedicated-")
@@ -550,7 +550,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		exutil.By("SSH to the node and confirm the /etc/hosts have the same clusterIP")
 		allNodeList, _ := exutil.GetAllNodes(oc)
 		// get a random node
-		node := getRandomDNSPodName(allNodeList)
+		node := getRandomElementFromList(allNodeList)
 		hostOutput, err := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(hostOutput).To(o.And(

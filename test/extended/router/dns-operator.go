@@ -13,54 +13,27 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("dns-operator", exutil.KubeConfigPath())
 	// author: mjoseph@redhat.com
-	// no master nodes on HyperShift guest cluster so this case is not available
-	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
+	g.It("Author:mjoseph-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
 		var (
-			dnsWorkerNodeselector = "[{\"op\":\"add\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/worker\":\"\"}}]"
-			dnsMasterNodeselector = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/master\":\"\"}}]"
+			ns    = "openshift-dns"
+			label = "ne-dns-testing=true"
 		)
+		exutil.By("check the default dns nodeSelector is present")
+		nodePlacement := getByJsonPath(oc, ns, "ds/dns-default", "{.spec.template.spec.nodeSelector}")
+		o.Expect(nodePlacement).To(o.BeEquivalentTo(`{"kubernetes.io/os":"linux"}`))
 
-		exutil.By("check the default dns pod placement is present")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("kubernetes.io/os=linux"))
-
-		exutil.By("Patch dns operator with worker as node selector in dns.operator default")
-		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
-		jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
+		// Since func forceOnlyOneDnsPodExist() has implemented DNS nodeSelector
+		// just ensure the pod is running on the node with label "ne-dns-testing=true"
+		exutil.By("check the nodeSelector can be updated")
 		defer deleteDnsOperatorToRestore(oc)
-		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsWorkerNodeselector)
-		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
-		waitForOutput(oc, "default", "co/dns", jsonPath, "TrueFalseFalse")
-		_, newMasterNodes := getAllDNSAndMasterNodes(oc)
-		checkGivenStringPresentOrNot(false, newMasterNodes, "master")
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
+		nodePlacement = getByJsonPath(oc, "openshift-dns", "ds/dns-default", "{.spec.template.spec.nodeSelector}")
+		o.Expect(nodePlacement).To(o.ContainSubstring(`{"ne-dns-testing":"true"}`))
 
-		exutil.By("check dns pod placement to confirm 'workernodes' are present")
-		output1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output1).To(o.ContainSubstring("kubernetes.io/worker"))
-		outputLcfg, errLcfg := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.nodeSelector}").Output()
-		o.Expect(errLcfg).NotTo(o.HaveOccurred())
-		o.Expect(outputLcfg).To(o.ContainSubstring(`"node-role.kubernetes.io/worker":""`))
-
-		exutil.By("Restoring the dns operator back to normal")
-		deleteDnsOperatorToRestore(oc)
-
-		exutil.By("Patch dns operator with master as node selector in dns.operator default")
-		dnsNodes1, _ := getAllDNSAndMasterNodes(oc)
-		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterNodeselector)
-		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes1)
-		waitForOutput(oc, "default", "co/dns", jsonPath, "TrueFalseFalse")
-		_, newMasterNodes1 := getAllDNSAndMasterNodes(oc)
-		checkGivenStringPresentOrNot(true, newMasterNodes1, "master")
-
-		exutil.By("check dns pod placement to confirm 'masternodes' are present")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("kubernetes.io/master"))
-		outputLcfg1, errLcfg1 := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.nodeSelector}").Output()
-		o.Expect(errLcfg1).NotTo(o.HaveOccurred())
-		o.Expect(outputLcfg1).To(o.ContainSubstring(`"node-role.kubernetes.io/master":""`))
+		exutil.By("check the dns pod is running on the expected node")
+		nodeByPod := getByJsonPath(oc, ns, "pod/"+oneDnsPod, "{.spec.nodeName}")
+		nodeByLabel := getByLabelAndJsonPath(oc, "default", "node", label, "{.items[*].metadata.name}")
+		o.Expect(nodeByPod).To(o.BeEquivalentTo(nodeByLabel))
 	})
 
 	// author: mjoseph@redhat.com
@@ -74,37 +47,36 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		}
 
 		var (
-			dnsMasterToleration = `[{"op":"replace", "path":"/spec/nodePlacement", "value":{"tolerations":[{"effect":"NoExecute","key":"my-dns-test","operator":"Equal","value":"abc"}]}}]`
+			ns                  = "openshift-dns"
+			dnsCustomToleration = `[{"op":"replace", "path":"/spec/nodePlacement", "value":{"tolerations":[{"effect":"NoExecute","key":"my-dns-test","operator":"Equal","value":"abc"}]}}]`
 		)
-		exutil.By("check the dns pod placement to confirm it is running on default mode")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("kubernetes.io/os=linux"))
 
 		exutil.By("check dns pod placement to confirm it is running on default tolerations")
-		outputLcfg, errLcfg := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
-		o.Expect(errLcfg).NotTo(o.HaveOccurred())
-		o.Expect(outputLcfg).To(o.ContainSubstring(`{"key":"node-role.kubernetes.io/master","operator":"Exists"}`))
+		tolerationCfg := getByJsonPath(oc, ns, "ds/dns-default", "{.spec.template.spec.tolerations}")
+		o.Expect(tolerationCfg).To(o.ContainSubstring(`{"key":"node-role.kubernetes.io/master","operator":"Exists"}`))
 
 		exutil.By("Patch dns operator config with custom tolerations of dns pod, not to tolerate master node taints")
-		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
+		dnsPodsList := getAllDNSPodsNames(oc)
 		jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
 		defer deleteDnsOperatorToRestore(oc)
-		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterToleration)
-		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
+		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsCustomToleration)
+		waitForRangeOfPodsToDisappear(oc, ns, dnsPodsList)
 		waitForOutput(oc, "default", "co/dns", jsonPath, "TrueFalseFalse")
-		_, newMasterNodes := getAllDNSAndMasterNodes(oc)
-		checkGivenStringPresentOrNot(false, newMasterNodes, "master")
+		// Get new created DNS pods and ensure they are not running on master
+		dnsPodsList = getAllDNSPodsNames(oc)
+		for _, podName := range dnsPodsList {
+			nodeName := getNodeNameByPod(oc, ns, podName)
+			nodeLabels := getByJsonPath(oc, "default", "node/"+nodeName, "{.metadata.labels}")
+			o.Expect(nodeLabels).NotTo(o.ContainSubstring("node-role.kubernetes.io/master"))
+		}
 
 		exutil.By("check dns pod placement to check the custom tolerations")
-		outputLcfg1, errLcfg1 := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
-		o.Expect(errLcfg1).NotTo(o.HaveOccurred())
-		o.Expect(outputLcfg1).To(o.ContainSubstring(`{"effect":"NoExecute","key":"my-dns-test","operator":"Equal","value":"abc"}`))
+		tolerationCfg = getByJsonPath(oc, ns, "ds/dns-default", "{.spec.template.spec.tolerations}")
+		o.Expect(tolerationCfg).To(o.ContainSubstring(`{"effect":"NoExecute","key":"my-dns-test","operator":"Equal","value":"abc"}`))
 
 		exutil.By("check dns.operator status to see any error messages")
-		outputLcfg2, errLcfg2 := oc.AsAdmin().Run("get").Args("dns.operator/default", "-o=jsonpath={.status}").Output()
-		o.Expect(errLcfg2).NotTo(o.HaveOccurred())
-		o.Expect(outputLcfg2).NotTo(o.ContainSubstring("error"))
+		status := getByJsonPath(oc, "default", "dns.operator/default", "{.status}")
+		o.Expect(status).NotTo(o.ContainSubstring("error"))
 	})
 
 	// author: hongli@redhat.com

@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -378,6 +377,14 @@ func getByJsonPath(oc *exutil.CLI, ns, resource, jsonPath string) string {
 	return output
 }
 
+// this function get resource using label and filtered by jsonpath
+func getByLabelAndJsonPath(oc *exutil.CLI, ns, resource, label, jsonPath string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, resource, "-l", label, "-ojsonpath="+jsonPath).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the output filtered by label and jsonpath is: %v", output)
+	return output
+}
+
 // getNodeNameByPod gets the pod located node's name
 func getNodeNameByPod(oc *exutil.CLI, namespace string, podName string) string {
 	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.spec.nodeName}").Output()
@@ -474,14 +481,6 @@ func getBlockConfig(oc *exutil.CLI, routerPodName, searchString string) string {
 		} else if flag == 2 {
 			break
 		}
-	}
-	return result
-}
-
-func regexpGet(target, searchString string, index int) string {
-	result := ""
-	if len(regexp.MustCompile(searchString).FindStringSubmatch(target)) > 0 {
-		result = regexp.MustCompile(searchString).FindStringSubmatch(target)[index]
 	}
 	return result
 }
@@ -801,20 +800,6 @@ func checkAllClusterOperatorsStatus(oc *exutil.CLI) []string {
 	return badOpList
 }
 
-// to ensure DNS rolling upgrade is done after updating the global resource "dns.operator/default"
-// 1st, co/dns go to Progressing status
-// 2nd, co/dns is back to normal and stable
-func ensureDNSRollingUpdateDone(oc *exutil.CLI) {
-	ensureClusterOperatorNormal(oc, "dns", 5, 300)
-}
-
-// this function is to get all linux nodes on which coredns pods can land, for windows nodes, there won't be any coredns pods on them
-func getAllLinuxNodes(oc *exutil.CLI) string {
-	allLinuxNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=linux", "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return allLinuxNodes
-}
-
 // to speed up the dns/coredns testing, just force only one dns-default pod in the cluster during the test
 // find random linux node and add label "ne-dns-testing=true" to it, then patch spec.nodePlacement.nodeSelector
 // please use func deleteDnsOperatorToRestore() for clear up.
@@ -828,7 +813,7 @@ func forceOnlyOneDnsPodExist(oc *exutil.CLI) string {
 	if len(podList) == 1 {
 		e2e.Logf("Found only one dns-default pod and it looks like SNO cluster. Continue the test...")
 	} else {
-		dnsPodName := getRandomDNSPodName(podList)
+		dnsPodName := getRandomElementFromList(podList)
 		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", dnsPodName, "-o=jsonpath={.spec.nodeName}", "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Find random dns pod '%s' and its node '%s' which will be used for the following testing", dnsPodName, nodeName)
@@ -860,48 +845,23 @@ func deleteDnsOperatorToRestore(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("label").Args("node", "-l", "ne-dns-testing=true", "ne-dns-testing-").Execute()
 }
 
-func waitAllDNSPodsAppear(oc *exutil.CLI) {
-	for _, nodeName := range strings.Split(getAllLinuxNodes(oc), " ") {
-		waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			landedNodes, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].spec.nodeName}").Output()
-			if strings.Contains(landedNodes, nodeName) {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the desired dns pod on node "+nodeName+"does not appear"))
-	}
-	for _, podName := range getAllDNSPodsNames(oc) {
-		waitForOutput(oc, "openshift-dns", "pod/"+podName, "{.status.phase}", "Running")
-	}
-}
-
-// this function is to get all dns pods' names, the return is the string slice of all dns pods' names, together with an error
+// this function is to get all dns pods' names
 func getAllDNSPodsNames(oc *exutil.CLI) []string {
-	podList := []string{}
-	outputPods, err := oc.AsAdmin().Run("get").Args("pods", "-n", "openshift-dns").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	podsRe := regexp.MustCompile("dns-default-[a-z0-9]+")
-	pods := podsRe.FindAllStringSubmatch(outputPods, -1)
-	if len(pods) > 0 {
-		for i := 0; i < len(pods); i++ {
-			podList = append(podList, pods[i][0])
-		}
-	} else {
-		o.Expect(errors.New("Can't find a dns pod")).NotTo(o.HaveOccurred())
-	}
-	return podList
+	ns := "openshift-dns"
+	label := "dns.operator.openshift.io/daemonset-dns=default"
+	dnsPods := getByLabelAndJsonPath(oc, ns, "pod", label, "{.items[*].metadata.name}")
+	return strings.Split(dnsPods, " ")
 }
 
-// this function is to select a dns pod randomly
-func getRandomDNSPodName(podList []string) string {
+// this function returns an element randomly from the given list
+func getRandomElementFromList(list []string) string {
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
-	index := seed.Intn(len(podList))
-	return podList[index]
+	index := seed.Intn(len(list))
+	return list[index]
 }
 
 // this function is to check whether the given resource pod's are deleted or not
-func waitForRangeOfResourceToDisappear(oc *exutil.CLI, resource string, podList []string) {
+func waitForRangeOfPodsToDisappear(oc *exutil.CLI, resource string, podList []string) {
 	for _, podName := range podList {
 		err := waitForResourceToDisappear(oc, resource, "pod/"+podName)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s pod %s is NOT deleted", resource, podName))
@@ -946,21 +906,6 @@ func searchLogFromDNSPods(oc *exutil.CLI, podList []string, searchStr string) st
 		}
 	}
 	return "none"
-}
-
-// this function is to wait the dns logs appearing by using searchLogFromDNSPods function repeatly
-func waitDNSLogsAppear(oc *exutil.CLI, podList []string, searchStr string) string {
-	result := "none"
-	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		result = searchLogFromDNSPods(oc, podList, searchStr)
-		primary := false
-		if result != "none" {
-			primary = true
-		}
-		return primary, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("expected string \"%s\" is not found in the dns logs", searchStr))
-	return result
 }
 
 func waitRouterLogsAppear(oc *exutil.CLI, routerpod, searchStr string) string {
@@ -1514,34 +1459,6 @@ func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration 
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully"))
 }
 
-// this function will collect all dns pods which resides in master node and its respective machine names
-func getAllDNSAndMasterNodes(oc *exutil.CLI) ([]string, []string) {
-	masterNodeList := []string{}
-	dnsPodList := []string{}
-	podNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-dns").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	podList := strings.Split(podNames, " ")
-	e2e.Logf("The podname are %v", podList)
-	masterRe := regexp.MustCompile("[a-z0-9-]+-master-+[a-z0-9-]+")
-	if len(podList) > 0 {
-		for i := 0; i < len(podList); i++ {
-			nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", podList[i], "-o=jsonpath={.spec.nodeName}", "-n", "openshift-dns").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The dns pod '%s' is residing in '%s' node", podList[i], nodeName)
-			machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.metadata.annotations.machine\\.openshift\\.io/machine}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			pod := masterRe.FindAllStringSubmatch(machineName, -1)
-			if pod != nil {
-				dnsPodList = append(dnsPodList, podList[i])
-				masterNodeList = append(masterNodeList, pod[0][0])
-			}
-		}
-	}
-	e2e.Logf("The dns pods which are residing in master nodes are :%s", dnsPodList)
-	e2e.Logf("The machine name's of master nodes where dns pods residing are :%s", masterNodeList)
-	return dnsPodList, masterNodeList
-}
-
 // this function is to check whether given string is present or not in a list
 func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, searchString string) {
 	if shouldContain {
@@ -1577,13 +1494,6 @@ func waitForRegexpOutput(oc *exutil.CLI, ns, resourceName, jsonPath, regExpress 
 		return false, nil
 	})
 	return result
-}
-
-// this function get resource using label and filtered by jsonpath
-func getByLabelAndJsonPath(oc *exutil.CLI, resource, label, jsonPath string) string {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-l", label, "-ojsonpath="+jsonPath).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return output
 }
 
 // this function will search in the polled and described resource details
