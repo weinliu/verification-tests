@@ -1345,10 +1345,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		winInternalIP := getWindowsInternalIPs(oc)
-		winHostNames := getWindowsHostNames(oc)
+		pollIntervalSeconds := 10
+		maxRetries := 60 // This allows for a 10 minute timeout
 
-		for idx, winhost := range winInternalIP {
-
+		for _, winhost := range winInternalIP {
 			g.By(fmt.Sprintf("Modify %v service binPath and check that it gets restored in host with IP %v", targetService, winhost))
 
 			initialBinPath := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "PathName")
@@ -1358,17 +1358,20 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			msg, _ := runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
 			o.Expect(msg).Should(o.ContainSubstring("SUCCESS"))
 
-			winHostName := winHostNames[idx]
-
-			svcModifiedTs := getWindowsNodeCurrentTime(oc, winhost, privateKey, iaasPlatform)
-			// When WICD reconciles the service state a message "successfully reconciled service <service_name>"
-			// will appear in wicd/windows-instance-config-daemon.exe.INFO logs.
-			waitForAdminNodeLogEvent(oc, winHostName, "wicd/windows-instance-config-daemon.exe.INFO", "successfully reconciled service "+targetService, svcModifiedTs)
+			// Poll for the service binPath to be restored
+			success := false
+			for i := 0; i < maxRetries; i++ {
+				afterReconciliationBinPath := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "PathName")
+				if afterReconciliationBinPath == initialBinPath {
+					success = true
+					break
+				}
+				time.Sleep(time.Duration(pollIntervalSeconds) * time.Second)
+			}
+			o.Expect(success).Should(o.BeTrue(), "Service binPath did not return to its initial state within the expected time frame")
 
 			afterReconciliationBinPath := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "PathName")
-
 			o.Expect(afterReconciliationBinPath).Should(o.Equal(initialBinPath))
-
 		}
 	})
 
@@ -1587,26 +1590,31 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	g.It("Author:jfrancoa-Medium-60944-WICD controller periodically reconciles state of Windows services [Disruptive]", func() {
 		targetService := "windows_exporter"
-
 		winInternalIP := getWindowsInternalIPs(oc)
-		winHostNames := getWindowsHostNames(oc)
+		pollIntervalSeconds := 10
+		maxRetries := 60 // This allows for a 10 minute timeout
 
-		for idx, winhost := range winInternalIP {
-
+		for _, winhost := range winInternalIP {
 			g.By(fmt.Sprintf("Stop service %v in host with IP %v", targetService, winhost))
 			// In case something goes wrong and the service does not get reconciled, make sure to
 			// restore back the service using defer
 			defer setServiceState(oc, winhost, privateKey, iaasPlatform, "start", targetService)
 			setServiceState(oc, winhost, privateKey, iaasPlatform, "stop", targetService)
 
-			stoppedTs := getWindowsNodeCurrentTime(oc, winhost, privateKey, iaasPlatform)
-			// When WICD reconciles the service state a message "successfully reconciled service <service_name>"
-			// will appear in wicd/windows-instance-config-daemon.exe.INFO logs.
-			waitForAdminNodeLogEvent(oc, winHostNames[idx], "wicd/windows-instance-config-daemon.exe.INFO", "successfully reconciled service "+targetService, stoppedTs)
+			// Poll for the service state using getServiceProperty
+			success := false
+			for i := 0; i < maxRetries; i++ {
+				state := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "State")
+				if strings.TrimSpace(state) == "Running" {
+					success = true
+					break
+				}
+				time.Sleep(time.Duration(pollIntervalSeconds) * time.Second)
+			}
+			o.Expect(success).Should(o.BeTrue(), "Service did not return to 'Running' state within the expected time frame")
 
 			status := getServiceProperty(oc, winhost, privateKey, iaasPlatform, targetService, "State")
 			o.Expect(status).Should(o.Equal("Running"))
-
 		}
 	})
 

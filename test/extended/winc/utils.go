@@ -982,7 +982,7 @@ func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, ia
 	o.Expect(err).NotTo(o.HaveOccurred())
 	outSplitted := strings.Split(msg, "\r\n")
 	tsFromOutput := strings.ReplaceAll(strings.TrimSpace(outSplitted[len(outSplitted)-4]), ",", "")
-	e2e.Logf("Sevice %v %v at %v", serviceName, status, tsFromOutput)
+	e2e.Logf("Service %v %v at %v", serviceName, status, tsFromOutput)
 	timeStamp, err := time.Parse(layout, tsFromOutput)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -998,7 +998,7 @@ func getServiceProperty(oc *exutil.CLI, winHostIP string, privateKey string, iaa
 	o.Expect(err).NotTo(o.HaveOccurred())
 	outSplitted := strings.Split(msg, "\r\n")
 	propertyFromOutput := strings.TrimSpace(outSplitted[len(outSplitted)-2])
-	e2e.Logf("Sevice %v %v: %v", serviceName, property, propertyFromOutput)
+	e2e.Logf("Service %v %v: %v", serviceName, property, propertyFromOutput)
 
 	return propertyFromOutput
 }
@@ -1025,10 +1025,10 @@ func setServiceState(oc *exutil.CLI, winHostIP string, privateKey string, iaasPl
 		pollErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			status := getServiceProperty(oc, winHostIP, privateKey, iaasPlatform, serviceName, "State")
 			if state == "stop" && status == "Stopped" {
-				e2e.Logf("Sevice %v state set to %v", serviceName, state)
+				e2e.Logf("Service %v state set to %v", serviceName, state)
 				return true, nil
 			} else if state == "start" && status == "Running" {
-				e2e.Logf("Sevice %v state set to %v", serviceName, state)
+				e2e.Logf("Service %v state set to %v", serviceName, state)
 				return true, nil
 			}
 			return false, nil
