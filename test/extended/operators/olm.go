@@ -319,6 +319,30 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:jiazha-Medium-53771-The certificate relating to operator-lifecycle-manager-packageserver isn't rotated after expired [Disruptive]", func() {
+		exutil.By("enhance steps to cover bug https://issues.redhat.com/browse/OCPBUGS-36138")
+		crtTime := strings.Fields(getResource(oc, asAdmin, withoutNamespace, "csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.certsRotateAt}\" \"{.status.certsLastUpdated}"))
+		o.Expect(crtTime).NotTo(o.BeEmpty())
+		certsRotateAt := crtTime[0]
+		certsLastUpdated := crtTime[1]
+
+		exutil.By("1) update the packageserver-service-cert secret to change the crt")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "packageserver-service-cert", "-n", "openshift-operator-lifecycle-manager", "-p", "{\"data\": {\"olmCAKey\" : \"\"}}", "--type=merge").Output()
+		if err != nil {
+			e2e.Failf("Fail to update packageserver-service-cert secret, error:%v", err)
+		}
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			updatedCrtTime := strings.Fields(getResource(oc, asAdmin, withoutNamespace, "csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.status.certsRotateAt}\" \"{.status.certsLastUpdated}"))
+			o.Expect(updatedCrtTime).NotTo(o.BeEmpty())
+			updatedCertsRotateAt := updatedCrtTime[0]
+			updatedCertsLastUpdated := updatedCrtTime[1]
+
+			if (updatedCertsRotateAt == certsRotateAt) || (updatedCertsLastUpdated == certsLastUpdated) {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the packageserver CSV's certsRotateAt(%s) or certsLastUpdated(%s) not updated after 180s", certsRotateAt, certsLastUpdated))
+
 		var image, phase, olmPhase, packagePhase string
 		customOLMImage := "quay.io/openshifttest/operator-framework-olm:cert5-rotation-rhel9"
 		defer func() {
@@ -337,8 +361,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("OLM pod image(%s),olmPhase(%s),packagePhase(%s) didn't recover after 180s", image, olmPhase, packagePhase))
 		}()
+
 		exutil.By("1, put OLM into an unmanaged state")
-		_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion", "version", "-p", "{\"spec\": {\"overrides\":[{\"kind\": \"Deployment\", \"name\": \"olm-operator\", \"namespace\": \"openshift-operator-lifecycle-manager\", \"unmanaged\": true, \"group\": \"apps\"}]}}", "--type=merge").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterversion", "version", "-p", "{\"spec\": {\"overrides\":[{\"kind\": \"Deployment\", \"name\": \"olm-operator\", \"namespace\": \"openshift-operator-lifecycle-manager\", \"unmanaged\": true, \"group\": \"apps\"}]}}", "--type=merge").Output()
 		if err != nil {
 			e2e.Failf("Fail to put OLM into an unmanaged state, error:%v", err)
 		}
