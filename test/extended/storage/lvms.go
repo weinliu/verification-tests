@@ -1514,8 +1514,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}, 20*time.Second, 5*time.Second).Should(o.Equal("Ready"))
 
 		exutil.By("#. Check CSIStorageCapacity object capacity value is updated as per the new 'overprovision-ratio' value")
-		newStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
-		o.Expect(newStorageCapacity == (originalStorageCapacity / 10)).To(o.BeTrue())
+		o.Eventually(func() int {
+			newStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
+			return newStorageCapacity
+		}, 60*time.Second, 5*time.Second).Should(o.Equal((originalStorageCapacity / 10)))
 
 		exutil.By("#. Remove new config files from worker node")
 		_, err = execCommandInSpecificNode(oc, workerNode, "rm -rf /etc/topolvm/tmp-73363.yaml "+lvmdConfigFilePath) // When lvmd.yaml is deleted, new lvmd.yaml is auto-generated
@@ -1528,8 +1530,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}, 20*time.Second, 5*time.Second).Should(o.Equal("Ready"))
 
 		exutil.By("#. Check CSIStorageCapacity object capacity value is updated back to original value")
-		newStorageCapacity = lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
-		o.Expect(newStorageCapacity == originalStorageCapacity).To(o.BeTrue())
+		o.Eventually(func() int {
+			newStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
+			return newStorageCapacity
+		}, 60*time.Second, 5*time.Second).Should(o.Equal(originalStorageCapacity))
 	})
 })
 
