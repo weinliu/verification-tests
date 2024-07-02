@@ -20,8 +20,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// NetObserv Operator variables
 		netobservNS   = "openshift-netobserv-operator"
 		NOPackageName = "netobserv-operator"
-		catsrc        = resource{"catsrc", "qe-app-registry", "openshift-marketplace"}
-		NOSource      = CatalogSourceObjects{"stable", catsrc.name, catsrc.namespace}
+		catsrc        = Resource{"catsrc", "qe-app-registry", "openshift-marketplace"}
+		NOSource      = CatalogSourceObjects{"stable", catsrc.Name, catsrc.Namespace}
 
 		// Template directories
 		baseDir         = exutil.FixturePath("testdata", "netobserv")
@@ -53,15 +53,15 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 		// check if Network Observability Operator is already present
-		NOexisting := checkOperatorStatus(oc, NO.Namespace, NO.PackageName)
+		NOexisting := CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
 
 		// create operatorNS and deploy operator if not present
 		if !NOexisting {
-			OperatorNS.deployOperatorNamespace(oc)
+			OperatorNS.DeployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
 			// check if NO operator is deployed
-			waitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
-			NOStatus := checkOperatorStatus(oc, NO.Namespace, NO.PackageName)
+			WaitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
+			NOStatus := CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
 			o.Expect((NOStatus)).To(o.BeTrue())
 
 			// check if flowcollector API exists
@@ -77,11 +77,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			LokiEnable:  "false",
 			Template:    flowFixturePath,
 		}
-		flow.createFlowcollector(oc)
-		flow.waitForFlowcollectorReady(oc)
+		flow.CreateFlowcollector(oc)
+		flow.WaitForFlowcollectorReady(oc)
 	})
 	g.AfterEach(func() {
-		flow.deleteFlowcollector(oc)
+		flow.DeleteFlowcollector(oc)
 	})
 
 	g.It("Author:memodi-High-73539-Create custom metrics and charts [Serial]", func() {

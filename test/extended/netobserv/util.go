@@ -79,8 +79,8 @@ func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 }
 
 // delete the objects in the cluster
-func (r resource) clear(oc *exutil.CLI) error {
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, r.kind, r.name).Output()
+func (r Resource) clear(oc *exutil.CLI) error {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.Namespace, r.Kind, r.Name).Output()
 	if err != nil {
 		errstring := fmt.Sprintf("%v", msg)
 		if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") {
@@ -136,9 +136,9 @@ func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (r resource) waitForResourceToAppear(oc *exutil.CLI) {
+func (r Resource) waitForResourceToAppear(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.Namespace, r.Kind, r.Name).Output()
 		if err != nil {
 			msg := fmt.Sprintf("%v", output)
 			if strings.Contains(msg, "NotFound") {
@@ -146,16 +146,16 @@ func (r resource) waitForResourceToAppear(oc *exutil.CLI) {
 			}
 			return false, err
 		}
-		e2e.Logf("Find %s %s", r.kind, r.name)
+		e2e.Logf("Find %s %s", r.Kind, r.Name)
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %s/%s is not appear", r.kind, r.name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %s/%s is not appear", r.Kind, r.Name))
 }
 
 // WaitUntilResourceIsGone waits for the resource to be removed cluster
-func (r resource) waitUntilResourceIsGone(oc *exutil.CLI) error {
+func (r Resource) waitUntilResourceIsGone(oc *exutil.CLI) error {
 	return wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.Namespace, r.Kind, r.Name).Output()
 		if err != nil {
 			errstring := fmt.Sprintf("%v", output)
 			if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") || strings.Contains(errstring, "not found") {
@@ -167,16 +167,16 @@ func (r resource) waitUntilResourceIsGone(oc *exutil.CLI) error {
 	})
 }
 
-func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error {
-	parameters = append(parameters, "-n", r.namespace)
+func (r Resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error {
+	parameters = append(parameters, "-n", r.Namespace)
 	file, err := processTemplate(oc, parameters...)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
-	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", r.namespace).Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", r.Namespace).Execute()
 	r.waitForResourceToAppear(oc)
 	return err
 }
 
-func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
+func WaitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {

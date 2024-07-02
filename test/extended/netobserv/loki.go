@@ -93,7 +93,7 @@ func (l lokiStack) deployLokiStack(oc *exutil.CLI) error {
 	file, err := processTemplate(oc, parameters...)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", l.Namespace).Execute()
-	ls := resource{"lokistack", l.Name, l.Namespace}
+	ls := Resource{"lokistack", l.Name, l.Namespace}
 	ls.waitForResourceToAppear(oc)
 	return err
 }
@@ -108,6 +108,6 @@ func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
 }
 
 func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
-	resource{"lokistack", l.Name, l.Namespace}.clear(oc)
+	Resource{"lokistack", l.Name, l.Namespace}.clear(oc)
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", "-n", l.Namespace, "-l", "app.kubernetes.io/instance="+l.Name).Execute()
 }

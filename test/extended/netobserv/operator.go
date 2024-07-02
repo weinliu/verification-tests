@@ -304,7 +304,7 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 }
 
 func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
-	resource{"subscription", so.PackageName, so.Namespace}.clear(oc)
+	Resource{"subscription", so.PackageName, so.Namespace}.clear(oc)
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "-l", "operators.coreos.com/"+so.PackageName+"."+so.Namespace+"=").Execute()
 	// do not remove namespace openshift-logging and openshift-operators-redhat, and preserve the operatorgroup as there may have several operators deployed in one namespace
 	// for example: loki-operator and elasticsearch-operator
@@ -329,7 +329,7 @@ func checkOperatorSource(oc *exutil.CLI, operatorNamespace string, operatorName 
 	return channelName, nil
 }
 
-func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName string) bool {
+func CheckOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName string) bool {
 	err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", operatorNamespace).Execute()
 	if err == nil {
 		err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace).Execute()
@@ -351,7 +351,7 @@ func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName 
 	return false
 }
 
-func (ns *OperatorNamespace) deployOperatorNamespace(oc *exutil.CLI) {
+func (ns *OperatorNamespace) DeployOperatorNamespace(oc *exutil.CLI) {
 	e2e.Logf("Creating Netobserv operator namespace")
 	nsParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.NamespaceTemplate}
 	exutil.ApplyClusterResourceFromTemplate(oc, nsParameters...)

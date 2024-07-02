@@ -114,10 +114,11 @@ type Lokilabels struct {
 	K8S_ClusterName  string
 	SrcK8S_Type      string
 	DstK8S_Type      string
+	Interfaces       string
 }
 
 // create flowcollector CRD for a given manifest file
-func (flow Flowcollector) createFlowcollector(oc *exutil.CLI) {
+func (flow Flowcollector) CreateFlowcollector(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p"}
 
 	flowCollector := reflect.ValueOf(&flow).Elem()
@@ -134,11 +135,11 @@ func (flow Flowcollector) createFlowcollector(oc *exutil.CLI) {
 }
 
 // delete flowcollector CRD from a cluster
-func (flow *Flowcollector) deleteFlowcollector(oc *exutil.CLI) error {
+func (flow *Flowcollector) DeleteFlowcollector(oc *exutil.CLI) error {
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("flowcollector", "cluster").Execute()
 }
 
-func (flow *Flowcollector) waitForFlowcollectorReady(oc *exutil.CLI) {
+func (flow *Flowcollector) WaitForFlowcollectorReady(oc *exutil.CLI) {
 	// check FLP status
 	if flow.DeploymentModel == "Kafka" {
 		waitUntilDeploymentReady(oc, "flowlogs-pipeline-transformer", flow.Namespace)

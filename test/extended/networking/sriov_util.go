@@ -23,6 +23,7 @@ type sriovNetResource struct {
 	namespace string
 	tempfile  string
 	kind      string
+	ip        string
 }
 
 type sriovNetworkNodePolicy struct {
@@ -68,6 +69,7 @@ type sriovPod struct {
 	ipv6addr     string
 	intfname     string
 	intfresource string
+	pingip       string
 }
 
 // delete sriov resource
@@ -104,8 +106,13 @@ func (rs *sriovNetResource) create(oc *exutil.CLI, parameters ...string) {
 func (pod *sriovPod) processPodTemplate(oc *exutil.CLI) string {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args("-f", pod.tempfile, "--ignore-unknown-parameters=true", "-p", "PODNAME="+pod.name, "SRIOVNETNAME="+pod.intfresource,
-			"IPV4_ADDR="+pod.ipv4addr, "IPV6_ADDR="+pod.ipv6addr, "-o=jsonpath={.items[0]}").OutputToFile(getRandomString() + "config.json")
+		parameters := fmt.Sprintf("-p PODNAME=%s, SRIOVNETNAME=%s, IPV4_ADDR=%s, IPV6_ADDR=%s", pod.name, pod.intfresource, pod.ipv4addr, pod.ipv6addr)
+
+		if pod.pingip != "" {
+			parameters += pod.pingip
+		}
+
+		output, err := oc.AsAdmin().Run("process").Args("-f", pod.tempfile, "--ignore-unknown-parameters=true", parameters, "-o=jsonpath={.items[0]}").OutputToFile(getRandomString() + "config.json")
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
 			return false, nil

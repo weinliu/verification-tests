@@ -465,7 +465,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 }
 
 func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
-	resource{"secret", l.StorageSecret, l.Namespace}.clear(oc)
+	Resource{"secret", l.StorageSecret, l.Namespace}.clear(oc)
 	var err error
 	switch l.StorageType {
 	case "s3":

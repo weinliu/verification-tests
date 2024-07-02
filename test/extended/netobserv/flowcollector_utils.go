@@ -71,7 +71,7 @@ func (flowlog *Flowlog) verifyFlowRecord() {
 	o.Expect(flowlog.TimeReceived).Should(o.BeNumerically(">", compareTime.Unix()), flow)
 }
 
-func (lokilabels Lokilabels) getLokiQuery(parameters ...string) string {
+func (lokilabels Lokilabels) getLokiQueryLabels() string {
 	label := reflect.ValueOf(&lokilabels).Elem()
 	var lokiQuery = "{"
 	for i := 0; i < label.NumField(); i++ {
@@ -92,6 +92,12 @@ func (lokilabels Lokilabels) getLokiQuery(parameters ...string) string {
 	}
 	lokiQuery = strings.TrimSuffix(lokiQuery, ", ")
 	lokiQuery += "}"
+
+	return lokiQuery
+}
+
+func (lokilabels Lokilabels) getLokiJSONfilterQuery(parameters ...string) string {
+	lokiQuery := lokilabels.getLokiQueryLabels()
 	if len(parameters) != 0 {
 		lokiQuery += " | json"
 		for _, p := range parameters {
@@ -102,12 +108,70 @@ func (lokilabels Lokilabels) getLokiQuery(parameters ...string) string {
 	return lokiQuery
 }
 
+func (lokilabels Lokilabels) getLokiRegexFilterQuery(parameters ...string) string {
+	lokiQuery := lokilabels.getLokiQueryLabels()
+	if len(parameters) != 0 {
+		for _, p := range parameters {
+			lokiQuery += fmt.Sprintf(" |~ %s", p)
+		}
+	}
+	e2e.Logf("Loki query is %s", lokiQuery)
+	return lokiQuery
+}
+
+func (lokilabels Lokilabels) getLokiQuery(filterType string, parameters ...string) string {
+	var lokiQuery string
+	switch filterType {
+	case "JSON":
+		lokiQuery = lokilabels.getLokiJSONfilterQuery(parameters...)
+	case "REGEX":
+		lokiQuery = lokilabels.getLokiRegexFilterQuery(parameters...)
+	default:
+		panic("loki filter is not supported yet")
+	}
+	return lokiQuery
+}
+
+func (lokilabels Lokilabels) GetMonolithicLokiFlowLogs(lokiRoute string, startTime time.Time, parameters ...string) ([]FlowRecord, error) {
+	lc := newLokiClient(lokiRoute, startTime).retry(5)
+	lc.quiet = false
+	lc.localhost = true
+	lokiQuery := lokilabels.getLokiQuery("REGEX", parameters...)
+	flowRecords := []FlowRecord{}
+	var res *lokiQueryResponse
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(context.Context) (done bool, err error) {
+		var qErr error
+		res, qErr = lc.searchLogsInLoki("", lokiQuery)
+		if qErr != nil {
+			e2e.Logf("\ngot error %v when getting %s logs for query: %s\n", qErr, lokiQuery)
+			return false, qErr
+		}
+
+		// return results if no error and result is empty
+		// caller should add assertions to ensure len([]FlowRecord) is as they expected for given loki query
+		return len(res.Data.Result) >= 0, nil
+	})
+
+	if err != nil {
+		return flowRecords, err
+	}
+
+	for _, result := range res.Data.Result {
+		flowRecords, err = getFlowRecords(result.Values)
+		if err != nil {
+			return []FlowRecord{}, err
+		}
+	}
+
+	return flowRecords, err
+}
+
 // TODO: add argument for condition to be matched.
 // Get flows from Loki logs
 func (lokilabels Lokilabels) getLokiFlowLogs(token, lokiRoute string, startTime time.Time, parameters ...string) ([]FlowRecord, error) {
 	lc := newLokiClient(lokiRoute, startTime).withToken(token).retry(5)
 	tenantID := "network"
-	lokiQuery := lokilabels.getLokiQuery(parameters...)
+	lokiQuery := lokilabels.getLokiQuery("JSON", parameters...)
 	flowRecords := []FlowRecord{}
 	var res *lokiQueryResponse
 	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(context.Context) (done bool, err error) {

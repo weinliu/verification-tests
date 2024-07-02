@@ -23,10 +23,10 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-type resource struct {
-	kind      string
-	name      string
-	namespace string
+type Resource struct {
+	Kind      string
+	Name      string
+	Namespace string
 }
 
 // CompareClusterResources compares the remaning resource with the requested resource provide by user
@@ -75,6 +75,7 @@ type lokiClient struct {
 	queryTags       string    //adds X-Query-Tags header to API requests.
 	quiet           bool      //Suppress query metadata.
 	startTime       time.Time //Start time for reading logs
+	localhost       bool      //whether loki is port-forwarded to localhost, useful for monolithic loki
 }
 
 type lokiQueryResponse struct {
@@ -134,6 +135,7 @@ func newLokiClient(routeAddress string, time time.Time) *lokiClient {
 	client.retries = 5
 	client.quiet = false
 	client.startTime = time
+	client.localhost = false
 	return client
 }
 
@@ -253,7 +255,9 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 
 	var tr *http.Transport
 	proxy := getProxyFromEnv()
-	if len(proxy) > 0 {
+
+	// don't use proxy if svc/loki is port-forwarded to localhost
+	if !c.localhost && len(proxy) > 0 {
 		proxyURL, err := url.Parse(proxy)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		tr = &http.Transport{
