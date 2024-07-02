@@ -889,7 +889,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
 				exutil.By("Check labelmy is in the alert")
-				checkMetric(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts", token, "labelmy", 2*uwmLoadTime)
+				checkMetric(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts", token, "labelmy", 2*uwmLoadTime)
 			})
 
 			// author: tagao@redhat.com
@@ -1533,10 +1533,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
 			exutil.By("check the user alerts TestAlert1 and TestAlert2 are shown in \"in-cluster alertmanager\" API")
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, "TestAlert1", uwmLoadTime)
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert1"}`, token, `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, "TestAlert2", uwmLoadTime)
-			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts?filter={alertname="TestAlert2"}`, token, `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?filter={alertname="TestAlert1"}`, token, "TestAlert1", uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?filter={alertname="TestAlert1"}`, token, `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?filter={alertname="TestAlert2"}`, token, "TestAlert2", uwmLoadTime)
+			checkMetric(oc, `https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts?filter={alertname="TestAlert2"}`, token, `"generatorURL":"https://console-openshift-console.`, uwmLoadTime)
 
 			exutil.By("check the alerts are also sent to external alertmanager")
 			queryFromPod(oc, `http://alertmanager-operated.openshift-user-workload-monitoring.svc:9093/api/v2/alerts?filter={alertname="TestAlert1"}`, token, "openshift-user-workload-monitoring", "thanos-ruler-user-workload-0", "thanos-ruler", "TestAlert1", uwmLoadTime)
