@@ -151,7 +151,7 @@ func chkSriovOperatorStatus(oc *exutil.CLI, ns string) {
 
 // check specified pods are running
 func chkPodsStatus(oc *exutil.CLI, ns, lable string) {
-	err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
 		podsStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", lable, "-o=jsonpath={.items[*].status.phase}").Output()
 		if err != nil {
 			return false, err

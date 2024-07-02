@@ -3910,3 +3910,17 @@ func CurlPod2NodeFail(oc *exutil.CLI, namespaceSrc, podNameSrc, namespaceDst, no
 		o.Expect(err).To(o.HaveOccurred())
 	}
 }
+
+// Check the cluster is fips enabled
+func checkFips(oc *exutil.CLI) bool {
+	node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	fipsInfo, err := exutil.DebugNodeWithChroot(oc, node, "bash", "-c", "fips-mode-setup --check")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(fipsInfo, "FIPS mode is disabled.") {
+		e2e.Logf("FIPS is not enabled.")
+		return false
+	}
+	e2e.Logf("FIPS is enabled.")
+	return true
+}

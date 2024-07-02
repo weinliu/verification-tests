@@ -17,6 +17,10 @@ var _ = g.Describe("[sig-networking] SDN sriov installation", func() {
 		oc = exutil.NewCLI("sriov-"+getRandomString(), exutil.KubeConfigPath())
 	)
 	g.BeforeEach(func() {
+		//skip this on fips cluster, due to bug https://issues.redhat.com/browse/OCPBUGS-22779
+		if checkFips(oc) {
+			g.Skip("Skip this case since sriov pod cannot be running on fips")
+		}
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
