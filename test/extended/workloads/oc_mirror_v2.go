@@ -74,7 +74,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 
 		exutil.By("Start mirroring of additionalImages to registry")
 		waitErr = wait.Poll(300*time.Second, 3600*time.Second, func() (bool, error) {
-			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName+"/multiarch", "--v2", "--authfile", dirname+"/.dockerconfigjson").Execute()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName+"/multiarch", "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
 			if err != nil {
 				e2e.Logf("The disk2mirror of additionalImages failed, retrying...")
 				return false, nil
@@ -206,7 +206,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73452.yaml")
 
 		exutil.By("Skopeo oci to localhost")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -496,7 +496,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Use skopoe copy catalogsource to localhost")
-		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 --remove-signatures  --insecure-policy oci://%s", dirname+"/redhat-operator-index"))
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 --remove-signatures  --insecure-policy oci://%s --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson"))
 
 		exutil.By("Create an internal registry")
 		registry := registry{
@@ -593,7 +593,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72948.yaml")
 
 		exutil.By("Use skopoe copy catalogsource to localhost")
-		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s --remove-signatures --insecure-policy", dirname+"/redhat-operator-index"))
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson"))
 
 		exutil.By("Start mirror2mirror for oci operators")
 		defer os.RemoveAll(".oc-mirror.log")

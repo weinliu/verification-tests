@@ -403,7 +403,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var skopeooutStr string
 		g.By("Copy the registry as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			skopeoout, err := exec.Command("bash", "-c", command).Output()
 			skopeooutStr = string(skopeoout)
@@ -450,7 +450,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		_, _, err = locateDockerCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Copy the registry as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -588,7 +588,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the registry as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -673,7 +673,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		g.By("Copy the registry as OCI FBC")
 		var skopeooutStr string
-		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			skopeoout, err := exec.Command("bash", "-c", command).Output()
 			skopeooutStr = string(skopeoout)
@@ -742,7 +742,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/oci-index")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/oci-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -814,7 +814,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the multi-arch catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/oci-multi-index")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/oci-multi-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -892,7 +892,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		defer os.RemoveAll("/tmp/redhat-operator-index")
 		g.By("Copy the catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", "/tmp/redhat-operator-index")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy  --authfile %s", "/tmp/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -1272,7 +1272,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy the multi-arch catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all --format oci docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy", dirname+"/oci-multi-index")
+		command := fmt.Sprintf("skopeo copy --all --format oci docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/oci-multi-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
