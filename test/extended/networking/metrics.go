@@ -941,7 +941,7 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 	})
 
 	// author huirwang@redhat.com
-	g.It("Author:huirwang-High-72893-IPSec state can be shown in prometheus endpoint.", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-High-72893-IPSec state can be shown in prometheus endpoint.", func() {
 		metricQuery := "openshift:openshift_network_operator_ipsec_state:info"
 
 		exutil.By(fmt.Sprintf("Check that the metric %s is exposed to telemetry", metricQuery))
