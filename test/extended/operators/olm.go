@@ -4702,6 +4702,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonPreRelease-PreChkUpgrade-Author:xzha-High-22615-prepare to check the OLM status", func() {
+		exutil.By("cover OCPBUGS-23538 to check the ConfigMap if labeled with the olm.managed=true")
+		configMaps, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-marketplace", "--no-headers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lines := strings.Split(configMaps, "\n")
+		for _, line := range lines {
+			configMap := strings.Fields(line)[0]
+			kind, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-marketplace", configMap, "-o=jsonpath={.metadata.ownerReferences[0].kind}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if kind != "CatalogSource" {
+				continue
+			}
+			managed, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-marketplace", configMap, `-o=jsonpath={.metadata.labels.olm\.managed}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if managed != "true" {
+				e2e.Failf("the configMap(%s) doesn't managed by OLM", configMap)
+			}
+		}
+
 		exutil.By("1) check version of the OLM related resource")
 		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
@@ -4716,7 +4734,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr.addIr(itName)
 
 		// Create a project here so that it can be keeped after this prepare case done.
-		_, err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args("olm-upgrade-22615").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args("olm-upgrade-22615").Output()
 		if err != nil {
 			e2e.Failf("Fail to create project, error:%v", err)
 		}
