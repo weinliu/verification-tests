@@ -2,6 +2,8 @@ package storage
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -458,6 +461,55 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			awsEbsCsiDriverController.namespace = hostedClusterNS + "-" + hostedClusterName
 		}
 		o.Expect(awsEbsCsiDriverController.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.containers[?(@.name=="csi-driver")].args}`)).Should(o.ContainSubstring(enableBatchingDescribeVolumeAPIArg))
+	})
+
+	// author: pewang@redhat.com
+	// Customer Bug: OCPBUGS-29196 OpenShift on C2S doesn't support using KMS key for StorageClass at install time
+	g.It("Author:pewang-NonHyperShiftHOST-High-74605-[AWS-EBS-CSI-Driver-Operator][BYOK][C2S] should support the us-iso, us-iso-b partitions kms encryption keys [Disruptive]", func() {
+
+		// Set the resource objects definition for the scenario
+		var (
+			presetStorageclasses = getPresetStorageClassListByProvisioner(oc, cloudProvider, ebsCsiDriverProvisioner)
+			fakeC2SKeyID         = "arn:aws-iso-b:kms:us-isob-east-1:123456789012:key/abcd1234-a123-456a-a12b-a123b4cd56ef"
+		)
+
+		exutil.By("# Update the user-managed encryption key with C2S partitions kms encryption key in ClusterCSIDriver")
+		// Backup the origin clustercsidriver configuration
+		originDriverConfigContent, getContentError := oc.AsAdmin().WithoutNamespace().Run("get").Args("clustercsidriver/"+ebsCsiDriverProvisioner, "-ojson").Output()
+		o.Expect(getContentError).NotTo(o.HaveOccurred(), `Failed to get the ebs clustercsidriver`)
+		originDriverConfigContent, getContentError = sjson.Delete(originDriverConfigContent, `metadata.resourceVersion`)
+		o.Expect(getContentError).NotTo(o.HaveOccurred(), `Failed to remove the metadata.resourceVersion`)
+		originDriverConfigContent, getContentError = sjson.Delete(originDriverConfigContent, `metadata.uid`)
+		o.Expect(getContentError).NotTo(o.HaveOccurred(), `Failed to remove the metadata.uid`)
+		originDriverConfigContentFilePath := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-csd-"+ebsCsiDriverProvisioner+"-74605.json")
+		e2e.Logf("The origin clustercsidriver config backup path is: %q", originDriverConfigContentFilePath)
+		o.Expect(ioutil.WriteFile(originDriverConfigContentFilePath, []byte(originDriverConfigContent), 0644)).NotTo(o.HaveOccurred())
+
+		defer func() {
+			restoreErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clustercsidriver", ebsCsiDriverProvisioner).Execute()
+			o.Expect(restoreErr).NotTo(o.HaveOccurred(), `Failed to delete the ebs clustercsidriver`)
+			restoreErr = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", originDriverConfigContentFilePath).Execute()
+			o.Expect(restoreErr).NotTo(o.HaveOccurred(), `Failed to restore the ebs clustercsidriver`)
+			os.RemoveAll(originDriverConfigContentFilePath)
+		}()
+		patchResourceAsAdmin(oc, "", "clustercsidriver/"+ebsCsiDriverProvisioner, `{"spec": {"driverConfig": {"driverType": "AWS", "aws": {"kmsKeyARN": "arn:aws-iso-b:kms:us-isob-east-1:123456789012:key/abcd1234-a123-456a-a12b-a123b4cd56ef"}}}}`, "merge")
+
+		exutil.By("# Check all the preset storageclasses have been injected with kms key")
+		o.Eventually(func() (managedStorageclasseskeys []string) {
+			for _, presetSc := range presetStorageclasses {
+				sc := newStorageClass(setStorageClassName(presetSc))
+				scBYOKid, getKeyErr := sc.getFieldByJSONPathWithoutAssert(oc, "{.parameters.kmsKeyId}")
+				if getKeyErr != nil {
+					e2e.Logf(`Failed to get storageClass %s keyID, caused by: "%v"`, sc.name, getKeyErr)
+					return
+				}
+				if scBYOKid == fakeC2SKeyID {
+					managedStorageclasseskeys = append(managedStorageclasseskeys, fakeC2SKeyID)
+				}
+			}
+			return
+		}).WithTimeout(defaultMaxWaitingTime).WithPolling(defaultMaxWaitingTime / defaultIterationTimes).Should(o.HaveLen(len(presetStorageclasses)))
+
 	})
 
 })
