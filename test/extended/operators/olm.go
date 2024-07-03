@@ -5858,12 +5858,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
-				name:      "og-singlenamespace",
+				name:      "og-41026-singlenamespace",
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "sub-24917",
+				subName:                "sub-41026",
 				namespace:              oc.Namespace(),
 				catalogSourceName:      "",
 				catalogSourceNamespace: "openshift-marketplace",
@@ -5922,7 +5922,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		installPlan := sub.getIP(oc)
 		o.Expect(installPlan).NotTo(o.BeEmpty())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-
 	})
 
 	// It will cover test case: OCP-68521, author: bandrade@redhat.com
