@@ -34,7 +34,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		subnetwork                     string
 		capiBaseDir                    string
 		clusterTemplate                string
-		awsClusterTemplate             string
 		awsMachineTemplateTemplate     string
 		gcpClusterTemplate             string
 		gcpMachineTemplateTemplate     string
@@ -62,7 +61,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 
 		err                    error
 		cluster                clusterDescription
-		awscluster             awsClusterDescription
 		awsMachineTemplate     awsMachineTemplateDescription
 		gcpcluster             gcpClusterDescription
 		gcpMachineTemplate     gcpMachineTemplateDescription
@@ -165,7 +163,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 
 		capiBaseDir = exutil.FixturePath("testdata", "clusterinfrastructure", "capi")
 		clusterTemplate = filepath.Join(capiBaseDir, "cluster.yaml")
-		awsClusterTemplate = filepath.Join(capiBaseDir, "awscluster.yaml")
 		if subnetName != "" {
 			awsMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-aws.yaml")
 		} else {
@@ -188,12 +185,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			name:      clusterID,
 			namespace: "openshift-machine-api",
 			template:  clusterTemplate,
-		}
-		awscluster = awsClusterDescription{
-			name:     clusterID,
-			region:   region,
-			host:     host,
-			template: awsClusterTemplate,
 		}
 		gcpcluster = gcpClusterDescription{
 			name:     clusterID,
@@ -303,8 +294,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 
 		g.By("Create capi machineset")
 		cluster.createCluster(oc)
-		defer awscluster.deleteAWSCluster(oc)
-		awscluster.createAWSCluster(oc)
 		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
 		awsMachineTemplate.createAWSMachineTemplate(oc)
 
@@ -376,8 +365,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 
 		g.By("Create cluster, awscluster, awsmachinetemplate")
 		cluster.createCluster(oc)
-		defer awscluster.deleteAWSCluster(oc)
-		awscluster.createAWSCluster(oc)
+		//OCPCLOUD-2204
+		/*	defer awscluster.deleteAWSCluster(oc)
+			awscluster.createAWSCluster(oc)*/
 		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
 		awsMachineTemplate.createAWSMachineTemplate(oc)
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("awsmachinetemplate", capiMachineSetAWS.machineTemplateName, "-n", clusterAPINamespace, "-p", `{"spec":{"template":{"spec":{"instanceMetadataOptions":{"httpEndpoint":"enabled","httpPutResponseHopLimit":1,"httpTokens":"required","instanceMetadataTags":"disabled"}}}}}`, "--type=merge").Execute()

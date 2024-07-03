@@ -28,14 +28,6 @@ type clusterDescriptionNotInCapi struct {
 	template  string
 }
 
-type awsClusterDescription struct {
-	name      string
-	namespace string
-	region    string
-	host      string
-	template  string
-}
-
 type gcpClusterDescription struct {
 	name      string
 	namespace string
@@ -156,17 +148,6 @@ func (clusterNotInCapi *clusterDescriptionNotInCapi) createClusterNotInCapiNames
 	e2e.Logf("Creating cluster in namepsace not openshift-cluster-api ...")
 	err := applyResourceFromTemplate(oc, "-f", clusterNotInCapi.template, "-p", "NAME="+clusterNotInCapi.name, "NAMESPACE="+clusterNotInCapi.namespace, "KIND="+clusterNotInCapi.kind)
 	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func (awsCluster *awsClusterDescription) createAWSCluster(oc *exutil.CLI) {
-	e2e.Logf("Creating awsCluster ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsCluster.template, "-p", "NAME="+awsCluster.name, "NAMESPACE="+clusterAPINamespace, "REGION="+awsCluster.region, "HOST="+awsCluster.host)
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func (awsCluster *awsClusterDescription) deleteAWSCluster(oc *exutil.CLI) error {
-	e2e.Logf("Deleting a awsCluster ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("awscluster", awsCluster.name, "-n", clusterAPINamespace).Execute()
 }
 
 func (gcpCluster *gcpClusterDescription) createGCPCluster(oc *exutil.CLI) {
