@@ -254,6 +254,8 @@ type ntoResource struct {
 	template    string
 	sysctlparm  string
 	sysctlvalue string
+	priority    int
+	label       string
 }
 
 func (ntoRes *ntoResource) createTunedProfileIfNotExist(oc *exutil.CLI) {
@@ -310,7 +312,7 @@ func (ntoRes *ntoResource) assertTunedProfileApplied(oc *exutil.CLI, workerNodeN
 }
 
 func (ntoRes *ntoResource) applyNTOTunedProfile(oc *exutil.CLI) {
-	exutil.ApplyNsResourceFromTemplate(oc, ntoRes.namespace, "--ignore-unknown-parameters=true", "-f", ntoRes.template, "-p", "TUNED_PROFILE="+ntoRes.name, "-p", "SYSCTL_NAME="+ntoRes.sysctlparm, "-p", "SYSCTL_VALUE="+ntoRes.sysctlvalue)
+	exutil.ApplyNsResourceFromTemplate(oc, ntoRes.namespace, "--ignore-unknown-parameters=true", "-f", ntoRes.template, "-p", "TUNED_PROFILE="+ntoRes.name, "-p", "SYSCTL_NAME="+ntoRes.sysctlparm, "-p", "SYSCTL_VALUE="+ntoRes.sysctlvalue, "-p", "LABEL_NAME="+ntoRes.label)
 }
 
 // assertDebugSettings
@@ -1070,7 +1072,10 @@ func getWorkerMachinesetName(oc *exutil.CLI, machineseetSN int) string {
 	if len(workerMachineSets) > 0 {
 		for i := 0; i < len(workerMachineSets); i++ {
 			//Skip windows worker node
-			if (!strings.Contains(workerMachineSets[i], "windows") || !strings.Contains(workerMachineSets[i], "edge")) && strings.Contains(workerMachineSets[i], "worker") {
+			// if (!strings.Contains(workerMachineSets[i], "windows") || !strings.Contains(workerMachineSets[i], "edge")) && strings.Contains(workerMachineSets[i], "worker") {
+			if strings.Contains(workerMachineSets[i], "windows") || strings.Contains(workerMachineSets[i], "edge") {
+				e2e.Logf("skip windows or egde node [ %v ] in getWorkerMachinesetName", workerMachineSets[i])
+			} else {
 				linuxMachineset = append(linuxMachineset, workerMachineSets[i])
 			}
 		}

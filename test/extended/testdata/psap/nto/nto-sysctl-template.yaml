@@ -20,7 +20,7 @@ objects:
      
      recommend:
      - match:
-       - label: node-role.kubernetes.io/worker-tuning
+       - label: ${LABEL_NAME}
          value: ""
        priority: 18
        profile: ${TUNED_PROFILE}
@@ -28,3 +28,4 @@ parameters:
 - name: TUNED_PROFILE
 - name: SYSCTL_NAME
 - name: SYSCTL_VALUE
+- name: LABEL_NAME

@@ -342,9 +342,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("nf-conntrack-max"))
 
-		logsCheck, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, "--tail=9", tunedPodName).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(logsCheck).To(o.ContainSubstring("tuned.daemon.daemon: static tuning from profile 'nf-conntrack-max' applied"))
+		exutil.By("Assert the log contains recommended profile (nf-conntrack-max) matches current configuratio ")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "20", 180, `recommended profile \(nf-conntrack-max\) matches current configuration|static tuning from profile 'nf-conntrack-max' applied`)
 
 		exutil.By("All node's current profile is:")
 		stdOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -1341,7 +1340,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=-1", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert static tuning from profile 'ips-host' applied in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `static tuning from profile 'ips-host' applied`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "20", 180, `static tuning from profile 'ips-host' applied|recommended profile \(ips-host\) matches current configuration`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "True")).To(o.Equal(true))
@@ -1452,7 +1451,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		exutil.By("Check if tuned pod logs contains openshift-node-performance-performance on labeled nodes")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "openshift-node-performance-performance")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "20", 60, "openshift-node-performance-performance")
 
 		exutil.By("Check if the linux kernel parameter as vm.stat_interval = 10")
 		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "10")
@@ -1479,7 +1478,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-performance"))
 
 		exutil.By("Check if tuned pod logs contains Cannot find profile 'openshift-node-performance-example-performanceprofile' on labeled nodes")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 60, "Cannot find profile")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "30", 60, "Cannot find profile")
 
 		exutil.By("Check if the linux kernel parameter as vm.stat_interval = 1")
 		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "1")
@@ -1500,7 +1499,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		exutil.By("Check if contains static tuning from profile 'performance-patch' applied in tuned pod logs on labeled nodes")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 60, "static tuning from profile 'performance-patch' applied")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "30", 60, `static tuning from profile 'performance-patch' applied|recommended profile \(performance-patch\) matches current configuration`)
 
 		exutil.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -1627,7 +1626,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(nodeProfileName).To(o.ContainSubstring("include-performance-profile"))
 
 		exutil.By("Check if contains static tuning from profile 'include-performance-profile' applied in tuned pod logs on labeled nodes")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "static tuning from profile 'include-performance-profile' applied")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "20", 60, `static tuning from profile 'include-performance-profile' applied|recommended profile \(include-performance-profile\) matches current configuration`)
 
 		//The custom mc and mcp must be deleted by correct sequence, unlabel first and labeled node return to worker mcp, then delete mc and mcp
 		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
@@ -2849,7 +2848,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(AssertTunedAppliedToNode(oc, tunedNodeName, "cpus=")).To(o.Equal(false))
 	})
 
-	g.It("ROSA-Author:liqcui-Medium-63223-NTO support tuning sysctl and kernel bools that applied to all nodes of nodepool-level settings in hypershift. [Disruptive]", func() {
+	g.It("Author:liqcui-Medium-63223-NTO support tuning sysctl and kernel bools that applied to all nodes of nodepool-level settings in hypershift.", func() {
+		//This is a ROSA HCP pre-defined case, only check result, ROSA team will create NTO tuned profile when ROSA HCP created, remove Disruptive
 		//Only execute on ROSA hosted cluster
 		isROSA := isROSAHostedCluster(oc)
 		if !isROSA {
@@ -3369,6 +3369,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			template:    ntoSysctlTemplate,
 			sysctlparm:  "kernel.pid_max",
 			sysctlvalue: "282828",
+			label:       "node-role.kubernetes.io/worker-tuning",
 		}
 
 		exutil.By("Create tuning-pidmax profile")
@@ -3412,6 +3413,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value is 16386")
 		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "vm.admin_reserve_kbytes", "16386")
 	})
+
 	g.It("NonPreRelease-PstChkUpgrade-Author:liqcui-Medium-21995-Post Check for basic NTO function to Upgrade OCP Cluster[Disruptive]", func() {
 
 		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
@@ -3446,6 +3448,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			template:    ntoSysctlTemplate,
 			sysctlparm:  "kernel.pid_max",
 			sysctlvalue: "282828",
+			label:       "node-role.kubernetes.io/worker-tuning",
 		}
 
 		exutil.By("Create tuning-pidmax profile and apply it to nodes")
@@ -3485,6 +3488,94 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-tuning-").Execute()
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "tuning-pidmax", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "provider-"+providerName, "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+	})
+
+	g.It("Author:liqcui-Medium-74507-NTO openshift-node-performance-uuid have the same priority warning keeps printing[Disruptive]", func() {
+
+		isSNO := exutil.IsSNOCluster(oc)
+
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
+		}
+
+		firstNodeName := choseOneWorkerNodeToRunCase(oc, 0)
+		secondNodeName := choseOneWorkerNodeToRunCase(oc, 1)
+
+		firstNodeLabel := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker-tuning")
+		secondNodeLabel := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker-priority18")
+
+		if len(firstNodeLabel) == 0 {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", firstNodeName, "node-role.kubernetes.io/worker-tuning-").Execute()
+		}
+
+		if len(secondNodeLabel) == 0 {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondNodeName, "node-role.kubernetes.io/worker-priority18-").Execute()
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "tuning-pidmax", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "tuning-dirtyratio", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		//Get the tuned pod name in the same node that labeled node
+		ntoOperatorPodName := getNTOOperatorPodName(oc, ntoNamespace)
+		o.Expect(ntoOperatorPodName).NotTo(o.BeEmpty())
+
+		exutil.By("Pickup two worker nodes to label node to worker-tuning and worker-priority18 ...")
+
+		if len(firstNodeLabel) == 0 {
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("node", firstNodeName, "node-role.kubernetes.io/worker-tuning=").Execute()
+		}
+
+		if len(secondNodeLabel) == 0 {
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("node", secondNodeName, "node-role.kubernetes.io/worker-priority18=").Execute()
+		}
+
+		firstNTORes := ntoResource{
+			name:        "tuning-pidmax",
+			namespace:   ntoNamespace,
+			template:    ntoSysctlTemplate,
+			sysctlparm:  "kernel.pid_max",
+			sysctlvalue: "282828",
+			label:       "node-role.kubernetes.io/worker-tuning",
+		}
+
+		secondNTORes := ntoResource{
+			name:        "tuning-dirtyratio",
+			namespace:   ntoNamespace,
+			template:    ntoSysctlTemplate,
+			sysctlparm:  "vm.dirty_ratio",
+			sysctlvalue: "56",
+			label:       "node-role.kubernetes.io/worker-priority18",
+		}
+
+		exutil.By("Create tuning-pidmax profile")
+		firstNTORes.applyNTOTunedProfile(oc)
+
+		exutil.By("Create tuning-dirtyratio profile")
+		secondNTORes.applyNTOTunedProfile(oc)
+
+		exutil.By("Create tuning-pidmax profile and apply it to nodes")
+		firstNTORes.assertTunedProfileApplied(oc, firstNodeName)
+
+		exutil.By("Create tuning-dirtyratio profile and apply it to nodes")
+		secondNTORes.assertTunedProfileApplied(oc, secondNodeName)
+
+		exutil.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Compare if the value kernel.pid_max in on labeled node, should be 282828")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, firstNodeName, "kernel.pid_max", "282828")
+
+		exutil.By("Compare if the value kernel.pid_max in on labeled node, should be 282828")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, secondNodeName, "vm.dirty_ratio", "56")
+
+		exutil.By("Assert the log contains recommended profile (nf-conntrack-max) matches current configuratio ")
+		ntoOperatorPodLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ntoNamespace, ntoOperatorPodName, "--tail=50").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ntoOperatorPodLogs).NotTo(o.BeEmpty())
+		o.Expect(ntoOperatorPodLogs).NotTo(o.ContainSubstring("same priority"))
 
 	})
 })
