@@ -672,19 +672,6 @@ func skipTestIfExtensionsAreUsed(oc *exutil.CLI) {
 
 }
 
-// skipTestIfCloudImagesCannotBeModified skips the current test if the machinesets cannot be modified to use other cloud images. Currently we can only do that in AWS and east-2 zone.
-func skipTestIfCloudImagesCannotBeModified(oc *exutil.CLI) {
-	// Skip if not AWS or GCP
-	skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
-
-	// Skip if not east-2 zone
-	infra := NewResource(oc.AsAdmin(), "infrastructure", "cluster")
-	zone := infra.GetOrFail(`{.status.platformStatus.aws.region}`)
-	if zone != "us-east-2" {
-		g.Skip(fmt.Sprintf(`Current AWS zone is '%s'. AWS 'us-east-2' zone is required to execute this test case!.`, zone))
-	}
-}
-
 // skipTestIfWorkersCannotBeScaled skips the current test if the worker pool cannot be scaled via machineset
 func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 	logger.Infof("Checking if in this cluster workers can be scaled using machinesets")

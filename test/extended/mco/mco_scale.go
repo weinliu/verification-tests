@@ -36,14 +36,13 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-LongDuration-High-63894-Scaleup using 4.1 cloud image[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-63894-Scaleup using 4.1 cloud image[Disruptive]", func() {
 		var (
 			imageVersion = "4.1" // OCP4.1 ami for AWS and use-east2 zone: https://github.com/openshift/installer/blob/release-4.1/data/data/rhcos.json
 			numNewNodes  = 1     // the number of nodes scaled up in the new Machineset
 		)
 
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.1 is only supported in AWS. GCP is only supported in versions 4.6+
-		skipTestIfCloudImagesCannotBeModified(oc.AsAdmin())
 
 		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
 	})
@@ -64,7 +63,6 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		)
 
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.5 is only supported for AWS. GCP is only supported in versions 4.6+
-		skipTestIfCloudImagesCannotBeModified(oc.AsAdmin())
 
 		initialNumWorkers := len(wMcp.GetNodesOrFail())
 
