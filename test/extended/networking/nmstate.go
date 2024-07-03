@@ -647,7 +647,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - the static ip and route found in node network state")
 
 		g.By("2.5 Verify the static ip and route are shown on the node")
-		ifaceInfo, ifaceErr := exutil.DebugNode(oc, nodeName, "ifconfig", stIPRoutePolicy.ifacename)
+		ifaceInfo, ifaceErr := exutil.DebugNode(oc, nodeName, "ip", "addr", "show", stIPRoutePolicy.ifacename)
 		o.Expect(ifaceErr).NotTo(o.HaveOccurred())
 		o.Expect(ifaceInfo).Should(o.ContainSubstring(ipAddrV4))
 		o.Expect(ifaceInfo).Should(o.ContainSubstring(ipAddrV6))
@@ -701,7 +701,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		o.Expect(routes1).ShouldNot(o.ContainSubstring(nextHopAddrV6))
 
 		g.By("3.5 Verify the static ip and route are removed from the node")
-		ifaceInfo1, ifaceErr1 := exutil.DebugNode(oc, nodeName, "ifconfig")
+		ifaceInfo1, ifaceErr1 := exutil.DebugNode(oc, nodeName, "ip", "addr", "show")
 		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
 		o.Expect(ifaceInfo1).ShouldNot(o.ContainSubstring(stIPRoutePolicy.ifacename))
 		o.Expect(ifaceInfo1).ShouldNot(o.ContainSubstring(ipAddrV4))
