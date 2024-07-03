@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 )
 
@@ -261,7 +262,7 @@ type node struct {
 	allocatableEphemeralStorage string
 	ephemeralStorageCapacity    string
 	instanceType                string
-	isTaintsEmpty               bool
+	isNoScheduleTaintsEmpty     bool
 }
 
 // Get cluster all node information
@@ -303,10 +304,14 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		tempSlice := strings.Split(gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
 		nodeInstanceID := tempSlice[len(tempSlice)-1]
 		nodeInstanceType := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.kubernetes\\.io\\/instance-type").String()
-		isTaintsEmpty := !gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.taints").Exists()
-		if !isTaintsEmpty && strSliceContains(nodeRole, "worker") {
-			e2e.Logf("The worker node %q has taints: %s", nodeName, gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.taints|@ugly|@flatten").String())
+
+		// taints: [{"effect":"PreferNoSchedule","key":"UpdateInProgress"}] could be tolerance since it is a prefer strategy the workloads still could schedule to these nodes
+		nodeTaints := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.taints|@ugly|@flatten").String()
+		isNoScheduleTaintsEmpty := !strings.Contains(nodeTaints, `"effect":"NoSchedule"`)
+		if strSliceContains(nodeRole, "worker") && nodeTaints != "" {
+			e2e.Logf("The worker node %q has taints: %s", nodeName, nodeTaints)
 		}
+
 		nodes = append(nodes, node{
 			name:                        nodeName,
 			instanceID:                  nodeInstanceID,
@@ -321,7 +326,7 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 			readyStatus:                 readyStatus,
 			allocatableEphemeralStorage: nodeAllocatableEphemeralStorage,
 			ephemeralStorageCapacity:    nodeEphemeralStorageCapacity,
-			isTaintsEmpty:               isTaintsEmpty,
+			isNoScheduleTaintsEmpty:     isNoScheduleTaintsEmpty,
 		})
 	}
 	e2e.Logf("*** The \"%s\" Cluster nodes info is ***:\n \"%+v\"", cloudProvider, nodes)
@@ -335,7 +340,7 @@ func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 		linuxWorkers = append(linuxWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isTaintsEmpty && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isNoScheduleTaintsEmpty && myNode.readyStatus == "True" {
 				linuxWorkers = append(linuxWorkers, myNode)
 			}
 		}
@@ -351,7 +356,7 @@ func getSchedulableRhelWorkers(allNodes []node) []node {
 		schedulableRhelWorkers = append(schedulableRhelWorkers, allNodes...)
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osID == "rhel" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isTaintsEmpty && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osID == "rhel" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isNoScheduleTaintsEmpty && myNode.readyStatus == "True" {
 				schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
 			}
 		}
@@ -361,7 +366,27 @@ func getSchedulableRhelWorkers(allNodes []node) []node {
 }
 
 // Get one cluster schedulable linux worker, rhel linux worker first
+// If no schedulable linux worker found, skip directly
 func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
+	expectedWorker = getOneSchedulableWorkerWithoutAssert(allNodes)
+	if len(expectedWorker.name) == 0 {
+		g.Skip("Skipped: Currently no schedulable workers could satisfy the tests")
+	}
+	return expectedWorker
+}
+
+// Get one cluster schedulable linux worker, rhel linux worker first
+// If no schedulable linux worker found, failed directly
+func getOneSchedulableWorkerWithAssert(allNodes []node) (expectedWorker node) {
+	expectedWorker = getOneSchedulableWorkerWithoutAssert(allNodes)
+	if len(expectedWorker.name) == 0 {
+		e2e.Failf("Currently no schedulable workers could satisfy the tests")
+	}
+	return expectedWorker
+}
+
+// Get one cluster schedulable linux worker, rhel linux worker first
+func getOneSchedulableWorkerWithoutAssert(allNodes []node) (expectedWorker node) {
 	schedulableRhelWorkers := getSchedulableRhelWorkers(allNodes)
 	if len(schedulableRhelWorkers) != 0 {
 		expectedWorker = schedulableRhelWorkers[0]
@@ -371,7 +396,7 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 		} else {
 			for _, myNode := range allNodes {
 				// For aws local zones cluster the default LOCALZONE_WORKER_SCHEDULABLE value is no in both official document and CI configuration
-				if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isTaintsEmpty && myNode.readyStatus == "True" {
+				if myNode.scheduleable && myNode.osType == "linux" && strSliceContains(myNode.role, "worker") && !strSliceContains(myNode.role, "infra") && !strSliceContains(myNode.role, "edge") && myNode.isNoScheduleTaintsEmpty && myNode.readyStatus == "True" {
 					expectedWorker = myNode
 					break
 				}
@@ -379,7 +404,6 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 		}
 	}
 	e2e.Logf("Get the schedulableWorker is \"%+v\"", expectedWorker)
-	o.Expect(expectedWorker.name).NotTo(o.BeEmpty())
 	return expectedWorker
 }
 

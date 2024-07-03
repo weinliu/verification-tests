@@ -481,9 +481,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod.checkMountedVolumeDataExist(oc, true)
 
 			exutil.By("# Write larger than origin capacity and less than new capacity data should succeed")
-			msg, err := pod.execCommand(oc, "fallocate -l "+strconv.FormatInt(originVolumeCapacity+getRandomNum(1, 3), 10)+"G "+pod.mountPath+"/"+getRandomString()+" ||true")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
+			// ext3 does not support the fallocate system call
+			if fsType != "ext3" {
+				msg, err := pod.execCommand(oc, "fallocate -l "+strconv.FormatInt(originVolumeCapacity+getRandomNum(1, 3), 10)+"G "+pod.mountPath+"/"+getRandomString())
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
+			}
 
 			exutil.By("# Delete pod and pvc and check the related pv's status")
 			pod.delete(oc)

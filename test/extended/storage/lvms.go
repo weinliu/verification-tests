@@ -1655,7 +1655,7 @@ func resizeLvmsVolume(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment,
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeDataExist(oc, true)
 		// After volume expand write data more than the old capacity should succeed
-		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
+		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
 		// Continue write data more than new capacity should fail of "No space left on device"

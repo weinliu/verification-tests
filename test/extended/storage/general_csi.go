@@ -4129,7 +4129,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 
 			exutil.By("# Write larger than original capacity data and less than new capacity data")
-			msg, err := execCommandInSpecificPod(oc, ds.namespace, ds.getPodsList(oc)[0], "fallocate -l "+strconv.FormatInt(originSizeInt64+getRandomNum(1, 3), 10)+"G "+ds.mpath+"/"+getRandomString()+" ||true")
+			msg, err := execCommandInSpecificPod(oc, ds.namespace, ds.getPodsList(oc)[0], "fallocate -l "+strconv.FormatInt(originSizeInt64+getRandomNum(1, 3), 10)+"G "+ds.mpath+"/"+getRandomString())
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
 
@@ -5594,7 +5594,7 @@ func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep 
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeDataExist(oc, true)
 		// After volume expand write data more than the old capacity should succeed
-		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
+		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
 		// Continue write data more than new capacity should fail of "No space left on device"
@@ -5670,7 +5670,7 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeDataExist(oc, true)
 		// After volume expand write data more than the old capacity should succeed
-		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
+		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
 		// Continue write data more than new capacity should fail of "No space left on device"
