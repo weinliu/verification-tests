@@ -254,6 +254,109 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	})
 
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-ConnectedOnly-Medium-74618-ClusterExtension supports simple registry vzero bundles only", func() {
+		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
+		var (
+			ns                       = "ns-74618"
+			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
+			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
+			catalog                  = olmv1util.CatalogDescription{
+				Name:     "catalog-74618",
+				Imageref: "quay.io/olmqe/nginx-ok-index:vokv32777",
+				Template: catalogTemplate,
+			}
+			ceGVK = olmv1util.ClusterExtensionDescription{
+				Name:             "dep-gvk-32777",
+				PackageName:      "nginx-ok-v32777gvk",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				Template:         clusterextensionTemplate,
+			}
+			cePKG = olmv1util.ClusterExtensionDescription{
+				Name:                    "dep-pkg-32777",
+				PackageName:             "nginx-ok-v32777pkg",
+				Channel:                 "alpha",
+				Version:                 ">=0.0.1",
+				InstallNamespace:        ns,
+				UpgradeConstraintPolicy: "Ignore",
+				Template:                clusterextensionTemplate,
+			}
+			ceCST = olmv1util.ClusterExtensionDescription{
+				Name:             "dep-cst-32777",
+				PackageName:      "nginx-ok-v32777cst",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				Template:         clusterextensionTemplate,
+			}
+			ceWBH = olmv1util.ClusterExtensionDescription{
+				Name:                    "wbh-32777",
+				PackageName:             "nginx-ok-v32777wbh",
+				Channel:                 "alpha",
+				Version:                 ">=0.0.1",
+				InstallNamespace:        ns,
+				UpgradeConstraintPolicy: "Ignore",
+				Template:                clusterextensionTemplate,
+			}
+			ceNAN = olmv1util.ClusterExtensionDescription{
+				Name:             "nan-32777",
+				PackageName:      "nginx-ok-v32777nan",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create catalog")
+		defer catalog.Delete(oc)
+		catalog.Create(oc)
+
+		exutil.By("check gvk dependency fails to be installed")
+		defer ceGVK.Delete(oc)
+		ceGVK.CreateWithoutCheck(oc)
+		o.Expect(ceGVK.GetClusterExtensionMessage(oc, "Resolved")).To(o.ContainSubstring("has a dependency declared via property \"olm.gvk.required\" which is currently not supported"))
+		ceGVK.Delete(oc)
+
+		exutil.By("check pkg dependency fails to be installed")
+		defer cePKG.Delete(oc)
+		cePKG.CreateWithoutCheck(oc)
+		o.Expect(cePKG.GetClusterExtensionMessage(oc, "Resolved")).To(o.ContainSubstring("has a dependency declared via property \"olm.package.required\" which is currently not supported"))
+		cePKG.Delete(oc)
+
+		exutil.By("check cst dependency fails to be installed")
+		defer ceCST.Delete(oc)
+		ceCST.CreateWithoutCheck(oc)
+		o.Expect(ceCST.GetClusterExtensionMessage(oc, "Resolved")).To(o.ContainSubstring("has a dependency declared via property \"olm.constraint\" which is currently not supported"))
+		ceCST.Delete(oc)
+
+		exutil.By("check webhook fails to be installed")
+		defer ceWBH.Delete(oc)
+		ceWBH.CreateWithoutCheck(oc)
+		o.Expect(ceWBH.GetClusterExtensionMessage(oc, "Installed")).To(o.ContainSubstring("bundle: webhookDefinitions are not supported"))
+		o.Expect(ceWBH.GetClusterExtensionField(oc, "Installed", "reason")).To(o.ContainSubstring("InstallationFailed"))
+		ceWBH.Delete(oc)
+
+		exutil.By("check non all ns mode fails to be installed. it has bug https://issues.redhat.com/browse/OCPBUGS-36471")
+		defer ceNAN.Delete(oc)
+		ceNAN.CreateWithoutCheck(oc)
+		o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "message")).To(o.ContainSubstring("successfully"))
+		// o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "message")).To(o.ContainSubstring("do not support target namespaces")) // should add it back
+		o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "reason")).To(o.ContainSubstring("Success"))
+		// o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "reason")).To(o.ContainSubstring("InstallationFailed")) // should add it back
+		ceNAN.Delete(oc)
+
+	})
+
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-68821-OLMv1 Supports Version Ranges during Installation", func() {
 		exutil.SkipOnProxyCluster(oc)
