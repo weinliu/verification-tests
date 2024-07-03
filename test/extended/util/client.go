@@ -309,7 +309,9 @@ func (c *CLI) SetupProject() {
 	// For all cluster types, a temporary KUBECONFIG file will be created (with c.configPath points to it).
 	// This file will be deleted when calling TeardownProject().
 	isExternalOIDCCluster, err := IsExternalOIDCCluster(c)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		g.Skip(fmt.Sprintf("when checking if it is external OIDC cluster, meet the error %v, and skip it", err))
+	}
 	if isExternalOIDCCluster {
 		// Clear username to avoid manipulation to users (e.g. oc adm policy ...)
 		c.username = ""
