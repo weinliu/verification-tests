@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No new pod generated after 600s, old pod(%s) status(%s)", podName, podStatus))
 	})
 
-	g.It("Author:jiazha-LEVEL0-Critical-72192-OLM is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
+	g.It("Author:jiazha-NonHyperShiftHOST-LEVEL0-Critical-72192-is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
 		exutil.By("1) get marketplace and OLM pods' image/imagePullPolicy")
 		allImageMap := make(map[string]string)
 		podMap := make(map[string]string)
@@ -222,7 +222,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 	})
 
-	g.It("Author:jiazha-Medium-72017-OLM pod panics when EnsureSecretOwnershipAnnotations runs", func() {
+	g.It("Author:jiazha-NonHyperShiftHOST-Medium-72017-pod panics when EnsureSecretOwnershipAnnotations runs", func() {
 		exutil.By("1) create a secret in the openshift-operator-lifecycle-manager project")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "secret-72017", "-n", "openshift-operator-lifecycle-manager").Output()
 		if err != nil {
