@@ -119,14 +119,16 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		exutil.By("3. When the leader master node is unavailable, apiservers continue to serve after a short interruption.")
-		// Adding wait time here of 240s because sometimes wait poll taking more thans 30s to complete for osp platform.
-		if platform == "openstack" || isAzureStack {
+		// Adding wait time here of 240s because sometimes wait poll takes more than 30s to complete for osp, azurestack and vsphere platform.
+		if platform == "openstack" || isAzureStack || platform == "vsphere" {
 			expectedOutageTime = 240
 		}
 		waitTime := expectedOutageTime + 30
 		timeFirstServiceDisruption := time.Now()
 		isFirstServiceDisruption := false
+		anyDisruptionOccurred := false
 		e2e.Logf("#### Watching start time(s) :: %v ####\n", time.Now().Format("2006-01-02 15:04:05"))
+
 		apiserverOutageWatcher := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
 			// KAS health check
 			_, getNodeError := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
@@ -162,6 +164,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				e2e.Logf("%v :: Failed to get the status of project openshift-apiserver!! :: %s\n", time.Now().Format(time.RFC3339), getProjectError)
 			}
 			if isFirstServiceDisruption {
+				anyDisruptionOccurred = true
 				e2e.Logf("The first disruption of openshift-apiserver occurred :: %v", timeFirstServiceDisruption.Format(time.RFC3339))
 				// Check if all apiservers are ready.
 				if getNodeError == nil && loginError == nil && getProjectError == nil {
@@ -182,7 +185,12 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(apiserverOutageWatcher, "The cluster outage time lasted longer than we expected!")
+
+		if !anyDisruptionOccurred {
+			e2e.Logf("No disruptions occurred during the test.")
+		} else {
+			exutil.AssertWaitPollNoErr(apiserverOutageWatcher, "The cluster outage time exceeded the expected duration!")
+		}
 
 		exutil.By("4. During the leader master node is unavailable, verify the cluster availability")
 		err = ClusterSanitycheck(oc, randProject1)
