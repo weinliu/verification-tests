@@ -139,7 +139,7 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	})
 
 	// author: pmali@redhat.com
-	g.It("Longduration-NonPreRelease-Author:pmali-High-37290-mco should cope with ContainerRuntimeConfig whose finalizer > 63 characters[Disruptive][Slow]", func() {
+	g.It("Author:pmali-LEVEL0-Longduration-NonPreRelease-High-37290-mco should cope with ContainerRuntimeConfig whose finalizer > 63 characters[Disruptive][Slow]", func() {
 
 		ctrcfg.name = "finalizer-test"
 		ctrcfg.loglevel = "debug"
