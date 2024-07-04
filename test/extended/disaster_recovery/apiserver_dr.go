@@ -37,11 +37,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Cluster should be healthy befor running dr case.")
-		err = ClusterHealthcheck(oc, "OCP-19941/log")
-		if err == nil {
-			e2e.Logf("Cluster health check passed before running dr case")
-		} else {
-			g.Skip(fmt.Sprintf("Cluster health check failed before running dr case :: %s ", err))
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+		if err != nil {
+			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
 		}
 
 		platform := exutil.CheckPlatform(oc)
@@ -235,7 +233,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The leader master node %s was unable to start!", nodeName))
 
 		exutil.By("5. After restarted the leader master node, verify the cluster availability")
-		err = ClusterHealthcheck(oc, "OCP-19941/log")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
 		if err == nil {
 			e2e.Logf("Post restarting the leader master node, cluster health check passed")
 		} else {
@@ -255,10 +253,8 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Cluster should be healthy before running case.")
-		err = ClusterHealthcheck(oc, "OCP-67718/log")
-		if err == nil {
-			e2e.Logf("Cluster health check passed before running case")
-		} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+		if err != nil {
 			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
 		}
 
@@ -377,7 +373,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		exutil.AssertWaitPollNoErr(err, "The clsuter was unable to start up!")
 
 		exutil.By("5. After restarted nodes of the cluster, verify the cluster availability")
-		err = ClusterHealthcheck(oc, "OCP-67718/log")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
 		if err == nil {
 			e2e.Logf("Post restarting the cluster, cluster health check passed")
 			// Output mem usage of top 3 system processes of work nodes for debugging
