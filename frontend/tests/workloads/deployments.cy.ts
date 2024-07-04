@@ -1,7 +1,7 @@
 import { guidedTour } from "upstream/views/guided-tour";
 import { Pages } from "views/pages";
 import { searchPage } from 'views/search';
-import { Deployment, checkAlert } from 'views/deployment';
+import { Deployment } from 'views/deployment';
 
 describe('deployment page', () => {
   const params ={
@@ -33,7 +33,7 @@ describe('deployment page', () => {
       },
       () => {
         Pages.gotoSearch();
-        searchPage.chooseResourceType('deploymentConfig');
+        searchPage.chooseResourceType('DeploymentConfig');
       },
       () => {
         cy.visit(`/topology/ns/${params.ns}?view=list`);
