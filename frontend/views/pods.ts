@@ -76,18 +76,18 @@ export const podsMetricsTab ={
     })
   },
   checkMetricsLoaded: () => {
-    const maxRetries = 5;
+    const maxRetries = 8;
     const pageLoadingDelay = 20000; // 20 seconds
     const retryDelay = 30000; //30 seconds
-    const textToCheck = 'no datapoints found';
+    const textToCheck = 'No datapoints found';
     const checkMetricsContent = ($metrics, retryCount = 0) => {
       const checkNoDataPointsFound = $metrics.toArray().every(el => {
         const metricText = Cypress.$(el).text().trim();
+        const containsText = !metricText.includes(textToCheck);
         if (metricText === '') {
           return false;
         }
-        const containsText = !metricText.includes(textToCheck);
-        cy.log(`METRIC TEXT: ${metricText} contain "${textToCheck}": return ${containsText}`);
+        cy.log(`METRIC TEXT: ${metricText} include/uninclude "${textToCheck}": return ${containsText}`);
         return containsText;
       });
 

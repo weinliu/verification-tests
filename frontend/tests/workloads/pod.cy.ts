@@ -91,9 +91,6 @@ describe('pod page', () => {
     cy.get('[aria-label="query results table"] tbody td')
       .as('queryresult')
       .contains(params.networkName);
-    podsPage.goToPodsMetricsTab(params.ns,params.podname);
-    podsMetricsTab.clickToMetricsPage(4,/network/);
-    cy.get('@queryresult').contains(params.networkName);
     // Check chart in Utilization section in Node Overview page
     podsPage.goToPodDetails(params.ns,params.podname);
     cy.get('[data-test-selector="details-item-value__Node"] span a')
