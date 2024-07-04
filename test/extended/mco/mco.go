@@ -4402,9 +4402,9 @@ desiredState:
 		logger.Infof(pruneMCOutput)
 
 		for _, mc := range sortedRenderedMCs {
-			matchString := "DRY RUN: Deleted rendered MachineConfig "
+			matchString := "dry-run deleting rendered MachineConfig "
 			if mc.GetName() == wSpecConf || mc.GetName() == mSpecConf {
-				matchString = "DRY RUN: Skipping deletion of rendered MachineConfig "
+				matchString = "Skip dry-run deleting rendered MachineConfig "
 			}
 			o.Expect(pruneMCOutput).To(o.ContainSubstring(matchString+mc.GetName()), "The %s is not same as in-use renderedMC in MCP", mc.GetName()) // to check correct rendered MC will be deleted or skipped
 
@@ -4419,9 +4419,9 @@ desiredState:
 		logger.Infof(pruneMCOutput)
 		NewSortedRenderedMCMaster = mcList.GetRenderedMachineConfigForMasterOrFail()
 
-		matchString = "DRY RUN: Deleted rendered MachineConfig "
+		matchString = "dry-run deleting rendered MachineConfig "
 		if sortedMCListMaster[0].GetName() == mSpecConf {
-			matchString = "DRY RUN: Skipping deletion of rendered MachineConfig "
+			matchString = "Skip dry-run deleting rendered MachineConfig "
 		}
 		o.Expect(pruneMCOutput).To(o.ContainSubstring(matchString+sortedMCListMaster[0].GetName()), "Oldest RenderedMachineConfig is not deleted") // to check old rendered  master MC will be getting deleted
 
@@ -4466,9 +4466,9 @@ desiredState:
 		logger.Infof(pruneMCOutput)
 
 		if sortedMCListMaster[0].GetName() == mSpecConf {
-			matchString = "Skipping deletion of rendered MachineConfig "
+			matchString = "Skip deleting rendered MachineConfig "
 		} else {
-			matchString = "Deleted rendered MachineConfig "
+			matchString = "deleting rendered MachineConfig "
 			for _, newMc := range NewSortedRenderedMCMaster {
 				o.Expect(newMc.GetName()).NotTo(o.ContainSubstring(sortedMCListMaster[0].GetName()), "Deleted rendered MachineConfig is still present in the new list") // check expected rendered-master MC is been deleted
 			}
@@ -4486,10 +4486,10 @@ desiredState:
 
 		for _, mc := range sortedRenderedMCs {
 			if mc.GetName() == mSpecConf || mc.GetName() == wSpecConf {
-				matchString = "Skipping deletion of rendered MachineConfig "
+				matchString = "Skip deleting rendered MachineConfig "
 				o.Expect(mc.Exists()).To(o.BeTrue(), "Deleted the in-use rendered MC") // check in-use rendered MC is not been deleted
 			} else {
-				matchString = "Deleted rendered MachineConfig "
+				matchString = "deleting rendered MachineConfig "
 				o.Expect(mc.Exists()).To(o.BeFalse(), "The expected rendered MC is not deleted") // check expected rendered MC is been deleted
 			}
 			o.Expect(pruneMCOutput).To(o.ContainSubstring(matchString+mc.GetName()), "Oldest RenderedMachineConfig is not deleted")
@@ -4552,7 +4552,7 @@ desiredState:
 		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", fileConfig)}
 		mc.skipWaitForMcp = true // to wait to execute command
 
-		defer mc.delete() // Clean up after creation
+		defer mc.deleteNoWait() // Clean up after creation
 		mc.create()
 		logger.Infof("OK\n")
 
@@ -4570,7 +4570,7 @@ desiredState:
 		// as  wMCP is still updating with previous in-use  rendered MC and new generated MC from 1st and 2nd MC created are also in-use so we need to check they are not deleted
 
 		for _, mc := range renderedMCs {
-			o.Expect(pruneMCOutput).To(o.ContainSubstring("Skipping deletion of rendered MachineConfig "+mc), "Deleted the in-use rendered MC: "+mc)
+			o.Expect(pruneMCOutput).To(o.ContainSubstring("Skip deleting rendered MachineConfig "+mc), "Deleted the in-use rendered MC: "+mc)
 		}
 		logger.Infof("OK\n")
 
@@ -4581,7 +4581,7 @@ desiredState:
 		pruneMCOutput, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "renderedmachineconfigs", "--pool-name", "worker", "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the rendered config list")
 		logger.Infof(pruneMCOutput)
-		o.Expect(pruneMCOutput).To(o.ContainSubstring("Skipping deletion of rendered MachineConfig "+newRenderedMC), "Deleted the in-use rendered MC")
+		o.Expect(pruneMCOutput).To(o.ContainSubstring("Skip deleting rendered MachineConfig "+newRenderedMC), "Deleted the in-use rendered MC")
 
 		logger.Infof("OK\n")
 
