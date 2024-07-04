@@ -1908,6 +1908,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-66560-adding/deleting http headers to a http route by a router owner", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
 			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
 			unsecsvcName        = "service-unsecure"
@@ -1915,13 +1916,27 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			srv                 = "gunicorn"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp66560",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
 		)
+
+		exutil.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
-		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
 		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
 		createResourceFromFile(oc, project1, testPod)
 		err = waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
@@ -1929,8 +1944,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
-		baseDomain := getBaseDomain(oc)
-		routeHost := "service-unsecure66560" + "." + "apps." + baseDomain
+		routeHost := "service-unsecure66560" + "." + ingctrl.domain
 		lowHost := strings.ToLower(routeHost)
 		base64Host := base64.StdEncoding.EncodeToString([]byte(routeHost))
 		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routeHost).Execute()
@@ -1968,7 +1982,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		exutil.By("check backend edge route in haproxy that headers to be set or deleted")
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getRouterPod(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "be_http:"+project1+":"+unsecsvcName, "-A33", "X-SSL-Client-Cert")
 		routeBackendCfg := getBlockConfig(oc, routerpod, "be_http:"+project1+":"+unsecsvcName)
 		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-SSL-Client-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
