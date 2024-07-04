@@ -254,7 +254,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("HyperShiftMGMT-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
+	g.It("Author:rgangwar-HyperShiftMGMT-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Longduration-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
 		var (
 			patchToRecover           = `{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": []}}}}}`
 			originHostdKubeconfigBkp = "kubeconfig.origin"
