@@ -428,9 +428,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		// Note: this case focuses on Egressfirewall working with IPv6 address, as ipv6 single cluster with proxy where egressfirewall cannot work, so only test it on dual stack.
 		// Currently only on the UPI packet dualstack cluster, the pod can access public website with IPv6 address.
 		ipStackType := checkIPStackType(oc)
-		platform := exutil.CheckPlatform(oc)
-		acceptedPlatform := strings.Contains(platform, "none")
-		if !acceptedPlatform || ipStackType != "dualstack" {
+		if ipStackType != "dualstack" || !checkIPv6PublicAccess(oc) {
 			g.Skip("This case should be run on UPI packet dualstack cluster, skip other platform or network stack type.")
 		}
 

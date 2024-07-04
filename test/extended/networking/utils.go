@@ -3924,3 +3924,18 @@ func checkFips(oc *exutil.CLI) bool {
 	e2e.Logf("FIPS is enabled.")
 	return true
 }
+
+// Check whether it is able to access public web with IPv6 address
+func checkIPv6PublicAccess(oc *exutil.CLI) bool {
+	workNode, err := exutil.GetFirstWorkerNode(oc)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	curlCMD := "curl -6 www.google.com --connect-timeout 5 -I"
+	output, err := exutil.DebugNode(oc, workNode, "bash", "-c", curlCMD)
+	if !strings.Contains(output, "HTTP") || err != nil {
+		e2e.Logf(output)
+		e2e.Logf("Unable to access the public Internet with IPv6 from the cluster.")
+		return false
+	}
+	e2e.Logf("Successfully connected to the public Internet with IPv6 from the cluster.")
+	return true
+}
