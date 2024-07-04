@@ -282,6 +282,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author:pewang@redhat.com
 	// Since it'll make the vSphere CSI driver credential invalid during the execution,so mark it Disruptive
 	g.It("NonHyperShiftHOST-Author:pewang-High-48875-[vSphere-CSI-Driver-Operator] should report 'vsphere_csi_driver_error' metric when couldn't connect to vCenter [Disruptive]", func() {
+
+		var (
+			csoSaToken              = getSpecifiedSaToken(oc, "cluster-storage-operator", "openshift-cluster-storage-operator")
+			driverOperatorNs        = "openshift-cluster-csi-drivers"
+			extraClusterRole        = "driver-operator-clusterrole-48875"
+			extraClusterRoleBinding = "driver-operator-clusterrole-48875-clusterrolebinding"
+		)
+
 		exutil.By("# Get the origin credential of vSphere CSI driver")
 		// Make sure the CSO is healthy
 		waitCSOhealthy(oc)
@@ -308,15 +316,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Restore the credential of vSphere CSI driver and make sure the CSO recover healthy by defer
 		defer func() {
 			restoreVsphereCSIcredential(oc, userKey, originUser)
+			// Enhancement: Without restarting the operators the CSO sometimes may need more time to become healthy again
+			vSphereDetectorOperator.hardRestart(oc.AsAdmin())
+			vSphereCSIDriverOperator.hardRestart(oc.AsAdmin())
 			waitCSOhealthy(oc)
 		}()
 		output, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+userKey+`":"`+invalidUser+`"}}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("patched"))
 		debugLogf("Replace the credential of vSphere CSI driver user to invalid user: \"%s\" succeed", invalidUser)
-
-		exutil.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
-		mo.waitSpecifiedMetricValueAsExpected("vsphere_csi_driver_error", `data.result.0.metric.failure_reason`, "vsphere_connection_failed")
 
 		exutil.By("# Check the cluster storage operator should be degrade")
 		// Don't block upgrades if we can't connect to vcenter
@@ -325,6 +333,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Double check with developer, since cso degrade is always True so the Upgradeable status could be any
 		waitCSOspecifiedStatusValueAsExpected(oc, "Degraded", "True")
 		checkCSOspecifiedStatusValueAsExpectedConsistently(oc, "Degraded", "True")
+
+		exutil.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("create").Args("clusterrole", extraClusterRole, "--verb=create", "--resource=subjectaccessreviews").Execute()).ShouldNot(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", extraClusterRole).Execute()
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", driverOperatorNs, "clusterrolebinding", extraClusterRoleBinding, "--clusterrole="+extraClusterRole, "--serviceaccount=openshift-cluster-csi-drivers:vmware-vsphere-csi-driver-operator").Execute()).ShouldNot(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", extraClusterRoleBinding).Execute()
+
+		o.Eventually(func() bool {
+			allMetrics, _, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", driverOperatorNs, "deployment/vmware-vsphere-csi-driver-operator", "--", "curl", "-k", "-s", "-H", fmt.Sprintf("Authorization: Bearer %v", csoSaToken), "https://vmware-vsphere-csi-driver-operator-metrics:8445/metrics").Outputs()
+			return strings.Contains(allMetrics, `vsphere_csi_driver_error{condition="degraded",failure_reason="vsphere_connection_failed"} 1`)
+		}).WithTimeout(defaultMaxWaitingTime).WithPolling(defaultIterationTimes).Should(o.BeTrue(), "Waiting for vsphere_connection_failed metrics reported timeout")
+
+		// Check the vmware-vsphere-csi-driver-operator servicemonitor exist to make sure the metric is collected to the prometheus
+		o.Expect(isSpecifiedResourceExist(oc, "servicemonitor/vmware-vsphere-csi-driver-operator", driverOperatorNs)).Should(o.BeTrue())
+
 	})
 
 	// author:wduan@redhat.com
