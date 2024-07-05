@@ -1,70 +1,52 @@
 import { guidedTour } from './../../upstream/views/guided-tour';
+import { listPage } from 'upstream/views/list-page';
+import { testName } from 'upstream/support';
 
 describe('Debug console for pods', () => {
 
   const testParams = {
-    namespace: 'pod-debug-console-48000',
-    name: 'nodejs-ex-git',
-    gitURL: 'https://github.com/sclorg/nodejs-ex.git',
-    invalidCommand: 'star a wktw',
-    waitTime: 50000,
-    debugConsoleLoadTime: 60000
+    namespace: testName,
+    filename: 'deployment-with-crashloopbackoff-pod',
+    name: 'crash-loop'
   }
 
   before(() => {
+    cy.cliLogin();
+    cy.exec(`oc new-project ${testParams.namespace}`);
+    cy.exec(`oc apply -f ./fixtures/deployments/${testParams.filename}.yaml -n ${testParams.namespace}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
-    cy.createProject(testParams.namespace);
   })
 
   after(() => {
-    cy.adminCLI(`oc delete project ${testParams.namespace}`);
+    cy.adminCLI(`oc delete project ${testParams.namespace}`, {failOnNonZeroExit: false});
   })
 
   it('(OCP-48000,xiyuzhao,UserInterface), Run Pod in Debug mode', {tags: ['e2e']}, () => {
-    // Import the nodejs-ex.git and run the invalid command to cause CrashLoopBackoof && Twice
-    cy.switchPerspective('Developer');
-    cy.visit(`/import/ns/${testParams.namespace}`)
-    cy.byLegacyTestID('git-form-input-url').scrollIntoView().clear().type(testParams.gitURL)
-    cy.get('#form-input-git-url-field-helper').contains('Validated')
-    cy.get('#form-input-name-field').clear().type(testParams.name)
-    cy.get('#form-input-image-imageEnv-NPM_RUN-field').clear().type(testParams.invalidCommand)
-    cy.byLegacyTestID('submit-button').click({force: true})
-    // Make sure the deployment is created
-    cy.byLegacyTestID('nodejs-ex-git').should('be.visible')
-
     // Go and find the CrashLoopBackOff Pod in the deployment page for the application
-    cy.visit(`/k8s/ns/${testParams.namespace}/deployments/${testParams.name}/pods`)
+    cy.visit(`/k8s/ns/${testParams.namespace}/deployments/${testParams.name}-deployment/pods`)
 
-    cy.byTestID('status-text').should('contain', 'Crash')
-    cy.byButtonText('CrashLoopBackOff')
-      .click()
-    cy.byTestID(`popup-debug-container-link-${testParams.name}`)
-      .click()
+    cy.get(`[data-test="status-text"]`, { timeout: 100000 }).should('contain', 'Crash');
+    cy.byButtonText('CrashLoopBackOff').click()
+    cy.get(`[data-test*="popup-debug-container-link-${testParams.name}-container"]`).click();
 
     // On the debug pod detail page; Check title and existence of debug console
     cy.byLegacyTestID(`resource-title`).should('exist')
     cy.contains('temporary pod').should('be.visible')
-    cy.get('.co-terminal', {timeout: testParams.debugConsoleLoadTime})
-      .should('be.visible')
+    cy.get('.co-terminal', {timeout: 60000}).should('be.visible')
 
     // Get pod name via cli
-    let podName: string
-    let rows: string[]
-    cy.adminCLI(`oc get pod -n ${testParams.namespace}`)
-      .then((res) => {
-        rows = res.stdout.split('\n').slice(1)
-        podName = rows[1].split(' ')[0]
-        cy.log(podName)
-        // Check drop down menu in logs for CrashLoopBackOff Pod
-        cy.visit(`/k8s/ns/${testParams.namespace}/pods/${podName}/logs`)
-        cy.get(`a:contains(Debug container)`).then($a => {
-          const message = $a.text();
-          expect($a, message).to.have.attr("href").contain("debug");
-        })
-        cy.byLegacyTestID('dropdown-button').click()
-        cy.get(`#${testParams.name}-link`).contains(testParams.name)
-      })
+    cy.visit(`/k8s/ns/${testParams.namespace}/pods/`);
+    listPage.filter.by('CrashLoopBackOff');
+    cy.get(`#name [data-test*=crash-loop]`).should('exist').click();
+    cy.get('[data-test-id="horizontal-link-Logs"]').should('exist').click();
+    cy.get(`[data-test="debug-container-link"]`).then($a => {
+      const message = $a.text();
+      expect($a, message).to.have.attr("href").contain("debug");
+    })
+    cy.byLegacyTestID('dropdown-button').click();
+    cy.get(`[data-test-dropdown-menu=${testParams.name}-container]`).should('exist');
+
     //Add checkpoint for customer bug OCPBUGS-12244: debug container should not copy main pod network info
     let ipaddress1, ipaddress2;
     cy.adminCLI(`oc get pods -n ${testParams.namespace} -o jsonpath='{.items[0].status.podIP}{"\t"}{.items[1].status.podIP}'`).then((result)=> {

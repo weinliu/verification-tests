@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crash-loop-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crash-loop-app
+  template:
+    metadata:
+      labels:
+        app: crash-loop-app
+    spec:
+      containers:
+      - name: crash-loop-container
+        image: busybox
+        command: ["sh", "-c", "exit 1"]
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+      restartPolicy: Always
