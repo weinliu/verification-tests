@@ -33,7 +33,9 @@ import (
 	// this appears to inexplicably auto-register global flags.
 	_ "k8s.io/kubernetes/test/e2e/storage/drivers"
 
+	configv1 "github.com/openshift/api/config/v1"
 	projectv1 "github.com/openshift/api/project/v1"
+	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	securityv1client "github.com/openshift/client-go/security/clientset/versioned"
 	"github.com/openshift/openshift-tests-private/pkg/version"
 )
@@ -45,6 +47,12 @@ var (
 )
 
 var TestContext *e2e.TestContextType = &e2e.TestContext
+
+const (
+	EnvIsExternalOIDCCluster = "ENV_IS_EXTERNAL_OIDC_CLUSTER"
+)
+
+var IsExternalOIDCClusterFlag string = ""
 
 func InitStandardFlags() {
 	e2e.RegisterCommonFlags(flag.CommandLine)
@@ -117,6 +125,59 @@ func AnnotateTestSuite() {
 
 	// ginkgo.GetSuite().BuildTree()
 	// ginkgo.GetSuite().WalkTests(testRenamer.maybeRenameTest)
+}
+
+// PreDetermineExternalOIDCCluster checks if the cluster is using external OIDC preflight to avoid to check it everytime.
+func PreDetermineExternalOIDCCluster() (bool, error) {
+
+	clientConfig, err := e2e.LoadConfig(true)
+	if err != nil {
+		e2e.Logf("clientConfig err: %v", err)
+		return false, err
+	}
+	client, err := configclient.NewForConfig(clientConfig)
+	if err != nil {
+		e2e.Logf("client err: %v", err)
+		return false, err
+	}
+
+	var auth *configv1.Authentication
+	var errAuth error
+	err = wait.PollImmediate(3*time.Second, 9*time.Second, func() (bool, error) {
+		auth, errAuth = client.ConfigV1().Authentications().Get(context.Background(), "cluster", metav1.GetOptions{})
+		if errAuth != nil {
+			e2e.Logf("auth err: %v", errAuth)
+			return false, nil
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		return false, errAuth
+	}
+
+	// auth.Spec.Type is optionial. if it does not exist, auth.Spec.Type is empty string
+	// if it exists and set as "", it is also empty string
+	e2e.Logf("Found authentication type used: %v", string(auth.Spec.Type))
+	return string(auth.Spec.Type) == string(configv1.AuthenticationTypeOIDC), nil
+
+	// keep it for possible usage
+	// var out []byte
+	// var err error
+	// waitErr := wait.PollImmediate(3*time.Second, 9*time.Second, func() (bool, error) {
+	// 	out, err = kubectlCmd("get", "authentication/cluster", "-o=jsonpath={.spec.type}").CombinedOutput()
+	// 	if err != nil {
+	// 		e2e.Logf("Fail to get the authentication/cluster, error: %v with %v, try again", err, string(out))
+	// 		return false, nil
+	// 	}
+	// 	e2e.Logf("Found authentication type used: %v", string(out))
+	// 	return true, nil
+	// })
+	// if waitErr != nil {
+	// 	return false, fmt.Errorf("error checking if the cluster is using external OIDC: %v", string(out))
+	// }
+
+	// return string(out) == string(configv1.AuthenticationTypeOIDC), nil
 }
 
 func kubectlCmd(args ...string) *exec.Cmd {

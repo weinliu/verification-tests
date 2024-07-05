@@ -124,6 +124,19 @@ func newRunCommand() *cobra.Command {
 					return err
 				}
 
+				if !opt.DryRun {
+					isOIDC, err := exutil.PreDetermineExternalOIDCCluster()
+					if err != nil {
+						os.Setenv(exutil.EnvIsExternalOIDCCluster, "unknown")
+					} else {
+						if isOIDC {
+							os.Setenv(exutil.EnvIsExternalOIDCCluster, "yes")
+						} else {
+							os.Setenv(exutil.EnvIsExternalOIDCCluster, "no")
+						}
+					}
+				}
+
 				e2e.AfterReadingAllFlags(exutil.TestContext)
 				e2e.TestContext.DumpLogsOnFailure = true
 				exutil.TestContext.DumpLogsOnFailure = true
@@ -157,6 +170,11 @@ func newRunTestCommand() *cobra.Command {
 			if err := initProvider(os.Getenv("TEST_PROVIDER"), testOpt.DryRun); err != nil {
 				return err
 			}
+
+			if !testOpt.DryRun {
+				exutil.IsExternalOIDCClusterFlag = os.Getenv(exutil.EnvIsExternalOIDCCluster)
+			}
+
 			e2e.AfterReadingAllFlags(exutil.TestContext)
 			e2e.TestContext.DumpLogsOnFailure = true
 			exutil.TestContext.DumpLogsOnFailure = true
