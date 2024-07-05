@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -141,42 +142,53 @@ func (nutanixSess *NutanixSession) GetNutanixInstanceState(instanceID string) (s
 	return "", nil
 }
 
-// SetNutanixInstanceState change nutanix powerstate for e.g. ON or OFF
+// SetNutanixInstanceState changes the Nutanix power state, e.g., ON or OFF
 func (nutanixSess *NutanixSession) SetNutanixInstanceState(targetState string, instanceUUID string) error {
 	// Create the request URL
 	url := fmt.Sprintf("https://%s/api/nutanix/v3/vms/%s", nutanixSess.Endpoint, instanceUUID)
 
+	// Retry logic parameters
+	maxRetries := 5
+	retryDelay := 30 * time.Second
+
+	// Create HTTP client
+	client := &http.Client{}
+
+	// Helper function to set common headers and authentication
+	setHeadersAndAuth := func(req *http.Request) {
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.SetBasicAuth(nutanixSess.Username, nutanixSess.Password)
+	}
+
 	// Fetch the VM data
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("Error creating request: %v", err)
+		return fmt.Errorf("error creating request: %v", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.SetBasicAuth(nutanixSess.Username, nutanixSess.Password)
+	setHeadersAndAuth(req)
 
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Error sending request: %v", err)
+		return fmt.Errorf("error sending request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Request failed with status code %d", resp.StatusCode)
+		return fmt.Errorf("request failed with status code %d", resp.StatusCode)
 	}
 
 	// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Error reading response body: %v", err)
+		return fmt.Errorf("error reading response body: %v", err)
 	}
 
 	// Update the VM power state in the JSON payload
 	var vmData map[string]interface{}
 	err = json.Unmarshal(body, &vmData)
 	if err != nil {
-		return fmt.Errorf("Error parsing response JSON: %v", err)
+		return fmt.Errorf("error parsing response JSON: %v", err)
 	}
 	delete(vmData, "status")
 	vmData["spec"].(map[string]interface{})["resources"].(map[string]interface{})["power_state"] = targetState
@@ -184,26 +196,38 @@ func (nutanixSess *NutanixSession) SetNutanixInstanceState(targetState string, i
 	// Convert the modified data back to JSON
 	payload, err := json.Marshal(vmData)
 	if err != nil {
-		return fmt.Errorf("Error creating request body: %v", err)
+		return fmt.Errorf("error creating request body: %v", err)
 	}
 
-	// Update the VM state
-	reqPut, err := http.NewRequest("PUT", url, bytes.NewBuffer(payload))
-	if err != nil {
-		return fmt.Errorf("Error creating request: %v", err)
-	}
-	reqPut.Header.Set("Content-Type", "application/json")
-	reqPut.Header.Set("Accept", "application/json")
-	reqPut.SetBasicAuth(nutanixSess.Username, nutanixSess.Password)
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Update the VM state
+		reqPut, err := http.NewRequest("PUT", url, bytes.NewBuffer(payload))
+		if err != nil {
+			return fmt.Errorf("error creating request: %v", err)
+		}
+		setHeadersAndAuth(reqPut)
 
-	respPut, err := client.Do(reqPut)
-	if err != nil {
-		return fmt.Errorf("Error sending request: %v", err)
-	}
-	defer respPut.Body.Close()
+		respPut, err := client.Do(reqPut)
+		if err != nil {
+			return fmt.Errorf("error sending request: %v", err)
+		}
+		defer respPut.Body.Close()
 
-	if respPut.StatusCode != http.StatusOK && respPut.StatusCode != 202 {
-		return fmt.Errorf("Request failed with status code %d", respPut.StatusCode)
+		if respPut.StatusCode == http.StatusOK || respPut.StatusCode == http.StatusAccepted {
+			return nil
+		} else if respPut.StatusCode == http.StatusConflict && attempt < maxRetries-1 {
+			fmt.Printf("Conflict detected, retrying in %v seconds... (attempt %d/%d)\n", retryDelay.Seconds(), attempt+1, maxRetries)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// Read the response body for debugging purposes
+		respBody, err := ioutil.ReadAll(respPut.Body)
+		if err != nil {
+			return fmt.Errorf("error reading response body: %v", err)
+		}
+		return fmt.Errorf("PUT request failed with status code %d: %s", respPut.StatusCode, string(respBody))
 	}
-	return nil
+
+	return fmt.Errorf("request failed after %d attempts", maxRetries)
 }
