@@ -12735,6 +12735,70 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		o.Expect(operatorinfo).NotTo(o.BeEmpty())
 		o.Expect(operatorinfo).NotTo(o.ContainSubstring("Copied"))
 	})
+
+	// author: xzha@redhat.com, test case OCP-74652
+	g.It("Author:xzha-ConnectedOnly-Medium-74652-InstallPlan should SUCCESS when multiple CRD versions are served [Serial]", func() {
+		architecture.SkipNonAmd64SingleArch(oc)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		var (
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-74652",
+				namespace:   "openshift-marketplace",
+				displayName: "Test Catsrc",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/devworkspace-operator-index:release",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "sub-74652",
+				namespace:              "openshift-operators",
+				catalogSourceName:      "catsrc-74652",
+				catalogSourceNamespace: "openshift-marketplace",
+				channel:                "fast",
+				ipApproval:             "Automatic",
+				operatorPackage:        "devworkspace-operator",
+				template:               subTemplate,
+			}
+		)
+		itName := g.CurrentSpecReport().FullText()
+		exutil.By("1) create the catalog source")
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+
+		exutil.By("2) install sub")
+		sub.create(oc, itName, dr)
+		defer sub.deleteCSV(itName, dr)
+		defer sub.delete(itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		exutil.By("3) create cr")
+		crFilePath := filepath.Join(buildPruningBaseDir, "cr_devworkspace.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("devworkspace").Output()
+			if strings.Contains(output, "Workspace is running") {
+				e2e.Logf("Workspace is running")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "creating devworkspace is not Succeeded")
+
+		exutil.By("4) delete sub/csv")
+		sub.deleteCSV(itName, dr)
+		sub.delete(itName, dr)
+
+		exutil.By("5) re-create sub")
+		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+	})
+
 })
 
 var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a namespace", func() {
