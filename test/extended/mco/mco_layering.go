@@ -1070,7 +1070,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 	})
 
-	g.It("Author:sregidor-DEPRECATED-ConnectedOnly-Longduration-NonPreRelease-Medium-54056-Update osImage using the internal registry to store the image [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-54056-Update osImage using the internal registry to store the image [Disruptive]", func() {
 		var (
 			osImageNewFilePath = "/etc/hello-tc-54056"
 			dockerFileCommands = fmt.Sprintf(`
