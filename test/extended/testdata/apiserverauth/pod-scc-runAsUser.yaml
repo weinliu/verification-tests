@@ -9,6 +9,7 @@ objects:
       labels:
         app: "${NAME}"
       name: "${NAME}"
+      namespace: "${NAMESPACE}"
     spec:
       securityContext:
         runAsNonRoot: true
@@ -25,3 +26,4 @@ parameters:
   - name: NAME
   - name: IMAGE
   - name: USERID
+  - name: NAMESPACE

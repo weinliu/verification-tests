@@ -354,6 +354,13 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
 	g.It("WRS-ConnectedOnly-Author:rugong-Medium-20052-New field forbiddenSysctls for SCC", func() {
+		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
+		}
+
 		oc.SetupProject()
 		username := oc.Username()
 		scc := "scc-test-20052"
@@ -847,13 +854,20 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("WRS-ConnectedOnly-Author:yinzhou-LEVEL0-High-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
+		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
+		}
+
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		username := oc.Username()
 
 		// "nonroot-v2" SCC has "MustRunAsNonRoot" as the RunAsUserStrategy, assigning it to the user
 		defer oc.AsAdmin().Run("adm", "policy").Args("remove-scc-from-user", "nonroot-v2", username).Execute()
-		err := oc.AsAdmin().Run("adm", "policy").Args("add-scc-to-user", "nonroot-v2", username).Execute()
+		err = oc.AsAdmin().Run("adm", "policy").Args("add-scc-to-user", "nonroot-v2", username).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		baseDir := exutil.FixturePath("testdata", "apiserverauth")
@@ -905,12 +919,19 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("WRS-Author:yinzhou-Medium-55675-Group member should not lose rights after other members join the group", func() {
+		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
+		}
+
 		g.By("Creat new namespace")
 		oc.SetupProject()
 		user1Name := oc.Username()
 		g.By("Creat new group")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("group", "g55675").Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "g55675").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "g55675").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Add first user to the group")
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "g55675", user1Name).Execute()
@@ -942,13 +963,20 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: dmukherj@redhat.com
 	g.It("WRS-ConnectedOnly-Author:dmukherj-LEVEL0-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
+		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("Skipping the test as we are running against an external OIDC cluster.")
+		}
+
 		g.By("1. Create a namespace as normal user")
 		oc.SetupProject()
 		testNamespace := oc.Namespace()
 		username := oc.Username()
 
 		g.By("2. Changing the pod security profile to privileged")
-		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", testNamespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", testNamespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Adding label to namespace failed")
 
 		g.By("3. Creating new role for ephemeral containers")
@@ -1013,6 +1041,12 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: zxiao@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-LEVEL0-High-22470-The basic challenge will be shown when user pass the X-CSRF-TOKEN http header", func() {
+		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			g.Skip("OCP-22470 is skipped because it tests OAuth functionality, which is by design not available in external OIDC clusters.")
+		}
+
 		e2e.Logf("Using OpenShift cluster with a default identity provider that supports 'challenge: true'")
 
 		g.By("1. Get authentication url")
