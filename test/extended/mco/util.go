@@ -23,7 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -1227,22 +1227,26 @@ func IsTrue(s string) bool {
 	return strings.EqualFold(s, TrueString)
 }
 
+// ToJSONOrFail converts the given string in to JSON forma
+func ToJSON(content string) (string, error) {
+	var js json.RawMessage
+	if json.Unmarshal([]byte(content), &js) == nil {
+		// the string is already JSON, no need to manipulate it
+		return content, nil
+	}
+
+	bytes, err := yaml.YAMLToJSON([]byte(content))
+	return string(bytes), err
+}
+
 // getCertsFromKubeconfig returns the certificate used in a kubeconfig file
 func getCertsFromKubeconfig(kubeconfig string) (string, error) {
 	// We don't know if the kubeconfig file will be in YAML or in JSON format
-	// We will parse it as YAML and transform it into a json string that can be handled with gjson lib
-	data := map[string]interface{}{}
-
-	err := yaml.Unmarshal([]byte(kubeconfig), data)
+	// We will transform it into JSON
+	JSONstring, err := ToJSON(kubeconfig)
 	if err != nil {
 		return "", err
 	}
-	JSONbytes, err := json.Marshal(data)
-	if err != nil {
-		return "", err
-	}
-
-	JSONstring := string(JSONbytes)
 
 	currentCtx := gjson.Get(JSONstring, "current-context")
 	logger.Debugf("Context: %s\n", currentCtx)

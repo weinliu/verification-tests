@@ -2664,7 +2664,7 @@ nulla pariatur.`
 		o.Expect(rf.Fetch()).To(o.Succeed(),
 			"Error trying to get the kubelet config from node %s", workerNode.GetName())
 
-		jsonConfig := JSON(rf.GetTextContent())
+		jsonConfig := JSON(exutil.OrFail[string](ToJSON(rf.GetTextContent()))) // we use ToJSON to make sure that we get a JSON format even if the file is YAML encoded
 		logger.Infof("Verifying tlsMinVersion")
 		o.Expect(jsonConfig.Get("tlsMinVersion")).To(
 			o.MatchJSON(expectedTLSMinVersion),

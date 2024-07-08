@@ -47,3 +47,19 @@ func AssertWaitPollWithErr(e error, msg string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 }
+
+// OrFail function will process another function's return values and fail if any of those returned values is ane error != nil and returns the first value
+// example: if we have: func getValued() (string, error)
+//
+//	we can do:  value := OrFail[string](getValue())
+func OrFail[T any](vals ...any) T {
+
+	for _, val := range vals {
+		err, ok := val.(error)
+		if ok {
+			o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred())
+		}
+	}
+
+	return vals[0].(T)
+}
