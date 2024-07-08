@@ -787,6 +787,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 	g.It("Author:miyadav-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-57438-Add support to Shielded VMs on GCP [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
+		//We should enable this case when the bug fixed
+		//https://issues.redhat.com/browse/OCPBUGS-17904
 		architecture.SkipArchitectures(oc, architecture.ARM64)
 		g.By("Create a new machineset")
 		machinesetName := infrastructureName + "-57438"
@@ -794,9 +796,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
+		arch, err := clusterinfra.GetArchitectureFromMachineSet(oc, machinesetName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if arch != architecture.AMD64 {
+			g.Skip("The selected machine set's arch is not amd64, skip this case!")
+		}
 
 		g.By("Update machineset with shieldedInstanceConfig compute options Enabled")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"shieldedInstanceConfig": {"secureBoot": "Enabled","integrityMonitoring": "Enabled","virtualizedTrustedPlatformModule": "Enabled"}}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"shieldedInstanceConfig": {"secureBoot": "Enabled","integrityMonitoring": "Enabled","virtualizedTrustedPlatformModule": "Enabled"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
