@@ -271,6 +271,8 @@ class SummaryClient:
                                     errorMsg = ""
                                     system_issue = False
                                     if self.check_system_issue_flag:
+                                        if status == "INTERRUPTED":
+                                            system_issue = True
                                         if status == "FAILED":
                                             log_url = self.base_url + "/api/v1/prow/log?filter.eq.item={0}".format(caseitemid)
                                             errorMsg = self.get_error_message(log_url)
@@ -413,6 +415,8 @@ class SummaryClient:
                                     errorMsg = ""
                                     system_issue = False
                                     if self.check_system_issue_flag:
+                                        if status == "INTERRUPTED":
+                                            system_issue = True
                                         if status == "FAILED":
                                             log_url = self.base_url + "/api/v1/ocp/log?filter.eq.item={0}".format(caseitemid)
                                             errorMsg = self.get_error_message(log_url)
@@ -533,7 +537,7 @@ class SummaryClient:
                 case_name = self.cases_result[case_number][id]["title"]
                 if status == "PASSED":
                     passed = passed +1
-                elif status == "FAILED" or status == "INTERRUPTED":
+                elif status == "FAILED":
                     failed = failed +1
                     system_issue = ""
                     self.logger.info(self.cases_result[case_number][id])
@@ -553,7 +557,7 @@ class SummaryClient:
 
                 if status == "PASSED":
                     result_subteam_by_platfrom[platfrom][subteam]["pass"] = result_subteam_by_platfrom[platfrom][subteam]["pass"] + 1
-                elif status == "FAILED" or status == "INTERRUPTED":
+                elif status == "FAILED":
                     result_subteam_by_platfrom[platfrom][subteam]["failed"] = result_subteam_by_platfrom[platfrom][subteam]["failed"] + 1
             
             if failed == 0:
@@ -633,6 +637,7 @@ class SummaryClient:
                 self.logger.info(comments)
                 jira_link = self.jiraManager.create_sub_task(self.author_map_file, self.parent_jira_issue, subtasks, caseid, case_title, author, comments)
                 worksheet.update_acell('J'+str(row_number), "https://issues.redhat.com/browse/"+jira_link)
+                time.sleep(10)
         
     def collectResult(self):
         self.logger.info("Collect CI result")
