@@ -554,6 +554,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(credType, "Manual") {
 			g.Skip("Skip test on none aws sts cluster")
 		}
+		credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-cloud-credentials", "-n", "openshift-machine-api", "-o=jsonpath={.data.credentials}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sDec, _ := base64.StdEncoding.DecodeString(credentials)
+		if !strings.Contains(string(sDec), "role_arn") {
+			g.Skip("Skip test on none aws sts cluster")
+		}
 
 		g.By("Check role_arn/web_identity_token_file inside image registry pod")
 		result, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
@@ -562,9 +568,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(result).To(o.ContainSubstring("web_identity_token_file"))
 
 		g.By("Check installer-cloud-credentials secret")
-		credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/installer-cloud-credentials", "-n", "openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
+		credentials, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/installer-cloud-credentials", "-n", "openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		sDec, _ := base64.StdEncoding.DecodeString(credentials)
+		sDec, _ = base64.StdEncoding.DecodeString(credentials)
 		if !strings.Contains(string(sDec), "role_arn") {
 			e2e.Failf("credentials does not contain role_arn")
 		}
