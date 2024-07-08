@@ -525,6 +525,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		}
 	})
 
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-56884-Confirm the coreDNS version and Kubernetes version of the oc client", func() {
+		var kubernetesVersion = "v1.30"
+		var coreDNS = "CoreDNS-1.11.3"
+
+		exutil.By("1.Check the Kubernetes version")
+		ocClientOutput, err := oc.AsAdmin().WithoutNamespace().Run("version").Args("--client=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ocClientOutput).To(o.ContainSubstring(kubernetesVersion))
+
+		exutil.By("2.Check all default dns pods for coredns version")
+		cmd := fmt.Sprintf("coredns --version")
+		podList := getAllDNSPodsNames(oc)
+		dnsPod := getRandomElementFromList(podList)
+		output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnsPod, "-c", "dns", "--", "bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(coreDNS))
+	})
+
 	// Bug: 1916907
 	g.It("Author:mjoseph-Longduration-NonPreRelease-High-56539-Disabling internal registry should not corrupt /etc/hosts [Disruptive]", func() {
 
