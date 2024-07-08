@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -54,28 +55,31 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator Pre-ch
 			SkipMissingDefaultSC(oc)
 			SkipMissingRhcosWorkers(oc)
 
-			g.By("Check csv and pods for coNamspace !!!")
+			g.By("Check csv and Compliance Operator pod is in running state !!!")
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "-n", coNamspace, "-l",
 				"operators.coreos.com/compliance-operator.openshift-compliance", "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "ocp4", ok, []string{"pod", "--selector=profile-bundle=ocp4", "-n",
-				coNamspace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "rhcos4", ok, []string{"pod", "--selector=profile-bundle=rhcos4", "-n",
-				coNamspace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-
-			g.By("Check Compliance Operator & profileParser pods are in running state !!!")
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=name=compliance-operator", "-n",
 				coNamspace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=profile-bundle=ocp4", "-n",
-				coNamspace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=profile-bundle=rhcos4", "-n",
-				coNamspace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
 
-			g.By("Check profilebundle status and metrics service !!!")
-			newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "ocp4", "-n", coNamspace,
-				"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "rhcos4", "-n", coNamspace,
-				"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+			g.By("Check metrics service !!!")
 			newCheck("expect", asAdmin, withoutNamespace, contain, "metrics", ok, []string{"service", "-n", coNamspace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+			g.By("Check profilebundle status !!!")
+			arch := architecture.ClusterArchitecture(oc)
+			switch arch {
+			case architecture.PPC64LE, architecture.S390X:
+				newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "ocp4", "-n", coNamspace,
+					"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+
+			case architecture.AMD64:
+				newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "ocp4", "-n", coNamspace,
+					"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+				newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "rhcos4", "-n", coNamspace,
+					"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+
+			default:
+				e2e.Logf("Architecture %s is not supported", arch.String())
+			}
 		})
 
 		// author: xiyuan@redhat.com

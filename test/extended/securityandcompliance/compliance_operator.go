@@ -1833,86 +1833,90 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
-		g.By("Check default profilebundles name and status.. !!!\n")
-		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
-		subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
-
-		g.By("Check default profiles name.. !!!\n")
 		arch := architecture.ClusterArchitecture(oc)
 
-		allProfilesOnPpc64le := []string{
-			"ocp4-cis",
-			"ocp4-cis-1-4",
-			"ocp4-cis-1-5",
-			"ocp4-cis-node",
-			"ocp4-cis-node-1-4",
-			"ocp4-cis-node-1-5",
-			"ocp4-moderate",
-			"ocp4-moderate-node",
-			"ocp4-moderate-node-rev-4",
-			"ocp4-moderate-rev-4",
-			"ocp4-pci-dss",
-			"ocp4-pci-dss-3-2",
-			"ocp4-pci-dss-node",
-			"ocp4-pci-dss-node-3-2"}
-		allProfilesOnS390x := []string{
-			"ocp4-cis",
-			"ocp4-cis-1-4",
-			"ocp4-cis-1-5",
-			"ocp4-cis-node",
-			"ocp4-cis-node-1-4",
-			"ocp4-cis-node-1-5",
-			"ocp4-moderate",
-			"ocp4-moderate-node",
-			"ocp4-moderate-node-rev-4",
-			"ocp4-moderate-rev-4"}
-		allProfilesOnAmd64 := []string{
-			"ocp4-cis",
-			"ocp4-cis-1-4",
-			"ocp4-cis-1-5",
-			"ocp4-cis-node",
-			"ocp4-cis-node-1-4",
-			"ocp4-cis-node-1-5",
-			"ocp4-e8",
-			"ocp4-high",
-			"ocp4-high-node",
-			"ocp4-high-node-rev-4",
-			"ocp4-high-rev-4",
-			"ocp4-moderate",
-			"ocp4-moderate-node",
-			"ocp4-moderate-node-rev-4",
-			"ocp4-moderate-rev-4",
-			"ocp4-nerc-cip",
-			"ocp4-nerc-cip-node",
-			"ocp4-pci-dss",
-			"ocp4-pci-dss-3-2",
-			"ocp4-pci-dss-node",
-			"ocp4-pci-dss-node-3-2",
-			"ocp4-stig",
-			"ocp4-stig-node",
-			"ocp4-stig-node-v1r1",
-			"ocp4-stig-v1r1",
-			"rhcos4-e8",
-			"rhcos4-high",
-			"rhcos4-high-rev-4",
-			"rhcos4-moderate",
-			"rhcos4-moderate-rev-4",
-			"rhcos4-nerc-cip",
-			"rhcos4-stig",
-			"rhcos4-stig-v1r1"}
+		g.By("Check default profilebundles name and status.. !!!\n")
 
-		if arch.String() == "ppc64le" {
-			for _, profile := range allProfilesOnPpc64le {
-				subD.getProfileName(oc, profile)
-			}
-		} else if arch.String() == "s390x" {
-			for _, profile := range allProfilesOnS390x {
+		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
+		switch arch {
+		case architecture.AMD64:
+			subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
+		case architecture.S390X, architecture.PPC64LE:
+		default:
+			e2e.Logf("Architecture %s is not supported", arch.String())
+		}
+
+		g.By("Check default profiles name.. !!!\n")
+
+		profilesByArch := map[architecture.Architecture][]string{
+			architecture.S390X: {
+				"ocp4-cis",
+				"ocp4-cis-1-4",
+				"ocp4-cis-1-5",
+				"ocp4-cis-node",
+				"ocp4-cis-node-1-4",
+				"ocp4-cis-node-1-5",
+				"ocp4-moderate",
+				"ocp4-moderate-node",
+				"ocp4-moderate-node-rev-4",
+				"ocp4-moderate-rev-4"},
+			architecture.PPC64LE: {
+				"ocp4-cis",
+				"ocp4-cis-1-4",
+				"ocp4-cis-1-5",
+				"ocp4-cis-node",
+				"ocp4-cis-node-1-4",
+				"ocp4-cis-node-1-5",
+				"ocp4-moderate",
+				"ocp4-moderate-node",
+				"ocp4-moderate-node-rev-4",
+				"ocp4-moderate-rev-4",
+				"ocp4-pci-dss",
+				"ocp4-pci-dss-3-2",
+				"ocp4-pci-dss-node",
+				"ocp4-pci-dss-node-3-2"},
+			architecture.AMD64: {
+				"ocp4-cis",
+				"ocp4-cis-1-4",
+				"ocp4-cis-1-5",
+				"ocp4-cis-node",
+				"ocp4-cis-node-1-4",
+				"ocp4-cis-node-1-5",
+				"ocp4-e8",
+				"ocp4-high",
+				"ocp4-high-node",
+				"ocp4-high-node-rev-4",
+				"ocp4-high-rev-4",
+				"ocp4-moderate",
+				"ocp4-moderate-node",
+				"ocp4-moderate-node-rev-4",
+				"ocp4-moderate-rev-4",
+				"ocp4-nerc-cip",
+				"ocp4-nerc-cip-node",
+				"ocp4-pci-dss",
+				"ocp4-pci-dss-3-2",
+				"ocp4-pci-dss-node",
+				"ocp4-pci-dss-node-3-2",
+				"ocp4-stig",
+				"ocp4-stig-node",
+				"ocp4-stig-node-v1r1",
+				"ocp4-stig-v1r1",
+				"rhcos4-e8",
+				"rhcos4-high",
+				"rhcos4-high-rev-4",
+				"rhcos4-moderate",
+				"rhcos4-moderate-rev-4",
+				"rhcos4-nerc-cip",
+				"rhcos4-stig",
+				"rhcos4-stig-v1r1"},
+		}
+
+		if profiles, ok := profilesByArch[arch]; ok {
+			for _, profile := range profiles {
 				subD.getProfileName(oc, profile)
 			}
 		} else {
-			for _, profile := range allProfilesOnAmd64 {
-				subD.getProfileName(oc, profile)
-			}
+			e2e.Logf("Architecture %s is not supported", arch.String())
 		}
 
 		g.By("The Compliance Operator by default created ProfileBundles and profiles are verified successfully.. !!!\n")

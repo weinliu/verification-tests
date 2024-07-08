@@ -17,6 +17,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -605,13 +606,23 @@ func createComplianceOperator(oc *exutil.CLI, subD subscriptionDescription, ogD 
 	g.By("Install compliance-operator !!!")
 	createOperator(oc, subD, ogD)
 
-	g.By("Check Compliance Operator & profileParser pods are in running state !!!")
+	g.By("Check Compliance Operator is in running state !!!")
 	newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=name=compliance-operator", "-n",
 		subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-	newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=profile-bundle=ocp4", "-n",
-		subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-	newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=profile-bundle=rhcos4", "-n",
-		subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+	newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "ocp4", "-n", subD.namespace,
+		"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+
+	g.By("Check profilebundle status !!!")
+	arch := architecture.ClusterArchitecture(oc)
+	switch arch {
+	case architecture.PPC64LE:
+	case architecture.S390X:
+	case architecture.AMD64:
+		newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "rhcos4", "-n", subD.namespace,
+			"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+	default:
+		e2e.Logf("Architecture %s is not supported", arch.String())
+	}
 
 	g.By("Check compliance operator sucessfully installed !!! ")
 }

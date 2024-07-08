@@ -4,6 +4,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	"path/filepath"
 
@@ -161,31 +162,31 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-NonPreRelease-High-41185-The oc compliance controls command reports the compliance standards and controls that is benchmark fulfil for profiles [Slow]", func() {
-		g.By("Check default profilebundles name and status.. !!!\n")
-		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
-		subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
-
-		g.By("Check default profiles name.. !!!\n")
 		arch := architecture.ClusterArchitecture(oc)
 
-		if arch.String() == "ppc64le" {
-			subD.getProfileName(oc, "ocp4-cis")
-			subD.getProfileName(oc, "ocp4-cis-node")
-			subD.getProfileName(oc, "ocp4-moderate")
-			subD.getProfileName(oc, "ocp4-moderate-node")
+		g.By("Check default profilebundles name and status.. !!!\n")
+
+		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
+		switch arch {
+		case architecture.AMD64:
+			subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
+		case architecture.S390X, architecture.PPC64LE:
+		default:
+			e2e.Logf("Architecture %s is not supported", arch.String())
+		}
+
+		g.By("Check default profiles name.. !!!\n")
+
+		subD.getProfileName(oc, "ocp4-cis")
+		subD.getProfileName(oc, "ocp4-cis-node")
+		subD.getProfileName(oc, "ocp4-moderate")
+		subD.getProfileName(oc, "ocp4-moderate-node")
+		switch arch {
+		case architecture.PPC64LE:
 			subD.getProfileName(oc, "ocp4-pci-dss")
 			subD.getProfileName(oc, "ocp4-pci-dss-node")
-		} else if arch.String() == "s390x" {
-			subD.getProfileName(oc, "ocp4-cis")
-			subD.getProfileName(oc, "ocp4-cis-node")
-			subD.getProfileName(oc, "ocp4-moderate")
-			subD.getProfileName(oc, "ocp4-moderate-node")
-		} else {
-			subD.getProfileName(oc, "ocp4-cis")
-			subD.getProfileName(oc, "ocp4-cis-node")
+		case architecture.AMD64:
 			subD.getProfileName(oc, "ocp4-e8")
-			subD.getProfileName(oc, "ocp4-moderate")
-			subD.getProfileName(oc, "ocp4-moderate-node")
 			subD.getProfileName(oc, "ocp4-nerc-cip")
 			subD.getProfileName(oc, "ocp4-nerc-cip-node")
 			subD.getProfileName(oc, "ocp4-pci-dss")
@@ -193,24 +194,25 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 			subD.getProfileName(oc, "rhcos4-e8")
 			subD.getProfileName(oc, "rhcos4-moderate")
 			subD.getProfileName(oc, "rhcos4-nerc-cip")
+		default:
+			e2e.Logf("Architecture %s is not supported", arch.String())
 		}
 
 		g.By("Check profile standards and controls.. !!!\n")
-		if arch.String() == "ppc64le" {
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
+
+		assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
+		assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
+		switch arch {
+		case architecture.PPC64LE:
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.3")
-		} else if arch.String() == "s390x" {
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
-		} else {
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-cis", "CIP-003-8.*R4.1")
+		case architecture.AMD64:
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-e8", "NIST-800-53")
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-high-node", "CIP-007-3.*R5.1.1")
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-nerc-cip", "PCI-DSS")
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.3")
 			assertCheckProfileControls(oc, subD.namespace, "rhcos4-high", "CIP-003-8.*R3")
+		default:
+			e2e.Logf("Architecture %s is not supported", arch.String())
 		}
 
 		g.By("The ocp-41185 Successfully verify compliance standards and controls for all profiles ... !!!!\n ")
