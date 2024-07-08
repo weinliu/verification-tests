@@ -4364,7 +4364,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkRegistryFunctionFine(oc, "test-64796", oc.Namespace())
 	})
 
-	g.It("Author:wewang-High-67388-Image Registry Pull through should support idms/itms [Serial]", func() {
+	g.It("Author:wewang-NonHyperShiftHOST-High-67388-Image Registry Pull through should support idms/itms [Serial]", func() {
 		//If a cluster contains any ICSP, it will skip the case
 		if checkICSP(oc) {
 			g.Skip("This cluster contain ICSP, skip the test.")
