@@ -144,7 +144,7 @@ manifests:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("MicroShiftBoth-ROSA-ARO-OSD_CCS-Author:dpunia-Medium-10969-Create clusterip service", func() {
+	g.It("Author:dpunia-MicroShiftBoth-ConnectedOnly-ROSA-ARO-OSD_CCS-Medium-10969-Create clusterip service", func() {
 		var (
 			caseID          = "10969"
 			name            = "ocp-" + caseID + "-openshift"
@@ -459,7 +459,7 @@ roleRef:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftBoth-Author:rgangwar-Medium-55394-[Apiserver] MicroShift enable SCC admission for pods", func() {
+	g.It("Author:rgangwar-MicroShiftBoth-ConnectedOnly-Medium-55394-[Apiserver] MicroShift enable SCC admission for pods", func() {
 		namespace := "test-scc-ocp55394"
 		testpod := "security-context-demo-ocp55394"
 		testpod2 := "security-context-demo-2-ocp55394"

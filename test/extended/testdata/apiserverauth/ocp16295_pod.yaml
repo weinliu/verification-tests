@@ -10,6 +10,10 @@ metadata:
     build: two
     builder: john-doe
 spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: client-container
       image: quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c
@@ -18,6 +22,14 @@ spec:
         - name: podinfo
           mountPath: /data/podinfo-dir
           readOnly: false
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
   volumes:
     - name: podinfo
       downwardAPI:
