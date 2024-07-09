@@ -317,7 +317,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			namespace: oc.Namespace(),
 			template:  usTemp,
 			graphdata: "quay.io/openshift-qe-optional-operators/graph-data:latest",
-			releases:  "quay.io/openshift-release-dev/ocp-release",
+			releases:  "quay.io/openshift-qe-optional-operators/osus-ocp-release",
 			replicas:  2,
 		}
 		defer uninstallOSUSApp(oc)
@@ -339,7 +339,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			namespace: oc.Namespace(),
 			template:  usTemp,
 			graphdata: "quay.io/openshift-qe-optional-operators/graph-data:1.0",
-			releases:  "quay.io/openshift-release-dev/ocp-release",
+			releases:  "quay.io/openshift-qe-optional-operators/osus-ocp-release",
 			replicas:  1,
 		}
 		defer uninstallOSUSApp(oc)
@@ -347,7 +347,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Waiting for osus instance pod rolling to expected replicas...")
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		err = wait.Poll(1*time.Minute, 10*time.Minute, func() (bool, error) {
 			runningPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
 			if err != nil || len(strings.Fields(runningPodName)) != us.replicas {
 				e2e.Logf("error: %v; running pod: %s", err, runningPodName)
@@ -368,7 +368,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Waiting for osus instance pod rolling...")
-		err = wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
+		err = wait.Poll(1*time.Minute, 10*time.Minute, func() (bool, error) {
 			runningPodNamePost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector", "app="+us.name, "-n", us.namespace, "-o=jsonpath={.items[?(@.status.phase==\"Running\")].metadata.name}").Output()
 			if err != nil || len(strings.Fields(runningPodNamePost)) != us.replicas || strings.Contains(runningPodNamePost, runningPodNamePre) {
 				e2e.Logf("error: %v; running pod after update image: %s; while running pod before update image: %s", err, runningPodNamePost, runningPodNamePre)
@@ -405,7 +405,7 @@ var _ = g.Describe("[sig-updates] OTA osus instance should", func() {
 			namespace: oc.Namespace(),
 			template:  usTemp,
 			graphdata: graphdataRepo + ":latest",
-			releases:  "quay.io/openshift-release-dev/ocp-release",
+			releases:  "quay.io/openshift-qe-optional-operators/osus-ocp-release",
 			replicas:  1,
 		}
 		exutil.By("Tag image graph-data:1.0 with latest and push the image")
