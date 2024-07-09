@@ -517,7 +517,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(oc.Namespace() + "/oci is not found, will remove the whole repository"))
 	})
 
-	g.It("Author:wewang-High-54905-Critical-54904-Critical-54051-Critical-54050-Critical-54171-Could import manifest lists via ImageStreamImport and sub-manifests did not be pruned when prune image", func() {
+	g.It("Author:wewang-High-54905-Critical-54904-Critical-54051-Critical-54050-Critical-54171-Could import manifest lists via ImageStreamImport and sub-manifests did not be pruned when prune image [Serial]", func() {
 		g.By("Create ImageStreamImport with docker multiarch image")
 		var (
 			isImportFile = filepath.Join(imageRegistryBaseDir, "imagestream-import-oci.yaml")
