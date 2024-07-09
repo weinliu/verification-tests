@@ -1003,7 +1003,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: tbuskey@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:tbuskey-High-22056-Registry operator configure prometheus metric gathering", func() {
+	g.It("Author:xiuwang-ROSA-OSD_CCS-ARO-High-22056-Registry operator configure prometheus metric gathering [Serial]", func() {
 		var (
 			authHeader         string
 			after              = make(map[string]int)
@@ -1022,11 +1022,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 				"imageregistry_http_request_size_bytes_count",
 				"imageregistry_http_request_size_bytes_sum",
 				"imageregistry_http_response_size_bytes_count",
-				"imageregistry_http_response_size_bytes_sum",
-				"imageregistry_http_request_size_bytes_count",
-				"imageregistry_http_request_size_bytes_sum",
 				"imageregistry_http_requests_total",
-				"imageregistry_http_response_size_bytes_count",
 				"imageregistry_http_response_size_bytes_sum"}
 		)
 
@@ -1035,16 +1031,24 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		authHeader = fmt.Sprintf("Authorization: Bearer %v", token)
+		checkRegistryFunctionFine(oc, "test-22056", oc.Namespace())
 
 		g.By("Collect metrics at start")
 		for _, query = range metrics {
 			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
-			msg, _, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
-			o.Expect(msg).NotTo(o.BeEmpty())
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+				msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
+				if err != nil || msg == "" {
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("[Before] the query %v is getting failed", query))
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
 			before[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
-			// e2e.Logf("query %v ==  %v", query, before[query])
+			e2e.Logf("[before] query %v ==  %v", query, before[query])
+
 		}
 		g.By("pause to get next metrics")
 		time.Sleep(60 * time.Second)
@@ -1052,12 +1056,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Collect metrics again")
 		for _, query = range metrics {
 			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
-			msg, _, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
-			o.Expect(msg).NotTo(o.BeEmpty())
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+				msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
+				if err != nil || msg == "" {
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("[After] the query %v is getting failed", query))
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
 			after[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
-			// e2e.Logf("query %v ==  %v", query, before[query])
+			e2e.Logf("[after] query %v ==  %v", query, before[query])
 		}
 
 		g.By("results")
