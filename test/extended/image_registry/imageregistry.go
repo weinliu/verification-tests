@@ -4349,7 +4349,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-	g.It("Author:xiuwang-Critical-64796-Image Registry support azure workload identity", func() {
+	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-64796-Image Registry support azure workload identity", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
 		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
