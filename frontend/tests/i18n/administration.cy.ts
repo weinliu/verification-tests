@@ -43,6 +43,8 @@ describe('Administration pages pesudo translation', () => {
     cy.visit('/k8s/cluster/namespaces?pseudolocalization=true&lng=en');
     listPage.rows.shouldBeLoaded();
     cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);
+    listPage.filter.byName('openshift-');
+    cy.wait(5000);
     cy.byLegacyTestID('kebab-button').first().click();
     cy.get('[class*="menu-item"]').isPseudoLocalized();
 
