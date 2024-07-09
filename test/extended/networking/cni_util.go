@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,6 +82,18 @@ type dualstackNAD struct {
 	ipv6rangestart string
 	ipv6rangeend   string
 	template       string
+}
+
+type whereaboutsoverlappingIPNAD struct {
+	nadname           string
+	namespace         string
+	plugintype        string
+	mode              string
+	ipamtype          string
+	ipv4range         string
+	enableoverlapping bool
+	networkname       string
+	template          string
 }
 
 func (nad *multihomingNAD) createMultihomingNAD(oc *exutil.CLI) {
@@ -364,4 +377,16 @@ func (nad *dualstackNAD) createDualstackNAD(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to net attach definition %v", nad.nadname))
+}
+
+func (nad *whereaboutsoverlappingIPNAD) createWhereaboutsoverlappingIPNAD(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NADNAME="+nad.nadname, "NAMESPACE="+nad.namespace, "PLUGINTYPE="+nad.plugintype, "MODE="+nad.mode, "IPAMTYPE="+nad.ipamtype, "IPV4RANGE="+nad.ipv4range, "ENABLEOVERLAPPING="+strconv.FormatBool(nad.enableoverlapping), "NETWORKNAME="+nad.networkname)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create the net-attach-definition %v", nad.nadname))
 }

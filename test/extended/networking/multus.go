@@ -365,4 +365,163 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(cmdOutput.String(), "Flags [solicited]")).NotTo(o.BeTrue(), cmdOutput.String())
 	})
+
+	g.It("Author:weliang-Medium-72202-[Multus] NAD without configuring network_name. [Disruptive]", func() {
+		var (
+			buildPruningBaseDir                 = exutil.FixturePath("testdata", "networking")
+			nad1Name                            = "ip-overlapping-1"
+			nad2Name                            = "ip-overlapping-2"
+			pod1Name                            = "ip-overlapping-pod1"
+			pod2Name                            = "ip-overlapping-pod2"
+			ipv4range1                          = "192.168.20.0/29"
+			ipv4range2                          = "192.168.20.0/24"
+			interfaceName                       = "net1"
+			whereaboutsoverlappingIPNADTemplate = filepath.Join(buildPruningBaseDir, "multus/whereabouts-overlappingIP-NAD-template.yaml")
+			multihomingPodTemplate              = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+		)
+
+		exutil.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("This case requires at least one worker node")
+		}
+
+		exutil.By("Get the name of namespace")
+		ns := oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		exutil.By("Configuring first NetworkAttachmentDefinition")
+		defer removeResource(oc, true, true, "net-attach-def", nad1Name, "-n", ns)
+
+		nad1 := whereaboutsoverlappingIPNAD{
+			nadname:           nad1Name,
+			namespace:         ns,
+			plugintype:        "macvlan",
+			mode:              "bridge",
+			ipamtype:          "whereabouts",
+			ipv4range:         ipv4range1,
+			enableoverlapping: true,
+			networkname:       "",
+			template:          whereaboutsoverlappingIPNADTemplate,
+		}
+		nad1.createWhereaboutsoverlappingIPNAD(oc)
+
+		exutil.By("Verifying the configued NetworkAttachmentDefinition")
+		if checkNAD(oc, ns, nad1Name) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nad1Name)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nad1Name)
+		}
+
+		exutil.By("Configuring pods to get additional network defined in first NAD")
+		nad1pod := testMultihomingPod{
+			name:       pod1Name,
+			namespace:  ns,
+			podlabel:   pod1Name,
+			nadname:    nad1Name,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		nad1pod.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, "name="+nad1pod.podlabel)).NotTo(o.HaveOccurred())
+
+		exutil.By("Configuring second NetworkAttachmentDefinition with setting true for enable_overlapping_ranges")
+		defer removeResource(oc, true, true, "net-attach-def", nad2Name, "-n", ns)
+		nad2 := whereaboutsoverlappingIPNAD{
+			nadname:           nad2Name,
+			namespace:         ns,
+			plugintype:        "macvlan",
+			mode:              "bridge",
+			ipamtype:          "whereabouts",
+			ipv4range:         ipv4range2,
+			enableoverlapping: true,
+			networkname:       "",
+			template:          whereaboutsoverlappingIPNADTemplate,
+		}
+		nad2.createWhereaboutsoverlappingIPNAD(oc)
+
+		exutil.By("Verifying the second NetworkAttachmentDefinition")
+		if checkNAD(oc, ns, nad2Name) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nad2Name)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nad2Name)
+		}
+
+		exutil.By("Configuring pods for additional network defined in second NAD")
+		nad2pod := testMultihomingPod{
+			name:       pod2Name,
+			namespace:  ns,
+			podlabel:   pod2Name,
+			nadname:    nad2Name,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		nad2pod.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, "name="+nad2pod.podlabel)).NotTo(o.HaveOccurred())
+
+		ippool1 := "192.168.20.0-29"
+		ippool2 := "192.168.20.0-24"
+		ipaddress1 := "192.168.20.1"
+		ipaddress2 := "192.168.20.2"
+
+		exutil.By("Verifing the correct network_names from ippools")
+		ippoolsOutput, ippoolsOutputErr := oc.AsAdmin().Run("get").Args("ippools", "-n", "openshift-multus").Output()
+		o.Expect(ippoolsOutputErr).NotTo(o.HaveOccurred())
+		o.Expect(ippoolsOutput).To(o.And(o.ContainSubstring(ippool1), o.ContainSubstring(ippool2)))
+
+		exutil.By("Verifing there are no ip overlapping IP addresses from overlappingrangeipreservations")
+		overlappingrangeOutput, overlappingrangeOutputErr := oc.AsAdmin().Run("get").Args("overlappingrangeipreservations", "-A", "-n", "openshift-multus").Output()
+		o.Expect(overlappingrangeOutputErr).NotTo(o.HaveOccurred())
+		o.Expect(overlappingrangeOutput).To(o.And(o.ContainSubstring(ipaddress1), o.ContainSubstring(ipaddress2)))
+
+		exutil.By("Getting IP from pod1's secondary interface")
+		pod1List, getPod1Err := exutil.GetAllPodsWithLabel(oc, ns, "name="+nad1pod.podlabel)
+		o.Expect(getPod1Err).NotTo(o.HaveOccurred())
+		o.Expect(len(pod1List)).NotTo(o.BeEquivalentTo(0))
+		pod1Net1IPv4, _ := getPodMultiNetworks(oc, ns, pod1List[0], interfaceName)
+		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
+		o.Expect(strings.HasPrefix(pod1Net1IPv4, ipaddress1)).Should(o.BeTrue())
+
+		exutil.By("Getting IP from pod2's secondary interface")
+		pod2List, getPod2Err := exutil.GetAllPodsWithLabel(oc, ns, "name="+nad2pod.podlabel)
+		o.Expect(getPod2Err).NotTo(o.HaveOccurred())
+		o.Expect(len(pod2List)).NotTo(o.BeEquivalentTo(0))
+		pod2Net1IPv4, _ := getPodMultiNetworks(oc, ns, pod2List[0], interfaceName)
+		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv4)
+		o.Expect(strings.HasPrefix(pod2Net1IPv4, ipaddress2)).Should(o.BeTrue())
+
+		exutil.By("Deleting the second NetworkAttachmentDefinition and responding pods")
+		removeResource(oc, true, true, "net-attach-def", nad2Name, "-n", ns)
+		removeResource(oc, true, true, "pod", pod2List[0], "-n", ns)
+
+		exutil.By("Deleting the secondary network_name from ippools")
+		removeResource(oc, true, true, "ippools", ippool2, "-n", "openshift-multus")
+
+		exutil.By("Reconfiguring second NetworkAttachmentDefinition with setting false for enable_overlapping_ranges")
+		defer removeResource(oc, true, true, "net-attach-def", nad2Name, "-n", ns)
+		nad2.enableoverlapping = false
+		nad2.createWhereaboutsoverlappingIPNAD(oc)
+
+		exutil.By("Reconfiguring pods for additional network defined in second NAD")
+		nad2pod.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, "name="+nad2pod.podlabel)).NotTo(o.HaveOccurred())
+
+		exutil.By("Verifing these is only one IP in overlappingrangeipreservations")
+		overlappingrangeOutput1, overlappingrangeOutputErr1 := oc.AsAdmin().Run("get").Args("overlappingrangeipreservations", "-A", "-n", "openshift-multus").Output()
+		o.Expect(overlappingrangeOutputErr1).NotTo(o.HaveOccurred())
+		o.Expect(overlappingrangeOutput1).To(o.ContainSubstring(ipaddress1))
+		o.Expect(overlappingrangeOutput1).NotTo(o.ContainSubstring(ipaddress2))
+
+		exutil.By("Getting IP from pod2's secondary interface")
+		podList2, getPod2Err2 := exutil.GetAllPodsWithLabel(oc, ns, "name="+nad2pod.podlabel)
+		o.Expect(getPod2Err2).NotTo(o.HaveOccurred())
+		o.Expect(len(podList2)).NotTo(o.BeEquivalentTo(0))
+		pod3Net1IPv4, _ := getPodMultiNetworks(oc, ns, podList2[0], interfaceName)
+		e2e.Logf("The v4 address of pod2's net1 is: %v", pod3Net1IPv4)
+		o.Expect(strings.HasPrefix(pod3Net1IPv4, ipaddress1)).Should(o.BeTrue())
+	})
 })
