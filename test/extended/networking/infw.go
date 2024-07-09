@@ -404,7 +404,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 	})
 
-	g.It("Author:anusaxen-High-55411-Check Ingress Firewall Allow/Deny functionality for ICMP [Serial]", func() {
+	g.It("Author:anusaxen-ROSA-High-55411-Check Ingress Firewall Allow/Deny functionality for ICMP [Serial]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			testDataDirInfw        = exutil.FixturePath("testdata", "networking/ingressnodefirewall")
@@ -948,7 +948,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 	})
 
-	g.It("Author:anusaxen-High-73844-Check Ingress Node Firewall functionality for blocking SSH traffic [Serial]", func() {
+	g.It("Author:anusaxen-ROSA-High-73844-Check Ingress Node Firewall functionality for blocking SSH traffic [Serial]", func() {
 		var (
 			testDataDirInfw = exutil.FixturePath("testdata", "networking/ingressnodefirewall")
 			infwCRtemplate  = filepath.Join(testDataDirInfw, "infw.yaml")
@@ -972,6 +972,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 			nodelabel: "node-role.kubernetes.io/worker",
 			template:  infwCfgTemplate,
 		}
+		defer deleteinfwCfg(oc)
 		infwCfg.createinfwConfig(oc)
 		waitforInfwDaemonsready(oc)
 
@@ -1000,7 +1001,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 			g.By("create Ingress node firewall Rule Custom Resource for IPv6 single stack")
 		} else {
 			//ssh traffic coming towards any worker node should be blocked
-			infwCR_single.src_cidr1 = "0.0.0.0/32"
+			infwCR_single.src_cidr1 = "0.0.0.0/0"
 			g.By("create Ingress node firewall Rule Custom Resource for IPv4 single stack")
 		}
 		defer deleteinfwCR(oc, infwCR_single.name)
