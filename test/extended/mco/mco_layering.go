@@ -439,6 +439,8 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 	})
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54909-Configure extensions while using a custom osImage [Disruptive]", func() {
+		// Due to https://issues.redhat.com/browse/OCPBUGS-31255 in this test case pools will be degraded intermittently. They will be degraded and automatically fixed in a few minutes/seconds
+		// Because of that we need to use WaitForUpdatedStatus instead of waitForComplete, since WaitForUpdatedStatus will not fail if a pool is degraded for just a few minutes but the configuration is applied properly
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 		var (
 			rpmName            = "zsh"
@@ -460,8 +462,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		mMcp.SetWaitingTimeForExtensionsChange()
 		wMcp.SetWaitingTimeForExtensionsChange()
-		defer mMcp.waitForComplete()
-		defer wMcp.waitForComplete()
+		defer mMcp.WaitForUpdatedStatus()
+		defer wMcp.WaitForUpdatedStatus()
 
 		// Build the new osImage
 		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
@@ -492,10 +494,10 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		mLayeringMC.create()
 
 		// Wait for pools
-		wMcp.waitForComplete()
+		wMcp.WaitForUpdatedStatus()
 		logger.Infof("The new osImage was deployed successfully in 'worker' pool\n")
 
-		mMcp.waitForComplete()
+		mMcp.WaitForUpdatedStatus()
 		logger.Infof("The new osImage was deployed successfully in 'master' pool\n")
 
 		// Check rpm-ostree status in worker node
@@ -569,10 +571,10 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		mUsbguardMC.create()
 
 		// Wait for pools
-		wMcp.waitForComplete()
+		wMcp.WaitForUpdatedStatus()
 		logger.Infof("The new config was applied successfully in 'worker' pool\n")
 
-		mMcp.waitForComplete()
+		mMcp.WaitForUpdatedStatus()
 		logger.Infof("The new config was applied successfully in 'master' pool\n")
 
 		// Check that rpms are installed in worker node after the extension
@@ -645,10 +647,10 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Wait for pools
-		wMcp.waitForComplete()
+		wMcp.WaitForUpdatedStatus()
 		logger.Infof("The new config was applied successfully in 'worker' pool\n")
 
-		mMcp.waitForComplete()
+		mMcp.WaitForUpdatedStatus()
 		logger.Infof("The new config was applied successfully in 'master' pool\n")
 
 		// Check that extension rpm is installed in the worker node, but custom layering rpm is not
