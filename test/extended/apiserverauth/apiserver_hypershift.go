@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
-	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -254,7 +253,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("Author:rgangwar-HyperShiftMGMT-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Longduration-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
+	g.It("Author:rgangwar-HyperShiftMGMT-ARO-OSD_CCS-NonPreRelease-Longduration-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
 		var (
 			patchToRecover           = `{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": []}}}}}`
 			originHostdKubeconfigBkp = "kubeconfig.origin"
@@ -320,14 +319,11 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			e2e.Logf("Cluster recovered")
 		}()
 
-		apiServerURL, err := oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("config").Args("view", "-ojsonpath={.clusters[0].cluster.server}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		fqdnName, err := url.Parse(apiServerURL)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		fqdnName, port := getApiServerFQDNandPort(oc, true)
 
 		exutil.By("2. Get the original CA")
 		caCmd := fmt.Sprintf(`grep certificate-authority-data %s | grep -Eo "[^ ]+$" | base64 -d > %s`, originHostedKube, originCA)
-		_, err = exec.Command("bash", "-c", caCmd).Output()
+		_, err := exec.Command("bash", "-c", caCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3. Create certificates with SAN.")
@@ -352,7 +348,7 @@ extendedKeyUsage = clientAuth, serverAuth
 subjectAltName = @alt_names
 [alt_names]
 DNS.1 = %s
-EOF`, serverconf, fqdnName.Hostname())
+EOF`, serverconf, fqdnName)
 		_, serverconfErr := exec.Command("bash", "-c", serverconfCMD).Output()
 		o.Expect(serverconfErr).NotTo(o.HaveOccurred())
 		serverWithSANCMD := fmt.Sprintf(`openssl req -new -key %v -out %v -subj "/CN=%s_server" -config %v`, serverKeypem, serverWithSANcsr, CN_BASE, serverconf)
@@ -367,7 +363,7 @@ EOF`, serverconf, fqdnName.Hostname())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Add new certificate to apiserver")
-		patchCmd := fmt.Sprintf(`{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": [{"names": ["%s"], "servingCertificate": {"name": "custom-api-cert"}}]}}}}}`, fqdnName.Hostname())
+		patchCmd := fmt.Sprintf(`{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": [{"names": ["%s"], "servingCertificate": {"name": "custom-api-cert"}}]}}}}}`, fqdnName)
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", patchCmd).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -380,13 +376,13 @@ EOF`, serverconf, fqdnName.Hostname())
 
 		exutil.By("8. Validate new certificates")
 		returnValues := []string{"Subject", "Issuer"}
-		certDetails, err := urlHealthCheck(fqdnName.Hostname(), caCertpem, returnValues)
+		certDetails, err := urlHealthCheck(fqdnName, port, caCertpem, returnValues)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(certDetails.Subject)).To(o.ContainSubstring("CN=kas-test-cert_server"))
 		o.Expect(string(certDetails.Issuer)).To(o.ContainSubstring("CN=kas-test-cert_ca"))
 
 		exutil.By("9. Validate old certificates should not work")
-		certDetails, err = urlHealthCheck(fqdnName.Hostname(), originCA, returnValues)
+		certDetails, err = urlHealthCheck(fqdnName, port, originCA, returnValues)
 		o.Expect(err).To(o.HaveOccurred())
 	})
 })

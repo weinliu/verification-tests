@@ -1309,9 +1309,21 @@ func getBaseDomain(oc *exutil.CLI) string {
 	return str
 }
 
-// Return  the API server FQDN. format is like api.$clustername.$basedomain
-func getApiServerFQDN(oc *exutil.CLI) string {
-	return fmt.Sprintf("api.%s", getBaseDomain(oc))
+// Return  the API server FQDN and port. format is like api.$clustername.$basedomain
+func getApiServerFQDNandPort(oc *exutil.CLI, hypershiftCluster bool) (string, string) {
+	var (
+		apiServerURL string
+		configErr    error
+	)
+	if !hypershiftCluster {
+		apiServerURL, configErr = oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-ojsonpath={.clusters[0].cluster.server}").Output()
+	} else {
+		apiServerURL, configErr = oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("config").Args("view", "-ojsonpath={.clusters[0].cluster.server}").Output()
+	}
+	o.Expect(configErr).NotTo(o.HaveOccurred())
+	fqdnName, parseErr := url.Parse(apiServerURL)
+	o.Expect(parseErr).NotTo(o.HaveOccurred())
+	return fqdnName.Hostname(), fqdnName.Port()
 }
 
 // isTechPreviewNoUpgrade checks if a cluster is a TechPreviewNoUpgrade cluster
@@ -1430,17 +1442,18 @@ type CertificateDetails struct {
 	SerialNumber   string
 }
 
-func urlHealthCheck(fqdnName string, certPath string, returnValues []string) (*CertificateDetails, error) {
+// urlHealthCheck performs a health check on the given FQDN name and port
+func urlHealthCheck(fqdnName string, port string, certPath string, returnValues []string) (*CertificateDetails, error) {
 	proxyURL := getProxyURL()
 	caCert, err := ioutil.ReadFile(certPath)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading CA certificate: %v", err)
+		return nil, fmt.Errorf("Error reading CA certificate: %s", err)
 	}
 
 	// Create a CertPool and add the CA certificate
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to append CA certificate")
+		return nil, fmt.Errorf("Failed to append CA certificate")
 	}
 
 	// Create a custom transport with the CA certificate
@@ -1455,41 +1468,55 @@ func urlHealthCheck(fqdnName string, certPath string, returnValues []string) (*C
 		Transport: transport,
 	}
 
-	url := fmt.Sprintf("https://%s:6443/healthz", fqdnName)
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("Error performing HTTP request: %v", err)
-	}
-	defer resp.Body.Close()
+	url := fmt.Sprintf("https://%s:%s/healthz", fqdnName, port)
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading response body: %v", err)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	// Create a CertificateDetails struct to store the details
-	certDetails := &CertificateDetails{}
-	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
-		cert := resp.TLS.PeerCertificates[0]
-		for _, value := range returnValues {
-			switch value {
-			case "CurlResponse":
-				certDetails.CurlResponse = string(body)
-			case "Subject":
-				certDetails.Subject = cert.Subject.String()
-			case "Issuer":
-				certDetails.Issuer = cert.Issuer.String()
-			case "NotBefore":
-				certDetails.NotBefore = cert.NotBefore.Format(time.RFC3339)
-			case "NotAfter":
-				certDetails.NotAfter = cert.NotAfter.Format(time.RFC3339)
-			case "SubjectAltName":
-				certDetails.SubjectAltName = cert.DNSNames
-			case "SerialNumber":
-				certDetails.SerialNumber = cert.SerialNumber.String()
+	var certDetails *CertificateDetails
+
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		resp, err := client.Get(url)
+		if err != nil {
+			e2e.Logf("Error performing HTTP request: %s, retrying...\n", err)
+			return false, nil
+		}
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("Error reading response body: %s", err)
+		}
+
+		certDetails = &CertificateDetails{}
+		if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
+			cert := resp.TLS.PeerCertificates[0]
+			for _, value := range returnValues {
+				switch value {
+				case "CurlResponse":
+					certDetails.CurlResponse = string(body)
+				case "Subject":
+					certDetails.Subject = cert.Subject.String()
+				case "Issuer":
+					certDetails.Issuer = cert.Issuer.String()
+				case "NotBefore":
+					certDetails.NotBefore = cert.NotBefore.Format(time.RFC3339)
+				case "NotAfter":
+					certDetails.NotAfter = cert.NotAfter.Format(time.RFC3339)
+				case "SubjectAltName":
+					certDetails.SubjectAltName = cert.DNSNames
+				case "SerialNumber":
+					certDetails.SerialNumber = cert.SerialNumber.String()
+				}
 			}
 		}
+		return true, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error performing HTTP request: %s", err)
 	}
+
 	return certDetails, nil
 }
 

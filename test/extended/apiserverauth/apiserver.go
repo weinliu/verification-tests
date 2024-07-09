@@ -4824,7 +4824,7 @@ spec:
 		}
 
 		// Case is failing on which cluster dns is not resolvable ...
-		apiServerFQDN := getApiServerFQDN(oc)
+		apiServerFQDN, _ := getApiServerFQDNandPort(oc, false)
 		cmd := fmt.Sprintf(`nslookup %s`, apiServerFQDN)
 		nsOutput, nsErr := exec.Command("bash", "-c", cmd).Output()
 		if nsErr != nil {
@@ -4935,7 +4935,7 @@ spec:
 			kas                 = "openshift-kube-apiserver"
 			kasOpExpectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 			kasOpNewStatus      = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "True"}
-			apiServerFQDN       = getApiServerFQDN(oc)
+			apiServerFQDN, _    = getApiServerFQDNandPort(oc, false)
 			patch               = fmt.Sprintf(`{"spec":{"servingCerts": {"namedCertificates": [{"names": ["%s"], "servingCertificate": {"name": "client-ca-cusom"}}]}}}`, apiServerFQDN)
 			patchToRecover      = `[{ "op": "remove", "path": "/spec/servingCerts" }]`
 		)
@@ -5757,7 +5757,6 @@ spec:
 			serverWithSANcsr    = tmpdir + "/serverWithSAN.csr"
 			serverCertWithSAN   = tmpdir + "/serverCertWithSAN.pem"
 			originKubeconfPath  string
-			fqdnName            = getApiServerFQDN(oc)
 		)
 
 		restoreCluster := func(oc *exutil.CLI) {
@@ -5804,6 +5803,7 @@ spec:
 			e2e.Logf("Cluster recovered")
 		}()
 
+		fqdnName, port := getApiServerFQDNandPort(oc, false)
 		//Taking backup of old kubeconfig to restore old kubeconfig
 		exutil.By("1. Get the original kubeconfig backup")
 		originKubeconfPath = CopyToFile(originKubeconfig, originKubeconfigBkp)
@@ -5871,13 +5871,13 @@ EOF`, serverconf, fqdnName)
 
 		exutil.By("8. Validate new certificates")
 		returnValues := []string{"Subject", "Issuer"}
-		certDetails, err := urlHealthCheck(fqdnName, caCertpem, returnValues)
+		certDetails, err := urlHealthCheck(fqdnName, port, caCertpem, returnValues)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(certDetails.Subject)).To(o.ContainSubstring("CN=kas-test-cert_server"))
 		o.Expect(string(certDetails.Issuer)).To(o.ContainSubstring("CN=kas-test-cert_ca"))
 
 		exutil.By("9. Validate old certificates should not work")
-		certDetails, err = urlHealthCheck(fqdnName, originCA, returnValues)
+		certDetails, err = urlHealthCheck(fqdnName, port, originCA, returnValues)
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
