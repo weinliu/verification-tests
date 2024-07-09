@@ -985,6 +985,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		spec := getByJsonPath(oc, "openshift-dns", "daemonset/dns-default", jsonPath)
 		o.Expect(spec).To(o.ContainSubstring("9-10%-0"))
 
+		// Checking whether there are windows nodes
+		windowNodeList, err := exutil.GetAllNodesbyOSType(oc, "windows")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if len(windowNodeList) > 1 {
+			g.Skip("This case will not work on clusters having windows nodes")
+		}
+
 		exutil.By("Check whether the topology-aware-hints annotation is auto set or not")
 		// Get all dns pods then check the resident nodes labels one by one
 		// search unique `topology.kubernetes.io/zone` info on worker nodes
