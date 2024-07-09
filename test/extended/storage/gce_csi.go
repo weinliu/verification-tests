@@ -359,7 +359,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
-	g.It("Author:chaoyang-NonHyperShiftHOST-OSD_CCS-High-54403-[GCE-PD-CSI] Clone a region disk from zone disk", func() {
+	g.It("Author:chaoyang-NonHyperShiftHOST-OSD_CCS-Medium-54403-[GCE-PD-CSI] Clone a region disk from zone disk", func() {
+
+		if len(getZonesFromWorker(oc)) < 2 {
+			g.Skip("Single zone clusters do not satisfy the scenario")
+		}
 
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
