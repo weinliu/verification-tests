@@ -2180,7 +2180,7 @@ spec:
 		defer func() {
 			exutil.By("destroy hosted cluster in one goroutine")
 			go func() {
-				g.GinkgoRecover()
+				defer g.GinkgoRecover()
 				installHelper.destroyAWSHostedClusters(createCluster)
 			}()
 
