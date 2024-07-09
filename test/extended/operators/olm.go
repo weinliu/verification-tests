@@ -438,7 +438,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr.addIr(itName)
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-opm.yaml")
 
 		cs := catalogSourceDescription{
 			name:        "bug-68679-4.14", // the name contains "."
