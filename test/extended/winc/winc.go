@@ -1338,7 +1338,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
-	g.It("Author:jfrancoa-Medium-56354-Stop dependent services before stopping a service in WICD [Disruptive]", func() {
+	g.It("Author:jfrancoa-Smokerun-Medium-56354-Stop dependent services before stopping a service in WICD [Disruptive]", func() {
 		targetService := "containerd"
 
 		g.By("Check configmap services running on Windows workers")
@@ -1588,7 +1588,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
-	g.It("Author:jfrancoa-Medium-60944-WICD controller periodically reconciles state of Windows services [Disruptive]", func() {
+	g.It("Author:jfrancoa-Smokerun-Medium-60944-WICD controller periodically reconciles state of Windows services [Disruptive]", func() {
 		targetService := "windows_exporter"
 		winInternalIP := getWindowsInternalIPs(oc)
 		pollIntervalSeconds := 10
