@@ -5857,3 +5857,299 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP StressTest ", func() {
 	})
 
 })
+
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP rdu1", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc              = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		egressNodeLabel = "k8s.ovn.org/egress-assignable"
+		exteranlHost    = "10.8.1.181"
+		exterGWIntf     = "sriovbm"
+	)
+
+	g.BeforeEach(func() {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com")) {
+			g.Skip("This case will only run on rdu1 cluster , skip for other envrionment!!!")
+		}
+
+	})
+
+	// author: yingwang@redhat.com
+	g.It("Author:yingwang-NonHyperShiftHOST-Medium-73641-[rducluster]external traffic direct to pod can work with EgressIP applied. [Disruptive]", func() {
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodTmpFile      = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			egressIPTemplate    = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			testpodLable        = "hello-pod"
+			podLabelKey         = "color"
+			podLabelValue       = "blue"
+			nsLabelKey          = "name"
+			nsLabelValue        = "test"
+		)
+
+		exutil.By("create new namespace\n")
+		ns1 := oc.Namespace()
+
+		exutil.By("create 2 pods\n")
+		workers := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker")
+		if len(workers) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+
+		//create pods on different worker nodes.
+		testPod1 := networkingRes{
+			name:      "testpod1",
+			namespace: ns1,
+			kind:      "pod",
+			tempfile:  testPodTmpFile,
+		}
+
+		testPod2 := networkingRes{
+			name:      "testpod2",
+			namespace: ns1,
+			kind:      "pod",
+			tempfile:  testPodTmpFile,
+		}
+
+		defer removeResource(oc, true, true, "pod", testPod1.name, "-n", testPod1.namespace)
+		testPod1.create(oc, "NAME="+testPod1.name, "NAMESPACE="+testPod1.namespace, "NODENAME="+workers[0])
+		defer removeResource(oc, true, true, "pod", testPod2.name, "-n", testPod2.namespace)
+		testPod2.create(oc, "NAME="+testPod2.name, "NAMESPACE="+testPod2.namespace, "NODENAME="+workers[1])
+
+		errPodRdy := waitForPodWithLabelReady(oc, ns1, "name="+testpodLable)
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("testpodn isn't ready"))
+
+		podLable := podLabelKey + "=" + podLabelValue
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", testPod1.name, "-n", testPod1.namespace, podLable).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", testPod2.name, "-n", testPod2.namespace, podLable).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podIP1 := getPodIPv4(oc, ns1, testPod1.name)
+		podIP2 := getPodIPv4(oc, ns1, testPod2.name)
+
+		exutil.By("Apply label to namespace\n")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an egressip object\n")
+
+		exutil.By("1.2 Apply EgressLabel Key to one node.")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel)
+
+		freeIPs := findFreeIPs(oc, workers[0], 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+
+		egressip1 := egressIPResource1{
+			name:          "egressip-66297",
+			template:      egressIPTemplate,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    nsLabelKey,
+			nsLabelValue:  nsLabelValue,
+			podLabelKey:   podLabelKey,
+			podLabelValue: podLabelValue,
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		//config direct route to pod on external host
+		defer rmRouteOnExternalHost(oc, exteranlHost, "root", testPod1.name, ns1)
+		res1 := cfgRouteOnExternalHost(oc, exteranlHost, "root", testPod1.name, ns1, exterGWIntf)
+		o.Expect(res1).To(o.BeTrue())
+		defer rmRouteOnExternalHost(oc, exteranlHost, "root", testPod2.name, ns1)
+		res2 := cfgRouteOnExternalHost(oc, exteranlHost, "root", testPod2.name, ns1, exterGWIntf)
+		o.Expect(res2).To(o.BeTrue())
+
+		externalHostCmd1 := "ping -c 5 " + podIP1
+		externalHostCmd2 := "ping -c 5 " + podIP2
+
+		outPut1, err1 := sshRunCmdOutPut(exteranlHost, "root", externalHostCmd1)
+		e2e.Logf("traffic from external direct to pod1 result is %v", outPut1)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(outPut1).To(o.ContainSubstring(`64 bytes from`))
+		outPut2, err2 := sshRunCmdOutPut(exteranlHost, "root", externalHostCmd2)
+		e2e.Logf("traffic from external direct to pod2 result is %v", outPut2)
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(outPut2).To(o.ContainSubstring(`64 bytes from`))
+
+	})
+
+	// author: yingwang@redhat.com
+	g.It("Author:yingwang-NonHyperShiftHOST-Medium-73625-[rducluster]external traffic can access MetalLB service when EgressIP is applied and service ETP=local. [Disruptive]", func() {
+		var (
+			networkBaseDir     = exutil.FixturePath("testdata", "networking")
+			testDataMetallbDir = exutil.FixturePath("testdata", "networking/metallb")
+
+			mlNSTemplate            = filepath.Join(testDataMetallbDir, "namespace-template.yaml")
+			mlOperatorGroupTemplate = filepath.Join(testDataMetallbDir, "operatorgroup-template.yaml")
+			mlSubscriptionTemplate  = filepath.Join(testDataMetallbDir, "subscription-template.yaml")
+			mlNs                    = "metallb-system"
+			exteranlHost            = "10.8.1.181"
+			metalLBNodeSelKey       = "node-role.kubernetes.io/worker"
+			metalLBNodeSelVal       = ""
+			metalLBControllerSelKey = "node-role.kubernetes.io/worker"
+			metalLBControllerSelVal = ""
+			podLabelKey             string
+			podLabelValue           string
+			nsLabelKey              = "name"
+			nsLabelValue            = "test"
+		)
+
+		workers := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker")
+		if len(workers) < 2 {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes")
+		}
+		freeIPs := findFreeIPs(oc, workers[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+
+		exutil.By("create new namespace\n")
+		ns1 := oc.Namespace()
+
+		exutil.By("install Metallb operator\n")
+
+		sub := subscriptionResource{
+			name:             "metallb-operator-sub",
+			namespace:        mlNs,
+			operatorName:     "metallb-operator",
+			channel:          "stable",
+			catalog:          "qe-app-registry",
+			catalogNamespace: "openshift-marketplace",
+			template:         mlSubscriptionTemplate,
+		}
+		ns := namespaceResource{
+			name:     mlNs,
+			template: mlNSTemplate,
+		}
+		og := operatorGroupResource{
+			name:             "metallb-operator",
+			namespace:        mlNs,
+			targetNamespaces: "metallb-system",
+			template:         mlOperatorGroupTemplate,
+		}
+		catalogSource := getOperatorSource(oc, "openshift-marketplace")
+		if catalogSource == "" {
+			g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+		}
+		sub.catalog = catalogSource
+		operatorInstall(oc, sub, ns, og)
+		g.By("Making sure CRDs are successfully installed")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		o.Expect(output).Should(
+			o.And(
+				o.ContainSubstring("bfdprofiles.metallb.io"),
+				o.ContainSubstring("bgpadvertisements.metallb.io"),
+				o.ContainSubstring("bgppeers.metallb.io"),
+				o.ContainSubstring("communities.metallb.io"),
+				o.ContainSubstring("ipaddresspools.metallb.io"),
+				o.ContainSubstring("l2advertisements.metallb.io"),
+				o.ContainSubstring("metallbs.metallb.io"),
+			))
+
+		exutil.By("1. Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataMetallbDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:                  "metallb",
+			namespace:             mlNs,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
+		}
+
+		defer removeResource(oc, true, true, "metallb", metallbCR.name, "-n", metallbCR.namespace)
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+		exutil.By("SUCCESS - MetalLB CR Created")
+
+		exutil.By("2. Create IP addresspool")
+		ipAddresspoolTemplate := filepath.Join(networkBaseDir, "metallb-ipaddresspool-template.yaml")
+		ipAddresspool := networkingRes{
+			name:      "ippool-" + getRandomString(),
+			namespace: mlNs,
+			kind:      "ipddresspool",
+			tempfile:  ipAddresspoolTemplate,
+		}
+		ipAddr := freeIPs[0] + "/32"
+		defer removeResource(oc, true, true, "IPAddressPool", ipAddresspool.name, "-n", ipAddresspool.namespace)
+		ipAddresspool.create(oc, "NAME="+ipAddresspool.name, "NAMESPACE="+ipAddresspool.namespace, "ADDRESS="+ipAddr)
+
+		l2AdTemplate := filepath.Join(networkBaseDir, "metallb-l2advertisement-template.yaml")
+		l2Ad := networkingRes{
+			name:      "l2ad-" + getRandomString(),
+			namespace: mlNs,
+			kind:      "L2Advertisement",
+			tempfile:  l2AdTemplate,
+		}
+
+		defer removeResource(oc, true, true, "L2Advertisement", l2Ad.name, "-n", l2Ad.namespace)
+		l2Ad.create(oc, "NAME="+l2Ad.name, "NAMESPACE="+l2Ad.namespace, "IPADDRESSPOOL="+ipAddresspool.name)
+
+		exutil.By("3. Create a service with annotation to obtain IP from first addresspool")
+		loadBalancerServiceAnnotatedTemplate := filepath.Join(testDataMetallbDir, "loadbalancer-svc-annotated-template.yaml")
+		svc := loadBalancerServiceResource{
+			name:                          "hello-world-73625",
+			namespace:                     ns1,
+			externaltrafficpolicy:         "Local",
+			labelKey:                      "environ",
+			labelValue:                    "Prod",
+			annotationKey:                 "metallb.universe.tf/address-pool",
+			annotationValue:               ipAddresspool.name,
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceAnnotatedTemplate,
+		}
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s 's External IP for OCP-73625 test case is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, freeIPs[0])).To(o.BeTrue())
+
+		exutil.By("SUCCESS - Services created successfully")
+
+		exutil.By("Apply label to namespace\n")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Create an egressip object\n")
+
+		exutil.By("Apply EgressLabel Key to one node.")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[1], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], egressNodeLabel, "true")
+
+		egressIPTemplate := filepath.Join(networkBaseDir, "egressip-config2-template.yaml")
+		podLabelKey = "name"
+		podLabelValue = svc.name
+		egressip := egressIPResource1{
+			name:          "egressip-" + getRandomString(),
+			template:      egressIPTemplate,
+			egressIP1:     freeIPs[1],
+			nsLabelKey:    nsLabelKey,
+			nsLabelValue:  nsLabelValue,
+			podLabelKey:   podLabelKey,
+			podLabelValue: podLabelValue,
+		}
+		defer egressip.deleteEgressIPObject1(oc)
+		egressip.createEgressIPObject2(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip.name, 1)
+
+		externalHostCmd := "curl -k " + freeIPs[0] + ":80"
+
+		outPut, err := sshRunCmdOutPut(exteranlHost, "root", externalHostCmd)
+		e2e.Logf("traffic from external direct to pod1 result is %v", outPut)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(outPut, "Hello OpenShift")).To(o.BeTrue())
+
+	})
+
+})

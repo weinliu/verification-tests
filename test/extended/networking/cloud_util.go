@@ -1398,3 +1398,45 @@ func (ibmPws *ibmPowerVsInstance) Stop() error {
 	}
 	return exutil.PerformInstanceActionOnPowerVs(ibmPws.clientPowerVs, instanceID, "stop")
 }
+
+func cfgRouteOnExternalHost(oc *exutil.CLI, host string, user string, pod string, ns string, externalIntf string) bool {
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, pod, "-o=jsonpath={.spec.nodeName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeIp := getNodeIPv4(oc, ns, nodeName)
+	podIP := getPodIPv4(oc, ns, pod)
+	routeCmd := "ip route add " + podIP + " via " + nodeIp + " dev " + externalIntf
+
+	err = sshRunCmd(host, user, routeCmd)
+	if err != nil {
+		e2e.Logf("send command %v fail with error info %v", routeCmd, err)
+		return false
+	} else {
+		return true
+	}
+}
+
+func rmRouteOnExternalHost(oc *exutil.CLI, host string, user string, pod string, ns string) {
+	var chkRes bool
+	podIP := getPodIPv4(oc, ns, pod)
+	routeCmd := "ip route delete " + podIP + " && " + "ip route"
+	ipRoute := podIP + "/32"
+
+	outPut, err := sshRunCmdOutPut(host, user, routeCmd)
+	if err != nil || strings.Contains(outPut, ipRoute) {
+		e2e.Logf("send command %v fail with error info %v", routeCmd, err)
+		chkRes = false
+	} else {
+		e2e.Logf("successfully removed the ip route %v, %v", podIP, outPut)
+		chkRes = true
+	}
+	o.Expect(chkRes).To(o.BeTrue())
+}
+
+func sshRunCmdOutPut(host string, user string, cmd string) (string, error) {
+	privateKey := os.Getenv("SSH_CLOUD_PRIV_KEY")
+	if privateKey == "" {
+		privateKey = "../internal/config/keys/openshift-qe.pem"
+	}
+	sshClient := exutil.SshClient{User: user, Host: host, Port: 22, PrivateKey: privateKey}
+	return sshClient.RunOutput(cmd)
+}
