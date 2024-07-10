@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
 		// oc.SetupProject() // it is example if the case need temp project. here it does not need it, so comment it.
-
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			ns                        = "ns-68903"
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
@@ -117,7 +117,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68936-BundleDeployment Health resource healthy and install fail", func() {
-
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			ns                           = "ns-68936"
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -194,7 +194,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-68937-BundleDeployment Health resource unhealthy ss rs unspport", func() {
-
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			ns                        = "ns-68937"
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")

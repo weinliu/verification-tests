@@ -5462,7 +5462,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5657,7 +5657,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
 				template:    catsrcImageTemplate,
 			}
 			subD = subscriptionDescription{
@@ -6035,7 +6035,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asUser, withoutNamespace, contain, "UnhealthyCatalogSourceFound", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 
 		exutil.By("create catalogsource")
-		catsrc.address = "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne"
+		catsrc.address = "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache"
 		catsrc.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
@@ -6078,7 +6078,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
 				template:    catsrcImageTemplate,
 			}
 			repeatedCount = 2
@@ -6143,7 +6143,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
 				template:    catsrcImageTemplate,
 			}
 
@@ -6225,7 +6225,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
 				template:    catsrcImageTemplate,
 			}
 			subD = subscriptionDescription{
@@ -6295,7 +6295,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-singlenamespace",
@@ -6378,7 +6378,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 30762 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v4",
+				address:     "quay.io/olmqe/olm-api:v4-withCache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -6435,7 +6435,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 27683 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/mta-index:v0.0.6",
+				address:     "quay.io/olmqe/mta-index:v0.0.6-withCache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -6492,7 +6492,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-singlenamespace",
@@ -6691,7 +6691,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 25760 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vchannel-crdv2",
+				address:     "quay.io/olmqe/olm-dep:vchannel-crdv2-withCache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -6755,7 +6755,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 35895 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vmtaduprol2",
+				address:     "quay.io/olmqe/olm-dep:vmtaduprol2-withCache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -6896,7 +6896,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-singlenamespace",
@@ -6963,7 +6963,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-singlenamespace",
@@ -6976,7 +6976,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "OLM 1860185 Catalog",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:v1860185-v2",
+				address:     "quay.io/olmqe/olm-dep:v1860185-v2-withCache",
 				template:    catsrcImageTemplate,
 			}
 			catsrc1 = catalogSourceDescription{
@@ -6985,7 +6985,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
 				template:    catsrcImageTemplate,
 			}
 			catsrc2 = catalogSourceDescription{
@@ -12373,7 +12373,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "OLM 21532 Catalog",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vcompos-v2",
+				address:     "quay.io/olmqe/olm-dep:vcompos-v2-withCache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
