@@ -120,6 +120,10 @@ export const Pages = {
   gotoMCPDetailsPage: (mcpname: string) => {
     cy.visit(`/k8s/cluster/machineconfiguration.openshift.io~v1~MachineConfigPool/${mcpname}`)
   },
+  gotoMachineConfigDetailsPage: (mc_name: string) => {
+    cy.visit(`/k8s/cluster/machineconfiguration.openshift.io~v1~MachineConfig/${mc_name}`);
+    cy.get('[data-test-id="resource-summary"]').should('be.visible');
+  },
   gotoCatalogSourcePage: () => {
     cy.visit('/k8s/ns/openshift-marketplace/operators.coreos.com~v1alpha1~CatalogSource/custom-catalogsource');
     cy.contains('READY', {timeout: 120000 }).should('exist');
