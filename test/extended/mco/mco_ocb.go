@@ -114,11 +114,11 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			pullSecret   = NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
 
 			fakePullSecretName         = "fake-pull-secret"
-			expectedWrongPullSecretMsg = fmt.Sprintf("could not update Machine OS Builder deployment: secret %s from on-cluster-build-config is not found. Did you use the right secret name?",
-				fakePullSecretName)
+			expectedWrongPullSecretMsg = fmt.Sprintf(`invalid MachineOSConfig %s: could not validate baseImagePullSecret "%s" for MachineOSConfig %s: secret %s from %s is not found. Did you use the right secret name?`,
+				moscName, fakePullSecretName, moscName, fakePullSecretName, moscName)
 			fakePushSecretName         = "fake-push-secret"
-			expectedWrongPushSecretMsg = fmt.Sprintf("could not update Machine OS Builder deployment: secret %s from on-cluster-build-config is not found. Did you use the right secret name?",
-				fakePushSecretName)
+			expectedWrongPushSecretMsg = fmt.Sprintf(`invalid MachineOSConfig %s: could not validate renderedImagePushSecret "%s" for MachineOSConfig %s: secret %s from %s is not found. Did you use the right secret name?`,
+				moscName, fakePushSecretName, moscName, fakePushSecretName, moscName)
 
 			fakeBuilderType             = "FakeBuilderType"
 			expectedWrongBuilderTypeMsg = fmt.Sprintf(`Unsupported value: "%s": supported values: "PodImageBuilder"`, fakeBuilderType)
