@@ -4587,7 +4587,10 @@ desiredState:
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-73309-disable ipv6 on worker nodes[Disruptive]", func() {
+	// We deprecate this test case because of https://issues.redhat.com/browse/OCPBUGS-36739
+	// Once this issue is fixed we will be able to set this test case as not deprecated again
+	// Before removing the deprecation label we need to make sure that we add a check to skip this test case if the cluster is IPV6, since it makes no sense to disable ipv6 in a cluster deployed to use ipv6
+	g.It("Author:sregidor-DEPRECATED-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73309-disable ipv6 on worker nodes[Disruptive]", func() {
 
 		var (
 			wMcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
