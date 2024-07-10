@@ -1,24 +1,19 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: catalog-secret-template
+  name: catalog-template
 objects:
 - apiVersion: catalogd.operatorframework.io/v1alpha1
-  kind: Catalog
+  kind: ClusterCatalog
   metadata:
     name: "${NAME}"
   spec:
     source:
       type: "${TYPE}"
       image:
-        pullSecret: "${SECRET}"
         ref: "${IMAGE}"
-        pollInterval: "${POLLINTERVAL}"
 parameters:
 - name: NAME
 - name: TYPE
   value: "image"
 - name: IMAGE
-- name: SECRET
-- name: POLLINTERVAL
-  value: "1h"

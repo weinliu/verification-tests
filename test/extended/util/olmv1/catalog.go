@@ -17,7 +17,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-type CatalogDescription struct {
+type ClusterCatalogDescription struct {
 	Name         string
 	PullSecret   string
 	TypeName     string
@@ -28,66 +28,66 @@ type CatalogDescription struct {
 	Template     string
 }
 
-func (catalog *CatalogDescription) Create(oc *exutil.CLI) {
-	e2e.Logf("=========Create catalog %v=========", catalog.Name)
-	err := catalog.CreateWithoutCheck(oc)
+func (clustercatalog *ClusterCatalogDescription) Create(oc *exutil.CLI) {
+	e2e.Logf("=========Create clustercatalog %v=========", clustercatalog.Name)
+	err := clustercatalog.CreateWithoutCheck(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	catalog.WaitCatalogStatus(oc, "Unpacked", 0)
-	catalog.GetcontentURL(oc)
+	clustercatalog.WaitCatalogStatus(oc, "Unpacked", 0)
+	clustercatalog.GetcontentURL(oc)
 }
 
-func (catalog *CatalogDescription) CreateWithoutCheck(oc *exutil.CLI) error {
-	paremeters := []string{"-n", "default", "--ignore-unknown-parameters=true", "-f", catalog.Template, "-p"}
-	if len(catalog.Name) > 0 {
-		paremeters = append(paremeters, "NAME="+catalog.Name)
+func (clustercatalog *ClusterCatalogDescription) CreateWithoutCheck(oc *exutil.CLI) error {
+	paremeters := []string{"-n", "default", "--ignore-unknown-parameters=true", "-f", clustercatalog.Template, "-p"}
+	if len(clustercatalog.Name) > 0 {
+		paremeters = append(paremeters, "NAME="+clustercatalog.Name)
 	}
-	if len(catalog.PullSecret) > 0 {
-		paremeters = append(paremeters, "SECRET="+catalog.PullSecret)
+	if len(clustercatalog.PullSecret) > 0 {
+		paremeters = append(paremeters, "SECRET="+clustercatalog.PullSecret)
 	}
-	if len(catalog.TypeName) > 0 {
-		paremeters = append(paremeters, "TYPE="+catalog.TypeName)
+	if len(clustercatalog.TypeName) > 0 {
+		paremeters = append(paremeters, "TYPE="+clustercatalog.TypeName)
 	}
-	if len(catalog.Imageref) > 0 {
-		paremeters = append(paremeters, "IMAGE="+catalog.Imageref)
+	if len(clustercatalog.Imageref) > 0 {
+		paremeters = append(paremeters, "IMAGE="+clustercatalog.Imageref)
 	}
-	if len(catalog.PollInterval) > 0 {
-		paremeters = append(paremeters, "POLLINTERVAL="+catalog.PollInterval)
+	if len(clustercatalog.PollInterval) > 0 {
+		paremeters = append(paremeters, "POLLINTERVAL="+clustercatalog.PollInterval)
 	}
 	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, paremeters...)
 	return err
 }
 
-func (catalog *CatalogDescription) WaitCatalogStatus(oc *exutil.CLI, status string, consistentTime int) {
-	e2e.Logf("========= check catalog %v status is %s =========", catalog.Name, status)
+func (clustercatalog *ClusterCatalogDescription) WaitCatalogStatus(oc *exutil.CLI, status string, consistentTime int) {
+	e2e.Logf("========= check clustercatalog %v status is %s =========", clustercatalog.Name, status)
 	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-		output, err := GetNoEmpty(oc, "catalog", catalog.Name, "-o", "jsonpath={.status.phase}")
+		output, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.phase}")
 		if err != nil {
 			e2e.Logf("output is %v, error is %v, and try next", output, err)
 			return false, nil
 		}
 		if !strings.Contains(strings.ToLower(output), strings.ToLower(status)) {
 			e2e.Logf("status is %v, not %v, and try next", output, status)
-			catalog.Status = output
+			clustercatalog.Status = output
 			return false, nil
 		}
 		return true, nil
 	})
 	if errWait != nil {
-		GetNoEmpty(oc, "catalog", catalog.Name, "-o=jsonpath-as-json={.status}")
-		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("catalog status is not %s", status))
+		GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("clustercatalog status is not %s", status))
 	}
 	if consistentTime != 0 {
-		e2e.Logf("make sure catalog %s status is %s consistently for %ds", catalog.Name, status, consistentTime)
+		e2e.Logf("make sure clustercatalog %s status is %s consistently for %ds", clustercatalog.Name, status, consistentTime)
 		o.Consistently(func() string {
-			output, _ := GetNoEmpty(oc, "catalog", catalog.Name, "-o", "jsonpath={.status.phase}")
+			output, _ := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.phase}")
 			return strings.ToLower(output)
 		}, time.Duration(consistentTime)*time.Second, 5*time.Second).Should(o.ContainSubstring(strings.ToLower(status)),
-			"catalog %s status is not %s", catalog.Name, status)
+			"clustercatalog %s status is not %s", clustercatalog.Name, status)
 	}
 }
 
-func (catalog *CatalogDescription) GetcontentURL(oc *exutil.CLI) {
-	e2e.Logf("=========Get catalog %v contentURL =========", catalog.Name)
+func (clustercatalog *ClusterCatalogDescription) GetcontentURL(oc *exutil.CLI) {
+	e2e.Logf("=========Get clustercatalog %v contentURL =========", clustercatalog.Name)
 	route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-catalogserver", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
 	if err != nil && !strings.Contains(route, "NotFound") {
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -110,29 +110,29 @@ func (catalog *CatalogDescription) GetcontentURL(oc *exutil.CLI) {
 		exutil.AssertWaitPollNoErr(errWait, "get route catalogd-catalogserver failed")
 	}
 	o.Expect(route).To(o.ContainSubstring("catalogd-catalogserver-openshift-catalogd"))
-	contentURL, err := GetNoEmpty(oc, "catalog", catalog.Name, "-o", "jsonpath={.status.contentURL}")
+	contentURL, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.contentURL}")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	catalog.ContentURL = strings.Replace(contentURL, "catalogd-catalogserver.openshift-catalogd.svc", route, 1)
-	e2e.Logf("catalog contentURL is %s", catalog.ContentURL)
+	clustercatalog.ContentURL = strings.Replace(contentURL, "catalogd-catalogserver.openshift-catalogd.svc", route, 1)
+	e2e.Logf("clustercatalog contentURL is %s", clustercatalog.ContentURL)
 }
 
-func (catalog *CatalogDescription) DeleteWithoutCheck(oc *exutil.CLI) {
-	e2e.Logf("=========DeleteWithoutCheck catalog %v=========", catalog.Name)
-	exutil.CleanupResource(oc, 4*time.Second, 160*time.Second, exutil.AsAdmin, exutil.WithoutNamespace, "catalog", catalog.Name)
+func (clustercatalog *ClusterCatalogDescription) DeleteWithoutCheck(oc *exutil.CLI) {
+	e2e.Logf("=========DeleteWithoutCheck clustercatalog %v=========", clustercatalog.Name)
+	exutil.CleanupResource(oc, 4*time.Second, 160*time.Second, exutil.AsAdmin, exutil.WithoutNamespace, "clustercatalog", clustercatalog.Name)
 }
 
-func (catalog *CatalogDescription) Delete(oc *exutil.CLI) {
-	e2e.Logf("=========Delete catalog %v=========", catalog.Name)
-	catalog.DeleteWithoutCheck(oc)
+func (clustercatalog *ClusterCatalogDescription) Delete(oc *exutil.CLI) {
+	e2e.Logf("=========Delete clustercatalog %v=========", clustercatalog.Name)
+	clustercatalog.DeleteWithoutCheck(oc)
 	//add check later
 }
 
-// Get catalog info content
-func (catalog *CatalogDescription) GetContent(oc *exutil.CLI) []byte {
-	if catalog.ContentURL == "" {
-		catalog.GetcontentURL(oc)
+// Get clustercatalog info content
+func (clustercatalog *ClusterCatalogDescription) GetContent(oc *exutil.CLI) []byte {
+	if clustercatalog.ContentURL == "" {
+		clustercatalog.GetcontentURL(oc)
 	}
-	resp, err := http.Get(catalog.ContentURL)
+	resp, err := http.Get(clustercatalog.ContentURL)
 	defer func() {
 		err := resp.Body.Close()
 		if err != nil {
@@ -329,7 +329,7 @@ type ContentData struct {
 }
 
 // Unmarshal Content
-func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema string) (ContentData, error) {
+func (clustercatalog *ClusterCatalogDescription) UnmarshalContent(oc *exutil.CLI, schema string) (ContentData, error) {
 	var (
 		singlePackageData     PackageData
 		singleChannelData     ChannelData
@@ -342,7 +342,7 @@ func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema strin
 
 	switch schema {
 	case "all":
-		return catalog.UnmarshalAllContent(oc)
+		return clustercatalog.UnmarshalAllContent(oc)
 	case "bundle":
 		targetData = &singleBundleData
 	case "channel":
@@ -355,7 +355,7 @@ func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema strin
 		return ContentData, fmt.Errorf("unsupported schema: %s", schema)
 	}
 
-	contents := catalog.GetContent(oc)
+	contents := clustercatalog.GetContent(oc)
 	lines := strings.Split(string(contents), "\n")
 
 	for _, line := range lines {
@@ -401,10 +401,10 @@ func (catalog *CatalogDescription) UnmarshalContent(oc *exutil.CLI, schema strin
 
 }
 
-func (catalog *CatalogDescription) UnmarshalAllContent(oc *exutil.CLI) (ContentData, error) {
+func (clustercatalog *ClusterCatalogDescription) UnmarshalAllContent(oc *exutil.CLI) (ContentData, error) {
 	var ContentData ContentData
 
-	contents := catalog.GetContent(oc)
+	contents := clustercatalog.GetContent(oc)
 	lines := strings.Split(string(contents), "\n")
 
 	for _, line := range lines {

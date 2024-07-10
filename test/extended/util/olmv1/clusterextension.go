@@ -61,7 +61,7 @@ func (clusterextension *ClusterExtensionDescription) CreateWithoutCheck(oc *exut
 }
 
 func (clusterextension *ClusterExtensionDescription) WaitClusterExtensionCondition(oc *exutil.CLI, conditionType string, status string, consistentTime int) {
-	e2e.Logf("========= check clusterextension %v %s status is %s =========", clusterextension.Name, conditionType, status)
+	e2e.Logf("========= wait clusterextension %v %s status is %s =========", clusterextension.Name, conditionType, status)
 	jsonpath := fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].status}`, conditionType)
 	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", jsonpath)
@@ -86,6 +86,35 @@ func (clusterextension *ClusterExtensionDescription) WaitClusterExtensionConditi
 			return strings.ToLower(output)
 		}, time.Duration(consistentTime)*time.Second, 5*time.Second).Should(o.ContainSubstring(strings.ToLower(status)),
 			"clusterextension %s status is not %s", conditionType, status)
+	}
+}
+
+func (clusterextension *ClusterExtensionDescription) CheckClusterExtensionCondition(oc *exutil.CLI, conditionType, field, expect string, checkInterval, checkTimeout, consistentTime int) {
+	e2e.Logf("========= check clusterextension %v %s %s expect is %s =========", clusterextension.Name, conditionType, field, expect)
+	jsonpath := fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].%s}`, conditionType, field)
+	errWait := wait.PollUntilContextTimeout(context.TODO(), time.Duration(checkInterval)*time.Second, time.Duration(checkTimeout)*time.Second, false, func(ctx context.Context) (bool, error) {
+		output, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", jsonpath)
+		if err != nil {
+			e2e.Logf("output is %v, error is %v, and try next", output, err)
+			return false, nil
+		}
+		if !strings.Contains(strings.ToLower(output), strings.ToLower(expect)) {
+			e2e.Logf("got is %v, not %v, and try next", output, expect)
+			return false, nil
+		}
+		return true, nil
+	})
+	if errWait != nil {
+		GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("clusterextension %s expected is not %s in %v seconds", conditionType, expect, checkTimeout))
+	}
+	if consistentTime != 0 {
+		e2e.Logf("make sure clusterextension %s expect is %s consistently for %ds", conditionType, expect, consistentTime)
+		o.Consistently(func() string {
+			output, _ := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", jsonpath)
+			return strings.ToLower(output)
+		}, time.Duration(consistentTime)*time.Second, 5*time.Second).Should(o.ContainSubstring(strings.ToLower(expect)),
+			"clusterextension %s expected is not %s", conditionType, expect)
 	}
 }
 

@@ -261,12 +261,12 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		var (
 			ns                       = "ns-74618"
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
-			catalog                  = olmv1util.CatalogDescription{
-				Name:     "catalog-74618",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-74618",
 				Imageref: "quay.io/olmqe/nginx-ok-index:vokv32777",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			ceGVK = olmv1util.ClusterExtensionDescription{
 				Name:             "dep-gvk-32777",
@@ -317,42 +317,43 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("check gvk dependency fails to be installed")
 		defer ceGVK.Delete(oc)
 		ceGVK.CreateWithoutCheck(oc)
-		o.Expect(ceGVK.GetClusterExtensionMessage(oc, "Resolved")).To(o.ContainSubstring("has a dependency declared via property \"olm.gvk.required\" which is currently not supported"))
+		// WA https://issues.redhat.com/browse/OCPBUGS-36798
+		ceGVK.CheckClusterExtensionCondition(oc, "Resolved", "message", "has a dependency declared via property \"olm.gvk.required\" which is currently not supported", 10, 180, 0)
 		ceGVK.Delete(oc)
 
 		exutil.By("check pkg dependency fails to be installed")
 		defer cePKG.Delete(oc)
 		cePKG.CreateWithoutCheck(oc)
-		o.Expect(cePKG.GetClusterExtensionMessage(oc, "Resolved")).To(o.ContainSubstring("has a dependency declared via property \"olm.package.required\" which is currently not supported"))
+		// WA https://issues.redhat.com/browse/OCPBUGS-36798
+		cePKG.CheckClusterExtensionCondition(oc, "Resolved", "message", "has a dependency declared via property \"olm.package.required\" which is currently not supported", 10, 180, 0)
 		cePKG.Delete(oc)
 
 		exutil.By("check cst dependency fails to be installed")
 		defer ceCST.Delete(oc)
 		ceCST.CreateWithoutCheck(oc)
-		o.Expect(ceCST.GetClusterExtensionMessage(oc, "Resolved")).To(o.ContainSubstring("has a dependency declared via property \"olm.constraint\" which is currently not supported"))
+		// WA https://issues.redhat.com/browse/OCPBUGS-36798
+		ceCST.CheckClusterExtensionCondition(oc, "Resolved", "message", "has a dependency declared via property \"olm.constraint\" which is currently not supported", 10, 180, 0)
 		ceCST.Delete(oc)
 
 		exutil.By("check webhook fails to be installed")
 		defer ceWBH.Delete(oc)
 		ceWBH.CreateWithoutCheck(oc)
-		o.Expect(ceWBH.GetClusterExtensionMessage(oc, "Installed")).To(o.ContainSubstring("bundle: webhookDefinitions are not supported"))
-		o.Expect(ceWBH.GetClusterExtensionField(oc, "Installed", "reason")).To(o.ContainSubstring("InstallationFailed"))
+		ceWBH.CheckClusterExtensionCondition(oc, "Installed", "message", "webhookDefinitions are not supported", 10, 180, 0)
+		ceWBH.CheckClusterExtensionCondition(oc, "Installed", "reason", "InstallationFailed", 10, 180, 0)
 		ceWBH.Delete(oc)
 
-		exutil.By("check non all ns mode fails to be installed. it has bug https://issues.redhat.com/browse/OCPBUGS-36471")
+		exutil.By("check non all ns mode fails to be installed.")
 		defer ceNAN.Delete(oc)
 		ceNAN.CreateWithoutCheck(oc)
-		o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "message")).To(o.ContainSubstring("successfully"))
-		// o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "message")).To(o.ContainSubstring("do not support target namespaces")) // should add it back
-		o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "reason")).To(o.ContainSubstring("Success"))
-		// o.Expect(ceNAN.GetClusterExtensionField(oc, "Installed", "reason")).To(o.ContainSubstring("InstallationFailed")) // should add it back
+		ceNAN.CheckClusterExtensionCondition(oc, "Installed", "message", "do not support targeting all namespaces", 10, 180, 0)
+		ceNAN.CheckClusterExtensionCondition(oc, "Installed", "reason", "InstallationFailed", 10, 180, 0)
 		ceNAN.Delete(oc)
 
 	})
@@ -362,15 +363,15 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                                       = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate                               = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate                        = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate                      = filepath.Join(baseDir, "clusterextension.yaml")
 			clusterextensionWithoutChannelTemplate        = filepath.Join(baseDir, "clusterextensionWithoutChannel.yaml")
 			clusterextensionWithoutChannelVersionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
 			ns                                            = "ns-68821"
-			catalog                                       = olmv1util.CatalogDescription{
-				Name:     "catalog-68821",
+			clustercatalog                                = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-68821",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-68821",
@@ -387,9 +388,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("Create clusterextension with channel candidate-v0.0, version >=0.0.1")
 		defer clusterextension.Delete(oc)
@@ -432,12 +433,12 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
-			catalog                  = olmv1util.CatalogDescription{
-				Name:     "catalog-69196",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69196",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69196",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			ns               = "ns-69196"
 			clusterextension = olmv1util.ClusterExtensionDescription{
@@ -455,9 +456,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.1")
 		defer clusterextension.Delete(oc)
@@ -500,13 +501,13 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextensionWithoutVersion.yaml")
 			ns                       = "ns-74108"
-			catalog                  = olmv1util.CatalogDescription{
-				Name:     "catalog-74108",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-74108",
 				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm74108",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-74108",
@@ -522,9 +523,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("1) Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("1) Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("2) Install clusterextension with channel candidate-v0.0")
 		defer clusterextension.Delete(oc)
@@ -661,13 +662,13 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
 			ns                       = "ns-69193"
-			catalog                  = olmv1util.CatalogDescription{
-				Name:     "catalog-69193",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69193",
 				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm69193",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-69193",
@@ -684,9 +685,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("1) Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("1) Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("2) Install version 0.0.1")
 		defer clusterextension.Delete(oc)
@@ -771,13 +772,13 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
 			ns                       = "ns-70719"
-			catalog                  = olmv1util.CatalogDescription{
-				Name:     "catalog-70719",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-70719",
 				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm70719",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-70719",
@@ -793,9 +794,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("1) Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("1) Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("2) Install version 0.2.2")
 		defer clusterextension.Delete(oc)
@@ -883,13 +884,13 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
 			ns                       = "ns-70723"
-			catalog                  = olmv1util.CatalogDescription{
-				Name:     "catalog-70723",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-70723",
 				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm70723",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-70723",
@@ -906,9 +907,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("1) Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("1) Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("2) Install version 2.2.1")
 		clusterextension.Create(oc)

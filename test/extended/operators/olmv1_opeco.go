@@ -35,16 +35,16 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	g.It("ConnectedOnly-VMonly-Author:jitli-High-69758-Catalogd Polling remote registries for update to images content", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
-			quayCLI         = container.NewQuayCLI()
-			imagev1         = "quay.io/olmqe/olmtest-operator-index:nginxolm69758v1"
-			imagev2         = "quay.io/olmqe/olmtest-operator-index:nginxolm69758v2"
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			quayCLI                = container.NewQuayCLI()
+			imagev1                = "quay.io/olmqe/olmtest-operator-index:nginxolm69758v1"
+			imagev2                = "quay.io/olmqe/olmtest-operator-index:nginxolm69758v2"
 
-			catalog = olmv1util.CatalogDescription{
-				Name:     "catalog-69758",
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69758",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:test69758",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 		)
 
@@ -57,12 +57,12 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(manifestDigestv2).NotTo(o.BeEmpty())
 
 		exutil.By("Check default digestID is v1")
-		indexImageDigest, err := quayCLI.GetImageDigest(strings.Replace(catalog.Imageref, "quay.io/", "", 1))
+		indexImageDigest, err := quayCLI.GetImageDigest(strings.Replace(clustercatalog.Imageref, "quay.io/", "", 1))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(indexImageDigest).NotTo(o.BeEmpty())
 		if indexImageDigest != manifestDigestv1 {
 			//tag v1 to testrun image
-			tagResult, tagErr := quayCLI.ChangeTag(strings.Replace(catalog.Imageref, "quay.io/", "", 1), manifestDigestv1)
+			tagResult, tagErr := quayCLI.ChangeTag(strings.Replace(clustercatalog.Imageref, "quay.io/", "", 1), manifestDigestv1)
 			if !tagResult {
 				e2e.Logf("Error: %v", tagErr)
 				e2e.Failf("Change tag failed on quay.io")
@@ -70,33 +70,33 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			e2e.Logf("Successful init tag v1")
 		}
 
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("Add image pollInterval time")
-		err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"pollInterval":"20s"}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pollInterval":"20s"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		pollInterval, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.spec.source.image.pollInterval}").Output()
+		pollInterval, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.spec.source.image.pollInterval}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(pollInterval)).To(o.ContainSubstring("20s"))
-		catalog.WaitCatalogStatus(oc, "Unpacked", 0)
+		clustercatalog.WaitCatalogStatus(oc, "Unpacked", 0)
 
 		exutil.By("Collect the initial image status information")
-		lastPollAttempt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastPollAttempt}").Output()
+		lastPollAttempt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastPollAttempt}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+		resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		v1bundlesDataOut, err := catalog.UnmarshalContent(oc, "bundle")
+		v1bundlesDataOut, err := clustercatalog.UnmarshalContent(oc, "bundle")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		v1bundlesImage := olmv1util.GetBundlesImageTag(v1bundlesDataOut.Bundles)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Update the image and check for changes")
 		//tag v2 to testrun image
-		tagResult, tagErr := quayCLI.ChangeTag(strings.Replace(catalog.Imageref, "quay.io/", "", 1), manifestDigestv2)
+		tagResult, tagErr := quayCLI.ChangeTag(strings.Replace(clustercatalog.Imageref, "quay.io/", "", 1), manifestDigestv2)
 		if !tagResult {
 			e2e.Logf("Error: %v", tagErr)
 			e2e.Failf("Change tag failed on quay.io")
@@ -104,9 +104,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		e2e.Logf("Successful tag v2")
 
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
-			lastPollAttempt2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastPollAttempt}").Output()
+			lastPollAttempt2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastPollAttempt}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			resolvedRef2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+			resolvedRef2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			if lastPollAttempt == lastPollAttempt2 || resolvedRef == resolvedRef2 {
@@ -119,7 +119,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.AssertWaitPollNoErr(errWait, "Error lastPollAttempt or resolvedRef are same")
 
 		exutil.By("check the index content changes")
-		v2bundlesDataOut, err := catalog.UnmarshalContent(oc, "bundle")
+		v2bundlesDataOut, err := clustercatalog.UnmarshalContent(oc, "bundle")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		v2bundlesImage := olmv1util.GetBundlesImageTag(v2bundlesDataOut.Bundles)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -131,30 +131,30 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		e2e.Logf("v1bundlesImage%v, v2bundlesImage%v", v1bundlesImage, v2bundlesImage)
 
 		exutil.By("Update use the digest image and check it")
-		output, err := oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index@`+manifestDigestv1+`"}}}}`, "--type=merge").Output()
+		output, err := oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index@`+manifestDigestv1+`"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("cannot specify PollInterval while using digest-based image"))
 
 	})
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-High-69123-Catalogd catalog offer the operator content through http server", func() {
+	g.It("Author:jitli-ConnectedOnly-High-69123-Catalogd clustercatalog offer the operator content through http server", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
-			catalog         = olmv1util.CatalogDescription{
-				Name:     "catalog-69123",
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69123",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69123",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 		)
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("get the index content through http service on cluster")
-		unmarshalContent, err := catalog.UnmarshalContent(oc, "all")
+		unmarshalContent, err := clustercatalog.UnmarshalContent(oc, "all")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		allPackageName := olmv1util.ListPackagesName(unmarshalContent.Packages)
@@ -169,49 +169,49 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-High-69124-check the catalog source type before created", func() {
+	g.It("Author:jitli-ConnectedOnly-High-69124-check the clustercatalog source type before created", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir             = exutil.FixturePath("testdata", "olm", "v1")
-			catalogPollTemplate = filepath.Join(baseDir, "catalog-secret.yaml")
-			catalog             = olmv1util.CatalogDescription{
-				Name:         "catalog-69124",
+			catalogPollTemplate = filepath.Join(baseDir, "clustercatalog-secret.yaml")
+			clustercatalog      = olmv1util.ClusterCatalogDescription{
+				Name:         "clustercatalog-69124",
 				Imageref:     "quay.io/olmqe/olmtest-operator-index:nginxolm69124",
 				PollInterval: "1m",
 				Template:     catalogPollTemplate,
 			}
 		)
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("Check image pollInterval time")
-		errMsg, err := oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"pollInterval":"1mm"}}}}`, "--type=merge").Output()
+		errMsg, err := oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pollInterval":"1mm"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(errMsg, "Invalid value: \"1mm\": spec.source.image.pollInterval in body")).To(o.BeTrue())
 
 		exutil.By("Check type value")
-		errMsg, err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"type":"redhat"}}}`, "--type=merge").Output()
+		errMsg, err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"type":"redhat"}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(strings.Contains(errMsg, "Unsupported value: \"redhat\": supported values: \"image\"")).To(o.BeTrue())
 
 	})
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from catalog CR", func() {
+	g.It("Author:jitli-ConnectedOnly-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from clustercatalog CR", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
-			catalog         = olmv1util.CatalogDescription{
-				Name:     "catalog-69242",
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69242",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69242",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 		)
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("get the old related crd package/bundlemetadata/bundledeployment")
 		packageOutput, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("package").Output()
@@ -232,33 +232,33 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	g.It("ConnectedOnly-Author:jitli-High-69069-Replace pod-based image unpacker with an image registry client", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
-			catalog         = olmv1util.CatalogDescription{
-				Name:     "catalog-69069",
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69069",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69069",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 		)
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
-		initresolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+		initresolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Update the index image with different tag , but the same digestID")
-		err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v1"}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v1"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Check the image is updated without wait but the resolvedSource is still the same and won't unpack again")
-		statusOutput, err := olmv1util.GetNoEmpty(oc, "catalog", catalog.Name, "-o", "jsonpath={.status.phase}")
+		statusOutput, err := olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.phase}")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(statusOutput, "Unpacked") {
 			e2e.Failf("status is %v, not Unpacked", statusOutput)
 		}
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
+			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if img != "quay.io/olmqe/olmtest-operator-index:nginxolm69069v1" {
 				e2e.Logf("image: %v", img)
@@ -267,20 +267,20 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(errWait, "Error image wrong or resolvedRef are same")
-		v1resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+		v1resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if initresolvedRef != v1resolvedRef {
 			e2e.Failf("initresolvedRef:%v,v1resolvedRef:%v", initresolvedRef, v1resolvedRef)
 		}
 
 		exutil.By("Update the index image with different tag and digestID")
-		err = oc.AsAdmin().Run("patch").Args("catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v2"}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v2"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
-			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
+			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			v2resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("catalog", catalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+			v2resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if initresolvedRef == v2resolvedRef || img != "quay.io/olmqe/olmtest-operator-index:nginxolm69069v2" {
 				e2e.Logf("image: %v,v2resolvedRef: %v", img, v2resolvedRef)
@@ -296,21 +296,21 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	g.It("ConnectedOnly-Author:jitli-High-69869-Catalogd Add metrics to the Storage implementation", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
-			catalog         = olmv1util.CatalogDescription{
-				Name:     "catalog-69869",
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69869",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69869",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			metricsMsg string
 		)
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("Get http content")
-		packageDataOut, err := catalog.UnmarshalContent(oc, "package")
+		packageDataOut, err := clustercatalog.UnmarshalContent(oc, "package")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		packageName := olmv1util.ListPackagesName(packageDataOut.Packages)
 		o.Expect(packageName[0]).To(o.ContainSubstring("nginx69869"))
@@ -324,13 +324,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(metricsToken).NotTo(o.BeEmpty())
 
-		catalogPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=catalog-operator", "-o=jsonpath={.items..metadata.name}").Output()
+		clustercatalogPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=catalog-operator", "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(catalogPodname).NotTo(o.BeEmpty())
+		o.Expect(clustercatalogPodname).NotTo(o.BeEmpty())
 
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			queryContent := "https://" + promeEp + ":8443/metrics"
-			metricsMsg, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", catalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", metricsToken), queryContent).Output()
+			metricsMsg, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", clustercatalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", metricsToken), queryContent).Output()
 			e2e.Logf("err:%v", err)
 			if strings.Contains(metricsMsg, "catalogd_http_request_duration_seconds_bucket{code=\"200\"") {
 				e2e.Logf("found catalogd_http_request_duration_seconds_bucket{code=\"200\"")
@@ -339,7 +339,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			return false, nil
 		})
 		if errWait != nil {
-			e2e.Logf("%v", metricsMsg)
+			e2e.Logf("metricsMsg:%v", metricsMsg)
 			exutil.AssertWaitPollNoErr(errWait, "catalogd_http_request_duration_seconds_bucket{code=\"200\" not found.")
 		}
 
@@ -350,15 +350,15 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog-secret.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog-secret.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
 			ns                       = "ns-70817"
-			catalog                  = olmv1util.CatalogDescription{
-				Name:         "catalog-70817-quay",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:         "clustercatalog-70817-quay",
 				Imageref:     "quay.io/olmqe/olmtest-operator-index-private:nginxolm70817",
 				PullSecret:   "fake-secret-70817",
 				PollInterval: "1m",
-				Template:     catalogTemplate,
+				Template:     clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-70817",
@@ -378,17 +378,17 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-catalogd", "secret", "generic", "secret-70817-quay", "--from-file=.dockerconfigjson=/home/cloud-user/.docker/config.json", "--type=kubernetes.io/dockerconfigjson").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("2) Create catalog")
-		defer catalog.Delete(oc)
-		catalog.CreateWithoutCheck(oc)
-		catalog.WaitCatalogStatus(oc, "Failing", 30)
-		conditions, _ := olmv1util.GetNoEmpty(oc, "catalog", catalog.Name, "-o", "jsonpath={.status.conditions}")
+		exutil.By("2) Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.CreateWithoutCheck(oc)
+		clustercatalog.WaitCatalogStatus(oc, "Failing", 30)
+		conditions, _ := olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.conditions}")
 		o.Expect(conditions).To(o.ContainSubstring("error fetching image"))
 		o.Expect(conditions).To(o.ContainSubstring("401 Unauthorized"))
 
-		exutil.By("3) Patch the catalog")
-		patchResource(oc, asAdmin, withoutNamespace, "catalog", catalog.Name, "-p", `{"spec":{"source":{"image":{"pullSecret":"secret-70817-quay"}}}}`, "--type=merge")
-		catalog.WaitCatalogStatus(oc, "Unpacked", 0)
+		exutil.By("3) Patch the clustercatalog")
+		patchResource(oc, asAdmin, withoutNamespace, "clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pullSecret":"secret-70817-quay"}}}}`, "--type=merge")
+		clustercatalog.WaitCatalogStatus(oc, "Unpacked", 0)
 
 		exutil.By("4) install clusterextension")
 		defer clusterextension.Delete(oc)
@@ -397,20 +397,20 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-69202-Catalogd catalog offer the operator content through http server off cluster", func() {
+	g.It("Author:jfan-VMonly-ConnectedOnly-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
-			catalog         = olmv1util.CatalogDescription{
-				Name:     "catalog-69202",
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-69202",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm69202",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 		)
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("port-forward the catalogd-catalogserver")
 		cmd1, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/catalogd-catalogserver", "6920:80", "-n", "openshift-catalogd").Background()
@@ -419,7 +419,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 		exutil.By("get the index content through http service off cluster")
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 100*time.Second, false, func(ctx context.Context) (bool, error) {
-			checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:6920/catalogs/catalog-69202/all.json").Output()
+			checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:6920/catalogs/clustercatalog-69202/all.json").Output()
 			if err != nil {
 				e2e.Logf("failed to execute the curl: %s. Trying again", err)
 				return false, nil
@@ -437,20 +437,20 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	g.It("ConnectedOnly-Author:jitli-High-73219-Fetch deprecation data from the catalogd http server", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir         = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate = filepath.Join(baseDir, "catalog.yaml")
-			catalog         = olmv1util.CatalogDescription{
-				Name:     "catalog-73219",
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-73219",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm73219",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 		)
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("get the deprecation content through http service on cluster")
-		unmarshalContent, err := catalog.UnmarshalContent(oc, "deprecations")
+		unmarshalContent, err := clustercatalog.UnmarshalContent(oc, "deprecations")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deprecatedChannel := olmv1util.GetDeprecatedChannelNameByPakcage(unmarshalContent.Deprecations, "nginx73219")
@@ -466,13 +466,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			catalogTemplate          = filepath.Join(baseDir, "catalog.yaml")
+			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
 			ns                       = "ns-73289"
-			catalog                  = olmv1util.CatalogDescription{
-				Name:     "catalog-73289",
+			clustercatalog           = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-73289",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm73289",
-				Template: catalogTemplate,
+				Template: clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-73289",
@@ -488,9 +488,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create catalog")
-		defer catalog.Delete(oc)
-		catalog.Create(oc)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
 		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.1")
 		defer clusterextension.Delete(oc)
