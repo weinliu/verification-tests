@@ -2329,7 +2329,7 @@ spec:
 
 	// author: zxiao@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-39601-Examine critical errors in openshift-kube-apiserver related log files", func() {
-		g.Skip("This test always fails due to non-real critical errors and is not suitable for automated testing and will be tested manually instead, skip.")
+		//g.Skip("This test always fails due to non-real critical errors and is not suitable for automated testing and will be tested manually instead, skip.")
 		exutil.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
 		masterNodeAbnormalLogs := make([]string, 0)
@@ -2352,7 +2352,7 @@ spec:
 
 		exutil.By("4) Check KAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		clusterOperator := "openshift-kube-apiserver-operator"
-		keywords := "panic|fatal|SHOULD NOT HAPPEN"
+		keywords := "panic|fatal|SHOULD NOT HAPPEN|duplicate entry"
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
