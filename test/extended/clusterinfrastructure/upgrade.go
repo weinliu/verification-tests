@@ -127,7 +127,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure Upgrade", fun
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-LEVEL0-Critical-70626-Service of type LoadBalancer can be created successful after upgrade", func() {
+	g.It("Author:zhsun-NonPreRelease-PstChkUpgrade-LEVEL0-Critical-70626-Service of type LoadBalancer can be created successful after upgrade", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		if iaasPlatform == clusterinfra.AWS && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
 			g.Skip("Skipped: There is no public subnet on AWS C2S/SC2S disconnected clusters!")

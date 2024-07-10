@@ -70,7 +70,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CMA", func() 
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-Medium-64165-Bootstrap kubelet client cert should include system:serviceaccounts group", func() {
+	g.It("Author:zhsun-Medium-64165-Bootstrap kubelet client cert should include system:serviceaccounts group", func() {
 		csrs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csr", "-o=jsonpath={.items[*].metadata.name}", "--field-selector", "spec.signerName=kubernetes.io/kube-apiserver-client-kubelet").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if csrs != "" {

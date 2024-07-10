@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 	})
 
 	// author: huliu@redhat.com
-	g.It("Author:huliu-NonHyperShiftHOST-Low-34718-Node labels and Affinity definition in PV should match", func() {
+	g.It("Author:huliu-Low-34718-Node labels and Affinity definition in PV should match", func() {
 		miscBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "misc")
 		pvcTemplate := filepath.Join(miscBaseDir, "pvc34718.yaml")
 		podTemplate := filepath.Join(miscBaseDir, "pod34718.yaml")

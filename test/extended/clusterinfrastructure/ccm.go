@@ -255,7 +255,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-High-70620-Region and zone labels should be available on the nodes", func() {
+	g.It("Author:zhsun-High-70620-Region and zone labels should be available on the nodes", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.OpenStack)
 		if iaasPlatform == clusterinfra.Azure {
 			azureStackCloud, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
@@ -301,7 +301,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-LEVEL0-Critical-70627-Service of type LoadBalancer can be created successful", func() {
+	g.It("Author:zhsun-LEVEL0-Critical-70627-Service of type LoadBalancer can be created successful", func() {
 		clusterinfra.SkipForAwsOutpostCluster(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud)
 		if iaasPlatform == clusterinfra.AWS && strings.HasPrefix(getClusterRegion(oc), "us-iso") {
@@ -639,7 +639,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 	})
 
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-NonHyperShiftHOST-Low-70124-system:openshift:kube-controller-manager:gce-cloud-provider referencing non existing serviceAccount", func() {
+	g.It("Author:miyadav-Low-70124-system:openshift:kube-controller-manager:gce-cloud-provider referencing non existing serviceAccount", func() {
 		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding", "system:openshift:kube-controller-manager:gce-cloud-provider").Output()
 		o.Expect(err).To(o.HaveOccurred())
 
