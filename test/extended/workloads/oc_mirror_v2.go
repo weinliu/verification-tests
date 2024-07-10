@@ -640,4 +640,65 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-72972-Medium-73381-Medium-74519-support to specify architectures of payload for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72972"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72972.yaml")
+		imageDeleteYamlFileF := filepath.Join(ocmirrorBaseDir, "delete-config-72972.yaml")
+
+		exutil.By("Use skopoe copy catalogsource to localhost")
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 --remove-signatures  --insecure-policy oci://%s  --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson"))
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "40G", "/var/lib/registry")
+
+		exutil.By("Start mirror2mirror ")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+		payloadImageInfo, err := oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/openshift-release-dev/ocp-release:4.15.19-s390x").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Payloadinfo is %s", payloadImageInfo)
+		o.Expect(strings.Contains(payloadImageInfo, "s390x")).To(o.BeTrue())
+
+		exutil.By("Checkpoint for 74519")
+		exutil.By("Generete delete image file")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--generate").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Execute delete without force-cache-delete")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Checked the payload manifest again should failed")
+		_, err = oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/openshift-release-dev/ocp-release:4.15.19-s390x").Output()
+		o.Expect(err).Should(o.HaveOccurred())
+
+		exutil.By("Checked the operator manifest again should failed")
+		_, err = oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/redhat/redhat-operator-index:v4.15").Output()
+		o.Expect(err).Should(o.HaveOccurred())
+	})
 })
