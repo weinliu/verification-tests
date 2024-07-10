@@ -3911,6 +3911,18 @@ func CurlPod2NodeFail(oc *exutil.CLI, namespaceSrc, podNameSrc, namespaceDst, no
 	}
 }
 
+// CurlPod2HostPass checks connectivity from a pod to host that has httpserverPod on it
+func CurlPod2HostPass(oc *exutil.CLI, namespaceSrc, podNameSrc, hostip, DstHostPort string) {
+	_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(hostip, DstHostPort))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// CurlPod2HostFail ensures no connectivity from pod to host that has httpserverPod on it
+func CurlPod2HostFail(oc *exutil.CLI, namespaceSrc, podNameSrc, hostip, DstHostPort string) {
+	_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(hostip, DstHostPort))
+	o.Expect(err).To(o.HaveOccurred())
+}
+
 // Check the cluster is fips enabled
 func checkFips(oc *exutil.CLI) bool {
 	node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o=jsonpath={.items[0].metadata.name}").Output()

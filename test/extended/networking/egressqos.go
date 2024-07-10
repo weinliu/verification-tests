@@ -682,4 +682,132 @@ var _ = g.Describe("[sig-networking] SDN egressqos", func() {
 
 	})
 
+	g.It("Author:yingwang-High-74054-Egress traffic works with ANP, BANP and NP with EgressQos. [Disruptive]", func() {
+		var (
+			dstCIDR          = externalPrivateIP + "/" + "32"
+			dscpValue        = 40
+			testDataDir      = exutil.FixturePath("testdata", "networking")
+			egressBaseDir    = filepath.Join(testDataDir, "egressqos")
+			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-template.yaml")
+			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
+			pktFile1         = getRandomString() + "pcap.txt"
+			pktFile2         = getRandomString() + "pcap.txt"
+
+			banpCRTemplate = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-single-rule-cidr-template.yaml")
+			anpCRTemplate  = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-cidr-template.yaml")
+			matchLabelKey  = "kubernetes.io/metadata.name"
+			banpRuleName   = "banp-rule"
+			anpRuleName    = "anp-rule"
+		)
+
+		ns := oc.Namespace()
+
+		exutil.By("####### 1. Create pod and egressqos #############")
+
+		egressQos := networkingRes{
+			name:      "default",
+			namespace: ns,
+			kind:      "egressqos",
+			tempfile:  egressQosTmpFile,
+		}
+
+		testPod := networkingRes{
+			name:      "test-pod",
+			namespace: ns,
+			kind:      "pod",
+			tempfile:  testPodTmpFile,
+		}
+		//create egressqos
+		defer removeResource(oc, true, true, "egressqos", egressQos.name, "-n", egressQos.namespace)
+		egressQos.create(oc, "NAME="+egressQos.name, "NAMESPACE="+egressQos.namespace, "CIDR1="+"0.0.0.0/0", "CIDR2="+dstCIDR)
+
+		defer removeResource(oc, true, true, "pod", testPod.name, "-n", testPod.namespace)
+		testPod.create(oc, "NAME="+testPod.name, "NAMESPACE="+testPod.namespace)
+
+		errPodRdy := waitForPodWithLabelReady(oc, ns, "name="+testPod.name)
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("testpod isn't ready"))
+
+		exutil.By("########### 2. Create a Admin Network Policy with deny action ############")
+
+		anpCR := singleRuleCIDRANPPolicyResource{
+			name:       "anp-74054",
+			subjectKey: matchLabelKey,
+			subjectVal: ns,
+			priority:   10,
+			ruleName:   anpRuleName,
+			ruleAction: "Deny",
+			cidr:       dstCIDR,
+			template:   anpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpCR.name)
+		anpCR.createSingleRuleCIDRANP(oc)
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+
+		exutil.By("############ 3. Verify ANP blocks matching egress traffic #############")
+		CurlPod2HostFail(oc, ns, testPod.name, externalPrivateIP, dscpSvcPort)
+
+		exutil.By("############## 4. edit ANP rule to allow egress traffic #############")
+		patchYamlToRestore := `[{"op":"replace","path":"/spec/egress/0/action","value":"Allow"}]`
+		output, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpCR.name, "--type=json", "-p", patchYamlToRestore).Output()
+		e2e.Logf("patch result is %v", output)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "adminnetworkpolicy.policy.networking.k8s.io/anp-74054 patched")).To(o.BeTrue())
+
+		exutil.By("############# 5. check egress traffic can pass and dscp value is correct ###########")
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile1)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile1)
+
+		startCurlTraffic(oc, testPod.namespace, testPod.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile1, dscpValue)
+		o.Expect(chkRes).Should(o.BeTrue())
+
+		exutil.By("############## 6. edit ANP rule to action pass  #############")
+		patchYamlToRestore = `[{"op":"replace","path":"/spec/egress/0/action","value":"Pass"}]`
+		output, err1 = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpCR.name, "--type=json", "-p", patchYamlToRestore).Output()
+		e2e.Logf("patch result is %v", output)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "adminnetworkpolicy.policy.networking.k8s.io/anp-74054 patched")).To(o.BeTrue())
+
+		exutil.By("############ 7. Create a Baseline Admin Network Policy with deny action ############")
+		banpCR := singleRuleCIDRBANPPolicyResource{
+			name:       "default",
+			subjectKey: matchLabelKey,
+			subjectVal: ns,
+			ruleName:   banpRuleName,
+			ruleAction: "Deny",
+			cidr:       dstCIDR,
+			template:   banpCRTemplate,
+		}
+
+		defer removeResource(oc, true, true, "banp", banpCR.name)
+		banpCR.createSingleRuleCIDRBANP(oc)
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+
+		exutil.By("############# 8. Verify BANP blocks matching egress traffic #########")
+		CurlPod2HostFail(oc, ns, testPod.name, externalPrivateIP, dscpSvcPort)
+
+		exutil.By("############ 9. edit BANP rule to allow egress traffic ###############")
+		patchYamlToRestore = `[{"op":"replace","path":"/spec/egress/0/action","value":"Allow"}]`
+		output, err1 = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy", banpCR.name, "--type=json", "-p", patchYamlToRestore).Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "baselineadminnetworkpolicy.policy.networking.k8s.io/default patched")).To(o.BeTrue())
+
+		exutil.By("############# 10. check egress traffic can pass and dscp value is correct #############")
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile2)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile2)
+
+		startCurlTraffic(oc, testPod.namespace, testPod.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes = chkDSCPinPkts(a, oc, dscpSvcIP, pktFile2, dscpValue)
+		o.Expect(chkRes).Should(o.BeTrue())
+
+	})
+
 })
