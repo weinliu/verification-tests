@@ -133,7 +133,7 @@ machinesets.cluster.x-k8s.io`
 	})
 	// author: miyadav@redhat.com
 	g.It("Author:miyadav-NonHyperShiftHOST-Medium-71913-Promote CAPI IPAM CRDs to GA", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.AlibabaCloud, clusterinfra.IBMCloud, clusterinfra.Nutanix)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.GCP, clusterinfra.AWS, clusterinfra.AlibabaCloud, clusterinfra.IBMCloud, clusterinfra.Nutanix, clusterinfra.PowerVS)
 
 		expectedCRDs := `ipaddressclaims.ipam.cluster.x-k8s.io
 ipaddresses.ipam.cluster.x-k8s.io`
