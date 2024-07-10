@@ -8,11 +8,7 @@ describe('show warning info for resources', () => {
   before(() => {
     cy.cliLogin();
     cy.adminCLI(`oc apply -f ./fixtures/warning-policy/gatekeeper.yaml`, {failOnNonZeroExit: false});
-    cy.wait(5000);
-    cy.adminCLI(`oc get pods -n gatekeeper-system`, {failOnNonZeroExit: false})
-      .then(output => {
-         expect(output.stdout).contain('Running');
-    });
+    cy.checkCommandResult(`oc get pods -n gatekeeper-system`, 'Running');
     cy.adminCLI(`oc create -f ./fixtures/warning-policy/gatekeeper-template.yaml`, {failOnNonZeroExit: false});
     cy.wait(5000);
     cy.adminCLI(`oc get crd k8srequiredlabels.constraints.gatekeeper.sh`, {failOnNonZeroExit: false})
@@ -48,10 +44,12 @@ describe('show warning info for resources', () => {
 
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
     cy.byTestID('import-yaml').click();
+    cy.wait(3000);
     cy.get('.ocs-yaml-editor__root')
         .selectFile('./fixtures/warning-policy/multiple-import.yaml', {action: 'drag-drop'});
-    cy.wait(5000);
-    cy.byTestID('save-changes').should('exist').click({force: true});
+    cy.byTestID('save-changes').should('exist');
+    cy.wait(2000);
+    cy.byTestID('save-changes').click({force: true});
     cy.contains(`${WARNING_FOO}`).should('exist');
     cy.contains(`${WARNING_BAR}`).should('exist');
 
