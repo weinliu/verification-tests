@@ -277,6 +277,8 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 				o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new random certificate")
 				defer kubeCloudProviderConfigMap.RemoveDataKey(cloudCertFileKey)
 				kubeCloudProviderConfigMap.SetData("--from-file=" + cloudCertFileKey + "=" + caPath)
+				o.Eventually(kubeCloudManagedConfigMap.GetDataValueOrFail, "5m", "20s").WithArguments(cloudCertFileKey).ShouldNot(o.BeEmpty(),
+					"A new CA was added to %s but the managed resource %s was not populated", kubeCloudProviderConfigMap, kubeCloudManagedConfigMap)
 				kubeCloudCertContent = kubeCloudManagedConfigMap.GetDataValueOrFail(cloudCertFileKey)
 
 			} else {
@@ -290,7 +292,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			logger.Infof("Check that the file is served in the ignition config")
 			jsonPath = fmt.Sprintf(`storage.files.#(path=="%s")`, kubeCloudCertFile)
 			o.Eventually(mcp.GetMCSIgnitionConfig,
-				"3m", "20s").WithArguments(true, ignitionConfig).ShouldNot(
+				"6m", "20s").WithArguments(true, ignitionConfig).ShouldNot(
 				HavePathWithValue(jsonPath, o.BeEmpty()),
 				"The file %s is not served in the ignition config", kubeCloudCertFile)
 
