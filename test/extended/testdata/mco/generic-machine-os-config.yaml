@@ -10,13 +10,16 @@ objects:
   spec:
     machineConfigPool:
       name: ${POOL}
+    buildOutputs:
+      currentImagePullSecret:
+        name: ${CURRENTIMAGEPULLSECRET}
     buildInputs:
       imageBuilder:
         imageBuilderType: ${IMAGEBUILDERTYPE}
       baseImagePullSecret:
-        name: ${PULLSECRET}
+        name: ${BASEIMAGEPULLSECRET}
       renderedImagePushSecret:
-        name: ${PUSHSECRET}
+        name: ${RENDEREDIMAGEPUSHSECRET}
       renderedImagePushspec: ${PUSHSPEC}
       containerFile: ${{CONTAINERFILE}}
 parameters:
@@ -24,10 +27,11 @@ parameters:
   - name: IMAGES
   - name: POOL
     value: "worker"
+  - name: CURRENTIMAGEPULLSECRET
   - name: IMAGEBUILDERTYPE
     value: "PodImageBuilder"
-  - name: PULLSECRET
-  - name: PUSHSECRET
+  - name: BASEIMAGEPULLSECRET
+  - name: RENDEREDIMAGEPUSHSECRET
   - name: PUSHSPEC
   - name: CONTAINERFILE
     value: "[]"

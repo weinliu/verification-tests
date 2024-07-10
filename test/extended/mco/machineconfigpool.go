@@ -624,6 +624,11 @@ func (mcp MachineConfigPool) WaitForUpdatedStatus() error {
 	return mcp.waitForConditionStatus("Updated", "True", time.Duration(mcp.estimateWaitTimeInMinutes())*time.Minute, 1*time.Minute, false)
 }
 
+// WaitImmediateForUpdatedStatus waits until MCP is rerpoting updated status, if the condition times out the returned error is != nil. It starts checking immediately.
+func (mcp MachineConfigPool) WaitImmediateForUpdatedStatus() error {
+	return mcp.waitForConditionStatus("Updated", "True", time.Duration(mcp.estimateWaitTimeInMinutes())*time.Minute, 1*time.Minute, true)
+}
+
 // WaitForUpdatingStatus waits until MCP is rerpoting updating status, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForUpdatingStatus() error {
 	return mcp.waitForConditionStatus("Updating", "True", 5*time.Minute, 5*time.Second, true)
@@ -1304,7 +1309,7 @@ func CreateCustomMCPByNodes(oc *exutil.CLI, name string, nodes []Node) (*Machine
 		return customMcp, err
 	}
 
-	err = customMcp.WaitForUpdatedStatus()
+	err = customMcp.WaitImmediateForUpdatedStatus()
 	if err != nil {
 		logger.Errorf("The %s MCP is not updated", customMcp.GetName())
 		return customMcp, err

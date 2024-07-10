@@ -25,6 +25,11 @@ func NewMachineOSBuildList(oc *exutil.CLI) *MachineOSBuildList {
 	return &MachineOSBuildList{*NewResourceList(oc, "machineosbuild")}
 }
 
+// GetMachineOSConfig returns the MachineOSCOnfig resource linked to this MOSB
+func (mosb MachineOSBuild) GetMachineOSConfig() (string, error) {
+	return mosb.Get(`{.spec.machineOSConfig}`)
+}
+
 // GetPod returns the pod used to build this build
 func (mosb MachineOSBuild) GetPod() (*Resource, error) {
 	podName, err := mosb.Get(`{.status.builderReference.buildPod.name}`)

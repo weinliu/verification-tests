@@ -35,11 +35,11 @@ func NewMachineOSConfigList(oc *exutil.CLI) *MachineOSConfigList {
 }
 
 // CreateMachineOSConfig creates a MOSC resource using the information provided in the arguments
-func CreateMachineOSConfig(oc *exutil.CLI, name, pool, pullSecret, pushSecret, pushSpec string, containerFile []ContainerFile) (*MachineOSConfig, error) {
+func CreateMachineOSConfig(oc *exutil.CLI, name, pool, currentImagePullSecret, baseImagePullSecret, renderedImagePushSecret, pushSpec string, containerFile []ContainerFile) (*MachineOSConfig, error) {
 	var (
 		containerFilesString = "[]"
 	)
-	logger.Infof("Creating MachineOSConfig %s in pool %s with pullSecret %s pushSecret %s and pushSpec %s", name, pool, pullSecret, pushSecret, pushSpec)
+	logger.Infof("Creating MachineOSConfig %s in pool %s with pullSecret %s pushSecret %s and pushSpec %s", name, pool, baseImagePullSecret, renderedImagePushSecret, pushSpec)
 	newMOSC := NewMachineOSConfig(oc, name)
 
 	if len(containerFile) > 0 {
@@ -51,30 +51,37 @@ func CreateMachineOSConfig(oc *exutil.CLI, name, pool, pullSecret, pushSecret, p
 	}
 	logger.Infof("Using custom Containerfile %s", containerFilesString)
 
-	err := NewMCOTemplate(oc, "generic-machine-os-config.yaml").Create("-p", "NAME="+name, "POOL="+pool, "PULLSECRET="+pullSecret,
-		"PUSHSECRET="+pushSecret, "PUSHSPEC="+pushSpec, "CONTAINERFILE="+containerFilesString)
+	err := NewMCOTemplate(oc, "generic-machine-os-config.yaml").Create("-p", "NAME="+name, "POOL="+pool, "CURRENTIMAGEPULLSECRET="+currentImagePullSecret, "BASEIMAGEPULLSECRET="+baseImagePullSecret,
+		"RENDEREDIMAGEPUSHSECRET="+renderedImagePushSecret, "PUSHSPEC="+pushSpec, "CONTAINERFILE="+containerFilesString)
 	return newMOSC, err
 }
 
 func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, name, pool string, containerFile []ContainerFile) (*MachineOSConfig, error) {
 	// We use a copy of the cluster's pull secret to pull the images
 	pullSecret := NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
-	clonnedPullSecret, err := CloneResource(pullSecret, "clonned-pull-secret-"+exutil.GetRandomString(), MachineConfigNamespace, nil)
+	baseImagePullSecret, err := CloneResource(pullSecret, "cloned-pull-secret-"+exutil.GetRandomString(), MachineConfigNamespace, nil)
 	if err != nil {
 		return NewMachineOSConfig(oc, name), err
 	}
 
 	// We use the builder SA secret in MCO to push the images to the internal registry
 	saBuilder := NewNamespacedResource(oc, "sa", MachineConfigNamespace, "builder")
-	pushSecretName := saBuilder.GetOrFail(`{.secrets[0].name}`)
-	if pushSecretName == "" {
-		return NewMachineOSConfig(oc, name), fmt.Errorf("Push secret cannot have an empty value")
+	renderedImagePushSecretName := saBuilder.GetOrFail(`{.secrets[0].name}`)
+	if renderedImagePushSecretName == "" {
+		return NewMachineOSConfig(oc, name), fmt.Errorf("Rendered image push secret cannot have an empty value")
+	}
+
+	// We use the default SA secret in MCO to pull the current image from the internal registry
+	saDefault := NewNamespacedResource(oc, "sa", MachineConfigNamespace, "default")
+	currentImagePullSecret := saDefault.GetOrFail(`{.secrets[0].name}`)
+	if currentImagePullSecret == "" {
+		return NewMachineOSConfig(oc, name), fmt.Errorf("Current image pull secret cannot have an empty value")
 	}
 
 	// We use a push spec stored in the internal registry in the MCO namespace. We use a different image for every pool
 	pushSpec := fmt.Sprintf("%s/openshift-machine-config-operator/ocb-%s-image:latest", InternalRegistrySvcURL, pool)
 
-	return CreateMachineOSConfig(oc, name, pool, clonnedPullSecret.GetName(), pushSecretName, pushSpec, containerFile)
+	return CreateMachineOSConfig(oc, name, pool, currentImagePullSecret, baseImagePullSecret.GetName(), renderedImagePushSecretName, pushSpec, containerFile)
 }
 
 // GetPullSecret returns the pull secret configured in this MOSC
@@ -140,6 +147,27 @@ func (mosc MachineOSConfig) CleanupAndDelete() error {
 	}
 
 	return mosc.Delete()
+}
+
+// GetMachineConfigPool returns the MachineConfigPool for this MOSC
+func (mosc MachineOSConfig) GetMachineConfigPool() (*MachineConfigPool, error) {
+	poolName, err := mosc.Get(`{.spec.machineConfigPool.name}`)
+	if err != nil {
+		return nil, err
+	}
+	if poolName == "" {
+		logger.Errorf("Empty MachineConfigPool configured in %s", mosc)
+		return nil, fmt.Errorf("Empty MachineConfigPool configured in %s", mosc)
+	}
+
+	return NewMachineConfigPool(mosc.oc, poolName), nil
+}
+
+// GetMachineOSBuildList returns a list of all MOSB linked to this MOSC
+func (mosc MachineOSConfig) GetMachineOSBuildList() ([]MachineOSBuild, error) {
+	mosbList := NewMachineOSBuildList(mosc.GetOC())
+	mosbList.SetItemsFilter(fmt.Sprintf(`?(@.spec.machineOSConfig.name=="%s")`, mosc.GetName()))
+	return mosbList.GetAll()
 }
 
 // GetAll returns a []MachineOSConfig list with all existing pinnedimageset sorted by creation timestamp

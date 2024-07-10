@@ -46,61 +46,14 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 		logger.Infof("OK!\n")
 
-		exutil.By("Check that the deployment machine-os-builder is created")
-		mOSBuilder := NewNamespacedResource(oc.AsAdmin(), "deployment", MachineConfigNamespace, "machine-os-builder")
-
-		o.Eventually(mOSBuilder, "5m", "30s").Should(Exist(),
-			"The machine-os-builder deployment was not created when the OCB functionality was enabled in the infra pool")
-
-		o.Expect(mOSBuilder.Get(`{.spec.template.spec.containers[?(@.name=="machine-os-builder")].command}`)).To(o.ContainSubstring("machine-os-builder"),
-			"Error the machine-os-builder is not invoking the machine-os-builder binary")
-
-		o.Eventually(mOSBuilder.Get, "3m", "30s").WithArguments(`{.spec.replicas}`).Should(o.Equal("1"),
-			"The machine-os-builder deployment was created but the configured number of replicas is not the expected one")
-		o.Eventually(mOSBuilder.Get, "2m", "30s").WithArguments(`{.status.availableReplicas}`).Should(o.Equal("1"),
-			"The machine-os-builder deployment was created but the available number of replicas is not the expected one")
-
-		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check that the  machine-os-builder is using leader election without failing")
-		o.Expect(mOSBuilder.Logs()).To(o.And(
-			o.ContainSubstring("attempting to acquire leader lease openshift-machine-config-operator/machine-os-builder"),
-			o.ContainSubstring("successfully acquired lease openshift-machine-config-operator/machine-os-builder")),
-			"The machine os builder pod is not using the leader election without failures")
-		logger.Infof("OK!\n")
-
-		exutil.By("Check that a new build has been triggered")
-		o.Eventually(infraMcp.GetLatestMachineOSBuildOrFail(), "5m", "20s").Should(Exist(),
-			"No build was created when OCB was enabled")
-		mosb := infraMcp.GetLatestMachineOSBuildOrFail()
-		o.Eventually(mosb.GetPod).Should(Exist(),
-			"No build pod was created when OCB was enabled")
-		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
-			"MachineOSBuild didn't report that the build has begun")
-		logger.Infof("OK!\n")
-
-		exutil.By("Check that a new build is successfully executed")
-		o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
-		o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
-		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Build was interrupted")
-		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
-		logger.Infof("Check that the build pod was deleted")
-		o.Eventually(mosb.GetPod, "2m", "20s").ShouldNot(Exist(), "Build pod was not cleaned")
-		logger.Infof("OK!\n")
+		ValidateSuccessfulMOSC(mosc, nil)
 
 		exutil.By("Remove the MachineOSConfig resource")
-		o.Expect(mosc.CleanupAndDelete()).To(o.Succeed(), "Error removing %s", mosc)
+		o.Expect(mosc.CleanupAndDelete()).To(o.Succeed(), "Error cleaning up %s", mosc)
 		logger.Infof("OK!\n")
 
-		exutil.By("Check that the OCB resources are cleaned up")
-		o.Eventually(mosb, "2m", "20s").ShouldNot(Exist(), "MachineSOBuild was not cleaned up")
-		o.Eventually(mOSBuilder, "2m", "30s").ShouldNot(Exist(),
-			"The machine-os-builder deployment was not removed when the infra pool was unlabeled")
-		for _, cm := range NewConfigMapList(oc, MachineConfigNamespace).GetAllOrFail() {
-			o.Expect(cm.GetName()).NotTo(o.ContainSubstring("rendered"),
-				"%s should have been garbage collected by OCB when the MOSC was deleted", cm)
-		}
+		ValidateMOSCIsGarbageCollected(mosc, infraMcp)
+
 		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
@@ -132,26 +85,26 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Clone the pull-secret in MCO namespace")
-		clonnedSecret, err := CloneResource(pullSecret, "clonned-pull-secret-"+exutil.GetRandomString(), MachineConfigNamespace, nil)
-		defer clonnedSecret.Delete()
+		clonedSecret, err := CloneResource(pullSecret, "cloned-pull-secret-"+exutil.GetRandomString(), MachineConfigNamespace, nil)
+		defer clonedSecret.Delete()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating the cluster's pull-secret in MCO namespace")
 		logger.Infof("OK!\n")
 
 		// Check behaviour when wrong pullSecret
-		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, fakePullSecretName, clonnedSecret.GetName(), pushSpec, nil,
+		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, clonedSecret.GetName(), fakePullSecretName, clonedSecret.GetName(), pushSpec, nil,
 			expectedWrongPullSecretMsg,
 			"Check that MOSC using wrong pull secret are failing as expected")
 
 		// Check behaviour when wrong pushSecret
-		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, clonnedSecret.GetName(), fakePushSecretName, pushSpec, nil,
+		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, clonedSecret.GetName(), clonedSecret.GetName(), fakePushSecretName, pushSpec, nil,
 			expectedWrongPushSecretMsg,
 			"Check that MOSC using wrong push secret are failing as expected")
 
 		// Try to create a MOSC with a wrong pushSpec
 		logger.Infof("Create a MachineOSConfig resource with a wrong builder type")
 
-		err = NewMCOTemplate(oc, "generic-machine-os-config.yaml").Create("-p", "NAME="+moscName, "POOL="+infraMcpName, "PULLSECRET="+clonnedSecret.GetName(),
-			"PUSHSECRET="+clonnedSecret.GetName(), "PUSHSPEC="+pushSpec, "IMAGEBUILDERTYPE="+fakeBuilderType)
+		err = NewMCOTemplate(oc, "generic-machine-os-config.yaml").Create("-p", "NAME="+moscName, "POOL="+infraMcpName, "PULLSECRET="+clonedSecret.GetName(),
+			"PUSHSECRET="+clonedSecret.GetName(), "PUSHSPEC="+pushSpec, "IMAGEBUILDERTYPE="+fakeBuilderType)
 		o.Expect(err).To(o.HaveOccurred(), "Expected oc command to fail, but it didn't")
 		o.Expect(err).To(o.BeAssignableToTypeOf(&exutil.ExitError{}), "Unexpected error while creating the new MOSC")
 		o.Expect(err.(*exutil.ExitError).StdErr).To(o.ContainSubstring(expectedWrongBuilderTypeMsg),
@@ -170,7 +123,7 @@ func skipTestIfOCBIsEnabled(oc *exutil.CLI) {
 	}
 }
 
-func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, pullSecret, pushSecret, pushSpec string, containerFile []ContainerFile,
+func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, currentImagePullSecret, baseImagePullSecret, renderedImagePushSecret, pushSpec string, containerFile []ContainerFile,
 	expectedMsg, stepMgs string) {
 	var (
 		machineConfigCO = NewResource(oc.AsAdmin(), "co", "machine-config")
@@ -180,7 +133,7 @@ func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, pullSecret, push
 	defer logger.Infof("OK!\n")
 
 	logger.Infof("Create a misconfiugred MOSC")
-	mosc, err := CreateMachineOSConfig(oc, moscName, poolName, pullSecret, pushSecret, pushSpec, containerFile)
+	mosc, err := CreateMachineOSConfig(oc, moscName, poolName, currentImagePullSecret, baseImagePullSecret, renderedImagePushSecret, pushSpec, containerFile)
 	defer mosc.Delete()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating MOSC with wrong pull secret")
 	logger.Infof("OK!")
@@ -200,4 +153,161 @@ func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, pullSecret, push
 	o.Eventually(machineConfigCO, "5m", "20s").ShouldNot(BeDegraded(),
 		"%s should stop being degraded when the offending MOSC is deleted", machineConfigCO)
 
+}
+
+// ValidateMOSCIsGarbageCollected makes sure that all resources related to the provided MOSC have been removed
+func ValidateMOSCIsGarbageCollected(mosc *MachineOSConfig, mcp *MachineConfigPool) {
+	exutil.By("Check that the OCB resources are cleaned up")
+
+	logger.Infof("Validating that MOSB resources were garbage collected")
+	NewMachineOSBuildList(mosc.GetOC()).PrintDebugCommand() // for debugging purposes
+	mosbs, err := mosc.GetMachineOSBuildList()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSBs linked to %s", mosc)
+
+	o.Eventually(mosbs, "2m", "20s").Should(o.HaveLen(0), "MachineSOBuilds were not cleaned when %s was removed", mosc)
+
+	logger.Infof("Validating that machine-os-builder pod was garbage collected")
+	mOSBuilder := NewNamespacedResource(mosc.GetOC().AsAdmin(), "deployment", MachineConfigNamespace, "machine-os-builder")
+	o.Eventually(mOSBuilder, "2m", "30s").ShouldNot(Exist(),
+		"The machine-os-builder deployment was not removed when the infra pool was unlabeled")
+
+	logger.Infof("Validating that configmaps were garbage collected")
+	for _, cm := range NewConfigMapList(mosc.GetOC(), MachineConfigNamespace).GetAllOrFail() {
+		o.Expect(cm.GetName()).NotTo(o.ContainSubstring("rendered-"+mcp.GetName()),
+			"%s should have been garbage collected by OCB when the %s was deleted", cm, mosc)
+	}
+	logger.Infof("OK!")
+
+}
+
+// ValidateSuccessfulMOSC check that the provided MOSC is successfully applied
+func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
+	mcp, err := mosc.GetMachineConfigPool()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Cannot get the MCP for %s", mosc)
+
+	exutil.By("Check that the deployment machine-os-builder is created")
+	mOSBuilder := NewNamespacedResource(mosc.GetOC(), "deployment", MachineConfigNamespace, "machine-os-builder")
+
+	o.Eventually(mOSBuilder, "5m", "30s").Should(Exist(),
+		"The machine-os-builder deployment was not created when the OCB functionality was enabled in the infra pool")
+
+	o.Expect(mOSBuilder.Get(`{.spec.template.spec.containers[?(@.name=="machine-os-builder")].command}`)).To(o.ContainSubstring("machine-os-builder"),
+		"Error the machine-os-builder is not invoking the machine-os-builder binary")
+
+	o.Eventually(mOSBuilder.Get, "3m", "30s").WithArguments(`{.spec.replicas}`).Should(o.Equal("1"),
+		"The machine-os-builder deployment was created but the configured number of replicas is not the expected one")
+	o.Eventually(mOSBuilder.Get, "2m", "30s").WithArguments(`{.status.availableReplicas}`).Should(o.Equal("1"),
+		"The machine-os-builder deployment was created but the available number of replicas is not the expected one")
+
+	exutil.AssertAllPodsToBeReady(mosc.GetOC(), MachineConfigNamespace)
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that the  machine-os-builder is using leader election without failing")
+	o.Expect(mOSBuilder.Logs()).To(o.And(
+		o.ContainSubstring("attempting to acquire leader lease openshift-machine-config-operator/machine-os-builder"),
+		o.ContainSubstring("successfully acquired lease openshift-machine-config-operator/machine-os-builder")),
+		"The machine os builder pod is not using the leader election without failures")
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that a new build has been triggered")
+	o.Eventually(mcp.GetLatestMachineOSBuildOrFail(), "5m", "20s").Should(Exist(),
+		"No build was created when OCB was enabled")
+	mosb := mcp.GetLatestMachineOSBuildOrFail()
+	o.Eventually(mosb.GetPod).Should(Exist(),
+		"No build pod was created when OCB was enabled")
+	o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
+		"MachineOSBuild didn't report that the build has begun")
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that a new build is successfully executed")
+	o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
+	o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
+	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Build was interrupted")
+	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
+	logger.Infof("Check that the build pod was deleted")
+	o.Eventually(mosb.GetPod, "2m", "20s").ShouldNot(Exist(), "Build pod was not cleaned")
+	logger.Infof("OK!\n")
+
+	numNodes, err := mcp.getMachineCount()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MachineCount from %s", mcp)
+	if numNodes > 0 {
+		mcp.waitForComplete()
+
+		node := mcp.GetSortedNodesOrFail()[0]
+		for _, checker := range checkers {
+			checker.Check(node)
+		}
+	} else {
+		logger.Infof("There is no node configured in %s. We don't wait for the configuration to be applied", mcp)
+	}
+}
+
+// DisableOCL this function disables OCL. There is no way to disable it in a controlled way, it needs to be implemented.
+// The only way to disable OCL in a pool is to delete all nodes and recreate them from scratch.
+// Hence, we cant automate OCL tests using master pool
+func DisableOCL(mosc *MachineOSConfig) error {
+	if !mosc.Exists() {
+		logger.Infof("%s does not exist. No need to remove/disable it", mosc)
+		return nil
+	}
+
+	mcp, err := mosc.GetMachineConfigPool()
+	if err != nil {
+		return err
+
+	}
+
+	err = mosc.CleanupAndDelete()
+	if err != nil {
+		return err
+	}
+
+	allNodes, err := mcp.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	logger.Infof("Removing all machines in pool %s to recreate the nodes", mcp.GetName())
+
+	for _, node := range allNodes {
+		machine, err := node.GetMachine()
+		if err != nil {
+			return err
+		}
+
+		if !machine.Exists() {
+			return fmt.Errorf("%s was created using %s, but %s does not exist. Something went wrong", node, machine, machine)
+		}
+
+		err = machine.Delete("--wait=false")
+		if err != nil {
+			return err
+		}
+	}
+
+	logger.Infof("Waiting for all Machinesets to be ready")
+
+	allMachineSets, err := NewMachineSetList(mosc.GetOC(), "openshift-machine-api").GetAll()
+	if err != nil {
+		return err
+	}
+
+	for _, machineSet := range allMachineSets {
+		err := machineSet.WaitUntilReady("15m")
+		if err != nil {
+			return err
+		}
+	}
+
+	logger.Infof("Manually remove all nodes to make things faster")
+
+	for _, node := range allNodes {
+		err := node.Delete("--ignore-not-found=true")
+		if err != nil {
+			return err
+		}
+	}
+
+	mcp.WaitImmediateForUpdatedStatus()
+	return nil
 }

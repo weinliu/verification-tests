@@ -1168,6 +1168,21 @@ func (n *Node) GetFileSystemSpaceUsage(path string) (*SpaceUsage, error) {
 	return &SpaceUsage{Used: used, Avail: avail}, nil
 }
 
+// GetMachine returns the machine used to create this node
+func (n Node) GetMachine() (*Machine, error) {
+	machineLabel, err := n.GetAnnotation("machine.openshift.io/machine")
+	if err != nil {
+		return nil, err
+	}
+	machineLabelSplit := strings.Split(machineLabel, "/")
+
+	if len(machineLabelSplit) != 2 {
+		return nil, fmt.Errorf("Malformed machine label %s in node %s", machineLabel, n.GetName())
+	}
+	machineName := machineLabelSplit[1]
+	return NewMachine(n.GetOC(), "openshift-machine-api", machineName), nil
+}
+
 // GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()

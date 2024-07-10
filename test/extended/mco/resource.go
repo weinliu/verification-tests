@@ -37,8 +37,8 @@ type ResourceInterface interface {
 	GetSafe(jsonPath string, defaultValue string, extraParams ...string) string
 	GetOrFail(jsonPath string, extraParams ...string) string
 	Poll(jsonPath string) func() string
-	Delete() error
-	DeleteOrFail()
+	Delete(extraParams ...string) error
+	DeleteOrFail(extraParams ...string)
 	Exists() bool
 	Patch(patchType string, patch string) error
 	GetAnnotationOrFail(annotation string) string
@@ -166,8 +166,9 @@ func (r Resource) GetOC() *exutil.CLI {
 }
 
 // Delete removes the resource from openshift cluster
-func (r *Resource) Delete() error {
+func (r *Resource) Delete(extraParams ...string) error {
 	params := r.getCommonParams()
+	params = append(params, extraParams...)
 
 	_, err := r.oc.WithoutNamespace().Run("delete").Args(params...).Output()
 	if err != nil {
@@ -178,8 +179,8 @@ func (r *Resource) Delete() error {
 }
 
 // DeleteOrFail deletes the resource, and if any error happens it fails the testcase
-func (r *Resource) DeleteOrFail() {
-	err := r.Delete()
+func (r *Resource) DeleteOrFail(extraParams ...string) {
+	err := r.Delete(extraParams...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -247,10 +248,17 @@ func (r *Resource) Patch(patchType, patch string) error {
 	return err
 }
 
-// GetAnnotationOrFail returns the value
-func (r *Resource) GetAnnotationOrFail(annotation string) string {
+// GetAnnotation returns the value of the given annotation
+func (r *Resource) GetAnnotation(annotation string) (string, error) {
 	scapedAnnotation := strings.ReplaceAll(annotation, `.`, `\.`)
-	return r.GetOrFail(fmt.Sprintf(`{.metadata.annotations.%s}`, scapedAnnotation))
+	return r.Get(fmt.Sprintf(`{.metadata.annotations.%s}`, scapedAnnotation))
+}
+
+// GetAnnotationOrFail returns the value of the given annotation and fails the test case if there is any error
+func (r *Resource) GetAnnotationOrFail(annotation string) string {
+	annotation, err := r.GetAnnotation(annotation)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting annotation %s from %s", annotation, r)
+	return annotation
 }
 
 // GetConditionByType returns the status.condition matching the given type
