@@ -1967,4 +1967,49 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
+	g.It("Author:rrasouli-DisconnectedOnly-Smokerun-Critical-74760-Windows workloads with disconnected registry image", func() {
+		var (
+			sourceNamespace   = "openshift-config"
+			namespace         = "winc-74760"
+			pull_secret_name  = "pull-secret"
+			primary_image_key = "primary_windows_container_disconnected_image"
+		)
+
+		g.By("Create a Windows workload using the disconnected registry image")
+
+		// Step 1: Retrieve the primary_windows_container_disconnected_image from the ConfigMap
+		g.By("Retrieving the primary disconnected image from the ConfigMap")
+		primaryDisconnectedImage := getConfigMapData(oc, wincTestCM, primary_image_key, defaultNamespace)
+		if primaryDisconnectedImage == "" || primaryDisconnectedImage == "<primary_windows_container_disconnected_image>" {
+			g.Skip("Skipping test not a disconnected test")
+		}
+		defer deleteProject(oc, namespace)
+		createProject(oc, namespace)
+
+		// Step 2: Apply the pull-secret to the namespace
+		g.By("Applying the pull-secret to the namespace")
+		pullSecretData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", pull_secret_name, "-n", sourceNamespace, "-o=jsonpath={.data.\\.dockerconfigjson}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Unable to retrieve pull-secret from %v namespace", sourceNamespace)
+
+		decodedPullSecretData, err := base64.StdEncoding.DecodeString(pullSecretData)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Unable to decode pull-secret data")
+
+		_, err = oc.AsAdmin().NotShowInfo().WithoutNamespace().Run("create").Args("secret", "generic", pull_secret_name, fmt.Sprintf("--from-literal=.dockerconfigjson=%s", decodedPullSecretData), "--type=kubernetes.io/dockerconfigjson", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Unable to create pull-secret in %v namespace", namespace)
+
+		// Step 3: Create workloads pulling from a disconnected registry
+		g.By("Creating workloads pulling from a disconnected registry")
+		createWindowsWorkload(oc, namespace, "windows_web_server_disconnected.yaml", map[string]string{"<windows_container_image>": primaryDisconnectedImage}, true)
+
+		// Step 4: Scale the deployment up
+		g.By("Scaling the deployment up")
+		err = scaleDeployment(oc, windowsWorkloads, 5, namespace)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to scale up the deployment")
+
+		// Step 5: Scale the deployment back down
+		g.By("Scaling the deployment back down")
+		err = scaleDeployment(oc, windowsWorkloads, 1, namespace)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to scale down the deployment")
+	})
+
 })
