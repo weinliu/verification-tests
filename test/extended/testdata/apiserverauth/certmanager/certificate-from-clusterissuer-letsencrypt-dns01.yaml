@@ -13,6 +13,7 @@ objects:
       - "${DNS_NAME}"
       issuerRef:
         kind: ClusterIssuer
-        name: letsencrypt-dns01
+        name: "${ISSUER_NAME}"
 parameters:
   - name: DNS_NAME
+  - name: ISSUER_NAME

@@ -11,6 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/blang/semver"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -61,6 +66,13 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		awsConfig, err := config.LoadDefaultConfig(
+			context.TODO(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secureKey, "")),
+			config.WithRegion(region),
+		)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Create clusterissuer with route53 as dns01 solver.")
 		defer func() {
 			e2e.Logf("Delete clusterissuers.cert-manager.io letsencrypt-dns01")
@@ -72,7 +84,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		dnsZone, err := getParentDomain(baseDomain)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("dnsZone=%s", dnsZone)
-		hostedZoneID := getRoute53HostedZoneID(accessKeyID, secureKey, region, dnsZone)
+		hostedZoneID := getRoute53HostedZoneID(awsConfig, dnsZone)
 		if len(hostedZoneID) == 0 {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
@@ -107,7 +119,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		oc.SetupProject()
 		dnsName := constructDNSName(dnsZone)
 		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + "letsencrypt-dns01"}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			output, err := oc.Run("get").Args("certificate").Output()
@@ -345,13 +357,20 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		awsConfig, err := config.LoadDefaultConfig(
+			context.TODO(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secureKey, "")),
+			config.WithRegion(region),
+		)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Create clusterissuer with route53 as dns01 solver.")
 		baseDomain := getBaseDomain(oc)
 		e2e.Logf("baseDomain=%s", baseDomain)
 		dnsZone, err := getParentDomain(baseDomain)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("dnsZone=%s", dnsZone)
-		hostedZoneID := getRoute53HostedZoneID(accessKeyID, secureKey, region, dnsZone)
+		hostedZoneID := getRoute53HostedZoneID(awsConfig, dnsZone)
 		if len(hostedZoneID) == 0 {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
@@ -482,6 +501,13 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		region, err := exutil.GetAWSClusterRegion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		awsConfig, err := config.LoadDefaultConfig(
+			context.TODO(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secureKey, "")),
+			config.WithRegion(region),
+		)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Login with normal user and create issuers.\n")
 		oc.SetupProject()
 		baseDomain := getBaseDomain(oc)
@@ -489,7 +515,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		dnsZone, err := getParentDomain(baseDomain)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("dnsZone=%s", dnsZone)
-		hostedZoneID := getRoute53HostedZoneID(accessKeyID, secureKey, region, dnsZone)
+		hostedZoneID := getRoute53HostedZoneID(awsConfig, dnsZone)
 		if len(hostedZoneID) == 0 {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
@@ -519,7 +545,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		exutil.By("Create the certificate.")
 		dnsName := constructDNSName(dnsZone)
 		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + "letsencrypt-dns01"}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		exutil.By("Check the certificate and its challenge")
@@ -608,7 +634,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			exutil.By("Create a new certificate.")
 			dnsName := constructDNSName(dnsZone)
 			certTemplate = filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-			params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+			params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + "letsencrypt-dns01"}
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 			exutil.By("Check if challenge will be pending and show HTTP 403 error")
@@ -738,6 +764,196 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		if !strings.Contains(challenge3, "test-example.com") || err != nil {
 			e2e.Failf("challenge3 has not output as expected.")
 		}
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ROSA-ConnectedOnly-High-62500-Use IRSA as ambient credential in AWS STS env for ACME dns01 route53 solver to generate certificate [Serial]", func() {
+		const (
+			roleName            = "test-private-62500-cert-manager"
+			policyName          = "test-private-62500-cert-manager-dns"
+			controllerNamespace = "cert-manager"
+			controllerLabel     = "app.kubernetes.io/name=cert-manager"
+			issuerName          = "route53-ambient"
+			certName            = "certificate-from-dns01"
+		)
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "httpsProxy") || strings.Contains(output, "httpProxy") {
+			g.Skip("This case can run in STS proxy env. Handling proxy env needs to use cert-manager flag '--dns01-recursive-nameservers-only', which is already covered in OCP-63555. For simplicity, skipping proxy configured cluster for this case.")
+		}
+
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		if !exutil.IsSTSCluster(oc) {
+			g.Skip("Skip for non-STS cluster")
+		}
+
+		exutil.By("prepare the AWS config, STS and IAM client")
+		// AWS config
+		// Note that in Prow CI, the credentials source is automatically pre-configured to by the step 'openshift-extended-test'
+		// See https://github.com/openshift/release/blob/69b2b9c4f28adcfcc5b9ff4820ecbd8d2582a3d7/ci-operator/step-registry/openshift-extended/test/openshift-extended-test-commands.sh#L41
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// STS client
+		stsClient := sts.NewFromConfig(awsConfig)
+		getCallerIdentityOutput, err := stsClient.GetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		accountID := aws.ToString(getCallerIdentityOutput.Account)
+
+		// IAM client
+		iamClient := iam.NewFromConfig(awsConfig)
+
+		// OIDC provider
+		oidcProvider, err := exutil.GetOIDCProvider(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create the AWS IAM role with trust relationship policy")
+		roleTrustPolicy := `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Principal": {
+						"Federated": "arn:aws:iam::%s:oidc-provider/%s"
+					},
+					"Action": "sts:AssumeRoleWithWebIdentity",
+					"Condition": {
+						"StringEquals": {
+							"%s:sub": [
+								"system:serviceaccount:cert-manager:cert-manager"
+							]
+						}
+					}
+				}
+			]
+		}`
+		roleTrustPolicy = fmt.Sprintf(roleTrustPolicy, accountID, oidcProvider, oidcProvider)
+
+		createRoleOutput, err := iamClient.CreateRole(context.TODO(), &iam.CreateRoleInput{
+			AssumeRolePolicyDocument: aws.String(roleTrustPolicy),
+			RoleName:                 aws.String(roleName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		roleARN := aws.ToString(createRoleOutput.Role.Arn)
+		defer func() {
+			_, err = iamClient.DeleteRole(context.TODO(), &iam.DeleteRoleInput{RoleName: aws.String(roleName)})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("create the AWS IAM policy for permissions to operate in Route 53")
+		dnsPolicy := `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Action": "route53:GetChange",
+					"Resource": "arn:aws:route53:::change/*"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
+						"route53:ChangeResourceRecordSets",
+						"route53:ListResourceRecordSets"
+					],
+					"Resource": "arn:aws:route53:::hostedzone/*"
+				},
+				{
+					"Effect": "Allow",
+					"Action": "route53:ListHostedZonesByName",
+					"Resource": "*"
+				}
+			]
+		}`
+		createPolicyOutput, err := iamClient.CreatePolicy(context.TODO(), &iam.CreatePolicyInput{
+			PolicyDocument: aws.String(dnsPolicy),
+			PolicyName:     aws.String(policyName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		policyARN := aws.ToString(createPolicyOutput.Policy.Arn)
+		defer func() {
+			_, err = iamClient.DeletePolicy(context.TODO(), &iam.DeletePolicyInput{PolicyArn: aws.String(policyARN)})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("attach the AWS IAM policy to the created role")
+		_, err = iamClient.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
+			PolicyArn: aws.String(policyARN),
+			RoleName:  aws.String(roleName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			_, err = iamClient.DetachRolePolicy(context.TODO(), &iam.DetachRolePolicyInput{
+				PolicyArn: aws.String(policyARN),
+				RoleName:  aws.String(roleName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("annotate the ServiceAccount created by cert-manager")
+		// record old controller pod's name
+		oldPodList, err := exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("sa/cert-manager", "eks.amazonaws.com/role-arn="+roleARN, "-n", controllerNamespace, "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			e2e.Logf("de-annotate the role-arn from the cert-manager ServiceAccount")
+			err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("sa/cert-manager", "eks.amazonaws.com/role-arn-", "-n", controllerNamespace, "--overwrite").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", controllerLabel, "-n", controllerNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+		}()
+
+		// delete the old pod and wait for a new one redeployed
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", controllerLabel, "-n", controllerNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+
+		exutil.By("create a clusterissuer with route53 as dns01 solver")
+		baseDomain := getBaseDomain(oc)
+		dnsZone, err := getParentDomain(baseDomain)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hostedZoneID := getRoute53HostedZoneID(awsConfig, dnsZone)
+		if len(hostedZoneID) == 0 {
+			g.Skip("skipping as retreiving Route53 hosted zone ID for current env returns none")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-route53-ambient-credential.yaml")
+		params := []string{"-f", issuerFile, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		exutil.ApplyClusterResourceFromTemplate(oc, params...)
+		defer func() {
+			e2e.Logf("delete the clusterissuer")
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuer", issuerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, "", "clusterissuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
+
+		exutil.By("create a certificate")
+		dnsName := getRandomString(4) + "." + dnsZone
+
+		certFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		params = []string{"-f", certFile, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 	})
 
 	// author: yuewu@redhat.com

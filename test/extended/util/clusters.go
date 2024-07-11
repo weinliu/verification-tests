@@ -256,6 +256,15 @@ func IsWorkloadIdentityCluster(oc *CLI) bool {
 	return len(serviceAccountIssuer) > 0
 }
 
+// GetOIDCProvider returns the OIDC provider for current cluster
+func GetOIDCProvider(oc *CLI) (string, error) {
+	oidc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication.config", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(oidc, "https://"), nil
+}
+
 // Skip the test if there is not catalogsource/qe-app-registry in the cluster
 func SkipMissingQECatalogsource(oc *CLI) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()

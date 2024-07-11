@@ -16,8 +16,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	"github.com/blang/semver"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
@@ -106,14 +104,7 @@ func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
 
 // Get AWS Route53's hosted zone ID. Returning "" means retreiving Route53 hosted zone ID for current env returns none
 // If there are multiple HostedZones sharing the same name (which is relatively rare), it will return the first one matched by AWS SDK.
-func getRoute53HostedZoneID(accessKeyID, secretAccessKey, region, hostedZoneName string) string {
-	awsConfig, err := config.LoadDefaultConfig(
-		context.Background(),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")),
-		config.WithRegion(region),
-	)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
+func getRoute53HostedZoneID(awsConfig aws.Config, hostedZoneName string) string {
 	// Equals: `aws route53 list-hosted-zones-by-name --dns-name qe.devcluster.openshift.com`
 	route53Client := route53.NewFromConfig(awsConfig)
 	list, err := route53Client.ListHostedZonesByName(
