@@ -3,7 +3,6 @@ package logging
 import (
 	"encoding/xml"
 
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -338,82 +337,6 @@ type OperatorHub struct {
 			Status   string `json:"status"`
 		} `json:"sources"`
 	} `json:"status"`
-}
-
-// Conditions logging component's current condition
-type Conditions struct {
-	LastTransitionTime string `json:"lastTransitionTime"`
-	Status             string `json:"status"`
-	Type               string `json:"type"`
-	Message            string `json:"message,omitempty"`
-	Reason             string `json:"reason,omitempty"`
-}
-
-// StorageSpec defines the storage size and storage class name
-type StorageSpec struct {
-	Size             string `json:"size"`
-	StorageClassName string `json:"storageClassName"`
-}
-
-// PodsStatus shows the failed, notready and ready pods
-type PodsStatus struct {
-	Failed   []string `json:"failed,omitempty"`
-	NotReady []string `json:"notReady,omitempty"`
-	Ready    []string `json:"ready,omitempty"`
-}
-
-// ResourcesSpec defines the request and limit resouces
-type ResourcesSpec struct {
-	Limits   ResourceList `json:"limits,omitempty"`
-	Requests ResourceList `json:"requests,omitempty"`
-}
-
-// ResourceList CPU and memory
-type ResourceList struct {
-	Memory string `json:"memory,omitempty"`
-	CPU    string `json:"cpu,omitempty"`
-}
-
-// ClusterLogging the content in clusterlogging CR
-type ClusterLogging struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              struct {
-		CollectionSpec struct {
-			Type         string            `json:"type"`
-			Resources    ResourcesSpec     `json:"resources"`
-			NodeSelector map[string]string `json:"nodeSelector,omitempty"`
-			Tolerations  []v1.Toleration   `json:"tolerations,omitempty"`
-		} `json:"collection,omitempty"`
-		LogStoreSpec struct {
-			Type          *string `json:"type"`
-			LokiStackSpec struct {
-				Name string `json:"name"`
-			} `json:"lokistack,omitempty"`
-		} `json:"logStore,omitempty"`
-		ManagementState   string `json:"managementState"`
-		VisualizationSpec struct {
-			Type *string `json:"type"`
-		} `json:"visualization,omitempty"`
-	} `json:"spec"`
-	Status struct {
-		ClusterConditions []Conditions `json:"clusterConditons,omitempty"`
-		Collection        struct {
-		} `json:"collection"`
-	} `json:"status,omitempty"`
-}
-
-// RetentionPolicySpec defines how the logs will be removed
-type RetentionPolicySpec struct {
-	MaxAge                  string           `json:"maxAge"`
-	PruneNamespacesInterval string           `json:"pruneNamespacesInterval,omitempty"`
-	Namespaces              []PruneNamespace `json:"namespaceSpec,omitempty"`
-}
-
-// PruneNamespace enables prune logs by namespace
-type PruneNamespace struct {
-	Namespace string `json:"namespace"`
-	MinAge    string `json:"minAge,omitempty"`
 }
 
 //LokiLogQuery result example

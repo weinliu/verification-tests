@@ -61,14 +61,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-49390",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-mtls.yaml"),
 				secretName:                es.secretName,
 				waitForPodReady:           true,
 				collectInfrastructureLogs: true,
 				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=https://"+es.serverName+"."+esProj+".svc:9200", "ES_VERSION="+es.version, "INPUTREFS=[\"infrastructure\"]")
+			clf.create(oc, "ES_URL=https://"+es.serverName+"."+esProj+".svc:9200", "ES_VERSION="+es.version, "INPUT_REFS=[\"infrastructure\"]")
 
 			g.By("Deploy the Event Router")
 			evt := eventRouter{
@@ -118,7 +118,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-53995",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
 				secretName:                ees.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -195,14 +195,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                   "clf-52129",
 				namespace:              esProj,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-logs.yaml"),
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
 				secretName:             ees.secretName,
 				waitForPodReady:        true,
 				collectApplicationLogs: true,
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "STRUCTURED_CONTAINER=true", "URL="+eesURL, "ES_VERSION="+ees.version)
+			clf.create(oc, "URL="+eesURL, "ES_VERSION="+ees.version, "INDEX=.kubernetes.container_name")
 
 			g.By("check indices in externale ES")
 			ees.waitForIndexAppear(oc, containerName+"-0")
@@ -272,14 +272,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                   "clf-52131",
 				namespace:              esProj,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "structured-container-logs.yaml"),
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
 				secretName:             ees.secretName,
 				waitForPodReady:        true,
 				collectApplicationLogs: true,
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "STRUCTURED_CONTAINER=true", "URL="+eesURL, "ES_VERSION="+ees.version)
+			clf.create(oc, "INDEX=.kubernetes.container_name", "URL="+eesURL, "ES_VERSION="+ees.version)
 
 			g.By("check indices in externale ES")
 			ees.waitForIndexAppear(oc, "app-"+containerName)
@@ -321,7 +321,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				collectInfrastructureLogs: true,
 				waitForPodReady:           true,
 				serviceAccountName:        "test-clf-" + getRandomString(),
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch.yaml"),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=http://"+getRouteAddress(oc, ees.namespace, ees.serverName)+":80", "ES_VERSION="+ees.version)
@@ -332,7 +332,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ees.waitForIndexAppear(oc, "audit")
 
 			g.By("Add pipeline labels to the ClusterLogForwarder instance")
-			clf.update(oc, "", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"infrastructure\",\"application\",\"audit\"],\"labels\":{\"logging-labels\":\"test-labels\"},\"name\":\"forward-to-external-es\",\"outputRefs\":[\"es-created-by-user\"]}]}}", "--type=merge")
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "test-label", "type": "openShiftLabels", "openShiftLabels": {"logging-labels":"test-labels"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["test-label"]}]`
+			clf.update(oc, "", patch, "--type=json")
 
 			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
@@ -377,7 +378,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-48593",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "48593.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "48593.yaml"),
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -385,18 +386,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
 			ees.waitForIndexAppear(oc, "infra")
 			ees.waitForIndexAppear(oc, "audit")
-
-			g.By("Add pipeline labels to the ClusterLogForwarder instance")
-			clf.update(oc, "", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"application\"],\"labels\":{\"logging\":\"app-logs\"},\"name\":\"forward-app-logs\",\"outputRefs\":[\"es-created-by-user\"]},{\"inputRefs\":[\"infrastructure\"],\"labels\":{\"logging\":\"infra-logs\"},\"name\":\"forward-infra-logs\",\"outputRefs\":[\"es-created-by-user\"]},{\"inputRefs\":[\"audit\"],\"labels\":{\"logging\":\"audit-logs\"},\"name\":\"forward-audit-logs\",\"outputRefs\":[\"es-created-by-user\"]}]}}", "--type=merge")
-
-			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
-			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
 			g.By("Check logs with pipeline label in external ES")
 			indexName := []string{"app", "infra", "audit"}
@@ -445,7 +440,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-46882",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch.yaml"),
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -508,7 +503,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-46920",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
 				secretName:                ees.secretName,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -518,7 +513,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				enableMonitoring:          true,
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, `TLS={"securityProfile": {"type": "Old"}}`)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, `SECURITY_PROFILE={"type": "Old"}`)
 
 			g.By("Check logs in external ES")
 			ees.waitForIndexAppear(oc, "app")
@@ -530,16 +525,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			er := oc.AsAdmin().WithoutNamespace().Run("patch").Args("prometheusrules", "collector", "--type=json", "-p", `[{"op": "replace", "path": "/spec/groups/0/rules/0/for", "value":"2m"}]`, "-n", cloNS).Execute()
 			o.Expect(er).NotTo(o.HaveOccurred())
 
-			g.By("Create ClusterLogging instance to set the cpu and memory for collector pods")
-			cl := clusterlogging{
-				name:          clf.name,
-				namespace:     clf.namespace,
-				collectorType: "vector",
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			resource := `{"limits": {"memory": "128Mi", "cpu": "10m"}, "requests": {"cpu": "1m", "memory": "2Mi"}}`
-			cl.create(oc, "RESOURCES="+resource)
+			g.By("Update clusterlogforwarder to set the cpu and memory for collector pods")
+			resource := `[{"op": "replace", "path": "/spec/collector/resources", "value": {"limits": {"memory": "128Mi", "cpu": "10m"}, "requests": {"cpu": "1m", "memory": "2Mi"}}}]`
+			clf.update(oc, "", resource, "--type=json")
 
 			g.By("Check the alert CollectorNodeDown is in state firing or pending")
 			checkAlert(oc, getSAToken(oc, "prometheus-k8s", "openshift-monitoring"), "CollectorNodeDown", "firing/pending", 5)
@@ -572,7 +560,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-47753",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-userauth.yaml"),
 				secretName:                ees.secretName,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -621,7 +609,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-55199",
 				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-userauth-https.yaml"),
 				secretName:                ees.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -670,7 +658,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-47758",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-userauth-mtls.yaml"),
 				secretName:                ees.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -732,7 +720,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-61450",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
 				secretName:                ees.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -809,13 +797,13 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			clf := clusterlogforwarder{
 				name:                   "clf-71000",
 				namespace:              esProj,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml"),
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-mtls.yaml"),
 				secretName:             ees.secretName,
 				collectApplicationLogs: true,
 				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "INPUTREFS=[\"application\"]", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
+			clf.create(oc, "INPUT_REFS=[\"application\"]", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
 			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace":"logging-project-71000-2"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
@@ -975,15 +963,15 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			clf := clusterlogforwarder{
 				name:                   "clf-51740",
 				namespace:              esProj,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es.yaml"),
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch.yaml"),
 				collectApplicationLogs: true,
 				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, "INPUTREFS=[\"application\"]")
+			clf.create(oc, "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, "INPUT_REFS=[\"application\"]")
 
 			lokiURL := "http://" + loki.name + "." + lokiNS + ".svc:3100"
-			patch := `[{"op": "add", "path": "/spec/outputs/-", "value": {"name": "loki-server", "type": "loki", "url": "` + lokiURL + `"}}, {"op": "add", "path": "/spec/pipelines/0/outputRefs/-", "value": "loki-server"}]`
+			patch := `[{"op": "add", "path": "/spec/outputs/-", "value": {"name": "loki-server", "type": "loki", "loki": {"url": "` + lokiURL + `"}}}, {"op": "add", "path": "/spec/pipelines/0/outputRefs/-", "value": "loki-server"}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 

@@ -387,7 +387,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-48141",
 				namespace:                 loggingNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_kafka_multi_brokers.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "kafka-multi-brokers.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,

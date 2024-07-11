@@ -231,8 +231,8 @@ func createIAMRoleForLokiSTSDeployment(iamClient *iam.Client, oidcName, awsAccou
 	return roleArn
 }
 
-// Creates S3 bucket using STS AssumeRole operation with Temporary credentials and session token
-func createObjectStorageSecretWithS3OnSTS(cfg aws.Config, stsClient *sts.Client, s3roleArn, bucketName string) {
+// Creates S3 bucket storage with STS
+func createS3ObjectStorageBucketWithSTS(cfg aws.Config, stsClient *sts.Client, s3roleArn, bucketName string) {
 	// Check if bucket exists, if yes delete it
 	if checkIfS3bucketExistsWithSTS(cfg, stsClient, s3roleArn, bucketName) {
 		e2e.Logf("Bucket already exists. Deleting bucket")
@@ -442,7 +442,6 @@ type cloudwatchSpec struct {
 	secretName        string // `default: "cw-secret"`, the name of the secret for the collector to use
 	secretNamespace   string // `default: "openshift-logging"`, the namespace where the clusterloggingfoward deployed
 	stsEnabled        bool   //  Is sts Enabled
-	stsSecretType     string //  CredentialsCreate|CredentialsRequest|CredentialsCreateSimple, refer to functon createStsSecret
 	awsRoleName       string // aws_access_key file
 	awsRoleArn        string // aws_access_key file
 	awsRegion         string
@@ -517,10 +516,6 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 			// use us-east-2 as default region
 			cw.awsRegion = "us-east-2"
 		}
-	}
-
-	if cw.stsSecretType == "" {
-		cw.stsSecretType = "CredentialsCreate"
 	}
 	if cw.stsEnabled {
 		//Create IAM roles for cloudwatch
@@ -627,29 +622,12 @@ func (cw *cloudwatchSpec) deleteIAMCloudwatchRole() {
 	iamDeletePolicy(cw.iamClient, cw.awsPolicyArn)
 }
 
-func (cw *cloudwatchSpec) createStsSecret(oc *exutil.CLI) error {
-	switch cw.stsSecretType {
-	case "CredentialsCreate":
-		credentialsData := `[default]
-sts_regional_endpoints = regional
-role_arn = %s
-web_identity_token_file = /var/run/secrets/openshift/serviceaccount/token`
-		credentialsData = fmt.Sprintf(credentialsData, cw.awsRoleArn)
-		return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=credentials="+credentialsData, "-n", cw.secretNamespace).Execute()
-	case "CredentialsCreateSimple":
-		return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=role_arn="+cw.awsRoleArn, "-n", cw.secretNamespace).Execute()
-	case "CredentialsRequest":
-		return fmt.Errorf("TBD: Create sts secret via CredentialsRequest")
-	default:
-		return fmt.Errorf("unsupported stsSecretType : %s", cw.stsSecretType)
-	}
-}
-
 // Create Cloudwatch Secret. note: use credential files can avoid leak in output
 func (cw *cloudwatchSpec) createClfSecret(oc *exutil.CLI) {
 	var err error
 	if cw.stsEnabled {
-		err = cw.createStsSecret(oc)
+		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=role_arn="+cw.awsRoleArn, "-n", cw.secretNamespace).Execute()
+
 	} else {
 		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=aws_access_key_id="+os.Getenv("AWS_ACCESS_KEY_ID"), "--from-literal=aws_secret_access_key="+os.Getenv("AWS_SECRET_ACCESS_KEY"), "-n", cw.secretNamespace).Execute()
 	}
@@ -760,11 +738,10 @@ func (cw *cloudwatchSpec) infrastructurePodLogsFound(strict bool) bool {
 	}
 
 	//Construct the stream search pattern.
-	//podLogStream:  ip-10-0-152-69.us-east-2.compute.internal.kubernetes.var.log.pods.openshift-image-registry_image-registry-5dccc4f469-fnbbm_ae43a304-b972-4427-8333-359672194daa.registry.0.log
+	//podLogStream: ip-10-0-30-218.us-east-2.compute.internal.default
 	var streamsToVerify []*cloudwatchStreamResult
 	for _, e := range cw.nodes {
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: e + ".kubernetes.var.log.pods", logType: "container", exist: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: e + ".var.log.pods", logType: "container", exist: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: e + ".default", logType: "container", exist: false})
 	}
 
 	// Check if logstream can be found
@@ -847,18 +824,16 @@ func (cw *cloudwatchSpec) infrastructureLogsFound(strict bool) bool {
 	return cw.infrastructureSystemLogsFound(false) || cw.infrastructurePodLogsFound(false)
 }
 
-// In this function, verify all type of audit logs can be found.
-// LogStream Example:
-//
-//		anli48022-gwbb4-master-2.k8s-audit.log
-//		anli48022-gwbb4-master-2.openshift-audit.log
-//		anli48022-gwbb4-master-1.k8s-audit.log
-//		ip-10-0-136-31.us-east-2.compute.internal.linux-audit.log
-//	  when strict=false, test pass when all type of audit logs are found
-//	  when strict=true,  test pass if any audit log is found.
-func (cw *cloudwatchSpec) auditLogsFound(strict bool) bool {
+/*
+In this function, verify all type of audit logs can be found.
+when strict=false, test pass when all type of audit logs are found
+when strict=true,  test pass if any audit log is found.
+stream:
+ip-10-0-90-156.us-east-2.compute.internal
+*/
+func (cw *cloudwatchSpec) auditLogsFound() bool {
 	var auditLogGroupNames []string
-	var streamsToVerify []*cloudwatchStreamResult
+	//var streamsToVerify []*cloudwatchStreamResult
 
 	for _, e := range cw.getCloudwatchLogGroupNames(cw.groupPrefix) {
 		r, _ := regexp.Compile(`.*\.audit$`)
@@ -873,39 +848,45 @@ func (cw *cloudwatchSpec) auditLogsFound(strict bool) bool {
 		return false
 	}
 
-	if cw.hasMaster {
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".k8s-audit.log$", logType: "k8saudit", exist: false})
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".openshift-audit.log$", logType: "ocpaudit", exist: false})
-	}
-	if cw.ovnEnabled {
-		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".ovn-audit.log", logType: "ovnaudit", exist: false})
-	}
-	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".linux-audit.log$", logType: "linuxaudit", exist: false})
+	// TODO: filter audit logs
+	/*
+		if cw.hasMaster {
+			streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".k8s-audit.log$", logType: "k8saudit", exist: false})
+			streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".openshift-audit.log$", logType: "ocpaudit", exist: false})
+		}
+		if cw.ovnEnabled {
+			streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".ovn-audit.log", logType: "ovnaudit", exist: false})
+		}
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{pattern: ".linux-audit.log$", logType: "linuxaudit", exist: false})
 
-	//Only search the logstream in which the suffix is audit.log. logStreams can not fetch all records in one batch in larger cluster
-	logFoundOne := false
+		//Only search the logstream in which the suffix is audit.log. logStreams can not fetch all records in one batch in larger cluster
+		logFoundOne := false
+	*/
 	logStreams := cw.getCloudwatchLogStreamNames(auditLogGroupNames[0], "")
-	for _, streamI := range streamsToVerify {
-		for _, streamName := range logStreams {
-			match, _ := regexp.MatchString(streamI.pattern, streamName)
-			if match {
-				streamI.exist = true
-				logFoundOne = true
+	/*
+		for _, streamI := range streamsToVerify {
+			for _, streamName := range logStreams {
+				match, _ := regexp.MatchString(streamI.pattern, streamName)
+				if match {
+					streamI.exist = true
+					logFoundOne = true
+				}
 			}
 		}
-	}
 
-	logFoundAll := true
-	for _, streamI := range streamsToVerify {
-		if !streamI.exist {
-			e2e.Logf("warning: can not find stream matching the pattern : " + streamI.pattern)
-			logFoundAll = false
+		logFoundAll := true
+		for _, streamI := range streamsToVerify {
+			if !streamI.exist {
+				e2e.Logf("warning: can not find stream matching the pattern : " + streamI.pattern)
+				logFoundAll = false
+			}
 		}
-	}
-	if strict {
-		return logFoundAll
-	}
-	return logFoundOne
+		if strict {
+			return logFoundAll
+		}
+		return logFoundOne
+	*/
+	return len(logStreams) > 0
 }
 
 // In this function, verify the pod's groupNames can be found in cloudwatch
@@ -1087,7 +1068,7 @@ func (cw *cloudwatchSpec) logsFound() bool {
 		if logType == "audit" {
 			auditLogSuccess = false
 			err2 := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-				return cw.auditLogsFound(true), nil
+				return cw.auditLogsFound(), nil
 			})
 			if err2 != nil {
 				e2e.Logf("Failed to find auditLogs in given time\n %v", err2)

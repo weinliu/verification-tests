@@ -102,72 +102,61 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		defer lfme.delete(oc)
 		lfme.create(oc)
 
-		// deploy cluster logging
-		g.By("deploy cluster logging")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			logStoreType:  "lokistack",
-			lokistackName: ls.name,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
-			waitForReady:  true,
+		exutil.By("create a CLF to test forward to lokistack")
+		clf := clusterlogforwarder{
+			name:                      "clf-53817",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector-53817",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret-53817",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+			enableMonitoring:          true,
 		}
-		defer cl.delete(oc)
-		cl.create(oc)
+		// due to https://issues.redhat.com/browse/LOG-5793, we can't set authentication.token.from: serviceAccountToken,
+		// here create the sa at first, then get the token and add it into the secret
+		clf.createServiceAccount(oc)
+		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-53817")
+		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-53817", clf.serviceAccountName, clf.namespace)
+		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
 		//check logs in loki stack
 		g.By("check logs in loki")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "default", oc.Namespace())
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
-		for _, logType := range []string{"application", "infrastructure"} {
+		for _, logType := range []string{"application", "infrastructure", "audit"} {
 			lc.waitForLogsAppearByKey(logType, "log_type", logType)
 			labels, err := lc.listLabels(logType, "")
 			o.Expect(err).NotTo(o.HaveOccurred(), "got error when checking %s log labels", logType)
 			e2e.Logf("\nthe %s log labels are: %v\n", logType, labels)
 		}
-
 		journalLog, err := lc.searchLogsInLoki("infrastructure", `{log_type = "infrastructure", kubernetes_namespace_name !~ ".+"}`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		journalLogs := extractLogEntities(journalLog)
 		o.Expect(len(journalLogs) > 0).Should(o.BeTrue(), "can't find journal logs in lokistack")
-		e2e.Logf("found journal logs")
-
-		g.By("check audit logs")
-		res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(res.Data.Result) == 0).Should(o.BeTrue())
-
-		g.By("create a CLF to test forward to default")
-		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
-		}
-		defer clf.delete(oc)
-		clf.create(oc)
-
-		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
-		labels, err := lc.listLabels("audit", "")
-		o.Expect(err).NotTo(o.HaveOccurred(), "got error when checking audit log labels")
-		e2e.Logf("\nthe audit log labels are: %v\n", labels)
-
+		e2e.Logf("find journal logs")
 		lc.waitForLogsAppearByProject("application", appProj)
 
 		g.By("Check if the ServiceMonitor object for Vector is created.")
-		resource{"servicemonitor", "collector", cl.namespace}.WaitForResourceToAppear(oc)
+		resource{"servicemonitor", clf.name, clf.namespace}.WaitForResourceToAppear(oc)
 
-		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		promToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		g.By("check metrics exposed by collector")
-		for _, job := range []string{"collector", "logfilesmetricexporter"} {
-			checkMetric(oc, token, "{job=\""+job+"\"}", 3)
+		for _, job := range []string{clf.name, "logfilesmetricexporter"} {
+			checkMetric(oc, promToken, "{job=\""+job+"\"}", 3)
 		}
-
 		for _, metric := range []string{"log_logged_bytes_total", "vector_component_received_events_total"} {
-			checkMetric(oc, token, metric, 3)
+			checkMetric(oc, promToken, metric, 3)
 		}
 
 		g.By("check metrics exposed by loki")
@@ -175,11 +164,11 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, svc := range svcs.Items {
 			if !strings.Contains(svc.Name, "grpc") && !strings.Contains(svc.Name, "ring") {
-				checkMetric(oc, token, "{job=\""+svc.Name+"\"}", 3)
+				checkMetric(oc, promToken, "{job=\""+svc.Name+"\"}", 3)
 			}
 		}
 		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"" + loNS + "\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
-			checkMetric(oc, token, metric, 3)
+			checkMetric(oc, promToken, metric, 3)
 		}
 		exutil.By("Validate log streams are pushed to external storage bucket/container")
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
@@ -210,15 +199,22 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 
-		g.By("Create clusterlogforwarder/instance")
+		g.By("Create clusterlogforwarder")
 		defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 		cw.createClfSecret(oc)
+
+		var template string
+		if cw.stsEnabled {
+			template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
+		} else {
+			template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
+		}
 
 		clf := clusterlogforwarder{
 			name:                      "clf-51974",
 			namespace:                 clfNS,
 			secretName:                cw.secretName,
-			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-groupby-logtype.yaml"),
+			templateFile:              template,
 			waitForPodReady:           true,
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
@@ -226,7 +222,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			serviceAccountName:        cw.clfAccountName,
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix)
+		clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupPrefix+`.{{.log_type}}`)
 
 		g.By("Check logs in Cloudwatch")
 		o.Expect(cw.logsFound()).To(o.BeTrue())
@@ -264,7 +260,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			name:                      "clf-53691",
 			namespace:                 clfNS,
 			secretName:                gcpSecret.name,
-			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "googleCloudLogging.yaml"),
 			waitForPodReady:           true,
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
@@ -272,7 +268,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			serviceAccountName:        "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName)
+		clf.create(oc, "ID_TYPE=project", "ID_VALUE="+gcl.projectID, "LOG_ID="+gcl.logName)
 
 		for _, logType := range []string{"infrastructure", "audit", "application"} {
 			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
@@ -323,7 +319,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			name:                      "clf-71772",
 			namespace:                 clfNS,
 			secretName:                azureSecret.name,
-			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-to-azure-log-analytics.yaml"),
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "azureMonitor.yaml"),
 			waitForPodReady:           true,
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,

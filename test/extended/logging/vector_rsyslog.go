@@ -62,7 +62,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-60699",
 				namespace:                 syslogProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "syslog.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,

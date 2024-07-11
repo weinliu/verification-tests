@@ -708,7 +708,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 					deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
 				}()
 				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.name)
-				createObjectStorageSecretWithS3OnSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName)
+				createS3ObjectStorageBucketWithSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName)
 				createObjectStorageSecretOnAWSSTSCluster(oc, region, l.storageSecret, l.bucketName, l.namespace)
 			} else {
 				cred := getAWSCredentialFromCluster(oc)

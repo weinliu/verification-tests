@@ -70,10 +70,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
+			var template string
+			if cw.stsEnabled {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
+			} else {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
+			}
+
 			clf := clusterlogforwarder{
 				name:                      "clf-51977",
 				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				templateFile:              template,
 				secretName:                cw.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -83,17 +90,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "PREFIX="+cw.groupPrefix, "GROUPTYPE="+cw.groupType)
-
-			g.By("Deploy collector pods")
-			cl := clusterlogging{
-				name:          clf.name,
-				namespace:     clf.namespace,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
 
 			g.By("Check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
@@ -129,10 +125,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
+			var template string
+			if cw.stsEnabled {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
+			} else {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
+			}
+
 			clf := clusterlogforwarder{
 				name:                      "clf-51978",
 				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				templateFile:              template,
 				secretName:                cw.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -181,10 +184,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
+			var template string
+			if cw.stsEnabled {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
+			} else {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
+			}
+
 			clf := clusterlogforwarder{
 				name:                      "clf-61600",
 				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				templateFile:              template,
 				secretName:                cw.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -292,10 +302,17 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
 
+			var template string
+			if cw.stsEnabled {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
+			} else {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
+			}
+
 			clf := clusterlogforwarder{
 				name:                   "clf-71778",
 				namespace:              clfNS,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch-label-selector.yaml"),
+				templateFile:           template,
 				secretName:             cw.secretName,
 				waitForPodReady:        true,
 				collectApplicationLogs: true,
@@ -344,10 +361,17 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			exutil.By("Create clusterlogforwarder")
 			defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 			cw.createClfSecret(oc)
+
+			var template string
+			if cw.stsEnabled {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
+			} else {
+				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
+			}
 			clf := clusterlogforwarder{
 				name:                   "clf-71488",
 				namespace:              clfNS,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-cloudwatch.yaml"),
+				templateFile:           template,
 				secretName:             cw.secretName,
 				collectApplicationLogs: true,
 				serviceAccountName:     cw.clfAccountName,

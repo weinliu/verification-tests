@@ -316,7 +316,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			for _, containerStatus := range pod.Status.ContainerStatuses {
 				if !containerStatus.Ready {
 					ready = false
-					e2e.Logf("Container %s in pod %s is not ready", &containerStatus.Name, pod.Name)
+					e2e.Logf("Container %s in pod %s is not ready", containerStatus.Name, pod.Name)
 					break
 				}
 			}
@@ -577,28 +577,8 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return nil
 }
 
-// deleteClusterLogging deletes the clusterlogging instance which isn't created by `func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string)`
-// and ensures the related resources are removed
-func deleteClusterLogging(oc *exutil.CLI, name, namespace string) {
-	clOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterlogging", name, "-n", namespace, "-ojson").Output()
-	if len(clOutput) > 0 && !strings.Contains(clOutput, fmt.Sprint("clusterloggings.logging.openshift.io \""+name+"\" not found")) {
-		err := resource{"clusterlogging", name, namespace}.clear(oc)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete clusterlogging/%s in %s project", name, namespace))
-
-		cl := ClusterLogging{}
-		json.Unmarshal([]byte(clOutput), &cl)
-		//make sure other resources are removed
-		resources := []resource{{"daemonset", "collector", namespace}}
-		if *cl.Spec.VisualizationSpec.Type == "ocp-console" {
-			resources = append(resources, resource{"deployment", "logging-view-plugin", namespace})
-		}
-		for i := 0; i < len(resources); i++ {
-			err = resources[i].WaitUntilResourceIsGone(oc)
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", resources[i].kind, resources[i].name))
-		}
-	}
-}
-
+// Depracted, will be removed from logging 6.1 and later
+// Reserve it for upgrade testing.
 type clusterlogging struct {
 	name          string // default: instance
 	namespace     string // default: openshift-logging
@@ -617,8 +597,6 @@ func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
 	if cl.namespace == "" {
 		cl.namespace = loggingNS
 	}
-	// In case of there is a clusterlogging in the namespace, add a step to check&remove the existing CR before creating it.
-	deleteClusterLogging(oc, cl.name, cl.namespace)
 
 	if cl.collectorType == "" {
 		cl.collectorType = "vector"
@@ -634,7 +612,7 @@ func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
 	if len(optionalParameters) > 0 {
 		parameters = append(parameters, optionalParameters...)
 	}
-	//parameters = append(parameters, "-f", cl.templateFile, "--ignore-unknown-parameters=true")
+	// parameters = append(parameters, "-f", cl.templateFile, "--ignore-unknown-parameters=true")
 	parameters = append(parameters, "-f", cl.templateFile)
 	file, processErr := processTemplate(oc, parameters...)
 	defer os.Remove(file)
@@ -649,34 +627,6 @@ func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
 
 	if cl.waitForReady {
 		cl.waitForLoggingReady(oc)
-	}
-}
-
-// update clusterlogging CR
-// if template is specified, then run command `oc process -f template -p patches | oc apply -f -`
-// if template is not specified, then run command `oc patch clusterlogging/${cl.name} -p patches`
-// if use patch, should add `--type=xxxx` in the end of patches
-func (cl *clusterlogging) update(oc *exutil.CLI, template string, patches ...string) {
-	var err error
-	if template != "" {
-		//parameters := []string{"-f", template, "--ignore-unknown-parameters=true", "-p", "NAME=" + cl.name, "NAMESPACE=" + cl.namespace}
-		parameters := []string{"-f", template, "-p", "NAME=" + cl.name, "NAMESPACE=" + cl.namespace}
-		if len(patches) > 0 {
-			parameters = append(parameters, patches...)
-		}
-		file, processErr := processTemplate(oc, parameters...)
-		defer os.Remove(file)
-		if processErr != nil {
-			e2e.Failf("error processing file: %v", processErr)
-		}
-		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", cl.namespace).Execute()
-	} else {
-		parameters := []string{"cl/" + cl.name, "-n", cl.namespace, "-p"}
-		parameters = append(parameters, patches...)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(parameters...).Execute()
-	}
-	if err != nil {
-		e2e.Failf("error updating clusterlogging: %v", err)
 	}
 }
 
@@ -714,36 +664,29 @@ func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
 }
 
 type clusterlogforwarder struct {
-	name                      string // default: instance
-	namespace                 string // default: openshift-logging
+	collectApplicationLogs    bool // optional, if true, will add cluster-role/collect-application-logs to the serviceAccount
+	collectAuditLogs          bool // optional, if true, will add cluster-role/collect-audit-logs to the serviceAccount
+	collectInfrastructureLogs bool // optional, if true, will add cluster-role/collect-infrastructure-logs to the serviceAccount
+	enableMonitoring          bool // optional, if true, will add label `openshift.io/cluster-monitoring: "true"` to the project, and create role/prometheus-k8s rolebinding/prometheus-k8s in the namespace, works when when !(clf.namespace == "openshift-operators-redhat" || clf.namespace == "openshift-logging")
+	name                      string
+	namespace                 string
+	serviceAccountName        string
 	templateFile              string // the template used to create clusterlogforwarder, no default value
 	secretName                string // optional, if it's specified, when creating CLF, the parameter `"SECRET_NAME="+clf.secretName` will be added automatically
-	serviceAccountName        string // optional, only required when !(clf.name == "instance" && clf.namespace == "openshift-logging")
-	collectApplicationLogs    bool   // optional, if true, will add cluster-role/collect-application-logs to the serviceAccount when !(clf.name == "instance" && clf.namespace == "openshift-logging")
-	collectAuditLogs          bool   // optional, if true, will add cluster-role/collect-audit-logs to the serviceAccount when !(clf.name == "instance" && clf.namespace == "openshift-logging")
-	collectInfrastructureLogs bool   // optional, if true, will add cluster-role/collect-infrastructure-logs to the serviceAccount when !(clf.name == "instance" && clf.namespace == "openshift-logging")
-	waitForPodReady           bool   // optional, if true, will check daemonset stats when !(clf.name == "instance" && clf.namespace == "openshift-logging")
-	enableMonitoring          bool   // optional, if true, will add label `openshift.io/cluster-monitoring: "true"` to the project, and create role/prometheus-k8s rolebinding/prometheus-k8s in the namespace, works when when !(clf.namespace == "openshift-operators-redhat" || clf.namespace == "openshift-logging")
+	waitForPodReady           bool   // optional, if true, will check daemonset stats
 }
 
 // create clusterlogforwarder CR from a template
 func (clf *clusterlogforwarder) create(oc *exutil.CLI, optionalParameters ...string) {
-	if clf.name == "" {
-		clf.name = "instance"
-	}
-	if clf.namespace == "" {
-		clf.namespace = loggingNS
-	}
-
 	//parameters := []string{"-f", clf.templateFile, "--ignore-unknown-parameters=true", "-p", "NAME=" + clf.name, "NAMESPACE=" + clf.namespace}
 	parameters := []string{"-f", clf.templateFile, "-p", "NAME=" + clf.name, "NAMESPACE=" + clf.namespace}
 	if clf.secretName != "" {
 		parameters = append(parameters, "SECRET_NAME="+clf.secretName)
 	}
-	if !(clf.name == "instance" && clf.namespace == cloNS) && len(clf.serviceAccountName) > 0 {
-		clf.createServiceAccount(oc)
-		parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+clf.serviceAccountName)
-	}
+
+	clf.createServiceAccount(oc)
+	parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+clf.serviceAccountName)
+
 	if len(optionalParameters) > 0 {
 		parameters = append(parameters, optionalParameters...)
 	}
@@ -757,13 +700,12 @@ func (clf *clusterlogforwarder) create(oc *exutil.CLI, optionalParameters ...str
 	if err != nil {
 		e2e.Failf("error creating clusterlogforwarder: %v", err)
 	}
-	resource{"clusterlogforwarder", clf.name, clf.namespace}.WaitForResourceToAppear(oc)
-
-	if !(clf.name == "instance" && clf.namespace == cloNS) && clf.waitForPodReady {
-		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+	resource{"clusterlogforwarders.observability.openshift.io", clf.name, clf.namespace}.WaitForResourceToAppear(oc)
+	if clf.waitForPodReady {
+		clf.waitForCollectorPodsReady(oc)
 	}
 
-	if clf.namespace != cloNS && clf.namespace != "openshift-operators-redhat" && clf.enableMonitoring {
+	if clf.namespace != cloNS && clf.namespace != loNS && clf.enableMonitoring {
 		enableClusterMonitoring(oc, clf.namespace)
 	}
 }
@@ -816,9 +758,8 @@ func (clf *clusterlogforwarder) update(oc *exutil.CLI, template string, patches 
 		if clf.secretName != "" {
 			parameters = append(parameters, "SECRET_NAME="+clf.secretName)
 		}
-		if !(clf.name == "instance" && clf.namespace == cloNS) && len(clf.serviceAccountName) > 0 {
-			parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+clf.serviceAccountName)
-		}
+		parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+clf.serviceAccountName)
+
 		if len(patches) > 0 {
 			parameters = append(parameters, patches...)
 		}
@@ -829,7 +770,7 @@ func (clf *clusterlogforwarder) update(oc *exutil.CLI, template string, patches 
 		}
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", clf.namespace).Execute()
 	} else {
-		parameters := []string{"clf/" + clf.name, "-n", clf.namespace, "-p"}
+		parameters := []string{"clusterlogforwarders.observability.openshift.io/" + clf.name, "-n", clf.namespace, "-p"}
 		parameters = append(parameters, patches...)
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(parameters...).Execute()
 	}
@@ -840,29 +781,31 @@ func (clf *clusterlogforwarder) update(oc *exutil.CLI, template string, patches 
 
 // delete the clusterlogforwarder CR
 func (clf *clusterlogforwarder) delete(oc *exutil.CLI) {
-	err := resource{"clusterlogforwarder", clf.name, clf.namespace}.clear(oc)
+	err := resource{"clusterlogforwarders.observability.openshift.io", clf.name, clf.namespace}.clear(oc)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("clusterlogforwarder/%s in project/%s is not deleted", clf.name, clf.namespace))
-	if !(clf.name == "instance" && clf.namespace == cloNS) {
-		if len(clf.serviceAccountName) > 0 {
-			if clf.collectApplicationLogs {
-				err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-application-logs")
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			if clf.collectInfrastructureLogs {
-				err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-infrastructure-logs")
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			if clf.collectAuditLogs {
-				err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-audit-logs")
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			resource{"serviceaccount", clf.serviceAccountName, clf.namespace}.clear(oc)
+	if len(clf.serviceAccountName) > 0 {
+		if clf.collectApplicationLogs {
+			err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-application-logs")
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		if clf.waitForPodReady {
-			err = resource{"daemonset", clf.name, clf.namespace}.WaitUntilResourceIsGone(oc)
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("daemonset/%s in project/%s is not deleted", clf.name, clf.namespace))
+		if clf.collectInfrastructureLogs {
+			err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-infrastructure-logs")
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
+		if clf.collectAuditLogs {
+			err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-audit-logs")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		resource{"serviceaccount", clf.serviceAccountName, clf.namespace}.clear(oc)
 	}
+
+	err = resource{"daemonset", clf.name, clf.namespace}.WaitUntilResourceIsGone(oc)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("daemonset/%s in project/%s is not deleted", clf.name, clf.namespace))
+
+}
+
+func (clf *clusterlogforwarder) waitForCollectorPodsReady(oc *exutil.CLI) {
+	WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 }
 
 type logFileMetricExporter struct {
@@ -929,22 +872,6 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Namespace %s is not deleted in 3 minutes", ns))
-}
-
-// WaitForIMCronJobToAppear checks if the cronjob exists or not
-func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
-	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		_, err = oc.AdminKubeClient().BatchV1().CronJobs(ns).Get(context.Background(), name, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of cronjob\n")
-				return false, nil
-			}
-			return false, err
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cronjob %s is not available", name))
 }
 
 func getStorageClassName(oc *exutil.CLI) (string, error) {
@@ -1229,7 +1156,7 @@ func (r rsyslog) createPipelineSecret(oc *exutil.CLI, keysPath string) {
 
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args(cmd...).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	resource{"secret", r.secretName, r.loggingNS}.WaitForResourceToAppear(oc)
+	secret.WaitForResourceToAppear(oc)
 }
 
 func (r rsyslog) deploy(oc *exutil.CLI) {
@@ -2127,13 +2054,7 @@ func checkTLSProfile(oc *exutil.CLI, profile string, algo string, server string,
 	return true
 }
 
-func checkCollectorConfiguration(oc *exutil.CLI, ns, secretName string, searchString ...string) (bool, error) {
-	if ns == "" {
-		ns = loggingNS
-	}
-	if secretName == "" {
-		secretName = "collector-config"
-	}
+func checkCollectorConfiguration(oc *exutil.CLI, ns, cmName string, searchString ...string) (bool, error) {
 	// Parse the vector.toml file
 	dirname := "/tmp/" + oc.Namespace() + "-vectortoml"
 	defer os.RemoveAll(dirname)
@@ -2142,7 +2063,7 @@ func checkCollectorConfiguration(oc *exutil.CLI, ns, secretName string, searchSt
 		return false, err
 	}
 
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+secretName, "-n", ns, "--confirm", "--to="+dirname).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("configmap/"+cmName, "-n", ns, "--confirm", "--to="+dirname).Output()
 	if err != nil {
 		return false, err
 	}

@@ -77,17 +77,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		defer clf.delete(oc)
 		clf.create(oc, "PROJECT_ID="+projectID, "LOG_ID="+logName)
 
-		g.By("Deploy collector pods")
-		cl := clusterlogging{
-			name:          clf.name,
-			namespace:     clf.namespace,
-			collectorType: "vector",
-			waitForReady:  true,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
-
 		for _, logType := range logTypes {
 			gcl := googleCloudLogging{
 				projectID: projectID,

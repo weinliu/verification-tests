@@ -1,0 +1,89 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: clusterlogforwarder-template
+objects:
+- apiVersion: "logging.openshift.io/v1"
+  kind: ClusterLogForwarder
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    filters:
+    - kubeAPIAudit:
+        omitStages:
+        - RequestReceived
+        rules:
+        - level: RequestResponse
+          resources:
+          - group: ""
+            resources:
+            - pods
+      name: my-policy-0
+      type: kubeAPIAudit
+    - kubeAPIAudit:
+        rules:
+        - level: Request
+          resources:
+          - group: ""
+            resources:
+            - pods/status
+            - pods/binding
+      name: my-policy-1
+      type: kubeAPIAudit
+    managementState: ${MANAGEMENT_STATE}
+    outputs:
+    - name: lokistack
+      type: lokiStack
+      lokiStack:
+        authentication:
+          token:
+            from: serviceAccountToken
+        labelKeys:
+        - .hostname
+        - .log_type
+        - .kubernetes_container_name
+        - .kubernetes_namespace_name
+        - .kubernetes_pod_name
+        target:
+          name: ${LOKISTACK_NAME}
+          namespace: ${LOKISTACK_NAMESPACE}
+    - name: es-created-by-user
+      type: elasticsearch
+      elasticsearch:
+        url: ${ES_URL}
+        version: ${{ES_VERSION}}
+    pipelines:
+    - name: forward-to-external-es
+      inputRefs:
+      - audit
+      outputRefs:
+      - es-created-by-user
+      filterRefs:
+      - my-policy-0
+    - name: forward-to-lokistack
+      inputRefs:
+      - audit
+      outputRefs:
+      - lokistack
+      filterRefs:
+      - my-policy-1
+    serviceAccount:
+      name: ${SERVICE_ACCOUNT_NAME}
+parameters:
+- name: NAME
+  value: "instance"
+- name: NAMESPACE
+  value: "openshift-logging"
+- name: ES_URL
+  value: "http://elasticsearch-server.es-aosqe-qa.svc:9200"
+- name: ES_VERSION
+  value: "6"
+- name: SERVICE_ACCOUNT_NAME
+  value: ""
+- name: LOKISTACK_NAME
+  value: "logging-loki"
+- name: LOKISTACK_NAMESPACE
+  value: "openshift-logging"
+- name: MANAGEMENT_STATE
+  value: "managed"

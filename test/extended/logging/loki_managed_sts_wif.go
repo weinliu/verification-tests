@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -89,30 +88,32 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 
-		exutil.By("Create clusterlogforwarder as syslogserver and forward logs to default LokiStack")
+		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			name:                      "clf-71534",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+			enableMonitoring:          true,
 		}
-		defer clf.delete(oc)
-		clf.create(oc)
+		clf.createServiceAccount(oc)
+		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-71534")
+		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-71534", clf.serviceAccountName, clf.namespace)
+		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
 
-		exutil.By("Create ClusterLogging instance with Loki as logstore")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			logStoreType:  "lokistack",
-			lokistackName: ls.name,
-			waitForReady:  true,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
 		exutil.By("Validate Logs in Loki")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "default", oc.Namespace())
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
@@ -153,30 +154,32 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 
-		exutil.By("Create clusterlogforwarder as syslogserver and forward logs to default LokiStack")
+		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:         "instance",
-			namespace:    loggingNS,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "forward_to_default.yaml"),
+			name:                      "clf-71773",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+			enableMonitoring:          true,
 		}
-		defer clf.delete(oc)
-		clf.create(oc)
+		clf.createServiceAccount(oc)
+		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-71773")
+		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-71773", clf.serviceAccountName, clf.namespace)
+		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
 
-		exutil.By("Create ClusterLogging instance with Loki as logstore")
-		cl := clusterlogging{
-			name:          "instance",
-			namespace:     loggingNS,
-			collectorType: "vector",
-			logStoreType:  "lokistack",
-			lokistackName: ls.name,
-			waitForReady:  true,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
-		}
-		defer cl.delete(oc)
-		cl.create(oc)
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
 		exutil.By("Validate Logs in Loki")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", oc.Namespace())).Output()
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "default", oc.Namespace())
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)

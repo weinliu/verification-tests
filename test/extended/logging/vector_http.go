@@ -76,17 +76,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clf.delete(oc)
 			clf.create(oc, "URL=https://"+fluentdS.serverName+"."+fluentdS.namespace+".svc:24224")
 
-			g.By("deploy collector pods")
-			cl := clusterlogging{
-				name:          clf.name,
-				namespace:     clf.namespace,
-				collectorType: "vector",
-				waitForReady:  true,
-				templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "collector_only.yaml"),
-			}
-			defer cl.delete(oc)
-			cl.create(oc)
-
 			g.By("check logs in fluentd server")
 			fluentdS.checkData(oc, true, "app.log")
 			fluentdS.checkData(oc, true, "audit.log")
@@ -159,7 +148,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-60926",
 				namespace:                 fluentdProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-http-template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "http-output.yaml"),
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,

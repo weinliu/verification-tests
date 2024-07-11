@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-54980",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX=main")
 
 			g.By("create log producer")
 			oc.SetupProject()
@@ -409,7 +409,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-71028",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexName.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -421,7 +421,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_NAME="+indexName)
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX="+indexName)
 
 			exutil.By("check logs in splunk")
 			for _, logType := range []string{"application", "audit", "infrastructure"} {
@@ -432,7 +432,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-High-71029-Forward logs to Splunk indexes by indexKey: kubernetes.namespace_name[Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-71029-Forward logs to Splunk indexes by kubernetes.namespace_name[Slow]", func() {
 			exutil.By("create log producer")
 			appProj := oc.Namespace()
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -471,7 +471,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-71029",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexKey.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -483,7 +483,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=kubernetes.namespace_name")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.namespace_name}}")
 
 			exutil.By("check logs in splunk")
 			// not all of the projects in cluster have container logs, so here only check some of the projects
@@ -503,7 +503,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-High-71031-Forward logs to Splunk indexes by indexKey: openshift.labels", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-71031-Forward logs to Splunk indexes by openshift.labels", func() {
 			exutil.By("create log producer")
 			appProj := oc.Namespace()
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -536,8 +536,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-71031",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexKey.yaml"),
-				waitForPodReady:           true,
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -548,7 +547,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=openshift.labels.test", "LABELS={\"test\": \""+index+"\"}")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.openshift.labels.test}}")
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "labels", "type": "openShiftLabels", "openShiftLabels": {"test": "` + index + `"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["labels"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
 
 			//sleep 10 seconds for collector pods to send logs to splunk
 			time.Sleep(10 * time.Second)
@@ -564,7 +566,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-High-71035-Forward logs to Splunk indexes by indexKey: kubernetes.labels", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-71035-Forward logs to Splunk indexes by kubernetes.labels", func() {
 			exutil.By("create log producer")
 			appProj := oc.Namespace()
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -597,7 +599,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-71035",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexKey.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -609,7 +611,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=kubernetes.labels.\"test.logging.io/logging.qe-test-label\"")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.labels.\"test.logging.io/logging.qe-test-label\"}}")
 
 			exutil.By("check logs in splunk")
 			// logs from project appProj should be stored in 'logging-OCP-71035', other logs should be in default index
@@ -627,46 +629,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in "+index+" index, this is not expected")
 			}
-		})
-
-		g.It("CPaasrunOnly-Author:qitang-Medium-71039-CLF should be rejected if indexKey and indexName are specified.", func() {
-			oc.SetupProject()
-			splunkProject := oc.Namespace()
-			sp := splunkPodServer{
-				namespace: splunkProject,
-				name:      "default-http",
-				authType:  "http",
-				version:   "9.0",
-			}
-			sp.init()
-
-			exutil.By("Deploy splunk")
-			defer sp.destroy(oc)
-			sp.deploy(oc)
-
-			clfSecret := toSplunkSecret{
-				name:      "splunk-secret-71039",
-				namespace: splunkProject,
-				hecToken:  sp.hecToken,
-			}
-			clf := clusterlogforwarder{
-				name:                      "clf-71039",
-				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexKey.yaml"),
-				collectApplicationLogs:    true,
-				collectAuditLogs:          true,
-				collectInfrastructureLogs: true,
-				serviceAccountName:        "clf-" + getRandomString(),
-			}
-
-			exutil.By("create clusterlogforwarder")
-			defer clfSecret.delete(oc)
-			clfSecret.create(oc)
-			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=kubernetes.labels.test-logging")
-			patch := `[{"op": "add", "path": "/spec/outputs/0/splunk/indexName", "value": "test-71039"}]`
-			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "Only one of indexKey or indexName can be set, not both.", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputs.splunk-aosqe[0].message}"})
 		})
 
 		g.It("CPaasrunOnly-Author:qitang-High-71322-Logs should be forwarded to Splunk default index when indexKey is missing from a log.", func() {
@@ -698,7 +660,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-71322",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexKey.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -710,7 +672,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=kubernetes.non_existing.key")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.non_existing.key}}")
 
 			exutil.By("check logs in splunk")
 			for _, logType := range []string{"audit", "infrastructure", "application"} {
@@ -796,7 +758,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-71051",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-splunk-with-indexKey.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -808,7 +770,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX_KEY=kubernetes.non_existing.key")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.non_existing.key}}")
 
 			exutil.By("update CLF to set invalid glob for namespace")
 			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace":"invalid-name@"}],"includes": [{"namespace":"tes*t"}]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
