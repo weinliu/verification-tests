@@ -100,6 +100,19 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(log).NotTo(o.ContainSubstring(`timer overflow`))
 	})
 
+	// author: hongli@redhat.com
+	g.It("Author:hongli-ROSA-OSD_CCS-ARO-High-45741-ingress canary route redirects http to https", func() {
+		var ns = "openshift-ingress-canary"
+		exutil.By("get the ingress route host")
+		canaryRouteHost := getByJsonPath(oc, ns, "route/canary", "{.status.ingress[0].host}")
+		o.Expect(canaryRouteHost).Should(o.ContainSubstring(`canary-openshift-ingress-canary.apps`))
+
+		exutil.By("curl canary route via http and redirects to https")
+		waitForOutsideCurlContains("http://"+canaryRouteHost, "-I", "302 Found")
+		waitForOutsideCurlContains("http://"+canaryRouteHost, "-kL", "Healthcheck requested")
+		waitForOutsideCurlContains("https://"+canaryRouteHost, "-k", "Healthcheck requested")
+	})
+
 	// author: mjoseph@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
 		// curling through default controller will not work for proxy cluster.
