@@ -200,7 +200,7 @@ describe('Operator Hub tests', () => {
     })
   });
 
-  it('(OCP-71516,xiyuzhao,UserInterface) Add TLSProfiles and tokenAuthGCP annotation to Infrastructures features filter section', {tags: ['e2e','admin']}, () => {
+  it('(OCP-71516,xiyuzhao,UserInterface) Add TLSProfiles and tokenAuthGCP annotation to Infrastructures features filter section', {tags: ['e2e','admin']}, function () {
     cy.checkClusterType('isGCPCluster').then(value => {
       if (value === false) {
         cy.log('This is not a GCP Platform, Skip the case!!');
