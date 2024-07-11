@@ -77,6 +77,12 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-LEVEL0-Longduration-NonPreRelease-Critical-23803-Restoring back to a previous cluster state in ocp v4 [Disruptive][Slow]", func() {
+		g.By("check the platform is supported or not")
+		supportedList := []string{"aws", "gcp", "azure"}
+		support := in(iaasPlatform, supportedList)
+		if support != true {
+			g.Skip("The platform is not supported now, skip the cases!!")
+		}
 		privateKeyForBastion := os.Getenv("SSH_CLOUD_PRIV_KEY")
 		if privateKeyForBastion == "" {
 			g.Skip("Failed to get the private key, skip the cases!!")
@@ -85,13 +91,6 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		bastionHost := os.Getenv("QE_BASTION_PUBLIC_ADDRESS")
 		if bastionHost == "" {
 			g.Skip("Failed to get the qe bastion public ip, skip the cases!!")
-		}
-
-		g.By("check the platform is supported or not")
-		supportedList := []string{"aws", "gcp", "azure"}
-		support := in(iaasPlatform, supportedList)
-		if support != true {
-			g.Skip("The platform is not supported now, skip the cases!!")
 		}
 
 		g.By("make sure all the etcd pods are running")
@@ -187,8 +186,18 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		defer checkOperator(oc, "etcd")
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": null}}")).Execute()
 		g.By("Turn off quorum guard to ensure revision rollouts of static pods")
-		errGrd := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": {\"useUnsupportedUnsafeNonHANonProductionUnstableEtcd\": true}}}")).Execute()
-		o.Expect(errGrd).NotTo(o.HaveOccurred())
+		errWait := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			errGrd := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": {\"useUnsupportedUnsafeNonHANonProductionUnstableEtcd\": true}}}")).Execute()
+			if errGrd != nil {
+				e2e.Logf("server is not ready yet, error: %s. Trying again ...", errGrd)
+				return false, nil
+			} else {
+				e2e.Logf("successfully patched.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "unable to patch the server to turn off the quorum guard.")
 
 		waitForOperatorRestart(oc, "etcd")
 		waitForOperatorRestart(oc, "kube-apiserver")
