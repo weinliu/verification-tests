@@ -738,14 +738,13 @@ func chkSriovInjectorResource(oc *exutil.CLI, status bool) {
 }
 
 func pingPassWithNet1(oc *exutil.CLI, ns1, pod1, pod2 string) {
-	pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns1, pod1)
+	pod1IPv4, _ := getPodMultiNetwork(oc, ns1, pod1)
 	e2e.Logf("The second interface v4 address of pod1 is: %v", pod1IPv4)
-	e2e.Logf("The second interface v6 address of pod1 is: %v", pod1IPv6)
-	command := fmt.Sprintf("ping -c 3 %s && ping6 -c 3 %s", pod1IPv4, pod1IPv6)
+	command := fmt.Sprintf("ping -c 3 %s", pod1IPv4)
 	pingOutput, err := e2eoutput.RunHostCmdWithRetries(ns1, pod2, command, 3*time.Second, 12*time.Second)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("ping output: %v", pingOutput)
-	o.Expect(strings.Count(pingOutput, "3 received")).To(o.Equal(2))
+	o.Expect(strings.Count(pingOutput, "3 received")).To(o.Equal(1))
 }
 
 // get the Mac address from one pod interface

@@ -917,7 +917,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 	g.It("LEVEL0-Author:zzhao-NonPreRelease-Longduration-Critical-49860-pods numbers same with VF numbers can be still working after worker reboot [Disruptive]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking/sriov")
-			sriovNeworkTemplate    = filepath.Join(buildPruningBaseDir, "sriovnetwork-whereabouts-template.yaml")
+			sriovNeworkTemplate    = filepath.Join(buildPruningBaseDir, "sriovnetwork-hostlocal-template.yaml")
 			sriovTestPodRCTemplate = filepath.Join(buildPruningBaseDir, "sriov-netdevice-rc-template.yaml")
 			sriovOpNs              = "openshift-sriov-network-operator"
 			policyName             = "e810c"
