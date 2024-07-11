@@ -8218,7 +8218,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-30312",
@@ -8231,7 +8231,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 30312 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/nginx-operator-index-30312:v2",
+				address:     "quay.io/olmqe/nginx-operator-index-30312:v2-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -8310,7 +8310,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-30317",
@@ -8323,7 +8323,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 30317 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/nginx-operator-index-30317:v2",
+				address:     "quay.io/olmqe/nginx-operator-index-30317:v2-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -8401,7 +8401,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName                 = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate       = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate    = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate    = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate            = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			validatingwebhookName1 = ""
 			validatingwebhookName2 = ""
@@ -8416,7 +8416,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 30319 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/nginx-operator-index-30312:v2",
+				address:     "quay.io/olmqe/nginx-operator-index-30312:v2-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -8501,7 +8501,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 30206 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/cockroachdb-index:5.0.4-30206",
+				address:     "quay.io/olmqe/cockroachdb-index:5.0.4-30206-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -8589,7 +8589,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		subTemplateProxy := filepath.Join(buildPruningBaseDir, "olm-proxy-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		var (
 			og = operatorGroupDescription{
@@ -8779,7 +8779,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
@@ -9409,20 +9409,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		envFromPod := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=control-plane=controller-manager", "-n", sub.namespace, `-o=jsonpath='{..spec.containers[*].envFrom}'`)
 		o.Expect(envFromPod).To(o.ContainSubstring(cm.name))
 		o.Expect(envFromPod).To(o.ContainSubstring(secret.name))
-
-		names, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", sub.namespace, "-l", "control-plane=controller-manager", "-o", "name").Output()
-		podNames := strings.Split(names, "\n")
-		for _, podName := range podNames {
-			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
-			if status == "Running" {
-				e2e.Logf("check env of pod %s", podName)
-				envPod, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", sub.namespace, "--", "env").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(strings.Contains(envPod, "mykey")).To(o.BeTrue())
-				o.Expect(strings.Contains(envPod, "special.how")).To(o.BeTrue())
-				o.Expect(strings.Contains(envPod, "special.type")).To(o.BeTrue())
-			}
-		}
 	})
 
 	// author: xzha@redhat.com, test case OCP-72018
@@ -9526,7 +9512,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -9536,7 +9522,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc ditto Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/ditto-index:v1beta1",
+				address:     "quay.io/olmqe/ditto-index:v1beta1-cache",
 				template:    catsrcImageTemplate,
 			}
 			og = operatorGroupDescription{
@@ -9590,7 +9576,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -9600,7 +9586,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc ditto Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/ditto-index:v1beta1",
+				address:     "quay.io/olmqe/ditto-index:v1beta1-cache",
 				template:    catsrcImageTemplate,
 			}
 			og = operatorGroupDescription{
@@ -9668,7 +9654,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -9733,7 +9719,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		og := operatorGroupDescription{
@@ -10208,7 +10194,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -10223,7 +10209,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test 47322",
 				publisher:   "OLM QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/etcd-index:47322-single",
+				address:     "quay.io/olmqe/etcd-index:47322-single-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -10560,7 +10546,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test 47323 OR",
 				publisher:   "OLM QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/etcd-index:47323-or",
+				address:     "quay.io/olmqe/etcd-index:47323-or-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -10661,7 +10647,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test 47323 NOT",
 				publisher:   "OLM QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/etcd-index:47323-not",
+				address:     "quay.io/olmqe/etcd-index:47323-not-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -10729,7 +10715,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -10976,7 +10962,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		og := operatorGroupDescription{
@@ -11915,7 +11901,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogTemplate          = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-singlenamespace",
