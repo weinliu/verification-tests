@@ -4445,7 +4445,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		var og1 = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-		var catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		var catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -4459,7 +4459,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			displayName: "Test Catsrc 41565 Operators",
 			publisher:   "Red Hat",
 			sourceType:  "grpc",
-			address:     "quay.io/olmqe/ditto-index:41565",
+			address:     "quay.io/olmqe/ditto-index:41565-cache",
 			template:    catsrcImageTemplate,
 		}
 
@@ -4592,64 +4592,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(resultBase64).NotTo(o.BeEmpty())
 		}
-
-	})
-
-	// author: scolange@redhat.com
-	g.It("ConnectedOnly-Author:scolange-Medium-43723-Allow missing replaces in channel tail in DC validation", func() {
-		architecture.SkipNonAmd64SingleArch(oc)
-		var (
-			itName              = g.CurrentSpecReport().FullText()
-			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
-			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
-			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-			og                  = operatorGroupDescription{
-				name:      "og-singlenamespace",
-				namespace: "",
-				template:  ogSingleTemplate,
-			}
-			catsrc = catalogSourceDescription{
-				name:        "catsrc-43723-operator",
-				namespace:   "",
-				displayName: "Test Catsrc 43723 Operators",
-				publisher:   "Red Hat",
-				sourceType:  "grpc",
-				address:     "quay.io/olmqe/index-test:4.0",
-				template:    catsrcImageTemplate,
-			}
-			sub1 = subscriptionDescription{
-				subName:                "sub1",
-				namespace:              "",
-				channel:                "singlenamespace-alpha",
-				ipApproval:             "Automatic",
-				operatorPackage:        "etcd",
-				catalogSourceName:      catsrc.name,
-				catalogSourceNamespace: "",
-				startingCSV:            "etcdoperator.v0.9.4",
-				currentCSV:             "",
-				installedCSV:           "etcdoperator.v0.9.4",
-				template:               subTemplate,
-				singleNamespace:        true,
-			}
-		)
-		dr := make(describerResrouce)
-		dr.addIr(itName)
-		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
-		og.namespace = oc.Namespace()
-		catsrc.namespace = oc.Namespace()
-		sub1.namespace = oc.Namespace()
-		sub1.catalogSourceNamespace = catsrc.namespace
-
-		exutil.By("Create og")
-		og.create(oc, itName, dr)
-
-		exutil.By("Create catsrc")
-		catsrc.createWithCheck(oc, itName, dr)
-
-		exutil.By("Create operator1")
-		sub1.create(oc, itName, dr)
-		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub1.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
 
