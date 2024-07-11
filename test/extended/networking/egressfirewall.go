@@ -1440,7 +1440,8 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		exutil.By(" 6. Verify Egress firewall rules in NBDB of all nodes.")
 		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids:k8s.ovn.org/name=%s | grep allow", ns)
-		nodelist, nodeErr := exutil.GetAllNodes(oc) // unlike nodeList at beginning of the case, this nodelist includes master nodes
+		// nodelist, nodeErr := exutil.GetAllNodes(oc) // unlike nodeList at beginning of the case, this nodelist includes master nodes
+		nodelist, nodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 		o.Expect(len(nodelist)).NotTo(o.BeEquivalentTo(0))
 

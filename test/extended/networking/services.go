@@ -942,7 +942,8 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		e2e.Logf("\n On this %s cluster, V4 endpoints of service lb are expected to be: %v\n", ipStack, expectedEndpointsv4)
 
 		// check service lb endpoints in northdb on each node's ovnkube-pod
-		nodeList, nodeErr := exutil.GetAllNodes(oc)
+		nodeList, nodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 		o.Expect(len(nodeList)).NotTo(o.BeEquivalentTo(0))
 
