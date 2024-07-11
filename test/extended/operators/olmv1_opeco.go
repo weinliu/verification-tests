@@ -552,7 +552,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		}
 
 		exutil.By("update channel to candidate-v3.1")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v3.1","upgradeConstraintPolicy":"Ignore"}}`)
+		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v3.1"}}`)
 
 		exutil.By("Check if ChannelDeprecated status and messages still exist")
 		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "False", 0)
