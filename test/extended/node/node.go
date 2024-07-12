@@ -3,7 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1659,7 +1659,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 				originclusterMonitoringConfig, getContentError = sjson.Delete(originclusterMonitoringConfig, `metadata.uid`)
 				o.Expect(getContentError).NotTo(o.HaveOccurred())
 				originclusterMonitoringConfigFilePath := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-52385.json")
-				o.Expect(ioutil.WriteFile(originclusterMonitoringConfigFilePath, []byte(originclusterMonitoringConfig), 0644)).NotTo(o.HaveOccurred())
+				o.Expect(os.WriteFile(originclusterMonitoringConfigFilePath, []byte(originclusterMonitoringConfig), 0644)).NotTo(o.HaveOccurred())
 				defer func() {
 					errReplace := oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originclusterMonitoringConfigFilePath).Execute()
 					o.Expect(errReplace).NotTo(o.HaveOccurred())
@@ -1693,12 +1693,20 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "thanos-52385", "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("3.1) Get the SA token name")
-		cmd := `oc describe sa thanos-52385 -n cma-52385 | awk '/Tokens:/ {printf "%s",$2}'`
-		saTokenName, err := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("----- saTokenName is %v -----, error is %v", saTokenName[0], err)
+		exutil.By("3.1) Create Service Account Token")
+		servicetokenTemp := filepath.Join(buildPruningBaseDir, "servicetoken-52385.yaml")
+		token, err := oc.AsAdmin().SetNamespace(cmaNs).Run("apply").Args("-f", servicetokenTemp).Output()
+		e2e.Logf("err %v, token %v", err, token)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.By("3.2) Define TriggerAuthentication with the Service Account's token")
+
+		exutil.By("3.2) Make sure the token is still there and didn't get deleted")
+		serviceToken, err := oc.AsAdmin().Run("get").Args("secret", "thanos-token", "-n", cmaNs).Output()
+		e2e.Logf("err %v, token %v", err, serviceToken)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		saTokenName := "thanos-token"
+
+		exutil.By("3.3) Define TriggerAuthentication with the Service Account's token")
 		triggerAuthentication52385.secretname = string(saTokenName[:])
 		triggerAuthentication52385.namespace = cmaNs
 		defer oc.AsAdmin().Run("delete").Args("-n", cmaNs, "TriggerAuthentication", "keda-trigger-auth-prometheus").Execute()
@@ -1730,7 +1738,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 
 		exutil.By("8) Check ScaledObject is up")
 		err = wait.Poll(3*time.Second, 100*time.Second, func() (bool, error) {
-			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "prometheus-scaledobject", "-o=jsonpath={.status.health.s0-prometheus-http_requests_total.status}", "-n", cmaNs).Output()
+			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "prometheus-scaledobject", "-o=jsonpath={.status.health.s0-prometheus.status}", "-n", cmaNs).Output()
 			if scaledObjectStatus == "Happy" {
 				e2e.Logf("ScaledObject is up and working")
 				return true, nil

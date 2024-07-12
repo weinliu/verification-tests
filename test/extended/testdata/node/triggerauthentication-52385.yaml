@@ -13,8 +13,9 @@ objects:
       key: token
     - parameter: ca
       name: ${SECRET_NAME}
-      key: ca.crt
+      key: ca.crt 
 parameters:
 - name: SECRET_NAME
+  value: thanos-token
 - name: NAMESPACE
   value: cma-52385
