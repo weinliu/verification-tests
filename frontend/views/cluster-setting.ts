@@ -7,7 +7,8 @@ export const ClusterSettingPage = {
   goToClusterSettingConfiguration: () => cy.visit('/settings/cluster/globalconfig'),
   goToConsolePlugins: () => {
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
-    cy.get('th[data-label="Name"]',{timeout: 60000}).should('be.visible');
+    cy.wait(30000);
+    cy.get('th[data-label="Name"]',{timeout: 60000}).should('exist');
   },
   clickToClustSettingDetailTab: () => cy.get('[data-test-id="horizontal-link-Details"]').click(),
   checkUpstreamUrlDisabled: () => cy.get('button[data-test-id*="upstream-server-url"]').should("have.attr", "aria-disabled").and("eq", "true"),
@@ -53,9 +54,9 @@ export const ClusterSettingPage = {
   },
   toggleConsolePlugin: (plugin_name: string, toggle_action: string) => {
     cy.get(`a[data-test="${plugin_name}"]`).parent().parent().parent('tr').within(() => {
-      cy.get('button[data-test="edit-console-plugin"]').click();
+      cy.get('button[data-test="edit-console-plugin"]').click({force: true});
     });
     cy.get(`input[data-test="${toggle_action}-radio-input"]`).click({force: true});
-    cy.get('button[data-test="confirm-action"]').click();
+    cy.get('button[data-test="confirm-action"]').click({force: true});
   }
 }

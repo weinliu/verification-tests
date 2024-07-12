@@ -5,8 +5,13 @@ import { Branding } from '../../views/branding';
 import { ClusterSettingPage } from '../../views/cluster-setting';
 import { guidedTour } from '../../upstream/views/guided-tour';
 import { listPage } from '../../upstream/views/list-page';
+import { Pages } from 'views/pages';
+import { projectsPage, namespacePage } from 'views/projects';
 
 describe('Dynamic plugins features', () => {
+  const ocp_74292_prj_name = '74292-prj-with-c-modal';
+  const ocp_74292_ns1_name = '74292-ns-test1';
+  const ocp_74292_ns2_name = '74292-ns-test2';
   before(() => {
     const query_console_dmeo_plugin_pod = `oc get deployment console-demo-plugin -n console-demo-plugin -o jsonpath='{.status.conditions[?(@.type=="Available")].status}'`;
     // deploy plugin manifests
@@ -24,11 +29,17 @@ describe('Dynamic plugins features', () => {
   });
 
   after(() => {
+    cy.adminCLI(`oc delete namespace ${ocp_74292_prj_name} ${ocp_74292_ns1_name} ${ocp_74292_ns2_name} console-demo-plugin console-customization-plugin`,{failOnNonZeroExit: false});
     cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge`);
     ClusterSettingPage.goToConsolePlugins();
     ClusterSettingPage.toggleConsolePlugin('console-customization', 'Disable');
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      expect(result.stdout).not.include('console-customization')
+    });
     ClusterSettingPage.toggleConsolePlugin('console-demo-plugin', 'Disable');
-    cy.adminCLI(`oc delete namespace console-demo-plugin console-customization-plugin`,{failOnNonZeroExit: false});
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      expect(result.stdout).not.include('console-demo-plugin')
+    });
     cy.adminCLI(`oc delete consoleplugin console-customization console-demo-plugin`,{failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   });
@@ -175,6 +186,7 @@ describe('Dynamic plugins features', () => {
     cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 1');
     cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 2');
     cy.visit('/test-proxy-service');
+    cy.wait(10000);
     cy.contains('success').should('be.visible');
   });
 
@@ -222,6 +234,27 @@ describe('Dynamic plugins features', () => {
       .its('stdout')
       .should('contain', 'apiVersion: console.openshift.io/v1')
 })
+
+  it('(OCP-74292,yapei,UserInterface)Add extension point to enable customized create project modal)',{tags:['e2e','admin','@osd-ccs']}, () => {
+    cy.visit('/k8s/cluster/projects');
+    listPage.rows.shouldBeLoaded();
+    listPage.clickCreateYAMLbutton();
+    cy.get('div').contains('modal is created with an extension').should('exist');
+    projectsPage.createProject(ocp_74292_prj_name);
+    cy.checkCommandResult(`oc get projects ${ocp_74292_prj_name}`, `${ocp_74292_prj_name}`);
+    Pages.gotoNamespacesList();
+    listPage.rows.shouldBeLoaded();
+    listPage.clickCreateYAMLbutton();
+    namespacePage.createNS(ocp_74292_ns1_name, 'No restrictions');
+    cy.wait(5000);
+    Pages.gotoNamespacesList();
+    listPage.rows.shouldBeLoaded();
+    listPage.clickCreateYAMLbutton();
+    namespacePage.createNS(ocp_74292_ns2_name, 'Deny all inbound traffic');
+    cy.adminCLI(`oc get namespace ${ocp_74292_ns1_name} ${ocp_74292_ns2_name}`).its('stdout').should('not.include','not found');
+    cy.adminCLI(`oc get networkpolicy -n ${ocp_74292_ns1_name}`).its('stderr').should('include', 'No resources found');
+    cy.adminCLI(`oc get networkpolicy -n ${ocp_74292_ns2_name}`).its('stdout').should('include', 'default-deny');
+  });
 
   it('(OCP-53234,yapei,UserInterface) Show alert when console operator is Unmanaged', {tags: ['e2e','admin','@osd-ccs']}, () => {
     // set console to Unmanaged
