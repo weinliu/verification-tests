@@ -4365,7 +4365,7 @@ desiredState:
 			logger.Infof("node/%s %s", node, nodeUpdate)
 		}
 	})
-	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-73148-prune renderedmachineconfigs [Disruptive]", func() {
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73148-prune renderedmachineconfigs [Disruptive]", func() {
 		var (
 			mcName                    = "fake-worker-pass-1"
 			mcList                    = NewMachineConfigList(oc.AsAdmin())
@@ -4499,7 +4499,7 @@ desiredState:
 
 	})
 
-	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-73155-prune renderedmachineconfigs in updating pools[Disruptive]", func() {
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73155-prune renderedmachineconfigs in updating pools[Disruptive]", func() {
 		var (
 			wMcp        = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcList      = NewMachineConfigList(oc.AsAdmin())
@@ -4584,6 +4584,23 @@ desiredState:
 		o.Expect(pruneMCOutput).To(o.ContainSubstring("Skip deleting rendered MachineConfig "+newRenderedMC), "Deleted the in-use rendered MC")
 
 		logger.Infof("OK\n")
+
+	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Low-74606-'oc adm prune' report failures consistently when using wrong pool name", func() {
+		var expectedErrorMsg = "error: MachineConfigPool with name 'fake' not found"
+
+		out, err := oc.AsAdmin().Run("adm").Args("prune", "renderedmachineconfigs", "list", "--pool-name", "fake").Output()
+		o.Expect(err).To(o.HaveOccurred(), "Expected oc command error to fail but it didn't")
+		o.Expect(err).To(o.BeAssignableToTypeOf(&exutil.ExitError{}), "Unexpected error while executing prune command")
+		o.Expect(err.(*exutil.ExitError).ExitCode()).ShouldNot(o.Equal(0), "Unexpected return code when executing the prune command with a wrong pool name")
+		o.Expect(out).To(o.Equal(expectedErrorMsg), "Unexecpted error message when using wrong pool name in the prune command")
+
+		out, err = oc.AsAdmin().Run("adm").Args("prune", "renderedmachineconfigs", "list", "--in-use", "--pool-name", "fake").Output()
+		o.Expect(err).To(o.HaveOccurred(), "Expected oc command error to fail but it didn't")
+		o.Expect(err).To(o.BeAssignableToTypeOf(&exutil.ExitError{}), "Unexpected error while executing prune command with in-use flag")
+		o.Expect(err.(*exutil.ExitError).ExitCode()).ShouldNot(o.Equal(0), "Unexpected return code when executing the prune command with the in-use flag and a wrong pool name")
+		o.Expect(out).To(o.Equal(expectedErrorMsg), "Unexecpted error message when using in-use flag and a wrong pool name in the prune command")
 
 	})
 
