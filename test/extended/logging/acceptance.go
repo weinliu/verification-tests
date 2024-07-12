@@ -167,7 +167,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 				checkMetric(oc, promToken, "{job=\""+svc.Name+"\"}", 3)
 			}
 		}
-		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"" + loNS + "\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
+		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"" + loNS + "\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_streams_created_total"} {
 			checkMetric(oc, promToken, metric, 3)
 		}
 		exutil.By("Validate log streams are pushed to external storage bucket/container")
