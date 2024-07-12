@@ -701,4 +701,320 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		_, err = oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/redhat/redhat-operator-index:v4.15").Output()
 		o.Expect(err).Should(o.HaveOccurred())
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-74649-Low-74646-Show warning when an eus channel with minor versions range >=2 for v2[Serial]", func() {
+		dirname := "/tmp/case74649"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-74649.yaml")
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "50G", "/var/lib/registry")
+
+		exutil.By("Checkpoint for v2 m2d")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname+"/m2d", "--authfile", dirname+"/.dockerconfigjson").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is not seen for m2d v2")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+		err = os.RemoveAll(dirname + "/m2d")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checkpoint for v2 m2m")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "docker://"+serInfo.serviceName, "--dest-tls-verify=false").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is not seen for m2m v2")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		exutil.By("Checkpoint for 74646: show warning when an eus channle with minor versions range >=2 for v2 m2d with dry-run")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname+"/m2d", "--authfile", dirname+"/.dockerconfigjson", "--dry-run").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is not seen for m2d v2 dry-run")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		exutil.By("Checkpoint for 74646: show warning when an eus channle with minor versions range >=2 for  v2 m2m with dry-run")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "docker://"+serInfo.serviceName, "--dest-tls-verify=false", "--dry-run").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is not seen for m2m v2 dry-run")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-74650-Should no warning about eus when use the eus channel with minor versions range < 2  for V1[Serial]", func() {
+		dirname := "/tmp/case74650"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetV1MinorFile := filepath.Join(ocmirrorBaseDir, "config-74650-minor-v1.yaml")
+		imageSetV1PatchFile := filepath.Join(ocmirrorBaseDir, "config-74650-patch-v1.yaml")
+
+		exutil.By("Step 1 : no warning when minor diff < 2 for v1")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV1MinorFile, "file://"+dirname+"/m2d", "--dry-run").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for minor diff <2 for v1 m2d")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV1MinorFile, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for minor diff <2 for v1 m2m")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		exutil.By("Step 2 : no warning when patch diff for v1")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV1PatchFile, "file://"+dirname+"/m2d", "--dry-run").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for patch diff for v1 m2d")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV1PatchFile, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for patch diff for v1 m2m")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with  %s", err))
+
+	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-74660-Low-74646-Show warning when an eus channel with minor versions range >=2 for v1[Serial]", func() {
+		dirname := "/tmp/case74660"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-74660.yaml")
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "50G", "/var/lib/registry")
+
+		exutil.By("Checkpoint for v1 m2d")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname+"/m2d").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("V1 m2d test failed as can't find the expected warning")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+		err = os.RemoveAll(dirname + "/m2d")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checkpoint for v1 m2m")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--dest-skip-tls").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("V1 m2m test failed as can't find the expected warning")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		exutil.By("Checkpoint for 74646: show warning when an eus channle with minor versions range >=2 for v1 m2d with dry-run")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname+"/m2d", "--dry-run").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("V1 m2d with dry-run test failed as can't find the expected warning")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		exutil.By("Checkpoint for 74646: show warning when an eus channel with minor versions range >=2 for v1 m2m with dry-run")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("V1 m2m with dry-run test failed as can't find the expected warning")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-74733-Should no warning about eus when use the eus channel with minor versions range < 2  for V2[Serial]", func() {
+		dirname := "/tmp/case74733"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetV2MinorFile := filepath.Join(ocmirrorBaseDir, "config-74650-minor-v2.yaml")
+		imageSetV2PatchFile := filepath.Join(ocmirrorBaseDir, "config-74650-patch-v2.yaml")
+
+		exutil.By("Step 1 : no warning when minor diff < 2 for v2")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV2MinorFile, "--v2", "file://"+dirname+"/m2d", "--authfile", dirname+"/.dockerconfigjson", "--dry-run").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for minor diff <2 for v2 m2d")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with  %s", err))
+
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV2MinorFile, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "docker://"+serInfo.serviceName, "--dest-tls-verify=false", "--dry-run").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for minor diff <2 for v2 m2m")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		exutil.By("Step 2 : no warning when patch diff for v2")
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV2PatchFile, "--v2", "file://"+dirname+"/m2d", "--authfile", dirname+"/.dockerconfigjson", "--dry-run").OutputToFile(getRandomString() + "workload-mirror.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for patch diff for v2 m2d")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
+
+		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV2PatchFile, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "docker://"+serInfo.serviceName, "--dest-tls-verify=false", "--dry-run").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if validateStringFromFile(mirrorOutFile, "To correctly determine the upgrade path for EUS releases") {
+				return false, fmt.Errorf("Upgrade warning related to correctly determing the upgrade path is showing for patch diff for v2 m2m")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with  %s", err))
+	})
+
 })

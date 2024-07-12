@@ -2142,3 +2142,12 @@ func createCSAndISCPNoPackageCheck(oc *exutil.CLI, podLabel string, namespace st
 	e2e.Logf("Check the version and item from catalogsource")
 	assertPodOutput(oc, "olm.catalogSource="+podLabel, namespace, expectedStatus)
 }
+
+func validateStringFromFile(fileName string, expectedS string) bool {
+	content, err := ioutil.ReadFile(fileName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(string(content), expectedS) {
+		return true
+	}
+	return false
+}
