@@ -9,8 +9,13 @@ objects:
     name: "${NAME}"
   spec:
     installNamespace: "${INSTALLNAMESPACE}"
+    serviceAccount:
+      name: "${SANAME}"
     packageName: "${PACKAGE}"
 parameters:
 - name: NAME
 - name: INSTALLNAMESPACE
 - name: PACKAGE
+- name: SANAME
+  value: "default"
+

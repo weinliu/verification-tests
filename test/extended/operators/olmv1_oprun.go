@@ -260,6 +260,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			ns                       = "ns-74618"
+			sa                       = "sa-74618"
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
@@ -308,6 +309,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 				Channel:          "alpha",
 				Version:          ">=0.0.1",
 				InstallNamespace: ns,
+				SaName:           sa,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -315,6 +317,8 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("Create namespace")
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create clustercatalog")
@@ -368,6 +372,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			clusterextensionWithoutChannelTemplate        = filepath.Join(baseDir, "clusterextensionWithoutChannel.yaml")
 			clusterextensionWithoutChannelVersionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
 			ns                                            = "ns-68821"
+			sa                                            = "sa-68821"
 			clustercatalog                                = olmv1util.ClusterCatalogDescription{
 				Name:     "clustercatalog-68821",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm68821",
@@ -379,6 +384,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 				Channel:          "candidate-v0.0",
 				Version:          ">=0.0.1",
 				InstallNamespace: ns,
+				SaName:           sa,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -386,6 +392,8 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("Create namespace")
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create clustercatalog")

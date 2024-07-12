@@ -9,6 +9,8 @@ objects:
     name: "${NAME}"
   spec:
     installNamespace: "${INSTALLNAMESPACE}"
+    serviceAccount:
+      name: "${SANAME}"
     packageName: "${PACKAGE}"
     version: "${VERSION}"
     upgradeConstraintPolicy: "${POLICY}"
@@ -19,3 +21,6 @@ parameters:
 - name: VERSION
 - name: POLICY
   value: "Enforce"
+- name: SANAME
+  value: "default"
+

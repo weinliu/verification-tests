@@ -9,6 +9,8 @@ objects:
     name: "${NAME}"
   spec:
     installNamespace: "${INSTALLNAMESPACE}"
+    serviceAccount:
+      name: "${SANAME}"
     packageName: "${PACKAGE}"
     channel: "${CHANNEL}"
     version: "${VERSION}"
@@ -21,3 +23,5 @@ parameters:
 - name: VERSION
 - name: POLICY
   value: "Enforce"
+- name: SANAME
+  value: "default"
