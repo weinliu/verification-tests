@@ -2161,10 +2161,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Collect metrics of tag")
 		mo, err := exutil.NewPrometheusMonitor(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		tagQueryParams := exutil.MonitorInstantQueryParams{Query: "imageregistry:imagestreamtags_count:sum"}
-		tagMsg, err := mo.InstantQuery(tagQueryParams)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(tagMsg).NotTo(o.BeEmpty())
+		err = wait.Poll(20*time.Second, 3*time.Minute, func() (bool, error) {
+			tagQueryParams := exutil.MonitorInstantQueryParams{Query: "imageregistry:imagestreamtags_count:sum"}
+			tagMsg, err := mo.InstantQuery(tagQueryParams)
+			if err != nil {
+				return false, err
+			}
+			if tagMsg == "" {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The operation metric don't get expect tag")
 
 		g.By("Collect metrics of operations")
 		opQueryParams := exutil.MonitorInstantQueryParams{Query: "imageregistry:operations_count:sum"}
