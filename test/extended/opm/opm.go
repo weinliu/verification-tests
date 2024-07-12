@@ -557,7 +557,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		}
 
 		exutil.By("4) checking render-veneer semver")
-		output, err = opmCLI.Run("alpha").Args("render-template", "--use-http", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "yaml").Output()
+		output, err = opmCLI.Run("alpha").Args("render-template", "--use-http", "basic", filepath.Join(opmBaseDir, "catalog-basic-template.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "nginx-operator") {
 			e2e.Failf(fmt.Sprintf("Failed run render command : %s", output))
@@ -1564,8 +1564,9 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("step: create a catalog using basic veneer with yaml format")
-		output, err := opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "yaml").Output()
+		output, err := opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-template.yaml"), "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("nginx-operator"))
 
 		indexFilePath := filepath.Join(catsrcPathYaml, "index.yaml")
 		if err = ioutil.WriteFile(indexFilePath, []byte(output), 0644); err != nil {
@@ -1576,7 +1577,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		output, err = opmCLI.Run("alpha").Args("list", "bundles", catsrcPathYaml, "nginx-operator").Output()
+		output, err = opmCLI.Run("alpha").Args("list", "bundles", catsrcPathYaml).Output()
 		if err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1590,7 +1591,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("step: create a catalog using basic veneer with json format")
-		output, err = opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "json").Output()
+		output, err = opmCLI.Run("alpha").Args("render-template", "basic", filepath.Join(opmBaseDir, "catalog-basic-template.yaml"), "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		indexFilePath = filepath.Join(catsrcPathJSON, "index.json")

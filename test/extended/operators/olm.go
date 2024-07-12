@@ -10815,7 +10815,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		namespaceName := oc.Namespace()
 		var (
@@ -12521,7 +12521,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			crwebhook           = filepath.Join(buildPruningBaseDir, "cr-webhookTest.yaml")
 
@@ -12531,7 +12531,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "Test Catsrc 34181 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/webhook-operator-index:0.0.3-v1",
+				address:     "quay.io/olmqe/webhook-operator-index:0.0.3-v1-cache",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -12669,7 +12669,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		architecture.SkipNonAmd64SingleArch(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
 		var (
 			catsrc = catalogSourceDescription{
 				name:        "catsrc-74652",
@@ -12698,18 +12698,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 		exutil.By("2) install sub")
 		sub.create(oc, itName, dr)
-		defer sub.deleteCSV(itName, dr)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "devworkspace-operator.v0.29.0", "-n", "openshift-operators").Execute()
 		defer sub.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("3) create cr")
 		crFilePath := filepath.Join(buildPruningBaseDir, "cr_devworkspace.yaml")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath).Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", sub.namespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", sub.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("devworkspace").Output()
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("devworkspace", "-n", sub.namespace).Output()
 			if strings.Contains(output, "Workspace is running") {
 				e2e.Logf("Workspace is running")
 				return true, nil
@@ -13259,18 +13259,20 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
-			containerCLI    = container.NewPodmanCLI()
-			containerTool   = "podman"
-			quayCLI         = container.NewQuayCLI()
-			opmCLI          = opm.NewOpmCLI()
-			bundleImageTag1 = "quay.io/olmqe/cockroachdb-operator:5.0.3-42979-" + getRandomString()
-			bundleImageTag2 = "quay.io/olmqe/cockroachdb-operator:5.0.4-42979-" + getRandomString()
-			indexImageTag   = "quay.io/olmqe/cockroachdb-index:42979-" + getRandomString()
+			containerCLI     = container.NewPodmanCLI()
+			containerTool    = "podman"
+			quayCLI          = container.NewQuayCLI()
+			opmCLI           = opm.NewOpmCLI()
+			bundleImageTag1  = "quay.io/olmqe/cockroachdb-operator:5.0.3-42979-" + getRandomString()
+			bundleImageTag2  = "quay.io/olmqe/cockroachdb-operator:5.0.4-42979-" + getRandomString()
+			indexImageTagTmp = "quay.io/olmqe/cockroachdb-index:42979-tmp" + getRandomString()
+			indexImageTag    = "quay.io/olmqe/cockroachdb-index:42979-" + getRandomString()
 		)
 
 		defer containerCLI.RemoveImage(indexImageTag)
 		defer containerCLI.RemoveImage(bundleImageTag1)
 		defer containerCLI.RemoveImage(bundleImageTag2)
+		defer quayCLI.DeleteTag(strings.Replace(indexImageTagTmp, "quay.io/", "", 1))
 		defer quayCLI.DeleteTag(strings.Replace(indexImageTag, "quay.io/", "", 1))
 		defer quayCLI.DeleteTag(strings.Replace(bundleImageTag1, "quay.io/", "", 1))
 		defer quayCLI.DeleteTag(strings.Replace(bundleImageTag2, "quay.io/", "", 1))
@@ -13313,51 +13315,50 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		}
 
 		exutil.By("build index image")
-		if output, err := opmCLI.Run("index").Args("add", "-b", bundleImageTag1+","+bundleImageTag2, "-t", indexImageTag, "-c", containerTool).Output(); err != nil {
+		if output, err := opmCLI.Run("index").Args("add", "-b", bundleImageTag1+","+bundleImageTag2, "-t", indexImageTagTmp, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		if output, err := containerCLI.Run("push").Args(indexImageTag).Output(); err != nil {
+		if output, err := containerCLI.Run("push").Args(indexImageTagTmp).Output(); err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		exutil.By("get index.db")
-		TmpDataPath := filepath.Join(opmBaseDir, "tmp")
-		dbFilePath := filepath.Join(TmpDataPath, "index.db")
+		exutil.By("Create index directory")
+		catalogFileName := "catalog"
+		TmpDataPath := filepath.Join("tmp", "tmp"+getRandomString())
 		err = os.MkdirAll(TmpDataPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", indexImageTag, "--path", "/database/index.db:"+TmpDataPath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("get index.db SUCCESS, path is %s", dbFilePath)
-		if _, err := os.Stat(dbFilePath); os.IsNotExist(err) {
-			e2e.Logf("get index.db Failed")
-		}
+		opmCLI.ExecCommandPath = TmpDataPath
 
-		exutil.By("Run the opm registry server binary to load manifest and serves a grpc API to query it.")
-		defer exec.Command("kill", "-9", "$(lsof -t -i:42979)").Output()
-		e2e.Logf("step: Run the registry-server")
-		cmd := exec.Command("opm", "registry", "serve", "-d", dbFilePath, "-t", filepath.Join(TmpDataPath, "42979.log"), "-p", "42979")
-		cmd.Dir = TmpDataPath
-		err = cmd.Start()
+		exutil.By("Migrate a sqlite-based index image or database file to a file-based catalog")
+		output, err = opmCLI.Run("migrate").Args(indexImageTagTmp, catalogFileName).Output()
+		o.Expect(output).To(o.ContainSubstring("file-based catalog"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		time.Sleep(time.Second * 1)
-		e2e.Logf("step: check api.Registry/ListBundles")
-		outputCurl, err := exec.Command("grpcurl", "-plaintext", "localhost:42979", "api.Registry/ListBundles").Output()
-		e2e.Logf(string(outputCurl))
+
+		exutil.By("Generate the index docker file")
+		_, err = opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(outputCurl)).To(o.ContainSubstring("cockroachdb.v5.0.3"))
-		o.Expect(string(outputCurl)).To(o.ContainSubstring("cockroachdb.v5.0.4"))
-		o.Expect(string(outputCurl)).To(o.ContainSubstring("type5.type5"))
-		o.Expect(string(outputCurl)).To(o.ContainSubstring("version is 5.0.3"))
-		o.Expect(string(outputCurl)).To(o.ContainSubstring("version is 5.0.4"))
-		cmd.Process.Kill()
+		dockerFileContent, err := ioutil.ReadFile(filepath.Join(TmpDataPath, catalogFileName+".Dockerfile"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(dockerFileContent).To(o.ContainSubstring("--cache-dir=/tmp/cache"))
+
+		exutil.By("Build and push the image")
+		podmanCLI := container.NewPodmanCLI()
+		podmanCLI.ExecCommandPath = TmpDataPath
+		output, err = podmanCLI.Run("build").Args(".", "-f", catalogFileName+".Dockerfile", "-t", indexImageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully"))
+
+		output, err = podmanCLI.Run("push").Args(indexImageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
 
 		var (
 			itName            = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate  = filepath.Join(buildIndexBaseDir, "operatorgroup.yaml")
-			catsrcTemplate    = filepath.Join(buildIndexBaseDir, "catalogsource-image.yaml")
+			catsrcTemplate    = filepath.Join(buildIndexBaseDir, "catalogsource-image-extract.yaml")
 			subTemplate       = filepath.Join(buildIndexBaseDir, "olm-subscription.yaml")
 			og                = operatorGroupDescription{
 				name:      "test-og",
@@ -13462,7 +13463,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("create namespace and catsrc")
 		itName := g.CurrentSpecReport().FullText()
 		buildIndexBaseDir := exutil.FixturePath("testdata", "olm")
-		catsrcTemplate := filepath.Join(buildIndexBaseDir, "catalogsource-image.yaml")
+		catsrcTemplate := filepath.Join(buildIndexBaseDir, "catalogsource-image-extract.yaml")
 		oc.SetupProject()
 		ns := oc.Namespace()
 		catsrc := catalogSourceDescription{
@@ -13499,76 +13500,6 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.AssertWaitPollNoErr(err, "packagemanifest of Test Catsrc 43246 Operators doesn't exist")
 
 		exutil.By("43246 SUCCESS")
-
-	})
-
-	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-62947-opm serve FBC should not fail if cachedir not provided", func() {
-		architecture.SkipNonAmd64SingleArch(oc)
-		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
-			g.Skip("HTTP_PROXY is not empty - skipping test ...")
-		}
-		var (
-			olmDataDir        = exutil.FixturePath("testdata", "olm")
-			buildIndexBaseDir = filepath.Join(olmDataDir, "62947")
-			indexImageTag     = "quay.io/olmqe/nginxolm-operator-index:62947-" + getRandomString()
-			quayCLI           = container.NewQuayCLI()
-		)
-
-		exutil.By("Build and push the index image")
-		podmanCLI := container.NewPodmanCLI()
-		podmanCLI.ExecCommandPath = buildIndexBaseDir
-		dockerconfigjsonpath := filepath.Join(buildIndexBaseDir, ".dockerconfigjson")
-		defer exec.Command("rm", "-f", dockerconfigjsonpath).Output()
-		_, err := oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+buildIndexBaseDir).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		output, err := podmanCLI.Run("build").Args(".", "-f", "catalog.Dockerfile", "-t", indexImageTag, "--authfile", dockerconfigjsonpath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Successfully"))
-
-		defer quayCLI.DeleteTag(strings.Replace(indexImageTag, "quay.io/", "", 1))
-		output, err = podmanCLI.Run("push").Args(indexImageTag).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
-
-		exutil.By("create namespace and catsrc")
-		itName := g.CurrentSpecReport().FullText()
-		catsrcTemplate := filepath.Join(olmDataDir, "catalogsource-image.yaml")
-		oc.SetupProject()
-		ns := oc.Namespace()
-		catsrc := catalogSourceDescription{
-			name:        "catsrc-62947",
-			namespace:   ns,
-			displayName: "Test Catsrc 62947 Operators",
-			publisher:   "Red Hat",
-			sourceType:  "grpc",
-			address:     indexImageTag,
-			template:    catsrcTemplate,
-		}
-		oc.SetupProject()
-		defer catsrc.delete(itName, dr)
-		catsrc.createWithCheck(oc, itName, dr)
-
-		exutil.By("check packagemanifest")
-		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--selector=catalog=catsrc-62947", "-n", ns).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(output, "Test Catsrc 62947 Operators") {
-				e2e.Logf(output)
-				return true, nil
-			}
-			e2e.Logf("packagemanifest of Test Catsrc 62947 Operators doesn't exist, go next round")
-			return false, nil
-		})
-		if err != nil {
-			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", ns, "-o=jsonpath={.status}").Output()
-			e2e.Logf(output)
-			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns).Output()
-			e2e.Logf(output)
-		}
-		exutil.AssertWaitPollNoErr(err, "packagemanifest of Test Catsrc 62947 Operators doesn't exist")
-
-		exutil.By("62947 SUCCESS")
 
 	})
 
