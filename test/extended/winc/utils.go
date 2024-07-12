@@ -33,25 +33,29 @@ type ConfigMapPayload struct {
 }
 
 var (
-	mcoNamespace       = "openshift-machine-api"
-	wmcoNamespace      = "openshift-windows-machine-config-operator"
-	wmcoDeployment     = "windows-machine-config-operator"
-	privateKey         = ""
-	publicKey          = ""
-	windowsWorkloads   = "win-webserver"
-	linuxWorkloads     = "linux-webserver"
-	windowsServiceDNS  = "win-webserver.winc-test.svc.cluster.local"
-	linuxServiceDNS    = "linux-webserver.winc-test.svc.cluster.local:8080"
-	defaultWindowsMS   = "windows"
-	defaultNamespace   = "winc-test"
-	proxyCAConfigMap   = "trusted-ca"
-	wicdConfigMap      = "windows-services"
-	iaasPlatform       string
-	trustedCACM        = "trusted-ca"
-	noProxy            = "test.no-proxy.com"
-	nutanix_proxy_host = "10.0.77.69"
-	vsphere_bastion    = "10.0.76.163"
-	wincTestCM         = "winc-test-config"
+	mcoNamespace                   = "openshift-machine-api"
+	wmcoNamespace                  = "openshift-windows-machine-config-operator"
+	wmcoDeployment                 = "windows-machine-config-operator"
+	privateKey                     = ""
+	publicKey                      = ""
+	windowsWorkloads               = "win-webserver"
+	linuxWorkloads                 = "linux-webserver"
+	windowsServiceDNS              = "win-webserver.winc-test.svc.cluster.local"
+	linuxServiceDNS                = "linux-webserver.winc-test.svc.cluster.local:8080"
+	defaultWindowsMS               = "windows"
+	defaultNamespace               = "winc-test"
+	proxyCAConfigMap               = "trusted-ca"
+	wicdConfigMap                  = "windows-services"
+	iaasPlatform                   string
+	trustedCACM                    = "trusted-ca"
+	noProxy                        = "test.no-proxy.com"
+	nutanix_proxy_host             = "10.0.77.69"
+	vsphere_bastion                = "10.0.76.163"
+	wincTestCM                     = "winc-test-config"
+	linuxNoTagsImage               = "quay.io/openshifttest/hello-openshift@sha256:2a3edeadd7aa12a6156e9a27de1daae73d0569cbb0a761a7885944738245f11e"
+	primary_disconnected_image_key = "primary_windows_container_disconnected_image"
+	linuxWebserverFile             = "linux_web_server.yaml"
+	windowsWebserverFile           = "windows_web_server.yaml"
 	//	defaultSource      = "wmco"
 	// Bastion user used for Nutanix and vSphere IBMC
 	sshProxyUser = "root"
@@ -354,18 +358,43 @@ func getWindowsNodeCurrentTime(oc *exutil.CLI, winHostIP string, privateKey stri
 	return timeStamp
 }
 
-func createLinuxWorkload(oc *exutil.CLI, namespace string) {
-	linuxWebServer := filepath.Join(exutil.FixturePath("testdata", "winc"), "linux_web_server.yaml")
-	// Wait up to 3 minutes for Linux workload ready
-	oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", linuxWebServer, "-n", namespace).Output()
-	poolErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		return checkWorkloadCreated(oc, linuxWorkloads, namespace, 1), nil
-	})
-	if poolErr != nil {
-		e2e.Failf("Linux workload is not ready after waiting up to 3 minutes ...")
+/*
+replacement contains a slice with string to replace (as written in the template, for example:
+
+	<windows_container_image>) and the value to be replaced by. Example:
+	var toReplace map[string]string = map[string]string{
+	             "<windows_container_image>": "mcr.microsoft.com/windows/servercore:ltsc2019",
+	             "<kernelID>": "k3Rn3L-1d"
+*/
+func createWorkload(oc *exutil.CLI, namespace string, workloadFile string, replacement map[string]string, waitForReady bool, workloadType string) {
+	// Get the content of the workload file
+	workloadContent := exutil.GetFileContent("winc", workloadFile)
+
+	// Replace placeholders in the workload content
+	for rep, value := range replacement {
+		workloadContent = strings.ReplaceAll(workloadContent, rep, value)
+	}
+
+	// Write the modified content to a temporary file
+	tempFileName := namespace + "-" + workloadType + "-workload.yaml"
+	defer os.Remove(tempFileName) // Cleanup the temporary file
+	if err := os.WriteFile(tempFileName, []byte(workloadContent), 0644); err != nil {
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to write temporary file")
+		return
+	}
+
+	// Create the workload
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create "+workloadType+" workload")
+
+	// Wait for the workload to be ready if specified
+	if waitForReady {
+		poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
+			return checkWorkloadCreated(oc, workloadType, namespace, 1), nil
+		})
+		o.Expect(poolErr).NotTo(o.HaveOccurred(), workloadType+" workload is not ready after waiting up to 15 minutes")
 	}
 }
-
 func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
 	// Get the number of ready replicas
 	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").
@@ -376,44 +405,6 @@ func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace strin
 
 	// Check if the number of ready replicas matches the expected number
 	return (msg == "" && replicas == 0) || numberOfWorkloads == replicas
-}
-
-/*
-replacement contains a slice with string to replace (as written in the template, for example:
-
-	<windows_container_image>) and the value to be replaced by. Example:
-	var toReplace map[string]string = map[string]string{
-	             "<windows_container_image>": "mcr.microsoft.com/windows/servercore:ltsc2019",
-	             "<kernelID>": "k3Rn3L-1d"
-*/
-func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string, replacement map[string]string, waitBool bool) {
-	// Get the content of the workload file
-	windowsWebServer := exutil.GetFileContent("winc", workloadFile)
-
-	// Replace placeholders in the workload content
-	for rep, value := range replacement {
-		windowsWebServer = strings.ReplaceAll(windowsWebServer, rep, value)
-	}
-
-	// Write the modified content to a temporary file
-	tempFileName := namespace + "-windows-workload"
-	defer os.Remove(tempFileName) // Cleanup the temporary file
-	if err := os.WriteFile(tempFileName, []byte(windowsWebServer), 0644); err != nil {
-		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to write temporary file")
-		return
-	}
-
-	// Create the Windows workload
-	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create Windows workload")
-
-	// Wait for the Windows workload to be ready if specified
-	if waitBool {
-		poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
-			return checkWorkloadCreated(oc, windowsWorkloads, namespace, 1), nil
-		})
-		o.Expect(poolErr).NotTo(o.HaveOccurred(), "Windows workload is not ready after waiting up to 15 minutes")
-	}
 }
 
 // Get an external IP of loadbalancer service
@@ -1546,4 +1537,12 @@ func extractMetricValue(queryResult string) string {
 
 	metricValue := jsonResult.Get("data.result.0.value.1").String()
 	return metricValue
+}
+
+func isDisconnectedCluster(oc *exutil.CLI) bool {
+	primaryDisconnectedImage := getConfigMapData(oc, wincTestCM, primary_disconnected_image_key, defaultNamespace)
+	if primaryDisconnectedImage == "" || primaryDisconnectedImage == "<primary_windows_container_disconnected_image>" {
+		return false
+	}
+	return true
 }

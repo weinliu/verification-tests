@@ -235,7 +235,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-32273"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
+		createWorkload(oc, namespace, windowsWebserverFile, map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
 		externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
@@ -274,7 +274,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createWindowsAutoscaller(oc, machinesetName)
 
 		g.By("Creating Windows workloads")
-		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
+		createWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
 
 		if iaasPlatform == "gcp" || iaasPlatform == "vsphere" {
 			g.By("Scalling up the Windows workload to 4")
@@ -329,7 +329,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			"<windows_container_image>": getConfigMapData(oc, wincTestCM, "secondary_windows_container_image", defaultNamespace),
 			"<kernelID>":                buildID,
 		}
-		createWindowsWorkload(oc, namespace, "windows_webserver_secondary_os.yaml", replacement, true)
+		createWorkload(oc, namespace, "windows_webserver_secondary_os.yaml", replacement, true, windowsWorkloads)
 		e2e.Logf("-------- Windows workload scaled on node IP %v -------------", machineIP[0])
 		e2e.Logf("-------- Scaling up workloads to 5 -------------")
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
@@ -402,7 +402,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		byohIP := setBYOH(oc, iaasPlatform, []string{"InternalIP"}, byohMachineSetName, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
+		createWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -437,7 +437,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		setBYOH(oc, iaasPlatform, []string{"InternalIP", "InternalDNS"}, byohMachineSetName, getConfigMapData(oc, wincTestCM, "primary_windows_image", defaultNamespace))
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
+		createWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -452,8 +452,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-39451"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
-		createLinuxWorkload(oc, namespace)
+		createWorkload(oc, namespace, windowsWebserverFile, map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
+		var linuxWebserverImage string
+		if isDisconnectedCluster(oc) {
+			linuxWebserverImage = getConfigMapData(oc, wincTestCM, "linux_container_disconnected_image", defaultNamespace)
+		} else {
+			linuxWebserverImage = linuxNoTagsImage
+		}
+		createWorkload(oc, namespace, linuxWebserverFile, map[string]string{"<linux_webserver_image>": linuxWebserverImage}, true, linuxWorkloads)
 		g.By("Check access through clusterIP from Linux and Windows pods")
 		windowsClusterIP, err := getServiceClusterIP(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -534,8 +540,19 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-31276"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
-		createLinuxWorkload(oc, namespace)
+		createWorkload(oc, namespace, windowsWebserverFile, map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
+		// Determine the Linux web server image based on disconnected status
+		var linuxWebserverImage string
+		if isDisconnectedCluster(oc) {
+			linuxWebserverImage = getConfigMapData(oc, wincTestCM, "linux_container_disconnected_image", defaultNamespace)
+		} else {
+			linuxWebserverImage = linuxNoTagsImage
+		}
+
+		// Create Linux workload
+		createWorkload(oc, namespace, linuxWebserverFile, map[string]string{
+			"<linux_webserver_image>": linuxWebserverImage,
+		}, true, linuxWorkloads)
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		hostIPArray, err := getWorkloadsHostIP(oc, windowsWorkloads, namespace)
@@ -821,7 +838,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-37472"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
+		createWorkload(oc, namespace, windowsWebserverFile, map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
 		windowsHostName := getWindowsHostNames(oc)[0]
 		oc.AsAdmin().WithoutNamespace().Run("annotate").Args("node", windowsHostName, "windowsmachineconfig.openshift.io/version-").Output()
 
@@ -901,7 +918,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true)
+		createWorkload(oc, namespace, windowsWebserverFile, map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
 		// fetching here the external IP
 		externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -935,7 +952,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Failed to check Windows node have taint os=Windows:NoSchedule")
 		}
 		g.By("Check deployment without tolerations would not land on Windows nodes")
-		createWindowsWorkload(oc, namespace, "windows_web_server_no_taint.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, false)
+		createWorkload(oc, namespace, "windows_web_server_no_taint.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, false, windowsWorkloads)
 		poolErr := wait.Poll(20*time.Second, 60*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l=app=win-webserver", "-o=jsonpath={.items[].status.conditions[].message}", "-n", namespace).Output()
 			if strings.Contains(msg, "had untolerated taint") {
@@ -946,7 +963,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if poolErr != nil {
 			e2e.Failf("Failed to check deployment without tolerations would not land on Windows nodes")
 		}
-		g.By("Check deployment with tolerations already covered in function createWindowsWorkload()")
+		g.By("Check deployment with tolerations already covered in function createWorkload()")
 		g.By("Check none of core/optional operators/operands would land on Windows nodes")
 		for _, winHostName := range getWindowsHostNames(oc) {
 			e2e.Logf("Check pods running on Windows node: " + winHostName)
@@ -988,7 +1005,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if strings.Contains(deployedImage, "ltsc2022") {
 			image = "mcr.microsoft.com/windows/servercore:ltsc2022"
 		}
-		createWindowsWorkload(oc, namespace, "windows_webserver_projected_volume.yaml", map[string]string{"<windows_container_image>": image}, true)
+		createWorkload(oc, namespace, "windows_webserver_projected_volume.yaml", map[string]string{"<windows_container_image>": image}, true, windowsWorkloads)
 		winpod, err := getWorkloadsNames(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check in Windows pod, the projected-volume directory contains your projected sources")
@@ -1980,7 +1997,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// Step 1: Retrieve the primary_windows_container_disconnected_image from the ConfigMap
 		g.By("Retrieving the primary disconnected image from the ConfigMap")
 		primaryDisconnectedImage := getConfigMapData(oc, wincTestCM, primary_image_key, defaultNamespace)
-		if primaryDisconnectedImage == "" || primaryDisconnectedImage == "<primary_windows_container_disconnected_image>" {
+		if !isDisconnectedCluster(oc) {
 			g.Skip("Skipping test not a disconnected test")
 		}
 		defer deleteProject(oc, namespace)
@@ -1999,7 +2016,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		// Step 3: Create workloads pulling from a disconnected registry
 		g.By("Creating workloads pulling from a disconnected registry")
-		createWindowsWorkload(oc, namespace, "windows_web_server_disconnected.yaml", map[string]string{"<windows_container_image>": primaryDisconnectedImage}, true)
+		createWorkload(oc, namespace, "windows_web_server_disconnected.yaml", map[string]string{"<windows_container_image>": primaryDisconnectedImage}, true, windowsWorkloads)
 
 		// Step 4: Scale the deployment up
 		g.By("Scaling the deployment up")
