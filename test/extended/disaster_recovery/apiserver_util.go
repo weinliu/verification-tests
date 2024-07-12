@@ -2,6 +2,7 @@ package disasterrecovery
 
 import (
 	"fmt"
+	"math/rand"
 	"os/exec"
 	"strings"
 	"time"
@@ -194,4 +195,10 @@ func isAzureStackCluster(oc *exutil.CLI) (bool, string) {
 		return true, cloudName
 	}
 	return false, ""
+}
+
+// Get a random number of int32 type [m,n], n > m
+func getRandomNum(m int32, n int32) int32 {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Int31n(n-m+1) + m
 }
