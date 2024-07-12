@@ -406,7 +406,7 @@ var _ = g.Describe("[sig-apps] Workloads test kubescheduler operator works well"
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 		kubeletOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+masterNodes[0], "-n", "openshift-kube-scheduler", "--", "chroot", "/host", "cat", "/etc/kubernetes/kubelet.conf").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(kubeletOutput, `"DynamicResourceAllocation": true`)).To(o.BeTrue())
+		o.Expect(strings.Contains(kubeletOutput, "DynamicResourceAllocation: true")).To(o.BeTrue())
 
 	})
 
