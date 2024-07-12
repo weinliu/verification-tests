@@ -12,6 +12,46 @@ import (
 var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("dns-operator", exutil.KubeConfigPath())
+
+	// Test case creater: hongli@redhat.com
+	// No dns operator namespace on HyperShift guest cluster so this case is not available
+	g.It("Author:mjoseph-NonHyperShiftHOST-High-37912-DNS operator should show clear error message when DNS service IP already allocated [Disruptive]", func() {
+		// Bug: 1813062
+		// Store the clusterip from the cluster
+		clusterIp := getByJsonPath(oc, "openshift-dns", "service/dns-default", "{.spec.clusterIP}")
+
+		exutil.By("Step1: Delete DNS operator pod and delete the default DNS service")
+		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", "name=dns-operator")[0]
+		defer deleteDnsOperatorToRestore(oc)
+		_, errDelpod := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", dnsOperatorPodName, "-n", "openshift-dns-operator").Output()
+		o.Expect(errDelpod).NotTo(o.HaveOccurred())
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "dns-default", "-n", "openshift-dns").Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		exutil.By("Step2: Create a test server with the Cluster IP")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "svc-37912", "-n", "openshift-dns").Execute()
+		err2 := oc.AsAdmin().WithoutNamespace().Run("create").Args("svc", "clusterip", "svc-37912", "--tcp=53:53", "--clusterip="+clusterIp, "-n", "openshift-dns").Execute()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		// wait for the dns operator pod to come up
+		errPodDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)
+		exutil.AssertWaitPollNoErr(errPodDis, fmt.Sprintf("resource %v does not disapper", "pod/"+dnsOperatorPodName))
+		errPodRdy := waitForPodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("dns-operator pod isn't ready"))
+
+		exutil.By("Step3: Confirm the new dns service came with the given address")
+		newClusterIp := getByJsonPath(oc, "openshift-dns", "service/svc-37912", "{.spec.clusterIP}")
+		o.Expect(newClusterIp).To(o.BeEquivalentTo(clusterIp))
+
+		exutil.By("Step4: Confirm the error message from the DNS operator status")
+		outputOpcfg, errOpcfg := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].message}}`).Output()
+		o.Expect(errOpcfg).NotTo(o.HaveOccurred())
+		o.Expect(outputOpcfg).To(o.ContainSubstring("No IP address is assigned to the DNS service"))
+
+		exutil.By("Step5: Check the degraded status of dns operator among the cluster operators")
+		jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
+		waitForOutput(oc, "default", "co/dns", jsonPath, "FalseTrueTrue")
+	})
+
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
 		var (
