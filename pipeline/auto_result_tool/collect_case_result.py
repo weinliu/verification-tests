@@ -173,6 +173,8 @@ class SummaryClient:
             return True
         if "dial tcp" in message and "no route to host" in message:
             return True
+        if "tls: failed to verify certificate:" in message:
+            return True
         return False
 
 
