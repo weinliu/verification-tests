@@ -1,0 +1,28 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+objects:
+- kind: NetworkAttachmentDefinition
+  apiVersion: k8s.cni.cncf.io/v1
+  metadata:
+    name: "${NADNAME}"
+    namespace: "${NAMESPACE}" 
+  spec:
+    config: |2
+      {
+        "cniVersion": "0.3.1",
+        "name": "${NADNAME}",
+        "type": "ovn-k8s-cni-overlay",
+        "topology":"${TOPOLOGY}",
+        "subnets": "${SUBNET}",
+        "mtu": ${MTU},
+        "netAttachDefName": "${NET_ATTACH_DEF_NAME}",
+        "role": "primary"
+      }
+
+parameters:
+- name: NADNAME
+- name: NAMESPACE
+- name: TOPOLOGY
+- name: SUBNET
+- name: MTU
+- name: NET_ATTACH_DEF_NAME
