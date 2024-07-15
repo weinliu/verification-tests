@@ -6433,4 +6433,53 @@ EOF`, serverconf, fqdnName)
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("invalid"), "Expected 'invalid' in output when removing the featuregate")
 	})
+
+	// author: dpunia@redhat.com
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-High-53230-[Apiserver] CVE Security Test Kubernetes Validating Admission Webhook Bypass [Serial]", func() {
+		exutil.By("Check if it's a proxy cluster")
+		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
+		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
+			g.Skip("Skip for proxy platform")
+		}
+
+		exutil.By("Get a node name required by test")
+		nodeName, getNodeErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(nodeName).NotTo(o.Equal(""))
+
+		exutil.By("1. Create custom webhook & service")
+		webhookDeployTemplate := getTestDataFilePath("webhook-deploy.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", webhookDeployTemplate).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", webhookDeployTemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podName := getPodsList(oc.AsAdmin(), "validationwebhook")
+		o.Expect(podName).NotTo(o.BeEmpty())
+		exutil.AssertPodToBeReady(oc, podName[0], "validationwebhook")
+		//Get caBundle used by register webhook.
+		caBundle := ExecCommandOnPod(oc, podName[0], "validationwebhook", `cat /usr/src/app/ca.crt | base64 | tr -d "\n"`)
+		o.Expect(caBundle).NotTo(o.BeEmpty())
+
+		exutil.By("2. Register the above created webhook")
+		webhookRegistrationTemplate := getTestDataFilePath("webhook-registration.yaml")
+		params := []string{"-n", "validationwebhook", "-f", webhookRegistrationTemplate, "-p", "NAME=validationwebhook.validationwebhook.svc", "NAMESPACE=validationwebhook", "CABUNDLE=" + caBundle}
+		webhookRegistrationConfigFile := exutil.ProcessTemplate(oc, params...)
+		defer func() {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", webhookRegistrationConfigFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", webhookRegistrationConfigFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		parameters := []string{
+			`{"changeAllowed": "false"}`,
+			`{"changeAllowed": "true"}`,
+		}
+
+		for index, param := range parameters {
+			exutil.By(fmt.Sprintf("3.%v Node Label Addition Fails Due to Validation Webhook Denial", index+1))
+			out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("node", nodeName, "-p", fmt.Sprintf(`{"metadata": {"labels": %s}}`, param)).Output()
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(out).Should(o.ContainSubstring("denied the request: Validation failed"), fmt.Sprintf("admission webhook \"validationwebhook.validationwebhook.svc\" denied the request: Validation failed with changeAllowed: %s", param))
+		}
+	})
 })
