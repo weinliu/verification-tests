@@ -5477,7 +5477,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
 				template:    catsrcImageTemplate,
 			}
 
@@ -5921,6 +5921,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-24438, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-24438-check subscription CatalogSource Status", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5989,6 +5993,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-24027, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24027-can create and delete catalogsource and sub repeatedly", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6065,7 +6073,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
 		var (
@@ -6144,7 +6152,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
 			exutil.IsSpecifiedAnnotationKeyExist(oc, "ingress.config/cluster", "", `ingress.operator.openshift.io/default-enable-http2`) ||
 			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" ||
 			exutil.IsTechPreviewNoUpgrade(oc) {
@@ -6430,6 +6438,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-24513, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24513-Operator config support env only", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6499,6 +6511,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-24382, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24382-Should restrict CRD update if schema changes [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if infra == "SingleReplica" {
@@ -6616,6 +6637,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-25760, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-25760-Operator upgrades does not fail after change the channel", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6834,6 +6859,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-34472, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-34472-OLM label dependency", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		platform := exutil.CheckPlatform(oc)
+		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6898,7 +6927,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
 		var (
@@ -7249,7 +7278,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 39897 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/mta-index:v0.0.6",
+				address:     "quay.io/olmqe/mta-index:v0.0.6-withCache",
 				template:    catsrcImageTemplate,
 			}
 			subMta = subscriptionDescription{
@@ -12242,7 +12271,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "Test Catsrc 25783 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v21",
+				address:     "quay.io/olmqe/olm-api:v21-withCache",
 				template:    catsrcImageTemplate,
 			}
 			subCockroachdb = subscriptionDescription{
@@ -12422,7 +12451,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "Test Catsrc 33241 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v4",
+				address:     "quay.io/olmqe/olm-api:v4-withCache",
 				template:    catsrcImageTemplate,
 			}
 			subCockroachdb = subscriptionDescription{
@@ -13879,12 +13908,21 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	// Test case: OCP-29810, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-29810-The bundle and index image reated successfully when spec replaces field is null", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		node, errNode := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errNode).NotTo(o.HaveOccurred())
+		errSet := exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errSet).NotTo(o.HaveOccurred())
+		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		o.Expect(errFips).NotTo(o.HaveOccurred())
+		if strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipForSNOCluster(oc)
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") {
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") {
 			g.Skip("it is not supported")
 		}
 		var (
