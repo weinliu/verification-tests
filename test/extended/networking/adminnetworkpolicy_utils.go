@@ -3,14 +3,18 @@ package networking
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
+
+	o "github.com/onsi/gomega"
 )
 
-// Struct to create BANP with both ingress and egress rule
+// Struct to create BANP with either ingress or egress single rule
 // Match Label selector
 type singleRuleBANPPolicyResource struct {
 	name       string
@@ -25,7 +29,7 @@ type singleRuleBANPPolicyResource struct {
 	template   string
 }
 
-// Struct to create BANP with either ingress or egress rules
+// Struct to create BANP with either ingress or egress multiple rules
 // Match Label selector
 // egress to
 // ingress from
@@ -62,7 +66,7 @@ type singleRuleBANPPolicyResourceNode struct {
 	template   string
 }
 
-// Struct to create ANP with either ingress or egress rule
+// Struct to create ANP with either ingress or egress single rule
 // Match Label selector
 // egress to
 // ingress from
@@ -97,7 +101,7 @@ type singleRuleANPPolicyResourceNode struct {
 	template   string
 }
 
-// Struct to create ANP with either ingress or egress rules
+// Struct to create ANP with either ingress or egress multiple rules
 // Match Label selector
 // egress to
 // ingress from
@@ -138,6 +142,26 @@ type networkPolicyResource struct {
 	template         string
 }
 
+// Resource to create a network policy with protocol
+// Namespace and Pod Selector
+// policy - egress or ingress
+// policyType - Egress or Ingress
+type networkPolicyProtocolResource struct {
+	name            string
+	namespace       string
+	policy          string
+	policyType      string
+	direction       string
+	namespaceSel    string
+	namespaceSelKey string
+	namespaceSelVal string
+	podSel          string
+	podSelKey       string
+	podSelVal       string
+	port            int
+	protocol        string
+	template        string
+}
 type replicationControllerPingPodResource struct {
 	name      string
 	replicas  int
@@ -321,6 +345,26 @@ func (netpol *networkPolicyResource) createNetworkPolicy(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create networkpolicy %v", netpol.name))
 }
 
+func (netpol *networkPolicyProtocolResource) createProtocolNetworkPolicy(oc *exutil.CLI) {
+	exutil.By("Creating protocol networkpolicy from template")
+	portString := fmt.Sprintf("PORT=%v", netpol.port)
+
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", netpol.template, "-p", "NAME="+netpol.name,
+			"NAMESPACE="+netpol.namespace, "POLICY="+netpol.policy, "POLICYTYPE="+netpol.policyType,
+			"DIRECTION="+netpol.direction,
+			"NAMESPACESEL="+netpol.namespaceSel, "NAMESPACESELKEY="+netpol.namespaceSelKey, "NAMESPACESELVAL="+netpol.namespaceSelVal,
+			"PODSEL="+netpol.podSel, "PODSELKEY="+netpol.podSelKey, "PODSELVAL="+netpol.podSelVal,
+			"PROTOCOL="+netpol.protocol, portString)
+		if err1 != nil {
+			e2e.Logf("Error creating networkpolicy :%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create networkpolicy %v", netpol.name))
+}
+
 func (banp *singleRuleCIDRBANPPolicyResource) createSingleRuleCIDRBANP(oc *exutil.CLI) {
 	exutil.By("Creating single rule Baseline Admin Network Policy from template")
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
@@ -365,4 +409,87 @@ func (anp *MultiRuleCIDRANPPolicyResource) createMultiRuleCIDRANP(oc *exutil.CLI
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Admin Network Policy CR %v", anp.name))
+}
+
+func checkUDPTraffic(oc *exutil.CLI, clientPodName string, clientPodNamespace string, serverPodName string, serverPodNamespace string, serverUdpPort string, resultPass bool) {
+	e2e.Logf("Listening on pod %s at port %s", serverPodName, serverUdpPort)
+	ipStackType := checkIPStackType(oc)
+	var udpServerPodIPList []string
+	switch ipStackType {
+	case "ipv4single":
+		udpServerPodIPList = append(udpServerPodIPList, getPodIPv4(oc, serverPodNamespace, serverPodName))
+	case "ipv6single":
+		udpServerPodIPList = append(udpServerPodIPList, getPodIPv6(oc, serverPodNamespace, serverPodName, ipStackType))
+	case "dualstack":
+		udpServerPodIPList = append(udpServerPodIPList, getPodIPv4(oc, serverPodNamespace, serverPodName))
+		udpServerPodIPList = append(udpServerPodIPList, getPodIPv6(oc, serverPodNamespace, serverPodName, ipStackType))
+	default:
+		e2e.Logf("Stack type could not be determined")
+	}
+	udpServerCmd := fmt.Sprintf("timeout --preserve-status 60 ncat -u -l %s", serverUdpPort)
+	for _, udpServerPodIP := range udpServerPodIPList {
+		cmdNcat, cmdOutput, _, ncatCmdErr := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", serverPodNamespace, serverPodName, "bash", "-c", udpServerCmd).Background()
+		defer cmdNcat.Process.Kill()
+		o.Expect(ncatCmdErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Sending UDP packets to pod %s", serverPodName)
+		cmd := fmt.Sprintf("echo hello | ncat -v -u %s %s", udpServerPodIP, serverUdpPort)
+		for i := 0; i < 2; i++ {
+			output, ncatCmdErr := execCommandInSpecificPod(oc, clientPodNamespace, clientPodName, cmd)
+			o.Expect(ncatCmdErr).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(string(output), "bytes sent")).To(o.BeTrue())
+		}
+		e2e.Logf("UDP pod server output %s", cmdOutput)
+		if resultPass {
+			o.Expect(strings.Contains(cmdOutput.String(), "hello")).To(o.BeTrue())
+		} else {
+			o.Expect(strings.Contains(cmdOutput.String(), "hello")).To(o.BeFalse())
+		}
+		cmdNcat.Process.Kill()
+	}
+}
+
+func checkSCTPTraffic(oc *exutil.CLI, clientPodName string, clientPodNamespace string, serverPodName string, serverPodNamespace string, resultPass bool) {
+	ipStackType := checkIPStackType(oc)
+	var sctpServerPodIPList []string
+	switch ipStackType {
+	case "ipv4single":
+		sctpServerPodIPList = append(sctpServerPodIPList, getPodIPv4(oc, serverPodNamespace, serverPodName))
+	case "ipv6single":
+		sctpServerPodIPList = append(sctpServerPodIPList, getPodIPv6(oc, serverPodNamespace, serverPodName, ipStackType))
+	case "dualstack":
+		sctpServerPodIPList = append(sctpServerPodIPList, getPodIPv4(oc, serverPodNamespace, serverPodName))
+		sctpServerPodIPList = append(sctpServerPodIPList, getPodIPv6(oc, serverPodNamespace, serverPodName, ipStackType))
+	default:
+		e2e.Logf("Stack type could not be determined")
+	}
+	for _, sctpServerPodIP := range sctpServerPodIPList {
+		e2e.Logf("SCTP server pod listening for sctp traffic")
+		cmdNcat, _, _, err := oc.AsAdmin().Run("exec").Args("-n", serverPodNamespace, serverPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+		defer cmdNcat.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Check SCTP process running in the SCTP server pod")
+		o.Eventually(func() string {
+			msg, err := e2eoutput.RunHostCmd(serverPodNamespace, serverPodName, "ps aux | grep sctp")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return msg
+		}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No SCTP process running on SCTP server pod")
+
+		e2e.Logf("SCTP client pod sending SCTP traffic")
+		_, err1 := e2eoutput.RunHostCmd(clientPodNamespace, clientPodName, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+		if resultPass {
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			exutil.By("Server SCTP process will end after receiving SCTP traffic from SCTP client")
+			o.Eventually(func() string {
+				msg, err := e2eoutput.RunHostCmd(serverPodNamespace, serverPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "SCTP process didn't end after getting SCTP traffic from SCTP client")
+		} else {
+			e2e.Logf("SCTP traffic is blocked")
+			o.Expect(err1).To(o.HaveOccurred())
+		}
+		cmdNcat.Process.Kill()
+	}
 }
