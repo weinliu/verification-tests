@@ -165,7 +165,13 @@ func getGoVersion(component, commitID string) (float64, error) {
 		return 0, curlErr
 	}
 	goVersion := string(curlOutput)[3:]
-	return strconv.ParseFloat(strings.TrimSuffix(goVersion, "\n"), 64)
+	// We only want X.Y version, not X.Y.Z version
+	goVersionSplit := strings.Split(goVersion, ".")
+	if len(goVersionSplit) < 2 {
+		return 0, fmt.Errorf("Wrong go version string %s. It should be at least X.Y format", goVersion)
+	}
+	xyGoVersion := goVersionSplit[0] + "." + goVersionSplit[1]
+	return strconv.ParseFloat(strings.TrimSuffix(xyGoVersion, "\n"), 64)
 }
 
 func containsMultipleStrings(sourceString string, expectedStrings []string) bool {
