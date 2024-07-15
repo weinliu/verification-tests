@@ -253,7 +253,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		getRoutes(oc, project1)
 
 		exutil.By("5. Check the reachability of the wildcard route")
-		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
+		ingressContPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")
 		iplist := getPodIP(oc, "openshift-ingress", custContPod)
 		toDst := routehost + ":80:" + iplist[0]
 		cmdOnPod := []string{"-n", "openshift-ingress-operator", ingressContPod[0], "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
@@ -307,7 +307,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("5. Confirm the route status is 'RouteNotAdmitted' and confirm the route is not accessible")
 		getRouteDetails(oc, project1, "service-unsecure", `{.status.ingress[?(@.routerName=="wildcard")].conditions[*].reason}`, "RouteNotAdmitted", true)
-		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
+		ingressContPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")
 		iplist := getPodIP(oc, "openshift-ingress", custContPod)
 		curlCmd := fmt.Sprintf("curl --resolve %s:80:%s http://%s -I -k --connect-timeout 10", routehost, iplist[0], routehost)
 		statsOut, err := exutil.RemoteShPod(oc, "openshift-ingress-operator", ingressContPod[0], "sh", "-c", curlCmd)

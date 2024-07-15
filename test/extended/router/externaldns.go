@@ -123,7 +123,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Found 0 Azure DNS zone")
-		operandPod := getPodName(oc, operatorNamespace, operandLabel)
+		operandPod := getPodListByLabel(oc, operatorNamespace, operandLabel)
 
 		exutil.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
 		patchStr := "[{\"op\":\"replace\",\"path\":\"/spec/zones/0\",\"value\":" + zoneID + "}]"
@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "No zones found in the project")
-		operandPod := getPodName(oc, operatorNamespace, operandLabel)
+		operandPod := getPodListByLabel(oc, operatorNamespace, operandLabel)
 
 		exutil.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
 		patchStr := "[{\"op\":\"replace\",\"path\":\"/spec/source/fqdnTemplate/0\",\"value\":'{{.Name}}." + baseDomain + "'},{\"op\":\"replace\",\"path\":\"/spec/zones/0\",\"value\":" + zoneID + "}]"

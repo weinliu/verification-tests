@@ -1297,7 +1297,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlhp2.create(oc)
 		err := waitForPodWithLabelAppear(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
 		exutil.AssertWaitPollNoErr(err, "router pod of the second custom IC does not appear  within allowed time!")
-		customICRouterPod := getPodName(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
+		customICRouterPod := getPodListByLabel(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=ocp50819two")
 		checkPodMsg := getByJsonPath(oc, "openshift-ingress", "pod/"+customICRouterPod[0], "{.status..message}")
 		o.Expect(checkPodMsg).To(o.ContainSubstring("node(s) didn't have free ports for the requested pod ports"))
 	})

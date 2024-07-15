@@ -356,7 +356,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(digOutput1).To(o.ContainSubstring("udp: 1232"))
 
 		exutil.By("Check the different DNS records")
-		ingressContPod := getPodName(oc, "openshift-ingress-operator", "name=ingress-operator")
+		ingressContPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")
 		// to identify which address type the cluster IP belongs
 		iplist := getPodIP(oc, "openshift-ingress-operator", ingressContPod[0])
 		ptrValue := "10.0.30.172.in-addr.arpa"
@@ -463,7 +463,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-v4v6rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-v4v6rc, Ready status not met")
-		srvPod := getPodName(oc, project1, "name=web-server-v4v6rc")[0]
+		srvPod := getPodListByLabel(oc, project1, "name=web-server-v4v6rc")[0]
 
 		exutil.By("check the services v4v6 addresses")
 		IPAddresses := getByJsonPath(oc, project1, "service/"+unsecsvcName, "{.spec.clusterIPs}")
@@ -719,7 +719,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(forward).To(o.ContainSubstring("tls /etc/pki/dns.ocp51536.ocp-ca-ca-51536-bundle"))
 
 		exutil.By("7.Check no error logs from dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
+		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")
 		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], `ocp51536.ocp:5353 -A3`)
 		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
@@ -764,7 +764,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(forward).NotTo(o.ContainSubstring("/etc/pki/dns.ocp51857.ocp-ca-ca-51857-bundle"))
 
 		exutil.By("6.Check and confirm the non configured CABundle warning message from dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
+		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")
 		podLogs1, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], `ocp51857.ocp:5353 -A3`)
 		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs1).To(o.ContainSubstring(`level=warning msg="source ca bundle configmap ca-51857-bundle does not exist"`))
@@ -841,7 +841,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(upstreams).To(o.ContainSubstring("tls /etc/pki/dns.ocp51946.ocp-ca-ca-51946-bundle"))
 
 		exutil.By("7.Check no error logs from dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
+		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")
 		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], srvPodIP+` -A3`)
 		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
@@ -883,7 +883,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(forward).To(o.ContainSubstring("forward . " + srvPodIP))
 
 		exutil.By("6.Check no error logs from dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
+		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")
 		podLogs1, errLogs1 := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], `ocp52077.ocp:5353 -A3`)
 		o.Expect(errLogs1).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs1).To(o.ContainSubstring(`msg="reconciling request: /default"`))
@@ -948,7 +948,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(forward).To(o.ContainSubstring("tls"))
 
 		exutil.By("6.Check no error logs from dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", " ")
+		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")
 		podLogs1, errLogs1 := exutil.GetSpecificPodLogs(oc, "openshift-dns-operator", "dns-operator", dnsOperatorPodName[0], `ocp52497.ocp:5353 -A3`)
 		o.Expect(errLogs1).NotTo(o.HaveOccurred(), "Error in getting logs from the pod")
 		o.Expect(podLogs1).To(o.ContainSubstring(`msg="reconciling request: /default"`))

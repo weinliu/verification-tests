@@ -1300,7 +1300,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-30060-NetworkEdge Create an ingresscontroller that logs to external rsyslog instance", func() {
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-30060-NetworkEdge Create an ingresscontroller that logs to external rsyslog instance", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			baseTemp            = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")

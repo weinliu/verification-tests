@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, e2eTestNamespace, "name=web-server-rc")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create ingress using the file and get the route details")
@@ -79,7 +79,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, e2eTestNamespace, "name=web-server-rc")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create a passthrough route")
@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, e2eTestNamespace, "name=web-server-rc")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create a http route")
@@ -202,7 +202,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, e2eTestNamespace, "name=web-server-rc")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create ingress using the file and get the route details")
@@ -339,7 +339,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("9. curl the first HTTP route and check the result")
-		srvPodName := getPodName(oc, e2eTestNamespace1, "name=web-server-rc")
+		srvPodName := getPodListByLabel(oc, e2eTestNamespace1, "name=web-server-rc")
 		routerPodIP := getPodv4Address(oc, routerPodName, "openshift-ingress")
 		toDst := httpRoutehost + ":80:" + routerPodIP
 		cmdOnPod := []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/index.html", "--resolve", toDst, "--connect-timeout", "10"}
@@ -350,7 +350,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("ocp-test " + srvPodName[0] + " http-8080"))
 
 		exutil.By("10. curl the second HTTP route and check the result")
-		srvPodName = getPodName(oc, e2eTestNamespace2, "name=web-server-rc")
+		srvPodName = getPodListByLabel(oc, e2eTestNamespace2, "name=web-server-rc")
 		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/second/index.html", "--resolve", toDst, "--connect-timeout", "10"}
 		result = repeatCmd(oc, cmdOnPod, "http-8080", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))

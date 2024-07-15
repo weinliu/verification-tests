@@ -151,7 +151,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
+		podName := getPodListByLabel(oc, oc.Namespace(), "name=web-server-rc")
 
 		exutil.By("create custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + "." + baseDomain
@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
+		podName := getPodListByLabel(oc, oc.Namespace(), "name=web-server-rc")
 
 		exutil.By("create custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + "." + baseDomain

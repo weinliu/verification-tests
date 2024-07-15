@@ -218,10 +218,18 @@ func getOnePodNameByLabel(oc *exutil.CLI, ns, label string) string {
 func getNewRouterPod(oc *exutil.CLI, icName string) string {
 	ns := "openshift-ingress"
 	deployName := "deployment/router-" + icName
+	rsLabel := ""
 	re := regexp.MustCompile(`NewReplicaSet:\s+router-.+-([a-z0-9]+)\s+`)
-
-	output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args(deployName, "-n", ns).Output()
-	rsLabel := "pod-template-hash=" + re.FindStringSubmatch(output)[1]
+	waitErr := wait.PollImmediate(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args(deployName, "-n", ns).Output()
+		hash := re.FindStringSubmatch(output)
+		if len(hash) > 1 {
+			rsLabel = "pod-template-hash=" + hash[1]
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but NewReplicaSet not found"))
 	e2e.Logf("the new ReplicaSet labels is %s", rsLabel)
 	err := waitForPodWithLabelReady(oc, ns, rsLabel)
 	exutil.AssertWaitPollNoErr(err, "the new router pod failed to be ready within allowed time!")
@@ -514,7 +522,7 @@ func getImagePullSpecFromPayload(oc *exutil.CLI, image string) string {
 	defer exec.Command("rm", "-rf", indexTmpPath).Output()
 	err := os.MkdirAll(indexTmpPath, 0755)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+indexTmpPath).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+indexTmpPath).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	pullspec, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--image-for="+image, "-a", dockerconfigjsonpath).Output()
 	if err != nil {
@@ -528,7 +536,7 @@ func (ipf *ipfailoverDescription) create(oc *exutil.CLI, ns string) {
 	// create ServiceAccount and add it to related SCC
 	_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "ipfailover", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "ipfailover").Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "ipfailover").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// create the ipfailover deployment
 	err = createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ipf.template, "-p", "NAME="+ipf.name, "NAMESPACE="+ipf.namespace, "IMAGE="+ipf.image, "HAINTERFACE="+ipf.HAInterface)
@@ -645,13 +653,13 @@ func replaceIPOctet(ipaddress string, octet int, octetValue string) string {
 }
 
 // this function is to obtain the pod name based on the particular label
-func getPodName(oc *exutil.CLI, namespace string, label string) []string {
-	var podName []string
-	podNameAll, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pod", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
+func getPodListByLabel(oc *exutil.CLI, namespace string, label string) []string {
+	var podList []string
+	podNameAll, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "pod", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	podName = strings.Split(podNameAll, " ")
-	e2e.Logf("The pod(s) are  %v ", podName)
-	return podName
+	podList = strings.Split(podNameAll, " ")
+	e2e.Logf("The pod list is %v", podList)
+	return podList
 }
 
 func getDNSPodName(oc *exutil.CLI) string {
@@ -751,11 +759,11 @@ func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold int, totalWaitTime time.Duration) {
 	count := 0
 	printCount := 0
-	jsonPath := `-o=jsonpath={.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
+	jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
 
 	e2e.Logf("waiting for CO %v back to normal status......", coName)
-	waitErr := wait.Poll(5*time.Second, totalWaitTime*time.Second, func() (bool, error) {
-		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
+	waitErr := wait.PollImmediate(5*time.Second, totalWaitTime*time.Second, func() (bool, error) {
+		status := getByJsonPath(oc, "default", "co/"+coName, jsonPath)
 		primary := false
 		printCount++
 		if strings.Compare(status, "TrueFalseFalse") == 0 {
@@ -774,6 +782,15 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold
 		}
 		return primary, nil
 	})
+	// for debugging: print all messages in co status.conditions
+	if waitErr != nil {
+		output := getByJsonPath(oc, "default", "co/"+coName, "{.status.conditions}")
+		e2e.Logf("The co %v is abnormal and here is status: %v", coName, output)
+		if coName == "ingress" {
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", "openshift-ingress", "service", "router-default").Output()
+			e2e.Logf("The output of describe router-default service: %v", output)
+		}
+	}
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but CO %v is still abnoraml.", coName))
 }
 
@@ -875,7 +892,7 @@ func keepSearchInAllDNSPods(oc *exutil.CLI, podList []string, expStr string) {
 	for _, podName := range podList {
 		count := 0
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			output, _ := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", podName, "-c", "dns", "--", "bash", "-c", cmd).Output()
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-dns", podName, "-c", "dns", "--", "bash", "-c", cmd).Output()
 			count++
 			primary := false
 			if strings.Contains(output, expStr) {
@@ -897,7 +914,7 @@ func keepSearchInAllDNSPods(oc *exutil.CLI, podList []string, expStr string) {
 func searchLogFromDNSPods(oc *exutil.CLI, podList []string, searchStr string) string {
 	o.Expect(podList).NotTo(o.BeEmpty())
 	for _, podName := range podList {
-		output, _ := oc.AsAdmin().Run("logs").Args(podName, "-c", "dns", "-n", "openshift-dns").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args(podName, "-c", "dns", "-n", "openshift-dns").Output()
 		outputList := strings.Split(output, "\n")
 		for _, line := range outputList {
 			if strings.Contains(line, searchStr) {
@@ -938,7 +955,7 @@ func waitRouterLogsAppear(oc *exutil.CLI, routerpod, searchStr string) string {
 func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 	attrList := [][]string{}
 	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
-	output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return append(attrList, []string{dnspodname, output})
 }
@@ -1331,7 +1348,7 @@ func nslookupsAndWaitForDNSlog(oc *exutil.CLI, podName, searchLog string, dnsPod
 
 // this function will get the route hostname
 func getRouteHost(oc *exutil.CLI, ns, routeName string) string {
-	host, err := oc.AsAdmin().Run("get").Args("route", routeName, "-n", ns, `-ojsonpath={.spec.host}`).Output()
+	host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", ns, `-ojsonpath={.spec.host}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the host of the route %v is %v.", routeName, host)
 	return host
@@ -1339,7 +1356,7 @@ func getRouteHost(oc *exutil.CLI, ns, routeName string) string {
 
 // this function will get the route detail
 func getRoutes(oc *exutil.CLI, ns string) string {
-	output, err := oc.AsAdmin().Run("get").Args("route", "-n", ns).Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("oc get route: %v", output)
 	return output
@@ -1364,7 +1381,7 @@ func createGenericSecret(oc *exutil.CLI, ns, name, keyName, certFile string) {
 // this function is to obtain the resource name like ingress's,route's name
 func getResourceName(oc *exutil.CLI, namespace, resourceName string) []string {
 	var resourceList []string
-	resourceNames, err := oc.AsAdmin().Run("get").Args("-n", namespace, resourceName,
+	resourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, resourceName,
 		"-ojsonpath={.items..metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	resourceList = strings.Split(resourceNames, " ")
@@ -1389,7 +1406,7 @@ func unicastIPFailover(oc *exutil.CLI, ns, failoverName string) {
 	platformtype := exutil.CheckPlatform(oc)
 
 	if platformtype == "nutanix" || platformtype == "none" {
-		getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
+		getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		workerIPAddress, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-ojsonpath={.items[*].status.addresses[0].address}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		modifiedIPList := strings.Split(workerIPAddress, " ")
@@ -1444,7 +1461,7 @@ func repeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, repeatTimes in
 
 func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration time.Duration) {
 	waitErr := wait.Poll(5*time.Second, duration*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("exec").Args(cmd...).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
 		if err != nil {
 			e2e.Logf("failed to execute cmd %v successfully, retrying...", cmd)
 			return false, nil
@@ -1470,7 +1487,7 @@ func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, se
 
 // this function check output of fetch command is polled
 func waitForOutput(oc *exutil.CLI, ns, resourceName, jsonPath, value string) {
-	waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	waitErr := wait.PollImmediate(5*time.Second, 180*time.Second, func() (bool, error) {
 		sourceRange := getByJsonPath(oc, ns, resourceName, jsonPath)
 		if strings.Contains(sourceRange, value) {
 			return true, nil

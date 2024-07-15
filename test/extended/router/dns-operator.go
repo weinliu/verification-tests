@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		clusterIp := getByJsonPath(oc, "openshift-dns", "service/dns-default", "{.spec.clusterIP}")
 
 		exutil.By("Step1: Delete DNS operator pod and delete the default DNS service")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", "name=dns-operator")[0]
+		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")[0]
 		defer deleteDnsOperatorToRestore(oc)
 		_, errDelpod := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", dnsOperatorPodName, "-n", "openshift-dns-operator").Output()
 		o.Expect(errDelpod).NotTo(o.HaveOccurred())
@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		//Remove the dns operator pod and wait for the new pod is created, which is useful to check the dns operator log
 		exutil.By("Remove dns operator pod")
-		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", "name=dns-operator")[0]
+		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")[0]
 		_, errDelpod := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", dnsOperatorPodName, "-n", "openshift-dns-operator").Output()
 		o.Expect(errDelpod).NotTo(o.HaveOccurred())
 		errPodDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)

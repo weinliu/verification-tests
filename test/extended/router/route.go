@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=hello-pod, Ready status not met")
-		podName := getPodName(oc, project1, "name=web-server-rc")
+		podName := getPodListByLabel(oc, project1, "name=web-server-rc")
 		defaultContPod := getNewRouterPod(oc, "default")
 
 		exutil.By("create routes and get the details")
@@ -219,13 +219,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// bugzilla: 2021446
-	g.It("Author:mjoseph-High-55895-When canary route is not available, Ingress should be in degarded state	[Disruptive]", func() {
-		exutil.By("Check the intial canary route status")
+	// no ingress-operator pod on HyperShift guest cluster so this case is not available
+	g.It("Author:mjoseph-NonHyperShiftHOST-High-55895-Ingress should be in degraded status when canary route is not available [Disruptive]", func() {
+		exutil.By("Check the intial co/ingress and canary route status")
+		ensureClusterOperatorNormal(oc, "ingress", 1, 10)
 		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", false)
 
 		exutil.By("Check the reachability of the canary route")
 		baseDomain := getBaseDomain(oc)
-		operatorPod := getPodName(oc, "openshift-ingress-operator", " ")
+		operatorPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")
 		routehost := "canary-openshift-ingress-canary.apps." + baseDomain
 		cmdOnPod := []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-k", "https://" + routehost, "--connect-timeout", "10"}
 		adminRepeatCmd(oc, cmdOnPod, "Healthcheck requested", 30)

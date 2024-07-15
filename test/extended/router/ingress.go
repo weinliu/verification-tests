@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, project1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, project1, "name=web-server-rc")
+		podName := getPodListByLabel(oc, project1, "name=web-server-rc")
 		baseDomain := getBaseDomain(oc)
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project1
@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, project2, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project2, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, project2, "name=web-server-rc")
+		podName := getPodListByLabel(oc, project2, "name=web-server-rc")
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project2
 
@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, project3, testPodSvc)
 		err := waitForPodWithLabelReady(oc, project3, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, project3, "name=web-server-rc")
+		podName := getPodListByLabel(oc, project3, "name=web-server-rc")
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project3
 
