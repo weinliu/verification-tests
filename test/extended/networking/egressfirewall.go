@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -1648,6 +1650,166 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 			exutil.By("Verify destination got blocked")
 			verifyDstIPAccess(oc, pod1.name, ns, ipv6, false)
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-74657-EgressFirewall nodeSelector works after some specific operations. [Disruptive]", func() {
+		//https://issues.redhat.com/browse/OCPBUGS-34331
+		exutil.By("Get worker nodes")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+		node1 := nodeList.Items[0].Name
+		node2 := nodeList.Items[1].Name
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall3-template.yaml")
+
+		exutil.By("Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("Create egressfirewall from file")
+		type egressFirewallConfig struct {
+			Domains []string
+		}
+		outputEFFilePath := "/tmp/egress_firewall_8000.yaml"
+		domainsPerFile := 7999
+		yamlTemplate := `apiVersion: k8s.ovn.org/v1
+kind: EgressFirewall
+metadata:
+  name: default
+spec:
+  egress:
+{{- range .Domains }}
+  - type: Allow
+    to:
+      dnsName: {{ . }}
+{{- end }}
+  - type: Deny
+    to:
+      cidrSelector: 0.0.0.0/0
+`
+
+		// Parse the YAML template
+		tmpl, err := template.New("egressFirewall").Parse(yamlTemplate)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Generate the egressfirewall file
+		domains := make([]string, domainsPerFile)
+		for i := 0; i < domainsPerFile; i++ {
+			domains[i] = fmt.Sprintf("fake-domain-%d.com", i+1)
+		}
+		// Create the EgressFirewallConfig struct
+		config := egressFirewallConfig{Domains: domains}
+		// Open the output file
+		defer os.Remove(outputEFFilePath)
+		outputFile, err := os.Create(outputEFFilePath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Execute the template and write to the file
+		err = tmpl.Execute(outputFile, config)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		outputFile.Close()
+		e2e.Logf("Successfully generated %s\n", outputEFFilePath)
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", outputEFFilePath, "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		o.Eventually(func() bool {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall/default", "-n", ns).Output()
+			e2e.Logf("\n EgressFiewall status: %v\n", output)
+			return strings.Contains(output, "EgressFirewall Rules applied")
+		}, "1800s", "30s").Should(o.BeTrue(), "Egressfiewall Rules were not correctly applied!!")
+
+		exutil.By("Delete the egressfirewall and stop nbdb for one node")
+		removeResource(oc, true, true, "egressfirewall/default", "-n", ns)
+		killNBDBCmd := "crictl stop $(crictl ps | grep nbdb | awk '{print $1}')"
+		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, node1, "bash", "-c", killNBDBCmd)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Create second namespace and two pods")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		pod1ns2 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns2,
+			nodename:  node1,
+			template:  pingPodNodeTemplate,
+		}
+		pod1ns2.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
+		pod2ns2 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns2,
+			nodename:  node2,
+			template:  pingPodNodeTemplate,
+		}
+		pod2ns2.createPingPodNode(oc)
+		waitPodReady(oc, pod2ns2.namespace, pod2ns2.name)
+		exutil.By("Get one master node IP.")
+		master1, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		master1IP1, master1IP2 := getNodeIP(oc, master1)
+		_, err = e2eoutput.RunHostCmd(pod1ns2.namespace, pod1ns2.name, "ping -c 2 "+master1IP2)
+		if err != nil {
+			g.Skip("Ping node IP failed without egressfirewall, skip the test in this environment.")
+		}
+
+		exutil.By("Create EgressFirewall object with nodeSelector.")
+		ipStackType := checkIPStackType(oc)
+		var cidrValue string
+		if ipStackType == "ipv6single" {
+			cidrValue = "::/0"
+		} else {
+			cidrValue = "0.0.0.0/0"
+		}
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns2,
+			ruletype:  "Deny",
+			cidr:      cidrValue,
+			template:  egressFWTemplate,
+		}
+		defer egressFW2.deleteEgressFW2Object(oc)
+		egressFW2.createEgressFW2Object(oc)
+		efErr := waitEgressFirewallApplied(oc, "default", ns2)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify the master node can NOT be accessed from both pods")
+		o.Eventually(func() error {
+			_, err = e2eoutput.RunHostCmd(pod1ns2.namespace, pod1ns2.name, "ping -c 2 "+master1IP2)
+			return err
+		}, "60s", "10s").Should(o.HaveOccurred())
+		o.Eventually(func() error {
+			_, err = e2eoutput.RunHostCmd(pod2ns2.namespace, pod2ns2.name, "ping -c 2 "+master1IP2)
+			return err
+		}, "10s", "5s").Should(o.HaveOccurred())
+
+		exutil.By("Label the master node which would match the egressfirewall.")
+		defer exutil.DeleteLabelFromNode(oc, master1, "ef-dep")
+		exutil.AddLabelToNode(oc, master1, "ef-dep", "qe")
+
+		exutil.By("Verify the master node can be accessed from both pods")
+		_, err = e2eoutput.RunHostCmdWithRetries(pod1ns2.namespace, pod1ns2.name, "ping -c 2 "+master1IP2, 5*time.Second, 20*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmdWithRetries(pod2ns2.namespace, pod2ns2.name, "ping -c 2 "+master1IP2, 5*time.Second, 20*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if ipStackType == "dualstack" {
+			// Test node ipv6 address as well
+			egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.cidr = "::/0"
+			defer egressFW2.deleteEgressFW2Object(oc)
+			egressFW2.createEgressFW2Object(oc)
+			efErr = waitEgressFirewallApplied(oc, "default", ns2)
+			o.Expect(efErr).NotTo(o.HaveOccurred())
+
+			exutil.By("Verify the master node can be accessed from both pods with IPv6")
+			_, err = e2eoutput.RunHostCmdWithRetries(pod1ns2.namespace, pod1ns2.name, "ping -c 2 "+master1IP1, 5*time.Second, 20*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = e2eoutput.RunHostCmdWithRetries(pod2ns2.namespace, pod2ns2.name, "ping -c 2 "+master1IP1, 5*time.Second, 20*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
 })
