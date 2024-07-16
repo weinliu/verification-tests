@@ -1394,14 +1394,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// consumes this index imaage: quay.io/olmqe/etcd-index:upgrade-auto, it contains the etcdoperator v0.9.2, v0.9.4, v0.9.5
 		exutil.By("1) Create a CatalogSource in the openshift-marketplace project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-opm.yaml")
 		cs := catalogSourceDescription{
 			name:        "cs-43101",
 			namespace:   "openshift-marketplace",
 			displayName: "OLM QE Operators",
 			publisher:   "Jian",
 			sourceType:  "grpc",
-			address:     "quay.io/olmqe/etcd-index:upgrade-auto",
+			address:     "quay.io/olmqe/etcd-index:upgrade-fips",
 			template:    csImageTemplate,
 		}
 		dr := make(describerResrouce)
