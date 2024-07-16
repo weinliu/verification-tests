@@ -5110,7 +5110,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 		g.By("check alerts")
 		alertString := "The compliance suite pci-test returned as NON-COMPLIANT, ERROR, or INCONSISTENT"
-		checkAlert(oc, alertString, 300)
+		checkAlert(oc, ssb.name, alertString, 300)
 	})
 
 	// author: xiyuan@redhat.com

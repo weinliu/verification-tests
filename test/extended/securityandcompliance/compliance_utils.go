@@ -1,6 +1,7 @@
 package securityandcompliance
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -1052,24 +1053,47 @@ func getAlertManager(oc *exutil.CLI) string {
 	return alertManager
 }
 
-func checkAlert(oc *exutil.CLI, alertString string, timeout time.Duration) {
+func checkAlert(oc *exutil.CLI, labelName string, alertString string, timeout time.Duration) {
+	var alerts []byte
+	var errBash error
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	url := getAlertManager(oc)
-	alertName := "NonCompliant"
 	alertManagerVersion, errGetAlertmanagerVersion := getAlertmanagerVersion(oc)
 	o.Expect(errGetAlertmanagerVersion).NotTo(o.HaveOccurred())
-	gjsonQueryAlertName, gjsonQueryAlertNameEqual, errGetAlertQueries := getAlertQueries(oc)
+	gjsonQueryAlertName, gjsonQueryAlertNameEqual, errGetAlertQueries := getAlertQueriesWithLabelName(oc)
 	o.Expect(errGetAlertQueries).NotTo(o.HaveOccurred())
 	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/%s/alerts", token, url, alertManagerVersion)
 	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
-		alerts, err := exec.Command("bash", "-c", alertCMD).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertName).String(), alertName) && strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertNameEqual+alertName+").annotations.description").String(), alertString) {
+		alerts, errBash = exec.Command("bash", "-c", alertCMD).Output()
+		o.Expect(errBash).NotTo(o.HaveOccurred())
+		if strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertName).String(), labelName) && strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertNameEqual+labelName+").annotations.description").String(), alertString) {
 			return true, nil
 		}
 		return false, nil
 	})
+
+	if err != nil {
+		e2e.Logf("The alerts are: %s", string(alerts))
+		e2e.Logf("The description for the query alerts is: %s", gjson.Get(string(alerts), gjsonQueryAlertNameEqual+labelName+").annotations.description").String())
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The alerts NOT to contain %s", alertString))
+}
+
+func getAlertQueriesWithLabelName(oc *exutil.CLI) (string, string, error) {
+	version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-ojsonpath={.status.desired.version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	major := strings.Split(version, ".")[0]
+	minor := strings.Split(version, ".")[1]
+	minorInt, err := strconv.Atoi(minor)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	switch {
+	case major == "4" && minorInt >= 17:
+		return "#.labels.name", "#(labels.name=", nil
+	case major == "4" && minorInt < 17:
+		return "data.#.labels.name", "data.#(labels.name=", nil
+	default:
+		return "", "", errors.New("Unknown version " + major + "." + minor)
+	}
 }
 
 func assertParameterValueForBulkPods(oc *exutil.CLI, expected string, parameters ...string) {
