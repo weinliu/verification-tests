@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-NonHyperShiftHOST-Critical-32198-Verify all master bmh are 'externally provisioned'", func() {
+	g.It("Author:miyadav-NonHyperShiftHOST-Critical-32198-Verify all master bmh are 'provisioned'", func() {
 		g.By("Check if baremetal cluster")
 		if !(iaasPlatform == clusterinfra.BareMetal) {
 			e2e.Logf("Cluster is: %s", iaasPlatform.String())
@@ -48,11 +48,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		for _, bmhMastersWorkers := range strings.Fields(bmhNames) {
 			if strings.Contains(bmhMastersWorkers, "master") {
 				bmhMasters := bmhMastersWorkers
-				g.By("Check if master bmh is externally provisioned")
-				state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", bmhMasters, "-n", machineAPINamespace, "-o=jsonpath={.spec.externallyProvisioned}").Output()
+				g.By("Check if master bmh is provisioned")
+				state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", bmhMasters, "-n", machineAPINamespace, "-o=jsonpath={.spec.Provisioned}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				if state != "true" {
-					e2e.Failf("baremetal master not provisioned externally")
+					e2e.Failf("baremetal master not provisioned")
 				}
 			}
 		}
