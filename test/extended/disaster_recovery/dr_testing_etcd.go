@@ -77,8 +77,15 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-Longduration-NonPreRelease-Critical-23803-Restoring back to a previous cluster state in ocp v4 [Disruptive][Slow]", func() {
+
+		var (
+			bastionHost    = ""
+			userForBastion = ""
+		)
+
 		g.By("check the platform is supported or not")
-		supportedList := []string{"aws", "gcp", "azure"}
+		supportedList := []string{"aws", "gcp", "azure", "vsphere", "nutanix"}
+		platformListWithoutBastion := []string{"vsphere", "nutanix"}
 		support := in(iaasPlatform, supportedList)
 		if support != true {
 			g.Skip("The platform is not supported now, skip the cases!!")
@@ -87,10 +94,16 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		if privateKeyForBastion == "" {
 			g.Skip("Failed to get the private key, skip the cases!!")
 		}
-
-		bastionHost := os.Getenv("QE_BASTION_PUBLIC_ADDRESS")
-		if bastionHost == "" {
-			g.Skip("Failed to get the qe bastion public ip, skip the cases!!")
+		withoutBastion := in(iaasPlatform, platformListWithoutBastion)
+		if !withoutBastion {
+			bastionHost = os.Getenv("QE_BASTION_PUBLIC_ADDRESS")
+			if bastionHost == "" {
+				g.Skip("Failed to get the qe bastion public ip, skip the case !!")
+			}
+			userForBastion = getUserNameAndKeyonBationByPlatform(iaasPlatform)
+			if userForBastion == "" {
+				g.Skip("Failed to get the user for bastion host, hence skipping the case!!")
+			}
 		}
 
 		g.By("make sure all the etcd pods are running")
@@ -104,7 +117,6 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
 		masterNodeInternalIPList := getNodeInternalIPListByLabel(oc, "node-role.kubernetes.io/master=")
 
-		userForBastion := getUserNameAndKeyonBationByPlatform(iaasPlatform)
 		e2e.Logf("bastion host is  : %v", bastionHost)
 		e2e.Logf("platform is  : %v", iaasPlatform)
 		e2e.Logf("user on bastion is  : %v", userForBastion)
@@ -199,7 +211,8 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "unable to patch the server to turn off the quorum guard.")
 
-		waitForOperatorRestart(oc, "etcd")
+		// both etcd and kube-apiserver operators start and end roll out almost simultaneously.
+		go waitForOperatorRestart(oc, "etcd")
 		waitForOperatorRestart(oc, "kube-apiserver")
 	})
 	// author: geliu@redhat.com

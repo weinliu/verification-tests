@@ -101,7 +101,11 @@ func getNodeInternalIPListByLabel(oc *exutil.CLI, labelKey string) []string {
 // Run the etcdrestroe shell script command on master or node
 func runPSCommand(bastionHost string, nodeInternalIP string, command string, privateKeyForBastion string, userForBastion string) (result string, err error) {
 	var msg []byte
-	msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+";ssh -i "+privateKeyForBastion+" -o StrictHostKeyChecking=no  -o ProxyCommand=\"ssh -o IdentityFile="+privateKeyForBastion+" -o StrictHostKeyChecking=no -W %h:%p "+userForBastion+"@"+bastionHost+"\""+" core@"+nodeInternalIP+" "+command).CombinedOutput()
+	if bastionHost != "" {
+		msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+";ssh -i "+privateKeyForBastion+" -o StrictHostKeyChecking=no  -o ProxyCommand=\"ssh -o IdentityFile="+privateKeyForBastion+" -o StrictHostKeyChecking=no -W %h:%p "+userForBastion+"@"+bastionHost+"\""+" core@"+nodeInternalIP+" "+command).CombinedOutput()
+	} else {
+		msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+";ssh -i "+privateKeyForBastion+" -o StrictHostKeyChecking=no core@"+nodeInternalIP+" "+command).CombinedOutput()
+	}
 	return string(msg), err
 }
 
@@ -110,11 +114,11 @@ func waitForOperatorRestart(oc *exutil.CLI, operatorName string) {
 	err := wait.Poll(20*time.Second, 600*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", operatorName).Output()
 		if err != nil {
-			e2e.Logf("clusteroperator not start new progress, error: %s. Trying again", err)
+			e2e.Logf("clusteroperator %s has not started new progress, error: %s. Trying again", operatorName, err)
 			return false, nil
 		}
 		if matched, _ := regexp.MatchString("True.*True.*False", output); matched {
-			e2e.Logf("clusteroperator is Progressing:\n%s", output)
+			e2e.Logf("clusteroperator %s is Progressing:\n%s", operatorName, output)
 			return true, nil
 		}
 		return false, nil
@@ -129,12 +133,12 @@ func waitForOperatorRestart(oc *exutil.CLI, operatorName string) {
 			return false, nil
 		}
 		if matched, _ := regexp.MatchString("True.*False.*False", output); matched {
-			e2e.Logf("clusteroperator %s is recover to normal:\n%s", operatorName, output)
+			e2e.Logf("clusteroperator %s has recovered to normal:\n%s", operatorName, output)
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "clusteroperator is not recovered to normal")
+	exutil.AssertWaitPollNoErr(err, "clusteroperator has not recovered to normal")
 }
 
 func waitForContainerDisappear(bastionHost string, nodeInternalIP string, command string, privateKeyForBastion string, userForBastion string) {
