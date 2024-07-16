@@ -1017,4 +1017,79 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with  %s", err))
 	})
 
+	// author: knarra@redhat.com
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73783-Do not generate IDMS or ITMS if nothing has been mirrored [Serial]", func() {
+		dirname := "/tmp/case73783"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73783.yaml")
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		exutil.By("Start mirror2mirror and verify no idms and itms has been generated since nothing is mirrored")
+		waitErr := wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--workspace", "file://"+dirname, "docker://"+serInfo.serviceName+"/noidmsitms", "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirrorOutput, "Nothing mirrored. Skipping IDMS and ITMS files generation") && strings.Contains(mirrorOutput, "No catalogs mirrored. Skipping CatalogSource file generation") {
+				e2e.Logf("No ITMS & IDMS generated when nothing is mirrored")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but could not find message about no IDMS and ITMS generation")
+	})
+
+	// author: knarra@redhat.com
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Low-73421-Verify oc-mirror throws error when using invalid imageSetConfig with bundles [Serial]", func() {
+		dirname := "/tmp/case73421"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73421.yaml")
+		imageSetYamlFileT := filepath.Join(ocmirrorBaseDir, "config-73421-1.yaml")
+
+		exutil.By("Start mirrro2disk with bundles and min/max filtering")
+		mirrorToDiskOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+		if err != nil {
+			if strings.Contains(mirrorToDiskOutput, "mixing both filtering by bundles and filtering by channels or minVersion/maxVersion is not allowed") {
+				e2e.Logf("Error related to mixing both bundles, min & max version allowed is seen")
+			} else {
+				e2e.Failf("Error related to mixing both bundles, min & max version allowed is not seen")
+			}
+		}
+
+		exutil.By("Start mirror2disk with bundles & filtering with full true")
+		mirrorToDiskOutputFT, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileT, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+		if err != nil {
+			if strings.Contains(mirrorToDiskOutputFT, "cannot use filtering by bundle selection and full the same time") {
+				e2e.Logf("Error related to cannot use filtering by bundle selection and full at the same time is seen")
+			} else {
+				e2e.Failf("Error related to cannot use filtering by bundle selection and full at the same time is not seen")
+			}
+		}
+
+	})
+
 })
