@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -228,8 +229,6 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		exutil.By("The labeled machineset without owner should be updated")
 		currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
 		logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the currently configured coreos boot image")
 
 		o.Eventually(clonedMSLabel.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 			"%s was NOT updated to use the right boot image", clonedMSLabel)
@@ -254,6 +253,171 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("Waiting %s machineset for being ready", clonedMSLabel)
 		o.Eventually(clonedMSLabel.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", clonedMSLabel.GetName())
 		logger.Infof("OK!\n")
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74764-ManagedBootImages on GCP. Delete machineset when error [Disruptive]", func() {
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
+		skipIfNoTechPreview(oc)
+
+		var (
+			machineConfiguration = GetMachineConfiguration(oc.AsAdmin())
+			machineSet           = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
+			clonedMSName         = "cloned-tc-74764-copy"
+			labelName            = "test"
+			labelValue           = "update"
+
+			expectedFailedMessageRegexp = regexp.QuoteMeta("Error(s): error syncing MAPI MachineSet " +
+				clonedMSName +
+				": unexpected OwnerReference: fakekind/master. Please remove this machineset from boot image management to avoid errors")
+			expectedFailedProgressMessage = "Reconciled 0 of 1 MAPI MachineSets | Reconciled 0 of 0 CAPI MachineSets | Reconciled 0 of 0 CAPI MachineDeployments"
+			expectedOKMessage             = "0 Degraded MAPI MachineSets | 0 Degraded CAPI MachineSets | 0 CAPI MachineDeployments"
+		)
+		exutil.By("Opt-in boot images update")
+
+		defer machineConfiguration.SetSpec(machineConfiguration.GetSpecOrFail())
+		o.Expect(
+			machineConfiguration.SetPartialManagedBootImagesConfig(labelName, labelValue),
+		).To(o.Succeed(), "Error configuring Partial managedBootImages in the 'cluster' MachineConfiguration resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Clone the first machineset")
+		clonedMS, err := machineSet.Duplicate(clonedMSName)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating %s", machineSet)
+		defer clonedMS.Delete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Add a fake owner to the new cloned machineset")
+		o.Expect(
+			clonedMS.Patch("merge", `{"metadata":{"ownerReferences": [{"apiVersion": "fake","blockOwnerDeletion": true,"controller": true,"kind": "fakekind","name": "master","uid": "fake-uuid"}]}}`),
+		).To(o.Succeed(), "Error patching %s with a fake owner", clonedMS)
+		logger.Infof("OK!\n")
+
+		exutil.By("Label the cloned machineset so that its boot image is updated by MCO")
+		o.Expect(clonedMS.AddLabel(labelName, labelValue)).To(o.Succeed(),
+			"Error labeling %s", clonedMS)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that an error is reported in the machineconfiguration resource")
+		o.Eventually(machineConfiguration, "5m", "10s").Should(HaveConditionField("BootImageUpdateDegraded", "status", "True"),
+			"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "5m", "10s").Should(HaveConditionField("BootImageUpdateDegraded", "message", o.MatchRegexp(expectedFailedMessageRegexp)),
+			"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check reported progress in machineconfiguration resource")
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateProgressing", "message", expectedFailedProgressMessage),
+			"Progress message is not the expected one.\n%s", machineConfiguration.PrettyString())
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateProgressing", "status", "False"),
+			"Progress status is not the expected one.\n%s", machineConfiguration.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Delete the new cloned machineset")
+		o.Expect(clonedMS.Delete()).To(o.Succeed(), "Error deleting %s", clonedMS)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check the machineconfiguration resource is not reporting errors anymore and the progress is OK")
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "status", "False"),
+			"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "message", expectedOKMessage),
+			"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateProgressing", "status", "False"),
+			"Progress status is not the expected one.\n%s", machineConfiguration.PrettyString())
+		logger.Infof("OK!\n")
+
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74751-ManagedBootImages on GCP. Fix errors [Disruptive]", func() {
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
+		skipIfNoTechPreview(oc)
+
+		var (
+			coreosBootimagesCM          = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "coreos-bootimages")
+			machineConfiguration        = GetMachineConfiguration(oc.AsAdmin())
+			machineSet                  = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
+			clonedMSName                = "cloned-tc-74751-copy"
+			labelName                   = "test"
+			labelValue                  = "update"
+			fakearch                    = "fake-arch"
+			expectedFailedMessageRegexp = regexp.QuoteMeta("Error(s): error syncing MAPI MachineSet " +
+				clonedMSName +
+				": failed to fetch arch during machineset sync: invalid architecture value found in annotation: kubernetes.io/arch=" + fakearch)
+		)
+		exutil.By("Opt-in boot images update")
+
+		defer machineConfiguration.SetSpec(machineConfiguration.GetSpecOrFail())
+		o.Expect(
+			machineConfiguration.SetPartialManagedBootImagesConfig(labelName, labelValue),
+		).To(o.Succeed(), "Error configuring Partial managedBootImages in the 'cluster' MachineConfiguration resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Clone the first machineset")
+		clonedMS, err := machineSet.Duplicate(clonedMSName)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating %s", machineSet)
+		defer clonedMS.Delete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Set a wrong architecture in the cloned image")
+		o.Expect(clonedMS.SetArchitecture(fakearch)).To(o.Succeed(), "Error setting a fake architecture in %s", clonedMS)
+		logger.Infof("OK!\n")
+
+		exutil.By("Set a wrong boot image in the cloned image")
+		o.Expect(clonedMS.SetCoreOsBootImage("fake-image")).To(o.Succeed(), "Error setting a fake boot image in %s", clonedMS)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that no failures are being reported")
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "status", "False"),
+			"Expected %s not to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateProgressing", "status", "False"),
+			"Expected %s not to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Label the cloned machineset so that its boot image is updated by MCO")
+		o.Expect(clonedMS.AddLabel(labelName, labelValue)).To(o.Succeed(),
+			"Error labeling %s", clonedMS)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that an error is reported in the machineconfiguration resource and that there is no progress")
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "status", "True"),
+			"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "message", o.MatchRegexp(expectedFailedMessageRegexp)),
+			"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateProgressing", "status", "False"),
+			"Progress status is not the expected one.\n%s", machineConfiguration.PrettyString())
+
+		// since it will be in "progressing" status for a very short time, we cant poll the value. We need to use the lasttransition date
+		lastProgressTransition := machineConfiguration.GetOrFail(`{.status.conditions[?(@.type=="BootImageUpdateProgressing")].lastTransitionTime}`)
+		logger.Infof("OK!\n")
+
+		exutil.By("Set the right architecture in the cloneed machineset")
+		o.Expect(clonedMS.SetArchitecture(machineSet.GetArchitectureOrFail().String())).To(o.Succeed(), "Error fixing the problem in the architecture in %s", clonedMS)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that no error is reported anymore in the machineconfiguration resource and the progress was OK")
+		// We need to poll requently since it will be on "progressing" status a very short time
+		o.Eventually(machineConfiguration, "20s", "1s").ShouldNot(HaveConditionField("BootImageUpdateProgressing", "lastTransitionTime", lastProgressTransition),
+			"Progress status did not change, but it should have been moved to 'true' and back to 'false' .\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "2m", "10s").Should(HaveConditionField("BootImageUpdateProgressing", "status", "False"),
+			"Progress status is not the expected one.\n%s", machineConfiguration.PrettyString())
+
+		o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "status", "False"),
+			"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the boot image was updated")
+		currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
+		logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
+
+		o.Eventually(clonedMS.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
+			"%s was NOT updated to use the right boot image", clonedMS)
+		logger.Infof("OK!\n")
+
 	})
 })
 
