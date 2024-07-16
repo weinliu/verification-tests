@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			e2e.Logf("Cluster should be healthy before running case.")
-			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=60s", "--timeout=30m").Execute()
 			if err != nil {
 				g.Skip(fmt.Sprintf("Cluster health check failed before restart cluster :: %s ", err))
 			}
@@ -309,12 +309,12 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 					if _, ok := startStates[vmState]; ok {
 						if shutdownType == 1 {
 							e2e.Logf("Force node %s shutdown ...", nodeName)
-							err = node.Stop()
+							stateErr = node.Stop()
 						} else {
 							e2e.Logf("Node %s is being soft shutdown ...", nodeName)
-							_, err = exutil.DebugNodeWithChroot(oc, nodeName, "shutdown", "-h", "1")
+							_, stateErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--to-namespace=openshift-kube-apiserver"}, "shutdown", "-h", "1")
 						}
-						o.Expect(err).NotTo(o.HaveOccurred())
+						o.Expect(stateErr).NotTo(o.HaveOccurred())
 					} else {
 						e2e.Logf("The node %s are not active :: %s", nodeName, err)
 					}
@@ -391,7 +391,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			exutil.AssertWaitPollNoErr(err, "The clsuter was unable to start up!")
 
 			exutil.By("5. After restarted nodes of the cluster, verify the cluster availability")
-			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=60s", "--timeout=30m").Execute()
 			if err == nil {
 				// Output mem usage of top 3 system processes of work nodes for debugging
 				// cmd := "ps -o pid,user,%mem,vsz,rss,command ax | sort -b -k3 -r | head -3"
