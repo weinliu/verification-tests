@@ -5,6 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -200,4 +203,37 @@ func getPassFromSecret(oc *exutil.CLI, namespace string, secretName string) stri
 	pwd, err := base64.StdEncoding.DecodeString(pwdbase64)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	return string(pwd)
+}
+
+func CopyToFile(fromPath string, toFilename string) string {
+	// check if source file is regular file
+	srcFileStat, err := os.Stat(fromPath)
+	if err != nil {
+		e2e.Failf("get source file %s stat failed: %v", fromPath, err)
+	}
+	if !srcFileStat.Mode().IsRegular() {
+		e2e.Failf("source file %s is not a regular file", fromPath)
+	}
+
+	// open source file
+	source, err := os.Open(fromPath)
+	defer source.Close()
+	if err != nil {
+		e2e.Failf("open source file %s failed: %v", fromPath, err)
+	}
+
+	// open dest file
+	saveTo := filepath.Join(e2e.TestContext.OutputDir, toFilename)
+	dest, err := os.Create(saveTo)
+	defer dest.Close()
+	if err != nil {
+		e2e.Failf("open destination file %s failed: %v", saveTo, err)
+	}
+
+	// copy from source to dest
+	_, err = io.Copy(dest, source)
+	if err != nil {
+		e2e.Failf("copy file from %s to %s failed: %v", fromPath, saveTo, err)
+	}
+	return saveTo
 }
