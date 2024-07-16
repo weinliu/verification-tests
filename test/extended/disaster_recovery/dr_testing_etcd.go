@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -212,8 +213,15 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		exutil.AssertWaitPollNoErr(errWait, "unable to patch the server to turn off the quorum guard.")
 
 		// both etcd and kube-apiserver operators start and end roll out almost simultaneously.
-		go waitForOperatorRestart(oc, "etcd")
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer g.GinkgoRecover()
+			defer wg.Done()
+			waitForOperatorRestart(oc, "etcd")
+		}()
 		waitForOperatorRestart(oc, "kube-apiserver")
+		wg.Wait()
 	})
 	// author: geliu@redhat.com
 	g.It("Author:geliu-NonPreRelease-Longduration-Critical-50205-lost master can be replaced by new one with machine config recreation in ocp 4.x [Disruptive][Slow]", func() {
