@@ -5555,6 +5555,81 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		newLastPhaseTransitionTimevalue = pvc.getVolumeLastPhaseTransitionTime(oc)
 		o.Expect(newLastPhaseTransitionTimevalue).To(o.Equal(customTimeStamp))
 	})
+
+	// author: wduan@redhat.com
+	// OCP-73644-[bz-storage][CSI-Driver] pod stuck in terminating state after OCP node crash and restart
+	// OCPBUGS-23896: VM stuck in terminating state after OCP node crash
+	g.It("Author:wduan-Longduration-NonPreRelease-NonHyperShiftHOST-Medium-73644-[bz-storage][CSI-Driver] pod stuck in terminating state after OCP node crash and restart [Disruptive]", func() {
+		// Define the test scenario support provisioners
+		// Case only implement on AWS now
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			stsTemplate         = filepath.Join(storageTeamBaseDir, "sts-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Only run when there is root credential
+		if isRootSecretExist(oc) {
+			getAwsCredentialFromSpecifiedSecret(oc, "kube-system", getRootSecretNameByCloudProvider())
+		} else {
+			g.Skip("Skip for scenario without root credential.")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Set the resource definition for the scenario, use the Block VolumeMode in statefulset
+			sts := newSts(setStsTemplate(stsTemplate), setStsReplicasNumber("1"), setStsVolumeType("volumeDevices"), setStsVolumeTypePath("devicePath"), setStsMountpath("/dev/dblock"), setStsVolumeMode("Block"))
+
+			exutil.By("# Create StatefulSet with the preset csi storageclass")
+			sts.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+			e2e.Logf("%s", sts.scname)
+			sts.create(oc)
+			defer sts.deleteAsAdmin(oc)
+			sts.waitReady(oc)
+
+			pods, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			pod := pods[0]
+			node := getNodeNameByPod(oc, sts.namespace, pod)
+			o.Expect(node).NotTo(o.BeEmpty())
+
+			exutil.By("# Stop node and wait until pod go to Terminating")
+			ac := exutil.InitAwsSession()
+			instance, err := ac.GetAwsInstanceIDFromHostname(node)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			stopInstance(ac, instance)
+
+			defer func() {
+				startInstance(ac, instance)
+				waitNodeAvailable(oc, node)
+			}()
+
+			o.Eventually(func() string {
+				podStatus, _ := getPodStatus(oc, sts.namespace, pod)
+				return podStatus
+			}, 600*time.Second, 5*time.Second).Should(o.Or((o.Equal("Terminating")), o.Equal("Pending")))
+
+			exutil.By("# Start node and wait until pod go to Running")
+			startInstance(ac, instance)
+			o.Eventually(func() string {
+				podStatus, _ := getPodStatus(oc, sts.namespace, pod)
+				return podStatus
+			}, 600*time.Second, 5*time.Second).Should(o.Equal("Running"))
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+
+		}
+	})
+
 })
 
 // Performing test steps for Online Volume Resizing

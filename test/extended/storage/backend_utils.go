@@ -698,6 +698,55 @@ func rebootInstanceAndWaitSucceed(ac *ec2.EC2, instanceID string) {
 	e2e.Logf("Reboot Instance:\"%+s\" Succeed", instanceID)
 }
 
+// start AWS instance
+func startInstance(ac *exutil.AwsClient, instanceID string) {
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		state, err := ac.GetAwsInstanceState(instanceID)
+		if err != nil {
+			e2e.Logf("%v", err)
+			return false, nil
+		}
+		if state == "running" {
+			e2e.Logf("The instance is already running")
+			return true, nil
+		}
+		if state == "stopped" {
+			err = ac.StartInstance(instanceID)
+			if err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		e2e.Logf("The instance is in %s, please check.", state)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("Start instance %q failed.", instanceID))
+}
+
+func stopInstance(ac *exutil.AwsClient, instanceID string) {
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		state, err := ac.GetAwsInstanceState(instanceID)
+		if err != nil {
+			e2e.Logf("%v", err)
+			return false, nil
+		}
+		if state == "stopped" {
+			e2e.Logf("The instance is already stopped.")
+			return true, nil
+		}
+		if state == "running" {
+			err = ac.StopInstance(instanceID)
+			if err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		e2e.Logf("The instance is in %s, please check.", state)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("Stop instance %q failed.", instanceID))
+}
+
 // Create aws backend session connection
 func newAwsSession(oc *exutil.CLI) *session.Session {
 	getCredentialFromCluster(oc)
