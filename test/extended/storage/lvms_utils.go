@@ -148,6 +148,107 @@ func (lvm *lvmCluster) createWithMultiDeviceClasses(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Make a disk partition and create a logical volume on new volume group
+func createLogicalVolumeOnDisk(oc *exutil.CLI, nodeHostName string, disk string, vgName string, lvName string) {
+	diskName := "/dev/" + disk
+	// Create LVM disk partition
+	createPartitionCmd := "echo -e 'n\np\n1\n\n\nw' | fdisk " + diskName
+	_, err := execCommandInSpecificNode(oc, nodeHostName, createPartitionCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	partitionName := diskName + "p1"
+	// Unmount the partition if it's mounted
+	unmountCmd := "umount " + partitionName + " || true"
+	_, err = execCommandInSpecificNode(oc, nodeHostName, unmountCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Create Physical Volume
+	createPV := "pvcreate " + partitionName
+	_, err = execCommandInSpecificNode(oc, nodeHostName, createPV)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Create Volume Group
+	createVG := "vgcreate " + vgName + " " + partitionName
+	_, err = execCommandInSpecificNode(oc, nodeHostName, createVG)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Create Logical Volume
+	createLV := "lvcreate -n " + lvName + " -l 100%FREE " + vgName
+	_, err = execCommandInSpecificNode(oc, nodeHostName, createLV)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Format Logical Volume with XFS filesystem
+	formatLV := "mkfs.xfs -L xfs-test /dev/" + vgName + "/" + lvName
+	_, err = execCommandInSpecificNode(oc, nodeHostName, formatLV)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Remove logical volume on volume group from backend disk
+func removeLogicalVolumeOnDisk(oc *exutil.CLI, nodeHostName string, disk string, vgName string, lvName string) {
+	diskName := "/dev/" + disk
+	partitionName := diskName + "p1"
+
+	existsLV := `lvdisplay /dev/` + vgName + `/` + lvName + ` && echo "true" || echo "false"`
+	outputLV, err := execCommandInSpecificNode(oc, nodeHostName, existsLV)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	lvExists := strings.Contains(outputLV, "true")
+	// If VG exists, proceed to check LV and remove accordingly
+	existsVG := `vgdisplay | grep -q '` + vgName + `' && echo "true" || echo "false"`
+	outputVG, err := execCommandInSpecificNode(oc, nodeHostName, existsVG)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(outputVG, "true") {
+		if lvExists {
+			// Remove Logical Volume (LV)
+			removeLV := "lvremove -f /dev/" + vgName + "/" + lvName
+			_, err = execCommandInSpecificNode(oc, nodeHostName, removeLV)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		// Remove Volume Group (VG)
+		removeVG := "vgremove -f " + vgName
+		_, err = execCommandInSpecificNode(oc, nodeHostName, removeVG)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	existsPV := `pvdisplay | grep -q '` + partitionName + `' && echo "true" || echo "false"`
+	outputPV, err := execCommandInSpecificNode(oc, nodeHostName, existsPV)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(outputPV, "true") {
+		//Remove Physical Volume (PV)
+		partitionName := diskName + "p1"
+		removePV := "pvremove -f " + partitionName
+		_, err = execCommandInSpecificNode(oc, nodeHostName, removePV)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	existsPartition := `lsblk | grep -q '` + disk + `' && echo "true" || echo "false"`
+	outputPartition, err := execCommandInSpecificNode(oc, nodeHostName, existsPartition)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(outputPartition, "true") {
+		// Remove LVM disk partition
+		removePartitionCmd := "echo -e 'd\nw' | fdisk " + diskName
+		_, err = execCommandInSpecificNode(oc, nodeHostName, removePartitionCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	existsXFS := `lsblk -o FSTYPE | grep -q xfs-test && echo "true" || echo "false"`
+	outputXFS, err := execCommandInSpecificNode(oc, nodeHostName, existsXFS)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(outputXFS, "true") {
+		// Wipe DOS signature from disk (if present)
+		wipeDiskCmd := "wipefs -a " + diskName
+		_, err = execCommandInSpecificNode(oc, nodeHostName, wipeDiskCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+// Create a new customized LVMCluster with forceWipeDevicesAndDestroyAllData configuration
+func (lvm *lvmCluster) createWithForceWipeDevicesAndDestroyAllData(oc *exutil.CLI) {
+	extraParameters := map[string]interface{}{
+		"jsonPath":                          `items.0.spec.storage.deviceClasses.0.deviceSelector.`,
+		"forceWipeDevicesAndDestroyAllData": true,
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
+		"FSTYPE="+lvm.fsType, "PATH="+lvm.paths[0], "OPTIONALPATH1="+lvm.optionalPaths[0], "OPTIONALPATH2="+lvm.optionalPaths[1])
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Create a new customized lvmCluster to return expected error
 func (lvm *lvmCluster) createToExpectError(oc *exutil.CLI) (string, error) {
 	output, err := applyResourceFromTemplateWithOutput(oc.AsAdmin(), "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME="+lvm.deviceClassName,
