@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,6 +62,22 @@ type updateService struct {
 type supportedMap struct {
 	osusver string
 	ocpver  []string
+}
+
+func getProxyURL() *url.URL {
+	// Prefer https_proxy, fallback to http_proxy
+	proxyURLString := os.Getenv("https_proxy")
+	if proxyURLString == "" {
+		proxyURLString = os.Getenv("http_proxy")
+	}
+	if proxyURLString == "" {
+		return nil
+	}
+	proxyURL, err := url.Parse(proxyURLString)
+	if err != nil {
+		e2e.Failf("error parsing proxy URL: %v", err)
+	}
+	return proxyURL
 }
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
@@ -335,15 +352,19 @@ func verifyOSUS(oc *exutil.CLI) (err error) {
 	if err != nil {
 		return fmt.Errorf("get policy engine URI failed: %v", err)
 	}
-	graphURI := PEURI + "/api/upgrades_info/v1/graph"
+
+	proxyURL := getProxyURL()
 
 	transCfg := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		Proxy:           http.ProxyURL(proxyURL),
 	}
 	client := &http.Client{Transport: transCfg}
 
-	response, err := client.Get(graphURI + "?channel=stable-4.13")
-
+	// Any channel is available, we just check whether osus working properly and don't care about the channel itself.
+	uri := PEURI + "/api/upgrades_info/v1/graph?channel=stable-4.13"
+	e2e.Logf("check if osus update service available or not through graph URI: " + uri)
+	response, err := client.Get(uri)
 	if err != nil {
 		return fmt.Errorf("reach graph URI failed: %v", err)
 	}
