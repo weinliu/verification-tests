@@ -301,6 +301,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		defer waitForCapiMachinesDisapper(oc, capiMachineSetAWS.name)
 		defer capiMachineSetAWS.deleteCapiMachineSet(oc)
 		capiMachineSetAWS.createCapiMachineSet(oc)
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cluster-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = matchProviderIDWithNode(oc, capiMachine, machineName, "openshift-cluster-api")
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-High-53100-Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
@@ -320,7 +324,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		defer waitForCapiMachinesDisappergcp(oc, capiMachineSetgcp.name)
 		defer capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
 		capiMachineSetgcp.createCapiMachineSetgcp(oc)
-
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cluster-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = matchProviderIDWithNode(oc, capiMachine, machineName, "openshift-cluster-api")
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	// author: zhsun@redhat.com
@@ -402,9 +409,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		vsphereMachineTemplate.createvsphereMachineTemplate(oc)
 
 		capiMachineSetvsphere.name = "capi-machineset-72433"
+		capiMachineSetvsphere.createCapiMachineSetvsphere(oc)
 		defer waitForCapiMachinesDisapper(oc, capiMachineSetvsphere.name)
 		defer capiMachineSetvsphere.deleteCapiMachineSetvsphere(oc)
-		capiMachineSetvsphere.createCapiMachineSetvsphere(oc)
-
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cluster-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = matchProviderIDWithNode(oc, capiMachine, machineName, "openshift-cluster-api")
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })

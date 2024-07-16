@@ -305,3 +305,21 @@ func waitForCapiMachinesDisappergcp(oc *exutil.CLI, machineSetName string) {
 	})
 	exutil.AssertWaitPollNoErr(err, "Wait machine disappear failed.")
 }
+
+func matchProviderIDWithNode(oc *exutil.CLI, resourceType, resourceName, namespace string) (bool, error) {
+	machineProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceType, resourceName, "-o=jsonpath={.spec.providerID}", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceType, resourceName, "-o=jsonpath={.status.nodeRef.name}", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	nodeProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.providerID}", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if string(machineProviderID) != string(nodeProviderID) {
+		e2e.Logf("Node & machine provider ID not matched")
+		return false, err
+	}
+	e2e.Logf("Node & machine provider ID matched")
+	return true, nil
+}
