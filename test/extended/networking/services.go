@@ -1394,4 +1394,239 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-74601-Verify traffic and OVNK LB endpoints in nbdb for LoadBalancer Service when externalTrafficPolicy is set to Cluster.[Serial]", func() {
+
+		// For customer bug https://issues.redhat.com/browse/OCPBUGS-24363
+		// OVNK choose LB endpoints in the following sequence:
+		// 1. when there is/are pods in Ready state, ovnk ONLY choose endpoints of ready pods
+		// 2. When there is/are no ready pods, ovnk choose endpoints that terminating + serving endpoints
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod-with-special-lifecycle.yaml")
+		genericServiceTemplate := filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+
+		platform := exutil.CheckPlatform(oc)
+		networkType := checkNetworkType(oc)
+		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
+		scheduleableNodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		acceptedPlatform := strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
+		if !acceptedPlatform || !strings.Contains(networkType, "ovn") || len(scheduleableNodeList.Items) < 2 {
+			g.Skip("Test cases should be run on GCP or Azure cluster with ovn network plugin, minimal 2 nodes are required, skip for others that do not meet the test requirement")
+		}
+
+		exutil.By("1. Get namespace, create 2 test pods in it, create a service in front of the test pods \n")
+		ns := oc.Namespace()
+		createResourceFromFile(oc, ns, testPodFile)
+		err = waitForPodWithLabelReady(oc, ns, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "Not all test pods with label name=test-pods are ready")
+
+		exutil.By("2. Create a service in front of the above test pods \n")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "test-pods",
+			serviceType:           "LoadBalancer",
+			ipFamilyPolicy:        "SingleStack",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "Cluster",
+			template:              genericServiceTemplate,
+		}
+		svc.createServiceFromParams(oc)
+		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
+
+		exutil.By("3. Get IP for the OVN service lb \n")
+		var svcIPv4, podIPv4, curlSVC4ChkCmd string
+		svcIPv4, _ = getSvcIP(oc, svc.namespace, svc.servicename)
+		curlSVC4ChkCmd = fmt.Sprintf("for i in {1..10}; do curl %s --connect-timeout 5 ; sleep 2;echo ;done", net.JoinHostPort(svcIPv4, "27017"))
+		e2e.Logf("IP for service IP: %s", svcIPv4)
+
+		exutil.By("4. Before scale down test pods, check OVN service lb endpoints in northdb and traffic at endpoints \n")
+		exutil.By("4.1. Check OVN service lb endpoints in northdb, it should include all running backend test pods \n")
+		allPods, getPodErr := exutil.GetAllPodsWithLabel(oc, ns, "name=test-pods")
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
+		o.Expect(len(allPods)).NotTo(o.BeEquivalentTo(0))
+
+		var expectedEndpointsv4 []string
+		podNodeNames := make(map[string]string)
+		podIPv4s := make(map[string]string)
+		for _, eachPod := range allPods {
+			nodeName, getNodeErr := exutil.GetPodNodeName(oc, ns, eachPod)
+			o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+			podNodeNames[eachPod] = nodeName
+			podIPv4, _ = getPodIP(oc, ns, eachPod)
+			podIPv4s[eachPod] = podIPv4
+			expectedEndpointsv4 = append(expectedEndpointsv4, podIPv4+":8080")
+
+		}
+		e2e.Logf("\n V4 endpoints of service lb are expected to be: %v\n", expectedEndpointsv4)
+
+		// check service lb endpoints in northdb on each node's ovnkube-pod
+		nodeList, nodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList)).NotTo(o.BeEquivalentTo(0))
+
+		var endpointsv4 []string
+		var epErr error
+		for _, eachNode := range nodeList {
+			endpointsv4, epErr = getLBListEndpointsbySVCIPPortinNBDB(oc, eachNode, svcIPv4+":27017")
+			e2e.Logf("\n Got V4 endpoints of service lb for node %s : %v\n", eachNode, expectedEndpointsv4)
+			o.Expect(epErr).NotTo(o.HaveOccurred())
+			o.Expect(unorderedEqual(endpointsv4, expectedEndpointsv4)).Should(o.BeTrue(), fmt.Sprintf("V4 service lb endpoints on node %sdo not match expected endpoints!", eachNode))
+
+		}
+
+		exutil.By("4.2. Verify all running pods get traffic \n")
+		var channels [2]chan string
+		// Initialize each channel in the array
+		for i := range channels {
+			channels[i] = make(chan string)
+		}
+
+		exutil.By(" Start tcpdump on each pod's node")
+		for i, pod := range allPods {
+			go func(i int, pod string) {
+				defer g.GinkgoRecover()
+				tcpdumpCmd := fmt.Sprintf(`timeout 60s tcpdump -c 4 -nneep -i any "(dst port 8080) and (dst %s)"`, podIPv4s[pod])
+				outputTcpdump, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+podNodeNames[pod], "--", "bash", "-c", tcpdumpCmd).Output()
+				channels[i] <- outputTcpdump
+			}(i, pod)
+		}
+		// add sleep time to let the ping action happen later after tcpdump is enabled.
+		time.Sleep(5 * time.Second)
+
+		exutil.By(" Curl the externalIP service from test runner\n")
+		output, curlErr := exec.Command("bash", "-c", curlSVC4ChkCmd).Output()
+		o.Expect(curlErr).NotTo(o.HaveOccurred())
+
+		for i, pod := range allPods {
+			receivedMsg := <-channels[i]
+			e2e.Logf(" at step 4.2, tcpdumpOutput for node %s is \n%s\n\n", podNodeNames[pod], receivedMsg)
+			o.Expect(strings.Contains(receivedMsg, podIPv4s[pod])).Should(o.BeTrue())
+		}
+		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
+
+		exutil.By("5. Scale test pods down to 1 \n")
+		scaleErr := oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=1", "-n", ns).Execute()
+		o.Expect(scaleErr).NotTo(o.HaveOccurred())
+
+		allPods = allPods[:0]
+		var terminatingPods []string
+		o.Eventually(func() bool {
+			terminatingPods = getAllPodsWithLabelAndCertainState(oc, ns, "name=test-pods", "Terminating")
+			return len(terminatingPods) == 1
+		}, "30s", "5s").Should(o.BeTrue(), "Test pods did not scale down to 1")
+		e2e.Logf("\n terminatingPods: %v\n", terminatingPods)
+		allPods = append(allPods, terminatingPods[0])
+
+		var expectedCleanedUpEPsv4, expectedRemindedEPsv4, actualFinalEPsv4 []string
+		for _, eachPod := range terminatingPods {
+			expectedCleanedUpEPsv4 = append(expectedCleanedUpEPsv4, podIPv4s[eachPod]+":8080")
+		}
+		e2e.Logf("\n V4 endpoints of service lb are expected to be cleaned up: %v\n", expectedCleanedUpEPsv4)
+
+		runningPods := getAllPodsWithLabelAndCertainState(oc, ns, "name=test-pods", "Running")
+		o.Expect(len(runningPods)).To(o.BeEquivalentTo(1))
+		e2e.Logf("\n runningPods: %v\n", runningPods)
+		allPods = append(allPods, runningPods[0])
+
+		for _, eachPod := range runningPods {
+			expectedRemindedEPsv4 = append(expectedRemindedEPsv4, podIPv4s[eachPod]+":8080")
+		}
+		e2e.Logf("\n V4 endpoints of service lb are expected to remind: %v\n", expectedRemindedEPsv4)
+
+		exutil.By("5.1. Check lb-list entries in northdb again in each node's ovnkube-node pod, only Ready pods' endpoints reminded in service lb endpoints \n")
+		for _, eachNode := range nodeList {
+			actualFinalEPsv4, epErr = getLBListEndpointsbySVCIPPortinNBDB(oc, eachNode, svcIPv4+":27017")
+			o.Expect(epErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\n\n After scale-down to 2, V4 endpoints from lb-list output on node %s northdb: %v\n\n", eachNode, actualFinalEPsv4)
+			o.Expect(unorderedEqual(actualFinalEPsv4, expectedRemindedEPsv4)).Should(o.BeTrue(), fmt.Sprintf("After scale-down, V4 service lb endpoints on node %s do not match expected endpoints!", eachNode))
+
+			// Verify terminating pods' endpoints are not in final service lb endpoints
+			for _, ep := range expectedCleanedUpEPsv4 {
+				o.Expect(isValueInList(ep, actualFinalEPsv4)).ShouldNot(o.BeTrue(), fmt.Sprintf("After scale-down, terminating pod's V4 endpoint %s is not cleaned up from V4 service lb endpoint", ep))
+			}
+		}
+
+		exutil.By("5.2 Verify only the running pod receives traffic, the terminating pod does not receive traffic \n")
+		for i, pod := range allPods {
+			go func(i int, pod string) {
+				defer g.GinkgoRecover()
+				tcpdumpCmd := fmt.Sprintf(`timeout 60s tcpdump -c 4 -nneep -i any "(dst port 8080) and (dst %s)"`, podIPv4s[pod])
+				outputTcpdump, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+podNodeNames[pod], "--", "bash", "-c", tcpdumpCmd).Output()
+				channels[i] <- outputTcpdump
+			}(i, pod)
+		}
+
+		// add sleep time to let the ping action happen later after tcpdump is enabled.
+		time.Sleep(5 * time.Second)
+		output, curlErr = exec.Command("bash", "-c", curlSVC4ChkCmd).Output()
+		o.Expect(curlErr).NotTo(o.HaveOccurred())
+
+		for i, pod := range allPods {
+			receivedMsg := <-channels[i]
+			e2e.Logf(" at step 5.2, tcpdumpOutput for node %s is \n%s\n\n", podNodeNames[pod], receivedMsg)
+			if pod == terminatingPods[0] {
+				o.Expect(strings.Contains(receivedMsg, "0 packets captured")).Should(o.BeTrue())
+			} else {
+				o.Expect(strings.Contains(receivedMsg, podIPv4s[pod])).Should(o.BeTrue())
+			}
+		}
+		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
+
+		exutil.By("5.3. Wait for terminating pod from step 7 to disappear so that there is only one running pod left\n")
+		o.Eventually(func() bool {
+			allPodsWithLabel := getPodName(oc, ns, "name=test-pods")
+			runningPods = getAllPodsWithLabelAndCertainState(oc, ns, "name=test-pods", "Running")
+			return len(runningPods) == len(allPodsWithLabel)
+		}, "180s", "10s").Should(o.BeTrue(), "Terminating pods did not disappear after waiting enough time")
+
+		exutil.By("6. Scale test pods down to 0 \n")
+		scaleErr = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=0", "-n", ns).Execute()
+		o.Expect(scaleErr).NotTo(o.HaveOccurred())
+
+		o.Eventually(func() bool {
+			terminatingPods = getAllPodsWithLabelAndCertainState(oc, ns, "name=test-pods", "Terminating")
+			return len(terminatingPods) == 1
+		}, "30s", "5s").Should(o.BeTrue(), "Test pods did not scale down to 0")
+		e2e.Logf("\n terminatingPods: %v\n", terminatingPods)
+
+		exutil.By("6.1. Check lb-list entries in northdb again in each node's ovnkube-node pod, verify that the two terminating but serving pods reminded in service lb endpoints \n")
+
+		// expectedRemindedEPv4 are still expected in NBDB for a little while,
+		// that is because the last pod transition from Running state to terminating but serving state and there is no other running pod available
+		for _, eachNode := range nodeList {
+			actualFinalEPsv4, epErr = getLBListEndpointsbySVCIPPortinNBDB(oc, eachNode, svcIPv4+":27017")
+			o.Expect(epErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\n\n After scale-down to 0, V4 endpoints from lb-list output on node %s northdb: %v\n\n", eachNode, actualFinalEPsv4)
+			o.Expect(unorderedEqual(actualFinalEPsv4, expectedRemindedEPsv4)).Should(o.BeTrue(), fmt.Sprintf("After scale-down, V4 service lb endpoints on node %s do not match expected endpoints!", eachNode))
+		}
+
+		exutil.By("6.2 Verify that the terminating pod still receives traffic because there is no other running pod\n")
+		for i, pod := range terminatingPods {
+			go func(i int, pod string) {
+				defer g.GinkgoRecover()
+				tcpdumpCmd := fmt.Sprintf(`timeout 60s tcpdump -c 4 -nneep -i any "(dst port 8080) and (dst %s)"`, podIPv4s[pod])
+				outputTcpdump, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+podNodeNames[pod], "--", "bash", "-c", tcpdumpCmd).Output()
+				channels[i] <- outputTcpdump
+			}(i, pod)
+		}
+
+		// add sleep time to let the ping action happen later after tcpdump is enabled.
+		time.Sleep(5 * time.Second)
+		output, curlErr = exec.Command("bash", "-c", curlSVC4ChkCmd).Output()
+		o.Expect(curlErr).NotTo(o.HaveOccurred())
+
+		for i, pod := range terminatingPods {
+			receivedMsg := <-channels[i]
+			e2e.Logf(" at step 6.2, tcpdumpOutput for node %s is \n%s\n\n", podNodeNames[pod], receivedMsg)
+			o.Expect(strings.Contains(receivedMsg, podIPv4s[pod])).Should(o.BeTrue())
+		}
+		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
+	})
+
 })
