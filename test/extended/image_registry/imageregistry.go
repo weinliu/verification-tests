@@ -1194,7 +1194,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The registry does not reschedule after nodes lost"))
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
+	g.It("Author:xiuwang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
 		var (
 			mc = machineConfig{
 				name:     "",
@@ -1352,7 +1352,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwangredhat.com
-	g.It("ROSA-OSD_CCS-ARO-VMonly-Author:xiuwang-Critical-48744-High-18995-Pull through for images that have dots in their namespace", func() {
+	g.It("Author:xiuwang-ROSA-OSD_CCS-ARO-Critical-48744-High-18995-Pull through for images that have dots in their namespace", func() {
 
 		g.By("Setup a private registry")
 		oc.SetupProject()
@@ -2886,7 +2886,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-VMonly-Author:xiuwang-Medium-10788-Medium-12059-Could import image and pull from private registry", func() {
+	g.It("Author:xiuwang-ROSA-OSD_CCS-ARO-Medium-10788-Medium-12059-Could import image and pull from private registry", func() {
 		g.By("Setup a private registry")
 		var regUser, regPass = "testuser", getRandomString()
 		authFile := filepath.Join("/tmp/", fmt.Sprintf("ir-auth-%s", getRandomString()))
