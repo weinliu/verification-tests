@@ -168,7 +168,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		kcFile := NewRemoteFile(*newNode, "/etc/kubernetes/kubelet.conf")
 		kcrErr := kcFile.Fetch()
 		o.Expect(kcrErr).NotTo(o.HaveOccurred(), "Error reading kubelet config in node %s", newNode.GetName())
-		o.Expect(kcFile.GetTextContent()).Should(o.ContainSubstring("\"maxPods\": 500"),
+		o.Expect(kcFile.GetTextContent()).Should(o.Or(o.ContainSubstring(`"maxPods": 500`), o.ContainSubstring(`maxPods: 500`)),
 			"File /etc/kubernetes/kubelet.conf has not the expected content")
 		logger.Infof("OK!\n")
 
