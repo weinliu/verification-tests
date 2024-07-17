@@ -1279,7 +1279,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator upgrade", func() {
 		}
 	})
 
-	g.It("Author:qiowang-NonHyperShiftHOST-PreChkUpgrade-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
+	g.It("Author:qiowang-NonHyperShiftHOST-PreChkUpgrade-NonPreRelease-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
 		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		nodeName := nodeList[0]
@@ -1333,7 +1333,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator upgrade", func() {
 		o.Expect(strings.Contains(ifaceState, "up")).Should(o.BeTrue())
 	})
 
-	g.It("Author:qiowang-NonHyperShiftHOST-PstChkUpgrade-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
+	g.It("Author:qiowang-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
 		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		nodeName := nodeList[0]
