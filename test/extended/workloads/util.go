@@ -1307,7 +1307,7 @@ func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.D
 }
 
 func assertPodOutput(oc *exutil.CLI, podLabel string, namespace string, expected string) {
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
 		podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("the result of pod:%v", podStatus)

@@ -1092,4 +1092,124 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 
 	})
 
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-72971-support mirror multiple catalogs (v2docker2 +oci) for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72971"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72971.yaml")
+
+		exutil.By("Use skopoe copy catalogsource to localhost")
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 --remove-signatures  --insecure-policy oci://%s", dirname+"/redhat-operator-index"))
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "20G", "/var/lib/registry")
+
+		exutil.By("Get root ca")
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-72971")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-72971")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start mirror2mirror ")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+		exutil.By("Check for the catalogsource pod status")
+		assertPodOutput(oc, "olm.catalogSource=cs-certified-operator-index-v4-15", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-community-operator-index-v4-15", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-marketplace-index-v4-15", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-latest", "openshift-marketplace", "Running")
+
+		exutil.By("Install operator from certified-operator CS")
+		portworxSub, portworxOG := getOperatorInfo(oc, "portworx-certified", "portworx-certified-ns", "registry.redhat.io/redhat/certified-operator-index:v4.15", "cs-certified-operator-index-v4-15")
+		defer removeOperatorFromCustomCS(oc, portworxSub, portworxOG, "portworx-certified-ns")
+		installOperatorFromCustomCS(oc, portworxSub, portworxOG, "portworx-certified-ns", "portworx-operator")
+
+		exutil.By("Install operator from redhat-marketplace CS")
+		crunchySub, crunchyOG := getOperatorInfo(oc, "crunchy-postgres-operator-rhmp", "marketoperatortest", "registry.redhat.io/redhat/redhat-marketplace-index:v4.15", "cs-redhat-marketplace-index-v4-15")
+		defer removeOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest")
+		installOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest", "pgo")
+	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-72917-support v2docker2 operator catalog filtering for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72917"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72917.yaml")
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "35G", "/var/lib/registry")
+
+		exutil.By("Get root ca")
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-72917")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-72917")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start mirror2mirror ")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+		exutil.By("Check for the catalogsource pod status")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-15", "openshift-marketplace", "Running")
+	})
 })
