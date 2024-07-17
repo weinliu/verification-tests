@@ -41,6 +41,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 
+		// Add the SCC to the service account after creating the project
+		g.By("Adding privileged SCC to service account")
+		_, err := oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", fmt.Sprintf("system:serviceaccount:%s:azure-file-csi-driver-controller-sa", namespace)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		driverName := "vmware-vsphere-csi-driver-node-windows"
 		if iaasPlatform == "azure" {
 			driverName = "azure-file-csi-driver-node-windows"
@@ -108,18 +113,35 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 			}
 
 			// Obtain the driver Name from the PV by using the PVC name
+			e2e.Logf("Obtaining PV name for PVC: %s", pvc)
 			pvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "-n", namespace, pvc, "-o=jsonpath={.spec.volumeName}").Output()
+			if err != nil {
+				e2e.Logf("Failed to get PV name for PVC: %s, error: %v", pvc, err)
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
-			csiDriverName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", "-n", namespace, pvName, "-o=jsonpath={.spec.csi.driver}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("PV name for PVC %s: %s", pvc, pvName)
+
+			// Print more log
+			e2e.Logf("Obtaining CSI driver name for PV: %s", pvName)
+			csiDriverName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.driver}").Output()
+			if err != nil {
+				e2e.Logf("Failed to get CSI driver name for PV: %s, error: %v", pvName, err)
+			}
 
 			cmd := "ls -r C:\\var\\lib\\kubelet\\plugins\\kubernetes.io\\csi\\" + csiDriverName + "\\*\\globalmount"
 			msg, err := runPSCommand(bastionHost, winInternalIP[idx], cmd, privateKey, iaasPlatform)
+			if err != nil {
+				e2e.Logf("Failed to run command: %s, error: %v", cmd, err)
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// The volume created under the directory
 			// C:\var\lib\kubelet\plugins\kubernetes.io\csi\<driver_name>\
 			// should contain the index.html file, which is the one created in the
 			// volume mount.
+			e2e.Logf("Command executed: %s", cmd)
+			e2e.Logf("Message received: %s", msg)
+			e2e.Logf("Error (if any): %v", err)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(msg).To(o.ContainSubstring("index.html"), "Failed to check CSI volume being mounted on Windows node %v", winHost)
 
 		}
@@ -170,7 +192,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(outExec).To(o.ContainSubstring(modText))
 		}
-
 	})
 
 })
