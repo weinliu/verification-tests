@@ -275,9 +275,9 @@ func SkipMissingQECatalogsource(oc *CLI) {
 
 // Skip the test if default catsrc is disable
 func SkipIfDisableDefaultCatalogsource(oc *CLI) {
-	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhubs", "cluster", "-o=jsonpath={.spec.disableAllDefaultSources}").Output()
-	if output == "true" {
-		g.Skip("Skip the test, the default catsrc is disable")
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhubs", "cluster", "-o=jsonpath={.spec.disableAllDefaultSources}").Output()
+	if output == "true" || err != nil {
+		g.Skip("Skip the test, the default catsrc is disable or don't have operatorhub resource")
 	}
 }
 

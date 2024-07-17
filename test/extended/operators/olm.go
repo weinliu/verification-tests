@@ -538,7 +538,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("fail to get %s's SCC, error:%v", cs, err)
 			}
 			if SCC != "restricted" {
-				e2e.Failf("%s's SCC is not restricted!", cs)
+				e2e.Failf("%s's SCC(%s) is not restricted!", cs, SCC)
 			}
 		}
 	})
