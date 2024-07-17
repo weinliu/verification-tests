@@ -17,7 +17,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	var oc = exutil.NewCLIWithoutNamespace("router-microshift")
 
-	g.It("MicroShiftOnly-Author:mjoseph-High-60136-reencrypt route using Ingress resource for Microshift with destination CA certificate", func() {
+	g.It("Author:mjoseph-MicroShiftOnly-High-60136-reencrypt route using Ingress resource for Microshift with destination CA certificate", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60136-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
@@ -51,23 +51,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("check the reachability of the host in test pod")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
-		curlCmd := fmt.Sprintf("curl --resolve service-secure1-test.example.com:443:%s https://service-secure1-test.example.com -I -k --connect-timeout 10", routerPodIP)
-		statsOut, err := exutil.RemoteShPod(oc, e2eTestNamespace, podName[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://service-secure1-test.example.com:443", "-k", "-I", "--resolve", "service-secure1-test.example.com:443:" + routerPodIP, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "200", 30)
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ingress-ms-reen")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace + ":" + routeNames[0]))
 	})
 
-	g.It("MicroShiftOnly-Author:mjoseph-Critical-60266-creation of edge and passthrough routes for Microshift", func() {
+	g.It("Author:mjoseph-MicroShiftOnly-Critical-60266-creation of edge and passthrough routes for Microshift", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60266-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			edgeRoute           = "route-edge-" + e2eTestNamespace + ".apps.example.com"
-			passRoute           = "route-pass-" + e2eTestNamespace + ".apps.example.com"
+			edgeRouteHost       = "route-edge-" + e2eTestNamespace + ".apps.example.com"
+			passRouteHost       = "route-pass-" + e2eTestNamespace + ".apps.example.com"
 		)
 
 		exutil.By("create a namespace for the scenario")
@@ -83,52 +81,50 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create a passthrough route")
-		createRoute(oc, e2eTestNamespace, "passthrough", "ms-pass", "service-secure", []string{"--hostname=" + passRoute})
+		createRoute(oc, e2eTestNamespace, "passthrough", "ms-pass", "service-secure", []string{"--hostname=" + passRouteHost})
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether passthrough route details are present")
 		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", "{.spec.tls.termination}", "passthrough")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", "{.status.ingress[0].host}", passRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", "{.status.ingress[0].host}", passRouteHost)
 		waitForOutput(oc, e2eTestNamespace, "route/ms-pass", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod for passthrough route")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
-		curlCmd := fmt.Sprintf("curl --resolve %s:443:%s https://%s -I -k --connect-timeout 10", passRoute, routerPodIP, passRoute)
-		statsOut, err := exutil.RemoteShPod(oc, e2eTestNamespace, podName[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/2 200"))
+		passRoute := passRouteHost + ":443:" + routerPodIP
+		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://" + passRouteHost + ":443", "-k", "-I", "--resolve", passRoute, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "200", 30)
 
 		exutil.By("check the router pod and ensure the passthrough route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-pass")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_tcp:" + e2eTestNamespace + ":ms-pass"))
 
 		exutil.By("create a edge route")
-		createRoute(oc, e2eTestNamespace, "edge", "ms-edge", "service-unsecure", []string{"--hostname=" + edgeRoute})
+		createRoute(oc, e2eTestNamespace, "edge", "ms-edge", "service-unsecure", []string{"--hostname=" + edgeRouteHost})
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether edge route details are present")
 		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", "{.spec.tls.termination}", "edge")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", "{.status.ingress[0].host}", edgeRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", "{.status.ingress[0].host}", edgeRouteHost)
 		waitForOutput(oc, e2eTestNamespace, "route/ms-edge", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod for edge route")
-		curlCmd1 := fmt.Sprintf("curl --resolve %s:443:%s https://%s -I -k --connect-timeout 10", edgeRoute, routerPodIP, edgeRoute)
-		statsOut1, err1 := exutil.RemoteShPod(oc, e2eTestNamespace, podName[0], "sh", "-c", curlCmd1)
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		o.Expect(statsOut1).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		edgeRoute := edgeRouteHost + ":443:" + routerPodIP
+		curlCmd1 := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://" + edgeRouteHost + ":443", "-k", "-I", "--resolve", edgeRoute, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd1, "200", 30)
 
 		exutil.By("check the router pod and ensure the edge route is loaded in haproxy.config")
 		searchOutput1 := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-edge")
 		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_edge_http:" + e2eTestNamespace + ":ms-edge"))
 	})
 
-	g.It("MicroShiftOnly-Author:mjoseph-Critical-60283-creation of http and re-encrypt routes for Microshift", func() {
+	g.It("Author:mjoseph-MicroShiftOnly-Critical-60283-creation of http and re-encrypt routes for Microshift", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60283-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
-			httpRoute           = "route-http-" + e2eTestNamespace + ".apps.example.com"
-			reenRoute           = "route-reen-" + e2eTestNamespace + ".apps.example.com"
+			httpRouteHost       = "route-http-" + e2eTestNamespace + ".apps.example.com"
+			reenRouteHost       = "route-reen-" + e2eTestNamespace + ".apps.example.com"
 		)
 
 		exutil.By("create a namespace for the scenario")
@@ -144,47 +140,45 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create a http route")
-		_, err = oc.WithoutNamespace().Run("expose").Args("-n", e2eTestNamespace, "--name=ms-http", "service", "service-unsecure1", "--hostname="+httpRoute).Output()
+		_, err = oc.WithoutNamespace().Run("expose").Args("-n", e2eTestNamespace, "--name=ms-http", "service", "service-unsecure1", "--hostname="+httpRouteHost).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether http route details are present")
 		waitForOutput(oc, e2eTestNamespace, "route/ms-http", "{.spec.port.targetPort}", "http")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-http", "{.status.ingress[0].host}", httpRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-http", "{.status.ingress[0].host}", httpRouteHost)
 		waitForOutput(oc, e2eTestNamespace, "route/ms-http", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod for http route")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
-		curlCmd := fmt.Sprintf("curl --resolve %s:80:%s http://%s -I --connect-timeout 10", httpRoute, routerPodIP, httpRoute)
-		statsOut, err := exutil.RemoteShPod(oc, e2eTestNamespace, podName[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		httpRoute := httpRouteHost + ":80:" + routerPodIP
+		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "http://" + httpRouteHost + ":80", "-k", "-I", "--resolve", httpRoute, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "200", 30)
 
 		exutil.By("check the router pod and ensure the http route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-http")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_http:" + e2eTestNamespace + ":ms-http"))
 
 		exutil.By("create a reen route")
-		createRoute(oc, e2eTestNamespace, "reencrypt", "ms-reen", "service-secure1", []string{"--hostname=" + reenRoute})
+		createRoute(oc, e2eTestNamespace, "reencrypt", "ms-reen", "service-secure1", []string{"--hostname=" + reenRouteHost})
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether reen route details are present")
 		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", "{.spec.tls.termination}", "reencrypt")
-		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", "{.status.ingress[0].host}", reenRoute)
+		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", "{.status.ingress[0].host}", reenRouteHost)
 		waitForOutput(oc, e2eTestNamespace, "route/ms-reen", "{.status.ingress[0].conditions[0].type}", "Admitted")
 
 		exutil.By("check the reachability of the host in test pod reen route")
-		curlCmd1 := fmt.Sprintf("curl --resolve %s:443:%s https://%s -I -k --connect-timeout 10", reenRoute, routerPodIP, reenRoute)
-		statsOut1, err1 := exutil.RemoteShPod(oc, e2eTestNamespace, podName[0], "sh", "-c", curlCmd1)
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		o.Expect(statsOut1).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		reenRoute := reenRouteHost + ":443:" + routerPodIP
+		curlCmd1 := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://" + reenRouteHost + ":443", "-k", "-I", "--resolve", reenRoute, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd1, "200", 30)
 
 		exutil.By("check the router pod and ensure the reen route is loaded in haproxy.config")
 		searchOutput1 := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-reen")
 		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace + ":ms-reen"))
 	})
 
-	g.It("MicroShiftOnly-Author:mjoseph-Critical-60149-http route using Ingress resource for Microshift", func() {
+	g.It("Author:mjoseph-MicroShiftOnly-Critical-60149-http route using Ingress resource for Microshift", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60149-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
@@ -219,10 +213,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("check the reachability of the host in test pod for http route")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
-		curlCmd := fmt.Sprintf("curl --resolve %s:80:%s http://%s -I --connect-timeout 10", httpRoute, routerPodIP, httpRoute)
-		statsOut, err := exutil.RemoteShPod(oc, e2eTestNamespace, podName[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "http://service-unsecure-test.example.com:80", "-k", "-I", "--resolve", "service-unsecure-test.example.com:80:" + routerPodIP, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "200", 30)
 
 		exutil.By("check the router pod and ensure the http route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ingress-on-microshift")
