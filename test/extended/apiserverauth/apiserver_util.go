@@ -1656,3 +1656,58 @@ func gatherSosreports(fqdnName string, user string, sosReportCmd string, tmpdir 
 	o.Expect(strings.Contains(sosreportStatus, tmpdir+"/sosreport")).To(o.BeTrue())
 	return sosreportStatus
 }
+
+func clusterSanityCheck(oc *exutil.CLI) error {
+	statusCO, errCO := getResource(oc, asAdmin, withoutNamespace, "co")
+	if errCO != nil {
+		e2e.Logf("Error fetching Cluster Operators Status: %s :: %s", statusCO, errCO.Error())
+		if strings.ContainsAny(errCO.Error(), "Unable to connect to the server: tls: failed to verify certificate: x509: certificate signed by unknown authority") {
+			status, _ := getResource(oc, asAdmin, withoutNamespace, "co", "--insecure-skip-tls-verify")
+			e2e.Logf("cluster Operators Status :: %s", status)
+			statusKAS, _ := getResource(oc, asAdmin, withoutNamespace, "co", "kube-apiserver", "-o", "yaml", "--insecure-skip-tls-verify")
+			e2e.Logf("KAS Operators Status :: %s", statusKAS)
+		}
+	}
+
+	project_ns := exutil.GetRandomString()
+	errCreateProj := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(project_ns, "--skip-config-write").Execute()
+	if errCreateProj != nil {
+		e2e.Logf("Error creating project %s: %s", project_ns, errCreateProj.Error())
+		if strings.ContainsAny(errCreateProj.Error(), "the server is currently unable to handle the request") {
+			status, _ := getResource(oc, asAdmin, withoutNamespace, "co")
+			e2e.Logf("cluster Operators Status :: %s", status)
+		}
+	}
+
+	errDeleteProj := oc.WithoutNamespace().Run("delete").Args("project", project_ns, "--ignore-not-found").Execute()
+	if errDeleteProj != nil {
+		e2e.Logf("Error deleting project %s: %s", project_ns, errDeleteProj.Error())
+	}
+
+	if errCO != nil || errCreateProj != nil || errDeleteProj != nil {
+		return fmt.Errorf("Cluster sanity check failed")
+	}
+
+	e2e.Logf("Cluster sanity check passed")
+	return nil
+}
+
+func clusterSanityCheckMicroShift(oc *exutil.CLI) error {
+	project_ns := exutil.GetRandomString()
+	errCreateNs := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", project_ns).Execute()
+	if errCreateNs != nil {
+		e2e.Logf("Error creating project %s: %s", project_ns, errCreateNs.Error())
+	}
+
+	errDeleteNs := oc.WithoutNamespace().Run("delete").Args("ns", project_ns, "--ignore-not-found").Execute()
+	if errDeleteNs != nil {
+		e2e.Logf("Error deleting project %s: %s", project_ns, errDeleteNs.Error())
+	}
+
+	if errCreateNs != nil || errDeleteNs != nil {
+		return fmt.Errorf("Cluster sanity check failed")
+	}
+
+	e2e.Logf("Cluster sanity check passed")
+	return nil
+}

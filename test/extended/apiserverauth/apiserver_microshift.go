@@ -33,6 +33,12 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 		tmpdir = "/tmp/-OCP-microshift-apiseerver-cases-" + exutil.GetRandomString() + "/"
 		err := os.MkdirAll(tmpdir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("The cluster should be healthy before running case.")
+		errSanity := clusterSanityCheckMicroShift(oc)
+		if errSanity != nil {
+			e2e.Failf("Cluster health check failed before running case :: %s ", errSanity)
+		}
 	})
 
 	g.JustAfterEach(func() {
