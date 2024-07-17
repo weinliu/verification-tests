@@ -91,14 +91,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.BeforeEach(func() {
 		exutil.SkipNoOLMCore(oc)
 	})
-	g.It("ConnectedOnly-Author:jiazha-High-73201-OLM catalog pods do not recover from node failure [Disruptive][Serial]", func() {
+	g.It("Author:jiazha-ConnectedOnly-High-73201-catalog pods do not recover from node failure [Disruptive][Serial]", func() {
 		exutil.By("1, create a custom catalogsource in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-opm.yaml")
 
 		cs := catalogSourceDescription{
 			name:        "cs-73201",
