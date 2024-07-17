@@ -33,8 +33,7 @@ objects:
       tls:
         ca:
           key: ca-bundle.crt
-          secret:
-            name: ${SECRET_NAME}
+          secretName: ${SECRET_NAME}
     pipelines:
     - name: forward-to-lokistack
       inputRefs: ${{INPUT_REFS}}

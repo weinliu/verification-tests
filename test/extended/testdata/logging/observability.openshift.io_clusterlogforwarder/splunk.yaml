@@ -17,8 +17,7 @@ objects:
         authentication:
           token:
             key: hecToken
-            secret:
-              name: ${SECRET_NAME}
+            secretName: ${SECRET_NAME}
         index: ${INDEX}
         tuning: ${{TUNING}}
         url: ${URL}

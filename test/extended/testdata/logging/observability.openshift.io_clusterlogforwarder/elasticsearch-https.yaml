@@ -24,11 +24,9 @@ objects:
         version: ${{ES_VERSION}}
       tls:
         ca:
-          configMap:
-            name:
+          configMapName:
           key: ca-bundle.crt
-          secret:
-            name: ${SECRET_NAME} #configmap or secret
+          secretName: ${SECRET_NAME} #configmap or secret
         insecureSkipVerify: ${{INSECURE_SKIP_VERIFY}}
         securityProfile: ${{SECURITY_PROFILE}}
     pipelines:

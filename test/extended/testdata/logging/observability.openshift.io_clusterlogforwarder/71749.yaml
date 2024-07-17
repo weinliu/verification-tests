@@ -46,7 +46,7 @@ objects:
       type: lokiStack
       lokiStack:
           token:
-            from: serviceAccountToken
+            from: serviceAccount
         labelKeys:
         - .hostname
         - .log_type
@@ -56,6 +56,10 @@ objects:
         target:
           name: ${LOKISTACK_NAME}
           namespace: ${LOKISTACK_NAMESPACE}
+      tls:
+        ca:
+          key: ca-bundle.crt
+          secretName: ${SECRET_NAME}
     pipelines:
     - name: forward-to-lokistack
       inputRefs: ${{INPUT_REFS}}
@@ -82,3 +86,5 @@ parameters:
   value: "openshift-logging"
 - name: MANAGEMENT_STATE
   value: "managed"
+- name: SECRET_NAME
+  value: ""

@@ -21,34 +21,27 @@ objects:
         authentication:
           password:
             key: password
-            secret:
-              name: ${SECRET_NAME}
+            secretName: ${SECRET_NAME}
           username:
             key: username
-            secret:
-              name: ${SECRET_NAME}
+            secretName: ${SECRET_NAME}
         index: ${INDEX}
         tuning: ${{TUNING}}
         url: ${ES_URL}
         version: ${{ES_VERSION}}
       tls:
         ca:
-          configMap:
-            name:
+          configMapName:
           key: ca-bundle.crt
-          secret:
-            name: ${SECRET_NAME}
+          secretName: ${SECRET_NAME}
         certificate:
-          configMap:
-            name:
+          configMapName:
           key: tls.crt
-          secret:
-            name: ${SECRET_NAME}
+          secretName: ${SECRET_NAME}
         insecureSkipVerify: ${{INSECURE_SKIP_VERIFY}}
         key:
           key: tls.key
-          secret:
-            name: ${SECRET_NAME}
+          secretName: ${SECRET_NAME}
         securityProfile: ${{SECURITY_PROFILE}}
     pipelines:
     - name: forward-to-external-es

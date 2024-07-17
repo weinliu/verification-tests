@@ -17,8 +17,7 @@ objects:
         authentication:
           sharedKey:
             key: shared_key
-            secret:
-              name: ${SECRET_NAME}
+            secretName: ${SECRET_NAME}
         customerId: ${CUSTOMER_ID}
         logType: ${PREFIX_OR_NAME}app_log
         azureResourceId: ${RESOURCE_ID}
@@ -34,8 +33,7 @@ objects:
         authentication:
           sharedKey:
             key: shared_key
-            secret:
-              name: ${SECRET_NAME}
+            secretName: ${SECRET_NAME}
         customerId: ${CUSTOMER_ID}
         logType: ${PREFIX_OR_NAME}infra_log
         azureResourceId: ${RESOURCE_ID}
@@ -46,8 +44,7 @@ objects:
         authentication:
           sharedKey:
             key: shared_key
-            secret:
-              name: ${SECRET_NAME}
+            secretName: ${SECRET_NAME}
         customerId: ${CUSTOMER_ID}
         logType: ${PREFIX_OR_NAME}audit_log
         azureResourceId: ${RESOURCE_ID}

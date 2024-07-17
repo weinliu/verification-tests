@@ -17,8 +17,7 @@ objects:
         authentication:
           credentials:
             key: ${CRED_KEY}
-            secret:
-              name: ${SECRET_NAME}
+            secretName: ${SECRET_NAME}
         id:
           type: ${ID_TYPE}
           value: ${ID_VALUE}

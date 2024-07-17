@@ -18,12 +18,10 @@ objects:
           awsAccessKey:
             keyID:
               key: aws_access_key_id
-              secret:
-                name: ${SECRET_NAME}
+              secretName: ${SECRET_NAME}
             keySecret:
               key: aws_secret_access_key
-              secret:
-                name: ${SECRET_NAME}
+              secretName: ${SECRET_NAME}
           type: accessKey
         groupName: ${GROUP_NAME}
         region: ${REGION}
