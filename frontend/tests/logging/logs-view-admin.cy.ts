@@ -87,7 +87,7 @@ describe('Logging view on the openshift console', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-53324,gkarager,Logging) disable query executors when the query is empty', {tags: ['e2e','admin']}, () => {
+  it('(OCP-53324,gkarager,Logging) disable query executors when the query is empty', {tags: ['e2e','admin','@logging']}, () => {
     cy.visit(Logs_Page_URL);
     cy.byTestID(TestIds.RefreshIntervalDropdown).should('exist');
     cy.byTestID(TestIds.TimeRangeDropdown).should('exist');
@@ -116,7 +116,7 @@ describe('Logging view on the openshift console', () => {
     });
   }); 
 
-  it('(OCP-53324,gkarager,Logging) LogQL Query', {tags: ['e2e','admin']}, () => {
+  it('(OCP-53324,gkarager,Logging) LogQL Query', {tags: ['e2e','admin','@logging', '@smoke','@level0']}, () => {
     cy.visit(Logs_Page_URL);
 
     cy.byTestID(TestIds.LogsQueryInput).should('not.exist');
@@ -140,7 +140,7 @@ describe('Logging view on the openshift console', () => {
     })
   });
 
-  it('(OCP-53324,gkarager,Logging) execute query as per selected tenant', {tags: ['e2e','admin']}, () => {
+  it('(OCP-53324,gkarager,Logging) execute query as per selected tenant', {tags: ['e2e','admin','@logging']}, () => {
     const logType = "infrastructure"
     cy.visit(Logs_Page_URL);
     cy.byTestID(TestIds.TenantDropdown).click().within(() => {

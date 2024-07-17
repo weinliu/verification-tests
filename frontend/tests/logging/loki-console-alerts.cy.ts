@@ -57,7 +57,7 @@ describe('Loki log based alerts on dev-console', () => {
     cy.exec(`oc delete group cluster-admin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false });   
   });
 
-  it('(OCP-65686,kbharti,Logging) Validate Loki log based alerts on Console', { tags: ['e2e', 'admin', '@smoke'] }, function () {
+  it('(OCP-65686,kbharti,Logging) Validate Loki log based alerts on Console', { tags: ['e2e', 'admin', '@smoke', '@logging'] }, function () {
 
     if (ocpVersion < '4.13') {
       // Skipping the test on OCP versions below 4.13 since Alerts are available on 4.13+

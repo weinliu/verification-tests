@@ -46,7 +46,7 @@ describe('Logging related features', () => {
     cy.logout;
   });
 
-  it('(OCP-66825,qitang,Logging) Vector - OpenShift Logging Collection Vector metrics dashboard', {tags: ['e2e','admin']}, () => {
+  it('(OCP-66825,qitang,Logging) Vector - OpenShift Logging Collection Vector metrics dashboard', {tags: ['e2e','admin','@logging']}, () => {
     // Create Logging instance
     cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} process -f ./fixtures/logging/cl_default_es.yaml -n ${CLO.namespace} -p COLLECTOR=fluentd | oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} apply -f -`, {failOnNonZeroExit: false})
     .then(output => {
