@@ -1737,3 +1737,18 @@ func getProjectPods(oc *exutil.CLI, project string) (podSlice []string) {
 	podSlice = strings.Split(pods, "\n")
 	return podSlice
 }
+
+func ClusterHasEnabledFIPS(oc *exutil.CLI) bool {
+	firstNode, err := exutil.GetFirstMasterNode(oc)
+	msgIfErr := fmt.Sprintf("ERROR Could not get first node to check FIPS '%v' %v", firstNode, err)
+	o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+	o.Expect(firstNode).NotTo(o.BeEmpty(), msgIfErr)
+	// hardcode the default project since its enforce is privileged as default
+	fipsModeStatus, err := oc.AsAdmin().Run("debug").Args("-n", "default", "node/"+firstNode, "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+	msgIfErr = fmt.Sprintf("ERROR Could not check FIPS on node %v: '%v' %v", firstNode, fipsModeStatus, err)
+	o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+	o.Expect(fipsModeStatus).NotTo(o.BeEmpty(), msgIfErr)
+
+	// This will be true or false
+	return strings.Contains(fipsModeStatus, "FIPS mode is enabled.")
+}

@@ -585,6 +585,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-59416-Revert Catalog PSA decisions for 4.12 [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		if ClusterHasEnabledFIPS(oc) {
+			g.Skip("FIPS enabled, skip it")
+		}
 		exutil.By("step 1 -> check openshift-marketplace project labels")
 		labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-marketplace", "--show-labels").Output()
 		if err != nil {
