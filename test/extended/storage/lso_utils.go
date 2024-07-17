@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	qeCatalogSource     string = "qe-app-registry"
-	redhatCatalogSource string = "redhat-operators"
-	sourceNameSpace     string = "openshift-marketplace"
+	qeCatalogSource          string = "qe-app-registry"
+	autoReleaseCatalogSource string = "auto-release-app-registry"
+	redhatCatalogSource      string = "redhat-operators"
+	sourceNameSpace          string = "openshift-marketplace"
 )
 
 // Define the localStorageOperator struct
@@ -107,7 +108,7 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 		currentCSV string
 		errinfo    error
 	)
-	err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		currentCSV, errinfo = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lso.namespace, "Subscription", `-o=jsonpath={.items[?(@.metadata.name=="`+lso.subName+`")].status.currentCSV}`).Output()
 		if errinfo != nil {
 			e2e.Logf("Get local storage operator currentCSV failed :%v, wait for next round get.", errinfo)
@@ -152,6 +153,8 @@ func (lso *localStorageOperator) checkPackagemanifestsExistInClusterCatalogs(oc 
 	case isPreviewExist: // Used for lso presubmit test jobs
 		lso.source = catalogsList[index]
 		lso.channel = "preview"
+	case strings.Contains(catalogs, autoReleaseCatalogSource):
+		lso.source = autoReleaseCatalogSource
 	case strings.Contains(catalogs, qeCatalogSource):
 		lso.source = qeCatalogSource
 	case strings.Contains(catalogs, redhatCatalogSource):
