@@ -76,13 +76,6 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-LEVEL0-StagerunBoth-High-43074-MetalLB-Operator installation ", func() {
-		g.By("Checking metalLB operator installation")
-		e2e.Logf("Operator install check successfull as part of setup !!!!!")
-		g.By("SUCCESS - MetalLB operator installed")
-
-	})
-
 	g.It("Author:asood-High-46560-High-50944-MetalLB-CR All Workers Creation and Verify the logging level of MetalLB can be changed for debugging [Serial]", func() {
 
 		exutil.By("Creating metalLB CR on all the worker nodes in cluster")
@@ -138,7 +131,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-High-54857-Validate controller and pod can be scheduled based on node selectors.[Serial]", func() {
+	g.It("Author:asood-LEVEL0-StagerunBoth-High-54857-Validate controller and pod can be scheduled based on node selectors.[Serial]", func() {
 		var nodeSelKey = "kubernetes.io/hostname"
 		exutil.By("Obtain the worker nodes in cluster")
 		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
