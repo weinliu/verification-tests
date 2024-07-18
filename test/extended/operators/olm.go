@@ -2135,14 +2135,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.By("1) Install a customization CatalogSource CR")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-opm.yaml")
 		cs := catalogSourceDescription{
 			name:        "cs-33450",
 			namespace:   "openshift-marketplace",
 			displayName: "OLM QE Operators",
 			publisher:   "Jian",
 			sourceType:  "grpc",
-			address:     "quay.io/olmqe/etcd-index:33450",
+			address:     "quay.io/olmqe/etcd-index:33450-fips",
 			template:    csImageTemplate,
 		}
 		dr := make(describerResrouce)
