@@ -9,6 +9,36 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
+    limits:
+      global:
+        retention:
+          days: 20
+          streams:
+          - days: 4
+            priority: 1
+            selector: '{kubernetes_namespace_name=~"e2e.+"}'
+          - days: 1
+            priority: 1
+            selector: '{kubernetes_namespace_name="kube.+"}'
+          - days: 15
+            priority: 1
+            selector: '{log_type="audit"}'
+      tenants:
+        application:
+          retention:
+            days: 1
+            streams:
+            - days: 4
+              selector: '{kubernetes_namespace_name=~"test.+"}'
+        audit:
+          retention:
+            days: 15
+        infrastructure:
+          retention:
+            days: 5
+            streams:
+            - days: 1
+              selector: '{kubernetes_namespace_name=~"openshift-cluster.+"}'
     managementState: "Managed"
     size: ${SIZE}
     storage:
@@ -50,4 +80,3 @@ parameters:
   value: "v13"
 - name: SCHEMA_EFFECTIVE_DATE
   value: "2023-10-15"
-
