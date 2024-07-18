@@ -1370,4 +1370,82 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 	})
+
+	// author: huliu@redhat.com
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-74603-[MAPI] Support AWS Placement Group Partition Number [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region != "us-east-2" && region != "us-east-1" {
+			g.Skip("Not support region " + region + " for the case for now.")
+		}
+		g.By("Create a new machineset")
+		machinesetName := infrastructureName + "-74603"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		exutil.By("Patch machineset only with valid partition placementGroupName")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgpartition3"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		exutil.By("Check machine with placementGroupName and without placementGroupPartition ")
+		placementGroupName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.placementGroupName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(placementGroupName).Should(o.Equal("pgpartition3"))
+		placementGroupPartition, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.placementGroupPartition}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(placementGroupPartition).To(o.BeEmpty())
+
+		exutil.By("Patch machineset with valid partition placementGroupName and placementGroupPartition")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":2,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgpartition3", "placementGroupPartition":2}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
+
+		exutil.By("Check machine with placementGroupName and placementGroupPartition")
+		machine := clusterinfra.GetLatestMachineFromMachineSet(oc, machinesetName)
+		placementGroupName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machine, "-n", "openshift-machine-api", "-o=jsonpath={.spec.providerSpec.value.placementGroupName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(placementGroupName).Should(o.Equal("pgpartition3"))
+		placementGroupPartition, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machine, "-n", "openshift-machine-api", "-o=jsonpath={.spec.providerSpec.value.placementGroupPartition}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(placementGroupPartition).Should(o.Equal("2"))
+	})
+
+	// author: huliu@redhat.com
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-75037-[MAPI] Webhook validation for AWS Placement Group Partition Number [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region != "us-east-2" && region != "us-east-1" {
+			g.Skip("Not support region " + region + " for the case for now.")
+		}
+		g.By("Create a new machineset")
+		machinesetName := infrastructureName + "-75037"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		exutil.By("Update machineset with invalid Placement group partition nubmer")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgpartition3", "placementGroupPartition":0}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("placementGroupPartition: Invalid value: 0: providerSpec.placementGroupPartition must be between 1 and 7"))
+
+		exutil.By("Update machineset with placementGroupPartition but without placementGroupName")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupPartition":2}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("placementGroupPartition: Invalid value: 2: providerSpec.placementGroupPartition is set but providerSpec.placementGroupName is empty"))
+
+		exutil.By("Patch machineset with valid placementGroupPartition but cluster placementGroupName")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgcluster", "placementGroupPartition":2}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+
+		exutil.By("Patch machineset with invalid placementGroupPartition of the partition placementGroupName")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgpartition3", "placementGroupPartition":4}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+	})
 })
