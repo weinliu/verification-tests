@@ -2,6 +2,7 @@ package olmv1util
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -93,7 +94,7 @@ func (clustercatalog *ClusterCatalogDescription) GetcontentURL(oc *exutil.CLI) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	if route == "" || err != nil {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("expose").Args("service", "catalogd-catalogserver", "-n", "openshift-catalogd").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "reencrypt", "--service=catalogd-catalogserver", "-n", "openshift-catalogd").Output()
 		e2e.Logf("output is %v, error is %v", output, err)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 			route, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-catalogserver", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
@@ -132,7 +133,15 @@ func (clustercatalog *ClusterCatalogDescription) GetContent(oc *exutil.CLI) []by
 	if clustercatalog.ContentURL == "" {
 		clustercatalog.GetcontentURL(oc)
 	}
-	resp, err := http.Get(clustercatalog.ContentURL)
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+	client := &http.Client{Transport: tr}
+
+	resp, err := client.Get(clustercatalog.ContentURL)
 	defer func() {
 		err := resp.Body.Close()
 		if err != nil {
