@@ -464,6 +464,23 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
+	// Customer Bug: OCPBUGS-23260 Error in namespaces: Expected device to be attached but was attaching for AWS m5.8xlarge and c5a.4xlarge instances
+	g.It("Author:pewang-HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Medium-74746-[AWS-EBS-CSI-Driver-Operator][bz-storage] reserved volume attachments should be enabled in driver node by default", func() {
+
+		// Set the resource objects definition for the scenario
+		var (
+			enableReservedVolumeAttachments = "--reserved-volume-attachments=1"
+			awsEbsCsiDriverNode             = newDaemonSet(setDsName("aws-ebs-csi-driver-node"), setDsNamespace("openshift-cluster-csi-drivers"), setDsApplabel("app=aws-ebs-csi-driver-node"))
+		)
+
+		exutil.By("# Check the reserved-volume-attachments should be enabled in aws ebs csi driver node")
+		if hostedClusterName, _, hostedClusterNS := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc); hostedClusterNS != "" {
+			awsEbsCsiDriverNode.namespace = hostedClusterNS + "-" + hostedClusterName
+		}
+		o.Expect(awsEbsCsiDriverNode.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.containers[?(@.name=="csi-driver")].args}`)).Should(o.ContainSubstring(enableReservedVolumeAttachments))
+	})
+
+	// author: pewang@redhat.com
 	// Customer Bug: OCPBUGS-29196 OpenShift on C2S doesn't support using KMS key for StorageClass at install time
 	g.It("Author:pewang-NonHyperShiftHOST-High-74605-[AWS-EBS-CSI-Driver-Operator][BYOK][C2S] should support the us-iso, us-iso-b partitions kms encryption keys [Disruptive]", func() {
 

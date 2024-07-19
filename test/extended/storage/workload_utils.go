@@ -1675,6 +1675,14 @@ func (ds *daemonset) getNodesList(oc *exutil.CLI) []string {
 	return nodeList
 }
 
+// GetSpecifiedJSONPathValue gets the specified jsonpath value of the daemonset
+func (ds *daemonset) getSpecifiedJSONPathValue(oc *exutil.CLI, jsonPath string) string {
+	value, getValueErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", fmt.Sprintf("jsonpath=%s", jsonPath)).Output()
+	o.Expect(getValueErr).NotTo(o.HaveOccurred())
+	e2e.Logf(`Daemonset/%s jsonPath->%q value is %q`, ds.name, jsonPath, value)
+	return value
+}
+
 // Check the Daemonset ready
 func (ds *daemonset) checkReady(oc *exutil.CLI) (bool, error) {
 	dsAvailableNumber, err1 := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.numberAvailable}").Output()
