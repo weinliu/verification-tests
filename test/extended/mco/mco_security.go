@@ -408,7 +408,11 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-70857-boostrap-kubeconfig must be updated when kube-apiserver server CA is rotated [Disruptive]", func() {
+	// In the latest branches times are artificially reduced and after about 6 or 7 hours all kube-apiserver certificates are rotated
+	// If we execute this test case, when this rotation happens the kubeconfig file needs to be updated to use new certificates and all test cases start failing because of this
+	// If we don't execute this test case, when this rotation happens the kubeconfig needs no update
+	// We will skip this test case in prow jobs and we will execute it only out of CI
+	g.It("Author:sregido-DEPRECATED-NonHyperShiftHOST-NonPreRelease-Critical-70857-boostrap-kubeconfig must be updated when kube-apiserver server CA is rotated [Disruptive]", func() {
 		var (
 			mco                      = NewResource(oc.AsAdmin(), "co", "machine-config")
 			kubernetesKubeconfigPath = "/etc/kubernetes/kubeconfig"
