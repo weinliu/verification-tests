@@ -527,8 +527,7 @@ func (n *Node) IsUpdating() bool {
 
 // IsReady returns boolean 'true' if the node is ready. Else it retruns 'false'.
 func (n Node) IsReady() bool {
-	readyCondition := JSON(n.GetOrFail(`{.status.conditions[?(@.type=="Ready")]}`))
-	return readyCondition.Get("status").ToString() == "True"
+	return n.IsConditionStatusTrue("Ready")
 }
 
 // GetMCDaemonLogs returns the logs of the MachineConfig daemonset pod for this node. The logs will be grepped using the 'filter' parameter
@@ -819,6 +818,21 @@ func (n *Node) CancelRpmOsTreeTransactions() (string, error) {
 
 // CopyFromLocal Copy a local file or directory to the node
 func (n *Node) CopyFromLocal(from, to string) error {
+	immediate := true
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 5*time.Minute, immediate, func(_ context.Context) (bool, error) {
+		kubeletReady := n.IsReady()
+		if kubeletReady {
+			return true, nil
+		}
+		logger.Warnf("Kubelet is not ready in %s. To copy the file to the node we need to wait for kubelet to be ready. Waiting...", n)
+		return false, nil
+	})
+
+	if waitErr != nil {
+		logger.Errorf("Cannot copy file %s to %s in node %s because Kubelet is not ready in this node", from, to, n)
+		return waitErr
+	}
+
 	return n.oc.Run("adm").Args("copy-to-node", "node/"+n.GetName(), fmt.Sprintf("--copy=%s=%s", from, to)).Execute()
 }
 

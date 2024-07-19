@@ -4794,6 +4794,58 @@ desiredState:
 			"%s unit is not active", unitName)
 		logger.Infof("OK \n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-74608-Env file /etc/kubernetes/node.env should not be overwritten after a node restart [Disruptive]", func() {
+		var (
+			node      = GetCompactCompatiblePool(oc.AsAdmin()).GetSortedNodesOrFail()[0]
+			rEnvFile  = NewRemoteFile(node, "/etc/kubernetes/node.env")
+			extraLine = "\nDUMMYKEY=DUMMYVAL"
+		)
+		exutil.By("Get current node.env content")
+		o.Expect(rEnvFile.Fetch()).To(o.Succeed(),
+			"Error getting information about %s", rEnvFile)
+		initialContent := rEnvFile.GetTextContent()
+		initialUser := rEnvFile.GetUIDName()
+		initialGroup := rEnvFile.GetGIDName()
+		initialPermissions := rEnvFile.GetOctalPermissions()
+		logger.Infof("Initial content: %s", initialContent)
+		logger.Infof("OK!\n")
+
+		exutil.By("Modify the content of the node.env file")
+		defer rEnvFile.PushNewTextContent(initialContent)
+		newContent := initialContent + extraLine
+		logger.Infof("New content: %s", newContent)
+		o.Expect(rEnvFile.PushNewTextContent(newContent)).To(o.Succeed(),
+			"Error writing new content in %s", rEnvFile)
+		logger.Infof("OK!\n")
+
+		exutil.By("Reboot node")
+		o.Expect(node.Reboot()).To(o.Succeed(),
+			"Error rebooting %s", node)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the content was not changed after the node reboot")
+		o.Expect(rEnvFile.Read()).To(o.And(
+			HaveContent(newContent),
+			HaveOwner(initialUser),
+			HaveGroup(initialGroup),
+			HaveOctalPermissions(initialPermissions)),
+			"The information in %s is not the expected one", rEnvFile)
+		logger.Infof("OK!\n")
+
+		exutil.By("Restore initial content")
+		o.Expect(rEnvFile.PushNewTextContent(initialContent)).To(o.Succeed(),
+			"Error writing the initial content in %s", rEnvFile)
+		o.Expect(node.Reboot()).To(o.Succeed(),
+			"Error rebooting %s", node)
+		o.Expect(rEnvFile.Read()).To(o.And(
+			HaveContent(initialContent),
+			HaveOwner(initialUser),
+			HaveGroup(initialGroup),
+			HaveOctalPermissions(initialPermissions)),
+			"The inforamtion of %s is not the expected one after restoring the initial content", rEnvFile)
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
