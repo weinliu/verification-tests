@@ -225,7 +225,7 @@ func comparePodHostIP(oc *exutil.CLI) (int, int) {
 // Check the latest image pruner pod logs
 func imagePruneLog(oc *exutil.CLI, matchLogs, notMatchLogs string) {
 	podsOfImagePrune := []corev1.Pod{}
-	err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
 		podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
 		if len(podsOfImagePrune) == 0 {
 			e2e.Logf("Can't get pruner pods, go to next round")
@@ -1082,14 +1082,19 @@ func (limitsrc *limitSource) create(oc *exutil.CLI) {
 
 func waitRouteReady(route string) {
 	curlCmd := "curl -k https://" + route
+	var output []byte
+	var curlErr error
 	pollErr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
-		_, curlErr := exec.Command("bash", "-c", curlCmd).Output()
+		output, curlErr = exec.Command("bash", "-c", curlCmd).CombinedOutput()
 		if curlErr != nil {
 			e2e.Logf("the route is not ready, go to next round")
 			return false, nil
 		}
 		return true, nil
 	})
+	if pollErr != nil {
+		e2e.Logf("output is: %v with error %v", string(output), curlErr.Error())
+	}
 	exutil.AssertWaitPollNoErr(pollErr, "The route can't be used")
 }
 
