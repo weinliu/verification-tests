@@ -45,6 +45,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		sVersion := string(version)
 		kubeVer := strings.Split(sVersion, "+")[0]
+		kubeVer = strings.TrimSpace(kubeVer)
 
 		e2e.Logf("retrieve all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
