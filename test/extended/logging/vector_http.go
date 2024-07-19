@@ -65,7 +65,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-" + getRandomString(),
 				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "https-output-mtls.yaml"),
 				secretName:                fluentdS.secretName,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-60933",
 				namespace:                 fluentdProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "https-output-ca.yaml"),
 				secretName:                fluentdS.secretName,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -201,7 +201,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-60936",
 				namespace:                 fluentdProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-forward-all-over-https-skipverify-template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "https-output-skipverify.yaml"),
 				secretName:                fakeSecret.name,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-61567",
 				namespace:                 fluentdProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "61567.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "https-61567.yaml"),
 				secretName:                fluentdS.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -339,7 +339,7 @@ ca_file = "/var/run/ocp-collector/secrets/to-fluentd-60933/ca-bundle.crt"`
 			clf := clusterlogforwarder{
 				name:               "http-to-http",
 				namespace:          clfNS,
-				templateFile:       filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-httpsever-to-http-template.yaml"),
+				templateFile:       filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "httpserver-to-httpout.yam"),
 				secretName:         fluentdS.secretName,
 				serviceAccountName: "clf-" + getRandomString(),
 				collectAuditLogs:   false,
