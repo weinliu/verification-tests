@@ -108,8 +108,8 @@ var _ = g.Describe("[sig-updates] OTA osus should", func() {
 	//author: jiajliu@redhat.com
 	g.It("NonPreRelease-Longduration-DisconnectedOnly-Author:jiajliu-High-44958-z version upgrade OSUS operator and operand for disconnected cluster [Disruptive]", func() {
 		updatePath := map[string]string{
-			"srcver": "5.0.1",
-			"tgtver": "5.0.2",
+			"srcver": "5.0.2",
+			"tgtver": "5.0.3",
 		}
 		tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
 		defer os.RemoveAll(tempDataDir)
