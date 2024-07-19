@@ -1212,4 +1212,173 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.By("Check for the catalogsource pod status")
 		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-15", "openshift-marketplace", "Running")
 	})
+
+	// author: knarra@redhat.com
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-73420-Critical-73419-Verify oc-mirror v2 skips and continues if selected bundle does not exist [Serial]", func() {
+		dirname := "/tmp/case73420"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73420.yaml")
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-73420")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-73420")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start mirrro2disk")
+		waitErr := wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			m2dOutputFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").OutputToFile(getRandomString() + "workload-m2m.txt")
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			if !validateStringFromFile(m2dOutputFile, "bundle secondaryscheduleroperator.v5.0 of operator openshift-secondary-scheduler-operator not found in catalog: SKIPPING") && !validateStringFromFile(m2dOutputFile, "bundle cockroach-operator.v2.13.1 of operator cockroachdb-certified not found in catalog: SKIPPING") && !validateStringFromFile(m2dOutputFile, "bundle 3scale-community-operator.v0.9.1 of operator 3scale-community-operator not found in catalog: SKIPPING") {
+				return false, fmt.Errorf("Do not see any bundles being skipped which is not expected")
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed")
+
+		exutil.By("Start disk2mirror")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName+"/d2m", "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror still failed")
+
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+		assertPodOutput(oc, "olm.catalogSource=cs-certified-operator-index-v4-14", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-community-operator-index-v4-14", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-15", "openshift-marketplace", "Running")
+
+		exutil.By("Install the operator from the new catalogsource")
+		rhssoSub, rhssoOG := getOperatorInfo(oc, "openshift-secondary-scheduler-operator", "openshift-secondary-scheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.15", "cs-redhat-operator-index-v4-15")
+		defer removeOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-secondary-scheduler-operator")
+		installOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-secondary-scheduler-operator", "secondary-scheduler-operator")
+
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-73124-Validate operator mirroring works fine for the catalog that does not follow same structure as RHOI [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case73124"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get root ca")
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "20G", "/var/lib/registry")
+
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-73124")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-73124")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73124.yaml")
+
+		exutil.By("Skopeo oci to localhost")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-zcon-zosconnect-catalog@sha256:6f02ecef46020bcd21bdd24a01f435023d5fc3943972ef0d9769d5276e178e76 oci://%s  --remove-signatures --insecure-policy", dirname+"/ibm-catalog")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for oci ibm catalog failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for oci ibm catalog failed")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for ibm oci catalog failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror for ibm oci catalog still failed")
+
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+		ibmCatalogSourceName, err := exec.Command("bash", "-c", fmt.Sprintf("oc get catalogsource -n openshift-marketplace | awk '{print $1}' | grep ibm")).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ibmCatalogSourceName is %s", ibmCatalogSourceName)
+
+		exutil.By("Check for the catalogsource pod status")
+		assertPodOutput(oc, "olm.catalogSource="+string(ibmCatalogSourceName), "openshift-marketplace", "Running")
+
+		exutil.By("Install the operator from the new catalogsource")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		ibmcatalogSubscription := filepath.Join(buildPruningBaseDir, "ibmcustomsub.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", ibmcatalogSubscription).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", ibmcatalogSubscription).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Wait for the operator pod running")
+		if ok := waitForAvailableRsRunning(oc, "deploy", "ibm-zcon-zosconnect-controller-manager", "openshift-operators", "1"); ok {
+			e2e.Logf("IBM operator with index structure different than RHOCI has been deployed successfully\n")
+		} else {
+			e2e.Failf("All pods related to ibm deployment are not running")
+		}
+
+	})
 })

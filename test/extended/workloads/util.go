@@ -1477,7 +1477,10 @@ func installOperatorFromCustomCS(oc *exutil.CLI, operatorSub *customsub, operato
 	e2e.Logf("Wait for the operator pod running")
 	if ok := waitForAvailableRsRunning(oc, "deploy", operatorDeoloy, operatorNamespace, "1"); ok {
 		e2e.Logf("installed operator runnnig now\n")
+	} else {
+		e2e.Failf("All pods related to deployment are not running")
 	}
+
 }
 
 func removeOperatorFromCustomCS(oc *exutil.CLI, operatorSub *customsub, operatorOG *operatorgroup, operatorNamespace string) {
