@@ -534,9 +534,9 @@ func getImagePullSpecFromPayload(oc *exutil.CLI, image string) string {
 
 func (ipf *ipfailoverDescription) create(oc *exutil.CLI, ns string) {
 	// create ServiceAccount and add it to related SCC
-	_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "ipfailover", "-n", ns).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", "ipfailover", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "ipfailover").Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "ipfailover", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// create the ipfailover deployment
 	err = createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ipf.template, "-p", "NAME="+ipf.name, "NAMESPACE="+ipf.namespace, "IMAGE="+ipf.image, "HAINTERFACE="+ipf.HAInterface)
