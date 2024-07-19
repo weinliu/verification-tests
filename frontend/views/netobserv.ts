@@ -48,9 +48,6 @@ export const Operator = {
         })
     },
     enableAllMetrics: () => {
-        // enable eBPF metrics
-        cy.get('#root_spec_agent_ebpf_metrics_accordion-toggle').click()
-        cy.get('#root_spec_agent_ebpf_metrics_enable').check()
         // enable FLP metrics
         cy.get('#root_spec_processor_accordion-toggle').click()
         cy.get('#root_spec_processor_metrics_accordion-toggle').click()
