@@ -1801,10 +1801,15 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(svcRoute).ShouldNot(o.Equal(""))
 
 		exutil.By("Access the route before network policy creation")
-		routeCurlOutput, svcErr := exec.Command("bash", "-c", "curl -sI "+svcRoute).Output()
-		o.Expect(svcErr).NotTo(o.HaveOccurred())
-		e2e.Logf(fmt.Sprintf("Output of route access \n %s", routeCurlOutput))
-		o.Expect(strings.Contains(string(routeCurlOutput), "200 OK")).To(o.BeTrue())
+		var svcErr error
+		var routeCurlOutput []byte
+		o.Eventually(func() string {
+			routeCurlOutput, svcErr = exec.Command("bash", "-c", "curl -sI "+svcRoute).Output()
+			if svcErr != nil {
+				e2e.Logf("Wait for service to be accessible through route, %v", svcErr)
+			}
+			return string(routeCurlOutput)
+		}, "15s", "5s").Should(o.ContainSubstring("200 OK"), fmt.Sprintf("Service inaccessible through route %s", string(routeCurlOutput)))
 
 		exutil.By("Create a network policy in namespace")
 		createResourceFromFile(oc, ns, allowFromAllNSNetworkPolicyFile)
