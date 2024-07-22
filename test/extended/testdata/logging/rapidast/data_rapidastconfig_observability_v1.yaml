@@ -27,7 +27,7 @@ scanners:
     # define a scan through the ZAP scanner
         apiScan:
             apis:
-                apiUrl: "https://kubernetes.default.svc/openapi/v3/apis/logging.openshift.io/v1"  # Replace this to scan other APi groups/version
+                apiUrl: "https://kubernetes.default.svc/openapi/v3/apis/observability.openshift.io/v1"  # Replace this to scan other APi groups/version
         passiveScan:
             # optional list of passive rules to disable
             disabledRules: "2,10015,10027,10096,10024,10054"

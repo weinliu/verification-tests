@@ -797,7 +797,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan"
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 	})
 	// author anli@redhat.com
-	g.It("CPaasrunOnly-Author:anli-High-67423-Cluster Logging Operator should pass DAST test", func() {
+	g.It("Author:anli-CPaasrunOnly-Critical-75070-clo operator should pass DAST", func() {
 		CLO := SubscriptionObjects{
 			OperatorName:  "cluster-logging-operator",
 			Namespace:     cloNS,
@@ -807,13 +807,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan"
 		}
 		CLO.SubscribeOperator(oc)
 		proj := oc.Namespace()
-		configFile := filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_logging_v1.yaml")
+		configFile := filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_observability_v1.yaml")
 		policyFile := filepath.Join(loggingBaseDir, "rapidast/customscan.policy")
-		_, err := rapidastScan(oc, proj, configFile, policyFile, "logging.openshift.io_v1")
+		_, err := rapidastScan(oc, proj, configFile, policyFile, "observability.openshift.io_v1")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	// author anli@redhat.com
-	g.It("CPaasrunOnly-Author:anli-High-67424-Loki Operator should pass DAST test", func() {
+	g.It("Author:anli-CPaasrunOnly-Critical-67424-Loki Operator should pass DAST test", func() {
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
 			Namespace:     loNS,
