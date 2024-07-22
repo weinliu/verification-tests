@@ -20,10 +20,10 @@ RUN MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL=${MIRR
     rcgaver=$(grep -E "<a href=\"4\.17" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${rcgaver}V" && \
     if [ "V${rcgaver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${rcgaver}; fi && \
     curl -s -k -L ${CLIENTURL}/openshift-client-linux-amd64-rhel9.tar.gz -o openshift-client-linux.tar.gz && \
-    curl -s -k -L ${CLIENTURL}/opm-linux.tar.gz -o opm-linux.tar.gz  && \
+    curl -s -k -L ${CLIENTURL}/opm-linux-rhel9.tar.gz -o opm-linux.tar.gz  && \
     curl -s -k -L ${CLIENTURL}/oc-mirror.rhel9.tar.gz -o oc-mirror.tar.gz && \
     tar -C /usr/bin -xzvf openshift-client-linux.tar.gz && rm -fr openshift-client-linux.tar.gz && \
-    tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz && \
+    tar -C /usr/bin -xzvf opm-linux.tar.gz && mv /usr/bin/opm-rhel9 /usr/bin/opm && rm -fr opm-linux.tar.gz && \
     opm version && \
     tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
     SDKURL=${MIRRORURL}/x86_64/clients/operator-sdk/pre-release && \
