@@ -277,4 +277,46 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-74644-Scope each MCN object to only be accessible from its associated MCD [Disruptive]", func() {
+		SkipIfSNO(oc.AsAdmin())
+		var (
+			nodes              = exutil.OrFail[[]Node](NewNodeList(oc.AsAdmin()).GetAllLinux())
+			node0              = nodes[0]
+			node1              = nodes[1]
+			machineConfigNode0 = nodes[0].GetMachineConfigNode()
+			machineConfigNode1 = nodes[1].GetMachineConfigNode()
+			poolNode1          = machineConfigNode1.GetOrFail(`{.spec.pool.name}`)
+			patchMCN1          = `{"spec":{"pool":{"name":"` + poolNode1 + `"}}}` // Actually we are not patching anything since we are setting the current value
+		)
+
+		exutil.By("Check that a machineconfignode cannot be patched from another MCD")
+		cmd := []string{"./rootfs/usr/bin/oc", "patch", "machineconfignodes/" + machineConfigNode1.GetName(), "--type=merge", "-p", patchMCN1}
+		_, err := exutil.RemoteShContainer(oc.AsAdmin(), MachineConfigNamespace, node0.GetMachineConfigDaemon(), MachineConfigDaemon, cmd...)
+		o.Expect(err).To(o.HaveOccurred(), "It should not be allowed to patch a machineconfignode from a different machineconfigdaemon")
+		o.Expect(err).To(o.BeAssignableToTypeOf(&exutil.ExitError{}), "Unexpected error while patching the machineconfignode resource from another MCD")
+		o.Expect(err.(*exutil.ExitError).StdErr).Should(o.ContainSubstring(`updates to MCN %s can only be done from the MCN's owner node`, machineConfigNode1.GetName()),
+			"Unexpected error message when patching the machineconfignode from another MCD")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a machineconfignode cannot be patched by MCD's SA")
+		err = machineConfigNode0.Patch("merge", patchMCN1, "--as=system:serviceaccount:openshift-machine-config-operator:machine-config-daemon")
+		o.Expect(err).To(o.HaveOccurred(), "MCD's SA should not be allowed to patch MachineConfigNode resources")
+		o.Expect(err).To(o.BeAssignableToTypeOf(&exutil.ExitError{}), "Unexpected error while patching the machineconfignode resource")
+		o.Expect(err.(*exutil.ExitError).StdErr).Should(o.ContainSubstring(`this user must have a "authentication.kubernetes.io/node-name" claim`),
+			"Unexpected error message when patching the machineconfignode resource with the MCD's SA")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check able to patch the MCN by same MCD running on node")
+		_, err = exutil.RemoteShContainer(oc.AsAdmin(), MachineConfigNamespace, node1.GetMachineConfigDaemon(), MachineConfigDaemon, cmd...)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"A MCD should be allowed to patch its own machineconfignode")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check patch directly from oc using your admin SA")
+		o.Expect(
+			machineConfigNode0.Patch("merge", patchMCN1),
+		).To(o.Succeed(), "Admin SA should be allowed to patch machineconfignodes")
+		logger.Infof("OK!\n")
+	})
+
 })

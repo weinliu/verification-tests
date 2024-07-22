@@ -40,7 +40,7 @@ type ResourceInterface interface {
 	Delete(extraParams ...string) error
 	DeleteOrFail(extraParams ...string)
 	Exists() bool
-	Patch(patchType string, patch string) error
+	Patch(patchType string, patch string, extraParams ...string) error
 	GetAnnotationOrFail(annotation string) string
 	GetConditionByType(ctype string) string
 	IsConditionStatusTrue(ctype string) bool
@@ -235,10 +235,11 @@ func (r Resource) Logs(args ...string) (string, error) {
 // The following patches are exactly the same patch but using different types, 'merge' and 'json'
 // --type merge -p '{"spec": {"selector": {"app": "frommergepatch"}}}'
 // --type json  -p '[{ "op": "replace", "path": "/spec/selector/app", "value": "fromjsonpatch"}]'
-func (r *Resource) Patch(patchType, patch string) error {
+func (r *Resource) Patch(patchType, patch string, extraParams ...string) error {
 	params := r.getCommonParams()
 
 	params = append(params, []string{"--type", patchType, "-p", patch}...)
+	params = append(params, extraParams...)
 
 	_, err := r.oc.WithoutNamespace().Run("patch").Args(params...).Output()
 	if err != nil {

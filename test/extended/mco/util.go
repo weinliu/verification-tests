@@ -1298,3 +1298,10 @@ func checkAllOperatorsHealthy(oc *exutil.CLI, timeout, poll string) {
 		Should(o.Succeed(),
 			"There are degraded ClusterOperators!")
 }
+
+func SkipIfSNO(oc *exutil.CLI) {
+	numNodes := len(exutil.OrFail[[]Node](NewNodeList(oc.AsAdmin()).GetAll()))
+	if numNodes == 1 {
+		g.Skip("There is only 1 node in the cluster. This test is not supported in SNO clusters")
+	}
+}
