@@ -17,5 +17,6 @@ parameters:
 - name: INSTALLNAMESPACE
 - name: PACKAGE
 - name: SANAME
-  value: "default"
+
+
 

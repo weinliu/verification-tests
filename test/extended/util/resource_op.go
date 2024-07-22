@@ -202,7 +202,9 @@ func GetFieldWithJsonpath(oc *CLI, interval, timeout time.Duration, immediately,
 // if you expect pod in ns disappear, could be
 // CheckAppearance(oc, 4*time.Second, 200*time.Second, exutil.NotImmediately, exutil.AsAdmin, exutil.WithoutNamespace, exutil.Disappear, "-n", ns, "pod" name)
 func CheckAppearance(oc *CLI, interval, timeout time.Duration, immediately, asAdmin, withoutNamespace, appear bool, parameters ...string) bool {
-	parameters = append(parameters, "--ignore-not-found")
+	if appear == Disappear {
+		parameters = append(parameters, "--ignore-not-found")
+	}
 	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, immediately, func(ctx context.Context) (bool, error) {
 		output, err := ocAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {

@@ -19,8 +19,7 @@ parameters:
 - name: INSTALLNAMESPACE
 - name: PACKAGE
 - name: CHANNEL
+- name: SANAME
 - name: POLICY
   value: "Enforce"
-- name: SANAME
-  value: "default"
 
