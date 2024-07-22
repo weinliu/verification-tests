@@ -12,6 +12,7 @@ import (
 	"github.com/tidwall/gjson"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -303,6 +304,33 @@ func IsExternalOIDCCluster(oc *CLI) (bool, error) {
 	e2e.Logf("Found authentication type used: %v", authType)
 
 	return authType == string(configv1.AuthenticationTypeOIDC), nil
+}
+
+// IsOpenShiftCluster checks if the active cluster is OpenShift or a derivative
+func IsOpenShiftCluster(ctx context.Context, c corev1client.NamespaceInterface) (bool, error) {
+	switch _, err := c.Get(ctx, "openshift-controller-manager", metav1.GetOptions{}); {
+	case err == nil:
+		return true, nil
+	case apierrors.IsNotFound(err):
+		return false, nil
+	default:
+		return false, fmt.Errorf("unable to determine if we are running against an OpenShift cluster: %v", err)
+	}
+}
+
+// SkipOnOpenShiftNess skips the test if the cluster type doesn't match the expected type.
+func SkipOnOpenShiftNess(expectOpenShift bool) {
+	switch IsKubernetesClusterFlag {
+	case "yes":
+		if expectOpenShift {
+			g.Skip("Expecting OpenShift but the active cluster is not, skipping the test")
+		}
+	// Treat both "no" and "unknown" as OpenShift
+	default:
+		if !expectOpenShift {
+			g.Skip("Expecting non-OpenShift but the active cluster is OpenShift, skipping the test")
+		}
+	}
 }
 
 // Skip for proxy platform

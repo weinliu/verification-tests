@@ -40,6 +40,11 @@ import (
 	"github.com/openshift/openshift-tests-private/pkg/version"
 )
 
+const (
+	EnvIsExternalOIDCCluster = "ENV_IS_EXTERNAL_OIDC_CLUSTER"
+	EnvIsKubernetesCluster   = "ENV_IS_KUBERNETES_CLUSTER"
+)
+
 var (
 	reportFileName string
 	syntheticSuite string
@@ -48,11 +53,10 @@ var (
 
 var TestContext *e2e.TestContextType = &e2e.TestContext
 
-const (
-	EnvIsExternalOIDCCluster = "ENV_IS_EXTERNAL_OIDC_CLUSTER"
+var (
+	IsExternalOIDCClusterFlag = ""
+	IsKubernetesClusterFlag   = ""
 )
-
-var IsExternalOIDCClusterFlag string = ""
 
 func InitStandardFlags() {
 	e2e.RegisterCommonFlags(flag.CommandLine)
@@ -178,6 +182,60 @@ func PreDetermineExternalOIDCCluster() (bool, error) {
 	// }
 
 	// return string(out) == string(configv1.AuthenticationTypeOIDC), nil
+}
+
+// PreDetermineK8sCluster checks if the active cluster is a Kubernetes cluster (as opposed to OpenShift).
+func PreDetermineK8sCluster() (isK8s bool, err error) {
+	ctx := context.Background()
+
+	kubeClient, err := e2e.LoadClientset(true)
+	if err != nil {
+		return false, fmt.Errorf("failed to load Kubernetes clientset: %w", err)
+	}
+
+	err = wait.PollUntilContextTimeout(ctx, 3*time.Second, 9*time.Second, true, func(ctx context.Context) (done bool, err error) {
+		isOpenShift, isOCPErr := IsOpenShiftCluster(ctx, kubeClient.CoreV1().Namespaces())
+		if isOCPErr != nil {
+			e2e.Logf("failed to check if the active cluster is OpenShift: %v", isOCPErr)
+			return false, nil
+		}
+		isK8s = !isOpenShift
+		return true, nil
+	})
+
+	if err != nil {
+		return false, fmt.Errorf("error during polling: %w", err)
+	}
+
+	return isK8s, nil
+}
+
+func PreSetEnvK8s() (res string) {
+	isK8s, err := PreDetermineK8sCluster()
+	switch {
+	case err != nil:
+		res = "unknown"
+	case isK8s:
+		res = "yes"
+	default:
+		res = "no"
+	}
+	_ = os.Setenv(EnvIsKubernetesCluster, res)
+	return res
+}
+
+func PreSetEnvOIDCCluster() (res string) {
+	isOIDC, err := PreDetermineExternalOIDCCluster()
+	switch {
+	case err != nil:
+		res = "unknown"
+	case isOIDC:
+		res = "yes"
+	default:
+		res = "no"
+	}
+	_ = os.Setenv(EnvIsExternalOIDCCluster, res)
+	return res
 }
 
 func kubectlCmd(args ...string) *exec.Cmd {

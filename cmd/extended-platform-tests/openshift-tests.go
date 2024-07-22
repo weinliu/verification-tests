@@ -125,16 +125,7 @@ func newRunCommand() *cobra.Command {
 				}
 
 				if !opt.DryRun {
-					isOIDC, err := exutil.PreDetermineExternalOIDCCluster()
-					if err != nil {
-						os.Setenv(exutil.EnvIsExternalOIDCCluster, "unknown")
-					} else {
-						if isOIDC {
-							os.Setenv(exutil.EnvIsExternalOIDCCluster, "yes")
-						} else {
-							os.Setenv(exutil.EnvIsExternalOIDCCluster, "no")
-						}
-					}
+					checkClusterTypeAndSetEnvs()
 				}
 
 				e2e.AfterReadingAllFlags(exutil.TestContext)
@@ -172,7 +163,7 @@ func newRunTestCommand() *cobra.Command {
 			}
 
 			if !testOpt.DryRun {
-				exutil.IsExternalOIDCClusterFlag = os.Getenv(exutil.EnvIsExternalOIDCCluster)
+				readClusterTypeEnvsAndSetFlags()
 			}
 
 			e2e.AfterReadingAllFlags(exutil.TestContext)
@@ -183,6 +174,32 @@ func newRunTestCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&testOpt.DryRun, "dry-run", testOpt.DryRun, "Print the test to run without executing them.")
 	return cmd
+}
+
+func checkClusterTypeAndSetEnvs() {
+	if exutil.PreSetEnvK8s() == "yes" {
+		_ = os.Setenv(exutil.EnvIsExternalOIDCCluster, "no")
+	} else {
+		exutil.PreSetEnvOIDCCluster()
+	}
+}
+
+func readClusterTypeEnvsAndSetFlags() {
+	isK8sEnv := os.Getenv(exutil.EnvIsKubernetesCluster)
+	isExtOIDCEnv := os.Getenv(exutil.EnvIsExternalOIDCCluster)
+	if len(isK8sEnv) == 0 {
+		isK8sEnv = exutil.PreSetEnvK8s()
+		if isK8sEnv == "yes" {
+			isExtOIDCEnv = "no"
+			_ = os.Setenv(exutil.EnvIsExternalOIDCCluster, "no")
+		}
+	}
+	if len(isExtOIDCEnv) == 0 {
+		isExtOIDCEnv = exutil.PreSetEnvOIDCCluster()
+	}
+	exutil.IsExternalOIDCClusterFlag = isExtOIDCEnv
+	exutil.IsKubernetesClusterFlag = isK8sEnv
+	e2e.Logf("Is kubernetes cluster: %s, is external OIDC cluster: %s", exutil.IsKubernetesClusterFlag, exutil.IsExternalOIDCClusterFlag)
 }
 
 // mirrorToFile ensures a copy of all output goes to the provided OutFile, including

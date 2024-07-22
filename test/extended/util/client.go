@@ -106,6 +106,11 @@ type resourceRef struct {
 func NewCLI(project, adminConfigPath string) *CLI {
 	client := &CLI{}
 
+	// must be registered before
+	// - framework initialization which registers other Ginkgo setup nodes
+	// - project setup which requires an OCP cluster
+	g.BeforeEach(func() { SkipOnOpenShiftNess(true) })
+
 	// must be registered before the e2e framework aftereach
 	g.AfterEach(client.TeardownProject)
 
@@ -126,6 +131,9 @@ func NewCLI(project, adminConfigPath string) *CLI {
 func NewCLIWithoutNamespace(project string) *CLI {
 	client := &CLI{}
 
+	// must be registered before framework initialization which registers other Ginkgo setup nodes
+	g.BeforeEach(func() { SkipOnOpenShiftNess(true) })
+
 	// must be registered before the e2e framework aftereach
 	g.AfterEach(client.TeardownProject)
 
@@ -136,6 +144,31 @@ func NewCLIWithoutNamespace(project string) *CLI {
 	client.adminConfigPath = KubeConfigPath()
 	client.showInfo = true
 	return client
+}
+
+// NewCLIForKube initializes a *CLI object which works against Kubernetes clusters.
+func NewCLIForKube(basename string) *CLI {
+	client := &CLI{}
+
+	// must be registered before framework initialization which registers other Ginkgo setup nodes
+	g.BeforeEach(func() { SkipOnOpenShiftNess(false) })
+
+	client.adminConfigPath = KubeConfigPath()
+	client.execPath = "oc"
+	client.kubeFramework = e2e.NewDefaultFramework(basename)
+	client.showInfo = true
+	client.username = "admin"
+	return client
+}
+
+// NewCLIForKubeOpenShift initializes a *CLI object which works against Kubernetes AND OpenShift clusters.
+func NewCLIForKubeOpenShift(basename string) *CLI {
+	switch IsKubernetesClusterFlag {
+	case "yes":
+		return NewCLIForKube(basename)
+	default:
+		return NewCLI(basename, KubeConfigPath())
+	}
 }
 
 // KubeFramework returns Kubernetes framework which contains helper functions
@@ -493,6 +526,20 @@ func (c *CLI) TeardownProject() {
 		err := dynamicClient.Resource(resource.Resource).Namespace(resource.Namespace).Delete(context.Background(), resource.Name, metav1.DeleteOptions{})
 		e2e.Logf("Deleted %v, err: %v", resource, err)
 	}
+}
+
+// CreateNamespace creates and returns a test namespace, automatically torn down after the test.
+func (c *CLI) CreateNamespace(ctx context.Context, labels map[string]string) (*corev1.Namespace, error) {
+	return c.KubeFramework().CreateNamespace(ctx, c.KubeFramework().BaseName, labels)
+}
+
+// MustCreateNamespace creates a test namespace and fails the test if creation fails.
+func (c *CLI) MustCreateNamespace(ctx context.Context, labels map[string]string) *corev1.Namespace {
+	ns, err := c.CreateNamespace(ctx, labels)
+	if err != nil {
+		FatalErr(fmt.Sprintf("failed to create namespace: %v", err))
+	}
+	return ns
 }
 
 // CreateSpecifiedNamespaceAsAdmin creates specified name namespace.

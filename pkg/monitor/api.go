@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,9 +18,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	configclientset "github.com/openshift/client-go/config/clientset/versioned"
 	clientimagev1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
 // Start begins monitoring the cluster referenced by the default kube configuration until
@@ -46,7 +49,14 @@ func Start(ctx context.Context) (*Monitor, error) {
 	startPodMonitoring(ctx, m, client)
 	startNodeMonitoring(ctx, m, client)
 	startEventMonitoring(ctx, m, client)
-	startClusterOperatorMonitoring(ctx, m, configClient)
+	// Monitor ClusterOperators and ClusterVersions only if we are running against an OpenShift cluster
+	// This check occurs after suite initialization and before test case start, so we get the cluster type
+	// directly from the environment variable instead of using exutil.IsKubernetesClusterFlag.
+	isK8sClusterEnv := os.Getenv(exutil.EnvIsKubernetesCluster)
+	if isK8sClusterEnv != "yes" {
+		e2e.Logf("EnvIsKubernetesCluster = %s, start monitoring ClusterOperators and ClusterVersions", isK8sClusterEnv)
+		startClusterOperatorMonitoring(ctx, m, configClient)
+	}
 
 	m.StartSampling(ctx)
 	return m, nil
