@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -2029,4 +2031,22 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to scale down the deployment")
 	})
 
+	g.It("Author:weinliu-Medium-73595-Verify Display of Filesystem Graphs (metrics) for Windows Nodes [Serial]", func() {
+		windowsHostNames := getWindowsHostNames(oc)
+		o.Expect(len(windowsHostNames)).To(o.BeNumerically(">", 0), "Test requires at least one Windows node to run")
+
+		for _, winHostName := range windowsHostNames {
+			e2e.Logf("Verifying resource usage for node: %s", winHostName)
+
+			// Retrieve node ephemeral storage using `oc` command
+			nodeStorage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", winHostName, "-o=jsonpath={.status.allocatable['ephemeral-storage']}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get node %s ephemeral storage", winHostName))
+
+			// Convert the storage value from string to int64
+			storageValue, err := strconv.ParseInt(strings.TrimSuffix(nodeStorage, "Ki"), 10, 64)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to parse storage value for node %s: %s", winHostName, nodeStorage))
+
+			o.Expect(storageValue).To(o.BeNumerically(">", 0), fmt.Sprintf("Expected strictly positive storage value but got %d", storageValue))
+		}
+	})
 })
