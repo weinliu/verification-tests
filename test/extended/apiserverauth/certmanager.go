@@ -239,12 +239,10 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 	// author: geliu@redhat.com
 	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
-		e2e.Logf("Login with normal user and create issuer.\n")
-		oc.SetupProject()
+		e2e.Logf("Create an issuer and certificate before performing deletion")
 		createIssuer(oc)
-		e2e.Logf("Create certificate.\n")
 		createCertificate(oc)
-		e2e.Logf("Check issued certificate.\n")
+		e2e.Logf("Verify the issued certificate")
 		verifyCertificate(oc, "default-selfsigned-cert", oc.Namespace())
 
 		e2e.Logf("Delete subscription and csv")
@@ -268,12 +266,16 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 
 		e2e.Logf("Check cert-manager CRDs and apiservices still exist as expected.\n")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
-		if !strings.Contains(output, "cert-manager") || err != nil {
-			e2e.Failf("crd don't contain cert-manager\n.")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "cert-manager") {
+			e2e.Logf("existing crds:\n%v", output)
+			e2e.Failf("crds don't contain cert-manager")
 		}
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("apiservice").Output()
-		if !strings.Contains(output, "cert-manager") || err != nil {
-			e2e.Failf("apiservice don't contain cert-manager\n.")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "cert-manager") {
+			e2e.Logf("existing apiservices:\n%v", output)
+			e2e.Failf("apiservices don't contain cert-manager")
 		}
 		e2e.Logf("Clean up cert-manager-operator NS.\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "cert-manager-operator").Execute()
@@ -281,7 +283,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Delete operand.\n")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "cert-manager").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Delete cert-manager CRDs.\n")
+
 		e2e.Logf("Patching certmanager/cluster with null finalizers is required, otherwise the delete commands can be stuck.\n")
 		patchPath := "{\"metadata\":{\"finalizers\":null}}"
 		err = oc.AsAdmin().Run("patch").Args("certmanagers.operator", "cluster", "--type=merge", "-p", patchPath).Execute()
@@ -289,26 +291,37 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		e2e.Logf("Delete certmanagers.operator cluster.\n")
 		err = oc.AsAdmin().Run("delete").Args("certmanagers.operator", "cluster").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		e2e.Logf("Delete crd.\n")
+		e2e.Logf("Delete cert-manager CRDs")
 		crdList, err := oc.AsAdmin().Run("get").Args("crd").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		regexstr, _ := regexp.Compile(".*" + "cert-?manager" + "[0-9A-Za-z-.]*")
 		crdListArry := regexstr.FindAllString(crdList, -1)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"crd"}, crdListArry...)...).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("issuer").Output()
-		if !strings.Contains(output, "could not find the requested resource") && !strings.Contains(output, `the server doesn't have a resource type "issuer"`) {
-			e2e.Failf("issuer is still exist out of expected.\n")
-		}
+		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ = oc.AsAdmin().Run("get").Args("issuer").Output()
+			if strings.Contains(output, `the server doesn't have a resource type "issuer"`) || strings.Contains(output, `resource type "issuer" not known`) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for the cert-manager's CRDs deletion to take effect")
+
+		e2e.Logf("Check the clusterroles and clusterrolebindings remainders")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole").Output()
-		if !strings.Contains(output, "cert-manager") || err != nil {
-			e2e.Failf("clusterrole is not exist.\n")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "cert-manager") {
+			e2e.Logf("existing clusterrole:\n%v", output)
+			e2e.Failf("clusterroles don't contain cert-manager")
 		}
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding").Output()
-		if !strings.Contains(output, "cert-manager") || err != nil {
-			e2e.Failf("clusterrolebinding is not exist.\n")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "cert-manager") {
+			e2e.Logf("existing clusterrolebinding:\n%v", output)
+			e2e.Failf("clusterrolebindings don't contain cert-manager")
 		}
+
+		e2e.Logf("Clean up the clusterroles and clusterrolebindings remainders")
 		clusterroleList, err := oc.AsAdmin().Run("get").Args("clusterrole").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		regexstr, _ = regexp.Compile(".*" + "cert-?manager" + "[0-9A-Za-z-.:]*")
@@ -323,6 +336,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrolebinding"}, clusterrolebindingListArry...)...).Execute()
 		// Some clusterrolebinding resources returned by `oc get` may be automatically deleted. In such case, `NotTo(o.HaveOccurred())` assertion may fail with "xxxx" not found for those resources. So comment out the assertion.
 		// o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Install the cert-manager operator again")
 		createCertManagerOperator(oc)
 	})
 
