@@ -583,7 +583,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("ConnectedOnly-Author:jiazha-High-59416-Revert Catalog PSA decisions for 4.12 [Serial]", func() {
+	g.It("Author:jiazha-ConnectedOnly-NonHyperShiftHOST-High-59416-Revert Catalog PSA decisions for 4.12 [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		if ClusterHasEnabledFIPS(oc) {
 			g.Skip("FIPS enabled, skip it")
