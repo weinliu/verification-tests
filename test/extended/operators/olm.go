@@ -5520,14 +5520,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		infoCatalogOperator := strings.Fields(output)
 
 		exutil.By("check the subscription_sync_total")
-		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
-			subscriptionSyncTotal, _ := exec.Command("bash", "-c", "oc exec -c catalog-operator "+infoCatalogOperator[0]+" -n openshift-operator-lifecycle-manager -- curl -s -k -H 'Authorization: Bearer $(oc create token prometheus-k8s -n openshift-monitoring)' https://"+infoCatalogOperator[1]+"/metrics").Output()
+		var subscriptionSyncTotal []byte
+		var errExec error
+		err = wait.PollUntilContextTimeout(context.TODO(), 20*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+			subscriptionSyncTotal, errExec = exec.Command("bash", "-c", "oc exec -c catalog-operator "+infoCatalogOperator[0]+" -n openshift-operator-lifecycle-manager -- curl -s -k -H 'Authorization: Bearer $(oc create token prometheus-k8s -n openshift-monitoring)' https://"+infoCatalogOperator[1]+"/metrics").Output()
 			if !strings.Contains(string(subscriptionSyncTotal), sub.installedCSV) {
 				e2e.Logf("the metric is not counted and try next round")
 				return false, nil
 			}
 			return true, nil
 		})
+		if err != nil {
+			e2e.Logf("the output: %v \n the err: %v", string(subscriptionSyncTotal), errExec)
+		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv %s is not included in metric", sub.installedCSV))
 	})
 
