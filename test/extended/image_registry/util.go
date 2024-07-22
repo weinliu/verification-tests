@@ -1420,3 +1420,33 @@ func validateResourceEnv(oc *exutil.CLI, namespace, resource, value string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(strings.Contains(result, value)).To(o.BeTrue())
 }
+
+func checkDiscPolicy(oc *exutil.CLI) (string, bool) {
+	sites := [3]string{"ImageContentSourcePolicy", "idms", "itms"}
+	for _, policy := range sites {
+		result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(policy).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(result, "No resources found") {
+			return policy, true
+		}
+	}
+	return "", false
+}
+func checkMirrorRegistry(oc *exutil.CLI, repo string) string {
+	policy, dis := checkDiscPolicy(oc)
+	switch dis {
+	case policy == "ImageContentSourcePolicy":
+		mirrorReg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy/image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[?(@.source==\""+repo+"\")].mirrors[]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return mirrorReg
+	case policy == "idms":
+		mirrorReg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("idms/image-policy-aosqe", "-o=jsonpath={.spec.imageDigestMirrors[?(@.source==\""+repo+"\")].mirrors[]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return mirrorReg
+	case policy == "itms":
+		mirrorReg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("itms/image-policy-aosqe", "-o=jsonpath={.spec.imageTagMirrors[?(@.source==\""+repo+"\")].mirrors[]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return mirrorReg
+	}
+	return ""
+}

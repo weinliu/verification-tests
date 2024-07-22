@@ -1401,7 +1401,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-High-48739-Pull through works with icsp which source and mirror without full path [Disruptive]", func() {
+	g.It("Author:xiuwang-NonHyperShiftHOST-DisconnectedOnly-High-48739-Pull through works with icsp which source and mirror without full path [Disruptive]", func() {
 		var (
 			icspFile = filepath.Join(imageRegistryBaseDir, "icsp-full-mirrors.yaml")
 			icspsrc  = icspSource{
@@ -1420,15 +1420,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		)
 
 		g.By("Check if image-policy-aosqe created")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "image-policy-aosqe") {
-			e2e.Failf("image-policy-aosqe is not created in this disconnect cluster")
+		policy, dis := checkDiscPolicy(oc)
+		if dis {
+			output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args(policy).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "image-policy-aosqe") {
+				e2e.Failf("image-policy-aosqe is not created in this disconnect cluster")
+			}
 		}
-
 		g.By("Create imagestream using source image only match to mirrors namespace in icsp")
 		oc.SetupProject()
-		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1439,8 +1441,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Create imagestream using source image which use the whole mirrors")
 		// Get mirror registry with 5000 port, registry.redhat.io/rhel8 images have been mirrored into it
-		mirrorReg, mrerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagecontentsourcepolicy/image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[?(@.source==\"registry.redhat.io\")].mirrors[]}").Output()
-		o.Expect(mrerr).NotTo(o.HaveOccurred())
+		mirrorReg := checkMirrorRegistry(oc, "registry.redhat.io")
+		o.Expect(mirrorReg).NotTo(o.BeEmpty())
 		cmd := fmt.Sprintf(`echo '%v' | awk -F ':' '{print $1}'`, mirrorReg)
 		mReg6001, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2448,16 +2450,21 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-Critical-29693-Import image from a secure registry using node credentials", func() {
+	g.It("Author:xiuwang-NonHyperShiftHOST-DisconnectedOnly-Critical-29693-Import image from a secure registry using node credentials", func() {
 		g.By("Check if image-policy-aosqe created")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("image-policy-aosqe"))
+		policy, dis := checkDiscPolicy(oc)
+		if dis {
+			output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args(policy).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "image-policy-aosqe") {
+				e2e.Failf("image-policy-aosqe is not created in this disconnect cluster")
+			}
+		}
 
 		g.By("Could pull image from secure registry using node credentials")
 		// Get mirror registry with 5000 port, registry.redhat.io/rhel8 images have been mirrored into it
-		mirrorReg, mrerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagecontentsourcepolicy/image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[?(@.source==\"registry.redhat.io\")].mirrors[]}").Output()
-		o.Expect(mrerr).NotTo(o.HaveOccurred())
+		mirrorReg := checkMirrorRegistry(oc, "registry.redhat.io")
+		o.Expect(mirrorReg).NotTo(o.BeEmpty())
 		cmd := fmt.Sprintf(`echo '%v' | awk -F ':' '{print $1}'`, mirrorReg)
 		mReg6001, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2867,14 +2874,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:wewang-High-21988-Registry can use AdditionalTrustedCA to trust an external secured registry", func() {
+	g.It("Author:wewang-NonHyperShiftHOST-DisconnectedOnly-High-21988-Registry can use AdditionalTrustedCA to trust an external secured registry", func() {
 		g.By("Check registry-config")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/registry-config", "-n", "openshift-config").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("registry-config"))
 		g.By("Import an image from mirror registry")
-		getRegistry, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy/image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[?(@.source==\"quay.io/openshifttest\")].mirrors}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		getRegistry := checkMirrorRegistry(oc, "quay.io/openshifttest")
 		o.Expect(getRegistry).NotTo(o.BeEmpty())
 		getRegistry = strings.ReplaceAll(getRegistry, `["`, ``)
 		getRegistry = strings.ReplaceAll(getRegistry, `"]`, ``)
