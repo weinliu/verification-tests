@@ -406,6 +406,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	// author: skundu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:skundu-Critical-68658-CEO prevents member deletion during revision rollout. [Disruptive]", func() {
 		g.By("Test for case OCP-68658 - CEO prevents member deletion during revision rollout.")
+		g.Skip("Skipping this test temporarily until the product bug OCPBUGS-17199 gets fixed.")
 
 		var (
 			mhcName      = "control-plane-health-68658"
