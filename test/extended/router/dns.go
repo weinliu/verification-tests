@@ -18,6 +18,54 @@ import (
 var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("coredns", exutil.KubeConfigPath())
+	// Bug: 1916907
+	g.It("Author:mjoseph-High-40867-Deleting the internal registry should not corrupt /etc/hosts [Disruptive]", func() {
+		exutil.By("Step1: Get the Cluster IP of image-registry")
+		// Skip the test case if openshift-image-registry namespace is not found
+		clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
+		if err != nil || strings.Contains(clusterIP, `namespaces \"openshift-image-registry\" not found`) {
+			g.Skip("Skip for non-supported platform")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Step2: SSH to the node and confirm the /etc/hosts have the same clusterIP")
+		allNodeList, _ := exutil.GetAllNodes(oc)
+		// get a random node
+		node := getRandomElementFromList(allNodeList)
+		hostOutput, err := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(hostOutput).To(o.And(
+			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
+			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6"),
+			o.ContainSubstring(clusterIP+" image-registry.openshift-image-registry.svc image-registry.openshift-image-registry.svc.cluster.local")))
+		o.Expect(hostOutput).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
+
+		// Set status variables
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
+		exutil.By("Step3: Delete the image-registry svc and check whether it receives a new Cluster IP")
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "image-registry", "-n", "openshift-image-registry").Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Step4: Get the new Cluster IP of image-registry")
+		newClusterIP, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(newClusterIP).NotTo(o.ContainSubstring(clusterIP))
+
+		exutil.By("Step5: SSH to the node and confirm the /etc/hosts details, after deletion")
+		hostOutput1, err3 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		o.Expect(hostOutput1).To(o.And(
+			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
+			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6"),
+			o.ContainSubstring(newClusterIP+" image-registry.openshift-image-registry.svc image-registry.openshift-image-registry.svc.cluster.local")))
+		o.Expect(hostOutput1).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
+	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-Critical-46868-Configure forward policy for CoreDNS flag [Disruptive]", func() {
 		var (
@@ -544,28 +592,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 	})
 
 	// Bug: 1916907
-	g.It("Author:mjoseph-Longduration-NonPreRelease-High-56539-Disabling internal registry should not corrupt /etc/hosts [Disruptive]", func() {
-
-		exutil.By("Pre-flight check for the platform type in the environment")
-		platformtype := exutil.CheckPlatform(oc)
-		platforms := map[string]bool{
-			// ‘None’ also for Baremetal
-			"none":      true,
-			"baremetal": true,
-			"vsphere":   true,
-			"openstack": true,
-			"nutanix":   true,
-		}
-		if platforms[platformtype] {
-			g.Skip("Skip for non-supported platform")
-		}
-
-		exutil.By("Get the Cluster IP of image-registry")
+	g.It("Author:mjoseph-Longduration-NonPreRelease-High-56539-Disabling the internal registry should not corrupt /etc/hosts [Disruptive]", func() {
+		exutil.By("Step1: Get the Cluster IP of image-registry")
+		// Skip the test case if openshift-image-registry namespace is not found
 		clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
 			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
+		if err != nil || strings.Contains(clusterIP, `namespaces \"openshift-image-registry\" not found`) {
+			g.Skip("Skip for non-supported platform")
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("SSH to the node and confirm the /etc/hosts have the same clusterIP")
+		exutil.By("Step2: SSH to the node and confirm the /etc/hosts have the same clusterIP")
 		allNodeList, _ := exutil.GetAllNodes(oc)
 		// get a random node
 		node := getRandomElementFromList(allNodeList)
@@ -577,33 +614,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 			o.ContainSubstring(clusterIP)))
 		o.Expect(hostOutput).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
 
-		exutil.By("Set status variables")
+		// Set status variables
 		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
-		exutil.By("Delete the image-registry svc and check whether it receives a new Cluster IP")
-		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "image-registry", "-n", "openshift-image-registry").Execute()
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		newClusterIP, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		o.Expect(newClusterIP).NotTo(o.ContainSubstring(clusterIP))
-
-		exutil.By("SSH to the node and confirm the /etc/hosts details, after deletion")
-		hostOutput1, err3 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
-		o.Expect(err3).NotTo(o.HaveOccurred())
-		o.Expect(hostOutput1).To(o.And(
-			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
-			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6")))
-		o.Expect(hostOutput1).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
-
-		exutil.By("Disable the internal registry and check /host details")
+		exutil.By("Step3: Disable the internal registry and check /host details")
 		defer func() {
 			exutil.By("Recover image registry change")
 			err4 := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", "{\"spec\":{\"managementState\":\"Managed\"}}", "--type=merge").Execute()
@@ -612,14 +626,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus)
+			err = waitCoBecomes(oc, "kube-apiserver", 700, expectedStatus)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		// Set image registry to 'Removed'
 		_, err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("SSH to the node and confirm the /etc/hosts details, after disabling")
+		exutil.By("Step4: SSH to the node and confirm the /etc/hosts details, after disabling")
 		hostOutput2, err5 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
 		o.Expect(err5).NotTo(o.HaveOccurred())
 		o.Expect(hostOutput2).To(o.And(
