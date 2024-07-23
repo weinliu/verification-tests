@@ -4378,6 +4378,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-64796-Image Registry support azure workload identity", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.azure}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "AzureStackCloud") {
+			g.Skip("Skip for AzureStackCloud, ASH is using manual credentail mode, but operators using static token")
+		}
 		credType, err := oc.AsAdmin().Run("get").Args("cloudcredentials.operator.openshift.io/cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(credType, "Manual") {
