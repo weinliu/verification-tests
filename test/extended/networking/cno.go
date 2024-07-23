@@ -20,6 +20,13 @@ var _ = g.Describe("[sig-networking] SDN CNO", func() {
 		restoreCmd    = `[{"op":"replace","path":"/spec/networkDiagnostics","value":{"mode":"","sourcePlacement":{},"targetPlacement":{}}}]`
 	)
 
+	g.BeforeEach(func() {
+		err := exutil.CheckNetworkOperatorStatus(oc)
+		if err != nil {
+			g.Skip("The Cluster Network Operator is already not in normal status, skip networkDiagnostics test cases!!!")
+		}
+	})
+
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-Critical-72348-Configure networkDiagnostics for both network-check-source and network-check-target. [Disruptive]", func() {
 		workers, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
