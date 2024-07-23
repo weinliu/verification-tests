@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -236,4 +238,101 @@ func CopyToFile(fromPath string, toFilename string) string {
 		e2e.Failf("copy file from %s to %s failed: %v", fromPath, saveTo, err)
 	}
 	return saveTo
+}
+
+func waitForBMHState(oc *exutil.CLI, bmhName string, bmhStatus string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Minute, true, func(context.Context) (bool, error) {
+		statusOp, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "bmh", bmhName, "-o=jsonpath={.status.provisioning.state}").Output()
+		if err != nil {
+			return false, err
+		}
+		if strings.Contains(statusOp, bmhStatus) {
+			e2e.Logf("BMH state %v is %v", bmhName, bmhStatus)
+			return true, nil
+		}
+		e2e.Logf("BMH %v state is %v, Trying again", bmhName, statusOp)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The BMH state of is not as expected")
+}
+
+func waitForBMHDeletion(oc *exutil.CLI, bmhName string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Minute, true, func(ctx context.Context) (bool, error) {
+		out, err := oc.AsAdmin().Run("get").Args("-n", machineAPINamespace, "bmh", "-o=jsonpath={.items[*].metadata.name}").Output()
+		if err != nil {
+			return false, err
+		}
+		if !strings.Contains(out, bmhName) {
+			e2e.Logf("bmh %v still exists is", bmhName)
+			return true, nil
+		}
+		e2e.Logf("bmh %v exists, Trying again", bmhName)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The BMH was not deleted as expected")
+}
+
+func getBypathDeviceName(vendor string) string {
+	var deviceName string
+
+	switch vendor {
+	case "Dell Inc.":
+		deviceName = `{"deviceName":"/dev/disk/by-path/pci-0000:01:00.0-scsi-0:0:0:0"}`
+	case "HPE":
+		deviceName = `{"deviceName":"/dev/disk/by-path/pci-0000:00:14.0-usb-0:4:1.0-scsi-0:0:0:0"}`
+	default:
+		g.Skip("Unsupported vendor")
+	}
+
+	return deviceName
+}
+
+// clusterOperatorHealthcheck check abnormal operators
+func clusterOperatorHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
+	e2e.Logf("Check the abnormal operators")
+	errCo := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
+		coLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(dirname)
+		if err == nil {
+			cmd := fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
+			coLogs, err := exec.Command("bash", "-c", cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if len(coLogs) > 0 {
+				return false, nil
+			}
+		} else {
+			return false, nil
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("No abnormality found in cluster operators...")
+		return true, nil
+	})
+	if errCo != nil {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	return errCo
+}
+
+// clusterNodesHealthcheck check abnormal nodes
+func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int) error {
+	errNode := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+		if err == nil {
+			if strings.Contains(output, "NotReady") || strings.Contains(output, "SchedulingDisabled") {
+				return false, nil
+			}
+		} else {
+			return false, nil
+		}
+		e2e.Logf("Nodes are normal...")
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return true, nil
+	})
+	if errNode != nil {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	return errNode
 }
