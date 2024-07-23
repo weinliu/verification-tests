@@ -1018,7 +1018,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			prometheusURLQuery string
 			query              string
 			token              string
-			metrics            = []string{"imageregistry_http_request_duration_seconds_count",
+			metrics            = []string{
 				"imageregistry_http_request_size_bytes_count",
 				"imageregistry_http_request_size_bytes_sum",
 				"imageregistry_http_response_size_bytes_count",
@@ -1067,7 +1067,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
 			after[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
-			e2e.Logf("[after] query %v ==  %v", query, before[query])
+			e2e.Logf("[after] query %v ==  %v", query, after[query])
 		}
 
 		g.By("results")
