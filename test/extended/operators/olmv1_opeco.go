@@ -585,4 +585,46 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-High-74948-catalog offer the operator content through https server", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-74948",
+				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm74948",
+				Template: clustercatalogTemplate,
+			}
+		)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Examine the service to confirm that the annotations are present")
+		describe, err := oc.WithoutNamespace().AsAdmin().Run("describe").Args("service", "catalogd-catalogserver", "-n", "openshift-catalogd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(describe).To(o.ContainSubstring("service.beta.openshift.io/serving-cert-secret-name: catalogserver-cert"))
+
+		exutil.By("Ensure that the service CA bundle has been injected")
+		crt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", "openshift-service-ca.crt", "-n", "openshift-catalogd", "-o", "jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(crt).To(o.ContainSubstring("{\"service.beta.openshift.io/inject-cabundle\":\"true\"}"))
+
+		exutil.By("Check secret data tls.crt tls.key")
+		secretData, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret", "catalogserver-cert", "-n", "openshift-catalogd", "-o", "jsonpath={.data}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(secretData, "tls.crt") || !strings.Contains(secretData, "tls.key") {
+			e2e.Failf("secret data not found")
+		}
+
+		exutil.By("Get the index content through https service on cluster")
+		unmarshalContent, err := clustercatalog.UnmarshalContent(oc, "all")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		allPackageName := olmv1util.ListPackagesName(unmarshalContent.Packages)
+		o.Expect(allPackageName[0]).To(o.ContainSubstring("nginx74948"))
+
+	})
+
 })
