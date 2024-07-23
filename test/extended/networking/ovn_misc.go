@@ -1270,4 +1270,73 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		CurlPod2PodPass(oc, oc.Namespace(), pod1ns.name, oc.Namespace(), pod2ns.name)
 		CurlPod2SvcPass(oc, oc.Namespace(), oc.Namespace(), pod1ns.name, "test-service-73205")
 	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-74589-Pod-to-external TCP connectivity using port in range of snat port.", func() {
+
+		// For customer bug https://issues.redhat.com/browse/OCPBUGS-32202
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		nodeServiceTemplate := filepath.Join(buildPruningBaseDir, "nodeservice-template.yaml")
+		testPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		url := "www.example.com"
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough node available, need at least one node for the test, skip the case!!")
+		}
+
+		g.By("1. create a namespace, create nodeport service on one node")
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		service := nodePortService{
+			name:      "hello-pod",
+			namespace: ns,
+			nodeName:  nodeList.Items[0].Name,
+			template:  nodeServiceTemplate,
+		}
+
+		defer removeResource(oc, true, true, "service", service.name, "-n", service.namespace)
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME=" + service.name, "NODENAME=" + service.nodeName}
+		exutil.ApplyNsResourceFromTemplate(oc, service.namespace, parameters...)
+		waitPodReady(oc, ns, "hello-pod")
+
+		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, service.name).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(svcOutput, service.name)).Should(o.BeTrue())
+
+		g.By("2. From external, curl NodePort service with its port to make sure NodePort service works")
+		CurlNodePortPass(oc, nodeList.Items[1].Name, nodeList.Items[0].Name, "30012")
+
+		exutil.By("3. Create another test pod on another node, from the test pod to curl local port of external url, verify the connection can succeed\n")
+		pod := pingPodResourceNode{
+			name:      "testpod",
+			namespace: ns,
+			nodename:  nodeList.Items[1].Name,
+			template:  testPodNodeTemplate,
+		}
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod.name)
+
+		cmd := fmt.Sprintf("curl --local-port 32012 -v -I -L http://%s", url)
+		expectedString := fmt.Sprintf(`^* Connected to %s \(([\d\.]+)\) port 80 `, url)
+		re := regexp.MustCompile(expectedString)
+		connectErr := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			_, execCmdOutput, err := e2eoutput.RunHostCmdWithFullOutput(ns, pod.name, cmd)
+			if err != nil {
+				e2e.Logf("Getting err :%v, trying again...", err)
+				return false, nil
+			}
+			if !re.MatchString(execCmdOutput) {
+				e2e.Logf("Did not get expected output, trying again...")
+				e2e.Logf("\n execCmdOutput is %v\n", execCmdOutput)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(connectErr, fmt.Sprintf("Connection to %s did not succeed!", url))
+	})
+
 })
