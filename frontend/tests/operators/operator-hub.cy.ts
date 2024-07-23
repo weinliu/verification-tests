@@ -1,5 +1,5 @@
 import { Pages } from "views/pages";
-import {operatorHubPage, OperatorHubSelector, Operand, installedOperatorPage} from "../../views/operator-hub-page";
+import { operatorHubPage, operatorHubModal, OperatorHubSelector, Operand } from "../../views/operator-hub-page";
 import { listPage } from "upstream/views/list-page";
 
 describe('Operator Hub tests', () => {
@@ -66,6 +66,47 @@ describe('Operator Hub tests', () => {
         cy.contains('No Results Match the Filter Criteria').should('exist');
       })
     });
+  });
+
+  it('(OCP-74621,yapei,UserInterface)Show deprecated operators in OperatorHub)', {tags:['e2e','admin','@osd-ccs','@rosa']}, () => {
+    const operator_name_kiali = 'kiali';
+    const deprecated_channel_kiali = 'alpha';
+    const deprecation_msg_package_kiali = "package kiali is end of life.  Please use 'kiali-new' package for support";
+    const deprecation_msg_channel_kiali = "channel alpha is no longer supported.  Please switch to channel 'stable'";
+    Pages.gotoOperatorHubPage();
+    operatorHubPage.checkSourceCheckBox("custom-auto-source");
+    // Deprecation label&icon will be shown on OperatorHub list page when package is deprecated
+    operatorHubPage.filter(operator_name_kiali);
+    operatorHubPage.checkDeprecationLabel('exist');
+    // Deprecation label&icon and message was shown on Operator Details modal when when any package, channel or version is deprecated
+    operatorHubPage.clickOperatorTile(operator_name_kiali);
+    operatorHubPage.checkDeprecationLabel('exist');
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_package_kiali.slice(0,20));
+    operatorHubModal.selectChannel(deprecated_channel_kiali);
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_channel_kiali.slice(0,20));
+    operatorHubModal.clickInstall();
+    // Deprecation label&icon and message was shown on Operator Installation page when any package, channel or version is deprecated
+    operatorHubPage.checkDeprecationLabel('exist');
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_package_kiali.slice(0,20));
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_channel_kiali.slice(0,20));
+    operatorHubPage.cancel();
+
+    const operator_name_threescale = '3scale-community';
+    const deprecated_channel_threescale = 'threescale-2.11';
+    const deprecated_version_threescale = '0.8.2';
+    const deprecation_msg_version_threescale = "3scale-community-operator.v0.8.2 is deprecated.  Please upgrade to 3scale-community-operator.v0.9.0 or later.";
+    operatorHubPage.checkSourceCheckBox("custom-auto-source");
+    operatorHubPage.filter(operator_name_threescale);
+    operatorHubPage.checkDeprecationLabel('not.exist');
+    operatorHubPage.clickOperatorTile(operator_name_threescale);
+    operatorHubModal.selectChannel(deprecated_channel_threescale);
+    operatorHubModal.selectVersion(deprecated_version_threescale);
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_version_threescale.slice(0,20));
+    operatorHubPage.checkDeprecationIcon().should('have.length', 2);
+    operatorHubModal.clickInstall();
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_version_threescale.slice(0,20));
+    operatorHubPage.checkDeprecationIcon().should('have.length', 2);
+    operatorHubPage.cancel();
   });
 
   it('(OCP-55684,xiyuzhao,UserInterface) Allow operator to specitfy where to run with CSV suggested namespace template annotation', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {

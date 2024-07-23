@@ -35,10 +35,15 @@ export const operatorHubPage = {
         cy.wrap($btn).find(`[data-test="infraFeatures-${name}"] [type="checkbox"]`).check();
       })
   },
+  clickOperatorTile: (operator_name) => {
+    cy.get(`label[for*="${operator_name}"]`).first().click();
+  },
   filter: (name: string) => {
-    cy.get('input[type="text"]')
+    cy.get('[data-test="search-operatorhub"]').within(() => {
+      cy.get('input[type="text"]')
       .clear()
       .type(name)
+    })
   },
   // pass operator name that matches the Title on UI
   install: (name: string, metrics: boolean = false) => {
@@ -87,6 +92,15 @@ export const operatorHubPage = {
     cy.get('#confirm-action').click();
     cy.get(`[data-test-operator-row="${csvName}"]`).should('not.exist');
   },
+  checkDeprecationIcon: () => {
+    return cy.get('svg[class*="yellow-exclamation-icon"]')
+  },
+  checkDeprecationLabel: (criteria: string) => {
+    cy.get('span').contains('Deprecated').should(criteria);
+  },
+  checkDeprecationMsg: (message: string) => {
+    cy.get('div').contains(message).should('exist');
+  },
   checkWarningInfo: (warningInfo) => { cy.get('h4.pf-v5-c-alert__title').should('contain', `${warningInfo}`); },
   checkSTSwarningOnOperator: (operatorName, catalogSource, warningInfo, installNamespace, clusterType) => {
     cy.visit(`/operatorhub/all-namespaces?keyword=${operatorName}&catalogSourceDisplayName=%5B"${catalogSource}"%5D`);
@@ -111,7 +125,28 @@ export const operatorHubPage = {
     cy.get('[data-test="install-operator"]').click();
     cy.contains('Approve').click();
   },
+  cancel: () => {
+    cy.get('button').contains('Cancel').click({force: true});
+  }
+};
 
+export const operatorHubModal = {
+  clickInstall: () => {
+    cy.get('[data-test-id="operator-install-btn"]').click({force: true});
+  },
+  selectChannel: (channel) => {
+    cy.get('h5').contains('Channel').parent('div').within(() => {
+      // click on button instead of div
+      cy.get('button[id*="select-toggle"]').click({force: true});
+      cy.get(`li[id="${channel}"] button`).click({force: true});
+    })
+  },
+  selectVersion: (version) => {
+    cy.get('h5').contains('Version').parent('div').within(() => {
+      cy.get('button[id*="select-toggle"]').click({force: true});
+      cy.get(`li[id="${version}"] button`).click({force: true});
+    })
+  },
 };
 
 export namespace OperatorHubSelector {
