@@ -376,6 +376,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	// author: skundu@redhat.com
 	g.It("Longduration-Author:skundu-NonPreRelease-Critical-53767-cluster-backup.sh exits with a non-zero code in case Etcd backup fails. [Disruptive]", func() {
 		g.By("Test for case OCP-53767 - cluster-backup.sh exits with a non-zero code in case Etcd backup fails.")
+		g.Skip("Skipping this test temporarily because it is redundant with OCP-42183")
 
 		g.By("select all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
