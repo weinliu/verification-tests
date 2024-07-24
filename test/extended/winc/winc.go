@@ -1970,11 +1970,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		ready := checkWorkloadCreated(oc, wmcoDeployment, namespace, 1)
 		if !ready {
 			e2e.Failf("WMCO deployment %s is not ready", wmcoDeployment)
-			return
 		}
 
 		g.By("Checking CPU, Memory, and Filesystem graphs for Windows pods managed by WMCO")
-
 		// Get the pods managed by WMCO
 		podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+wmcoDeployment, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting pods managed by WMCO")
@@ -2066,6 +2064,51 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to parse storage value for node %s: %s", winHostName, nodeStorage))
 
 			o.Expect(storageValue).To(o.BeNumerically(">", 0), fmt.Sprintf("Expected strictly positive storage value but got %d", storageValue))
+		}
+	})
+
+	g.It("Author:weinliu-Medium-73752-Monitor Network In, and Network Out graphs for Windows Pods managed by wmco", func() {
+		// Define the metrics queries for Network In, and Network Out
+		networkInMetricQuery := "pod:network_receive_bytes_total:sum"
+		networkOutMetricQuery := "pod:network_transmit_bytes_total:sum"
+
+		// Create Prometheus monitor instance
+		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating new Prometheus monitor")
+
+		// Define the namespace where the Windows workloads are deployed
+		namespace := wmcoNamespace
+
+		// Check if the WMCO deployment is ready
+		ready := checkWorkloadCreated(oc, wmcoDeployment, namespace, 1)
+		if !ready {
+			e2e.Failf("WMCO deployment %s is not ready", wmcoDeployment)
+		}
+
+		exutil.By("Checking Network In, and Network Out graphs for Windows pods managed by WMCO")
+
+		// Get the pods managed by WMCO
+		podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app="+wmcoDeployment, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting pods managed by WMCO")
+
+		// Split the pod list
+		podNames := strings.Fields(podList)
+
+		for _, podName := range podNames {
+
+			// Check Network In metric
+			g.By(fmt.Sprintf("Verify Network In metric availability for pod: %s", podName))
+			networkInQueryResult, err := mon.SimpleQuery(networkInMetricQuery + "{pod=\"" + podName + "\"}")
+			networkInMetricValue := extractMetricValue(networkInQueryResult)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error querying Network In metric for pod %s: %s", podName, networkInMetricValue)
+
+			// Check Network Out metric
+			g.By(fmt.Sprintf("Verify Network Out metric availability for pod: %s", podName))
+			networkOutQueryResult, err := mon.SimpleQuery(networkOutMetricQuery + "{pod=\"" + podName + "\"}")
+			networkOutMetricValue := extractMetricValue(networkOutQueryResult)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error querying Network Out metric for pod %s: %s", podName, networkOutMetricValue)
+
+			// Add your expectations/assertions to validate the metrics
 		}
 	})
 })
