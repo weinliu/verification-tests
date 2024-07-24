@@ -329,19 +329,32 @@ func runPSCommand(bastionHost, windowsHost, command, privateKey, iaasPlatform st
 // Returns a map with the uptime for each windows node,
 // being the key the IP of the node and the value the
 // uptime parsed as a time.Time value.
-func getWindowsNodesUptime(oc *exutil.CLI, privateKey string, iaasPlatform string) map[string]time.Time {
+func getWindowsNodesUptime(oc *exutil.CLI, privateKey string, iaasPlatform string) (map[string]time.Time, error) {
 	bastionHost := getSSHBastionHost(oc, iaasPlatform)
 	layout := "1/2/2006 3:04:05 PM"
-	var winUptime map[string]time.Time = make(map[string]time.Time)
+	winUptime := make(map[string]time.Time)
 	winInternalIP := getWindowsInternalIPs(oc)
+
 	for _, winhost := range winInternalIP {
 		uptime, err := runPSCommand(bastionHost, winhost, "Get-CimInstance -ClassName Win32_OperatingSystem | Select LastBootUpTime", privateKey, iaasPlatform)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		winUptime[winhost], err = time.Parse(layout, strings.TrimSpace(strings.Split(uptime, "\r\n--------------")[1]))
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get uptime for Windows node %s: %v", winhost, err)
+		}
+
+		uptimeParts := strings.Split(uptime, "\r\n--------------")
+		if len(uptimeParts) < 2 {
+			return nil, fmt.Errorf("unexpected uptime format for Windows node %s", winhost)
+		}
+
+		parsedUptime, err := time.Parse(layout, strings.TrimSpace(uptimeParts[1]))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse uptime for Windows node %s: %v", winhost, err)
+		}
+
+		winUptime[winhost] = parsedUptime
 	}
 
-	return winUptime
+	return winUptime, nil
 }
 
 func getWindowsNodeCurrentTime(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string) time.Time {
