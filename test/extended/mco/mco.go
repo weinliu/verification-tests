@@ -4796,6 +4796,9 @@ desiredState:
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-74608-Env file /etc/kubernetes/node.env should not be overwritten after a node restart [Disruptive]", func() {
+		// /etc/kubernetes/node.env only exists in AWS
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform)
+
 		var (
 			node      = GetCompactCompatiblePool(oc.AsAdmin()).GetSortedNodesOrFail()[0]
 			rEnvFile  = NewRemoteFile(node, "/etc/kubernetes/node.env")
