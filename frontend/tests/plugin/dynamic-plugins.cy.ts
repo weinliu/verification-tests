@@ -34,11 +34,11 @@ describe('Dynamic plugins features', () => {
     ClusterSettingPage.goToConsolePlugins();
     ClusterSettingPage.toggleConsolePlugin('console-customization', 'Disable');
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
-      expect(result.stdout).not.include('console-customization')
+      expect(result.stdout).not.include('"console-customization"')
     });
     ClusterSettingPage.toggleConsolePlugin('console-demo-plugin', 'Disable');
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
-      expect(result.stdout).not.include('console-demo-plugin')
+      expect(result.stdout).not.include('"console-demo-plugin"')
     });
     cy.adminCLI(`oc delete consoleplugin console-customization console-demo-plugin`,{failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
@@ -59,7 +59,7 @@ describe('Dynamic plugins features', () => {
     // Use visiting pages to refresh instead of click on 'Refresh console' button
     // which is unreliable
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
-      expect(result.stdout).contains('console-customization')
+      expect(result.stdout).contains('"console-customization"')
     });
     cy.wait(30000);
     cy.visit('/api-explorer');
@@ -80,7 +80,7 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"console-demo-plugin"}]'`)
       .then(result => expect(result.stdout).contains('patched'));
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
-      expect(result.stdout).contains('console-customization').and.contains('console-demo-plugin');
+      expect(result.stdout).contains('"console-customization"').and.contains('"console-demo-plugin"');
     });
     cy.wait(30000);
     cy.visit('/topology/all-namespaces');

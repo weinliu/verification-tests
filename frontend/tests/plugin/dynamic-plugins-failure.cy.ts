@@ -34,7 +34,13 @@ describe('Dynamic Plugins notification features', () => {
       cy.get('a:contains(View all)').click({force: true});
     });
     ClusterSettingPage.toggleConsolePlugin(`${testParams.failPluginName}`, 'Disable');
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      expect(result.stdout).not.include(`"${testParams.failPluginName}"`)
+    });
     ClusterSettingPage.toggleConsolePlugin(`${testParams.pendingPluginName}`, 'Disable');
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      expect(result.stdout).not.include(`"${testParams.pendingPluginName}"`)
+    });
     cy.adminCLI(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName}`,{failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   })
@@ -42,8 +48,8 @@ describe('Dynamic Plugins notification features', () => {
   it('(OCP-55427,yapei,UserInterface) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`)
       .its('stdout')
-      .should('include', `${testParams.failPluginName}`)
-      .and('include',`${testParams.pendingPluginName}`)
+      .should('include', `"${testParams.failPluginName}"`)
+      .and('include',`"${testParams.pendingPluginName}"`)
     // wait 60000ms then reload console pages to load all enabled plugins
     cy.wait(60000);
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
