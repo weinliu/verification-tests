@@ -6107,6 +6107,68 @@ EOF`, serverconf, fqdnName)
 		o.Expect(imageSecretOutput).Should(o.ContainSubstring(randomSaAcc + "-dockercfg"))
 		imageSaOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "sa", randomSaAcc, "-n", namespace, "-o", `jsonpath={.metadata.annotations.openshift\.io/internal-registry-pull-secret-ref}`)
 		o.Expect(imageSaOutput).Should(o.ContainSubstring(randomSaAcc + "-dockercfg"))
+
+		// Adding this step related to bug https://issues.redhat.com/browse/OCPBUGS-36833
+		exutil.By("6. Verify no reconciliation loops cause unbounded dockercfg secret creation")
+		saName := "my-test-sa"
+
+		// Define the ServiceAccount in YAML format
+		saYAML := fmt.Sprintf(`apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: %s
+`, saName)
+
+		// Create or replace the ServiceAccount multiple times
+		for i := 0; i < 10; i++ {
+			output, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", "-").InputString(saYAML).Output()
+			if err != nil {
+				if !strings.Contains(output, "AlreadyExists") {
+					e2e.Failf("Failed to create ServiceAccount: %v", err.Error())
+				} else {
+					// Replace the ServiceAccount if it already exists
+					err = oc.WithoutNamespace().AsAdmin().Run("replace").Args("-n", namespace, "-f", "-").InputString(saYAML).Execute()
+					if err != nil {
+						e2e.Failf("Failed to replace ServiceAccount: %v", err)
+					}
+					e2e.Logf("ServiceAccount %s replaced\n", saName)
+				}
+			} else {
+				e2e.Logf("ServiceAccount %s created\n", saName)
+			}
+			time.Sleep(2 * time.Second) // Sleep to ensure secrets generation
+		}
+
+		// List ServiceAccounts and secrets
+		saList := getResourceToBeReady(oc, true, true, "-n", namespace, "sa", saName, "-o=jsonpath={.metadata.name}")
+		if saList == "" {
+			e2e.Failf("ServiceAccount %s not found", saName)
+		}
+		e2e.Logf("ServiceAccount found: %s", saName)
+
+		saNameSecretTypes, err := getResource(oc, true, true, "-n", namespace, "secrets", `-o`, `jsonpath={range .items[?(@.metadata.ownerReferences[0].name=="`+saName+`")]}{.type}{"\n"}{end}`)
+		if err != nil {
+			e2e.Failf("Failed to get secrets: %v", err)
+		}
+
+		secretTypes := strings.Split(saNameSecretTypes, "\n")
+		// Count the values
+		dockerCfgCount := 0
+		serviceAccountTokenCount := 0
+		for _, secretType := range secretTypes {
+			switch secretType {
+			case "kubernetes.io/dockercfg":
+				dockerCfgCount++
+			case "kubernetes.io/service-account-token":
+				serviceAccountTokenCount++
+			}
+		}
+
+		if dockerCfgCount != 1 || serviceAccountTokenCount != 0 {
+			e2e.Failf("Expected 1 dockercfg secret and 0 token secret, but found %d dockercfg secrets and %d token secrets", dockerCfgCount, serviceAccountTokenCount)
+		}
+
+		e2e.Logf("Correct number of secrets found, there is no reconciliation loops causing unbounded dockercfg secret creation")
 	})
 
 	// author: rgangwar@redhat.com
