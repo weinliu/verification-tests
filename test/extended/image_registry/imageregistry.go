@@ -545,7 +545,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-39028-Check aws secret and access key with an openShift installed with an STS credential", func() {
+	g.It("Author:wewang-NonHyperShiftHOST-Medium-39028-Check aws secret and access key with an openShift installed with an STS credential", func() {
 		g.By("Check platforms")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check if the cluster is with STS credential")
