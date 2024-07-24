@@ -30,7 +30,7 @@ describe('Operators Installed nonlatest operator test', () => {
           .next()
           .find('button')
           .then(($version) => {
-            selectedVersion = $version.text();
+            selectedVersion = $version.text().trim();
             cy.log(`Selected option version: ${selectedVersion}`);
             cy.get('[data-test-id="operator-modal-header"] h5')
               .should('contain.text', selectedVersion)
@@ -70,7 +70,7 @@ describe('Operators Installed nonlatest operator test', () => {
         .invoke('text')
         .should('contain',selectedVersion);
       cy.url()
-        .should('contain', selectedVersion)
+        .should('contain',selectedVersion)
         .and('contain','channel=stable');
     });
     cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
