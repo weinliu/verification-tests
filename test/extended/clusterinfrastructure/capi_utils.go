@@ -38,16 +38,18 @@ type gcpClusterDescription struct {
 }
 
 type awsMachineTemplateDescription struct {
-	name         string
-	namespace    string
-	profile      string
-	instanceType string
-	zone         string
-	ami          string
-	subnetName   string
-	subnetID     string
-	sgName       string
-	template     string
+	name                    string
+	namespace               string
+	profile                 string
+	instanceType            string
+	zone                    string
+	ami                     string
+	subnetName              string
+	subnetID                string
+	sgName                  string
+	template                string
+	placementGroupName      string
+	placementGroupPartition int
 }
 
 type gcpMachineTemplateDescription struct {
@@ -163,8 +165,13 @@ func (gcpCluster *gcpClusterDescription) deleteGCPCluster(oc *exutil.CLI) error 
 
 func (awsMachineTemplate *awsMachineTemplateDescription) createAWSMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating awsMachineTemplate ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "INSTANCETYPE="+awsMachineTemplate.instanceType, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SUBNETID="+awsMachineTemplate.subnetID, "SGNAME="+awsMachineTemplate.sgName)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if awsMachineTemplate.placementGroupPartition != 0 {
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "INSTANCETYPE="+awsMachineTemplate.instanceType, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SUBNETID="+awsMachineTemplate.subnetID, "SGNAME="+awsMachineTemplate.sgName, "PLACEMENTGROUPNAME="+awsMachineTemplate.placementGroupName, "PLACEMENTGROUPPARTITION="+strconv.Itoa(awsMachineTemplate.placementGroupPartition))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "INSTANCETYPE="+awsMachineTemplate.instanceType, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SUBNETID="+awsMachineTemplate.subnetID, "SGNAME="+awsMachineTemplate.sgName, "PLACEMENTGROUPNAME="+awsMachineTemplate.placementGroupName, "PLACEMENTGROUPPARTITION=null")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 func (awsMachineTemplate *awsMachineTemplateDescription) deleteAWSMachineTemplate(oc *exutil.CLI) error {

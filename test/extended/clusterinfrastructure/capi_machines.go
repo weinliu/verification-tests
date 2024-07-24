@@ -417,4 +417,31 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		_, err = matchProviderIDWithNode(oc, capiMachine, machineName, "openshift-cluster-api")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+
+	g.It("Author:huliu-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-74803-[CAPI] Support AWS Placement Group Partition Number [Disruptive][Slow]", func() {
+		g.By("Check if cluster api on this platform is supported")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		skipForCAPINotExist(oc)
+
+		g.By("Create capi machineset")
+		cluster.createCluster(oc)
+		awsMachineTemplate.placementGroupName = "pgpartition3"
+		awsMachineTemplate.placementGroupPartition = 3
+		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
+		awsMachineTemplate.createAWSMachineTemplate(oc)
+
+		g.By("Check machineTemplate with placementGroupName: pgpartition3 and placementGroupPartition: 3")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("awsmachinetemplate", capiMachineSetAWS.machineTemplateName, "-n", clusterAPINamespace, "-o=jsonpath={.spec.template.spec.placementGroupName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("pgpartition3"))
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("awsmachinetemplate", capiMachineSetAWS.machineTemplateName, "-n", clusterAPINamespace, "-o=jsonpath={.spec.template.spec.placementGroupPartition}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("3"))
+
+		capiMachineSetAWS.name = "capi-machineset-74803"
+		defer waitForCapiMachinesDisapper(oc, capiMachineSetAWS.name)
+		defer capiMachineSetAWS.deleteCapiMachineSet(oc)
+		capiMachineSetAWS.createCapiMachineSet(oc)
+	})
 })

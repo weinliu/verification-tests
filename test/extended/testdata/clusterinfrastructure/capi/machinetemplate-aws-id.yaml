@@ -27,6 +27,8 @@ objects:
             - name: tag:Name
               values:
               - ${SGNAME}
+          placementGroupName: ${PLACEMENTGROUPNAME}
+          placementGroupPartition: ${{PLACEMENTGROUPPARTITION}}
 parameters:
 - name: NAME
 - name: NAMESPACE
@@ -36,3 +38,5 @@ parameters:
 - name: AMI
 - name: SUBNETID
 - name: SGNAME
+- name: PLACEMENTGROUPNAME
+- name: PLACEMENTGROUPPARTITION
