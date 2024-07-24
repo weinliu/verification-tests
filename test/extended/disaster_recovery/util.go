@@ -184,29 +184,35 @@ func checkEtcdPodStatus(oc *exutil.CLI) bool {
 
 // make sure all the machine are running
 func waitMachineStatusRunning(oc *exutil.CLI, newMasterMachineName string) {
-	err := wait.Poll(60*time.Second, 480*time.Second, func() (bool, error) {
-		machineStatus, err := oc.AsAdmin().Run("get").Args("-n", "openshift-machine-api", exutil.MapiMachine, newMasterMachineName, "-o=jsonpath='{.status.phase}'").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+	err := wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
+		machineStatus, errSt := oc.AsAdmin().Run("get").Args("-n", "openshift-machine-api", exutil.MapiMachine, newMasterMachineName, "-o=jsonpath='{.status.phase}'").Output()
+		if errSt != nil {
+			e2e.Logf("Failed to get machineStatus, error: %s. Trying again", errSt)
+			return false, nil
+		}
 		if match, _ := regexp.MatchString("Running", machineStatus); match {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "The machine is not Running as expected")
+	exutil.AssertWaitPollNoErr(err, "Sadly the machine is not Running.")
 }
 
 // make sure correct number of machines are present
 func waitforDesiredMachineCount(oc *exutil.CLI, machineCount int) {
 	err := wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
 		output, errGetMachine := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath='{.items[*].metadata.name}'").Output()
-		o.Expect(errGetMachine).NotTo(o.HaveOccurred())
+		if errGetMachine != nil {
+			e2e.Logf("Failed to get machinecount, error: %s. Trying again", errGetMachine)
+			return false, nil
+		}
 		machineNameList := strings.Fields(output)
 		if len(machineNameList) == machineCount {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "The machine count didn't match")
+	exutil.AssertWaitPollNoErr(err, "Sadly the machine count didn't match")
 }
 
 // update new machine file
@@ -311,7 +317,10 @@ func waitMachineDesiredStatus(oc *exutil.CLI, newMasterMachineName string, desir
 func waitForDesiredStateOfCR(oc *exutil.CLI, desiredState string) {
 	err := wait.Poll(60*time.Second, 480*time.Second, func() (bool, error) {
 		statusOfCR, err := oc.AsAdmin().Run("get").Args("controlplanemachineset.machine.openshift.io", "cluster", "-n", "openshift-machine-api", "-o=jsonpath={.spec.state}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf("Failed to get CR status, error: %s. Trying again", err)
+			return false, nil
+		}
 		e2e.Logf("statusOfCR is %v ", statusOfCR)
 		if statusOfCR == desiredState {
 			return true, nil

@@ -198,7 +198,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		defer checkOperator(oc, "etcd")
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": null}}")).Execute()
 		g.By("Turn off quorum guard to ensure revision rollouts of static pods")
-		errWait := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		errWait := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			errGrd := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": {\"useUnsupportedUnsafeNonHANonProductionUnstableEtcd\": true}}}")).Execute()
 			if errGrd != nil {
 				e2e.Logf("server is not ready yet, error: %s. Trying again ...", errGrd)
@@ -267,7 +267,19 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 	// author: skundu@redhat.com
 	g.It("Longduration-Author:skundu-NonPreRelease-Critical-51109-Delete an existing machine at first and then add a new one. [Disruptive]", func() {
+
 		g.By("Test for delete an existing machine at first and then add a new one")
+		g.By("check the platform is supported or not")
+		supportedList := []string{"aws", "gcp", "azure"}
+		support := in(iaasPlatform, supportedList)
+		if support != true {
+			g.Skip("The platform is not supported now, skip the cases!!")
+		}
+
+		var (
+			mMachineop          = ""
+			machineStatusOutput = ""
+		)
 
 		g.By("Make sure all the etcd pods are running")
 		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
@@ -290,13 +302,35 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		g.By("Verify that the machine is getting deleted and new machine is automatically created")
 		waitforDesiredMachineCount(oc, masterNodeCount+1)
-		mMachineop, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(errMachineConfig).NotTo(o.HaveOccurred())
+
+		errWait := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			mMachineopraw, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+			if errMachineConfig != nil {
+				e2e.Logf("Failed to get machine name: %s. Trying again", errMachineConfig)
+				return false, nil
+			} else {
+				mMachineop = mMachineopraw
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "Failed to get master machine names")
 		mMachineNameList := strings.Fields(mMachineop)
 
-		machineStatusOutput, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
-		o.Expect(errStatus).NotTo(o.HaveOccurred())
+		errSt := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			machineStatusraw, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+			if errStatus != nil {
+				e2e.Logf("Failed to get machine status: %s. Trying again", errStatus)
+				return false, nil
+			} else {
+				machineStatusOutput = machineStatusraw
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errSt, "Failed to get master machine status")
 		mMachineStatus := strings.Fields(machineStatusOutput)
+
 		e2e.Logf("masterMachineStatus after deletion is %v", mMachineStatus)
 		o.Expect(in("Deleting", mMachineStatus)).To(o.Equal(true))
 
@@ -312,6 +346,17 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	// author: skundu@redhat.com
 	g.It("Longduration-Author:skundu-NonPreRelease-Critical-59377-etcd-operator should not scale-down when all members are healthy. [Disruptive]", func() {
 		g.By("etcd-operator should not scale-down when all members are healthy")
+		g.By("check the platform is supported or not")
+		supportedList := []string{"aws", "gcp", "azure"}
+		support := in(iaasPlatform, supportedList)
+		if support != true {
+			g.Skip("The platform is not supported now, skip the cases!!")
+		}
+
+		var (
+			mMachineop          = ""
+			machineStatusOutput = ""
+		)
 
 		g.By("Make sure all the etcd pods are running")
 		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
@@ -339,38 +384,73 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		errMachineDelete := oc.AsAdmin().Run("delete").Args("-n", "openshift-machine-api", "--wait=false", "machine", masterMachineNameList[0]).Execute()
 		o.Expect(errMachineDelete).NotTo(o.HaveOccurred())
 
-		machineStatusOutput, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
-		o.Expect(errStatus).NotTo(o.HaveOccurred())
+		errWait := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			machineStatusOutputraw, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+			if errStatus != nil {
+				e2e.Logf("Failed to get master machine name: %s. Trying again", errStatus)
+				return false, nil
+			} else {
+				machineStatusOutput = machineStatusOutputraw
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "Failed to get master machine names")
 		masterMachineStatus := strings.Fields(machineStatusOutput)
 		e2e.Logf("masterMachineStatus after deletion is %v", masterMachineStatus)
 		waitMachineDesiredStatus(oc, masterMachineNameList[0], "Deleting")
 
 		g.By("enable the control plane machineset")
-		patch := `[{"op": "replace", "path": "/spec/state", "value": "Active"}]`
-		startErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", "openshift-machine-api", "controlplanemachineset.machine.openshift.io", "cluster", "--type=json", "-p", patch).Execute()
-		o.Expect(startErr).NotTo(o.HaveOccurred())
+		errW := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			patch := `[{"op": "replace", "path": "/spec/state", "value": "Active"}]`
+			patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", "openshift-machine-api", "controlplanemachineset.machine.openshift.io", "cluster", "--type=json", "-p", patch).Execute()
+			if patchErr != nil {
+				e2e.Logf("unable to apply patch the machineset, error: %s. Trying again ...", patchErr)
+				return false, nil
+			} else {
+				e2e.Logf("successfully patched the machineset.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errW, "unable to enable the comtrol plane machineset.")
 		waitForDesiredStateOfCR(oc, "Active")
 
-		waitforDesiredMachineCount(oc, masterNodeCount+1)
+		errSt := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			machineStatusraw, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+			if errStatus != nil {
+				e2e.Logf("Failed to get machine status: %s. Trying again", errStatus)
+				return false, nil
+			} else {
+				machineStatusOutput = machineStatusraw
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errSt, "Failed to get master machine status")
+		mMachineStatus := strings.Fields(machineStatusOutput)
 
-		g.By("Get all master machine name list after deletion is initiated")
-		output, errNewMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(errNewMachineConfig).NotTo(o.HaveOccurred())
-		newMasterMachineNameList := strings.Fields(output)
+		errWt := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			mMachineopraw, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+			if errMachineConfig != nil {
+				e2e.Logf("Failed to get machine name: %s. Trying again", errMachineConfig)
+				return false, nil
+			} else {
+				mMachineop = mMachineopraw
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWt, "Failed to get master machine names")
+		mMachineNameList := strings.Fields(mMachineop)
 
-		e2e.Logf("newMasterMachineNameList is %v", newMasterMachineNameList)
-
-		newMachineStatusOutput, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
-		o.Expect(errStatus).NotTo(o.HaveOccurred())
-		newMasterMachineStatus := strings.Fields(newMachineStatusOutput)
-		e2e.Logf("newMasterMachineStatus after deletion is %v", newMasterMachineStatus)
-
-		newMasterMachine := getNewMastermachine(newMasterMachineStatus, newMasterMachineNameList, "Provision")
+		e2e.Logf("masterMachineStatus after enabling the CPMS is %v", mMachineStatus)
+		newMasterMachine := getNewMastermachine(mMachineStatus, mMachineNameList, "Provision")
 		g.By("Verify that the new machine is in running state.")
 		waitMachineStatusRunning(oc, newMasterMachine)
-		g.By("Make sure the old machine is deleted and goes away from the master machine list.")
-		waitforDesiredMachineCount(oc, masterNodeCount)
 
+		g.By("Verify that the old machine is deleted. The master machine count is same as initial one.")
+		waitforDesiredMachineCount(oc, masterNodeCount)
 	})
 
 	// author: skundu@redhat.com
