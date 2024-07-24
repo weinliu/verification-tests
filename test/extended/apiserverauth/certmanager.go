@@ -95,8 +95,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		oc.SetShowInfo()
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
+		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "letsencrypt-dns01", "-o", "wide").Output()
 			if !strings.Contains(output, "True") || err != nil {
 				e2e.Logf("clusterissuer is not ready.")
 				return false, nil
@@ -104,7 +104,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			e2e.Logf("clusterissuer is ready.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer timeout")
+		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer 'letsencrypt-dns01' timeout")
 		exutil.By("create certificate which references previous clusterissuer")
 		defer func() {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("certificate").Output()
@@ -401,8 +401,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "hosted-zone-overlapped").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
+		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "hosted-zone-overlapped", "-o", "wide").Output()
 			if !strings.Contains(output, "True") || err != nil {
 				e2e.Logf("clusterissuer is not ready.")
 				return false, nil
@@ -410,7 +410,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			e2e.Logf("clusterissuer is ready.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer timeout")
+		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer 'hosted-zone-overlapped' timeout")
 
 		exutil.By("create certificate which references previous clusterissuer")
 		e2e.Logf("Create ns with normal user.")
@@ -546,8 +546,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "-o", "wide").Output()
+		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "letsencrypt-dns01", "-o", "wide").Output()
 			if !strings.Contains(output, "True") || err != nil {
 				e2e.Logf("clusterissuer is not ready.")
 				return false, nil
@@ -555,7 +555,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			e2e.Logf("clusterissuer is ready.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer ready timeout.")
+		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer 'letsencrypt-dns01' ready timeout.")
 
 		exutil.By("Create the certificate.")
 		dnsName := constructDNSName(dnsZone)
@@ -701,7 +701,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		}()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "acme-multiple-solvers", "-o", "wide").Output()
 			if !strings.Contains(output, "True") || err != nil {
 				e2e.Logf("clusterissuer is not ready.")
@@ -710,7 +710,7 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 			e2e.Logf("clusterissuer is ready.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer timeout.")
+		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer 'acme-multiple-solvers' timeout.")
 
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
