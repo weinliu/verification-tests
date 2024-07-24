@@ -652,4 +652,38 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 			o.Expect(err).To(o.HaveOccurred())
 		}
 	})
+
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-70566-Garbage in cloud-controller-manager status [Disruptive]", func() {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.AlibabaCloud, clusterinfra.VSphere, clusterinfra.IBMCloud)
+
+		g.By("Delete the namespace openshift-cloud-controller-manager")
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "openshift-cloud-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).To(o.ContainSubstring("project.project.openshift.io \"openshift-cloud-controller-manager\" deleted"))
+		defer func() {
+			err = wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
+				g.By("Check co cloud-controller-manager is back")
+				state, checkCloudControllerManagerErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o", "jsonpath={.status.conditions}").Output()
+				if checkCloudControllerManagerErr != nil {
+					e2e.Logf("try next because of err %v", checkCloudControllerManagerErr)
+					return false, nil
+				}
+
+				if strings.Contains(state, "Trusted CA Bundle Controller works as expected") {
+					e2e.Logf("Co is back now")
+					return true, nil
+				}
+
+				e2e.Logf("Still waiting up to 1 minute ...")
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "co is not recovered")
+		}()
+
+		g.By("Check co cloud-controller-manager error message")
+		state, checkCloudControllerManagerErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o", "jsonpath={.status.conditions}").Output()
+		o.Expect(checkCloudControllerManagerErr).NotTo(o.HaveOccurred())
+		o.Expect(state).To(o.ContainSubstring("TrustedCABundleControllerControllerDegraded condition is set to True"))
+	})
 })
