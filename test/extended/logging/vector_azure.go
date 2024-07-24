@@ -65,7 +65,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			name:                      "clf-71770",
 			namespace:                 clfNS,
 			secretName:                azureSecret.name,
-			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-to-azure-log-analytics-min-opts.yaml"),
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "azureMonitor-min-opts.yaml"),
 			waitForPodReady:           true,
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
