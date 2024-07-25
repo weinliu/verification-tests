@@ -178,12 +178,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
-		curlCmd := fmt.Sprintf(
-			"curl --resolve service-secure-%s.ocp50842.%s:443:%s https://service-secure-%s.ocp50842.%s:443 -I -k --connect-timeout 10",
-			oc.Namespace(), baseDomain, controlerIP, oc.Namespace(), baseDomain)
-		statsOut, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		curlCmd := []string{"-n", oc.Namespace(), podName[0], "--", "curl", "https://service-secure-" + oc.Namespace() +
+			".ocp50842." + baseDomain + ":443", "-k", "-I", "--resolve", "service-secure-" + oc.Namespace() + ".ocp50842." +
+			baseDomain + ":443:" + controlerIP, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "200", 30)
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
 		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", "ingress-dca-opq")
@@ -246,12 +244,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
-		curlCmd := fmt.Sprintf(
-			"curl --resolve service-secure1-%s.ocp51980.%s:443:%s https://service-secure1-%s.ocp51980.%s:443 -I -k --connect-timeout 10",
-			oc.Namespace(), baseDomain, controlerIP, oc.Namespace(), baseDomain)
-		statsOut, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		curlCmd := []string{"-n", oc.Namespace(), podName[0], "--", "curl", "https://service-secure1-" + oc.Namespace() +
+			".ocp51980." + baseDomain + ":443", "-k", "-I", "--resolve", "service-secure1-" + oc.Namespace() + ".ocp51980." +
+			baseDomain + ":443:" + controlerIP, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "200", 30)
 	})
 
 	// bugzilla: 2025624
