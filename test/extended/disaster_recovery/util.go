@@ -170,16 +170,29 @@ func in(target string, strArray []string) bool {
 
 // make sure all the ectd pods are running
 func checkEtcdPodStatus(oc *exutil.CLI) bool {
-	output, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=etcd", "-n", "openshift-etcd", "-o=jsonpath='{.items[*].status.phase}'").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	statusList := strings.Fields(output)
-	for _, podStatus := range statusList {
-		if match, _ := regexp.MatchString("Running", podStatus); !match {
-			e2e.Logf("Find etcd pod is not running")
-			return false
+	err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+		output, errp := oc.AsAdmin().Run("get").Args("pods", "-l", "app=etcd", "-n", "openshift-etcd", "-o=jsonpath='{.items[*].status.phase}'").Output()
+		if errp != nil {
+			e2e.Logf("Failed to get etcd pod status, error: %s. Trying again", errp)
+			return false, nil
 		}
+		statusList := strings.Fields(output)
+		for _, podStatus := range statusList {
+			if match, _ := regexp.MatchString("Running", podStatus); !match {
+				e2e.Logf("Found etcd pod is not running")
+				return false, nil
+			}
+			return true, nil
+		}
+
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Sadly etcd pods are not Running.")
+	if err == nil {
+		return true
+	} else {
+		return false
 	}
-	return true
 }
 
 // make sure all the machine are running
@@ -291,7 +304,10 @@ func checkOperator(oc *exutil.CLI, operatorName string) {
 	err = wait.Poll(60*time.Second, 1500*time.Second, func() (bool, error) {
 		for _, item := range split {
 			output, err = oc.AsAdmin().Run("get").Args("clusteroperator", item).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("Failed to retrieve clusteroperator %s status, error: %s. Trying again", item, err)
+				return false, nil
+			}
 			if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
 				e2e.Logf("clusteroperator %s is abnormal, will try next time:\n", item)
 				return false, nil

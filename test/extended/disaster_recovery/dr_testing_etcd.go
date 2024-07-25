@@ -270,7 +270,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		g.By("Test for delete an existing machine at first and then add a new one")
 		g.By("check the platform is supported or not")
-		supportedList := []string{"aws", "gcp", "azure"}
+		supportedList := []string{"aws", "gcp", "azure", "vsphere", "nutanix"}
 		support := in(iaasPlatform, supportedList)
 		if support != true {
 			g.Skip("The platform is not supported now, skip the cases!!")
@@ -347,7 +347,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	g.It("Longduration-Author:skundu-NonPreRelease-Critical-59377-etcd-operator should not scale-down when all members are healthy. [Disruptive]", func() {
 		g.By("etcd-operator should not scale-down when all members are healthy")
 		g.By("check the platform is supported or not")
-		supportedList := []string{"aws", "gcp", "azure"}
+		supportedList := []string{"aws", "gcp", "azure", "vsphere", "nutanix"}
 		support := in(iaasPlatform, supportedList)
 		if support != true {
 			g.Skip("The platform is not supported now, skip the cases!!")
@@ -415,13 +415,14 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		})
 		exutil.AssertWaitPollNoErr(errW, "unable to enable the comtrol plane machineset.")
 		waitForDesiredStateOfCR(oc, "Active")
-
 		errSt := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			machineStatusraw, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
 			if errStatus != nil {
 				e2e.Logf("Failed to get machine status: %s. Trying again", errStatus)
 				return false, nil
-			} else {
+			}
+			if match, _ := regexp.MatchString("Provision", machineStatusraw); match {
+				e2e.Logf("machine status Provision showed up")
 				machineStatusOutput = machineStatusraw
 				return true, nil
 			}
