@@ -248,7 +248,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace2)
 		path1 := "/path"
-		path2 := "/path/second"
+		path2 := "/test"
 		httpRoutehost := unSecSvcName + "-" + "ocp72802." + "apps.example.com"
 		edgeRoute := "route-edge" + "-" + "ocp72802." + "apps.example.com"
 		reenRoute := "route-reen" + "-" + "ocp72802." + "apps.example.com"
@@ -343,12 +343,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("10. curl the second HTTP route and check the result")
 		srvPodName = getPodListByLabel(oc, e2eTestNamespace2, "name=web-server-rc")
-		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/second/index.html", "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/test/index.html", "--resolve", toDst, "--connect-timeout", "10"}
+		time.Sleep(3 * time.Second)
 		result = repeatCmd(oc, cmdOnPod, "http-8080", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
 		output, err = oc.Run("exec").Args(cmdOnPod...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("second-test " + srvPodName[0] + " http-8080"))
+		o.Expect(output).To(o.ContainSubstring("Hello-OpenShift-Path-Test " + srvPodName[0] + " http-8080"))
 	})
 
 	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-Medium-73621-Disable/Enable namespace ownership support for router [Disruptive]", func() {
