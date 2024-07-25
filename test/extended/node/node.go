@@ -1508,7 +1508,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		createKedaOperator(oc)
 	})
 	// author: weinliu@redhat.com
-	g.It("Author:weinliu-Level0-StagerunBoth-High-52383-Keda Install", func() {
+	g.It("Author:weinliu-LEVEL0-StagerunBoth-High-52383-Keda Install", func() {
 		g.By("CMA (Keda) operator has been installed successfully")
 	})
 
@@ -1549,6 +1549,44 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		log, err := exutil.GetSpecificPodLogs(oc, "openshift-keda", "", metricsApiserverPodName[0], "")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(log, "\"level\":\"Metadata\"")).Should(o.BeTrue())
+	})
+
+	g.It("Author:asahay-High-60962-Audit logging test - stdout Request[Serial]", func() {
+		g.By("Create KedaController with log level Request")
+		g.By("Create CMA Keda Controller ")
+		cmaKedaController := cmaKedaControllerDescription{
+			level:     "Request",
+			template:  cmaKedaControllerTemplate,
+			name:      "keda",
+			namespace: "openshift-keda",
+		}
+		defer cmaKedaController.delete(oc)
+		cmaKedaController.create(oc)
+		metricsApiserverPodName := getPodNameByLabel(oc, "openshift-keda", "app=keda-metrics-apiserver")
+		waitPodReady(oc, "openshift-keda", "app=keda-metrics-apiserver")
+		g.By("Check the Audit Logged as configed")
+		log, err := exutil.GetSpecificPodLogs(oc, "openshift-keda", "", metricsApiserverPodName[0], "")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(log, "\"level\":\"Request\"")).Should(o.BeTrue())
+	})
+
+	g.It("Author:asahay-High-60963-Audit logging test - stdout RequestResponse[Serial]", func() {
+		g.By("Create KedaController with log level RequestResponse")
+		g.By("Create CMA Keda Controller ")
+		cmaKedaController := cmaKedaControllerDescription{
+			level:     "RequestResponse",
+			template:  cmaKedaControllerTemplate,
+			name:      "keda",
+			namespace: "openshift-keda",
+		}
+		defer cmaKedaController.delete(oc)
+		cmaKedaController.create(oc)
+		metricsApiserverPodName := getPodNameByLabel(oc, "openshift-keda", "app=keda-metrics-apiserver")
+		waitPodReady(oc, "openshift-keda", "app=keda-metrics-apiserver")
+		g.By("Check the Audit Logged as configed")
+		log, err := exutil.GetSpecificPodLogs(oc, "openshift-keda", "", metricsApiserverPodName[0], "")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(log, "\"level\":\"RequestResponse\"")).Should(o.BeTrue())
 	})
 
 	// author: weinliu@redhat.com

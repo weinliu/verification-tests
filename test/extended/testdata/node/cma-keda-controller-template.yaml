@@ -28,6 +28,5 @@ parameters:
   - name: NAMESPACE
     value: openshift-keda
   - name: LEVEL
-    value: Metadata
   - name: WATCHNAMESPACE
     value: openshift-keda
