@@ -78,11 +78,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", "route-edge")
 
 		exutil.By("8 Check the custom router pod and ensure " + e2eTestNamespace1 + " http route is loaded in haproxy.config")
-		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace1)
+		searchOutput := readHaproxyConfig(oc, custContPod, e2eTestNamespace1, "-A1", "service-unsecure")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_http:" + e2eTestNamespace1 + ":service-unsecure"))
 
 		exutil.By("9. Check the custom router pod and ensure " + e2eTestNamespace2 + " edge route is loaded in haproxy.config")
-		searchOutput = readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace2)
+		searchOutput = readHaproxyConfig(oc, custContPod, e2eTestNamespace2, "-A1", "route-edge")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_edge_http:" + e2eTestNamespace2 + ":route-edge"))
 	})
 
@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", srvName)
 
 		exutil.By("8 Check the custom router pod and ensure " + e2eTestNamespace1 + " route is loaded in haproxy.config")
-		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", e2eTestNamespace1)
+		searchOutput := readHaproxyConfig(oc, custContPod, e2eTestNamespace1, "-A1", "route-reen")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace1 + ":route-reen"))
 
 		exutil.By("9. Confirm the route in the second ns is shown as HostAlreadyClaimed")
