@@ -12736,17 +12736,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		exutil.By("2) install sub")
 		sub.create(oc, itName, dr)
 		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", "devworkspace-webhook-server", "-n", "openshift-operators").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("service", "devworkspace-webhookserver", "-n", "openshift-operators").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccounts", "devworkspace-webhook-server", "-n", "openshift-operators").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", "devworkspace-webhook-server").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "devworkspace-webhook-server").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mutatingwebhookconfigurations", "controller.devfile.io").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("validatingwebhookconfigurations", "controller.devfile.io").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "devworkspaceroutings.controller.devfile.io").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "devworkspaces.workspace.devfile.io").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "devworkspacetemplates.workspace.devfile.io").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "devworkspaceoperatorconfigs.controller.devfile.io").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", "devworkspace-webhook-server", "-n", "openshift-operators").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("service", "devworkspace-webhookserver", "-n", "openshift-operators").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mutatingwebhookconfigurations", "controller.devfile.io").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("validatingwebhookconfigurations", "controller.devfile.io").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccounts", "devworkspace-webhook-server", "-n", "openshift-operators").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", "devworkspace-webhook-server").Execute()
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "devworkspace-webhook-server").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "devworkspace-operator.v0.29.0", "-n", "openshift-operators").Execute()
 			sub.delete(itName, dr)
 		}()
@@ -12762,8 +12762,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "service devworkspace-webhookserver is not running")
+
 		crFilePath := filepath.Join(buildPruningBaseDir, "cr_devworkspace.yaml")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", sub.namespace).Execute()
+		defer func() {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("devworkspaces", "empty-devworkspace", "-n", sub.namespace).Output()
+				e2e.Logf(output)
+				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("devworkspaces", "empty-devworkspace", "-n", sub.namespace).Output()
+				if strings.Contains(output, "NotFound") {
+					e2e.Logf("delete devworkspaces SUCCESS")
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "delete devworkspaces failed")
+		}()
+
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", sub.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -12784,6 +12798,25 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		exutil.By("5) re-create sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "devworkspace-webhookserver", "-n", sub.namespace).Output()
+			if strings.Contains(output, "TCP") {
+				e2e.Logf("service is OK")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "service devworkspace-webhookserver is not running")
+
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("devworkspace", "-n", sub.namespace).Output()
+			if strings.Contains(output, "Workspace is running") {
+				e2e.Logf("Workspace is running: \n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "devworkspace is not running")
 	})
 
 })
