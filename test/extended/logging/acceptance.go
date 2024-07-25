@@ -282,6 +282,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		}
 		err = gcl.waitForLogsAppearByNamespace(appProj)
 		exutil.AssertWaitPollNoErr(err, "can't find app logs from project/"+appProj)
+
+		// Check tuning options for GCL under collector configMap
+		checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", "[sinks.output_gcp_logging.batch]", "[sinks.output_gcp_logging.buffer]", "[sinks.output_gcp_logging.request]", "retry_initial_backoff_secs = 10", "retry_max_duration_secs = 20")
 	})
 
 	//author anli@redhat.com

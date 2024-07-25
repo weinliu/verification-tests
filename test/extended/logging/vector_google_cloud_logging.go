@@ -64,10 +64,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:                      "clf-" + getRandomString(),
+			name:                      "clf-53731",
 			namespace:                 clfNS,
 			secretName:                gcpSecret.name,
-			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging-multi-logids.yaml"),
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "google-cloud-logging-multi-logids.yaml"),
 			waitForPodReady:           true,
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			serviceAccountName:        "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+projectID, "LOG_ID="+logName)
+		clf.create(oc, "ID_TYPE=project", "ID_VALUE="+projectID, "LOG_ID="+logName)
 
 		for _, logType := range logTypes {
 			gcl := googleCloudLogging{
@@ -112,14 +112,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			name:                   "clf-71003",
 			namespace:              clfNS,
 			secretName:             gcpSecret.name,
-			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "googleCloudLogging.yaml"),
 			waitForPodReady:        true,
 			collectApplicationLogs: true,
 			serviceAccountName:     "clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUTREFS=[\"application\"]")
-		patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"selector": {"matchExpressions": [{"key": "test.logging.io/logging.qe-test-label", "operator": "In", "values": ["logging-71003-test-0", "logging-71003-test-1", "logging-71003-test-2"]},{"key":"test", "operator":"Exists"}]}}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+
+		clf.create(oc, "ID_TYPE=project", "ID_VALUE="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUT_REFS=[\"application\"]")
+		patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app","type": "application","application": {"selector": {"matchExpressions": [{"key": "test.logging.io/logging.qe-test-label", "operator": "In", "values": ["logging-71003-test-0", "logging-71003-test-1", "logging-71003-test-2"]},{"key":"test", "operator":"Exists"}]}}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
 		clf.update(oc, "", patch, "--type=json")
 		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
@@ -224,10 +225,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
 			projectID: projectID,
-			logName:   getInfrastructureName(oc) + "-53903",
+			logName:   getInfrastructureName(oc) + "-61602",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53903", clfNS}
+		gcpSecret := resource{"secret", "gcp-secret-61602", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -236,13 +237,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			name:                   "clf-61602",
 			namespace:              clfNS,
 			secretName:             gcpSecret.name,
-			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "googleCloudLogging.yaml"),
 			waitForPodReady:        true,
 			collectApplicationLogs: true,
 			serviceAccountName:     "test-clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUTREFS=[\"application\"]")
+
+		clf.create(oc, "ID_TYPE=project", "ID_VALUE="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUT_REFS=[\"application\"]")
 
 		g.By("The Google Cloud sink in Vector config must use the intermediate tlsSecurityProfile")
 		searchString := `[sinks.output_gcp_logging.tls]
@@ -315,15 +317,16 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			name:                   "clf-71777",
 			namespace:              clfNS,
 			secretName:             gcpSecret.name,
-			templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "googleCloudLogging.yaml"),
 			waitForPodReady:        true,
 			collectApplicationLogs: true,
 			serviceAccountName:     "clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUTREFS=[\"application\"]")
+
+		clf.create(oc, "ID_TYPE=project", "ID_VALUE="+gcl.projectID, "LOG_ID="+gcl.logName, "INPUT_REFS=[\"application\"]")
 		exutil.By("exclude logs from specific container in specific namespace")
-		patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace": "logging-log-71777", "container": "exclude-log-71777"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+		patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app","type": "application" ,"application": {"excludes": [{"namespace": "logging-log-71777", "container": "exclude-log-71777"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
 		clf.update(oc, "", patch, "--type=json")
 		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
@@ -490,14 +493,15 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			name:                      "clf-71753",
 			namespace:                 clfNS,
 			secretName:                gcpSecret.name,
-			templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-google-cloud-logging.yaml"),
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "googleCloudLogging.yaml"),
 			collectApplicationLogs:    true,
 			collectInfrastructureLogs: true,
 			collectAuditLogs:          true,
 			serviceAccountName:        "clf-" + getRandomString(),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "PROJECT_ID="+gcl.projectID, "LOG_ID="+gcl.logName)
+
+		clf.create(oc, "ID_TYPE=project", "ID_VALUE="+gcl.projectID, "LOG_ID="+gcl.logName)
 		exutil.By("Add prune filters to CLF")
 		patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "prune-logs", "type": "prune", "prune": {"in": [".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}}]},
 		{"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["prune-logs"]}]`
@@ -533,7 +537,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		exutil.By("Prune .hostname, the CLF should be rejected")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/in", "value": [".hostname",".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}]`
 		clf.update(oc, "", patch, "--type=json")
-		checkResource(oc, true, false, "googleCloudLogging cannot prune `.hostname` field.", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelines.test-google-cloud-logging[0].message}"})
+		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelinesStatus[0].message}"})
 
 		exutil.By("Update CLF to only reserve several fields")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift",".hostname"]}}]`
@@ -558,7 +562,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		exutil.By("Prune .hostname, the CLF should be rejected")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/notIn", "value": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift"]}]`
 		clf.update(oc, "", patch, "--type=json")
-		checkResource(oc, true, false, "googleCloudLogging cannot prune `.hostname` field.", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelines.test-google-cloud-logging[0].message}"})
+		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelinesStatus[0].message}"})
 
 		exutil.By("Combine in and notIn")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".hostname"],

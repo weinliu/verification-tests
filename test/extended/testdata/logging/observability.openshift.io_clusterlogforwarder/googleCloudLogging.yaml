@@ -22,7 +22,11 @@ objects:
           type: ${ID_TYPE}
           value: ${ID_VALUE}
         logId : ${LOG_ID}
-        tuning: ${{TUNING}}
+        tuning:
+          delivery: ${DELIVERY}
+          maxWrite: ${MAX_WRITE}
+          minRetryDuration: ${{MIN_RETRY_DURATION}}
+          maxRetryDuration: ${{MAX_RETRY_DURATION}}
     pipelines:
     - name: test-google-cloud-logging
       inputRefs: ${{INPUT_REFS}}
@@ -40,7 +44,7 @@ parameters:
 - name: SECRET_NAME
   value: "gcp-secret"
 - name: LOG_ID
-  value: "{{.log_type}}"
+  value: "{.log_type||\"none-typed-logs\"}"
 - name: ID_TYPE
   value: "project"
 - name: ID_VALUE
@@ -49,5 +53,11 @@ parameters:
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME
   value: ""
-- name: TUNING
-  value: "{}"
+- name: DELIVERY
+  value: "atLeastOnce"
+- name: MAX_WRITE
+  value: "10M"
+- name: MIN_RETRY_DURATION
+  value: "10"
+- name: MAX_RETRY_DURATION
+  value: "20"
