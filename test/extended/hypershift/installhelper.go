@@ -330,7 +330,10 @@ func (receiver *installHelper) extractAzureCredentials() {
 }
 
 func (receiver *installHelper) hyperShiftInstall() {
-	cmd := "hypershift install "
+	// Enable defaulting webhook since 4.14
+	// Deploy latest hypershift operator since 4.16
+	// Wait until the hypershift operator has been rolled out and its webhook service is available
+	cmd := "hypershift install --enable-defaulting-webhook=true --wait-until-available "
 
 	// Build up the platform-related part of the installation command
 	switch receiver.iaasPlatform {
@@ -356,28 +359,9 @@ func (receiver *installHelper) hyperShiftInstall() {
 		receiver.extractAzureCredentials()
 	}
 
-	// Ensure the HO's version aligns with the MC's version
-	xyVersion, _, err := exutil.GetClusterVersion(receiver.oc)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	cmd += fmt.Sprintf("--hypershift-image quay.io/hypershift/hypershift-operator:%s ", xyVersion)
-
-	// Enable defaulting webhook for 4.14 and above
-	cmd += "--enable-defaulting-webhook=true "
-
 	e2e.Logf("run hypershift install command: %s", cmd)
-	bashClient := NewCmdClient().WithShowInfo(true)
-	_, err = bashClient.Run(cmd).Output()
+	_, err := NewCmdClient().WithShowInfo(true).Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-
-	e2e.Logf("check hyperShift operator install")
-	o.Eventually(func() string {
-		value, er := receiver.oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "hypershift", "--ignore-not-found", "-l", "app=operator", `-ojsonpath='{.items[].status.conditions[?(@.type=="Ready")].status}`).Output()
-		if er != nil {
-			e2e.Logf("error occurred: %v, try next round", er)
-			return ""
-		}
-		return value
-	}, DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("True"), "hyperShift operator install error")
 }
 
 func (receiver *installHelper) hyperShiftUninstall() {
@@ -390,7 +374,7 @@ func (receiver *installHelper) hyperShiftUninstall() {
 	_, err = bashClient.Run("hypershift install render --enable-defaulting-webhook=true --format=yaml --outputs crds | oc delete -f -").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 
-	e2e.Logf("Waiting until the Hypershift operator and relevant resources is uninstalled")
+	e2e.Logf("Waiting until the Hypershift operator and relevant resources are uninstalled")
 	o.Eventually(func() string {
 		value, er := receiver.oc.AsAdmin().WithoutNamespace().Run("get").Args("all", "-n", "hypershift").Output()
 		if er != nil {
