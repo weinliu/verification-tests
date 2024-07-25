@@ -183,6 +183,12 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	// create namspace
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
+
+	// skip the install process to mitigate the namespace deletion terminating issue caused by case 62006
+	// the full message is 'Detected changes to resource cert-manager-operator which is currently being deleted'
+	if strings.Contains(msg, "being deleted") {
+		g.Skip("skipping the install process as the cert-manager-operator namespace is being terminated due to other env issue e.g. we ever hit such failures caused by OCPBUGS-31443")
+	}
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	// create operatorgroup
