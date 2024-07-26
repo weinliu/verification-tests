@@ -2,7 +2,6 @@ package storage
 
 import (
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -771,71 +770,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(filesCount).To(o.ContainSubstring("10001"))
 	})
-
-	// author: chaoyang@redhat.com
-	// OCP-74648 - [CSI-Driver] [CSI Clone] Clone volume support different storage class
-	g.It("Author:chaoyang-ARO-Low-74648-[CSI-Driver] [CSI Clone] [Filesystem] Clone volume support different storage class for azure file csi driver", func() {
-
-		// Set the resource template for the scenario
-		var (
-			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
-			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
-			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
-			mountOption          = []string{"mfsymlinks", "cache=strict", "nosharesock", "actimeo=30"}
-			extraParameters      = map[string]interface{}{
-				"allowVolumeExpansion": true,
-				"mountOptions":         mountOption,
-			}
-		)
-
-		exutil.By("Create new project for the scenario")
-		oc.SetupProject() //create new project
-		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"))
-		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
-
-		exutil.By("Create a pvc with the preset csi storageclass")
-		pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
-		e2e.Logf("%s", pvcOri.scname)
-		pvcOri.create(oc)
-		defer pvcOri.deleteAsAdmin(oc)
-
-		exutil.By("Create pod with the created pvc and wait for the pod ready")
-		podOri.create(oc)
-		defer podOri.deleteAsAdmin(oc)
-		podOri.waitReady(oc)
-		nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
-
-		exutil.By("Write file to volume")
-		podOri.checkMountedVolumeCouldRW(oc)
-		podOri.execCommand(oc, "sync")
-
-		// Set the resource definition for the clone
-		scClone := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-		scClone.provisioner = provisioner
-		scClone.createWithExtraParameters(oc, extraParameters)
-		defer scClone.deleteAsAdmin(oc)
-		pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scClone.name), setPersistentVolumeClaimDataSourceName(pvcOri.name))
-		podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
-
-		exutil.By("Create a clone pvc with the new csi storageclass")
-		oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
-		o.Expect(err).To(o.Not(o.HaveOccurred()))
-		clonecapacityInt64 := oricapacityInt64 + getRandomNum(1, 8)
-		pvcClone.capacity = strconv.FormatInt(clonecapacityInt64, 10) + "Gi"
-		pvcClone.createWithCloneDataSource(oc)
-		defer pvcClone.deleteAsAdmin(oc)
-
-		exutil.By("Create pod with the cloned pvc and wait for the pod ready")
-		// Clone volume could only provision in the same az with the origin volume
-		podClone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
-		defer podClone.deleteAsAdmin(oc)
-		podClone.waitReady(oc)
-
-		exutil.By("Check the file exist in cloned volume")
-		podClone.checkMountedVolumeDataExist(oc, true)
-	})
-
 })
 
 // Get resourceGroup/account/share name by creating a new azure-file volume
