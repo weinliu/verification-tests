@@ -34,7 +34,7 @@ parameters:
 - name: BROKERS
   value: "[\"tls://my-cluster-kafka-bootstrap.amq-aosqe1.svc:9092\", \"tls://my-cluster-kafka-bootstrap.amq-aosqe2.svc:9092\"]"
 - name: TOPIC
-  value: "{{.log_type}}"
+  value: "{.log_type||\"none-typed-logs\"}"
 - name: SERVICE_ACCOUNT_NAME
   value: ""
 - name: URL

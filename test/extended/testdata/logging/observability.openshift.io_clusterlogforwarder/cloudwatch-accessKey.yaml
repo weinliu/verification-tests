@@ -22,7 +22,7 @@ objects:
             keySecret:
               key: aws_secret_access_key
               secretName: ${SECRET_NAME}
-          type: accessKey
+          type: awsAccessKey
         groupName: ${GROUP_NAME}
         region: ${REGION}
         url: ${URL}
@@ -44,7 +44,7 @@ parameters:
 - name: REGION
   value: "us-east-2"
 - name: GROUP_NAME
-  value: "{{.log_type}}"
+  value: "{.log_type||\"none-typed-logs\"}"
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME

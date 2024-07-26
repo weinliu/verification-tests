@@ -448,8 +448,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				name:                      "clf-48646",
 				namespace:                 loggingNS,
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack_gateway_https_secret.yaml"),
-				serviceAccountName:        "logcollector",
-				secretName:                "lokistack-gateway",
+				serviceAccountName:        "logcollector-48646",
+				secretName:                "lokistack-gateway-48646",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -511,9 +511,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "instance-54663",
 				namespace:                 loggingNS,
-				serviceAccountName:        "logcollector",
+				serviceAccountName:        "logcollector-54663",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-				secretName:                "lokistack-secret",
+				secretName:                "lokistack-secret-54663",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -593,9 +593,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "instance-57063",
 				namespace:                 loggingNS,
-				serviceAccountName:        "logcollector",
+				serviceAccountName:        "logcollector-57063",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-				secretName:                "lokistack-secret",
+				secretName:                "lokistack-secret-57063",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -691,13 +691,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "instance-61968",
 				namespace:                 loggingNS,
-				serviceAccountName:        "logcollector",
+				serviceAccountName:        "logcollector-61968",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-				secretName:                "lokistack-secret",
+				secretName:                "lokistack-secret-61968",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
-				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
 			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-61968")
@@ -707,10 +706,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
-			/*
-				need to add:
-				clf.create(oc, "DETECT_MULTILINE_ERRORS=true")
-			*/
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "detectmultiline", "type": "detectMultilineException"}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value":["detectmultiline"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
 
 			g.By("create some pods to generate multiline error")
 			multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
@@ -804,7 +802,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:                 loggingNS,
 				serviceAccountName:        "logcollector-71144",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-				secretName:                "lokistack-secret",
+				secretName:                "lokistack-secret-71144",
 				collectInfrastructureLogs: true,
 				waitForPodReady:           true,
 			}
@@ -885,11 +883,11 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.tm
 
 			exutil.By("create a CLF to test forward to lokistack")
 			clf := clusterlogforwarder{
-				name:                      "instance",
+				name:                      "instance-71144",
 				namespace:                 loggingNS,
-				serviceAccountName:        "logcollector",
+				serviceAccountName:        "logcollector-71144",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "71749.yaml"),
-				secretName:                "lokistack-secret",
+				secretName:                "lokistack-secret-71144",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -1462,7 +1460,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:                 loggingNS,
 				serviceAccountName:        "logcollector-54523",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-				secretName:                "lokistack-secret",
+				secretName:                "lokistack-secret-54523",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -1581,7 +1579,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:                 loggingNS,
 				serviceAccountName:        "logcollector-54525",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-				secretName:                "lokistack-secret",
+				secretName:                "lokistack-secret-54525",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -2741,11 +2739,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:                      "instance",
+			name:                      "instance-67386",
 			namespace:                 loggingNS,
-			serviceAccountName:        "logcollector",
+			serviceAccountName:        "logcollector-67386",
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "audit-policy.yaml"),
-			secretName:                "lokistack-secret",
+			secretName:                "lokistack-secret-67386",
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
@@ -2905,11 +2903,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:               "instance",
+			name:               "instance-67421",
 			namespace:          loggingNS,
-			serviceAccountName: "logcollector",
+			serviceAccountName: "logcollector-67421",
 			templateFile:       filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "67421.yaml"),
-			secretName:         "lokistack-secret",
+			secretName:         "lokistack-secret-67421",
 			collectAuditLogs:   true,
 			waitForPodReady:    true,
 		}
@@ -2983,11 +2981,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:               "instance",
+			name:               "instance-68318",
 			namespace:          loggingNS,
-			serviceAccountName: "logcollector",
+			serviceAccountName: "logcollector-68318",
 			templateFile:       filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "63818.yaml"),
-			secretName:         "lokistack-secret",
+			secretName:         "lokistack-secret-68318",
 			collectAuditLogs:   true,
 			waitForPodReady:    true,
 		}

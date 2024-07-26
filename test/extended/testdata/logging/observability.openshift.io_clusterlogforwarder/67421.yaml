@@ -3,7 +3,7 @@ apiVersion: template.openshift.io/v1
 metadata:
   name: clusterlogforwarder-template
 objects:
-- apiVersion: "logging.openshift.io/v1"
+- apiVersion: "observability.openshift.io/v1"
   kind: ClusterLogForwarder
   metadata:
     name: ${NAME}

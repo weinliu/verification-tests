@@ -42,7 +42,6 @@ objects:
         key:
           key: tls.key
           secretName: ${SECRET_NAME}
-        securityProfile: ${{SECURITY_PROFILE}}
     pipelines:
     - name: forward-to-external-es
       inputRefs: ${{INPUT_REFS}}
@@ -78,6 +77,4 @@ parameters:
 - name: TUNING
   value: "{}"
 - name: INDEX
-  value: "{{.log_type}}"
-- name: SECURITY_PROFILE
-  value: "{}"
+  value: "{.log_type||\"none-typed-logs\"}"

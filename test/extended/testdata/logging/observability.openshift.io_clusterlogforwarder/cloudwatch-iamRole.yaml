@@ -19,6 +19,8 @@ objects:
             roleARN:
               key: role_arn
               secretName: ${SECRET_NAME}
+            token:
+              from: serviceAccount
           type: iamRole
         groupName: ${GROUP_NAME}
         region: ${REGION}
@@ -41,7 +43,7 @@ parameters:
 - name: REGION
   value: "us-east-2"
 - name: GROUP_NAME
-  value: "{{.log_type}}"
+  value: "{.log_type||\"none-typed-logs\"}"
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME

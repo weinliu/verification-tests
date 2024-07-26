@@ -53,4 +53,4 @@ parameters:
 - name: TUNING
   value: "{}"
 - name: INDEX
-  value: "{{.log_type}}"
+  value: "{.log_type||\"none-typed-logs\"}"

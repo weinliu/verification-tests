@@ -115,8 +115,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			waitForPodReady:           true,
 			enableMonitoring:          true,
 		}
-		// due to https://issues.redhat.com/browse/LOG-5793, we can't set authentication.token.from: serviceAccountToken,
-		// here create the sa at first, then get the token and add it into the secret
 		clf.createServiceAccount(oc)
 		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-53817")
 		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-53817", clf.serviceAccountName, clf.namespace)
@@ -182,34 +180,34 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		clfNS := oc.Namespace()
 		cw := cloudwatchSpec{
-			groupPrefix:     "logging-51974-" + getInfrastructureName(oc),
-			groupType:       "logType",
+			collectorSAName: "cloudwatch-" + getRandomString(),
+			groupName:       "logging-51974-" + getInfrastructureName(oc) + `.{.log_type||"none-typed-logs"}`,
 			logTypes:        []string{"infrastructure", "application", "audit"},
 			secretNamespace: clfNS,
+			secretName:      "logging-51974-" + getRandomString(),
 		}
 		cw.init(oc)
-		defer cw.deleteResources()
+		defer cw.deleteResources(oc)
 
 		g.By("Create log producer")
 		appProj := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeName, err := genLinuxAuditLogsOnWorker(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
+		if !cw.hasMaster {
+			nodeName, err := genLinuxAuditLogsOnWorker(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
+		}
 
 		g.By("Create clusterlogforwarder")
-		defer resource{"secret", cw.secretName, cw.secretNamespace}.clear(oc)
 		cw.createClfSecret(oc)
-
 		var template string
 		if cw.stsEnabled {
 			template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
 		} else {
 			template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
 		}
-
 		clf := clusterlogforwarder{
 			name:                      "clf-51974",
 			namespace:                 clfNS,
@@ -219,10 +217,11 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
-			serviceAccountName:        cw.clfAccountName,
+			enableMonitoring:          true,
+			serviceAccountName:        cw.collectorSAName,
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupPrefix+`.{{.log_type}}`)
+		clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
 
 		g.By("Check logs in Cloudwatch")
 		o.Expect(cw.logsFound()).To(o.BeTrue())

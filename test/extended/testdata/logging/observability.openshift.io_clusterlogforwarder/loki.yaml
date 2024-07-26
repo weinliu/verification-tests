@@ -39,6 +39,6 @@ parameters:
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: TENANT_KEY
-  value: "{{.log_type}}"
+  value: "{.log_type||\"none-typed-logs\"}"
 - name: TUNING
   value: "{}"

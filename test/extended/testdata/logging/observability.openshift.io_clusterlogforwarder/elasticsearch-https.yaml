@@ -62,7 +62,7 @@ parameters:
 - name: TUNING
   value: "{}"
 - name: INDEX
-  value: "{{.log_type}}"
+  value: "{.log_type||\"none-typed-logs\"}"
 - name: INSECURE_SKIP_VERIFY
   value: "false"
 - name: SECURITY_PROFILE
