@@ -77,11 +77,11 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	testrun := TestRunDescription{
 		checked:            false,
-		operatorVer:        "1.5.3",
+		operatorVer:        "1.6.0",
 		catalogSourceName:  subscription.catalogSourceName,
 		channel:            subscription.channel,
 		redirectNeeded:     false,
-		mustgatherImage:    "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.5.3",
+		mustgatherImage:    "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel9:latest",
 		eligibility:        kataconfig.eligibility,
 		labelSingleNode:    false,
 		eligibleSingleNode: false,
@@ -183,6 +183,12 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)
 			}
 
+			e2e.Logf("patch cm for DISABLECVM=true for OSC 1.5.3 and 1.6.0")
+			if strings.Contains(testrun.operatorVer, "1.6.0") || strings.Contains(testrun.operatorVer, "1.5.3") {
+				msg, err = oc.AsAdmin().Run("patch").Args("configmap", ppConfigMapName, "-n", opNamespace, "--type", "merge",
+					"--patch", "{\"data\":{\"DISABLECVM\":\"true\"}}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch DISABLECVM=true \n error: %v %v", msg, err))
+			}
 			//new flow for GPU prior to image building job
 			if testrun.enableGPU {
 				cmName := cloudPlatform + "-podvm-image-cm"
