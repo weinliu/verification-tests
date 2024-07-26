@@ -106,6 +106,9 @@ func runPSCommand(bastionHost string, nodeInternalIP string, command string, pri
 	} else {
 		msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+";ssh -i "+privateKeyForBastion+" -o StrictHostKeyChecking=no core@"+nodeInternalIP+" "+command).CombinedOutput()
 	}
+	if err != nil {
+		e2e.Logf("Message from bash -> %s", string(msg))
+	}
 	return string(msg), err
 }
 
