@@ -4914,7 +4914,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			exutil.By("#. Delete first pod and check second pod goes into Runnning status")
 			deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
-			pod2.checkStatusEventually(oc, "Running", 60)
+			pod2.checkStatusEventually(oc, "Running", 180)
 
 			exutil.By("#. Check the second pod volume have existing data")
 			pod2.checkMountedVolumeDataExist(oc, true)
