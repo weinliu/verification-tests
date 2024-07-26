@@ -349,11 +349,18 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	g.It("VMonly-ConnectedOnly-Author:xzha-High-70817-catalogd support setting a pull secret", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog-secret.yaml")
-			clusterextensionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
-			ns                       = "ns-70817"
-			clustercatalog           = olmv1util.ClusterCatalogDescription{
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-secret.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			ns                           = "ns-70817"
+			sa                           = "sa70817"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
 				Name:         "clustercatalog-70817-quay",
 				Imageref:     "quay.io/olmqe/olmtest-operator-index-private:nginxolm70817",
 				PullSecret:   "fake-secret-70817",
@@ -364,6 +371,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Name:             "clusterextension-70817",
 				InstallNamespace: ns,
 				PackageName:      "nginx70817",
+				SaName:           sa,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -371,6 +379,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.By("Create namespace")
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("1) Create secret")
@@ -465,11 +477,18 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	g.It("ConnectedOnly-Author:jitli-High-73289-Check the deprecation conditions and messages", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate = filepath.Join(baseDir, "clusterextension.yaml")
-			ns                       = "ns-73289"
-			clustercatalog           = olmv1util.ClusterCatalogDescription{
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			ns                           = "ns-73289"
+			sa                           = "sa73289"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
 				Name:     "clustercatalog-73289",
 				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm73289",
 				Template: clustercatalogTemplate,
@@ -480,6 +499,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				PackageName:      "nginx73289v1",
 				Channel:          "candidate-v1.0",
 				Version:          "1.0.1",
+				SaName:           sa,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -487,6 +507,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
 
 		exutil.By("Create clustercatalog")
 		defer clustercatalog.Delete(oc)
