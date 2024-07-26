@@ -1201,7 +1201,6 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 	var (
 		secretString  string
 		decodedString string
-		lines         []string
 	)
 
 	// Read peerpods-param-secret to fetch the keys
@@ -1214,40 +1213,19 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 
 	decodedString, err = decodeSecret(secretString)
 	if err != nil {
+		e2e.Logf("Error: %v CI provided peer pods secret data can't be decoded", err)
 		return "", err
 	}
 
-	decodedString = decodedString[1 : len(decodedString)-1] // removing curly braces from the string
-	lines = strings.Split(decodedString, ",")
+	//check for all the keys and empty values
+	if !(gjson.Get(decodedString, "subscriptionId").Exists() && gjson.Get(decodedString, "clientId").Exists() &&
+		gjson.Get(decodedString, "clientSecret").Exists() && gjson.Get(decodedString, "tenantId").Exists()) ||
+		gjson.Get(decodedString, "subscriptionId").String() == "" || gjson.Get(decodedString, "clientId").String() == "" ||
+		gjson.Get(decodedString, "clientSecret").String() == "" || gjson.Get(decodedString, "tenantId").String() == "" {
 
-	subscriptionId := ""
-	clientId := ""
-	clientSecret := ""
-	tenantId := ""
-
-	for _, line := range lines {
-		parts := strings.Split(line, ":")
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			if key == "\"subscriptionId\"" {
-				subscriptionId = value
-			} else if key == "\"clientId\"" {
-				clientId = value
-			} else if key == "\"clientSecret\"" {
-				clientSecret = value
-			} else if key == "\"tenantId\"" {
-				tenantId = value
-			}
-		}
-	}
-
-	// Check for Azure credentials
-	if clientId == "" || clientSecret == "" || tenantId == "" || subscriptionId == "" {
-		msg := "Azure credentials not found in the data."
+		msg := "Azure credentials not found or partial in the data."
 		return msg, fmt.Errorf("Azure credentials not found")
 	}
-
 	// create Azure specific secret file logic here
 	// Construct the secretJSON for Azure
 	secretJSON := map[string]interface{}{
@@ -1259,10 +1237,10 @@ func createAzurePeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretNam
 			"namespace": "openshift-sandboxed-containers-operator",
 		},
 		"stringData": map[string]string{
-			"AZURE_CLIENT_ID":       clientId,
-			"AZURE_CLIENT_SECRET":   clientSecret,
-			"AZURE_TENANT_ID":       tenantId,
-			"AZURE_SUBSCRIPTION_ID": subscriptionId,
+			"AZURE_CLIENT_ID":       gjson.Get(decodedString, "clientId").String(),
+			"AZURE_CLIENT_SECRET":   gjson.Get(decodedString, "clientSecret").String(),
+			"AZURE_TENANT_ID":       gjson.Get(decodedString, "tenantId").String(),
+			"AZURE_SUBSCRIPTION_ID": gjson.Get(decodedString, "subscriptionId").String(),
 		},
 	}
 
