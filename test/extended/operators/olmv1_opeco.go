@@ -589,17 +589,45 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	g.It("Author:jitli-ConnectedOnly-High-74948-catalog offer the operator content through https server", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
-			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
-			clustercatalog         = olmv1util.ClusterCatalogDescription{
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			ns                           = "ns-74948"
+			sa                           = "sa74948"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
 				Name:     "clustercatalog-74948",
-				Imageref: "quay.io/olmqe/olmtest-operator-index:nginxolm74948",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm74948",
 				Template: clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-74948",
+				InstallNamespace: ns,
+				PackageName:      "nginx74948",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.3",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
 			}
 		)
 		exutil.By("Create clustercatalog")
 		defer clustercatalog.Delete(oc)
 		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
 
 		exutil.By("Examine the service to confirm that the annotations are present")
 		describe, err := oc.WithoutNamespace().AsAdmin().Run("describe").Args("service", "catalogd-catalogserver", "-n", "openshift-catalogd").Output()
@@ -624,6 +652,11 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 		allPackageName := olmv1util.ListPackagesName(unmarshalContent.Packages)
 		o.Expect(allPackageName[0]).To(o.ContainSubstring("nginx74948"))
+
+		exutil.By("Create clusterextension to verify operator-controller has been started, appropriately loaded the CA certs")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
 	})
 
