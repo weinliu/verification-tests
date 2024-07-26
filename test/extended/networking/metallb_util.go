@@ -247,6 +247,12 @@ func createMetalLBCR(oc *exutil.CLI, metallbcr metalLBCRResource, metalLBCRTempl
 		e2e.Logf("Speaker Pods did not transition to ready state %v", err)
 		return false
 	}
+	err = waitForPodWithLabelReady(oc, metallbcr.namespace, "component=frr-k8s")
+	exutil.AssertWaitPollNoErr(err, "The pods with label component=frr-k8s are not ready")
+	if err != nil {
+		e2e.Logf("FRR k8s Pods did not transition to ready state %v", err)
+		return false
+	}
 	err = waitForPodWithLabelReady(oc, metallbcr.namespace, "component=controller")
 	exutil.AssertWaitPollNoErr(err, "The pod with label component=controller is not ready")
 	if err != nil {
@@ -259,21 +265,36 @@ func createMetalLBCR(oc *exutil.CLI, metallbcr metalLBCRResource, metalLBCRTempl
 }
 
 func validateAllWorkerNodeMCR(oc *exutil.CLI, namespace string) bool {
-	podList, err := exutil.GetAllPodsWithLabel(oc, namespace, "component=speaker")
-
-	if err != nil {
-		e2e.Logf("Unable to get list of speaker pods %s", err)
-		return false
-	}
+	var (
+		podList = []string{}
+	)
 	nodeList, err := exutil.GetClusterNodesBy(oc, "worker")
-	if len(podList) != len(nodeList) {
-		e2e.Logf("Speaker pods not scheduled on all worker nodes")
-	}
 	if err != nil {
 		e2e.Logf("Unable to get nodes to determine if node is worker node  %s", err)
 		return false
 	}
-	// Iterate over the speaker pods to validate they are scheduled on node that is worker node
+
+	speakerPodList, errSpeaker := exutil.GetAllPodsWithLabel(oc, namespace, "component=speaker")
+	if errSpeaker != nil {
+		e2e.Logf("Unable to get list of speaker pods %s", err)
+		return false
+	}
+	if len(speakerPodList) != len(nodeList) {
+		e2e.Logf("Speaker pods not scheduled on all worker nodes")
+		return false
+	}
+	frrk8sPodList, errFrrk8s := exutil.GetAllPodsWithLabel(oc, namespace, "component=frr-k8s")
+	if errFrrk8s != nil {
+		e2e.Logf("Unable to get list of frr-k8s pods %s", err)
+		return false
+	}
+	if len(frrk8sPodList) != len(nodeList) {
+		e2e.Logf("K8s FRR pods not scheduled on all worker nodes")
+		return false
+	}
+	podList = append(podList, speakerPodList[:]...)
+	podList = append(podList, frrk8sPodList[:]...)
+	// Iterate over the speaker and frr-k8s pods to validate they are scheduled on node that is worker node
 	for _, pod := range podList {
 		nodeName, _ := exutil.GetPodNodeName(oc, namespace, pod)
 		e2e.Logf("Pod %s, node name %s", pod, nodeName)

@@ -73,6 +73,8 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		o.Expect(strings.Contains(output, "ipaddresspools.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "l2advertisements.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
 
 	})
 
@@ -94,14 +96,14 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("SUCCESS - MetalLB CR Created")
-		exutil.By("Validate speaker pods scheduled on worker nodes")
+		exutil.By("Validate speaker and  frr-k8s pods scheduled on worker nodes")
 		result = validateAllWorkerNodeMCR(oc, opNamespace)
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("50944-Verify the logging level of MetalLB can be changed for debugging")
 		exutil.By("Validate log level is info")
 		level := "info"
-		components := [2]string{"controller", "speaker"}
+		components := [3]string{"controller", "speaker", "frr-k8s"}
 		var err string
 		for _, component := range components {
 			result, err = checkLogLevelPod(oc, component, opNamespace, level)
@@ -118,9 +120,12 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		dpStatus, dpStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "deployment", "controller", "--timeout", "5m").Output()
 		o.Expect(dpStatusErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(dpStatus, "successfully rolled out")).To(o.BeTrue())
-		dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", "speaker", "--timeout", "5m").Output()
-		o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
+		dsSets := [2]string{"speaker", "frr-k8s"}
+		for _, dsSet := range dsSets {
+			dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", dsSet, "--timeout", "5m").Output()
+			o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
+		}
 		level = "debug"
 		for _, component := range components {
 			result, err = checkLogLevelPod(oc, component, opNamespace, level)
@@ -234,6 +239,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		o.Expect(strings.Contains(output, "ipaddresspools.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "l2advertisements.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
 
 		exutil.By("Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -1478,6 +1485,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		o.Expect(strings.Contains(output, "ipaddresspools.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "l2advertisements.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
 
 		exutil.By("Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -1857,7 +1866,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 
 		exutil.By("10. OCPBUGS-3825 Check BGP password is not in clear text")
 		//https://issues.redhat.com/browse/OCPBUGS-3825
-		podList, podListErr := exutil.GetAllPodsWithLabel(oc, opNamespace, "component=speaker")
+		podList, podListErr := exutil.GetAllPodsWithLabel(oc, opNamespace, "component=frr-k8s")
 		o.Expect(podListErr).NotTo(o.HaveOccurred())
 		o.Expect(len(podList)).NotTo(o.Equal(0))
 		searchString := fmt.Sprintf("neighbor '%s' password <retracted>", peerIPAddress)
