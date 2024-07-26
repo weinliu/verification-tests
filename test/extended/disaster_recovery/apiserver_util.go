@@ -1,6 +1,7 @@
 package disasterrecovery
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os/exec"
@@ -36,48 +37,63 @@ var (
 // ClusterSanitycheck do sanity check on cluster.
 func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 	e2e.Logf("Running cluster sanity")
-	errProject := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
-		// Added like this to handle project exist error.
-		cmd := fmt.Sprintf(`oc new-project %s || oc project %s`, projectName, projectName)
-		_, err := exec.Command("bash", "-c", cmd).Output()
-		if err != nil {
-			return false, nil
-		}
-		e2e.Logf("oc new-project %s succeeded", projectName)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(errProject, fmt.Sprintf("oc new-project %s failed", projectName))
-	errApp := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
-		err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
-		if err != nil {
-			return false, nil
-		}
-		e2e.Logf("oc new app succeeded")
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(errApp, "oc new app failed")
-	// Increasing wait time for prow ci failures
-	errDeployment := wait.Poll(15*time.Second, 1200*time.Second, func() (bool, error) {
-		err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/hello-openshift", "-n", projectName).Execute()
-		if err != nil {
-			return false, nil
-		}
-		e2e.Logf("oc log deployment succeeded")
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(errDeployment, "oc log deployment failed")
-	gettestpod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", projectName, "--no-headers", "-o", `jsonpath={.items[0].metadata.name}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 
-	errExec := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
-		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", projectName, gettestpod, "--", "/bin/sh", "-c", `echo 'Test'`).Execute()
+	// Helper function for polling
+	pollAndLog := func(interval, timeout time.Duration, action func() error, successMsg, errorMsg string) error {
+		err := wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(cxt context.Context) (bool, error) {
+			if errDo := action(); errDo != nil {
+				return false, nil
+			}
+			e2e.Logf(successMsg)
+			return true, nil
+		})
 		if err != nil {
-			return false, nil
+			return fmt.Errorf(errorMsg)
 		}
-		e2e.Logf("oc exec succeeded")
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(errExec, "oc exec failed")
+		return nil
+	}
+
+	// Create or switch to the project
+	err := pollAndLog(10*time.Second, 600*time.Second, func() error {
+		cmd := fmt.Sprintf(`oc new-project %s --skip-config-write || oc project %s`, projectName, projectName)
+		_, err := exec.Command("bash", "-c", cmd).Output()
+		return err
+	}, fmt.Sprintf("oc new-project %s succeeded", projectName), fmt.Sprintf("oc new-project %s failed", projectName))
+	if err != nil {
+		return err
+	}
+
+	// Deploy the application
+	err = pollAndLog(10*time.Second, 600*time.Second, func() error {
+		return oc.AsAdmin().WithoutNamespace().Run("new-app").
+			Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
+	}, "oc new app succeeded", "oc new app failed")
+	if err != nil {
+		return err
+	}
+
+	// Check deployment logs
+	err = pollAndLog(15*time.Second, 900*time.Second, func() error {
+		return oc.AsAdmin().WithoutNamespace().Run("logs").
+			Args("deployment/hello-openshift", "-n", projectName).Execute()
+	}, "oc log deployment succeeded", "oc log deployment failed")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return err
+	}
+
+	// Get test pod name
+	gettestpod, err := oc.AsAdmin().WithoutNamespace().Run("get").
+		Args("pod", "-n", projectName, "--no-headers", "-o", `jsonpath={.items[0].metadata.name}`).Output()
+	if err != nil {
+		return err
+	}
+
+	// Execute command in test pod
+	err = pollAndLog(5*time.Second, 60*time.Second, func() error {
+		return oc.AsAdmin().WithoutNamespace().Run("exec").
+			Args("-n", projectName, gettestpod, "--", "/bin/sh", "-c", `echo 'Test'`).Execute()
+	}, "oc exec succeeded", "oc exec failed")
 	return err
 }
 
@@ -92,7 +108,7 @@ func ClusterHealthcheck(oc *exutil.CLI, dirname string) error {
 		return fmt.Errorf("%s: %w", "Failed to cluster health check::Abnormal cluster operators found", err)
 	}
 	// Check the load of cluster nodes
-	err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, false, func(cxt context.Context) (bool, error) {
 		_, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes.metrics").Output()
 		if err1 != nil {
 			e2e.Logf("Nodes metrics are not ready!")
@@ -115,7 +131,7 @@ func ClusterHealthcheck(oc *exutil.CLI, dirname string) error {
 // ClusterOperatorHealthcheck check abnormal operators
 func ClusterOperatorHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
 	e2e.Logf("Check the abnormal operators")
-	errCo := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errCo := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		coLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(dirname)
 		if err == nil {
 			cmd := fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
@@ -143,7 +159,7 @@ func ClusterOperatorHealthcheck(oc *exutil.CLI, waitTime int, dirname string) er
 func ClusterPodsHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
 	e2e.Logf("Check the abnormal pods")
 	var podLogs []byte
-	errPod := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errPod := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		podLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile(dirname)
 		if err == nil {
 			cmd := fmt.Sprintf(`cat %v | grep -ivE 'Running|Completed|namespace|installer' || true`, podLogFile)
@@ -166,7 +182,7 @@ func ClusterPodsHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error 
 
 // ClusterNodesHealthcheck check abnormal nodes
 func ClusterNodesHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
-	errNode := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	errNode := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
 		if err == nil {
 			if strings.Contains(output, "NotReady") || strings.Contains(output, "SchedulingDisabled") {

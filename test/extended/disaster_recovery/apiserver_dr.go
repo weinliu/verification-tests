@@ -1,6 +1,7 @@
 package disasterrecovery
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -82,9 +83,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				err = node.Start()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				time.Sleep(10 * time.Second)
-				err = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 240*time.Second, false, func(cxt context.Context) (bool, error) {
 					vmState, stateErr := node.State()
-					o.Expect(stateErr).NotTo(o.HaveOccurred())
+					if stateErr != nil {
+						return false, stateErr
+					}
 					if _, ok := startStates[vmState]; ok {
 						e2e.Logf("The leader master node %s has been started completely!", nodeName)
 						return true, nil
@@ -93,7 +96,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 						return false, nil
 					}
 				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The leader master node %s was unable to start!", nodeName))
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The leader master node %s was unable to start with error %v!", nodeName, err))
 
 				err = ClusterHealthcheck(oc, "OCP-19941/log")
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -126,57 +129,41 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		timeFirstServiceDisruption := time.Now()
 		isFirstServiceDisruption := false
 		anyDisruptionOccurred := false
-		e2e.Logf("#### Watching start time(s) :: %v ####\n", time.Now().Format("2006-01-02 15:04:05"))
+		e2e.Logf("#### Watching start time(s) :: %v ####\n", time.Now().Format(time.RFC3339))
 
-		apiserverOutageWatcher := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
-			// KAS health check
-			_, getNodeError := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
-			if getNodeError == nil {
-				e2e.Logf("%v :: Succeeded in obtaining the status of nodes!!\n", time.Now().Format(time.RFC3339))
-			} else {
-				if !isFirstServiceDisruption {
-					isFirstServiceDisruption = true
-					timeFirstServiceDisruption = time.Now()
+		apiserverOutageWatcher := wait.Poll(3*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+			checkHealth := func(description string, command []string) error {
+				_, err := exec.Command(command[0], command[1:]...).Output()
+				if err != nil {
+					e2e.Logf("%v :: %s failed :: %s\n", time.Now().Format(time.RFC3339), description, err)
+					if !isFirstServiceDisruption {
+						isFirstServiceDisruption = true
+						timeFirstServiceDisruption = time.Now()
+					}
+					return err
 				}
-				e2e.Logf("%v :: Failed to get the status of nodes!! :: %s\n", time.Now().Format(time.RFC3339), getNodeError)
+				e2e.Logf("%v :: %s succeeded\n", time.Now().Format(time.RFC3339), description)
+				return nil
 			}
-			// OAUTH health check
-			_, loginError := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", "system:admin", "-n", "default").Output()
-			if loginError == nil {
-				e2e.Logf("%v :: User admin login succeeded\n", time.Now().Format(time.RFC3339))
-			} else {
-				if !isFirstServiceDisruption {
-					isFirstServiceDisruption = true
-					timeFirstServiceDisruption = time.Now()
-				}
-				e2e.Logf("%v :: User admin login failed :: %s\n", time.Now().Format(time.RFC3339), loginError)
-			}
-			// OAS health check
-			_, getProjectError := exec.Command("bash", "-c", "oc get project/openshift-apiserver 2>&1").Output()
-			if getProjectError == nil {
-				e2e.Logf("%v :: Succeeded in obtaining the status of project openshift-apiserver!! \n", time.Now().Format(time.RFC3339))
-			} else {
-				if !isFirstServiceDisruption {
-					isFirstServiceDisruption = true
-					timeFirstServiceDisruption = time.Now()
-				}
-				e2e.Logf("%v :: Failed to get the status of project openshift-apiserver!! :: %s\n", time.Now().Format(time.RFC3339), getProjectError)
-			}
+
+			getNodeError := checkHealth("KAS health check: obtaining the status of nodes", []string{"oc", "get", "node"})
+			loginError := checkHealth("OAUTH health check: user admin login", []string{"oc", "login", "-u", "system:admin", "-n", "default"})
+			getProjectError := checkHealth("OAS health check: obtaining the status of project openshift-apiserver", []string{"bash", "-c", "oc get project/openshift-apiserver 2>&1"})
+
 			if isFirstServiceDisruption {
 				anyDisruptionOccurred = true
 				e2e.Logf("The first disruption of openshift-apiserver occurred :: %v", timeFirstServiceDisruption.Format(time.RFC3339))
 				// Check if all apiservers are ready.
 				if getNodeError == nil && loginError == nil && getProjectError == nil {
-					_, getNodeError := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
-					_, loginError := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", "system:admin", "-n", "default").Output()
-					_, getProjectError := exec.Command("bash", "-c", "oc get project/openshift-apiserver 2>&1").Output()
-					if getNodeError == nil && loginError == nil && getProjectError == nil {
+					if checkHealth("Re-checking node status for KAS health", []string{"oc", "get", "node"}) == nil &&
+						checkHealth("Re-checking user admin login for OAUTH health", []string{"oc", "login", "-u", "system:admin", "-n", "default"}) == nil &&
+						checkHealth("Re-checking project openshift-apiserver status for OAS health", []string{"bash", "-c", "oc get project/openshift-apiserver 2>&1"}) == nil {
 						serviceRecoveryTime := time.Now()
 						e2e.Logf("#### The cluster apiservers have been recovered at time :: %v ####\n", serviceRecoveryTime.Format("2006-01-02 15:04:05"))
 						diff := serviceRecoveryTime.Sub(timeFirstServiceDisruption)
 						e2e.Logf("#### Apiservers outage time(s) :: %f ####\n", diff.Seconds())
 						if int(diff.Seconds()) > expectedOutageTime {
-							e2e.Failf("The cluster apiservers outage time lasted %d longer than we expected %d", int(diff.Seconds()), expectedOutageTime)
+							return false, fmt.Errorf(fmt.Sprintf("service of apiserver disruption time is %d", int(diff.Seconds())))
 						}
 						return true, nil
 					}
@@ -188,7 +175,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		if !anyDisruptionOccurred {
 			e2e.Logf("No disruptions occurred during the test.")
 		} else {
-			exutil.AssertWaitPollNoErr(apiserverOutageWatcher, "The cluster outage time exceeded the expected duration!")
+			exutil.AssertWaitPollNoErr(apiserverOutageWatcher, fmt.Sprintf("%v, expected time: %v", apiserverOutageWatcher, expectedOutageTime))
 		}
 
 		exutil.By("4. During the leader master node is unavailable, verify the cluster availability")
@@ -220,9 +207,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		// Wait for some time and then check the status to avoid a fake start
 		time.Sleep(10 * time.Second)
-		err = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 240*time.Second, false, func(cxt context.Context) (bool, error) {
 			vmState, stateErr := node.State()
-			o.Expect(stateErr).NotTo(o.HaveOccurred())
+			if stateErr != nil {
+				return false, stateErr
+			}
 			if _, ok := startStates[vmState]; ok {
 				e2e.Logf("The leader master node %s has been started completely!", nodeName)
 				return true, nil
@@ -335,12 +324,14 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			if shutdownType == 2 {
 				duration = time.Duration(480)
 			}
-			err = wait.Poll(10*time.Second, duration*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, duration*time.Second, false, func(cxt context.Context) (bool, error) {
 				poweroffDone := false
 				for i := 0; i < len(nodes); i++ {
 					vmState, stateErr := nodes[i].State()
 					nodeName := nodes[i].GetName()
-					o.Expect(stateErr).NotTo(o.HaveOccurred())
+					if stateErr != nil {
+						return false, stateErr
+					}
 					if _, ok := stopStates[vmState]; ok {
 						n += 1
 						// Remove completely stopped node
@@ -368,12 +359,14 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 					e2e.Failf("Failed to start the node %s", node.GetName())
 				}
 			}
-			err = wait.Poll(10*time.Second, duration*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, duration*time.Second, false, func(cxt context.Context) (bool, error) {
 				poweronDone := false
 				for i := 0; i < len(nodes); i++ {
 					vmState, stateErr := nodes[i].State()
 					nodeName := nodes[i].GetName()
-					o.Expect(stateErr).NotTo(o.HaveOccurred())
+					if stateErr != nil {
+						return false, stateErr
+					}
 					if _, ok := startStates[vmState]; ok {
 						n += 1
 						// Remove completely stopped node
