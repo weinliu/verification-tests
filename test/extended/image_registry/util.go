@@ -1079,6 +1079,15 @@ func (limitsrc *limitSource) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", limitsrc.template, "-p", "NAME="+limitsrc.name, "NAMESPACE="+limitsrc.namespace, "SIZE="+limitsrc.size)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+func checkDnsCO(oc *exutil.CLI) {
+	expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+	err := waitCoBecomes(oc, "ingress", 240, expectedStatus)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = waitCoBecomes(oc, "dns", 240, expectedStatus)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
 
 func waitRouteReady(route string) {
 	curlCmd := "curl -k https://" + route

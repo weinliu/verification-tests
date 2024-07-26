@@ -377,6 +377,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		checkDnsCO(oc)
 		waitRouteReady(refRoute)
 
 		g.By("Add system:image-pruner role to user")
@@ -539,6 +540,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		checkDnsCO(oc)
 		waitRouteReady(refRoute)
 
 		g.By("Prune the images")
@@ -729,6 +731,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		checkDnsCO(oc)
 		waitRouteReady(regRoute)
 
 		manifestList := getManifestList(oc, "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", `""`)

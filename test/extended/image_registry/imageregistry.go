@@ -710,6 +710,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		host := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		checkDnsCO(oc)
 		waitRouteReady(host)
 
 		g.By("Get token from secret")
@@ -3053,6 +3054,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		checkDnsCO(oc)
 		waitRouteReady(regRoute)
 		getURL := "curl -kv " + "https://" + regRoute + "/v2/_catalog?n=5"
 		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
@@ -3080,6 +3082,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		checkDnsCO(oc)
 		waitRouteReady(regRoute)
 
 		g.By("Create prometheus-scraper cluster role")
@@ -3409,6 +3412,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}()
 		createRouteExposeRegistry(oc)
 		regRoute := getRegistryDefaultRoute(oc)
+		checkDnsCO(oc)
 		waitRouteReady(regRoute)
 
 		g.By("Check options --public")
@@ -3935,6 +3939,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			routeName := getRandomString()
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 			refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+			checkDnsCO(oc)
 			waitRouteReady(refRoute)
 
 			g.By("Prune the images")
