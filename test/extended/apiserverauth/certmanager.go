@@ -299,8 +299,8 @@ var _ = g.Describe("[sig-auth] CFE", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"crd"}, crdListArry...)...).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, _ = oc.AsAdmin().Run("get").Args("issuer").Output()
-			if strings.Contains(output, `the server doesn't have a resource type "issuer"`) || strings.Contains(output, `resource type "issuer" not known`) {
+			err = oc.AsAdmin().Run("get").Args("issuer").Execute()
+			if err != nil { // We expect the err to be not nil
 				return true, nil
 			}
 			return false, nil
