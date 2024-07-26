@@ -1546,7 +1546,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: tagao@redhat.com
-		g.It("Author:tagao-Medium-43311-Allow sending alerts to external Alertmanager for user workload monitoring components - disabled in-cluster alertmanager [Serial]", func() {
+		g.It("Author:tagao-ConnectedOnly-Medium-43311-Allow sending alerts to external Alertmanager for user workload monitoring components - disabled in-cluster alertmanager [Serial]", func() {
 			var (
 				InClusterMonitoringCM = filepath.Join(monitoringBaseDir, "disLocalAlert-setExternalAlert-prometheus.yaml")
 				testAlertmanager      = filepath.Join(monitoringBaseDir, "example-alertmanager.yaml")
@@ -1564,7 +1564,24 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
 
 			exutil.By("check alertmanager pod is created")
-			exutil.AssertPodToBeReady(oc, "alertmanager-test-alertmanager-0", "openshift-user-workload-monitoring")
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+				podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
+				if err != nil || strings.Contains(podStats, "not found") {
+					return false, nil
+				}
+				if err != nil || strings.Contains(podStats, "Init:0/1") {
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "pod not created or ready")
+
+			exutil.By("skip case on disconnected cluster")
+			cmCheck, _ := oc.AsAdmin().Run("get").Args("cm", "cluster-monitoring-config", "-n", "openshift-monitoring", "-ojson").Output()
+			poCheck, _ := oc.AsAdmin().Run("get").Args("pod", "-n", "openshift-monitoring").Output()
+			if !strings.Contains(cmCheck, "telemeter") && !strings.Contains(poCheck, "telemeter") {
+				g.Skip("This case can not execute on a disconnected cluster!")
+			}
 
 			exutil.By("create example PrometheusRule under user namespace")
 			oc.SetupProject()
