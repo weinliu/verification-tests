@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		g.By("Wait for all the kubelet service on all control plane hosts are ready")
 		for i := 0; i < len(masterNodeList); i++ {
-			err := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			err := wait.Poll(20*time.Second, 900*time.Second, func() (bool, error) {
 				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNodeList[i]).Output()
 				if err != nil {
 					e2e.Logf("Fail to get master, error: %s. Trying again", err)
