@@ -14,7 +14,7 @@ describe('logs related features', () => {
   after(() => {
     cy.exec(`oc delete project ${testName}`);
     cy.cliLogout();
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`, {failOnNonZeroExit: false});
   });
   it('(OCP-69245,yanpzhan,UserInterface) Add option to enable/disable tailing to Pod log viewer', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
