@@ -4507,11 +4507,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"trustedCA":{"name":"not-exist-ca"}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].message}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, `failed to get trusted CA "not-exist-ca": configmap "not-exist-ca" not found`) {
-			e2e.Failf("The image registry should report error when trustedCA is not found")
-		}
+		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			output, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].message}").Output()
+			if errGet != nil {
+				return false, errGet
+			}
+			if !strings.Contains(output, `failed to get trusted CA "not-exist-ca": configmap "not-exist-ca" not found`) {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The image registry should report error when trustedCA is not found")
+
 	})
 
 	g.It("Author:xiuwang-Medium-67714-Could get the correct digest when import images with the same digest but different import mode at same time", func() {
