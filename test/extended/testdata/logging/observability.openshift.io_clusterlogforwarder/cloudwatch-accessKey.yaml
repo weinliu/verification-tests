@@ -25,7 +25,7 @@ objects:
           type: awsAccessKey
         groupName: ${GROUP_NAME}
         region: ${REGION}
-        url: ${URL}
+        url: "https://logs.${REGION}.amazonaws.com"
         tuning: ${{TUNING}}
     pipelines:
     - name: to-cloudwatch
@@ -48,8 +48,6 @@ parameters:
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME
-  value: ""
-- name: URL
   value: ""
 - name: TUNING
   value: "{}"

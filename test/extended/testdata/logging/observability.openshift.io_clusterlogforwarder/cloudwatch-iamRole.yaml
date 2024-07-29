@@ -24,7 +24,6 @@ objects:
           type: iamRole
         groupName: ${GROUP_NAME}
         region: ${REGION}
-        url: ${URL}
         tuning: ${{TUNING}}
     pipelines:
     - name: to-cloudwatch
@@ -47,8 +46,6 @@ parameters:
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME
-  value: ""
-- name: URL
   value: ""
 - name: TUNING
   value: "{}"
