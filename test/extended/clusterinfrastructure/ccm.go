@@ -169,9 +169,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 		g.By("Check the security group has also been deleted")
 		err = wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 			sg, err1 := awsClient.GetSecurityGroupByGroupID(sgId)
-			if strings.Contains(err1.Error(), "InvalidGroup.NotFound") {
-				e2e.Logf("security group has been deleted")
-				return true, nil
+			if err1 != nil {
+				if strings.Contains(err1.Error(), "InvalidGroup.NotFound") {
+					e2e.Logf("security group has been deleted")
+					return true, nil
+				}
+				e2e.Logf("error: %s", err1.Error())
+				return false, nil
 			}
 			e2e.Logf("still can get the security group, sgId is: %s", *sg.GroupId)
 			return false, nil
