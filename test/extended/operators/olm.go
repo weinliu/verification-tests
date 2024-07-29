@@ -92,6 +92,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.SkipNoOLMCore(oc)
 	})
 	g.It("Author:jiazha-ConnectedOnly-High-73201-catalog pods do not recover from node failure [Disruptive][Serial]", func() {
+		if isSNOCluster(oc) {
+			g.Skip("This is a SNO cluster, skip.")
+		}
 		exutil.By("1, create a custom catalogsource in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
