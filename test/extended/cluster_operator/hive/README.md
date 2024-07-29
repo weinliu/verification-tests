@@ -20,7 +20,6 @@ TODO: add intro for Hive-specific tags
 3. Make changes to the code. 
 4. Run static code checks, fix any errors, repeat until no errors persist:
    ```shell
-   pushd ./test/extended/cluster_operator/hive; golangci-lint run -v; popd
    go mod tidy
    ``` 
 5. Commit and push the changes to your forked repository.
@@ -111,11 +110,6 @@ making this repository unnecessarily difficult to maintain.
 For a minimal install-config, use the `minimalInstallConfig` type, and extend it if necessary.
 
 # Miscellaneous
-
-## Linting
-We utilize golangci-lint for our linting process.
-The configuration file can be found at ./.golangci-lint.yaml.
-Please ensure that you run the linters and resolve any errors before committing your changes.
 
 ## Timeouts
 The majority of test cases for Hive involve cluster installation, so special care must be taken
