@@ -257,14 +257,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		iplist := getPodIP(oc, "openshift-ingress", custContPod)
 		toDst := routehost + ":80:" + iplist[0]
 		cmdOnPod := []string{"-n", "openshift-ingress-operator", ingressContPod[0], "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		result := repeatCmd(oc, cmdOnPod, "200", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		result := adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
+		o.Expect(result).To(o.ContainSubstring("200"))
 
 		exutil.By("6. Check the reachability of the test route")
 		toDst = anyhost + ":80:" + iplist[0]
 		cmdOnPod = []string{"-n", "openshift-ingress-operator", ingressContPod[0], "--", "curl", "-I", "http://" + anyhost, "--resolve", toDst, "--connect-timeout", "10"}
-		result = repeatCmd(oc, cmdOnPod, "200", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		result = adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
+		o.Expect(result).To(o.ContainSubstring("200"))
 	})
 
 	// Test case creater: hongli@redhat.com

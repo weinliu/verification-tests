@@ -810,15 +810,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("Expose an route with the unsecure service inside the project")
 		routehost := srvName + "-" + project1 + "." + ingctrl.domain
+		toDst := routehost + ":80:" + podIP
 		output, SrvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Output()
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(srvName))
+		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
 
 		exutil.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
-		toDst := notExistRoute + ":80:" + podIP
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		repeatCmd(oc, cmdOnPod, "200", 5)
+		toDst = notExistRoute + ":80:" + podIP
 		output, err = oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.And(
@@ -1711,8 +1712,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("curl the route from the client pod")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		result := repeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		result := adminRepeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 30, 1)
+		o.Expect(result).To(o.ContainSubstring("Set-Cookie2 X=Y"))
 	})
 
 	// bugzilla: 1941592 1859134
@@ -2012,7 +2013,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
+		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlHTTPRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(strings.Contains(reqHeaders, "\"X-Ssl-Client-Cert\": \"\"")).To(o.BeTrue())
@@ -2192,7 +2193,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlReenRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlReenRouteRes, "200", 30)
+		adminRepeatCmd(oc, curlReenRouteRes, "200", 30, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlReenRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(len(regexp.MustCompile("\"X-Ssl-Client-Cert\": \"([0-9a-zA-Z]+)").FindStringSubmatch(reqHeaders)) > 0).To(o.BeTrue())
@@ -2368,7 +2369,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30)
+		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlEdgeRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(len(regexp.MustCompile("\"X-Ssl-Client-Cert\": \"([0-9a-zA-Z]+)").FindStringSubmatch(reqHeaders)) > 0).To(o.BeTrue())
@@ -2501,7 +2502,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30)
+		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlHTTPRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -2680,7 +2681,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30)
+		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlEdgeRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -2863,7 +2864,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlReenRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlReenRouteRes, "200", 30)
+		adminRepeatCmd(oc, curlReenRouteRes, "200", 30, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlReenRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -2965,7 +2966,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("send traffic and check the max http headers specified in a route")
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
-		repeatCmd(oc, cmdOnPod, "200", 5)
+		adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
 		resHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(resHeaders), "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
@@ -3251,7 +3252,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
-		repeatCmd(oc, cmdOnPod, "200", 5)
+		adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
 		reqHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(reqHeaders), "\"reqtestheader\": \"req111\"")).To(o.BeTrue())

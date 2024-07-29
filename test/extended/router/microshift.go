@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check the reachability of the host in test pod")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
 		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://service-secure1-test.example.com:443", "-k", "-I", "--resolve", "service-secure1-test.example.com:443:" + routerPodIP, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "200", 30)
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ingress-ms-reen")
@@ -93,7 +93,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
 		passRoute := passRouteHost + ":443:" + routerPodIP
 		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://" + passRouteHost + ":443", "-k", "-I", "--resolve", passRoute, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "200", 30)
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the passthrough route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-pass")
@@ -111,7 +111,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check the reachability of the host in test pod for edge route")
 		edgeRoute := edgeRouteHost + ":443:" + routerPodIP
 		curlCmd1 := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://" + edgeRouteHost + ":443", "-k", "-I", "--resolve", edgeRoute, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd1, "200", 30)
+		adminRepeatCmd(oc, curlCmd1, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the edge route is loaded in haproxy.config")
 		searchOutput1 := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-edge")
@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
 		httpRoute := httpRouteHost + ":80:" + routerPodIP
 		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "http://" + httpRouteHost + ":80", "-k", "-I", "--resolve", httpRoute, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "200", 30)
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the http route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-http")
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check the reachability of the host in test pod reen route")
 		reenRoute := reenRouteHost + ":443:" + routerPodIP
 		curlCmd1 := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://" + reenRouteHost + ":443", "-k", "-I", "--resolve", reenRoute, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd1, "200", 30)
+		adminRepeatCmd(oc, curlCmd1, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the reen route is loaded in haproxy.config")
 		searchOutput1 := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ms-reen")
@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("check the reachability of the host in test pod for http route")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
 		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "http://service-unsecure-test.example.com:80", "-k", "-I", "--resolve", "service-unsecure-test.example.com:80:" + routerPodIP, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "200", 30)
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the http route is loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, ingressPod, "cat haproxy.config", "ingress-on-microshift")
@@ -335,8 +335,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		routerPodIP := getPodv4Address(oc, routerPodName, "openshift-ingress")
 		toDst := httpRoutehost + ":80:" + routerPodIP
 		cmdOnPod := []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/index.html", "--resolve", toDst, "--connect-timeout", "10"}
-		result := repeatCmd(oc, cmdOnPod, "http-8080", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		result := adminRepeatCmd(oc, cmdOnPod, "http-8080", 30, 1)
+		o.Expect(result).To(o.ContainSubstring("http-8080"))
 		output, err = oc.Run("exec").Args(cmdOnPod...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ocp-test " + srvPodName[0] + " http-8080"))
@@ -344,12 +344,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("10. curl the second HTTP route and check the result")
 		srvPodName = getPodListByLabel(oc, e2eTestNamespace2, "name=web-server-rc")
 		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/test/index.html", "--resolve", toDst, "--connect-timeout", "10"}
-		time.Sleep(3 * time.Second)
-		result = repeatCmd(oc, cmdOnPod, "http-8080", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
-		output, err = oc.Run("exec").Args(cmdOnPod...).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Hello-OpenShift-Path-Test " + srvPodName[0] + " http-8080"))
+		result = adminRepeatCmd(oc, cmdOnPod, "http-8080", 30, 1)
+		o.Expect(result).To(o.ContainSubstring("Hello-OpenShift-Path-Test " + srvPodName[0] + " http-8080"))
 	})
 
 	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-Medium-73621-Disable/Enable namespace ownership support for router [Disruptive]", func() {
@@ -504,19 +500,19 @@ fi
 
 		exutil.By("Curl the HTTP route")
 		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 		exutil.By("Curl the Edge route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 		exutil.By("Curl the Passthrough route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 		exutil.By("Curl the REEN route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 	})
 
 	g.It("MicroShiftOnly-Author:shudili-High-73202-Add configurable listening IP addresses and listening ports", func() {
@@ -586,19 +582,19 @@ fi
 
 			exutil.By("Curl the http route with destination " + lbIP)
 			routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30)
+			adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 			exutil.By("Curl the Edge route with destination " + lbIP)
 			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30)
+			adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 			exutil.By("Curl the Pass-through route with destination " + lbIP)
 			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30)
+			adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 			exutil.By("Curl the REEN route with destination " + lbIP)
 			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30)
+			adminRepeatCmd(oc, routeReq, "200", 30, 1)
 		}
 	})
 
@@ -711,19 +707,19 @@ fi
 
 		exutil.By("Curl the http route")
 		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost + ":10080", "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 		exutil.By("Curl the Edge route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost + ":10443", "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 		exutil.By("Curl the Passthrough route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost + ":10443", "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 
 		exutil.By("Curl the REEN route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost + ":10443", "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30)
+		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 	})
 
 	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-High-73209-Add enable/disable option for default router [Disruptive]", func() {

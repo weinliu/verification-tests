@@ -230,7 +230,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		operatorPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")
 		routehost := "canary-openshift-ingress-canary.apps." + baseDomain
 		cmdOnPod := []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-k", "https://" + routehost, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "Healthcheck requested", 30)
+		adminRepeatCmd(oc, cmdOnPod, "Healthcheck requested", 30, 1)
 
 		exutil.By("Patch the ingress controller and deleting the canary route")
 		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
@@ -247,7 +247,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("Check whether the canary route status cleared and confirm the route is not accessible")
 		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", true)
 		cmdOnPod = []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "503", 50)
+		adminRepeatCmd(oc, cmdOnPod, "503", 30, 1)
 
 		// Wait may be about 300 seconds
 		exutil.By("Check the ingress operator status to confirm it is in degraded state cause by canary route")

@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlCmd := []string{"-n", oc.Namespace(), podName[0], "--", "curl", "https://service-secure-" + oc.Namespace() +
 			".ocp50842." + baseDomain + ":443", "-k", "-I", "--resolve", "service-secure-" + oc.Namespace() + ".ocp50842." +
 			baseDomain + ":443:" + controlerIP, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "200", 30)
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
 		searchOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", "ingress-dca-opq")
@@ -247,7 +247,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlCmd := []string{"-n", oc.Namespace(), podName[0], "--", "curl", "https://service-secure1-" + oc.Namespace() +
 			".ocp51980." + baseDomain + ":443", "-k", "-I", "--resolve", "service-secure1-" + oc.Namespace() + ".ocp51980." +
 			baseDomain + ":443:" + controlerIP, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "200", 30)
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 	})
 
 	// bugzilla: 2025624

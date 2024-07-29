@@ -1370,17 +1370,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
 		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		output := ""
-		for i := 0; i < 6; i++ {
-			result := repeatCmd(oc, cmdOnPod, "200", 5)
-			o.Expect(result).To(o.ContainSubstring("passed"))
-			output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", project1, syslogPodName).Output()
-			if strings.Contains(output, ep) {
-				break
-			} else {
-				time.Sleep(1 * time.Second)
-			}
-		}
+		result := adminRepeatCmd(oc, cmdOnPod, "200", 30, 5)
+		o.Expect(result).To(o.ContainSubstring("200"))
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", project1, syslogPodName).Output()
 		o.Expect(output).To(o.MatchRegexp("haproxy.+" + ep + ".+HTTP/1.1"))
 	})
 
@@ -1438,8 +1430,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
 		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		result := repeatCmd(oc, cmdOnPod, "200", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		result := adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
+		o.Expect(result).To(o.ContainSubstring("200"))
 		output := waitRouterLogsAppear(oc, routerpod, ep)
 		log := regexp.MustCompile("haproxy.+" + ep + ".+HTTP/1.1").FindStringSubmatch(output)[0]
 		o.Expect(len(log) > 1).To(o.BeTrue())

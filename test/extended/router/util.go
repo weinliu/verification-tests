@@ -1446,20 +1446,9 @@ func getRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonPath, matchStr
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route details are not reachable"))
 }
 
-// this function is to make sure a command such as curl the route successfully, for the route isn't reachable occasionally
-func repeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, repeatTimes int) string {
-	result := "failed"
-	for i := 0; i < repeatTimes; i++ {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
-		if strings.Contains(output, expectOutput) {
-			result = "passed"
-			break
-		}
-	}
-	return result
-}
-
-func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration time.Duration) {
+func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration time.Duration, repeatTimes int) string {
+	result := ""
+	matchTime := 0
 	waitErr := wait.Poll(5*time.Second, duration*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
 		if err != nil {
@@ -1467,13 +1456,22 @@ func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration 
 			return false, nil
 		}
 		if strings.Contains(output, expectOutput) {
-			return true, nil
+			matchTime++
+			e2e.Logf("executed cmd %v successfully for %i times, expect %i times...", cmd, matchTime, repeatTimes)
+			if matchTime == repeatTimes {
+				result = output
+				return true, nil
+			} else {
+				return false, nil
+			}
 		} else {
+			matchTime = 0
 			return false, nil
 		}
 
 	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully"))
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully for the desired times"))
+	return result
 }
 
 // this function is to check whether given string is present or not in a list
