@@ -3,6 +3,7 @@ package workloads
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -277,5 +278,55 @@ var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 		} else if strings.Contains(oupErr, "certificate signed by unknown authority") {
 			e2e.Failf("Hit certificate signed error %v", err)
 		}
+	})
+
+	//yinzhou@redhat.com
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-ConnectedOnly-Low-11111-Buildconfig should support providing cpu and memory usage", func() {
+		if !isEnabledCapability(oc, "ImageRegistry") {
+			g.Skip("Skip for the test due to image registry not installed")
+
+		}
+
+		g.By("Create new namespace")
+		oc.SetupProject()
+		ns11111 := oc.Namespace()
+
+		fileBaseDir := exutil.FixturePath("testdata", "workloads/ocp11111")
+		quotaFile := filepath.Join(fileBaseDir, "quota.yaml")
+		limitFile := filepath.Join(fileBaseDir, "limits.yaml")
+		appFile := filepath.Join(fileBaseDir, "application-template-with-resources.json")
+		g.By("Create the quota and limit")
+		err := oc.AsAdmin().Run("create").Args("-f", quotaFile, "-n", ns11111).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().Run("create").Args("-f", limitFile, "-n", ns11111).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the template and app")
+		err = oc.Run("create").Args("-f", appFile, "-n", ns11111).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("new-app").Args("--template=ruby-helloworld-sample-with-resources", "--import-mode=PreserveOriginal", "-n", ns11111).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertPodOutput(oc, "openshift.io/build.name=ruby-sample-build-1", ns11111, "Running")
+		g.By("Check the build should has cpu and memory setting")
+		output, err := oc.Run("get").Args("pod", "-l", "openshift.io/build.name=ruby-sample-build-1", "-n", ns11111, "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "cpu: 120m")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "memory: 256Mi")).To(o.BeTrue())
+		g.By("Patch buildconfig to use higher cpu and memory setting")
+		patchCpu := `[{"op": "replace", "path": "/spec/resources/limits/cpu", "value":"1020m"}]`
+		err = oc.Run("patch").Args("bc", "ruby-sample-build", "-n", ns11111, "--type=json", "-p", patchCpu).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchMemory := `[{"op": "replace", "path": "/spec/resources/limits/memory", "value":"760Mi"}]`
+		err = oc.Run("patch").Args("bc", "ruby-sample-build", "-n", ns11111, "--type=json", "-p", patchMemory).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("delete").Args("build", "--all", "-n", ns11111).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Make sure when exceed limit should failed to create pod")
+		err = oc.Run("start-build").Args("ruby-sample-build", "-n", ns11111).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		buildOut, err := oc.Run("describe").Args("build", "-n", ns11111).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(buildOut, "Failed creating build pod")).To(o.BeTrue())
+		o.Expect(strings.Contains(buildOut, "maximum cpu usage per Pod")).To(o.BeTrue())
 	})
 })
