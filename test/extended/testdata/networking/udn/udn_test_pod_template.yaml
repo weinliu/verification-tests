@@ -8,8 +8,6 @@ objects:
   metadata:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
-    annotations:
-      k8s.v1.cni.cncf.io/networks: "${ANNOTATION}" 
     labels:
       name: "${LABEL}"
   spec:
@@ -27,5 +25,4 @@ objects:
 parameters:
 - name: NAME
 - name: NAMESPACE
-- name: ANNOTATION
 - name: LABEL

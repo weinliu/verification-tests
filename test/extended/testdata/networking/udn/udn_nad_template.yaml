@@ -10,7 +10,7 @@ objects:
     config: |2
       {
         "cniVersion": "0.3.1",
-        "name": "${NADNAME}",
+        "name": "${NAD_NETWORK_NAME}",
         "type": "ovn-k8s-cni-overlay",
         "topology":"${TOPOLOGY}",
         "subnets": "${SUBNET}",
@@ -22,6 +22,7 @@ objects:
 parameters:
 - name: NADNAME
 - name: NAMESPACE
+- name: NAD_NETWORK_NAME
 - name: TOPOLOGY
 - name: SUBNET
 - name: MTU
