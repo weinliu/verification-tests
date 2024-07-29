@@ -146,7 +146,7 @@ func waitForPodReady(oc *exutil.CLI, pod string, ns string) {
 	pollErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector="+pod, "-n", ns).Output()
 		if err != nil || strings.Contains(cmdOut, "No resources found") {
-			e2e.Logf("error: %v, keep trying!", err)
+			e2e.Logf("No pod found, keep trying! error: %v, cmdOut: %s", err, cmdOut)
 			return false, nil
 		}
 		return true, nil
