@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("WRS-Author:qitang-LEVEL0-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
+	g.It("Author:qitang-WRS-CPaasrunBoth-Critical-53817-vector to lokistack[Slow][Serial]", func() {
 		platform := exutil.CheckPlatform(oc)
 		if exutil.IsSTSCluster(oc) && platform == "aws" {
 			g.Skip("skip this case on sts cluster, the test is replaced by OCP-71534 now ")
@@ -172,7 +172,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
 	})
 
-	g.It("CPaasrunBoth-ConnectedOnly-Author:ikanse-LEVEL0-Critical-51974-Vector Forward logs to Cloudwatch by logtype", func() {
+	g.It("Author:ikanse-CPaasrunBoth-ConnectedOnly-Critical-51974-Vector Forward logs to Cloudwatch by logtype", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")
@@ -228,7 +228,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunBoth-ConnectedOnly-Author:qitang-LEVEL0-Critical-53691-Forward logs to Google Cloud Logging using Service Account authentication.", func() {
+	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-53691-Forward logs to GCL using Service Account authentication.", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "gcp" {
 			g.Skip("Skip for the platform is not GCP!!!")
@@ -287,7 +287,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	//author anli@redhat.com
-	g.It("CPaasrunBoth-ConnectedOnly-Author:anli-Critical-71772-Forward logs to Azure Log Analytics -- full options", func() {
+	g.It("Author:anli-CPaasrunBoth-ConnectedOnly-Critical-71772-Forward logs to az Log Analytics -- full options", func() {
 		cloudType := getAzureCloudType(oc)
 		acceptedCloud := strings.ToLower(cloudType) == "azurepubliccloud" || strings.ToLower(cloudType) == "azureusgovernmentcloud"
 		if !acceptedCloud {
