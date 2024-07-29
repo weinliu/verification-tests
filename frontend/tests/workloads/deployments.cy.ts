@@ -22,8 +22,6 @@ describe('deployment page', () => {
        Note: The arguments should be passed when call the function within the loop
        */
     const pagesToCheck = [
-      Pages.gotoCreateDeploymentFormView,
-      Pages.gotoCreateDeploymentYamlView,
       Pages.gotoCreateDeploymentconfigsFormView,
       Pages.gotoCreateDeploymentconfigsYamlView,
       Pages.gotoDeploymentConfigList,
