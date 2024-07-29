@@ -716,6 +716,131 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	})
 
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-Medium-74923-no two ClusterExtensions can manage the same underlying object", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			ns1                          = "ns-74923-1"
+			ns2                          = "ns-74923-2"
+			sa1                          = "sa74923-1"
+			sa2                          = "sa74923-2"
+			saCrb1                       = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa1,
+				Namespace: ns1,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			saCrb2 = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa2,
+				Namespace: ns2,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-74923-1",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm74923",
+				Template: clustercatalogTemplate,
+			}
+			clusterextension1 = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-74923-1",
+				PackageName:      "nginx74923",
+				InstallNamespace: ns1,
+				SaName:           sa1,
+				Template:         clusterextensionTemplate,
+			}
+			clusterextension2 = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-74923-2",
+				PackageName:      "nginx74923",
+				InstallNamespace: ns2,
+				SaName:           sa2,
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("1. Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("2. Create clusterextension1")
+		exutil.By("2.1 Create namespace 1")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns1, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns1)).To(o.BeTrue())
+
+		exutil.By("2.2 Create SA for clusterextension1")
+		defer saCrb1.Delete(oc)
+		saCrb1.Create(oc)
+
+		exutil.By("2.3 Create clusterextension1")
+		defer clusterextension1.Delete(oc)
+		clusterextension1.Create(oc)
+		o.Expect(clusterextension1.ResolvedBundle).To(o.ContainSubstring("v1.0.2"))
+
+		exutil.By("3 Create clusterextension2")
+		exutil.By("3.1 Create namespace 2")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns2, "--ignore-not-found").Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns2)).To(o.BeTrue())
+
+		exutil.By("3.2 Create SA for clusterextension2")
+		defer saCrb2.Delete(oc)
+		saCrb2.Create(oc)
+
+		exutil.By("3.3 Create clusterextension2")
+		defer clusterextension2.Delete(oc)
+		clusterextension2.CreateWithoutCheck(oc)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension2.Name, "-o", "jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(message, "InstallationFailed:Unable to continue with install: CustomResourceDefinition") {
+				e2e.Logf("status is %s", message)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "clusterextension2 should not be installed")
+		clusterextension2.Delete(oc)
+		clusterextension1.Delete(oc)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "nginxolm74923s.cache.example.com").Output()
+			if !strings.Contains(status, "NotFound") {
+				e2e.Logf(status)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "crd nginxolm74923s.cache.example.com is not deleted")
+
+		exutil.By("4 Create crd")
+		crdFilePath := filepath.Join(baseDir, "crd-nginxolm74923.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "nginxolm74923s.cache.example.com").Output()
+		oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crdFilePath).Output()
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "nginxolm74923s.cache.example.com").Output()
+			if strings.Contains(status, "NotFound") {
+				e2e.Logf(status)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "crd nginxolm74923s.cache.example.com is not deleted")
+
+		clusterextension1.CreateWithoutCheck(oc)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension1.Name, "-o", "jsonpath={.status.conditions[*].message}")
+			if !strings.Contains(message, "InstallationFailed:Unable to continue with install: CustomResourceDefinition") {
+				e2e.Logf("status is %s", message)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "clusterextension1 should not be installed")
+
+	})
+
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-69193-OLMv1 major version zero", func() {
 		exutil.SkipOnProxyCluster(oc)
