@@ -4849,6 +4849,24 @@ desiredState:
 			"The inforamtion of %s is not the expected one after restoring the initial content", rEnvFile)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-75258-No ordering cycle issues should exist [Disruptive]", func() {
+		exutil.By("Check that there are no ordering cycle problems in the nodes")
+		for _, node := range exutil.OrFail[[]Node](NewNodeList(oc.AsAdmin()).GetAllLinux()) {
+			if node.HasTaintEffectOrFail("NoExecute") {
+				logger.Infof("Skipping node %s since it is tainted with NoExecute and no debug pod can be run in it", node.GetName())
+				continue
+			}
+			logger.Infof("Checking node %s", node.GetName())
+			// For debugging purposes. We ignore the error here
+			logMsg, _ := node.DebugNodeWithChroot("sh", "-c", `journalctl -o with-unit | grep "Found ordering cycle" -A 10 || true`)
+			logger.Infof("Orderging cycle messages: %s", logMsg)
+
+			o.Expect(node.DebugNodeWithChroot(`journalctl`, `-o`, `with-unit`)).NotTo(o.ContainSubstring("Found ordering cycle"),
+				"Ordering cycle problems found in node %s", node.GetName())
+		}
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
