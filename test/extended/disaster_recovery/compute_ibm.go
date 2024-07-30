@@ -41,7 +41,7 @@ func newIbmInstance(oc *exutil.CLI, client *exutil.IBMSession, ibmRegion, ibmVpc
 }
 
 func (ibm *ibmInstance) GetInstanceID() (string, error) {
-	instanceID, err := exutil.GetIBMInstanceID(ibm.client, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
+	instanceID, err := exutil.GetIBMInstanceID(ibm.client, ibm.oc, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
 	if err == nil {
 		e2e.Logf("VM instance name: %s", instanceID)
 		return instanceID, nil
@@ -50,20 +50,20 @@ func (ibm *ibmInstance) GetInstanceID() (string, error) {
 }
 
 func (ibm *ibmInstance) Start() error {
-	instanceID, idErr := exutil.GetIBMInstanceID(ibm.client, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
+	instanceID, idErr := exutil.GetIBMInstanceID(ibm.client, ibm.oc, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
 	o.Expect(idErr).NotTo(o.HaveOccurred())
 	return exutil.StartIBMInstance(ibm.client, instanceID)
 
 }
 
 func (ibm *ibmInstance) Stop() error {
-	instanceID, idErr := exutil.GetIBMInstanceID(ibm.client, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
+	instanceID, idErr := exutil.GetIBMInstanceID(ibm.client, ibm.oc, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
 	o.Expect(idErr).NotTo(o.HaveOccurred())
 	return exutil.StopIBMInstance(ibm.client, instanceID)
 }
 
 func (ibm *ibmInstance) State() (string, error) {
-	instanceID, idErr := exutil.GetIBMInstanceID(ibm.client, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
+	instanceID, idErr := exutil.GetIBMInstanceID(ibm.client, ibm.oc, ibm.ibmRegion, ibm.ibmVpcName, ibm.nodeName)
 	o.Expect(idErr).NotTo(o.HaveOccurred())
 	return exutil.GetIBMInstanceStatus(ibm.client, instanceID)
 }

@@ -118,7 +118,7 @@ func StartIBMInstance(session *IBMSession, instanceID string) error {
 }
 
 // GetIBMInstanceID get IBM instance id
-func GetIBMInstanceID(session *IBMSession, region string, vpcName string, instanceID string) (string, error) {
+func GetIBMInstanceID(session *IBMSession, oc *CLI, region string, vpcName string, instanceID string) (string, error) {
 	err := SetVPCServiceURLForRegion(session, region)
 	if err != nil {
 		return "", fmt.Errorf("Failed to set vpc api service url :: %v", err)
@@ -141,7 +141,11 @@ func GetIBMInstanceID(session *IBMSession, region string, vpcName string, instan
 	}
 
 	if vpcID == "" {
-		return "", fmt.Errorf("VPC not found: %s", vpcName)
+		// Attempt to extract VPC ID using the DNS base domain
+		vpcID, err = ExtractVPCIDFromBaseDomain(oc, vpcs.Vpcs)
+		if err != nil {
+			return "", fmt.Errorf("VPC not found: %s", vpcName)
+		}
 	}
 
 	// Set the VPC ID in the listInstancesOptions
@@ -309,4 +313,29 @@ func GetIBMPowerVsInstanceInfo(powerClient *IBMPowerVsSession, instanceName stri
 	}
 
 	return "", "", nil
+}
+
+// ExtractVPCIDFromBaseDomain extracts the VPC ID based on the DNS base domain.
+func ExtractVPCIDFromBaseDomain(oc *CLI, vpcs []vpcv1.VPC) (string, error) {
+	baseDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
+	if err != nil {
+		return "", fmt.Errorf("error retrieving DNS base domain: %v", err)
+	}
+	baseDomain = strings.TrimSpace(baseDomain)
+	parts := strings.Split(baseDomain, ".")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("invalid base domain format")
+	}
+	resourceGroupName := parts[0]
+	e2e.Logf("Extracted resource group name from DNS base domain: %s", resourceGroupName)
+	expectedVpcName := resourceGroupName + "-vpc"
+	// Find the VPC with the matching name
+	for _, vpc := range vpcs {
+		if *vpc.Name == expectedVpcName {
+			vpcID := *vpc.ID
+			e2e.Logf("VpcID found for VpcName %s: %s", *vpc.Name, vpcID)
+			return vpcID, nil
+		}
+	}
+	return "", fmt.Errorf("VPC not found: %s", expectedVpcName)
 }
