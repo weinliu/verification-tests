@@ -1120,7 +1120,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 	})
 
-	g.It("Author:memodi-NonPreRelease-Medium-67619-Verify NetObserv flows are seen on SRIOV interfaces [Serial]", func() {
+	g.It("Author:memodi-NonPreRelease-Medium-67619-Verify NetObserv flows are seen on SRIOV interfaces [Serial] [Flaky]", func() {
 		var (
 			netobservNS     = "openshift-netobserv-operator"
 			NOPackageName   = "netobserv-operator"
