@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -111,6 +112,64 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			"MSOC creation using wrong image type builder should be forbidden")
 
 		logger.Infof("OK!")
+	})
+
+	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Critical-74645-Panic Condition for Non-Matching MOSC Resources [Disruptive]", func() {
+
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+
+		var (
+			infraMcpName = "infra"
+			moscName     = "tc-74645"
+			mcc          = NewController(oc.AsAdmin())
+		)
+		exutil.By("Create New Custom MCP")
+		defer DeleteCustomMCP(oc.AsAdmin(), infraMcpName)
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), infraMcpName, 1)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Could not create a new custom MCP")
+		node := infraMcp.GetNodesOrFail()[0]
+		logger.Infof("%s", node.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Configure OCB functionality for the new infra MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), moscName, infraMcpName, nil)
+		defer DisableOCL(mosc)
+		// remove after this bug is fixed OCPBUGS-36810
+		defer func() {
+			logger.Infof("Configmaps should also be deleted ")
+			cmList := NewConfigMapList(mosc.GetOC(), MachineConfigNamespace).GetAllOrFail()
+			for _, cm := range cmList {
+				if strings.Contains(cm.GetName(), "rendered-") {
+					o.Expect(cm.Delete()).Should(o.Succeed(), "The ConfigMap related to MOSC has not been removed")
+				}
+			}
+		}()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build has been triggered")
+		o.Eventually(infraMcp.GetLatestMachineOSBuildOrFail(), "5m", "20s").Should(Exist(),
+			"No build was created when OCB was enabled")
+		mosb := infraMcp.GetLatestMachineOSBuildOrFail()
+		o.Eventually(mosb.GetPod).Should(Exist(),
+			"No build pod was created when OCB was enabled")
+		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
+			"MachineOSBuild didn't report that the build has begun")
+		logger.Infof("OK!\n")
+
+		exutil.By("Delete the MCOS and check it is deleted")
+		o.Expect(mosc.CleanupAndDelete()).To(o.Succeed(), "Error cleaning up %s", mosc)
+		ValidateMOSCIsGarbageCollected(mosc, infraMcp)
+		o.Expect(mosb).NotTo(Exist(), "Build is not deleted")
+		o.Expect(mosc).NotTo(Exist(), "MOSC is not deleted")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check MCC Logs for Panic is not produced")
+		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
+
+		o.Expect(mcc.GetPreviousLogs()).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC pod after deleting OCB resources")
+		o.Expect(mcc.GetLogs()).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC pod after deleting OCB resources")
+		logger.Infof("OK!\n")
 	})
 })
 

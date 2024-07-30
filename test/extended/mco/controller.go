@@ -167,3 +167,18 @@ func (mcc Controller) GetNode() (*Node, error) {
 
 	return NewNode(mcc.oc, nodeName), nil
 }
+
+// GetPreviousLogs returns previous logs of mcc pod
+func (mcc Controller) GetPreviousLogs() (string, error) {
+	cachedPodName, err := mcc.GetCachedPodName()
+	if err != nil {
+		return "", err
+	}
+	if cachedPodName == "" {
+		err := fmt.Errorf("Cannot get controller pod name. Failed getting MCO controller logs")
+		logger.Errorf("Error getting controller pod name. Error: %s", err)
+		return "", err
+	}
+
+	return NewNamespacedResource(mcc.oc, "pod", MachineConfigNamespace, cachedPodName).Logs("-p")
+}
