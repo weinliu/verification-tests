@@ -1114,11 +1114,16 @@ func choseOneWorkerNodeToRunCase(oc *exutil.CLI, choseBy int) string {
 	var tunedNodeName string
 	if exutil.IsMachineSetExist(oc) {
 		machinesetName := getWorkerMachinesetName(oc, choseBy)
-		e2e.Logf("machinesetName is %v ", machinesetName)
-		machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
-		if !strings.Contains(machinesetReplicas, "0") {
-			tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
-			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		e2e.Logf("machinesetName is %v in choseOneWorkerNodeToRunCase", machinesetName)
+
+		if len(machinesetName) != 0 {
+			machinesetReplicas := exutil.GetRelicasByMachinesetName(oc, machinesetName)
+			if !strings.Contains(machinesetReplicas, "0") {
+				tunedNodeName = exutil.GetNodeNameByMachineset(oc, machinesetName)
+				o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+			} else {
+				tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, choseBy)
+			}
 		} else {
 			tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, choseBy)
 		}
@@ -1127,4 +1132,35 @@ func choseOneWorkerNodeToRunCase(oc *exutil.CLI, choseBy int) string {
 		e2e.Logf("the tunedNodeName that we get inside choseOneWorkerNodeToRunCase when choseBy %v is %v ", choseBy, tunedNodeName)
 	}
 	return tunedNodeName
+}
+
+func getTotalLinuxMachinesetNum(oc *exutil.CLI) int {
+
+	var (
+		machinesetNum   int
+		linuxMachineset = make([]string, 0, 3)
+	)
+	machinesetList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-machine-api", "machineset", "-ojsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//workerMachineSets := strings.ReplaceAll(machinesetList, " ", "\n")
+	workerMachineSets := strings.Split(machinesetList, " ")
+	e2e.Logf("workerMachineSets is %v in getWorkerMachinesetName", workerMachineSets)
+
+	if len(workerMachineSets) > 0 {
+		for i := 0; i < len(workerMachineSets); i++ {
+			//Skip windows worker node
+			// if (!strings.Contains(workerMachineSets[i], "windows") || !strings.Contains(workerMachineSets[i], "edge")) && strings.Contains(workerMachineSets[i], "worker") {
+			if strings.Contains(workerMachineSets[i], "windows") || strings.Contains(workerMachineSets[i], "edge") {
+				e2e.Logf("skip windows or egde node [ %v ] in getWorkerMachinesetName", workerMachineSets[i])
+			} else {
+				linuxMachineset = append(linuxMachineset, workerMachineSets[i])
+			}
+		}
+		e2e.Logf("linuxMachineset is %v in getWorkerMachinesetName", linuxMachineset)
+		machinesetNum = len(linuxMachineset)
+
+	}
+	e2e.Logf("machinesetNum is %v in getWorkerMachinesetName", machinesetNum)
+	return machinesetNum
 }

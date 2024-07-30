@@ -651,7 +651,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
 		exutil.By("Verified the cpu allow list in cgroup black list for tuned ...")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
-		versionReg := regexp.MustCompile(`4.12|4.13|4.14|4.15`)
+		versionReg := regexp.MustCompile(`4.12|4.13|4.14`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if versionReg.MatchString(clusterVersion) {
 			o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "openshift-tuned", nodeCPUCoresInt)).To(o.Equal(true))
@@ -839,7 +839,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Verify nto tuned logs
 		exutil.By("Check NTO tuned pod logs to confirm if user-max-net-namespaces applied")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `user-max-net-namespaces applied|\(user-max-net-namespaces\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `'user-max-net-namespaces' applied|\(user-max-net-namespaces\) match`)
 		//Verify if debug is false by CR setting
 		exutil.By("Check node profile debug settings, it should be debug: false")
 		isEnableDebug = assertDebugSettings(oc, tunedNodeName, ntoNamespace, "false")
@@ -863,7 +863,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(profileCheck).To(o.Equal("user-max-net-namespaces"))
 
 		//Verify nto tuned logs
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `user-max-net-namespaces applied|\(user-max-net-namespaces\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "10", 180, `'user-max-net-namespaces' applied|\(user-max-net-namespaces\) match`)
 
 		//Verify if debug was enabled by CR setting
 		exutil.By("Check if the debug is true in node profile, the expected result should be true")
@@ -1316,7 +1316,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=kernel.pid_max", "SYSCTLVALUE1=1048575", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|active and recommended profile \(ips-host\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|\(ips-host\) match|'ips-host' applied`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -1340,7 +1340,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=-1", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert static tuning from profile 'ips-host' applied in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "20", 180, `static tuning from profile 'ips-host' applied|recommended profile \(ips-host\) matches current configuration`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "20", 180, `'ips-host' applied|recommended profile \(ips-host\) matches current configuration`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "True")).To(o.Equal(true))
@@ -1358,7 +1358,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=868686", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|active and recommended profile \(ips-host\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|\(ips-host\) match|'ips-host' applied`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -1759,7 +1759,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		exutil.By("Assert recommended profile (openshift-profile-stuck) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-profile-stuck\) matches current configuration`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-profile-stuck\) matches current configuration|'openshift-profile-stuck' applied`)
 
 		exutil.By("Check if new NTO profile openshift-profile-stuck was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-profile-stuck")
@@ -3494,13 +3494,21 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("Author:liqcui-Medium-74507-NTO openshift-node-performance-uuid have the same priority warning keeps printing[Disruptive]", func() {
 
 		isSNO := exutil.IsSNOCluster(oc)
-
+		var firstNodeName string
+		var secondNodeName string
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
-		firstNodeName := choseOneWorkerNodeToRunCase(oc, 0)
-		secondNodeName := choseOneWorkerNodeToRunCase(oc, 1)
+		machinesetName := getTotalLinuxMachinesetNum(oc)
+		e2e.Logf("len(machinesetName) is %v", machinesetName)
+		if machinesetName > 1 {
+			firstNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+			secondNodeName = choseOneWorkerNodeToRunCase(oc, 1)
+		} else {
+			firstNodeName = choseOneWorkerNodeNotByMachineset(oc, 0)
+			secondNodeName = choseOneWorkerNodeNotByMachineset(oc, 1)
+		}
 
 		firstNodeLabel := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker-tuning")
 		secondNodeLabel := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker-priority18")
