@@ -492,7 +492,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that kubelet was restarted")
-		o.Expect(node.GetUnitActiveEnterTime("kubelet.service")).To(o.BeTemporally(">", startTime),
+		o.Eventually(node.GetUnitActiveEnterTime, "6m", "20s").WithArguments("kubelet.service").Should(o.BeTemporally(">", startTime),
 			"Kubelet service was NOT restarted, but it should be")
 		logger.Infof("OK!\n")
 
@@ -500,7 +500,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		o.Expect(waitForAllMCOPodsReady(oc.AsAdmin(), 10*time.Minute)).To(o.Succeed(),
 			"MCO pods are not Ready after cert rotation")
 
-		o.Expect(mco).NotTo(BeDegraded(), "Error! %s is degraded:\n%s", mco, mco.PrettyString())
+		o.Eventually(mco, "5m", "20s").ShouldNot(BeDegraded(), "Error! %s is degraded:\n%s", mco, mco.PrettyString())
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that all cluster operators are healthy")

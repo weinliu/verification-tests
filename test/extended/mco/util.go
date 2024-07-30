@@ -544,6 +544,10 @@ func preChecks(oc *exutil.CLI) {
 
 	}
 
+	logger.Infof("Wait for MCC to get the leader lease")
+	o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "6m", "20s").Should(o.BeTrue(),
+		"The controller pod didn't acquire the lease properly. Cannot execute any test case if the controller is not active")
+
 	logger.Infof("End of MCO Preconditions\n")
 }
 
@@ -813,14 +817,16 @@ func removeMCOPods(oc *exutil.CLI, argsSelector ...string) error {
 // waitForAllMCOPodsReady waits
 func waitForAllMCOPodsReady(oc *exutil.CLI, timeout time.Duration) error {
 	logger.Infof("Waiting for MCO pods to be runnging and ready in namespace %s", MachineConfigNamespace)
+	mcoPodsList := NewNamespacedResourceList(oc.AsAdmin(), "pod", MachineConfigNamespace)
+	mcoPodsList.PrintDebugCommand()
 	immediate := false
 	waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, timeout, immediate,
 		func(_ context.Context) (bool, error) {
-			status, err := NewNamespacedResourceList(oc.AsAdmin(), "pod", MachineConfigNamespace).
-				Get(`{.items[*].status.conditions[?(@.type=="Ready")].status}`)
+			status, err := mcoPodsList.Get(`{.items[*].status.conditions[?(@.type=="Ready")].status}`)
 
 			if err != nil {
-				return false, err
+				logger.Errorf("Problems getting pods info. Trying again")
+				return false, nil
 			}
 
 			if strings.Contains(status, "False") {
@@ -1287,10 +1293,10 @@ func getCertsFromKubeconfig(kubeconfig string) (string, error) {
 
 // checkAllOperatorsHealthy fails the test if any ClusterOperator resource is degraded
 func checkAllOperatorsHealthy(oc *exutil.CLI, timeout, poll string) {
-	ops, err := NewResourceList(oc, "co").GetAll()
-	o.Expect(err).NotTo(o.HaveOccurred(), "Could not get a list with all the clusteroperator resources")
-
 	o.Eventually(func(gm o.Gomega) { // Passing o.Gomega as parameter we can use assertions inside the Eventually function without breaking the retries.
+		ops, err := NewResourceList(oc, "co").GetAll()
+		gm.Expect(err).NotTo(o.HaveOccurred(), "Could not get a list with all the clusteroperator resources")
+
 		for _, op := range ops {
 			gm.Expect(&op).NotTo(BeDegraded(), "%s is Degraded!. \n%s", op.PrettyString())
 		}
@@ -1299,9 +1305,14 @@ func checkAllOperatorsHealthy(oc *exutil.CLI, timeout, poll string) {
 			"There are degraded ClusterOperators!")
 }
 
+// IsSNO returns true if the cluster is a SNO cluster
+func IsSNO(oc *exutil.CLI) bool {
+	return len(exutil.OrFail[[]Node](NewNodeList(oc.AsAdmin()).GetAll())) == 1
+}
+
+// SkipIfSNO skips the test case if the cluster is a SNO cluster
 func SkipIfSNO(oc *exutil.CLI) {
-	numNodes := len(exutil.OrFail[[]Node](NewNodeList(oc.AsAdmin()).GetAll()))
-	if numNodes == 1 {
+	if IsSNO(oc) {
 		g.Skip("There is only 1 node in the cluster. This test is not supported in SNO clusters")
 	}
 }

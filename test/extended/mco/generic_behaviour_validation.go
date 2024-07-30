@@ -190,6 +190,8 @@ func (v *UpdateBehaviourValidator) Initialize(mcp *MachineConfigPool, nodes []No
 	// If no node is provided we test only the first node to be updated in the pool
 	if len(nodes) == 0 {
 		v.checkedNodes = []Node{v.mcp.GetSortedNodesOrFail()[0]}
+	} else {
+		v.checkedNodes = nodes
 	}
 
 	logger.Infof("Start capturing events in nodes")

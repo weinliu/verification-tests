@@ -306,7 +306,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		defer mc.delete()
 		mc.create()
 
-		wMcp.waitForComplete()
+		mcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that nodes are not drained nor rebooted")
@@ -334,7 +334,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		exutil.By("Delete the MC with the new authorized keys")
 		mc.delete()
 
-		wMcp.waitForComplete()
+		mcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the new authorized keys are removed but the original keys are still present")

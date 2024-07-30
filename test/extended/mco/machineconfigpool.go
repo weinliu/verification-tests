@@ -220,6 +220,7 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 	var (
 		totalNodes   int
 		masterAdjust = 1.0
+		snoModifier  = 0
 	)
 
 	o.Eventually(func() int {
@@ -242,7 +243,12 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 		masterAdjust = 1.3 // if the pool is the master pool, we wait an extra 30% time
 	}
 
-	return int(float64(totalNodes*mcp.MinutesWaitingPerNode) * masterAdjust)
+	// Because of https://issues.redhat.com/browse/OCPBUGS-37501 in SNO MCPs can take up to 3 minutes more to be updated because the MCC is not taking the lease properly
+	if IsSNO(mcp.GetOC().AsAdmin()) {
+		snoModifier = 3
+	}
+
+	return int(float64(totalNodes*mcp.MinutesWaitingPerNode)*masterAdjust) + snoModifier
 }
 
 // SetWaitingTimeForKernelChange increases the time that the MCP will wait for the update to be executed
@@ -437,10 +443,22 @@ func (mcp *MachineConfigPool) GetCoreOsNodes() ([]Node, error) {
 	return mcp.GetNodesByLabel("node.openshift.io/os_id=rhcos")
 }
 
-// GetCoreOsNodesOrFail returns a list with the nodes that belong to the machine config pool and fail the test if any error happened
+// GetCoreOsNodesOrFail returns a list with the coreos nodes that belong to the machine config pool and fail the test if any error happened
 func (mcp *MachineConfigPool) GetCoreOsNodesOrFail() []Node {
 	ns, err := mcp.GetCoreOsNodes()
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Cannot get the coreOS nodes in %s MCP", mcp.GetName())
+	return ns
+}
+
+// GetRhelNodes returns a list with the rhel nodes that belong to the machine config pool
+func (mcp *MachineConfigPool) GetRhelNodes() ([]Node, error) {
+	return mcp.GetNodesByLabel("node.openshift.io/os_id=rhel")
+}
+
+// GetRhelNodesOrFail returns a list with the rhel nodes that belong to the machine config pool and fail the test if any error happened
+func (mcp *MachineConfigPool) GetRhelNodesOrFail() []Node {
+	ns, err := mcp.GetRhelNodes()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Cannot get the rhel nodes in %s MCP", mcp.GetName())
 	return ns
 }
 

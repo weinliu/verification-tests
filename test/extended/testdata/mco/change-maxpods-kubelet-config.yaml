@@ -10,8 +10,10 @@ objects:
     spec:
       machineConfigPoolSelector:
         matchLabels:
-          "pools.operator.machineconfiguration.openshift.io/worker": ""
+          pools.operator.machineconfiguration.openshift.io/${POOL}: ''
       kubeletConfig:
         maxPods: 500
 parameters:
   - name: NAME
+  - name: POOL
+    value: worker

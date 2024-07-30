@@ -72,6 +72,16 @@ func (mcc Controller) GetIgnoredLogs() string {
 // GetLogs returns the MCO controller logs. Logs generated before calling the function "IgnoreLogsBeforeNow" will not be returned
 // This function can return big log so, please, try not to print the returned value in your tests
 func (mcc Controller) GetLogs() (string, error) {
+	podAllLogs, err := mcc.GetRawLogs()
+	if err != nil {
+		return "", err
+	}
+	// Remove the logs before the check point
+	return strings.Replace(podAllLogs, mcc.logsCheckPoint, "", 1), nil
+}
+
+// GetRawLogs return the controller pod's logs without removing the ignored logs part
+func (mcc Controller) GetRawLogs() (string, error) {
 	cachedPodName, err := mcc.GetCachedPodName()
 	if err != nil {
 		return "", err
@@ -86,8 +96,18 @@ func (mcc Controller) GetLogs() (string, error) {
 		logger.Errorf("Error getting log lines. Error: %s", err)
 		return "", err
 	}
-	// Remove the logs before the check point
-	return strings.Replace(podAllLogs, mcc.logsCheckPoint, "", 1), nil
+
+	return podAllLogs, nil
+}
+
+// HasAcquiredLease returns true if the controller acquired the lease properly
+func (mcc Controller) HasAcquiredLease() (bool, error) {
+	podAllLogs, err := mcc.GetRawLogs()
+	if err != nil {
+		return false, err
+	}
+
+	return strings.Contains(podAllLogs, "successfully acquired lease"), nil
 }
 
 // GetLogsAsList returns the MCO controller logs as a list strings. One string per line

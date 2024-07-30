@@ -10,7 +10,7 @@ objects:
     spec:
       machineConfigPoolSelector:
         matchLabels:
-          pools.operator.machineconfiguration.openshift.io/worker: ''
+          pools.operator.machineconfiguration.openshift.io/${POOL}: ''
       containerRuntimeConfig:
         pidsLimit: 2048
         logLevel: debug
@@ -18,3 +18,5 @@ objects:
         logSizeMax: "-1"
 parameters:
   - name: NAME
+  - name: POOL
+    value: worker

@@ -74,16 +74,17 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:rioliu-Longduration-NonPreRelease-Critical-42361-add chrony systemd config [Disruptive]", func() {
 		exutil.By("create new mc to apply chrony config on worker nodes")
-		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
+		mcp := GetCompactCompatiblePool(oc)
+		node := mcp.GetSortedNodesOrFail()[0]
 		mcName := "ztc-42361-change-workers-chrony-configuration"
 		mcTemplate := "change-workers-chrony-configuration.yaml"
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate(mcTemplate)
 
 		defer mc.delete()
 		mc.create()
 
-		exutil.By("get one worker node to verify the config changes")
-		stdout, err := workerNode.DebugNodeWithChroot("cat", "/etc/chrony.conf")
+		exutil.By("get one node to verify the config changes")
+		stdout, err := node.DebugNodeWithChroot("cat", "/etc/chrony.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		logger.Infof(stdout)
 		o.Expect(stdout).Should(
@@ -123,6 +124,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-LEVEL0-NonPreRelease-Longduration-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
+		if IsCompactOrSNOCluster(oc) {
+			g.Skip("This test case cannot be executed in SNO or Compact clusters")
+		}
 		exutil.By("get worker node to change the label")
 		nodeList := NewNodeList(oc)
 		workerNode := nodeList.GetAllLinuxWorkerNodesOrFail()[0]
@@ -201,18 +205,17 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42365-add real time kernel argument [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-		platform := exutil.CheckPlatform(oc)
-		if platform == GCPPlatform || platform == AWSPlatform {
-			workerNode := skipTestIfOsIsNotCoreOs(oc)
-			textToVerify := TextToVerify{
-				textToVerifyForMC:   "realtime",
-				textToVerifyForNode: "PREEMPT_RT",
-				needBash:            true,
-			}
-			createMcAndVerifyMCValue(oc, "realtime kernel", "set-realtime-kernel", workerNode, textToVerify, "uname -a")
-		} else {
-			g.Skip("AWS or GCP platform is required to execute this test case as currently kernel real time argument is only supported by these platforms!")
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
+		coreOSMcp := GetCoreOsCompatiblePool(oc)
+
+		node := coreOSMcp.GetCoreOsNodesOrFail()[0]
+		textToVerify := TextToVerify{
+			textToVerifyForMC:   "realtime",
+			textToVerifyForNode: "PREEMPT_RT",
+			needBash:            true,
 		}
+
+		createMcAndVerifyMCValue(oc, "realtime kernel", "set-realtime-kernel", node, textToVerify, "uname -a")
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-67787-switch kernel type to 64k-pages for clusters with arm64 nodes [Disruptive]", func() {
@@ -240,12 +243,16 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-LEVEL0-Longduration-NonPreRelease-Critical-42364-add selinux kernel argument [Disruptive]", func() {
-		workerNode := skipTestIfOsIsNotCoreOs(oc)
-		textToVerify := TextToVerify{
-			textToVerifyForMC:   "enforcing=0",
-			textToVerifyForNode: "enforcing=0",
-		}
-		createMcAndVerifyMCValue(oc, "Kernel argument", "change-worker-kernel-selinux", workerNode, textToVerify, "cat", "/rootfs/proc/cmdline")
+		var (
+			coreOSMcp    = GetCoreOsCompatiblePool(oc)
+			node         = coreOSMcp.GetCoreOsNodesOrFail()[0]
+			textToVerify = TextToVerify{
+				textToVerifyForMC:   "enforcing=0",
+				textToVerifyForNode: "enforcing=0",
+			}
+		)
+
+		createMcAndVerifyMCValue(oc, "Kernel argument", "change-worker-kernel-selinux", node, textToVerify, "cat", "/rootfs/proc/cmdline")
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-67825-Use duplicated kernel arguments[Disruptive]", func() {
@@ -259,10 +266,12 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42367-add extension to RHCOS [Disruptive]", func() {
 		var (
-			mcp                = GetCoreOsCompatiblePool(oc.AsAdmin())
+			coreOSMcp          = GetCoreOsCompatiblePool(oc.AsAdmin())
 			mcName             = "change-worker-extension-usbguard"
 			mcTemplate         = "change-worker-extension-usbguard.yaml"
+			skipDrainChecks    = IsSNO(oc.AsAdmin()) // SNO clusters should NOT drain the nodes before rebooting them. The validator is not prepared for that.
 			behaviourValidator = UpdateBehaviourValidator{
+				SkipDrainNodesValidation: skipDrainChecks,
 				PreRebootMCDLogsCheckers: []PreRebootMCDLogChecker{
 					{
 						Desc:     "Check that extensions are extracted using podman",
@@ -281,11 +290,11 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			}
 		)
 
-		mcp.SetWaitingTimeForExtensionsChange()
-		behaviourValidator.Initialize(mcp, nil)
+		coreOSMcp.SetWaitingTimeForExtensionsChange()
+		behaviourValidator.Initialize(coreOSMcp, coreOSMcp.GetCoreOsNodesOrFail())
 
 		exutil.By("Create a MC to deploy a usbguard extension")
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate(mcTemplate)
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, coreOSMcp.GetName()).SetMCOTemplate(mcTemplate)
 		mc.skipWaitForMcp = true
 		defer mc.delete()
 		mc.create()
@@ -297,7 +306,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 
 		var (
-			workerNode                   = skipTestIfOsIsNotCoreOs(oc)
+			coreOSMcp                    = GetCoreOsCompatiblePool(oc.AsAdmin())
+			node                         = coreOSMcp.GetCoreOsNodesOrFail()[0]
 			stepText                     = "available extensions"
 			mcName                       = "change-worker-all-extensions"
 			allExtensions                = []string{"usbguard", "kerberos", "kernel-devel", "sandboxed-containers"}
@@ -311,11 +321,11 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 			cmd = append([]string{"rpm", "-q"}, expectedRpmInstalledPackages...)
 		)
-		createMcAndVerifyMCValue(oc, stepText, mcName, workerNode, textToVerify, cmd...)
+		createMcAndVerifyMCValue(oc, stepText, mcName, node, textToVerify, cmd...)
 
 		exutil.By("Verify that extension packages where uninstalled after MC deletion")
 		for _, pkg := range expectedRpmInstalledPackages {
-			o.Expect(workerNode.RpmIsInstalled(pkg)).To(
+			o.Expect(node.RpmIsInstalled(pkg)).To(
 				o.BeFalse(),
 				"Package %s should be uninstalled when we remove the extensions MC", pkg)
 		}
@@ -323,6 +333,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-43310-add kernel arguments, kernel type and extension to the RHCOS and RHEL [Disruptive]", func() {
+		if IsCompactOrSNOCluster(oc.AsAdmin()) {
+			g.Skip("The cluster is SNO/Compact. This test cannot be executed in SNO/Compact clusters")
+		}
 		// skip if not amd64. realtime kernel is not supported.
 		architecture.SkipNonAmd64SingleArch(oc)
 
@@ -380,17 +393,20 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42368-add max pods to the kubelet config [Disruptive]", func() {
 		exutil.By("create kubelet config to add 500 max pods")
-		kcName := "change-maxpods-kubelet-config"
-		kcTemplate := generateTemplateAbsolutePath(kcName + ".yaml")
-		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		var (
+			mcp        = GetCompactCompatiblePool(oc.AsAdmin())
+			node       = mcp.GetSortedNodesOrFail()[0]
+			kcName     = "change-maxpods-kubelet-config"
+			kcTemplate = generateTemplateAbsolutePath(kcName + ".yaml")
+			kc         = NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		)
+
 		defer func() {
 			kc.DeleteOrFail()
-			mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcp.waitForComplete()
 		}()
-		kc.create()
+		kc.create("POOL=" + mcp.GetName())
 		kc.waitUntilSuccess("10s")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 		logger.Infof("Kubelet config is created successfully!")
 
@@ -400,8 +416,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Max pods are verified in the created kubelet config!")
 
 		exutil.By("Check kubelet config in the worker node")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		maxPods, err := workerNode.DebugNodeWithChroot("cat", "/etc/kubernetes/kubelet.conf")
+		maxPods, err := node.DebugNodeWithChroot("cat", "/etc/kubernetes/kubelet.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(maxPods).Should(o.Or(o.ContainSubstring("\"maxPods\": 500"), o.ContainSubstring("maxPods: 500")))
 		logger.Infof("Max pods are verified in the worker node!")
@@ -409,28 +424,30 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42369-add container runtime config [Disruptive]", func() {
 
-		allRhelOs := NewNodeList(oc).GetAllRhelWokerNodesOrFail()
-		if len(allRhelOs) > 0 {
-			g.Skip("ctrcfg test cannot be executed on rhel node")
+		var (
+			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
+			node   = mcp.GetSortedNodesOrFail()[0]
+			crName = "change-ctr-cr-config"
+		)
+
+		if len(mcp.GetRhelNodesOrFail()) > 0 {
+			// ctrcfg test cannot be executed on rhel nodes
+			mcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		}
 
 		exutil.By("Create container runtime config")
-		crName := "change-ctr-cr-config"
 		crTemplate := generateTemplateAbsolutePath(crName + ".yaml")
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 		defer func() {
 			cr.DeleteOrFail()
-			mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcp.waitForComplete()
 		}()
-		cr.create()
-		mcp := NewMachineConfigPool(cr.oc.AsAdmin(), MachineConfigPoolWorker)
+		cr.create("POOL=" + mcp.GetName())
 		mcp.waitForComplete()
 		logger.Infof("Container runtime config is created successfully!")
 
 		exutil.By("Check container runtime config values in the created config")
-		crOut := cr.GetOrFail(`{.spec}`)
-		o.Expect(crOut).Should(
+		o.Expect(cr.Get(`{.spec}`)).Should(
 			o.And(
 				o.ContainSubstring(`"logLevel":"debug"`),
 				o.ContainSubstring(`"logSizeMax":"-1"`),
@@ -439,13 +456,13 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Container runtime config values are verified in the created config!")
 
 		exutil.By("Check container runtime config values in the worker node")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		crStorageOut, err := workerNode.DebugNodeWithChroot("head", "-n", "7", "/etc/containers/storage.conf")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(crStorageOut).Should(o.ContainSubstring("size = \"8G\""))
-		crConfigOut, err := workerNode.DebugNodeWithChroot("crio", "config")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(crConfigOut).Should(
+		o.Expect(
+			node.DebugNodeWithChroot("head", "-n", "7", "/etc/containers/storage.conf"),
+		).Should(o.ContainSubstring("size = \"8G\""))
+
+		o.Expect(
+			node.DebugNodeWithChroot("crio", "config"),
+		).Should(
 			o.And(
 				o.ContainSubstring("log_level = \"debug\""),
 				o.ContainSubstring("pids_limit = 2048")))
@@ -460,7 +477,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		jcName := "change-worker-jrnl-configuration"
 		jcTemplate := jcName + ".yaml"
 		journaldConf := []string{"CONFIGURATION=" + conf}
-		jc := NewMachineConfig(oc.AsAdmin(), jcName, MachineConfigPoolWorker).SetMCOTemplate(jcTemplate)
+		mcp := GetCompactCompatiblePool(oc.AsAdmin())
+		jc := NewMachineConfig(oc.AsAdmin(), jcName, mcp.GetName()).SetMCOTemplate(jcTemplate)
 		jc.parameters = journaldConf
 		defer jc.delete()
 		jc.create()
@@ -473,11 +491,11 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Journald config is verified in the created machine config!")
 
 		exutil.By("Check journald config values in the worker node")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		node := mcp.GetSortedNodesOrFail()[0]
 		o.Expect(err).NotTo(o.HaveOccurred())
-		journaldConfOut, err := workerNode.DebugNodeWithChroot("cat", "/etc/systemd/journald.conf")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(journaldConfOut).Should(
+		o.Expect(
+			node.DebugNodeWithChroot("cat", "/etc/systemd/journald.conf"),
+		).Should(
 			o.And(
 				o.ContainSubstring("RateLimitInterval=1s"),
 				o.ContainSubstring("RateLimitBurst=10000"),
@@ -4828,7 +4846,7 @@ desiredState:
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the content was not changed after the node reboot")
-		o.Expect(rEnvFile.Read()).To(o.And(
+		o.Eventually(rEnvFile.Read, "15m", "20s").Should(o.And(
 			HaveContent(newContent),
 			HaveOwner(initialUser),
 			HaveGroup(initialGroup),
@@ -4837,11 +4855,11 @@ desiredState:
 		logger.Infof("OK!\n")
 
 		exutil.By("Restore initial content")
-		o.Expect(rEnvFile.PushNewTextContent(initialContent)).To(o.Succeed(),
+		o.Eventually(rEnvFile.PushNewTextContent, "5m", "20s").WithArguments(initialContent).Should(o.Succeed(),
 			"Error writing the initial content in %s", rEnvFile)
 		o.Expect(node.Reboot()).To(o.Succeed(),
 			"Error rebooting %s", node)
-		o.Expect(rEnvFile.Read()).To(o.And(
+		o.Eventually(rEnvFile.Read, "15m", "20s").Should(o.And(
 			HaveContent(initialContent),
 			HaveOwner(initialUser),
 			HaveGroup(initialGroup),
@@ -5039,17 +5057,17 @@ func skipTestIfImageContentSourcePolicyExists(oc *exutil.CLI) {
 func createMcAndVerifyIgnitionVersion(oc *exutil.CLI, stepText, mcName, ignitionVersion string) {
 	var (
 		mcTemplate        = "change-worker-ign-version.yaml"
-		wMcp              = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mcp               = GetCompactCompatiblePool(oc.AsAdmin())
 		expectedRDMessage = `parsing Ignition config failed: (unknown|invalid) version\. Supported spec versions: 2\.2, 3\.0, 3\.1, 3\.2, 3\.3, 3\.4$`
 		expectedRDReason  = "^$" // empty string
 	)
 	exutil.By(fmt.Sprintf("Create machine config with %s", stepText))
 
-	mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+	mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate(mcTemplate)
 	mc.parameters = []string{"IGNITION_VERSION=" + ignitionVersion}
 	mc.skipWaitForMcp = true
 
-	validateMcpRenderDegraded(mc, wMcp, expectedRDMessage, expectedRDReason)
+	validateMcpRenderDegraded(mc, mcp, expectedRDMessage, expectedRDReason)
 }
 
 // verifyRenderedMcs verifies that the resources provided in the parameter "allRes" have created a

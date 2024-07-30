@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
@@ -41,6 +42,8 @@ var _ = g.Describe("[sig-mco] MCO Layering", func() {
 
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 		// Because of https proxies using their own user-ca certificate, we need to take into account the openshift-config-user-ca-bundle.crt file
+		coreOSMcp := GetCoreOsCompatiblePool(oc.AsAdmin())
+		node := coreOSMcp.GetCoreOsNodesOrFail()[0]
 		dockerFileCommands := `
 RUN mkdir /etc/tc_54085 && chmod 3770 /etc/tc_54085 && ostree container commit
 
@@ -59,13 +62,12 @@ RUN update-ca-trust && \
 `
 		// Capture current rpm-ostree status
 		exutil.By("Capture the current ostree deployment")
-		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
-		initialBootedImage, err := workerNode.GetCurrentBootOSImage()
+		initialBootedImage, err := node.GetCurrentBootOSImage()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the initial booted image")
 		logger.Infof("OK\n")
 
 		// Build the new osImage
-		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
+		osImageBuilder := OsImageBuilderInNode{node: node, dockerFileCommands: dockerFileCommands}
 		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error creating the new osImage")
@@ -74,55 +76,55 @@ RUN update-ca-trust && \
 		// Create MC and wait for MCP
 		exutil.By("Create a MC to deploy the new osImage")
 		layeringMcName := "layering-mc"
-		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, MachineConfigPoolWorker)
+		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, coreOSMcp.GetName())
 		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		layeringMC.skipWaitForMcp = true
 
 		defer layeringMC.delete()
 		layeringMC.create()
 
-		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
-		mcp.waitForComplete()
+		coreOSMcp.waitForComplete()
 		logger.Infof("The new osImage was deployed successfully\n")
 
 		// Check rpm-ostree status
 		exutil.By("Check that the rpm-ostree status is reporting the right booted image")
-		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(digestedImage),
+		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(digestedImage),
 			"The booted image resported by rpm-ostree status is not the expected one")
 		logger.Infof("OK!\n")
 
 		// Check image content
 		exutil.By("Load remote resources to verify that the osImage content has been deployed properly")
 
-		tc54085Dir := NewRemoteFile(workerNode, "/etc/tc_54085")
-		tc54085File := NewRemoteFile(workerNode, "/etc/tc54085.txt")
-		binHelloWorld := NewRemoteFile(workerNode, "/usr/bin/tc54085_helloworld")
+		tc54085Dir := NewRemoteFile(node, "/etc/tc_54085")
+		tc54085File := NewRemoteFile(node, "/etc/tc54085.txt")
+		binHelloWorld := NewRemoteFile(node, "/usr/bin/tc54085_helloworld")
 
 		o.Expect(tc54085Dir.Fetch()).ShouldNot(o.HaveOccurred(),
-			"Error getting information about file %s in node %s", tc54085Dir.GetFullPath(), workerNode.GetName())
+			"Error getting information about file %s in node %s", tc54085Dir.GetFullPath(), node.GetName())
 		o.Expect(tc54085File.Fetch()).ShouldNot(o.HaveOccurred(),
-			"Error getting information about file %s in node %s", tc54085File.GetFullPath(), workerNode.GetName())
+			"Error getting information about file %s in node %s", tc54085File.GetFullPath(), node.GetName())
 		o.Expect(binHelloWorld.Fetch()).ShouldNot(o.HaveOccurred(),
-			"Error getting information about file %s in node %s", binHelloWorld.GetFullPath(), workerNode.GetName())
+			"Error getting information about file %s in node %s", binHelloWorld.GetFullPath(), node.GetName())
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the directory in /etc exists and has the right permissions")
 		o.Expect(tc54085Dir.IsDirectory()).To(o.BeTrue(),
-			"Error, %s in node %s is not a directory", tc54085Dir.GetFullPath(), workerNode.GetName())
+			"Error, %s in node %s is not a directory", tc54085Dir.GetFullPath(), node.GetName())
 		o.Expect(tc54085Dir.GetNpermissions()).To(o.Equal("3770"),
-			"Error, permissions of %s in node %s are not the expected ones", tc54085Dir.GetFullPath(), workerNode.GetName())
+			"Error, permissions of %s in node %s are not the expected ones", tc54085Dir.GetFullPath(), node.GetName())
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the file in /etc exists and has the right permissions")
 		o.Expect(tc54085File.GetNpermissions()).To(o.Equal("5400"),
-			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), workerNode.GetName())
+			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), node.GetName())
 		o.Expect(tc54085File.GetTextContent()).To(o.Equal("Test case 54085 test file\n"),
-			"Error, content of %s in node %s are not the expected one", tc54085File.GetFullPath(), workerNode.GetName())
+			"Error, content of %s in node %s are not the expected one", tc54085File.GetFullPath(), node.GetName())
 
 		exutil.By("Check that the file in /usr/bin exists, has the right permissions and can be executed")
 		o.Expect(binHelloWorld.GetNpermissions()).To(o.Equal("5770"),
-			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), workerNode.GetName())
+			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), node.GetName())
 
-		output, herr := workerNode.DebugNodeWithChroot("/usr/bin/tc54085_helloworld")
+		output, herr := node.DebugNodeWithChroot("/usr/bin/tc54085_helloworld")
 		o.Expect(herr).NotTo(o.HaveOccurred(),
 			"Error executing 'hello world' executable file /usr/bin/tc54085_helloworld")
 		o.Expect(output).To(o.ContainSubstring("Hello world"),
@@ -130,17 +132,17 @@ RUN update-ca-trust && \
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the tailscale rpm has been deployed")
-		tailscaledRpm, rpmErr := workerNode.DebugNodeWithChroot("rpm", "-q", "tailscale")
+		tailscaledRpm, rpmErr := node.DebugNodeWithChroot("rpm", "-q", "tailscale")
 		o.Expect(rpmErr).NotTo(o.HaveOccurred(),
-			"Error, getting the installed rpms in node %s.  'tailscale' rpm is not installed.", workerNode.GetName())
+			"Error, getting the installed rpms in node %s.  'tailscale' rpm is not installed.", node.GetName())
 		o.Expect(tailscaledRpm).To(o.ContainSubstring("tailscale-"),
-			"Error, 'tailscale' rpm is not installed in node %s", workerNode.GetName())
+			"Error, 'tailscale' rpm is not installed in node %s", node.GetName())
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the tailscaled.service unit is loaded, active and enabled")
-		tailscaledStatus, unitErr := workerNode.GetUnitStatus("tailscaled.service")
+		tailscaledStatus, unitErr := node.GetUnitStatus("tailscaled.service")
 		o.Expect(unitErr).NotTo(o.HaveOccurred(),
-			"Error getting the status of the 'tailscaled.service' unit in node %s", workerNode.GetName())
+			"Error getting the status of the 'tailscaled.service' unit in node %s", node.GetName())
 		o.Expect(tailscaledStatus).Should(
 			o.And(
 				o.ContainSubstring("tailscaled.service"),
@@ -153,41 +155,41 @@ RUN update-ca-trust && \
 		// Delete the MC and wait for MCP
 		exutil.By("Delete the MC so that the original osImage is restored")
 		layeringMC.delete()
-		mcp.waitForComplete()
+		coreOSMcp.waitForComplete()
 		logger.Infof("MC was successfully deleted\n")
 
 		// Check the rpm-ostree status after the MC deletion
 		exutil.By("Check that the original ostree deployment was restored")
-		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(initialBootedImage),
+		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(initialBootedImage),
 			"Error! the initial osImage was not properly restored after deleting the MachineConfig")
 		logger.Infof("OK!\n")
 
 		// Check the image content after the MC deletion
 		exutil.By("Check that the directory in /etc does not exist anymore")
 		o.Expect(tc54085Dir.Fetch()).Should(o.HaveOccurred(),
-			"Error, file %s should not exist in node %s, but it exists", tc54085Dir.GetFullPath(), workerNode.GetName())
+			"Error, file %s should not exist in node %s, but it exists", tc54085Dir.GetFullPath(), node.GetName())
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the file in /etc does not exist anymore")
 		o.Expect(tc54085File.Fetch()).Should(o.HaveOccurred(),
-			"Error, file %s should not exist in node %s, but it exists", tc54085File.GetFullPath(), workerNode.GetName())
+			"Error, file %s should not exist in node %s, but it exists", tc54085File.GetFullPath(), node.GetName())
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the file in /usr/bin does not exist anymore")
 		o.Expect(binHelloWorld.Fetch()).Should(o.HaveOccurred(),
-			"Error, file %s should not exist in node %s, but it exists", binHelloWorld.GetFullPath(), workerNode.GetName())
+			"Error, file %s should not exist in node %s, but it exists", binHelloWorld.GetFullPath(), node.GetName())
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the tailscale rpm is not installed anymore")
-		tailscaledRpm, rpmErr = workerNode.DebugNodeWithChroot("rpm", "-q", "tailscale")
+		tailscaledRpm, rpmErr = node.DebugNodeWithChroot("rpm", "-q", "tailscale")
 		o.Expect(rpmErr).To(o.HaveOccurred(),
-			"Error,  'tailscale' rpm should not be installed in node %s, but it is installed.\n Output %s", workerNode.GetName(), tailscaledRpm)
+			"Error,  'tailscale' rpm should not be installed in node %s, but it is installed.\n Output %s", node.GetName(), tailscaledRpm)
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the tailscaled.service is not present anymore")
-		tailscaledStatus, unitErr = workerNode.GetUnitStatus("tailscaled.service")
+		tailscaledStatus, unitErr = node.GetUnitStatus("tailscaled.service")
 		o.Expect(unitErr).To(o.HaveOccurred(),
-			"Error,  'tailscaled.service'  unit should not be available in node %s, but it is.\n Output %s", workerNode.GetName(), tailscaledStatus)
+			"Error,  'tailscaled.service'  unit should not be available in node %s, but it is.\n Output %s", node.GetName(), tailscaledStatus)
 		logger.Infof("OK!\n")
 
 	})
@@ -221,7 +223,8 @@ RUN update-ca-trust && \
 			yumRepoTemplate = generateTemplateAbsolutePath("centos.repo")
 			yumRepoFile     = "/etc/yum.repos.d/tc-54159-centos.repo"
 			proxy           = NewResource(oc.AsAdmin(), "proxy", "cluster")
-			workerNode      = NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
+			coreOSMcp       = GetCoreOsCompatiblePool(oc.AsAdmin())
+			node            = coreOSMcp.GetCoreOsNodesOrFail()[0]
 		)
 
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
@@ -230,82 +233,92 @@ RUN update-ca-trust && \
 RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && chmod 1755 /usr/bin/tc_54159_rpm_and_osimage
 `
 		// Build the new osImage
-		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
+		osImageBuilder := OsImageBuilderInNode{node: node, dockerFileCommands: dockerFileCommands}
 		digestedImage, berr := osImageBuilder.CreateAndDigestOsImage()
 		o.Expect(berr).NotTo(o.HaveOccurred(),
 			"Error creating the new osImage")
 		logger.Infof("OK\n")
 
-		// Install rpm in first worker node
+		// Install rpm in first node
 		exutil.By("Installing rpm package in first working node")
 
 		logger.Infof("Copy yum repo to node")
-		o.Expect(workerNode.CopyFromLocal(yumRepoTemplate, yumRepoFile)).
+		o.Expect(node.CopyFromLocal(yumRepoTemplate, yumRepoFile)).
 			NotTo(o.HaveOccurred(),
-				"Error copying  %s to %s in node %s", yumRepoTemplate, yumRepoFile, workerNode.GetName())
+				"Error copying  %s to %s in node %s", yumRepoTemplate, yumRepoFile, node.GetName())
 
 		// rpm-ostree only uses the proxy from the yum.repos.d configuration, it ignores the env vars.
 		logger.Infof("Configure proxy in yum")
-		_, err := workerNode.DebugNodeWithChroot("sed", "-i", "s#proxy=#proxy="+proxy.GetOrFail(`{.status.httpProxy}`)+"#g", yumRepoFile)
+		_, err := node.DebugNodeWithChroot("sed", "-i", "s#proxy=#proxy="+proxy.GetOrFail(`{.status.httpProxy}`)+"#g", yumRepoFile)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error configuring the proxy in the centos yum repo config")
 
 		defer func() {
 			logger.Infof("Start defer logic to uninstall the %s rpm", rpmName)
-			waitErr := workerNode.WaitUntilRpmOsTreeIsIdle()
+			waitErr := node.WaitUntilRpmOsTreeIsIdle()
 			if waitErr != nil {
-				workerNode.CancelRpmOsTreeTransactions()
+				node.CancelRpmOsTreeTransactions()
 			}
-			workerNode.UninstallRpm(rpmName)
-			workerNode.DebugNodeWithChroot("rm", yumRepoFile)
-			workerNode.Reboot()
+			node.UninstallRpm(rpmName)
+			node.DebugNodeWithChroot("rm", yumRepoFile)
+			node.Reboot()
+			err := node.WaitUntilNodeCanBeDebugged(10 * time.Minute)
+			if err != nil {
+				logger.Errorf("Could not reocover the node after reboot")
+			}
+			// Because of a bug in SNO after a reboot the controller cannot get the lease properly
+			// We wait until the controller gets the lease. We make sure that the next test will receive a fully clean environment with the controller ready
+			o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "10m", "20s").Should(o.BeTrue(),
+				"Controller never acquired lease after the nodes was rebooted")
+
 			// Printing the status, apart from tracing the exact status of rpm-ostree,
 			// is a way of waiting for the node to be ready after the reboot, so that the next test case
 			// can be executed without problems. Because the status cannot be retreived until the node is ready.
-			status, _ := workerNode.GetRpmOstreeStatus(false)
+			status, _ := node.GetRpmOstreeStatus(false)
 			logger.Infof(status)
 		}()
 		// We wait, but we dont fail, if it does not become idle we cancel the transaction in the installation command
-		waitErr := workerNode.WaitUntilRpmOsTreeIsIdle()
+		waitErr := node.WaitUntilRpmOsTreeIsIdle()
 		if waitErr != nil {
 			logger.Infof("rpm-ostree state is NOT IDLE. We cancel the current transactions to continue the test!!!")
-			cOut, err := workerNode.CancelRpmOsTreeTransactions()
+			cOut, err := node.CancelRpmOsTreeTransactions()
 			o.Expect(err).
 				NotTo(o.HaveOccurred(),
-					"Error cancelling transactions in node %s.\n%s", workerNode.GetName(), cOut)
+					"Error cancelling transactions in node %s.\n%s", node.GetName(), cOut)
 
 		}
-		instOut, err := workerNode.InstallRpm(rpmName)
+		instOut, err := node.InstallRpm(rpmName)
 		logger.Debugf("Install rpm output: %s", instOut)
 		o.Expect(err).
 			NotTo(o.HaveOccurred(),
-				"Error installing '%s' rpm in node %s", rpmName, workerNode.GetName())
+				"Error installing '%s' rpm in node %s", rpmName, node.GetName())
 
-		o.Expect(workerNode.Reboot()).To(o.Succeed(),
-			"Error rebooting node %s", workerNode.GetName())
+		o.Expect(node.Reboot()).To(o.Succeed(),
+			"Error rebooting node %s", node.GetName())
 
 		logger.Infof("Check that the wget binary is available")
-		whichOut, err := workerNode.DebugNodeWithChroot("which", "wget")
-		o.Expect(err).
-			NotTo(o.HaveOccurred(),
-				"Error. wget binay is not available after installing '%s' rpm in node %s.\n%s", rpmName, workerNode.GetName(), whichOut)
+		o.Eventually(func() error {
+			_, err := node.DebugNodeWithChroot("which", "wget")
+			return err
+		}, "15m", "20s").Should(o.Succeed(),
+			"Error. wget binay is not available after installing '%s' rpm in node %s.", rpmName, node.GetName())
 
 		logger.Infof("OK\n")
 
 		// Capture current rpm-ostree status
 		exutil.By("Capture the current ostree deployment")
-		o.Eventually(workerNode.IsRpmOsTreeIdle, "10m", "20s").
+		o.Eventually(node.IsRpmOsTreeIdle, "10m", "20s").
 			Should(o.BeTrue(), "rpm-ostree status didn't become idle after installing wget")
 
-		initialDeployment, derr := workerNode.GetBootedOsTreeDeployment(false)
+		initialDeployment, derr := node.GetBootedOsTreeDeployment(false)
 		o.Expect(derr).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
+			"Error getting the rpm-ostree status value in node %s", node.GetName())
 		logger.Infof("Current status with date:\n %s", initialDeployment)
 
 		o.Expect(initialDeployment).
 			To(o.MatchRegexp("LayeredPackages: .*%s", rpmName),
 				"rpm-ostree is not reporting the installed '%s' package in the rpm-ostree status command", rpmName)
 
-		initialBootedImage, err := workerNode.GetCurrentBootOSImage()
+		initialBootedImage, err := node.GetCurrentBootOSImage()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the initial booted image")
 		logger.Infof("Initial booted osImage: %s", initialBootedImage)
 		logger.Infof("OK\n")
@@ -313,55 +326,60 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		// Create MC and wait for MCP
 		exutil.By("Create a MC to deploy the new osImage")
 		layeringMcName := "layering-mc-54159"
-		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, MachineConfigPoolWorker)
+		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, coreOSMcp.GetName())
 		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		layeringMC.skipWaitForMcp = true
 
 		defer layeringMC.delete()
 		layeringMC.create()
 
-		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
-		mcp.waitForComplete()
+		// Because of a bug in SNO after a reboot the controller cannot get the lease properly
+		// We wait until the controller gets the lease
+		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "10m", "20s").Should(o.BeTrue(),
+			"Controller never acquired lease after the nodes was rebooted")
+
+		coreOSMcp.waitForComplete()
 		logger.Infof("The new osImage was deployed successfully\n")
 
 		// Check rpm-ostree status
 		exutil.By("Check that the rpm-ostree status is reporting the right booted image and installed rpm")
-		bootedDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
+		bootedDeployment, err := node.GetBootedOsTreeDeployment(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
+			"Error getting the rpm-ostree status value in node %s", node.GetName())
 		logger.Infof("Current rpm-ostree booted status:\n%s\n", bootedDeployment)
 
 		o.Expect(bootedDeployment).
 			To(o.MatchRegexp("LayeredPackages: .*%s", rpmName),
 				"rpm-ostree is not reporting the installed 'wget' package in the rpm-ostree status command")
 
-		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(digestedImage),
+		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(digestedImage),
 			"container reference in the status is not reporting the right booted image")
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed
 		exutil.By("Check that the rpm is installed even if we use the new osImage")
-		rpmOut, err := workerNode.DebugNodeWithChroot("rpm", "-q", "wget")
+		rpmOut, err := node.DebugNodeWithChroot("rpm", "-q", "wget")
 		o.Expect(err).
 			NotTo(o.HaveOccurred(),
-				"Error. %s rpm is not installed after changing the osImage in node %s.\n%s", rpmName, workerNode.GetName(), rpmOut)
+				"Error. %s rpm is not installed after changing the osImage in node %s.\n%s", rpmName, node.GetName(), rpmOut)
 
-		wOut, err := workerNode.DebugNodeWithChroot("which", "wget")
+		wOut, err := node.DebugNodeWithChroot("which", "wget")
 		o.Expect(err).
 			NotTo(o.HaveOccurred(),
-				"Error. wget binay is not available after installing '%s' rpm in node %s.\n%s", rpmName, workerNode.GetName(), wOut)
+				"Error. wget binay is not available after installing '%s' rpm in node %s.\n%s", rpmName, node.GetName(), wOut)
 
 		logger.Infof("OK\n")
 
 		// Check osImage content
 		exutil.By("Check that the new osImage content was deployed properly")
-		rf := NewRemoteFile(workerNode, "/usr/bin/tc_54159_rpm_and_osimage")
+		rf := NewRemoteFile(node, "/usr/bin/tc_54159_rpm_and_osimage")
 		o.Expect(rf.Fetch()).
 			ShouldNot(o.HaveOccurred(),
-				"Error getting information about file %s in node %s", rf.GetFullPath(), workerNode.GetName())
+				"Error getting information about file %s in node %s", rf.GetFullPath(), node.GetName())
 		o.Expect(rf.GetNpermissions()).To(o.Equal("1755"),
-			"Error, permissions of %s in node %s are not the expected ones", rf.GetFullPath(), workerNode.GetName())
+			"Error, permissions of %s in node %s are not the expected ones", rf.GetFullPath(), node.GetName())
 		o.Expect(rf.GetTextContent()).To(o.ContainSubstring("Hello world"),
-			"Error, content of %s in node %s is not the expected ones", rf.GetFullPath(), workerNode.GetName())
+			"Error, content of %s in node %s is not the expected ones", rf.GetFullPath(), node.GetName())
 		logger.Infof("OK\n")
 
 		// Delete the MC and wait for MCP
@@ -372,16 +390,16 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		// Check the rpm-ostree status after the MC deletion
 		exutil.By("Check that the original ostree deployment was restored")
 		logger.Infof("Waiting for rpm-ostree status to be idle")
-		o.Eventually(workerNode.IsRpmOsTreeIdle, "10m", "20s").
+		o.Eventually(node.IsRpmOsTreeIdle, "10m", "20s").
 			Should(o.BeTrue(), "rpm-ostree status didn't become idle after installing wget")
 
 		logger.Infof("Checking original status")
-		deployment, derr := workerNode.GetBootedOsTreeDeployment(false) // for debugging
+		deployment, derr := node.GetBootedOsTreeDeployment(false) // for debugging
 		o.Expect(derr).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
+			"Error getting the rpm-ostree status value in node %s", node.GetName())
 		logger.Infof("Current status with date:\n %s", deployment)
 
-		o.Expect(workerNode.GetCurrentBootOSImage()).To(o.Equal(initialBootedImage),
+		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(initialBootedImage),
 			"Error! the initial osImage was not properly restored after deleting the MachineConfig")
 		logger.Infof("OK!\n")
 
