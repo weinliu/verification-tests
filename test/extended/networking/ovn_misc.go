@@ -1272,7 +1272,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-74589-Pod-to-external TCP connectivity using port in range of snat port.", func() {
+	g.It("Author:jechen-ConnectedOnly-High-74589-Pod-to-external TCP connectivity using port in range of snat port.", func() {
 
 		// For customer bug https://issues.redhat.com/browse/OCPBUGS-32202
 
@@ -1280,6 +1280,10 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		nodeServiceTemplate := filepath.Join(buildPruningBaseDir, "nodeservice-template.yaml")
 		testPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		url := "www.example.com"
+
+		if checkDisconnect(oc) {
+			g.Skip("Skip the test on disconnected cluster.")
+		}
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
