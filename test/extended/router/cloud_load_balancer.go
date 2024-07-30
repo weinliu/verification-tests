@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -166,9 +168,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Check the error message in event of the Load Balancer service")
-		// wait 3 seconds for recocile the service
-		time.Sleep(3 * time.Second)
-		output2, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "service", "router-"+ingctrl.name).Output()
-		o.Expect(output2).To(o.MatchRegexp(`exceeds the maximum number of source IP addresses \(400[1-9] > 4000\)`))
+		// on some profiles it needs more than 6 seconds until the message appears
+		expectedMessage := `exceeds the maximum number of source IP addresses \(400[1-9] > 4000\)`
+		err = wait.PollImmediate(3*time.Second, 30*time.Second, func() (bool, error) {
+			output2, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "service", "router-"+ingctrl.name).Output()
+			if matched, _ := regexp.MatchString(expectedMessage, output2); matched {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("reached max time allowed but the error message doesn't appear", err))
 	})
 })
