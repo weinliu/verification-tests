@@ -41,7 +41,7 @@ parameters:
   - name: PODVM_INSTANCE_TYPE
     value: "t3.medium"
   - name: PODVM_INSTANCE_TYPES
-    value: "t3.small,t3.medium,t3.large,t3.xlarge,t3.2xlarge"
+    value: "t3.small,t3.medium,t3.large,t3.xlarge,t3.2xlarge,g4dn.2xlarge,g5.2xlarge,p3.2xlarge"
   - name: PROXY_TIMEOUT
     value: "5m"
   - name: VXLAN_PORT

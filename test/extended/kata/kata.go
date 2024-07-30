@@ -88,7 +88,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		runtimeClassName:   kataconfig.runtimeClassName,
 		enablePeerPods:     kataconfig.enablePeerPods,
 		enableGPU:          false,
-		podvmImageUrl:      "https://raw.githubusercontent.com/bpradipt/sandboxed-containers-operator/pvm-img-fix/config/peerpods/podvm/",
+		podvmImageUrl:      "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/",
 	}
 
 	g.BeforeEach(func() {
@@ -1450,8 +1450,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		annotations["INSTANCESIZE"] = val
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
+		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
 		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
@@ -1489,8 +1490,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		annotations["INSTANCESIZE"] = val
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
+		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
 		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
@@ -1522,8 +1524,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
+		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//get annotations from the live pod
 		podAnnotations, _ := oc.Run("get").Args("pods", podName, "-o=jsonpath={.metadata.annotations}", "-n", podNs).Output()
@@ -1612,4 +1615,46 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		_, _ = checkResourceJsonpath(oc, "csv", csvNameAfter, subscription.namespace, "-o=jsonpath={.status.phase}", "Succeeded", 300*time.Second, 10*time.Second)
 	})
 
+	g.It("Author:vvoronko-High-00210-run [peerpodGPU] cuda-vectoradd", func() {
+
+		oc.SetupProject()
+
+		var (
+			basePodName  = "-example-00210"
+			cudaImage    = "nvidia/samples:vectoradd-cuda11.2.1"
+			podNs        = oc.Namespace()
+			instanceSize = map[string]string{
+				"aws":   "g5.2xlarge",
+				"azure": "Standard_NC8as_T4_v3",
+			}
+			phase     = "Succeeded"
+			logPassed = "Test PASSED"
+		)
+
+		if !(kataconfig.enablePeerPods && testrun.enableGPU) {
+			g.Skip("210-run peerpod with GPU cuda-vectoradd supported only with GPU enabled in podvm")
+		}
+
+		instance := instanceSize[getCloudProvider(oc)]
+
+		g.By("Deploying pod with kata runtime and verify it")
+		newPodName := getRandomString() + basePodName
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", podAnnotatedTemplate,
+			"-p", "NAME="+newPodName,
+			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName,
+			"-p", "INSTANCESIZE="+instance,
+			"-p", "IMAGE="+cudaImage).OutputToFile(getRandomString() + "Pod-common.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podName, err := createKataPodFromTemplate(oc, podNs, newPodName, configFile, kataconfig.runtimeClassName, phase)
+		defer deleteKataResource(oc, "pod", podNs, podName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("vectoradd-cuda on peer pod with GPU instance type %v reached %v phase", instance, phase)
+
+		//verify the log of the pod
+		log, err := exutil.GetSpecificPodLogs(oc, podNs, "", podName, "")
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("unable to get the pod (%s) logs", podName))
+		o.Expect(log).To(o.ContainSubstring(logPassed), "required lines are missing in log")
+
+		g.By("SUCCESS - Podvm with GPU instance type was launched successfully")
+	})
 })

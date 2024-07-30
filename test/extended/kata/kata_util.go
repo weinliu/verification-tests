@@ -206,11 +206,11 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 	msg, err = waitForKataconfig(oc, kataconf.name, sub.namespace)
 	return msg, err
 }
-func createKataPodAnnotated(oc *exutil.CLI, podNs, template, basePodName, runtimeClassName string, annotations map[string]string) string {
+func createKataPodAnnotated(oc *exutil.CLI, podNs, template, basePodName, runtimeClassName string, annotations map[string]string) (msg string, err error) {
 	var (
-		err        error
 		newPodName string
 		configFile string
+		phase      = "Running"
 	)
 
 	newPodName = getRandomString() + basePodName
@@ -218,31 +218,26 @@ func createKataPodAnnotated(oc *exutil.CLI, podNs, template, basePodName, runtim
 		"-p", "MEMORY="+annotations["MEMORY"], "-p", "CPU="+annotations["CPU"], "-p",
 		"INSTANCESIZE="+annotations["INSTANCESIZE"], "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName)
+	return createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName, phase)
 }
 
-func createKataPodFromTemplate(oc *exutil.CLI, podNs, newPodName, configFile, runtimeClassName string) string {
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+func createKataPodFromTemplate(oc *exutil.CLI, podNs, newPodName, configFile, runtimeClassName, phase string) (msg string, err error) {
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
 	if msg == "" || err != nil {
-		e2e.Logf("Could not apply configFile %v: %v %v", configFile, msg, err)
+		return msg, fmt.Errorf("Could not apply configFile %v: %v %v", configFile, msg, err)
 	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(msg).NotTo(o.BeEmpty())
 
-	msg = fmt.Sprintf("Checking if pod %v is ready", newPodName)
-	g.By(msg)
-	msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", "Running", podSnooze*time.Second, 10*time.Second)
+	g.By(fmt.Sprintf("Checking if pod %v is ready", newPodName))
+	msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", phase, podSnooze*time.Second, 10*time.Second)
 	if msg == "" || err != nil {
-		e2e.Logf("Could not get pod status %v: %v %v", msg, err)
+		return msg, fmt.Errorf("Could not get pod (%v) status %v: %v %v", newPodName, phase, msg, err)
 	}
 
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.spec.runtimeClassName}").Output()
 	if msg != runtimeClassName || err != nil {
-		e2e.Logf("pod %v has wrong runtime %v %v, expecting %v %v", newPodName, msg, err, runtimeClassName)
+		err = fmt.Errorf("pod %v has wrong runtime %v, expecting %v %v", newPodName, msg, runtimeClassName, err)
 	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(msg).To(o.ContainSubstring(runtimeClassName))
-	return newPodName
+	return newPodName, err
 }
 
 // author: abhbaner@redhat.com
@@ -251,13 +246,16 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, basePodName, runtimeClassNa
 		err        error
 		newPodName string
 		configFile string
+		phase      = "Running"
 	)
 
 	newPodName = getRandomString() + basePodName
 	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", commonPod, "-p",
 		"NAME="+newPodName, "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName)
+	podname, err := createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName, phase)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return podname
 }
 
 func deleteKataResource(oc *exutil.CLI, res, resNs, resName string) bool {

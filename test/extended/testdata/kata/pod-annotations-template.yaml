@@ -15,6 +15,7 @@ objects:
         app: httpd
       name: "${NAME}"
     spec:
+      restartPolicy: OnFailure
       runtimeClassName: "${RUNTIMECLASSNAME}"
       containers:
         - image: "${IMAGE}"
@@ -35,7 +36,7 @@ parameters:
   - name: MEMORY
     value: "256"
   - name: CPU
-    value: "1"
+    value: "0"
   - name: INSTANCESIZE
     value: ""
   - name: NAME
