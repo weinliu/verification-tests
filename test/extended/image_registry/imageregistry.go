@@ -4756,7 +4756,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.By("Recover image registry change")
 			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+			err = waitCoBecomes(oc, "image-registry", 360, expectedStatus)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Unmanaged"}}`, "--type=merge").Execute()
