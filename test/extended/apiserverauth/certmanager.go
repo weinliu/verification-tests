@@ -24,7 +24,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-auth] CFE", func() {
+var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	defer g.GinkgoRecover()
 
 	var (
