@@ -4301,7 +4301,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.By("Recover image registry change")
 			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":null}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			err = waitCoBecomes(oc, "image-registry", 360, expectedStatus1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/infra","operator":"In","values":[""]}]},"weight":100}]}}}}`, "--type=merge").Execute()
