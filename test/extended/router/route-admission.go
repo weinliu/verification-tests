@@ -91,16 +91,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			srvrcInfo           = "web-server-rc"
-			srvName             = "service-unsecure"
 			e2eTestNamespace2   = "e2e-ne-ocp27595-" + getRandomString()
-			ingctrl             = ingressControllerDescription{
-				name:      "ocp27595",
-				namespace: "openshift-ingress-operator",
-				domain:    "",
-				template:  customTemp,
-			}
 		)
 
 		exutil.By("1. Create an additional namespace for this scenario")
@@ -109,48 +101,41 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		e2eTestNamespace1 := oc.Namespace()
 		path1 := "/path/first"
 		path2 := "/path/second"
-		routehost := srvName + "-" + "ocp27595." + "apps.example.com"
+		routehost := "ocp27595.apps.example.com"
 
-		exutil.By("2. Create a custom ingresscontroller")
-		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
-		defer ingctrl.delete(oc)
-		ingctrl.create(oc)
-		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, ingctrl.name)
-
-		exutil.By("3. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		// Strict is by default so just need to check in default router
+		exutil.By("2. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
+		routerpod := getRouterPod(oc, "default")
 		namespaceOwnershipEnv := readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
 		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
 
-		exutil.By("4. Create a server pod and an unsecure service in one ns")
+		exutil.By("3. Create a server pod and an unsecure service in one ns")
 		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
 		err := waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
 		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
 
-		exutil.By("5. Create a server pod and an unsecure service in the other ns")
-		operateResourceFromFile(oc, "create", e2eTestNamespace2, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
-
-		exutil.By("6. Create a reen route with path " + path1 + " in the first ns")
-		err = oc.AsAdmin().Run("create").Args("route", "reencrypt", "route-reen", "--service="+srvName, "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
+		exutil.By("4. Create a reen route with path " + path1 + " in the first ns")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "reencrypt", "route-reen", "--service=service-secure", "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace1)
 		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", "route-reen")
 
+		exutil.By("5 Check the custom router pod and ensure " + e2eTestNamespace1 + " route is loaded in haproxy.config")
+		searchOutput := readHaproxyConfig(oc, routerpod, e2eTestNamespace1, "-A1", "route-reen")
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace1 + ":route-reen"))
+		exutil.By("6. Create a server pod and an unsecure service in the other ns")
+		operateResourceFromFile(oc, "create", e2eTestNamespace2, testPodSvc)
+		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+
 		exutil.By("7. Create a http route with the same hostname, but with different path " + path2 + " in the second ns")
-		err = oc.AsAdmin().Run("expose").Args("service", srvName, "--hostname="+routehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("service", "service-unsecure", "--hostname="+routehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace2)
-		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", srvName)
+		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", "service-unsecure")
 
-		exutil.By("8 Check the custom router pod and ensure " + e2eTestNamespace1 + " route is loaded in haproxy.config")
-		searchOutput := readHaproxyConfig(oc, custContPod, e2eTestNamespace1, "-A1", "route-reen")
-		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace1 + ":route-reen"))
-
-		exutil.By("9. Confirm the route in the second ns is shown as HostAlreadyClaimed")
-		waitForOutput(oc, e2eTestNamespace2, "route", `{.items[*].status.ingress[?(@.routerName=="ocp27595")].conditions[*].reason}`, "HostAlreadyClaimed")
+		exutil.By("8. Confirm the route in the second ns is shown as HostAlreadyClaimed")
+		waitForOutput(oc, e2eTestNamespace2, "route", `{.items[*].status.ingress[?(@.routerName=="default")].conditions[*].reason}`, "HostAlreadyClaimed")
 	})
 
 	// Test case creater: hongli@redhat.com
