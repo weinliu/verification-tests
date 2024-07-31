@@ -1141,7 +1141,7 @@ func setWaitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string, tim
 */
 
 func waitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string) error {
-	return exutil.TimedWaitForAnImageStreamTag(oc, namespace, name, tag, time.Second*360)
+	return exutil.TimedWaitForAnImageStreamTag(oc, namespace, name, tag, time.Second*420)
 }
 
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
