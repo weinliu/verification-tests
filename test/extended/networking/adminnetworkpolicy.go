@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -453,9 +454,6 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 		var udpPodName []string
 		udpPodName = getPodName(oc, subjectNs, "name=udp-pod")
-		err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("pod", udpPodName[0], "-n", subjectNs, "--type=NodePort", "--port="+udpPort, "--protocol=UDP").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
 		exutil.By(fmt.Sprintf("4. All type of ingress traffic to %s from the clients is denied", subjectNs))
 		for i := 0; i < 3; i++ {
 			checkSCTPTraffic(oc, sctpClientPodname, nsList[i], sctpServerPodName, subjectNs, false)
@@ -696,4 +694,205 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 	})
 
+	g.It("Author:asood-High-67614-[FdpOvnOvs] Egress BANP, ANP and NP with allow, deny and pass action with TCP, UDP and SCTP protocols. [Serial]", func() {
+		var (
+			testID                  = "67614"
+			testDataDir             = exutil.FixturePath("testdata", "networking")
+			sctpTestDataDir         = filepath.Join(testDataDir, "sctp")
+			sctpClientPod           = filepath.Join(sctpTestDataDir, "sctpclient.yaml")
+			sctpServerPod           = filepath.Join(sctpTestDataDir, "sctpserver.yaml")
+			sctpModule              = filepath.Join(sctpTestDataDir, "load-sctp-module.yaml")
+			udpListenerPod          = filepath.Join(testDataDir, "udp-listener.yaml")
+			sctpServerPodName       = "sctpserver"
+			sctpClientPodname       = "sctpclient"
+			banpCRTemplate          = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-single-rule-me-template.yaml")
+			anpSingleRuleCRTemplate = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-me-template.yaml")
+			rcPingPodTemplate       = filepath.Join(testDataDir, "rc-ping-for-pod-template.yaml")
+			egressNPPolicyTemplate  = filepath.Join(testDataDir, "networkpolicy/generic-networkpolicy-protocol-template.yaml")
+			matchExpKey             = "kubernetes.io/metadata.name"
+			matchExpOper            = "In"
+			nsList                  = []string{}
+			policyType              = "egress"
+			direction               = "to"
+			udpPort                 = "8181"
+			matchStr                = "matchLabels"
+		)
+		exutil.By("1. Test setup")
+		exutil.By("Enable SCTP on all workers")
+		prepareSCTPModule(oc, sctpModule)
+
+		exutil.By("Get the first namespace, create three additional namespaces and label all except the subject namespace")
+		nsList = append(nsList, oc.Namespace())
+		subjectNs := nsList[0]
+		for i := 0; i < 3; i++ {
+			oc.SetupProject()
+			peerNs := oc.Namespace()
+			nsLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", peerNs, "team=qe").Execute()
+			o.Expect(nsLabelErr).NotTo(o.HaveOccurred())
+			nsList = append(nsList, peerNs)
+		}
+		// First created namespace for SCTP
+		defer exutil.RecoverNamespaceRestricted(oc, nsList[1])
+		exutil.SetNamespacePrivileged(oc, nsList[1])
+
+		exutil.By("2. Create a Baseline Admin Network Policy with deny action for egress to each peer namespaces for all protocols")
+		banpCR := singleRuleBANPMEPolicyResource{
+			name:            "default",
+			subjectKey:      matchExpKey,
+			subjectOperator: matchExpOper,
+			subjectVal:      subjectNs,
+			policyType:      policyType,
+			direction:       direction,
+			ruleName:        "default-deny-to-all",
+			ruleAction:      "Deny",
+			ruleKey:         matchExpKey,
+			ruleOperator:    matchExpOper,
+			ruleVal:         nsList[1],
+			template:        banpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banpCR.name)
+		banpCR.createSingleRuleBANPMatchExp(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+		nsListVal, err := json.Marshal(nsList[1:])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchBANP := fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/egress/0/to/0/namespaces/matchExpressions/0/values\", \"value\": %s}]", nsListVal)
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create workload in namespaces")
+		exutil.By(fmt.Sprintf("Create client in subject %s namespace and SCTP, UDP & TCP service respectively in other three namespaces", subjectNs))
+
+		exutil.By(fmt.Sprintf("Create SCTP client pod in %s", nsList[0]))
+		createResourceFromFile(oc, nsList[0], sctpClientPod)
+		err1 := waitForPodWithLabelReady(oc, nsList[0], "name=sctpclient")
+		exutil.AssertWaitPollNoErr(err1, "SCTP client pod is not running")
+
+		exutil.By(fmt.Sprintf("Create SCTP server pod in %s", nsList[1]))
+		createResourceFromFile(oc, nsList[1], sctpServerPod)
+		err2 := waitForPodWithLabelReady(oc, nsList[1], "name=sctpserver")
+		exutil.AssertWaitPollNoErr(err2, "SCTP server pod is not running")
+
+		exutil.By(fmt.Sprintf("Create a pod in %s for TCP", nsList[2]))
+		rcPingPodResource := replicationControllerPingPodResource{
+			name:      "test-pod-" + testID,
+			replicas:  1,
+			namespace: nsList[2],
+			template:  rcPingPodTemplate,
+		}
+		defer removeResource(oc, true, true, "replicationcontroller", rcPingPodResource.name, "-n", rcPingPodResource.namespace)
+		rcPingPodResource.createReplicaController(oc)
+		err = waitForPodWithLabelReady(oc, rcPingPodResource.namespace, "name="+rcPingPodResource.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pods with label name=%s not ready", rcPingPodResource.name))
+		podListNs, podListErr := exutil.GetAllPodsWithLabel(oc, rcPingPodResource.namespace, "name="+rcPingPodResource.name)
+		o.Expect(podListErr).NotTo(o.HaveOccurred())
+		o.Expect(len(podListNs)).Should(o.Equal(1))
+
+		exutil.By(fmt.Sprintf("Create UDP Listener Pod in %s", nsList[3]))
+		createResourceFromFile(oc, nsList[3], udpListenerPod)
+		err = waitForPodWithLabelReady(oc, nsList[3], "name=udp-pod")
+		exutil.AssertWaitPollNoErr(err, "The pod with label name=udp-pod not ready")
+
+		var udpPodName []string
+		udpPodName = getPodName(oc, nsList[3], "name=udp-pod")
+		exutil.By(fmt.Sprintf("4. All type of egress traffic from %s to TCP/UDP/SCTP service is denied", subjectNs))
+		checkSCTPTraffic(oc, sctpClientPodname, subjectNs, sctpServerPodName, nsList[1], false)
+		CurlPod2PodFail(oc, subjectNs, sctpClientPodname, nsList[2], podListNs[0])
+		checkUDPTraffic(oc, sctpClientPodname, subjectNs, udpPodName[0], nsList[3], udpPort, false)
+
+		exutil.By("5. Create a Admin Network Policy with allow action for egress to each peer namespaces for all protocols")
+		anpEgressRuleCR := singleRuleANPMEPolicyResource{
+			name:            "anp-" + policyType + "-" + testID + "-1",
+			subjectKey:      matchExpKey,
+			subjectOperator: matchExpOper,
+			subjectVal:      subjectNs,
+			priority:        10,
+			policyType:      "egress",
+			direction:       "to",
+			ruleName:        "allow-to-all",
+			ruleAction:      "Allow",
+			ruleKey:         matchExpKey,
+			ruleOperator:    matchExpOper,
+			ruleVal:         nsList[1],
+			template:        anpSingleRuleCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpEgressRuleCR.name)
+		anpEgressRuleCR.createSingleRuleANPMatchExp(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpEgressRuleCR.name)).To(o.BeTrue())
+		exutil.By("5.1 Update ANP to include all the namespaces")
+		patchANP := fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/egress/0/to/0/namespaces/matchExpressions/0/values\", \"value\": %s}]", nsListVal)
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpEgressRuleCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("6. Egress traffic from %s to TCP/UDP/SCTP service is allowed after ANP %s is applied", subjectNs, anpEgressRuleCR.name))
+		exutil.By(fmt.Sprintf("6.1 Egress traffic from %s to TCP and service is allowed", subjectNs))
+		patchANP = `[{"op": "add", "path": "/spec/egress/0/ports", "value": [{"portNumber": {"protocol": "TCP", "port": 8080}}, {"portNumber": {"protocol": "UDP", "port": 8181}}]}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpEgressRuleCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		checkSCTPTraffic(oc, sctpClientPodname, subjectNs, sctpServerPodName, nsList[1], false)
+		CurlPod2PodPass(oc, subjectNs, sctpClientPodname, nsList[2], podListNs[0])
+		checkUDPTraffic(oc, sctpClientPodname, subjectNs, udpPodName[0], nsList[3], udpPort, true)
+
+		exutil.By(fmt.Sprintf("6.2 Egress traffic from %s to SCTP service is also allowed", subjectNs))
+		patchANP = `[{"op": "add", "path": "/spec/egress/0/ports", "value": [{"portNumber": {"protocol": "TCP", "port": 8080}}, {"portNumber": {"protocol": "UDP", "port": 8181}}, {"portNumber": {"protocol": "SCTP", "port": 30102}}]}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpEgressRuleCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		checkSCTPTraffic(oc, sctpClientPodname, subjectNs, sctpServerPodName, nsList[1], true)
+		CurlPod2PodPass(oc, subjectNs, sctpClientPodname, nsList[2], podListNs[0])
+		checkUDPTraffic(oc, sctpClientPodname, subjectNs, udpPodName[0], nsList[3], udpPort, true)
+
+		exutil.By("7. Create another Admin Network Policy with pass action for egress to each peer namespaces for all protocols")
+		anpEgressRuleCR.name = "anp-" + policyType + "-" + testID + "-2"
+		anpEgressRuleCR.priority = 5
+		anpEgressRuleCR.ruleName = "pass-to-all"
+		anpEgressRuleCR.ruleAction = "Pass"
+		defer removeResource(oc, true, true, "anp", anpEgressRuleCR.name)
+		anpEgressRuleCR.createSingleRuleANPMatchExp(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpEgressRuleCR.name)).To(o.BeTrue())
+		exutil.By("7.1 Update ANP to include all the namespaces")
+		patchANP = fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/egress/0/to/0/namespaces/matchExpressions/0/values\", \"value\": %s}]", nsListVal)
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpEgressRuleCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("7.2 Egress traffic from %s to TCP/UDP/SCTP service is denied after ANP %s is applied", subjectNs, anpEgressRuleCR.name))
+		checkSCTPTraffic(oc, sctpClientPodname, subjectNs, sctpServerPodName, nsList[1], false)
+		CurlPod2PodFail(oc, subjectNs, sctpClientPodname, nsList[2], podListNs[0])
+		checkUDPTraffic(oc, sctpClientPodname, subjectNs, udpPodName[0], nsList[3], udpPort, false)
+
+		exutil.By(fmt.Sprintf("8. Egress traffic from %s to TCP/SCTP/UDP service is allowed after network policy is applied", subjectNs))
+		networkPolicyResource := networkPolicyProtocolResource{
+			name:            "allow-all-protocols-" + testID,
+			namespace:       subjectNs,
+			policy:          policyType,
+			policyType:      "Egress",
+			direction:       direction,
+			namespaceSel:    matchStr,
+			namespaceSelKey: "team",
+			namespaceSelVal: "qe",
+			podSel:          matchStr,
+			podSelKey:       "name",
+			podSelVal:       "sctpclient",
+			port:            30102,
+			protocol:        "SCTP",
+			template:        egressNPPolicyTemplate,
+		}
+		networkPolicyResource.createProtocolNetworkPolicy(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", "-n", subjectNs).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, networkPolicyResource.name)).To(o.BeTrue())
+		exutil.By(fmt.Sprintf("8.1 Update the network policy %s in %s to add ports for protocols and all the pods ", networkPolicyResource.name, subjectNs))
+		patchNP := `[{"op": "add", "path": "/spec/egress/0/ports", "value": [{"protocol": "TCP", "port": 8080},{"protocol": "UDP", "port": 8181}, {"protocol": "SCTP", "port": 30102}]}, {"op": "add", "path": "/spec/egress/0/to", "value": [{"namespaceSelector": {"matchLabels": {"team": "qe"}}, "podSelector": {}}]}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("networkpolicy", networkPolicyResource.name, "-n", subjectNs, "--type=json", "-p", patchNP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		checkSCTPTraffic(oc, sctpClientPodname, subjectNs, sctpServerPodName, nsList[1], true)
+		CurlPod2PodPass(oc, subjectNs, sctpClientPodname, nsList[2], podListNs[0])
+		checkUDPTraffic(oc, sctpClientPodname, subjectNs, udpPodName[0], nsList[3], udpPort, true)
+
+	})
 })
