@@ -47,7 +47,7 @@ describe('Workload Secrets test', () => {
     Secrets.gotoSecretsPage(project_name);
     Secrets.createImagePullSecret('secrettest','  quay.io  ','  testuser  ','  testpassword  ','  test@redhat.com  ');
     Secrets.revealValue();
-    cy.get('code').should('contain','{"auths":{"quay.io":{"username":"testuser","password":"testpassword","auth":"dGVzdHVzZXI6ICB0ZXN0cGFzc3dvcmQgIA==","email":"test@redhat.com"}}}');
+    cy.get('code').should('contain','{"auths":{"quay.io":{"username":"testuser","password":"testpassword","auth":"dGVzdHVzZXI6dGVzdHBhc3N3b3Jk","email":"test@redhat.com"}}}');
   });
 
   it('(OCP-73150,yapei)Passwords entered on the console are obfuscated', {tags: ['e2e','@osd-ccs','@rosa', '@wrs']}, () => {
