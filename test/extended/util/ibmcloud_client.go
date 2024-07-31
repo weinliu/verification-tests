@@ -52,29 +52,26 @@ func NewIBMSessionFromEnv(ibmApiKey string) (*IBMSession, error) {
 
 // GetIBMCredentialFromCluster gets IBM credentials like ibmapikey, ibmvpc and ibmregion from cluster
 func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
-	var credential string
+	var (
+		credential       string
+		credentialAPIKey []byte
+		credErr          error
+	)
+
 	platform := CheckPlatform(oc)
-	switch {
-	case platform == "powervs":
-		credential, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/ibm-cloud-credentials", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.data.ibmcloud_api_key}").Output()
-		if credential == "" {
-			cmd := exec.Command("bash", "-c", "cat ${CLUSTER_PROFILE_DIR}/ibmcloud-api-key")
-			output, _ := cmd.Output()
-			credential = string(output)
-			if credential == "" {
-				g.Skip("Failed to get credential to access IBM, skip the testing.")
-			}
+	if platform == "powervs" {
+		credential, credErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/ibm-cloud-credentials", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.data.ibmcloud_api_key}").Output()
+	} else {
+		credential, credErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/qe-ibmcloud-creds", "-n", "kube-system", "-o=jsonpath={.data.apiKey}").Output()
+	}
+
+	if credErr != nil || len(credential) == 0 {
+		cmd := "cat ${CLUSTER_PROFILE_DIR}/ibmcloud-api-key"
+		credentialAPIKey, credErr = exec.Command("bash", "-c", cmd).Output()
+		if len(credentialAPIKey) == 0 && credErr != nil {
+			g.Skip("Failed to get credential to access IBM, skip the testing.")
 		}
-	default:
-		credential, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/qe-ibmcloud-creds", "-n", "kube-system", "-o=jsonpath={.data.apiKey}").Output()
-		if credential == "" {
-			cmd := exec.Command("bash", "-c", "cat ${CLUSTER_PROFILE_DIR}/ibmcloud-api-key")
-			output, _ := cmd.Output()
-			credential = string(output)
-			if credential == "" {
-				g.Skip("Failed to get credential to access IBM, skip the testing.")
-			}
-		}
+		credential = string(credentialAPIKey)
 	}
 
 	ibmClientID, err := base64.StdEncoding.DecodeString(credential)
