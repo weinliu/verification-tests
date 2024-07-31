@@ -201,7 +201,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		}
 
 		g.By("Create clusterlogforwarder")
-		cw.createClfSecret(oc)
 		var template string
 		if cw.stsEnabled {
 			template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
@@ -221,6 +220,8 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			serviceAccountName:        cw.collectorSAName,
 		}
 		defer clf.delete(oc)
+		clf.createServiceAccount(oc)
+		cw.createClfSecret(oc)
 		clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
 
 		g.By("Check logs in Cloudwatch")

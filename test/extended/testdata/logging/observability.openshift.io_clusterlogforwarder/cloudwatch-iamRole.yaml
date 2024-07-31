@@ -20,7 +20,10 @@ objects:
               key: role_arn
               secretName: ${SECRET_NAME}
             token:
-              from: serviceAccount
+              from: secret
+              secret:
+                key: token
+                name: ${SECRET_NAME}
           type: iamRole
         groupName: ${GROUP_NAME}
         region: ${REGION}

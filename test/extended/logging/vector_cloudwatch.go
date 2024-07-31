@@ -70,8 +70,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			g.By("Create clusterlogforwarder")
-			cw.createClfSecret(oc)
-
 			var template string
 			if cw.stsEnabled {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
@@ -91,6 +89,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:        cw.collectorSAName,
 			}
 			defer clf.delete(oc)
+			clf.createServiceAccount(oc)
+			cw.createClfSecret(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
 
 			g.By("Check logs in Cloudwatch")
@@ -126,15 +126,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 			}
 
-			g.By("Create clusterlogforwarder/instance")
-			cw.createClfSecret(oc)
+			g.By("Create clusterlogforwarder")
 			var template string
 			if cw.stsEnabled {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
 			} else {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
 			}
-
 			clf := clusterlogforwarder{
 				name:                      "clf-51978",
 				namespace:                 clfNS,
@@ -147,6 +145,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:        cw.collectorSAName,
 			}
 			defer clf.delete(oc)
+			clf.createServiceAccount(oc)
+			cw.createClfSecret(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
 
 			g.By("Check logs in Cloudwatch")
@@ -186,16 +186,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 			waitForOperatorsRunning(oc)
 
-			g.By("create clusterlogforwarder/instance")
-			cw.createClfSecret(oc)
-
+			g.By("create clusterlogforwarder")
 			var template string
 			if cw.stsEnabled {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
 			} else {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
 			}
-
 			clf := clusterlogforwarder{
 				name:                      "clf-61600",
 				namespace:                 clfNS,
@@ -208,6 +205,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:        cw.collectorSAName,
 			}
 			defer clf.delete(oc)
+			clf.createServiceAccount(oc)
+			cw.createClfSecret(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
 
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -306,15 +305,12 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			exutil.By("Create clusterlogforwarder")
-			cw.createClfSecret(oc)
-
 			var template string
 			if cw.stsEnabled {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
 			} else {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
 			}
-
 			clf := clusterlogforwarder{
 				name:                   "clf-71778",
 				namespace:              clfNS,
@@ -324,6 +320,8 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 				serviceAccountName:     cw.collectorSAName,
 			}
 			defer clf.delete(oc)
+			clf.createServiceAccount(oc)
+			cw.createClfSecret(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName, "INPUT_REFS=[\"application\"]")
 			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "myapplogdata", "type": "application", "application": {"selector": {"matchLabels": {"test.logging.io/logging.qe-test-label": "logging-71778-test"}}}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["myapplogdata"]}]`
 			clf.update(oc, "", patch, "--type=json")
@@ -367,8 +365,6 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			cw.init(oc)
 
 			exutil.By("Create clusterlogforwarder")
-			cw.createClfSecret(oc)
-
 			var template string
 			if cw.stsEnabled {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml")
@@ -384,6 +380,8 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 				serviceAccountName:     cw.collectorSAName,
 			}
 			defer clf.delete(oc)
+			clf.createServiceAccount(oc)
+			cw.createClfSecret(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName, "INPUT_REFS=[\"application\"]")
 
 			exutil.By("Update CLF to add infra projects to application logs")

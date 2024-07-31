@@ -598,8 +598,8 @@ func (cw *cloudwatchSpec) deleteIAMCloudwatchRole() {
 func (cw *cloudwatchSpec) createClfSecret(oc *exutil.CLI) {
 	var err error
 	if cw.stsEnabled {
-		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=role_arn="+cw.awsRoleArn, "-n", cw.secretNamespace).Execute()
-
+		token, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", cw.collectorSAName, "--audience=openshift", "--duration=24h", "-n", cw.secretNamespace).Output()
+		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=role_arn="+cw.awsRoleArn, "--from-literal=token="+token, "-n", cw.secretNamespace).Execute()
 	} else {
 		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", cw.secretName, "--from-literal=aws_access_key_id="+os.Getenv("AWS_ACCESS_KEY_ID"), "--from-literal=aws_secret_access_key="+os.Getenv("AWS_SECRET_ACCESS_KEY"), "-n", cw.secretNamespace).Execute()
 	}
