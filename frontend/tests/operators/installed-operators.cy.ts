@@ -42,8 +42,8 @@ describe('Operators Installed page test', () => {
     cy.adminCLI(`oc label namespace ${params.specialNs} pod-security.kubernetes.io/audit-`);
     cy.adminCLI(`oc label namespace ${params.specialNs} pod-security.kubernetes.io/warn-`);
     cy.adminCLI(`oc delete project ${params.ns54975}`);
-    cy.adminCLI(`oc adm policy remove-role-from-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${params.specialNs}`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
+    cy.adminCLI(`oc adm policy remove-role-from-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${params.specialNs}`, {failOnNonZeroExit: false});
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`, {failOnNonZeroExit: false});
   });
 
   it('(OCP-54975,xiyuzhao,UserInterface) Check OCP console works when copied CSVs are disabled',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
