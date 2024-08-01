@@ -2995,8 +2995,12 @@ func ovnkubeNodePod(oc *exutil.CLI, nodeName string) string {
 }
 
 func waitForNetworkOperatorState(oc *exutil.CLI, interval int, timeout int, expectedStatus string) {
+	waitForClusterOperatorState(oc, "network", interval, timeout, expectedStatus)
+}
+
+func waitForClusterOperatorState(oc *exutil.CLI, co string, interval int, timeout int, expectedStatus string) {
 	errCheck := wait.Poll(time.Duration(interval)*time.Second, time.Duration(timeout)*time.Minute, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "network").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", co).Output()
 		if err != nil {
 			e2e.Logf("Fail to get clusteroperator network, error:%s. Trying again", err)
 			return false, nil
@@ -3958,4 +3962,13 @@ func checkIPv6PublicAccess(oc *exutil.CLI) bool {
 	}
 	e2e.Logf("Successfully connected to the public Internet with IPv6 from the cluster.")
 	return true
+}
+
+func forceRebootNode(oc *exutil.CLI, nodeName string) {
+	e2e.Logf("\nRebooting node %s....", nodeName)
+	runCmd, _, _, runCmdErr := oc.AsAdmin().Run("debug").Args("node/"+nodeName, "--", "chroot", "/host", "reboot", "--force").Background()
+	defer runCmd.Process.Kill()
+	o.Expect(runCmdErr).NotTo(o.HaveOccurred())
+	waitForNetworkOperatorState(oc, 100, 10, "True.*True.*False")
+	waitForNetworkOperatorState(oc, 100, 10, "True.*False.*False")
 }

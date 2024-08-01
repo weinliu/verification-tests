@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -683,5 +684,115 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 		pod3Net1IPv4, _ := getPodMultiNetworks(oc, ns, podList2[0], interfaceName)
 		e2e.Logf("The v4 address of pod2's net1 is: %v", pod3Net1IPv4)
 		o.Expect(strings.HasPrefix(pod3Net1IPv4, ipaddress1)).Should(o.BeTrue())
+	})
+
+	g.It("Author:weliang-NonPreRelease-Longduration-Medium-74933-whereabouts ips are not reconciled when the node is rebooted forcely. [Disruptive]", func() {
+		//https://issues.redhat.com/browse/OCPBUGS-35923: whereabouts ips are not reconciled when the node is rebooted forcely
+		var (
+			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking")
+			dualstackNADTemplate = filepath.Join(buildPruningBaseDir, "multus/dualstack-NAD-template.yaml")
+			multusPodTemplate    = filepath.Join(buildPruningBaseDir, "multus/multus-Statefulset-pod-template.yaml")
+			nad1Name             = "ip-overlapping-1"
+			pod1Name             = "ip-overlapping-pod1"
+		)
+
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("This case requires at least one worker node")
+		}
+
+		exutil.By("Getting the name of namespace")
+		ns := oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		exutil.By("Deleting the network_names/ippools/overlapping created from this testing")
+		ippool1 := "192.168.20.0-24"
+		ippool2 := "fd00-dead-beef-10---64"
+		overlapping1 := "192.168.20.1"
+		overlapping2 := "fd00-dead-beef-10--1"
+		defer removeResource(oc, true, true, "overlappingrangeipreservations.whereabouts.cni.cncf.io", overlapping1, "-n", "openshift-multus")
+		defer removeResource(oc, true, true, "overlappingrangeipreservations.whereabouts.cni.cncf.io", overlapping2, "-n", "openshift-multus")
+		defer removeResource(oc, true, true, "ippools.whereabouts.cni.cncf.io", ippool1, "-n", "openshift-multus")
+		defer removeResource(oc, true, true, "ippools.whereabouts.cni.cncf.io", ippool2, "-n", "openshift-multus")
+
+		exutil.By("Creating a network-attach-defintion")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad1Name, "-n", ns).Execute()
+		nadns := dualstackNAD{
+			nadname:        nad1Name,
+			namespace:      ns,
+			plugintype:     "macvlan",
+			mode:           "bridge",
+			ipamtype:       "whereabouts",
+			ipv4range:      "192.168.20.0/24",
+			ipv6range:      "fd00:dead:beef:10::/64",
+			ipv4rangestart: "",
+			ipv4rangeend:   "",
+			ipv6rangestart: "",
+			ipv6rangeend:   "",
+			template:       dualstackNADTemplate,
+		}
+		nadns.createDualstackNAD(oc)
+
+		exutil.By("Verifying the configued NetworkAttachmentDefinition")
+		if checkNAD(oc, ns, nad1Name) {
+			e2e.Logf("The correct network-attach-defintion: %v is created!", nad1Name)
+		} else {
+			e2e.Failf("The correct network-attach-defintion: %v is not created!", nad1Name)
+		}
+
+		exutil.By("Configuring a pod to get additional network")
+		replicasnum := strconv.Itoa(1)
+		nad1pod := testMultusPod{
+			name:       pod1Name,
+			namespace:  ns,
+			podlabel:   pod1Name,
+			nadname:    nad1Name,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			replicas:   replicasnum,
+			template:   multusPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", nad1pod.name, "-n", ns)
+		nad1pod.createTestMultusPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, "name="+nad1pod.podlabel)).NotTo(o.HaveOccurred())
+
+		ipaddress1 := "192.168.20.1"
+		ipaddress2 := "fd00:dead:beef:10::1"
+		interfaceName := "net1"
+
+		exutil.By("Getting IP from pod's secondary interface")
+		pod1List, getPod1Err := exutil.GetAllPodsWithLabel(oc, ns, "name="+nad1pod.podlabel)
+		o.Expect(getPod1Err).NotTo(o.HaveOccurred())
+		o.Expect(len(pod1List)).NotTo(o.BeEquivalentTo(0))
+		pod1Net1IPv4, pod1Net1IPv6 := getPodMultiNetworks(oc, ns, pod1List[0], interfaceName)
+		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
+		e2e.Logf("The v6 address of pod1's net1 is: %v", pod1Net1IPv6)
+		o.Expect(strings.HasPrefix(pod1Net1IPv4, ipaddress1)).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod1Net1IPv6, ipaddress2)).Should(o.BeTrue())
+
+		exutil.By("Rebooting the node where the statefulset pod is deployed")
+		clusterOperators := []string{"dns", "ingress", "storage"}
+		for _, operator := range clusterOperators {
+			defer waitForClusterOperatorState(oc, operator, 100, 3, "True.*False.*False")
+		}
+		defer waitForNetworkOperatorState(oc, 100, 3, "True.*False.*False")
+		defer checkNodeStatus(oc, nodeList.Items[0].Name, "Ready")
+		forceRebootNode(oc, nodeList.Items[0].Name)
+
+		exutil.By("Waiting for the StatefulSet pod to be deployed again")
+		o.Expect(waitForPodWithLabelReady(oc, ns, "name="+nad1pod.podlabel)).NotTo(o.HaveOccurred())
+
+		exutil.By("Getting IP from redployed pod's secondary interface, and both ipv4 and ipv6 are same as the ones pod get before.")
+		pod2List, getPod2Err := exutil.GetAllPodsWithLabel(oc, ns, "name="+nad1pod.podlabel)
+		o.Expect(getPod2Err).NotTo(o.HaveOccurred())
+		o.Expect(len(pod2List)).NotTo(o.BeEquivalentTo(0))
+		pod2Net1IPv4, pod2Net1IPv6 := getPodMultiNetworks(oc, ns, pod2List[0], interfaceName)
+		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv4)
+		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv6)
+		o.Expect(strings.HasPrefix(pod2Net1IPv4, ipaddress1)).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod2Net1IPv6, ipaddress2)).Should(o.BeTrue())
 	})
 })
