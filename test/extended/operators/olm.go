@@ -9393,6 +9393,82 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(envFromPod).To(o.ContainSubstring(secret.name))
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-High-75328-CatalogSources that use binaryless images must set extractContent", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		catsrcExtractImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
+		namespace := oc.Namespace()
+		catsrc := catalogSourceDescription{
+			name:        "binless-catalog-75328",
+			namespace:   namespace,
+			displayName: "Test Catsrc 75328 without bins",
+			publisher:   "Red Hat",
+			sourceType:  "grpc",
+			address:     "quay.io/openshifttest/nginxolm-operator-index:nginxolm75148",
+			template:    catsrcImageTemplate,
+		}
+		catsrcExtract := catalogSourceDescription{
+			name:        "binless-catalog-75328-extract",
+			namespace:   namespace,
+			displayName: "Test Catsrc 75328 without bins",
+			publisher:   "Red Hat",
+			sourceType:  "grpc",
+			address:     "quay.io/openshifttest/nginxolm-operator-index:nginxolm75148",
+			template:    catsrcExtractImageTemplate,
+		}
+
+		dr := make(describerResrouce)
+		itName := g.CurrentSpecReport().FullText()
+		dr.addIr(itName)
+
+		exutil.By("Create catalogsource that use binaryless images without extractContent")
+		defer catsrc.delete(itName, dr)
+		catsrc.create(oc, itName, dr)
+
+		exutil.By("Check the catalogsource fail")
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
+			if strings.Compare(status, "TRANSIENT_FAILURE") != 0 {
+				e2e.Logf("catsrc %s lastObservedState is %s, not TRANSIENT_FAILURE", catsrc.name, status)
+				return false, nil
+			}
+			return true, nil
+		})
+		if waitErr != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status}").Output()
+			e2e.Logf(output)
+			logDebugInfo(oc, catsrc.namespace, "pod", "events")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("catsrc %s lastObservedState is not TRANSIENT_FAILURE", catsrc.name))
+		e2e.Logf("catsrc %s lastObservedState is TRANSIENT_FAILURE", catsrc.name)
+
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "olm.catalogSource=binless-catalog-75328", "-o=jsonpath={.items[0].metadata.name}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		log, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args(podName, "-n", catsrc.namespace, "--tail", "3").Output()
+		if !strings.Contains(log, "CreateContainerError") {
+			e2e.Failf("need CreateContainerError: %s", log)
+		}
+
+		exutil.By("packagemanifest not be created")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "nginx75148", "-n", catsrc.namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("\"nginx75148\" not found"))
+
+		catsrc.delete(itName, dr)
+
+		exutil.By("Create catalogsource that use binaryless images with extractContent")
+		defer catsrcExtract.delete(itName, dr)
+		catsrcExtract.createWithCheck(oc, itName, dr)
+
+		exutil.By("packagemanifest works well")
+		entries := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx75148", "-n", catsrcExtract.namespace, "-o=jsonpath={.status.channels[?(@.name==\"candidate-v1.0\")].entries}")
+		o.Expect(entries).To(o.ContainSubstring("nginx75148.v1.0.6"))
+
+	})
+
 	// author: xzha@redhat.com, test case OCP-72018
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-72018-Do not sync namespaces that have no subscriptions", func() {
 		oc.SetupProject()
