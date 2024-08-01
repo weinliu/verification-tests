@@ -9,7 +9,49 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
+// var _ = g.Describe("[sig-baremetal] INSTALLER UPI for INSTALLER_GENERAL job on BareMetal", func() {
+// 	defer g.GinkgoRecover()
+// 	var (
+// 		oc           = exutil.NewCLI("cluster-baremetal-operator", exutil.KubeConfigPath())
+
+// 	)
+// 	g.BeforeEach(func() {
+
+// 	})
+
+// 	g.AfterEach(func() {
+
+// 	})
+
+// 	// author: sgoveas@redhat.com
+// 	g.It("Author:sgoveas--Medium-12345-example case", func() {
+
+// 	})
+
+// })
+
+// var _ = g.Describe("[sig-baremetal] INSTALLER UPI for INSTALLER_DEDICATED job on BareMetal", func() {
+// 	defer g.GinkgoRecover()
+// 	var (
+// 		oc           = exutil.NewCLI("cluster-baremetal-operator", exutil.KubeConfigPath())
+
+// 	)
+// 	g.BeforeEach(func() {
+
+// 	})
+
+// 	g.AfterEach(func() {
+
+// 	})
+
+// 	// author: sgoveas@redhat.com
+// 	g.It("Author:sgoveas--Medium-12345-example case", func() {
+
+// 	})
+
+// })
+
+var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc           = exutil.NewCLI("cluster-baremetal-operator", exutil.KubeConfigPath())
@@ -73,7 +115,23 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 
 	})
 
-	// author: jhajyahy@redhat.com
+})
+
+var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on BareMetal", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc           = exutil.NewCLI("cluster-baremetal-operator", exutil.KubeConfigPath())
+		iaasPlatform string
+	)
+	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
+		if !(iaasPlatform == "baremetal") {
+			e2e.Logf("Cluster is: %s", iaasPlatform)
+			g.Skip("For Non-baremetal cluster , this is not supported!")
+		}
+	})
+
 	g.It("Author:jhajyahy-Medium-38155-Verify when deleting the Provisioning CR, the associated resources are deleted[Serial]", func() {
 		g.By("Save provisioning-configuration as yaml file")
 		filePath, err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration", "-o=yaml").OutputToFile("prov.yaml")

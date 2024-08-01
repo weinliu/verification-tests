@@ -12,7 +12,49 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
+// var _ = g.Describe("[sig-baremetal] INSTALLER UPI for INSTALLER_GENERAL job on BareMetal", func() {
+// 	defer g.GinkgoRecover()
+// 	var (
+// 		oc           = exutil.NewCLI("baremetal-ironic-authentication", exutil.KubeConfigPath())
+
+// 	)
+// 	g.BeforeEach(func() {
+
+// 	})
+
+// 	g.AfterEach(func() {
+
+// 	})
+
+// 	// author: sgoveas@redhat.com
+// 	g.It("Author:sgoveas--Medium-12345-example case", func() {
+
+// 	})
+
+// })
+
+// var _ = g.Describe("[sig-baremetal] INSTALLER UPI for INSTALLER_DEDICATED job on BareMetal", func() {
+// 	defer g.GinkgoRecover()
+// 	var (
+// 		oc           = exutil.NewCLI("baremetal-ironic-authentication", exutil.KubeConfigPath())
+
+// 	)
+// 	g.BeforeEach(func() {
+
+// 	})
+
+// 	g.AfterEach(func() {
+
+// 	})
+
+// 	// author: sgoveas@redhat.com
+// 	g.It("Author:sgoveas--Medium-12345-example case", func() {
+
+// 	})
+
+// })
+
+var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on BareMetal", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc           = exutil.NewCLI("baremetal-ironic-authentication", exutil.KubeConfigPath())
@@ -141,3 +183,24 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI on BareMetal", func() {
 		})
 	})
 })
+
+// var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on BareMetal", func() {
+// 	defer g.GinkgoRecover()
+// 	var (
+// 		oc           = exutil.NewCLI("baremetal-ironic-authentication", exutil.KubeConfigPath())
+
+// 	)
+// 	g.BeforeEach(func() {
+
+// 	})
+
+// 	g.AfterEach(func() {
+
+// 	})
+
+// 	// author: sgoveas@redhat.com
+// 	g.It("Author:sgoveas--Medium-12345-example case", func() {
+
+// 	})
+
+// })
