@@ -1096,6 +1096,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			exutil.By("Configure remote write sigv4 and enable user workload monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", sigv4ClusterCM)
 
+			exutil.By("confirm prometheus-k8s-0 pod is ready for check")
+			pod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=prometheus").Output()
+			e2e.Logf("the prometheus pods condition: %s", pod)
+			exutil.AssertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
+
 			exutil.By("Check sig4 config under openshift-monitoring")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://authorization.remotewrite.com/api/write")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "sigv4:")
@@ -1110,6 +1115,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 			exutil.By("Configure remote write sigv4 setting for user workload monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", sigv4UwmCM)
+
+			exutil.By("confirm prometheus-user-workload-0 pod is ready for check")
+			pod, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-user-workload-monitoring", "-l", "app.kubernetes.io/name=prometheus").Output()
+			e2e.Logf("the prometheus pods condition: %s", pod)
+			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
 
 			exutil.By("Check sig4 config under openshift-user-workload-monitoring")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://authorization.remotewrite.com/api/write")
@@ -1246,6 +1256,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			exutil.By("Configure remote write auth and enable user workload monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", authClusterCM)
 
+			exutil.By("confirm prometheus-k8s-0 pod is ready for check")
+			pod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/name=prometheus").Output()
+			e2e.Logf("the prometheus pods condition: %s", pod)
+			exutil.AssertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
+
 			exutil.By("Check auth config under openshift-monitoring")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://remote-write.endpoint")
 			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "target_label: __tmp_openshift_cluster_id__")
@@ -1261,6 +1276,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 			exutil.By("Configure remote write auth setting for user workload monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", authUwmCM)
+
+			exutil.By("confirm prometheus-user-workload-0 pod is ready for check")
+			pod, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-user-workload-monitoring", "-l", "app.kubernetes.io/name=prometheus").Output()
+			e2e.Logf("the prometheus pods condition: %s", pod)
+			exutil.AssertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
 
 			exutil.By("Check auth config under openshift-user-workload-monitoring")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://remote-write.endpoint")

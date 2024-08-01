@@ -243,8 +243,8 @@ func patchAndCheckBodySizeLimit(oc *exutil.CLI, limitValue string, checkValue st
 
 // check remote write config in the pod
 func checkRmtWrtConfig(oc *exutil.CLI, ns string, podName string, checkValue string) {
-	envCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
-		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "prometheus", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/prometheus/config_out/prometheus.env.yaml | grep '%s'`, checkValue)).Output()
+	envCheck := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 360*time.Second, false, func(context.Context) (bool, error) {
+		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "prometheus", podName, "--", "bash", "-c", fmt.Sprintf(`cat "/etc/prometheus/config_out/prometheus.env.yaml" | grep '%s'`, checkValue)).Output()
 		if err != nil || !strings.Contains(envOutput, checkValue) {
 			return false, nil
 		}
