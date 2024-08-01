@@ -181,6 +181,11 @@ func AssertPodToBeReady(oc *CLI, podName string, namespace string) {
 
 // GetSpecificPodLogs returns the pod logs by the specific filter
 func GetSpecificPodLogs(oc *CLI, namespace string, container string, podName string, filter string) (string, error) {
+	return GetSpecificPodLogsCombinedOrNot(oc, namespace, container, podName, filter, false)
+}
+
+// GetSpecificPodLogsCombinedOrNot returns the pod logs by the specific filter with combining stderr or not
+func GetSpecificPodLogsCombinedOrNot(oc *CLI, namespace string, container string, podName string, filter string, combined bool) (string, error) {
 	var cargs []string
 	if len(container) > 0 {
 		cargs = []string{"-n", namespace, "-c", container, podName}
@@ -196,8 +201,14 @@ func GetSpecificPodLogs(oc *CLI, namespace string, container string, podName str
 	if len(filter) > 0 {
 		filterCmd = " | grep -i " + filter
 	}
-	filteredLogs, err := exec.Command("bash", "-c", "cat "+podLogs+filterCmd).Output()
-	return string(filteredLogs), err
+	var filteredLogs []byte
+	var errCmd error
+	if combined {
+		filteredLogs, errCmd = exec.Command("bash", "-c", "cat "+podLogs+filterCmd).CombinedOutput()
+	} else {
+		filteredLogs, errCmd = exec.Command("bash", "-c", "cat "+podLogs+filterCmd).Output()
+	}
+	return string(filteredLogs), errCmd
 }
 
 // GetAllPods returns a list of the names of all pods in the cluster in a given namespace

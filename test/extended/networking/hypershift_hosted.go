@@ -485,4 +485,90 @@ var _ = g.Describe("[sig-networking] SDN OVN hypershift", func() {
 		}
 	})
 
+	g.It("Author:jechen-HyperShiftMGMT-ConnectedOnly-High-74596-Even with a FQDN proxy configured on hostedCluster, connection can be made to the readinessEndpoint under noProxy that bypass the proxy [Disruptive]", func() {
+
+		// This is for bug https://issues.redhat.com/browse/OCPBUGS-33526
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		squidProxyDeploymentFile := filepath.Join(buildPruningBaseDir, "proxy_deployment.yaml")
+		url := "www.google.com"
+
+		exutil.By("1. create new namespace\n")
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "anyuid", "-z", "default", "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Deploy a squid deployment in the namespace then expose its service\n")
+		defer removeResource(oc, true, true, "deployment", "squid-deployment", ns)
+		defer removeResource(oc, true, true, "service", "squid-deployment", ns)
+		createResourceFromFile(oc, ns, squidProxyDeploymentFile)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", ns, "squid-deployment").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "squid-deployment")).To(o.BeTrue())
+
+		err = waitForPodWithLabelReady(oc, ns, "app=squid")
+		exutil.AssertWaitPollNoErr(err, "Not all squid pods with label app=squid are ready")
+		squidPods := getPodName(oc, ns, "app=squid")
+		o.Expect(len(squidPods)).Should(o.Equal(1))
+		defer removeResource(oc, true, true, "pod", squidPods[0], ns)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("deployment/squid-deployment", "--type=LoadBalancer", "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		LBSVCHostname := getLBSVCHostname(oc, ns, "squid-deployment")
+		e2e.Logf("\n\n\n Got hostname for the squid service: %v\n", LBSVCHostname)
+
+		exutil.By("3. Patch hosted cluster to add squid proxy as its proxy\n")
+		origProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedclusterNS, "-o=jsonpath={.spec.configuration.proxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		patchResource := "hostedcluster/" + hostedClusterName
+		patchRestore := fmt.Sprintf(`[{"op": "replace", "path": "/spec/configuration/proxy", "value":%s}]`, origProxy)
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", hostedclusterNS, patchResource, "--type=json", "-p", patchRestore).Execute()
+			proxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedclusterNS, "-o=jsonpath={.spec.configuration.proxy}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("proxy is restored to: %s\n", proxy)
+			o.Expect(proxy).Should(o.ContainSubstring(origProxy))
+		}()
+
+		proxyValue := "http://" + LBSVCHostname + ":3128"
+		patchAdd := "{\"spec\":{\"configuration\":{\"proxy\":{\"httpProxy\":\"" + proxyValue + "\", \"httpsProxy\":\"" + proxyValue + "\"}}}}"
+		patchResourceAsAdminNS(oc, hostedclusterNS, patchResource, patchAdd)
+
+		proxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedclusterNS, "-o=jsonpath={.spec.configuration.proxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("proxy: %s\n", proxy)
+		expectedProxy1 := fmt.Sprintf(`"httpProxy":"http://%s:3128"`, LBSVCHostname)
+		expectedProxy2 := fmt.Sprintf(`"httpsProxy":"http://%s:3128"`, LBSVCHostname)
+		o.Expect(proxy).Should(o.And(o.ContainSubstring(expectedProxy1), o.ContainSubstring(expectedProxy2)))
+
+		exutil.By("4. Patch hosted cluster to add squid proxy to noProxy, then set its readinessEndpoint to www.google.com\n")
+		patchAdd = "{\"spec\":{\"configuration\":{\"proxy\":{\"noProxy\":\"" + LBSVCHostname + "\"}}}}"
+		patchResourceAsAdminNS(oc, hostedclusterNS, patchResource, patchAdd)
+
+		readinessEP := "https://" + url
+		patchAdd = "{\"spec\":{\"configuration\":{\"proxy\":{\"readinessEndpoints\":[\"" + readinessEP + "\"]}}}}"
+		patchResourceAsAdminNS(oc, hostedclusterNS, patchResource, patchAdd)
+
+		noProxyOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedclusterNS, "-o=jsonpath={.spec.configuration.proxy.noProxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(noProxyOutput, LBSVCHostname)).To(o.BeTrue())
+		readinessEPOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedclusterNS, "-o=jsonpath={.spec.configuration.proxy.readinessEndpoints}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(readinessEPOutput, url)).To(o.BeTrue())
+
+		// give some time for readinessEndpoints under noProxy to take effect
+		time.Sleep(30 * time.Second)
+
+		exutil.By("5. Check squid pod to confirm connectivity to www.google.com succeed\n")
+		expectedString := fmt.Sprintf(`CONNECT %s:443`, url)
+		o.Eventually(func() bool {
+			podLogs, LogErr := checkLogMessageInPod(oc, ns, "tailer", squidPods[0], "google.com")
+			o.Expect(LogErr).NotTo(o.HaveOccurred())
+			return strings.Contains(podLogs, expectedString)
+		}, "5m", "10s").Should(o.BeTrue(), "Connection to the readinessEndpoint under noProxy did not succeed!!")
+	})
+
 })

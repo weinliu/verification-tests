@@ -2011,14 +2011,16 @@ func checkLogMessageInPod(oc *exutil.CLI, namespace string, containerName string
 	var podLogs string
 	var err, checkErr error
 	checkErr = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-		podLogs, err = exutil.GetSpecificPodLogs(oc, namespace, containerName, podName, filter)
+		podLogs, err = exutil.GetSpecificPodLogsCombinedOrNot(oc, namespace, containerName, podName, filter, true)
 		if len(podLogs) == 0 || err != nil {
 			e2e.Logf("did not get expected podLogs: %v, or have err:%v, try again", podLogs, err)
 			return false, nil
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("fail to get expected log in pod %v, err: %v", podName, checkErr))
+	if checkErr != nil {
+		return podLogs, fmt.Errorf(fmt.Sprintf("fail to get expected log in pod %v, err: %v", podName, err))
+	}
 	return podLogs, nil
 }
 
@@ -3756,12 +3758,18 @@ func applyConfigTypeExtHost(leftPublicIP, configType string) error {
 }
 
 // get hostname for LB service, this fuction is likely to be useful only for AWS, other public cloud platforms may not give LB service hostname
-func getLBSVCHostname(oc *exutil.CLI, svc genericServiceResource) string {
+func getLBSVCHostname(oc *exutil.CLI, namespace, svc string) string {
 	var LBSVCHostname string
 	var cmdErr error
+
+	platform := exutil.CheckPlatform(oc)
+	if !strings.Contains(platform, "aws") {
+		g.Skip("Skip for non-AWS cluster")
+	}
+
 	e2e.Logf("Getting the Load Balancer service hostname ...")
 	getLBSVCHostnameErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
-		LBSVCHostname, cmdErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", svc.servicename, "-n", svc.namespace, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}").Output()
+		LBSVCHostname, cmdErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", svc, "-n", namespace, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}").Output()
 		if cmdErr != nil || LBSVCHostname == "pending" || LBSVCHostname == "" {
 			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
 			return false, nil
