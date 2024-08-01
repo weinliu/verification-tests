@@ -1967,4 +1967,73 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-VMonly-ConnectedOnly-High-75148-opm generate binary-less dockerfiles", func() {
+
+		tmpBasePath := "/tmp/ocp-75148-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "catalog")
+		dockerFile := filepath.Join(tmpBasePath, "catalog.Dockerfile")
+
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		opmCLI.ExecCommandPath = tmpBasePath
+
+		exutil.By("Check flag --binary-image has been deprecated")
+		output, err := opmCLI.Run("generate").Args("dockerfile", "--binary-image", "quay.io/operator-framework/opm:latest", "catalog").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("--binary-image has been deprecated, use --base-image instead"))
+
+		err = os.Remove(dockerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check parameter --base-image and --builder-image")
+		_, err = opmCLI.Run("generate").Args("dockerfile", "catalog", "-i", "quay.io/openshifttest/opm:v1", "-b", "quay.io/openshifttest/opm:v2").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the custom images in Dockerfile")
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 6*time.Second, false, func(ctx context.Context) (bool, error) {
+			if _, err := os.Stat(dockerFile); os.IsNotExist(err) {
+				e2e.Logf("get catalog.Dockerfile Failed")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "get catalog.Dockerfile Failed")
+
+		content, err := ioutil.ReadFile(dockerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if !strings.Contains(string(content), "FROM quay.io/openshifttest/opm:v2 as builder") || !strings.Contains(string(content), "FROM quay.io/openshifttest/opm:v1") {
+			e2e.Failf("Fail to get the custom images in Dockerfile")
+		}
+
+		err = os.Remove(dockerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a binary-less dockerfile")
+		_, err = opmCLI.Run("generate").Args("dockerfile", "catalog", "--base-image=scratch").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the custom images in Dockerfile")
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 6*time.Second, false, func(ctx context.Context) (bool, error) {
+			if _, err := os.Stat(dockerFile); os.IsNotExist(err) {
+				e2e.Logf("get catalog.Dockerfile Failed")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "get catalog.Dockerfile Failed")
+
+		content, err = ioutil.ReadFile(dockerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(string(content), "OLMv0 CatalogSources that use binary-less images must set:") || !strings.Contains(string(content), "extractContent:") || !strings.Contains(string(content), "FROM scratch") {
+			e2e.Failf("Fail to get the scratch in Dockerfile")
+		}
+
+		err = os.Remove(dockerFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
 })
