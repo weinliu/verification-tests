@@ -1377,7 +1377,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-72054-EgressFirewall rules should include all IPs of matched node when nodeSelector is used.", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-High-72054-EgressFirewall rules should include all IPs of matched node when nodeSelector is used.", func() {
 
 		// https://issues.redhat.com/browse/OCPBUGS-13665
 
