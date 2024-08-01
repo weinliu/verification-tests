@@ -211,11 +211,9 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		return false, nil
 	})
 	if errCheck != nil {
-		e2e.Logf("Dumping the status of subscription %s:", subscriptionName)
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status}").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Failf("The subscription %v status is not correct", subscriptionName)
+		dumpResource(oc, subscriptionNamespace, "sub", subscriptionName, "-o=jsonpath={.status}")
 	}
+	exutil.AssertWaitPollNoErr(errCheck, "timeout waiting for subscription to become AtLatestKnown")
 
 	// checking csv status
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.installedCSV}").Output()
@@ -232,11 +230,9 @@ func createCertManagerOperator(oc *exutil.CLI) {
 
 	})
 	if errCheck != nil {
-		tmpCsvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", subscriptionNamespace, "-o=jsonpath={.status}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("csv %s is:%s", csvName, tmpCsvState)
-		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
+		dumpResource(oc, subscriptionNamespace, "csv", csvName, "-o=jsonpath={.status}")
 	}
+	exutil.AssertWaitPollNoErr(errCheck, "timeout waiting for csv to become Succeeded")
 
 	e2e.Logf("Check cert manager pods.\n")
 	mStatusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
@@ -263,16 +259,11 @@ func createIssuer(oc *exutil.CLI) {
 	err := oc.Run("create").Args("-f", issuerFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := oc.Run("get").Args("issuer", "default-selfsigned").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "True") {
-			e2e.Logf("Get issuer output is: %v", output)
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(statusErr, "get issuer is wrong")
+	err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", "default-selfsigned", 10*time.Second, 120*time.Second)
+	if err != nil {
+		dumpResource(oc, oc.Namespace(), "issuer", "default-selfsigned", "-o=yaml")
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 }
 
 // create certificate using selfsigned issuer
@@ -283,17 +274,11 @@ func createCertificate(oc *exutil.CLI) {
 	err := oc.Run("create").Args("-f", certFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := oc.Run("get").Args("certificate", "default-selfsigned-cert").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("certificate status is: %v ", output)
-		if strings.Contains(output, "True") {
-			e2e.Logf("certificate status is normal.")
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
+	err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "default-selfsigned-cert", 10*time.Second, 300*time.Second)
+	if err != nil {
+		dumpResource(oc, oc.Namespace(), "certificate", "default-selfsigned-cert", "-o=yaml")
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 }
 
 // waitForResourceReadiness polls the status of the object and returns no error once Ready.

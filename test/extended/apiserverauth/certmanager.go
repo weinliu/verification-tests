@@ -95,45 +95,25 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		oc.SetShowInfo()
-		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "letsencrypt-dns01", "-o", "wide").Output()
-			if !strings.Contains(output, "True") || err != nil {
-				e2e.Logf("clusterissuer is not ready.")
-				return false, nil
-			}
-			e2e.Logf("clusterissuer is ready.")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer 'letsencrypt-dns01' timeout")
+		err = waitForResourceReadiness(oc, "", "clusterissuer", "letsencrypt-dns01", 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, "", "clusterissuer", "letsencrypt-dns01", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
+
 		exutil.By("create certificate which references previous clusterissuer")
-		defer func() {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("certificate").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(output, "certificate-from-dns01") {
-				e2e.Logf("Remove certificate: certificate-from-dns01.")
-				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("certificate", "certificate-from-dns01").Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-		}()
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
 		dnsName := constructDNSName(dnsZone)
 		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + "letsencrypt-dns01"}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
-		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-			output, err := oc.Run("get").Args("certificate").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			output1, err := oc.Run("get").Args("challenge").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("certificate status is: %v ", output)
-			if strings.Contains(output, "True") && !strings.Contains(output1, "certificate-from-dns01") {
-				e2e.Logf("certificate status is normal: %v ", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("certificate is wrong: %v", statusErr))
+
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-from-dns01", 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", "certificate-from-dns01", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
 		verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
@@ -191,17 +171,12 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
 		err = oc.Run("create").Args("-f", issuerHTTP01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", "letsencrypt-http01", 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", "letsencrypt-http01", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
-			output, err := oc.Run("get").Args("issuer", "letsencrypt-http01").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(output, "True") {
-				e2e.Logf("Get issuer output is: %v", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("get issuer is wrong: %v", statusErr))
 		e2e.Logf("As the normal user, create certificate.")
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}", "--context=admin").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -212,17 +187,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", certHTTP01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-			output, err := oc.Run("get").Args("certificate", "cert-test-http01").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("certificate status is: %v ", output)
-			if strings.Contains(output, "True") {
-				e2e.Logf("certificate status is normal.")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "cert-test-http01", 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", "cert-test-http01", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
 		verifyCertificate(oc, "cert-test-http01", oc.Namespace())
@@ -401,16 +370,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "hosted-zone-overlapped").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "hosted-zone-overlapped", "-o", "wide").Output()
-			if !strings.Contains(output, "True") || err != nil {
-				e2e.Logf("clusterissuer is not ready.")
-				return false, nil
-			}
-			e2e.Logf("clusterissuer is ready.")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer 'hosted-zone-overlapped' timeout")
+		err = waitForResourceReadiness(oc, "", "clusterissuer", "hosted-zone-overlapped", 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, "", "clusterissuer", "hosted-zone-overlapped", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
 		exutil.By("create certificate which references previous clusterissuer")
 		e2e.Logf("Create ns with normal user.")
@@ -433,53 +397,28 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.AssertWaitPollNoErr(statusErr, "challenge/certificate is wrong.")
 
 		exutil.By("Apply dns args by patch.")
-		certManagerPod0, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
-		if len(string(certManagerPod0)) == 0 || err != nil {
-			e2e.Failf("Fail to get name of cert_manager_pod0.")
-		}
-		patchPath := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers=1.1.1.1:53\",\"--dns01-recursive-nameservers-only\"]}}}"
-		var certManagerPod1 string
-		defer func() {
-			e2e.Logf("patch clusterissuers.cert-manager.io back.")
-			patchPath1 := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":null}}}"
-			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath1).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			statusErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-				certManagerPod2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if !strings.Contains(certManagerPod2, certManagerPod1) {
-					e2e.Logf("cert-manager pods have been redeployed successfully.")
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed when recovered.")
-		}()
+		oldPodList, err := exutil.GetAllPodsWithLabel(oc, "cert-manager", "app=cert-manager")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchPath := `{"spec":{"controllerConfig":{"overrideArgs":["--dns01-recursive-nameservers=1.1.1.1:53", "--dns01-recursive-nameservers-only"]}}}`
 		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		statusErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-			certManagerPod1, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
+		defer func() {
+			e2e.Logf("[defer] Unpatch dns args")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, "cert-manager", "app=cert-manager")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if !strings.Contains(certManagerPod1, certManagerPod0) {
-				e2e.Logf("cert-manager pods have been redeployed successfully.")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed.")
+			patchPath = `{"spec":{"controllerConfig":{"overrideArgs":null}}}`
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForPodsToBeRedeployed(oc, "cert-manager", "app=cert-manager", oldPodList, 10*time.Second, 120*time.Second)
+		}()
+		waitForPodsToBeRedeployed(oc, "cert-manager", "app=cert-manager", oldPodList, 10*time.Second, 120*time.Second)
 
 		exutil.By("Check the certificate content AGAIN.")
-		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-			output, err = oc.Run("get").Args("certificate", "certificate-hosted-zone-overlapped").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("certificate status is: %v ", output)
-			if strings.Contains(output, "True") {
-				e2e.Logf("certificate status is normal.")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "certificate status is wrong.")
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-hosted-zone-overlapped", 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", "certificate-hosted-zone-overlapped", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
 		verifyCertificate(oc, "certificate-hosted-zone-overlapped", oc.Namespace())
@@ -546,16 +485,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "letsencrypt-dns01", "-o", "wide").Output()
-			if !strings.Contains(output, "True") || err != nil {
-				e2e.Logf("clusterissuer is not ready.")
-				return false, nil
-			}
-			e2e.Logf("clusterissuer is ready.")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for clusterissuer 'letsencrypt-dns01' ready timeout.")
+		err = waitForResourceReadiness(oc, "", "clusterissuer", "letsencrypt-dns01", 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, "", "clusterissuer", "letsencrypt-dns01", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
 		exutil.By("Create the certificate.")
 		dnsName := constructDNSName(dnsZone)
@@ -584,50 +518,29 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Failure: challenge has not output as expected.")
-		exutil.By("patch certmanager/cluster.")
-		certManagerPod1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
-		patchPath := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\"]}}}"
-		defer func() {
-			e2e.Logf("patch certmanager/cluster back.")
-			certManagerPod1, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
-			patchPath1 := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":null}}}"
-			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath1).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			statusErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-				certManagerPod2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if !strings.Contains(certManagerPod2, certManagerPod1) {
-					e2e.Logf("cert-manager pods have been redeployed successfully.")
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed after recovery.")
-		}()
+		exutil.By("Apply dns args by patch.")
+		oldPodList, err := exutil.GetAllPodsWithLabel(oc, "cert-manager", "app=cert-manager")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchPath := `{"spec":{"controllerConfig":{"overrideArgs":["--dns01-recursive-nameservers-only"]}}}`
 		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		statusErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-			certManagerPod2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "cert-manager", "-l", "app=cert-manager", "-o=jsonpath={.items[*].metadata.name}", "--field-selector=status.phase==Running").Output()
+		defer func() {
+			e2e.Logf("[defer] Unpatch dns args")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, "cert-manager", "app=cert-manager")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if !strings.Contains(certManagerPod2, certManagerPod1) {
-				e2e.Logf("cert-manager pods have been redeployed successfully.")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "cert-manager pods have NOT been redeployed after patch.")
-		exutil.By("Checke challenge and certificate again.")
-		statusErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-			output, err = oc.Run("get").Args("certificate", "certificate-from-dns01").Output()
+			patchPath = `{"spec":{"controllerConfig":{"overrideArgs":null}}}`
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("certificate status is: %v ", output)
-			if strings.Contains(output, "True") {
-				e2e.Logf("certificate status is normal.")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "certificate is wrong.")
+			waitForPodsToBeRedeployed(oc, "cert-manager", "app=cert-manager", oldPodList, 10*time.Second, 120*time.Second)
+		}()
+		waitForPodsToBeRedeployed(oc, "cert-manager", "app=cert-manager", oldPodList, 10*time.Second, 120*time.Second)
+
+		exutil.By("Checke certificate again.")
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-from-dns01", 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", "certificate-from-dns01", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
 		verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
@@ -653,7 +566,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 			exutil.By("Check if challenge will be pending and show HTTP 403 error")
-			statusErr = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+			statusErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
 				output, err = oc.Run("get").Args("challenge", "-o", "wide").Output()
 				if !strings.Contains(output, "403 Forbidden") || !strings.Contains(output, "pending") || err != nil {
 					e2e.Logf("challenge is still in processing, and status is not as expected: %s\n", output)
@@ -671,16 +584,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, "cert-manager", 10*time.Second, 120*time.Second)
 
 			exutil.By("Check if certificate will be True.")
-			statusErr = wait.Poll(10*time.Second, 150*time.Second, func() (bool, error) {
-				output, err = oc.Run("get").Args("certificate", "certificate-from-dns01").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if strings.Contains(output, "True") {
-					e2e.Logf("certificate status is normal.")
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(statusErr, "timed out after 150s waiting certificate to be True")
+			err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-from-dns01", 10*time.Second, 300*time.Second)
+			if err != nil {
+				dumpResource(oc, oc.Namespace(), "certificate", "certificate-from-dns01", "-o=yaml")
+			}
+			exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 			exutil.By("Check and verify issued certificate content")
 			verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
@@ -701,16 +609,12 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		}()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterissuer", "acme-multiple-solvers", "-o", "wide").Output()
-			if !strings.Contains(output, "True") || err != nil {
-				e2e.Logf("clusterissuer is not ready.")
-				return false, nil
-			}
-			e2e.Logf("clusterissuer is ready.")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Waiting for get clusterissuer 'acme-multiple-solvers' timeout.")
+
+		err = waitForResourceReadiness(oc, "", "clusterissuer", "acme-multiple-solvers", 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, "", "clusterissuer", "acme-multiple-solvers", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
 		e2e.Logf("Create ns with normal user.")
 		oc.SetupProject()
@@ -1106,19 +1010,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.By("create a CA Issuer")
 		err := oc.Run("apply").Args("-f", issuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		statusErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-			output, err := oc.Run("get").Args("issuer", "default-ca", "-o", "wide").Output()
-			if err != nil {
-				e2e.Logf("Error to get issuer: %v", err)
-				return false, nil
-			}
-			if strings.Contains(output, "True") {
-				return true, nil
-			}
-			e2e.Logf("Issuer status is: %v", output)
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "timed out after 180s waiting the CA Issuer to be Ready")
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", "default-ca", 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", "default-ca", "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer 'default-ca' to become Ready")
 
 		exutil.By("create 3 Certificates with the same secretName")
 		certNames := []string{"duplicate-cert-1", "duplicate-cert-2", "duplicate-cert-3"}
