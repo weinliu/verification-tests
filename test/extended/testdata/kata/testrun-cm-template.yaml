@@ -56,4 +56,4 @@ parameters:
   - name: ENABLENVIDIAGPU
     value: "false"
   - name: PODVMIMAGEURL
-    value: "https://raw.githubusercontent.com/bpradipt/sandboxed-containers-operator/pvm-img-fix/config/peerpods/podvm/"
+    value: "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/"

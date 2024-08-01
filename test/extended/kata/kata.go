@@ -181,10 +181,13 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			msg, err = createApplyPeerPodConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppConfigMapName, ppConfigMapTemplate)
 			if err != nil {
 				e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)
+			} else if cloudPlatform == "azure" || cloudPlatform == "libvirt" {
+				err = createSSHPeerPodsKeys(oc, ppParam, cloudPlatform)
+				o.Expect(err).NotTo(o.HaveOccurred(), err)
 			}
 
 			e2e.Logf("patch cm for DISABLECVM=true for OSC 1.5.3 and 1.6.0")
-			if strings.Contains(testrun.operatorVer, "1.6.0") || strings.Contains(testrun.operatorVer, "1.5.3") {
+			if cloudPlatform == "aws" && (strings.Contains(testrun.operatorVer, "1.6.0") || strings.Contains(testrun.operatorVer, "1.5.3")) {
 				msg, err = oc.AsAdmin().Run("patch").Args("configmap", ppConfigMapName, "-n", opNamespace, "--type", "merge",
 					"--patch", "{\"data\":{\"DISABLECVM\":\"true\"}}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch DISABLECVM=true \n error: %v %v", msg, err))
@@ -192,7 +195,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			//new flow for GPU prior to image building job
 			if testrun.enableGPU {
 				cmName := cloudPlatform + "-podvm-image-cm"
-				cmUrl := testrun.podvmImageUrl + cmName + ".yaml"
+				//fix till CI will be fixed
+				//cmUrl := testrun.podvmImageUrl + cmName + ".yaml"
+				cmUrl := "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/" + cmName + ".yaml"
 				msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", cmUrl).Output()
 				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("issue applying podvm image configmap %v: %v, %v", cmUrl, msg, err))
 				patchPodvmEnableGPU(oc, opNamespace, cmName, "yes")

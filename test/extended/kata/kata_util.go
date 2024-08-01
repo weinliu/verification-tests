@@ -89,14 +89,15 @@ type UpgradeCatalogDescription struct {
 }
 
 var (
-	snooze       time.Duration = 2400
-	kataSnooze   time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	podSnooze    time.Duration = 600  // Peer Pods take longer than 2 minutes
-	podRunState                = "Running"
-	featureLabel               = "feature.node.kubernetes.io/runtime.kata=true"
-	workerLabel                = "node-role.kubernetes.io/worker"
-	kataocLabel                = "node-role.kubernetes.io/kata-oc"
-	customLabel                = "custom-label=test"
+	snooze                time.Duration = 2400
+	kataSnooze            time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+	podSnooze             time.Duration = 600  // Peer Pods take longer than 2 minutes
+	podRunState                         = "Running"
+	featureLabel                        = "feature.node.kubernetes.io/runtime.kata=true"
+	workerLabel                         = "node-role.kubernetes.io/worker"
+	kataocLabel                         = "node-role.kubernetes.io/kata-oc"
+	customLabel                         = "custom-label=test"
+	kataconfigStatusQuery               = "-o=jsonpath={.status.conditions[?(@.type=='InProgress')].status}"
 )
 
 func ensureNamespaceIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, nsFile string) (err error) {
@@ -156,15 +157,10 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 	_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers", "-n", sub.namespace).Output()
 	if err == nil {
 		// kataconfig exists. Is it finished?
-		kataconfigStatusQuery, kataconfigStatusQueryChanged, err := kataconfigStatusInUse(oc, sub.namespace, kataconf.name)
-		if err != nil {
-			e2e.Logf("error with kataconfigStatusInUse: %v, changed %v %v", kataconfigStatusQuery, kataconfigStatusQueryChanged, err)
-		} else {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "-n", sub.namespace, kataconfigStatusQuery).Output()
-			if strings.ToLower(msg) == "false" {
-				g.By("(3) kataconfig is previously installed")
-				return msg, err // no need to go through the rest
-			}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "-n", sub.namespace, kataconfigStatusQuery).Output()
+		if strings.ToLower(msg) == "false" {
+			g.By("(3) kataconfig is previously installed")
+			return msg, err // no need to go through the rest
 		}
 	}
 
@@ -316,15 +312,9 @@ func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName stri
 				gjson.Get(jsonCsvStatus, "reason").String() != "InstallSucceeded" {
 				e2e.Logf("Error: CSV in wrong state, expected: %v actual:\n%v %v", "InstallSucceeded", jsonCsvStatus, err)
 			} else { // check kataconfig
-				// find out which status query to use
-				kataconfigStatusQuery, kataconfigStatusQueryChanged, err := kataconfigStatusInUse(oc, sub.namespace, kcName)
-				if err != nil {
-					e2e.Logf("error with kataconfigStatusInUse: %v, changed %v %v", kataconfigStatusQuery, kataconfigStatusQueryChanged, err)
-				} else {
-					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, kataconfigStatusQuery).Output()
-					if err == nil && strings.ToLower(msg) == "false" {
-						return true
-					}
+				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, kataconfigStatusQuery).Output()
+				if err == nil && strings.ToLower(msg) == "false" {
+					return true
 				}
 				e2e.Logf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", msg, err)
 			}
@@ -479,21 +469,11 @@ func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer
 
 func waitForKataconfig(oc *exutil.CLI, kcName, opNamespace string) (msg string, err error) {
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	var (
-		kataconfigStatusQuery        string
-		kataconfigStatusQueryChanged bool
-	)
 
 	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
-		// find out which status query to use
-		kataconfigStatusQuery, kataconfigStatusQueryChanged, err = kataconfigStatusInUse(oc, opNamespace, kcName)
-		if err != nil {
-			e2e.Logf("error with kataconfigStatusInUse: %v, changed %v %v", kataconfigStatusQuery, kataconfigStatusQueryChanged, err)
-		} else {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", opNamespace, kataconfigStatusQuery).Output()
-			if strings.ToLower(msg) == "false" {
-				return true, nil
-			}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", opNamespace, kataconfigStatusQuery).Output()
+		if strings.ToLower(msg) == "false" {
+			return true, nil
 		}
 		return false, nil
 	})
@@ -830,26 +810,6 @@ func checkControlSvc(oc *exutil.CLI, svcNs, svcName string) (msg string, err err
 
 	g.By("SUCCESS - service check passed")
 	return msg, err
-}
-
-func kataconfigStatusInUse(oc *exutil.CLI, opNamespace, kcName string) (kataconfigStatusQuery string, kataconfigStatusQueryChanged bool, err error) {
-	// author: tbuskey@redhat.com
-	// detect kataconfig status changes in 1.5 and use them
-	var json string
-
-	kataconfigStatusQuery = "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}"
-	kataconfigStatusQueryChanged = false
-
-	json, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", opNamespace, "-o=jsonpath={.status}").Output()
-	if err != nil || json == "" {
-		kataconfigStatusQuery = fmt.Sprintf("Could not get status of kataconfig %v %v", json, err)
-	} else {
-		if gjson.Get(json, "conditions").Exists() {
-			kataconfigStatusQuery = "-o=jsonpath={.status.conditions[?(@.type=='InProgress')].status}"
-			kataconfigStatusQueryChanged = true
-		}
-	}
-	return kataconfigStatusQuery, kataconfigStatusQueryChanged, err
 }
 
 func checkResourceExists(oc *exutil.CLI, resType, resName, resNs string, duration, interval time.Duration) (msg string, err error) {
@@ -1349,7 +1309,6 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 	_, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
 	if err == nil {
 		//check for IMAGE ID in the configmap
-
 		msg, err, imageID = CheckPodVMImageID(oc, ppConfigMapName, provider, opNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if imageID == "" {
@@ -1389,10 +1348,6 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 			configFile, err = createAzurePeerPodsConfigMap(oc, ppParam, ppConfigMapTemplate)
 		} else if provider == "libvirt" {
 			configFile, err = createLibvirtPeerPodsConfigMap(oc, ppParam, ppConfigMapTemplate)
-			if err != nil {
-				err = createLibvirtPeerPodsKeys(oc, ppParam)
-				o.Expect(err).NotTo(o.HaveOccurred(), err)
-			}
 		} else {
 			msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
 			return msg, fmt.Errorf("%v", msg)
@@ -1408,17 +1363,6 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 		if err != nil {
 			return fmt.Sprintf("Error: applying peer-pods-cm %v failed: %v %v", configFile, msg, err), err
 		}
-		//check for IMAGE ID in the configmap
-		msg, err, imageID = CheckPodVMImageID(oc, ppConfigMapName, provider, opNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if imageID == "" {
-			e2e.Logf("peer-pods-cm in the right state - does not have the IMAGE ID before the kataconfig install , msg: %v", msg)
-		} else {
-			e2e.Logf("IMAGE ID: %v", imageID)
-			msgIfErr := fmt.Sprintf("ERROR: peer-pods-cm has the Image ID before the kataconfig is installed, incorrect state: %v %v %v", imageID, msg, err)
-			o.Expect(imageID).NotTo(o.BeEmpty(), msgIfErr)
-		}
-
 	}
 
 	return msg, err
@@ -1481,11 +1425,12 @@ func createLibvirtPeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConf
 	return configFile, err
 }
 
-func createLibvirtPeerPodsKeys(oc *exutil.CLI, ppParam PeerpodParam) error {
+func createSSHPeerPodsKeys(oc *exutil.CLI, ppParam PeerpodParam, provider string) error {
 	g.By("Create ssh keys")
 
 	keyName := "id_rsa_" + getRandomString()
 	pubKeyName := keyName + ".pub"
+	fromFile := "--from-file=id_rsa.pub=./" + pubKeyName
 
 	shredRMCmd := fmt.Sprintf(`shred -f --remove ./%v ./%v`, keyName, pubKeyName)
 	defer exec.Command("bash", "-c", shredRMCmd).CombinedOutput()
@@ -1497,15 +1442,21 @@ func createLibvirtPeerPodsKeys(oc *exutil.CLI, ppParam PeerpodParam) error {
 		return err
 	}
 
-	sshCopyIdCmd := fmt.Sprintf(`ssh-copy-id -i ./%v %v`, pubKeyName, ppParam.LIBVIRT_KVM_HOST_ADDRESS)
-	retCmd, err = exec.Command("bash", "-c", sshCopyIdCmd).CombinedOutput()
-	if err != nil {
-		e2e.Logf("the error: %v", string(retCmd))
-		return err
+	if provider == "libvirt" {
+		fromFile = fromFile + " --from-file=id_rsa=./" + keyName
+		sshCopyIdCmd := fmt.Sprintf(`ssh-copy-id -i ./%v %v`, pubKeyName, ppParam.LIBVIRT_KVM_HOST_ADDRESS)
+		retCmd, err = exec.Command("bash", "-c", sshCopyIdCmd).CombinedOutput()
+		if err != nil {
+			e2e.Logf("the error: %v", string(retCmd))
+			return err
+		}
 	}
-
-	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-sandboxed-containers-operator", "secret", "generic", "ssh-key-secret",
-		"--from-file=id_rsa.pub=./"+pubKeyName, "--from-file=id_rsa=./"+keyName).Output()
+	secretMsg, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-sandboxed-containers-operator",
+		"secret", "generic", "ssh-key-secret", fromFile).Output()
+	if strings.Contains(secretMsg, "already exists") {
+		e2e.Logf(secretMsg)
+		return nil
+	}
 	return err
 }
 
