@@ -20,6 +20,14 @@ type udnPodResource struct {
 	template  string
 }
 
+type udnPodSecNADResource struct {
+	name       string
+	namespace  string
+	label      string
+	annotation string
+	template   string
+}
+
 type udnNetDefResource struct {
 	nadname             string
 	namespace           string
@@ -28,6 +36,7 @@ type udnNetDefResource struct {
 	subnet              string
 	mtu                 int32
 	net_attach_def_name string
+	role                string
 	template            string
 }
 
@@ -43,9 +52,21 @@ func (pod *udnPodResource) createUdnPod(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
 }
 
+func (pod *udnPodSecNADResource) createUdnPodWithSecNAD(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "LABEL="+pod.label, "ANNOTATION="+pod.annotation)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
 func (nad *udnNetDefResource) createUdnNad(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NADNAME="+nad.nadname, "NAMESPACE="+nad.namespace, "NAD_NETWORK_NAME="+nad.nad_network_name, "TOPOLOGY="+nad.topology, "SUBNET="+nad.subnet, "MTU="+strconv.Itoa(int(nad.mtu)), "NET_ATTACH_DEF_NAME="+nad.net_attach_def_name)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NADNAME="+nad.nadname, "NAMESPACE="+nad.namespace, "NAD_NETWORK_NAME="+nad.nad_network_name, "TOPOLOGY="+nad.topology, "SUBNET="+nad.subnet, "MTU="+strconv.Itoa(int(nad.mtu)), "NET_ATTACH_DEF_NAME="+nad.net_attach_def_name, "ROLE="+nad.role)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil

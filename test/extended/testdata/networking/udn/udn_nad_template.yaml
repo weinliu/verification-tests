@@ -16,7 +16,7 @@ objects:
         "subnets": "${SUBNET}",
         "mtu": ${MTU},
         "netAttachDefName": "${NET_ATTACH_DEF_NAME}",
-        "role": "primary"
+        "role": "${ROLE}"
       }
 
 parameters:
@@ -27,3 +27,4 @@ parameters:
 - name: SUBNET
 - name: MTU
 - name: NET_ATTACH_DEF_NAME
+- name: ROLE
