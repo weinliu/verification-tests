@@ -3,6 +3,7 @@ package clusterinfrastructure
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -217,6 +218,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure Upgrade", fun
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer func() {
+			time.Sleep(10 * time.Second) //Wait 10s before deleting the dhcp to make sure it is de-associated with the vpc.
 			err := awsClient.DeleteDhcpOptions(newDhcpOptionsID)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
