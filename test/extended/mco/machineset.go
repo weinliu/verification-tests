@@ -285,6 +285,11 @@ func (ms MachineSet) SetArchitecture(arch string) error {
 			arch))
 }
 
+// GetUserDataSecret returns the secret used for user-data
+func (ms MachineSet) GetUserDataSecret() (string, error) {
+	return ms.Get(`{.spec.template.spec.providerSpec.value.userDataSecret.name}`)
+}
+
 // GetCoreOsBootImage returns the configured coreOsBootImage in this machineset
 func (ms MachineSet) GetCoreOsBootImage() (string, error) {
 	// the coreOs boot image is stored differently in the machineset spec depending on the platform
