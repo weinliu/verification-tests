@@ -35,7 +35,6 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74238-BootImages not updated by default [Disruptive]", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-		skipIfNoTechPreview(oc)
 
 		var (
 			fakeImageName            = "fake-coreos-bootimage-name"
@@ -69,7 +68,6 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74240-ManagedBootImages on GCP. Restore All MachineSet images [Disruptive]", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-		skipIfNoTechPreview(oc)
 
 		var (
 			fakeImageName = "fake-coreos-bootimage-name"
@@ -166,7 +164,6 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74239-ManagedBootImages on GCP. Restore Partial MachineSet images [Disruptive]", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-		skipIfNoTechPreview(oc)
 
 		var (
 			fakeImageName = "fake-coreos-bootimage-name"
@@ -261,7 +258,6 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74764-ManagedBootImages on GCP. Delete machineset when error [Disruptive]", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-		skipIfNoTechPreview(oc)
 
 		var (
 			machineConfiguration = GetMachineConfiguration(oc.AsAdmin())
@@ -335,7 +331,6 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74751-ManagedBootImages on GCP. Fix errors [Disruptive]", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-		skipIfNoTechPreview(oc)
 
 		var (
 			coreosBootimagesCM          = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "coreos-bootimages")

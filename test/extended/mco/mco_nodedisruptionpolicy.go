@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -35,9 +36,6 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 	g.JustBeforeEach(func() {
 		preChecks(oc)
 		// skip the test if featureSet is not there
-		if !exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
-		}
 		// check featureGate NodeDisruptionPolicy is enabled
 		enabledFeatureGates := NewResource(oc.AsAdmin(), "featuregate", "cluster").GetOrFail(`{.status.featureGates[*].enabled}`)
 		o.Expect(enabledFeatureGates).Should(o.ContainSubstring("NodeDisruptionPolicy"), "featureGate: NodeDisruptionPolicy is not in enabled list")
@@ -160,6 +158,8 @@ func testFileBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expect
 		fileConfig = getURLEncodedFileConfig(filePath, fmt.Sprintf("test-%s", caseID), "420")
 		workerNode = NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
 		workerMcp  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		startTime  = workerNode.GetDateOrFail()
+		mcc        = NewController(oc.AsAdmin()).IgnoreLogsBeforeNowOrFail()
 	)
 
 	exutil.By("Patch ManchineConfiguration cluster")
@@ -178,8 +178,12 @@ func testFileBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expect
 	mc.create()
 
 	// check MCN for reboot and drain
-	checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	if exutil.OrFail[bool](IsFeaturegateEnabled(oc.AsAdmin(), MachineConfigNodesFeature)) {
+		checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	}
 	workerMcp.waitForComplete()
+	// check reboot and drain
+	checkDrainAndReboot(workerNode, startTime, mcc, actions)
 	// check MCD logs if expectedLogs is not empty
 	checkMachineConfigDaemonLog(workerNode, expectedLogs)
 }
@@ -195,6 +199,8 @@ func testUnitBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expect
 		mcName      = fmt.Sprintf("create-test-unit-%s-%s", caseID, exutil.GetRandomString())
 		workerNode  = NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
 		workerMcp   = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		startTime   = workerNode.GetDateOrFail()
+		mcc         = NewController(oc.AsAdmin()).IgnoreLogsBeforeNowOrFail()
 	)
 
 	exutil.By("Patch ManchineConfiguration cluster")
@@ -213,8 +219,12 @@ func testUnitBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expect
 	mc.create()
 
 	// check MCN for reboot and drain
-	checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	if exutil.OrFail[bool](IsFeaturegateEnabled(oc.AsAdmin(), MachineConfigNodesFeature)) {
+		checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	}
 	workerMcp.waitForComplete()
+	// check reboot and drain
+	checkDrainAndReboot(workerNode, startTime, mcc, actions)
 	// check MCD logs if expectedLogs is not empty
 	checkMachineConfigDaemonLog(workerNode, expectedLogs)
 }
@@ -227,6 +237,8 @@ func testSSHKeyBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expe
 		// sshkey change only works on coreOS node
 		workerNode = NewNodeList(oc.AsAdmin()).GetAllCoreOsWokerNodesOrFail()[0]
 		workerMcp  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		startTime  = workerNode.GetDateOrFail()
+		mcc        = NewController(oc.AsAdmin()).IgnoreLogsBeforeNowOrFail()
 	)
 
 	exutil.By("Patch ManchineConfiguration cluster")
@@ -244,8 +256,12 @@ func testSSHKeyBasedPolicy(oc *exutil.CLI, caseID string, actions []Action, expe
 	mc.create()
 
 	// check MCN for reboot and drain
-	checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	if exutil.OrFail[bool](IsFeaturegateEnabled(oc.AsAdmin(), MachineConfigNodesFeature)) {
+		checkMachineConfigNode(oc, workerNode.GetName(), actions)
+	}
 	workerMcp.waitForComplete()
+	// check reboot and drain
+	checkDrainAndReboot(workerNode, startTime, mcc, actions)
 	// check MCD logs if expectedLogs is not empty
 	checkMachineConfigDaemonLog(workerNode, expectedLogs)
 }
@@ -277,6 +293,17 @@ func checkMachineConfigNode(oc *exutil.CLI, nodeName string, actions []Action) {
 		exutil.By("Check whether the node is rebooted")
 		o.Eventually(mcn.GetRebootedNode, "10m", "6s").Should(o.Equal("True"))
 	}
+}
+
+// test func to check drain and reboot actions without using MCN
+func checkDrainAndReboot(node Node, startTime time.Time, controller *Controller, actions []Action) {
+	hasRebootAction := hasAction(NodeDisruptionPolicyActionReboot, actions)
+	hasDrainAction := hasAction(NodeDisruptionPolicyActionDrain, actions)
+
+	// A drain operation is always  executed when a reboot opration is executed, even if the drain action is not configured
+	// In SNO clusters the drain operation is not executed if the node is rebooted
+	checkDrainAction(hasDrainAction || (hasRebootAction && !IsSNO(node.GetOC())), node, controller)
+	checkRebootAction(hasRebootAction, node, startTime)
 }
 
 func hasAction(actnType string, actions []Action) bool {

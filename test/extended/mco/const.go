@@ -170,6 +170,9 @@ const (
 
 	// Regexp used to know if MCD logs is reporting that crio was reloaded
 	MCDCrioReloadedRegexp = "crio.* reloaded successfully"
+
+	// MachineConfigNodesFeature name of the MachineConfigNodes feature
+	MachineConfigNodesFeature = "MachineConfigNodes"
 )
 
 var (

@@ -136,7 +136,7 @@ func (r *ocGetter) GetSafe(jsonPath, defaultValue string, extraParams ...string)
 func (r *ocGetter) GetOrFail(jsonPath string, extraParams ...string) string {
 	ret, err := r.Get(jsonPath, extraParams...)
 	if err != nil {
-		e2e.Failf("Could not get value %s. Error: %v", jsonPath, err)
+		e2e.Failf("Could not get value %s in %s. Error: %v", jsonPath, r, err)
 	}
 
 	return ret
@@ -148,6 +148,11 @@ func (r *ocGetter) Poll(jsonPath string) func() string {
 		ret, _ := r.Get(jsonPath)
 		return ret
 	}
+}
+
+// String implements the Stringer interface
+func (r ocGetter) String() string {
+	return fmt.Sprintf("<Kind: %s, Name: %s, Namespace: %s>", r.kind, r.name, r.namespace)
 }
 
 // NewResource constructs a Resource struct for a not-namespaced resource
@@ -198,11 +203,6 @@ func (r Resource) SetSpec(spec string) error {
 func (r *Resource) Exists() bool {
 	_, err := r.Get("{.}")
 	return err == nil
-}
-
-// String implements the Stringer interface
-func (r Resource) String() string {
-	return fmt.Sprintf("<Kind: %s, Name: %s, Namespace: %s>", r.kind, r.name, r.namespace)
 }
 
 // HasOwnerOrFail returns true if the resource is owned by any other resource

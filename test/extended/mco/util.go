@@ -717,6 +717,39 @@ func isBaselineCapabilitySetNone(oc *exutil.CLI) bool {
 	return len(getEnabledCapabilities(oc)) == 0
 }
 
+// getEnabledFeatureGates get enabled featuregates list
+func getEnabledFeatureGates(oc *exutil.CLI) ([]string, error) {
+	enabledFeatureGates, err := NewResource(oc.AsAdmin(), "featuregate", "cluster").Get(`{.status.featureGates[0].enabled[*].name}`)
+	if err != nil {
+		return nil, err
+	}
+
+	return strings.Split(enabledFeatureGates, " "), nil
+}
+
+// IsFeaturegateEnabled check whether a featuregate is in enabled or not
+func IsFeaturegateEnabled(oc *exutil.CLI, featuregate string) (bool, error) {
+	enabledFeatureGates, err := getEnabledFeatureGates(oc)
+	if err != nil {
+		return false, err
+	}
+	for _, f := range enabledFeatureGates {
+		if f == featuregate {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func SkipIfNoFeatureGate(oc *exutil.CLI, featuregate string) {
+	enabled, err := IsFeaturegateEnabled(oc, featuregate)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting enabled featuregates")
+
+	if !enabled {
+		g.Skip(fmt.Sprintf("Featuregate %s is not enabled in this cluster", featuregate))
+	}
+}
+
 // getEnabledCapabilities get enabled capability list, the invoker can check expected capability is enabled or not
 func getEnabledCapabilities(oc *exutil.CLI) []interface{} {
 	jsonStr := NewResource(oc.AsAdmin(), "clusterversion", "version").GetOrFail(`{.status.capabilities.enabledCapabilities}`)

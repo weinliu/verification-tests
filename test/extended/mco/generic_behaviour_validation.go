@@ -309,10 +309,6 @@ func (v *UpdateBehaviourValidator) checkCrioRestart() {
 }
 
 func (v *UpdateBehaviourValidator) checkDrainNodes() {
-	var (
-		skipDrainLogMsg = "Changes do not require drain, skipping"
-		execDrainLogMsg = "initiating drain"
-	)
 	// We could check the "Drain" event in this function, but sometimes the events are not triggered and we don't know why
 	// Until events are not more stable we should not force even validation in ALL our tests, only in those that we want to expose to this instability
 
@@ -323,26 +319,7 @@ func (v *UpdateBehaviourValidator) checkDrainNodes() {
 	}
 
 	for _, node := range v.checkedNodes {
-		// We use MCD logs to check if drain is skipped, and we use the Controller logs to check if drain is executed
-		if v.DrainNodesShoulBeSkipped {
-			// When drain is skipped reboot is skipped always (since the reason why MCO executes a drain operation is to be able to execute a safe reboot).
-			// Hence, we can look for the "skipping" message in MCD logs after the configuration is applied.
-			logger.Infof("Checking that node %s was NOT drained", node.GetName())
-			o.Expect(
-				exutil.GetSpecificPodLogs(node.oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), ""),
-			).Should(o.ContainSubstring(skipDrainLogMsg),
-				"Error! The node %s was drained, but the drain operation should have been skipped", node.GetName())
-		} else {
-			// When drain is executed reboot is executed too always (since the reason why MCO executes a drain operation is to be able to execute a safe reboot).
-			// Hence, we cannot log for the "drain" message in the MCD logs because they have been removed in the reboot.
-			// There are two options, we can look for the message in the pre-reboot MCD logs or we can look for them in the MCController pod
-			// We decided to use the controller logs because it is way easier.
-			logger.Infof("Checking that node %s was drained", node.GetName())
-			o.Expect(
-				v.controller.GetLogs(),
-			).Should(o.ContainSubstring("node "+node.GetName()+": "+execDrainLogMsg),
-				"Error! The node %s was NOT drained, but it should be", node.GetName())
-		}
+		checkDrainAction(!v.DrainNodesShoulBeSkipped, node, v.controller)
 	}
 
 	logger.Infof("OK!\n")
@@ -363,15 +340,7 @@ func (v *UpdateBehaviourValidator) checkRebootNodes() {
 		"The provided comparison time was EMPTY while trying to guess if the nodes were rebooted")
 
 	for _, node := range v.checkedNodes {
-		if v.RebootNodesShouldBeSkipped {
-			logger.Infof("Checking that node %s was NOT rebooted", node.GetName())
-			o.Expect(node.GetUptime()).Should(o.BeTemporally("<", v.startTime),
-				"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
-		} else {
-			logger.Infof("Checking that node %s was rebooted", node.GetName())
-			o.Expect(node.GetUptime()).Should(o.BeTemporally(">", v.startTime),
-				"The node %s must be rebooted, but it was not. Uptime date happened before the start config time.", node.GetName())
-		}
+		checkRebootAction(!v.RebootNodesShouldBeSkipped, node, v.startTime)
 	}
 
 	logger.Infof("OK!\n")
@@ -385,5 +354,56 @@ func (v *UpdateBehaviourValidator) checkPreRebootMCDLogs() {
 
 	for _, preRebootMCDLogsChecker := range v.PreRebootMCDLogsCheckers {
 		preRebootMCDLogsChecker.CheckLogs(preRebootLogs, v.checkedNodes...)
+	}
+}
+
+// checkDrainAction checks that the drain action in the node is the expected one (drainSkipped)
+func checkDrainAction(drainSkipped bool, node Node, controller *Controller) {
+	checkDrainActionWithGomega(drainSkipped, node, controller, o.Default)
+}
+
+// checkDrainAction checks that the drain action in the node is the expected one (drainSkipped). It accepts and extra Gomega parameter that allows the function to be used in the Eventually gomega matchers
+func checkDrainActionWithGomega(drainExecuted bool, node Node, controller *Controller, gm o.Gomega) {
+	var (
+		execDrainLogMsg = "initiating drain"
+	)
+
+	// We use MCD logs to check if drain is skipped, and we use the Controller logs to check if drain is executed
+	if drainExecuted {
+		// When drain is executed reboot is usually executed too (since one of the reasons why MCO executes a drain operation is to be able to execute a safe reboot).
+		// Hence, we cannot look for the "drain" message in the MCD logs because they have been removed in the reboot.
+		// There are two options, we can look for the message in the pre-reboot MCD logs or we can look for them in the MCController pod
+		// We decided to use the controller logs because it is way easier.
+		logger.Infof("Checking that node %s was drained", node.GetName())
+		gm.Expect(
+			controller.GetLogs(),
+		).Should(o.ContainSubstring("node "+node.GetName()+": "+execDrainLogMsg),
+			"Error! The node %s was NOT drained, but it should be", node.GetName())
+	} else {
+		logger.Infof("Checking that node %s was NOT drained", node.GetName())
+		gm.Expect(
+			controller.GetLogs(),
+		).ShouldNot(o.ContainSubstring("node "+node.GetName()+": "+execDrainLogMsg),
+			"Error! The node %s was drained, but the drain operation should have been skipped", node.GetName())
+
+	}
+}
+
+// checkRebootActionWithGomega checks that the reboot action in the node is the expected one (rebootSkipped)
+func checkRebootAction(rebootSkipped bool, node Node, startTime time.Time) {
+	checkRebootActionWithGomega(rebootSkipped, node, startTime, o.Default)
+}
+
+// checkRebootActionWithGomega checks that the reboot action in the node is the expected one (rebootSkipped). It accepts and extra Gomega parameter that allows the function to be used in the Eventually gomega matchers
+func checkRebootActionWithGomega(rebootExecuted bool, node Node, startTime time.Time, gm o.Gomega) {
+	if rebootExecuted {
+		logger.Infof("Checking that node %s was rebooted", node.GetName())
+		gm.Expect(node.GetUptime()).Should(o.BeTemporally(">", startTime),
+			"The node %s must be rebooted, but it was not. Uptime date happened before the start config time.", node.GetName())
+	} else {
+		logger.Infof("Checking that node %s was NOT rebooted", node.GetName())
+		gm.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
+			"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+
 	}
 }

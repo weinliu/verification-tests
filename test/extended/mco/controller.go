@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
@@ -57,6 +58,14 @@ func (mcc *Controller) IgnoreLogsBeforeNow() error {
 	mcc.logsCheckPoint = logsUptoNow
 
 	return nil
+}
+
+// IgnoreLogsBeofreNowOrFail  when it is called all logs generated before calling it will be ignored by "GetLogs", if this method fails, the test is failed
+func (mcc *Controller) IgnoreLogsBeforeNowOrFail() *Controller {
+	err := mcc.IgnoreLogsBeforeNow()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error trying to ignore old logs in the MachineConfigController pod")
+
+	return mcc
 }
 
 // StopIgnoringLogs when it is called "IgnoreLogsBeforeNow" effect will not be taken into account anymore, and "GetLogs" will return full logs in MCO controller
