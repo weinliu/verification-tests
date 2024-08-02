@@ -1039,9 +1039,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			return lvmClusterState
 		}, 120*time.Second, 5*time.Second).Should(o.Equal("Failed"))
 		errMsg := "at least 1 valid device is required if DeviceSelector paths or optionalPaths are specified"
-		errorDesc := lvmCluster.describeLvmCluster(oc)
-		e2e.Logf("LVMCluster resource description: " + errorDesc)
-		o.Expect(strings.Contains(strings.ToLower(errorDesc), strings.ToLower(errMsg))).To(o.BeTrue())
+		o.Eventually(func() string {
+			errorReason, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", lvmCluster.name, "-n", "openshift-storage", "-ojsonpath={.status.deviceClassStatuses[*].nodeStatus[*].reason}").Output()
+			e2e.Logf("LVMCluster resource error reason: " + errorReason)
+			return errorReason
+		}, 120*time.Second, 5*time.Second).Should(o.ContainSubstring(errMsg))
 
 		exutil.By("Delete newly created LVMCluster resource")
 		lvmCluster.deleteLVMClusterSafely(oc)
@@ -1543,6 +1545,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-with-paths-template.yaml")
+			volumeGroup        = "vg1"
+			storageClassName   = "lvms-" + volumeGroup
 		)
 
 		exutil.By("#. Get list of available block devices/disks attached to all worker nodes")
@@ -1600,7 +1604,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject()
 
 		exutil.By("#. Define storage resources")
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassName))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
 		exutil.By("#. Create a pvc")
@@ -1616,6 +1620,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("#. Write data in deployment pod")
 		dep.checkPodMountedVolumeCouldRW(oc)
+
+		exutil.By("Delete Deployment and PVC resources")
+		deleteSpecifiedResource(oc, "deployment", dep.name, dep.namespace)
+		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
 
 		exutil.By("#. Delete newly created LVMCluster resource")
 		lvmCluster.deleteLVMClusterSafely(oc)

@@ -176,18 +176,13 @@ func createLogicalVolumeOnDisk(oc *exutil.CLI, nodeHostName string, disk string,
 	createLV := "lvcreate -n " + lvName + " -l 100%FREE " + vgName
 	_, err = execCommandInSpecificNode(oc, nodeHostName, createLV)
 	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Format Logical Volume with XFS filesystem
-	formatLV := "mkfs.xfs -L xfs-test /dev/" + vgName + "/" + lvName
-	_, err = execCommandInSpecificNode(oc, nodeHostName, formatLV)
-	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Remove logical volume on volume group from backend disk
 func removeLogicalVolumeOnDisk(oc *exutil.CLI, nodeHostName string, disk string, vgName string, lvName string) {
 	diskName := "/dev/" + disk
-	partitionName := diskName + "p1"
-
+	partitionName := disk + "p1"
+	pvName := diskName + "p1"
 	existsLV := `lvdisplay /dev/` + vgName + `/` + lvName + ` && echo "true" || echo "false"`
 	outputLV, err := execCommandInSpecificNode(oc, nodeHostName, existsLV)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -208,32 +203,22 @@ func removeLogicalVolumeOnDisk(oc *exutil.CLI, nodeHostName string, disk string,
 		_, err = execCommandInSpecificNode(oc, nodeHostName, removeVG)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	existsPV := `pvdisplay | grep -q '` + partitionName + `' && echo "true" || echo "false"`
+	existsPV := `pvdisplay | grep -q '` + pvName + `' && echo "true" || echo "false"`
 	outputPV, err := execCommandInSpecificNode(oc, nodeHostName, existsPV)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(outputPV, "true") {
 		//Remove Physical Volume (PV)
-		partitionName := diskName + "p1"
-		removePV := "pvremove -f " + partitionName
+		removePV := "pvremove -f " + pvName
 		_, err = execCommandInSpecificNode(oc, nodeHostName, removePV)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	existsPartition := `lsblk | grep -q '` + disk + `' && echo "true" || echo "false"`
+	existsPartition := `lsblk | grep -q '` + partitionName + `' && echo "true" || echo "false"`
 	outputPartition, err := execCommandInSpecificNode(oc, nodeHostName, existsPartition)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(outputPartition, "true") {
 		// Remove LVM disk partition
 		removePartitionCmd := "echo -e 'd\nw' | fdisk " + diskName
 		_, err = execCommandInSpecificNode(oc, nodeHostName, removePartitionCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
-	existsXFS := `lsblk -o FSTYPE | grep -q xfs-test && echo "true" || echo "false"`
-	outputXFS, err := execCommandInSpecificNode(oc, nodeHostName, existsXFS)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(outputXFS, "true") {
-		// Wipe DOS signature from disk (if present)
-		wipeDiskCmd := "wipefs -a " + diskName
-		_, err = execCommandInSpecificNode(oc, nodeHostName, wipeDiskCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
@@ -325,9 +310,6 @@ func (lvm *lvmCluster) waitReady(oc *exutil.CLI) {
 		if readyFlag == "Ready" {
 			e2e.Logf("The LvmCluster \"%s\" have already become Ready to use", lvm.name)
 			return true, nil
-		}
-		if readyFlag == "Failed" {
-			return false, fmt.Errorf("The LvmCluster creation failed.")
 		}
 		return false, nil
 	})
