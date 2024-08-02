@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os/exec"
+	"os"
 	"regexp"
 	"strings"
 
@@ -50,7 +50,7 @@ func NewIBMSessionFromEnv(ibmApiKey string) (*IBMSession, error) {
 	return session, nil
 }
 
-// GetIBMCredentialFromCluster gets IBM credentials like ibmapikey, ibmvpc and ibmregion from cluster
+// GetIBMCredentialFromCluster gets IBM credentials like ibmapikey, ibmvpc, and ibmregion from the cluster
 func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
 	var (
 		credential       string
@@ -66,17 +66,22 @@ func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
 	}
 
 	if credErr != nil || len(credential) == 0 {
-		cmd := "cat ${CLUSTER_PROFILE_DIR}/ibmcloud-api-key"
-		credentialAPIKey, credErr = exec.Command("bash", "-c", cmd).Output()
-		if len(credentialAPIKey) == 0 && credErr != nil {
+		// Fallback to reading from the CLUSTER_PROFILE_DIR
+		clusterProfileDir := os.Getenv("CLUSTER_PROFILE_DIR")
+		if clusterProfileDir == "" {
+			return "", "", "", fmt.Errorf("error getting environment variable CLUSTER_PROFILE_DIR")
+		}
+		credentialAPIKey, credErr = os.ReadFile(clusterProfileDir + "/ibmcloud-api-key")
+		if credErr != nil || len(credentialAPIKey) == 0 {
 			g.Skip("Failed to get credential to access IBM, skip the testing.")
 		}
-		credential = string(credentialAPIKey)
-	}
-
-	ibmClientID, err := base64.StdEncoding.DecodeString(credential)
-	if err != nil || string(ibmClientID) == "" {
-		return "", "", "", fmt.Errorf("Error decoding IBM credentials: %s", err)
+		credential = strings.TrimSpace(string(credentialAPIKey))
+	} else {
+		credDecode, err := base64.StdEncoding.DecodeString(credential)
+		if err != nil || string(credDecode) == "" {
+			return "", "", "", fmt.Errorf("Error decoding IBM credentials: %s", err)
+		}
+		credential = string(credDecode)
 	}
 
 	ibmRegion, regionErr := GetIBMRegion(oc)
@@ -88,10 +93,11 @@ func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
 	if ibmResourceGrpNameErr != nil {
 		return "", "", "", ibmResourceGrpNameErr
 	}
+
 	if CheckPlatform(oc) == "powervs" {
-		return string(ibmClientID), string(ibmRegion), string(ibmResourceGrpName), nil
+		return credential, string(ibmRegion), string(ibmResourceGrpName), nil
 	}
-	return string(ibmClientID), string(ibmRegion), string(ibmResourceGrpName) + "-vpc", nil
+	return credential, string(ibmRegion), string(ibmResourceGrpName) + "-vpc", nil
 }
 
 // StopIBMInstance stop the IBM instance
