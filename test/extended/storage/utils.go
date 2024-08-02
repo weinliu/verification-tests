@@ -524,9 +524,9 @@ func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	for i := 0; i < len(supportProvisionersResult); i++ {
 		supportProvisioners = append(supportProvisioners, gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#.name|@flatten."+strconv.Itoa(i)).String())
 	}
-	if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) || checkFips(oc) {
+	if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) {
 		supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
-		e2e.Logf("***%s \"AWS-EFS CSI Driver\" not installed OR it installed in FIPS enabled cluster, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
+		e2e.Logf(`***%s "AWS EFS CSI Driver" not installed updating support provisioners to: %v***`, cloudProvider, supportProvisioners)
 	}
 	if cloudProvider == "gcp" && !checkCSIDriverInstalled(oc, []string{"filestore.csi.storage.gke.io"}) {
 		supportProvisioners = deleteElement(supportProvisioners, "filestore.csi.storage.gke.io")

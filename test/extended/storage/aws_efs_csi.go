@@ -40,10 +40,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("CSI driver did not get successfully installed")
 		}
 
-		if checkFips(oc) {
-			g.Skip("Skip: currently efs does not support FIPS enabled env!!!")
-		}
-
 		// Check default sc exist
 		scName = getPresetStorageClassNameByProvisioner(oc, cloudProvider, "efs.csi.aws.com")
 		checkStorageclassExists(oc, scName)
