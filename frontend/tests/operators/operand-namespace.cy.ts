@@ -6,7 +6,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
   const params = {
     ns68180: 'testproject-68180',
     ns50153: 'testproject-50153',
-    operatorName: 'AMQ Streams',
+    operatorName: 'Red Hat Streams for Apache Kafka',
     operatorPkgName: "amq-streams",
     crName: 'kfakasample'
   }
@@ -21,17 +21,18 @@ describe('Display All Namespace Operands for Global Operators', () => {
     Pages.gotoInstalledOperatorPage();
     operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeeded');
     cy.adminCLI(`oc create -f ./fixtures/operators/amqstreams-opreand-kafka.yaml -n ${params.ns68180}`);
-    cy.adminCLI(`oc get clusterserviceversion -o=jsonpath='{.items[*].metadata.name}'`).then((result) => {
-      csvname = result.stdout;
+    cy.exec(`oc get clusterserviceversion -o custom-columns=NAME:.metadata.name --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep amq`, { timeout: 20000 })
+      .then((result) => {
+        csvname = result.stdout;
     })
   })
 
   after(() => {
     cy.adminCLI(`oc delete subscription ${params.operatorPkgName} -n openshift-operators`);
     cy.adminCLI(`oc delete clusterserviceversion ${csvname} -n openshift-operators`);
-    cy.adminCLI(`oc delete project ${params.ns50153}`);
-    cy.adminCLI(`oc delete project ${params.ns68180}`);
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI(`oc delete project ${params.ns50153}`, { timeout: 120000 });
+    cy.adminCLI(`oc delete project ${params.ns68180}`, { timeout: 120000 });
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`, { timeout: 60000 });
   })
 
   it('(OCP-68180,xiyuzhao,UserInterface) Check the sort function in Resources Tab in operator details page', {tags: ['e2e','admin']},() => {

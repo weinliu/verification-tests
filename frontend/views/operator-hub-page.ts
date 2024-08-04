@@ -86,7 +86,7 @@ export const operatorHubPage = {
     cy.get(`[data-test-operator-row="${csvName}"]`, { timeout: 120000 })
       .parents('tr')
       .children()
-      .contains(`${csvStatus}`, { timeout: 60000 });
+      .contains(`${csvStatus}`, { timeout: 120000 });
   },
   removeOperator: (csvName) => {
     listPage.rows.clickKebabAction(`${csvName}`, "Uninstall Operator");
