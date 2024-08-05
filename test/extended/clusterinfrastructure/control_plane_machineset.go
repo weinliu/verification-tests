@@ -24,6 +24,8 @@ const (
 	patchInstanceTypeSuffixCon        = "patchInstanceTypeSuffix"
 	getMachineAvailabilityZoneJSONCon = "getMachineAvailabilityZoneJSON"
 	getCPMSAvailabilityZonesJSONCon   = "getCPMSAvailabilityZonesJSON"
+	updateFieldsCon                   = "updateFields"
+	recoverFieldsCon                  = "recoverFields"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", func() {
@@ -41,14 +43,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		}
 		getInstanceTypeJsonByCloud = map[clusterinfra.PlatformType]map[string]string{
 			clusterinfra.AWS: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.instanceType}",
-				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"`,
-				patchInstanceTypeSuffixCon: `"}}}}}}}`},
+				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":`,
+				patchInstanceTypeSuffixCon: `}}}}}}}`},
 			clusterinfra.Azure: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}",
-				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`,
-				patchInstanceTypeSuffixCon: `"}}}}}}}`},
+				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":`,
+				patchInstanceTypeSuffixCon: `}}}}}}}`},
 			clusterinfra.GCP: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}",
-				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`,
-				patchInstanceTypeSuffixCon: `"}}}}}}}`},
+				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":`,
+				patchInstanceTypeSuffixCon: `}}}}}}}`},
+		}
+		otherUpdateFieldsByCloud = map[clusterinfra.PlatformType]map[string]string{
+			clusterinfra.AWS: {updateFieldsCon: `,"placementGroupPartition":3,"placementGroupName":"pgpartition3"`,
+				recoverFieldsCon: `,"placementGroupPartition":null,"placementGroupName":null`},
+			clusterinfra.Azure: {updateFieldsCon: ``,
+				recoverFieldsCon: ``},
+			clusterinfra.GCP: {updateFieldsCon: ``,
+				recoverFieldsCon: ``},
 		}
 		getAvailabilityZoneJSONByCloud = map[clusterinfra.PlatformType]map[string]string{
 			clusterinfra.AWS: {getMachineAvailabilityZoneJSONCon: "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}",
@@ -165,8 +175,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 
 		labelsAfter := "machine.openshift.io/instance-type=" + changeInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
 		labelsBefore := "machine.openshift.io/instance-type=" + currentInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
-		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + changeInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
-		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + currentInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + changeInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][updateFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + currentInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][recoverFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
 
 		g.By("Change instanceType to trigger RollingUpdate")
 		defer printNodeInfo(oc)
@@ -288,8 +298,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		}
 
 		labelsAfter := "machine.openshift.io/instance-type=" + changeInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
-		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + changeInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
-		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + currentInstanceType + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + changeInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][updateFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + currentInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][recoverFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
 
 		g.By("Update strategy to OnDelete, change instanceType to trigger OnDelete update")
 		defer printNodeInfo(oc)
