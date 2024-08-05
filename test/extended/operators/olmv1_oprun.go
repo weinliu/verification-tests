@@ -795,7 +795,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension2.CreateWithoutCheck(oc)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension2.Name, "-o", "jsonpath={.status.conditions[*].message}")
-			if !strings.Contains(message, "InstallationFailed:Unable to continue with install: CustomResourceDefinition") {
+			if !strings.Contains(message, "already exists in namespace") {
 				e2e.Logf("status is %s", message)
 				return false, nil
 			}
@@ -831,7 +831,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension1.CreateWithoutCheck(oc)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension1.Name, "-o", "jsonpath={.status.conditions[*].message}")
-			if !strings.Contains(message, "InstallationFailed:Unable to continue with install: CustomResourceDefinition") {
+			if !strings.Contains(message, "already exists in namespace") {
 				e2e.Logf("status is %s", message)
 				return false, nil
 			}
