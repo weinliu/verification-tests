@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode"
 
 	v "github.com/IBM-Cloud/power-go-client/clients/instance"
 	ps "github.com/IBM-Cloud/power-go-client/ibmpisession"
@@ -50,6 +51,25 @@ func NewIBMSessionFromEnv(ibmApiKey string) (*IBMSession, error) {
 	return session, nil
 }
 
+// IsBase64Encoded checks if the input string is likely base64-encoded.
+func IsBase64Encoded(s string) bool {
+	// Check if the length is a multiple of 4
+	if len(s)%4 != 0 {
+		return false
+	}
+
+	// Check if the string contains only valid base64 characters
+	for _, c := range s {
+		if !unicode.IsLetter(c) && !unicode.IsDigit(c) && c != '+' && c != '/' && c != '=' {
+			return false
+		}
+	}
+
+	// Attempt to decode the string
+	_, err := base64.StdEncoding.DecodeString(s)
+	return err == nil
+}
+
 // GetIBMCredentialFromCluster gets IBM credentials like ibmapikey, ibmvpc, and ibmregion from the cluster
 func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
 	var (
@@ -75,13 +95,18 @@ func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
 		if credErr != nil || len(credentialAPIKey) == 0 {
 			g.Skip("Failed to get credential to access IBM, skip the testing.")
 		}
-		credential = strings.TrimSpace(string(credentialAPIKey))
-	} else {
+		credential = string(credentialAPIKey)
+	}
+
+	credential = strings.TrimSpace(credential)
+
+	if IsBase64Encoded(credential) {
 		credDecode, err := base64.StdEncoding.DecodeString(credential)
 		if err != nil || string(credDecode) == "" {
 			return "", "", "", fmt.Errorf("Error decoding IBM credentials: %s", err)
 		}
 		credential = string(credDecode)
+		credential = strings.TrimSpace(credential)
 	}
 
 	ibmRegion, regionErr := GetIBMRegion(oc)
@@ -94,10 +119,10 @@ func GetIBMCredentialFromCluster(oc *CLI) (string, string, string, error) {
 		return "", "", "", ibmResourceGrpNameErr
 	}
 
-	if CheckPlatform(oc) == "powervs" {
-		return credential, string(ibmRegion), string(ibmResourceGrpName), nil
+	if platform == "powervs" {
+		return credential, ibmRegion, ibmResourceGrpName, nil
 	}
-	return credential, string(ibmRegion), string(ibmResourceGrpName) + "-vpc", nil
+	return credential, ibmRegion, ibmResourceGrpName + "-vpc", nil
 }
 
 // StopIBMInstance stop the IBM instance
