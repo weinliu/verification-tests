@@ -531,7 +531,7 @@ var _ = g.Describe("[sig-scheduling] Workloads podTopologySpreadConstraints work
 		pod3.createpodNodeAffinityRequiredPts(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pod3nodename := pod3.getPodNodeName(oc)
-		e2e.ExpectNotEqual(nodeList.Items[2].Name, pod3nodename)
+		o.Expect(nodeList.Items[2].Name).NotTo(o.Equal(pod3nodename))
 	})
 
 	// author: knarra@redhat.com
@@ -610,7 +610,7 @@ var _ = g.Describe("[sig-scheduling] Workloads podTopologySpreadConstraints work
 		pod340142.createpodSingleNodeAffinityRequiredPts(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pod340142nodename := pod340142.getPodNodeName(oc)
-		e2e.ExpectNotEqual(pod340141nodename, pod340142nodename)
+		o.Expect(pod340141nodename).NotTo(o.Equal(pod340142nodename))
 	})
 
 })

@@ -1,7 +1,6 @@
 package workloads
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,10 +15,6 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-
-	"github.com/containers/image/v5/docker"
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/types"
 )
 
 var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
@@ -88,26 +83,10 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.By("Validate if multi arch additionalImages have been mirrored")
 		additionalImageList := []string{"/multiarch/ubi8/ubi:latest", "/multiarch/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27", "/multiarch/openshifttest/scratch@sha256:b045c6ba28db13704c5cbf51aff3935dbed9a692d508603cc80591d89ab26308"}
 		for _, image := range additionalImageList {
-			ref, err := docker.ParseReference("//" + serInfo.serviceName + image)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			sys := &types.SystemContext{
-				AuthFilePath:                dirname + "/.dockerconfigjson",
-				OCIInsecureSkipTLSVerify:    true,
-				DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
-			}
-			ctx := context.Background()
-			src, err := ref.NewImageSource(ctx, sys)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer func(src types.ImageSource) {
-				err := src.Close()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}(src)
-			rawManifest, _, err := src.GetManifest(ctx, nil)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(image, "scratch") {
-				o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest))).To(o.BeFalse())
+				o.Expect(assertMultiImage(serInfo.serviceName+image, dirname+"/.dockerconfigjson")).To(o.BeFalse())
 			} else {
-				o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest))).To(o.BeTrue())
+				o.Expect(assertMultiImage(serInfo.serviceName+image, dirname+"/.dockerconfigjson")).To(o.BeTrue())
 			}
 		}
 

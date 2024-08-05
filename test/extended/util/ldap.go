@@ -77,7 +77,7 @@ func CreateLDAPTestServer(oc *CLI) (string, []byte, error) {
 
 	// Ensure that the server cert is valid for localhost and the service network hostname.
 	serviceHost := ldapService.Name + "." + oc.Namespace() + ".svc"
-	serverCertConfig, err := ca.MakeServerCert(sets.NewString("localhost", "127.0.0.1", serviceHost), 100)
+	serverCertConfig, err := ca.MakeServerCert(sets.New("localhost", "127.0.0.1", serviceHost), 100)
 	if err != nil {
 		return "", nil, err
 	}

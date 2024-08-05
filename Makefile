@@ -2,9 +2,15 @@ all: update build
 .PHONY: all
 OUT_DIR=bin
 
+GO_LD_FLAGS := -s -w
+
+ifeq ($(shell go env GOOS),darwin)
+	GO_LD_FLAGS += -extldflags='-ld_classic'
+endif
+
 build:
 	mkdir -p "${OUT_DIR}"
-	export GO111MODULE="on" && export GOFLAGS="" && export GOWORK=off && { go build  -ldflags="-s -w" -mod=mod -o "${OUT_DIR}" "./cmd/extended-platform-tests";sed -i'' -e '/^toolchain go/d' go.mod; rm -f go.mod-e; }
+	export GO111MODULE="on" && export GOFLAGS="" && export GOWORK=off && { go build  -ldflags="${GO_LD_FLAGS}" -mod=mod -o "${OUT_DIR}" "./cmd/extended-platform-tests";sed -i'' -e '/^toolchain go/d' go.mod; rm -f go.mod-e; }
 
 go-mod-tidy:
 	./hack/go-mod-tidy.sh

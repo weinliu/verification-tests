@@ -2,9 +2,7 @@ package workloads
 
 import (
 	"bufio"
-	"context"
 	"fmt"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"io"
 	"os"
 	"os/exec"
@@ -16,15 +14,12 @@ import (
 	"github.com/google/uuid"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-
-	"github.com/containers/image/v5/docker"
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/types"
 )
 
 var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
@@ -1028,23 +1023,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		// Validate if multi arch payload has been mirrored
 		g.By("Validate if multi arch payload has been mirrored")
-		ref, err := docker.ParseReference("//" + imageRegistryName + ":5000/openshift/release-images:4.13.6-multi")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		sys := &types.SystemContext{
-			AuthFilePath:                dirname + "/.dockerconfigjson",
-			OCIInsecureSkipTLSVerify:    true,
-			DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
-		}
-		ctx := context.Background()
-		src, err := ref.NewImageSource(ctx, sys)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer func(src types.ImageSource) {
-			err := src.Close()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}(src)
-		rawManifest, _, err := src.GetManifest(ctx, nil)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest))).To(o.BeTrue())
+		o.Expect(assertMultiImage(imageRegistryName+":5000/openshift/release-images:4.13.6-multi", dirname+"/.dockerconfigjson")).To(o.BeTrue())
 	})
 
 	// author: knarra@redhat.com
@@ -1125,28 +1104,11 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		archList := []architecture.Architecture{architecture.AMD64, architecture.ARM64, architecture.PPC64LE,
 			architecture.S390X, architecture.MULTI}
 		for _, arch := range archList {
-			ref, err := docker.ParseReference(fmt.Sprintf(
-				"//%s:5000/openshift/release-images:4.13.6-%s", imageRegistryName, arch.GNUString()))
-			o.Expect(err).NotTo(o.HaveOccurred())
-			sys := &types.SystemContext{
-				AuthFilePath:                dirname + "/.dockerconfigjson",
-				OCIInsecureSkipTLSVerify:    true,
-				DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
-			}
-			ctx := context.Background()
-			src, err := ref.NewImageSource(ctx, sys)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer func(src types.ImageSource) {
-				err := src.Close()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}(src)
-			rawManifest, _, err := src.GetManifest(ctx, nil)
-			o.Expect(err).NotTo(o.HaveOccurred())
 			matcher := o.BeFalse()
 			if arch == architecture.MULTI {
 				matcher = o.BeTrue()
 			}
-			o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest))).To(matcher)
+			o.Expect(assertMultiImage(fmt.Sprintf("%s:5000/openshift/release-images:4.13.6-%s", imageRegistryName, arch.GNUString()), dirname+"/.dockerconfigjson")).To(matcher)
 		}
 
 	})
@@ -1184,23 +1146,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "oc-mirror command still falied")
 		g.By("Check the mirrored image should still with multi-arch")
-		ref, err := docker.ParseReference("//" + serInfo.serviceName + "/cpopen/ibm-zcon-zosconnect-catalog:6f02ec")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		sys := &types.SystemContext{
-			AuthFilePath:                dirname + "/.dockerconfigjson",
-			OCIInsecureSkipTLSVerify:    true,
-			DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
-		}
-		ctx := context.Background()
-		src, err := ref.NewImageSource(ctx, sys)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer func(src types.ImageSource) {
-			err := src.Close()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}(src)
-		rawManifest, _, err := src.GetManifest(ctx, nil)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest))).To(o.BeTrue())
+		o.Expect(assertMultiImage(serInfo.serviceName+"/cpopen/ibm-zcon-zosconnect-catalog:6f02ec", dirname+"/.dockerconfigjson")).To(o.BeTrue())
 
 		g.By("Starting mirror2disk")
 		defer os.RemoveAll("66195out")
@@ -1226,18 +1172,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		exutil.AssertWaitPollNoErr(err, "disk2mirror command still falied")
 
 		g.By("Check the mirrored image should still with multi-arch")
-		ref2, err2 := docker.ParseReference("//" + serInfo.serviceName + "/disktomirror/cpopen/ibm-zcon-zosconnect-catalog:6f02ec")
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		ctx2 := context.Background()
-		src2, err2 := ref2.NewImageSource(ctx2, sys)
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		defer func(src types.ImageSource) {
-			err := src.Close()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}(src2)
-		rawManifest2, _, err := src2.GetManifest(ctx2, nil)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest2))).To(o.BeTrue())
+		o.Expect(assertMultiImage(serInfo.serviceName+"/disktomirror/cpopen/ibm-zcon-zosconnect-catalog:6f02ec", dirname+"/.dockerconfigjson")).To(o.BeTrue())
 	})
 
 	//author: yinzhou@redhat.com

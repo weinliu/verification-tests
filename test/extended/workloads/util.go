@@ -7,10 +7,11 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
-	o "github.com/onsi/gomega"
 	"io"
 	"io/ioutil"
 	"regexp"
+
+	o "github.com/onsi/gomega"
 
 	"math/rand"
 	"net/http"
@@ -737,6 +738,23 @@ func triggerFailedDeployment(oc *exutil.CLI, namespace string, deployname string
 	patchYaml := `[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value": "quay.io/openshifttest/hello-openshift:nonexist"}]`
 	err := oc.Run("patch").Args("-n", namespace, "deployment", deployname, "--type=json", "-p", patchYaml).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func assertMultiImage(url, authfile string) bool {
+	cmd := fmt.Sprintf(`skopeo inspect --raw --authfile %s --tls-verify=false docker://%s | jq .mediaType`, authfile, url)
+	e2e.Logf("cmd: %v", cmd)
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	result := string(output)
+	if err != nil {
+		e2e.Logf("the output: %v with error %v", result, err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	e2e.Logf("the correct output: %v", result)
+	if strings.Contains(result, "application/vnd.docker.distribution.manifest.list.v2+json") ||
+		strings.Contains(result, "application/vnd.oci.image.index.v1+json") {
+		return true
+	}
+	return false
 }
 
 func getShouldPruneRSFromPrune(oc *exutil.CLI, pruneRsNumCMD string, pruneRsCMD string, prunedNum int) []string {
