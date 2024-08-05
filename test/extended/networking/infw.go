@@ -32,6 +32,13 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 			g.Skip("This is required to run on OVNKubernetes Network Backened")
 		}
 
+		windowNodeList, err := exutil.GetAllNodesbyOSType(oc, "windows")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if len(windowNodeList) > 0 {
+			g.Skip("INFW usecases are not compatible to run on Cluster with window nodes")
+		}
+
 		//leveraging few templates and utils from metallb code
 		namespaceTemplate := filepath.Join(testDataDirMetallb, "namespace-template.yaml")
 		operatorGroupTemplate := filepath.Join(testDataDirMetallb, "operatorgroup-template.yaml")

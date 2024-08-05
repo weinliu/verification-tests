@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-networking] SDN winc", func() {
 		pod := pingPodResourceWinNode{
 			name:      "win-webserver",
 			namespace: ns,
-			image:     "mcr.microsoft.com/windows/servercore:ltsc2019",
+			image:     "mcr.microsoft.com/powershell:lts-nanoserver-ltsc2022",
 			nodename:  windowNodeList[0],
 			template:  pingPodWinNodeTemplate,
 		}
