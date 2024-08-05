@@ -11,7 +11,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI MHC", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MHC MAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("machine-healthcheck", exutil.KubeConfigPath())

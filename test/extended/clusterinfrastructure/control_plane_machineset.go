@@ -26,7 +26,7 @@ const (
 	getCPMSAvailabilityZonesJSONCon   = "getCPMSAvailabilityZonesJSON"
 )
 
-var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI CPMS", func() {
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc                         = exutil.NewCLI("control-plane-machineset", exutil.KubeConfigPath())
