@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -145,6 +146,89 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		o.Expect(ocerr).To(o.HaveOccurred(), "Expected oc command error not found")
 		o.Expect(output).Should(o.ContainSubstring("Only a single object of MachineConfiguration is allowed and it must be named cluster"))
 
+	})
+
+	g.It("Author:rioliu-NonPreRelease-Longduration-Medium-75109-NodeDisruptionPolicy files allow paths to be defined for non-disruptive updates [Disruptive]", func() {
+		var (
+			mcp  = GetCompactCompatiblePool(oc.AsAdmin())
+			node = mcp.GetSortedNodesOrFail()[0]
+			ndp  = NewNodeDisruptionPolicy(oc)
+
+			innerDirPath         = "/etc/test-file-policy-subdir-75109/extradir/"
+			innerDirFilePath     = innerDirPath + "test-file-inner.txt"
+			innerDirFileConfig   = getURLEncodedFileConfig(innerDirFilePath, "test-75109.txt", "420")
+			innerDirActions      = []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}
+			innerDirExpectedLogs = []string{LogPerformingPostConfigNone}
+			innderDirMcName      = "test-75109-inner-dir-files"
+
+			outerDirPath         = "/etc/test-file-policy-subdir-75109"
+			outerDirFilePath     = outerDirPath + "/test-file-outer.txt"
+			outerDirFileConfig   = getURLEncodedFileConfig(outerDirFilePath, "test-75109.txt", "420")
+			outerDirActions      = []Action{NewRestartAction(TestService)}
+			outerDirExpectedLogs = []string{LogPerformingPostConfigRestart, LogServiceRestartedSuccessfully}
+			outerDirMcName       = "test-75109-outer-dir-files"
+
+			filePath         = "/etc/test-file-policy-subdir-75109/test-file.txt"
+			fileConfig       = getURLEncodedFileConfig(filePath, "test-75109.txt", "420")
+			fileActions      = []Action{NewReloadAction(TestService)}
+			fileExpectedLogs = []string{LogPerformingPostConfigReload, LogServiceReloadedSuccessfully}
+			fileMcName       = "test-75109-files"
+
+			startTime = node.GetDateOrFail()
+			mcc       = NewController(oc.AsAdmin()).IgnoreLogsBeforeNowOrFail()
+		)
+		exutil.By("Patch ManchineConfiguration cluster")
+		defer ndp.Rollback()
+
+		o.Expect(
+			ndp.AddFilePolicy(innerDirPath, innerDirActions...).AddFilePolicy(outerDirPath, outerDirActions...).AddFilePolicy(filePath, fileActions...).Apply(),
+		).To(o.Succeed(), "Patch ManchineConfiguration failed")
+		logger.Infof("OK!\n")
+
+		// Test the behaviour of files created inside the inner directorty
+		exutil.By("Create a test file in the inner directory")
+		innerMc := NewMachineConfig(oc.AsAdmin(), innderDirMcName, mcp.GetName())
+		innerMc.SetParams(fmt.Sprintf("FILES=[%s]", innerDirFileConfig))
+		defer innerMc.delete()
+		innerMc.create()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that files inside the inner directory execute the right actions")
+		checkDrainAndReboot(node, startTime, mcc, innerDirActions)
+		checkMachineConfigDaemonLog(node, innerDirExpectedLogs)
+		logger.Infof("OK!\n")
+
+		// Test the behaviour of files created inside the outer directorty
+		exutil.By("Create a test file in the outer directory")
+		startTime = node.GetDateOrFail()
+		mcc.IgnoreLogsBeforeNowOrFail()
+
+		outerMc := NewMachineConfig(oc.AsAdmin(), outerDirMcName, mcp.GetName())
+		outerMc.SetParams(fmt.Sprintf("FILES=[%s]", outerDirFileConfig))
+		defer outerMc.Delete()
+		outerMc.create()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that files inside the outer directory execute the right actions")
+		checkDrainAndReboot(node, startTime, mcc, outerDirActions)
+		checkMachineConfigDaemonLog(node, outerDirExpectedLogs)
+		logger.Infof("OK!\n")
+
+		// Test the behaviour of files created inside the outer directorty but with an explicit policy for them
+		exutil.By("Create a test file inside the outer directory but with an explicitly defined policy")
+		startTime = node.GetDateOrFail()
+		mcc.IgnoreLogsBeforeNowOrFail()
+
+		fileMc := NewMachineConfig(oc.AsAdmin(), fileMcName, mcp.GetName())
+		fileMc.SetParams(fmt.Sprintf("FILES=[%s]", fileConfig))
+		defer fileMc.Delete()
+		fileMc.create()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that files with explicit defined policies execute the right actions")
+		checkDrainAndReboot(node, startTime, mcc, fileActions)
+		checkMachineConfigDaemonLog(node, fileExpectedLogs)
+		logger.Infof("OK!\n")
 	})
 
 })
