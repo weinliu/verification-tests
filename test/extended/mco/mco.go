@@ -925,13 +925,17 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		exutil.By("Check MCC logs to see the early sleep interval b/w failed drains")
 		var podLogs string
-		// Wait until trying drain for 6 times
+		// Wait until trying drain for 3 times
+		// Early sleep interval will last for 10m. During this interval MCO will wait 1 minute before every retry.
+		// Every failed drain operation will last 1 minute. So 1 minute execution + 1 minute delay = 2 minutes for every try.
+		// In a 10 minutes span we only have time for at most 5 "Drain failed" early sleep failures
+		// To have a stable test case we will take only 3 of them
 		immediate := false
 		waitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 15*time.Minute, immediate, func(_ context.Context) (bool, error) {
 			logs, _ := mcc.GetFilteredLogsAsList(workerNode.GetName() + ".*Drain failed")
-			if len(logs) > 5 {
-				// Get only 6 lines to avoid flooding the test logs, ignore the rest if any.
-				podLogs = strings.Join(logs[0:6], "\n")
+			if len(logs) > 2 {
+				// Get only 3 lines to avoid flooding the test logs, ignore the rest if any.
+				podLogs = strings.Join(logs[0:3], "\n")
 				return true, nil
 			}
 
@@ -939,13 +943,13 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		})
 		logger.Infof("Drain log lines for node %s:\n %s", workerNode.GetName(), podLogs)
 		o.Expect(waitErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get 'Drain failed' log lines from controller for node %s", workerNode.GetName()))
-		timestamps := filterTimestampFromLogs(podLogs, 6)
+		timestamps := filterTimestampFromLogs(podLogs, 3)
 		logger.Infof("Timestamps %s", timestamps)
-		// First 5 retries should be queued every 1 minute. We check 1 min < time < 2.7 min
+		// First 3 retries should be queued every 1 minute. We check 1 min < time < 2.7 min
 		o.Expect(getTimeDifferenceInMinute(timestamps[0], timestamps[1])).Should(o.BeNumerically("<=", 2.7))
 		o.Expect(getTimeDifferenceInMinute(timestamps[0], timestamps[1])).Should(o.BeNumerically(">=", 1))
-		o.Expect(getTimeDifferenceInMinute(timestamps[3], timestamps[4])).Should(o.BeNumerically("<=", 2.7))
-		o.Expect(getTimeDifferenceInMinute(timestamps[3], timestamps[4])).Should(o.BeNumerically(">=", 1))
+		o.Expect(getTimeDifferenceInMinute(timestamps[1], timestamps[2])).Should(o.BeNumerically("<=", 2.7))
+		o.Expect(getTimeDifferenceInMinute(timestamps[1], timestamps[2])).Should(o.BeNumerically(">=", 1))
 
 		exutil.By("Check MCC logs to see the increase in the sleep interval b/w failed drains")
 		lWaitErr := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, 15*time.Minute, immediate, func(_ context.Context) (bool, error) {
