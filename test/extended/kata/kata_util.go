@@ -645,9 +645,14 @@ func checkPeerPodSecrets(oc *exutil.CLI, opNamespace, provider string, ppSecretN
 		return msg, err
 	}
 
+	jsonData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", ppSecretName, "-n", opNamespace, "-o=jsonpath={.data}").Output()
+	if err != nil {
+		msg = fmt.Sprintf("Secret for %v not exists", provider)
+		err = fmt.Errorf("%v", msg)
+		return msg, err
+	}
 	for index := range providerVars {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", ppSecretName, "-n", opNamespace, "-o=jsonpath={.data."+providerVars[index]+"}").Output()
-		if err != nil || msg == "" {
+		if !gjson.Get(jsonData, providerVars[index]).Exists() || gjson.Get(jsonData, providerVars[index]).String() == "" {
 			errors++
 			errorList = append(errorList, providerVars[index])
 		}
@@ -691,11 +696,17 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 		return msg, err
 	}
 
-	for provider := range providerVars {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", ppConfigMapName, "-n", opNamespace, "-o=jsonpath={.data."+providerVars[provider]+"}").Output()
-		if err != nil || msg == "" {
+	jsonData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", ppConfigMapName, "-n", opNamespace, "-o=jsonpath={.data}").Output()
+	if err != nil {
+		msg = fmt.Sprintf("Configmap for %v not exists", provider)
+		err = fmt.Errorf("%v", msg)
+		return msg, err
+	}
+
+	for index := range providerVars {
+		if !gjson.Get(jsonData, providerVars[index]).Exists() || gjson.Get(jsonData, providerVars[index]).String() == "" {
 			errors++
-			errorList = append(errorList, providerVars[provider])
+			errorList = append(errorList, providerVars[index])
 		}
 	}
 
@@ -1564,11 +1575,12 @@ func getPeerPodLimit(oc *exutil.CLI, opNamespace string) (podLimit string) {
 }
 
 func getPeerPodMetadataInstanceType(oc *exutil.CLI, opNamespace, podName, provider string) (string, error) {
-	metadataCurl := map[string]string{
-		"aws":   "curl -s http://169.254.169.254/latest/meta-data/instance-type",
-		"azure": "curl -s -H Metadata:true --noproxy \"*\" \"http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2023-07-01&format=text\"",
+	metadataCurl := map[string][]string{
+		"aws":   {"http://169.254.169.254/latest/meta-data/instance-type"},
+		"azure": {"-H", "Metadata:true", "--noproxy", "\"*\"", "\"http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2023-07-01&format=text\""},
 	}
-	return oc.AsAdmin().Run("rsh").Args("-T", "-n", opNamespace, podName, "bash", "-c", metadataCurl[provider]).Output()
+	podCmd := []string{"-n", opNamespace, podName, "--", "curl", "-s"}
+	return oc.WithoutNamespace().AsAdmin().Run("exec").Args(append(podCmd, metadataCurl[provider]...)...).Output()
 }
 
 func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace string) (msg string, err error, imageID string) {
