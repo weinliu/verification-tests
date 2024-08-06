@@ -811,25 +811,6 @@ func (n *Node) WaitUntilRpmOsTreeIsIdle() error {
 
 }
 
-// WaitUntilNodeCanBeDebugged especially after rebooting the node in a SNO cluster, a node can be in a status where it cannot be debugged. With this function we wait until the node can be debugged.
-func (n Node) WaitUntilNodeCanBeDebugged(w time.Duration) error {
-	immediate := true
-	waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, w, immediate, func(_ context.Context) (bool, error) {
-		_, err := n.DebugNodeWithChroot("hostname")
-		if err == nil {
-			return true, nil
-		}
-		return false, nil
-	})
-
-	if waitErr != nil {
-		logger.Errorf("Timeout while waiting for node %s to be able to be debugged.",
-			n.GetName())
-	}
-
-	return waitErr
-}
-
 // CancelRpmOsTreeTransactions cancels rpm-ostree transactions
 func (n *Node) CancelRpmOsTreeTransactions() (string, error) {
 	return n.DebugNodeWithChroot("rpm-ostree", "cancel")

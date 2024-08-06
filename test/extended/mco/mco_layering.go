@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
@@ -261,10 +260,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 			node.UninstallRpm(rpmName)
 			node.DebugNodeWithChroot("rm", yumRepoFile)
 			node.Reboot()
-			err := node.WaitUntilNodeCanBeDebugged(10 * time.Minute)
-			if err != nil {
-				logger.Errorf("Could not reocover the node after reboot")
-			}
+			coreOSMcp.waitForComplete()
 			// Because of a bug in SNO after a reboot the controller cannot get the lease properly
 			// We wait until the controller gets the lease. We make sure that the next test will receive a fully clean environment with the controller ready
 			o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "10m", "20s").Should(o.BeTrue(),
@@ -294,6 +290,11 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 		o.Expect(node.Reboot()).To(o.Succeed(),
 			"Error rebooting node %s", node.GetName())
+
+		// In SNO clusters when we reboot the only node the connectivity is broken.
+		// Because the exutils.debugNode function fails the test if any problem happens
+		// we need to wait until the pool is stable (waitForComplete) before trying to debug the node again, even if we do it inside an Eventually instruction
+		coreOSMcp.waitForComplete()
 
 		logger.Infof("Check that the wget binary is available")
 		o.Eventually(func() error {
