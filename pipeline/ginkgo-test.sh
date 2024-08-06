@@ -47,11 +47,11 @@ function config_env_for_vm {
   echo 'unset http_proxy https_proxy no_proxy'
   unset http_proxy https_proxy
   echo "home path is "${HOME}
-  GOINSTALLPATH="/usr/local/go1.21.9/go"
-  if [ ! -d "/usr/local/go1.21.9/go/bin" ]; then
-    sudo mkdir /usr/local/go1.21.9
-    sudo wget https://go.dev/dl/go1.21.9.linux-amd64.tar.gz
-    sudo tar -C /usr/local/go1.21.9/ -xzf go1.21.9.linux-amd64.tar.gz
+  GOINSTALLPATH="/usr/local/go1.22.5/go"
+  if [ ! -d "/usr/local/go1.22.5/go/bin" ]; then
+    sudo mkdir /usr/local/go1.22.5
+    sudo wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
+    sudo tar -C /usr/local/go1.22.5/ -xzf go1.22.5.linux-amd64.tar.gz
   fi
   mkdir -p ${HOME}/kubeconf && mkdir -p ${HOME}/azureauth && \
   echo "export KUBECONFIG=${HOME}/kubeconf/kubeconfig" > ${WORKSPACE}/.bash_profile && \
