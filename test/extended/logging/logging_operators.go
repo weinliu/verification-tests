@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 	// author qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
 		g.Skip("Skip for logging 6.0 is not released!")
-		var targetchannel = "stable"
+		var targetchannel = "stable-6.0"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
@@ -390,7 +390,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operator deplo
 
 		g.By("Delete cluster-logging operator if exist")
 		sourceQE := CatalogSourceObjects{
-			Channel:         "stable",
+			Channel:         "stable-6.0",
 			SourceName:      "qe-app-registry",
 			SourceNamespace: "openshift-marketplace",
 		}
