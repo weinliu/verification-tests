@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 type ingressControllerDescription struct {
@@ -1709,4 +1710,43 @@ func restartMicroshiftService(oc *exutil.CLI, ns, nodeName string) {
 	oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ns, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "sudo systemctl restart microshift").Output()
 	exec.Command("bash", "-c", "sleep 60").Output()
 	checkNodeStatus(oc, nodeName, "Ready")
+}
+
+// the function will provide enough time for the egressfirewall to get applied
+func waitEgressFirewallApplied(oc *exutil.CLI, efName, ns string) string {
+	var output string
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", "-n", ns, efName).Output()
+		if efErr != nil {
+			e2e.Logf("Failed to get egressfirewall %v, error: %s. Trying again", efName, efErr)
+			return false, nil
+		}
+		if !strings.Contains(output, "EgressFirewall Rules applied") {
+			e2e.Logf("The egressfirewall was not applied, trying again. \n %s", output)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("reached max time allowed but cannot find the egressfirewall details."))
+	return output
+}
+
+func checkDomainReachability(oc *exutil.CLI, podName, ns, domainName string, passOrFail bool) {
+	curlCmd := fmt.Sprintf("curl -s -I %s --connect-timeout 5 ", domainName)
+	if passOrFail {
+		_, err := e2eoutput.RunHostCmdWithRetries(ns, podName, curlCmd, 10*time.Second, 20*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			curlCmd = fmt.Sprintf("curl -s -6 -I %s --connect-timeout 5", domainName)
+			_, err := e2eoutput.RunHostCmdWithRetries(ns, podName, curlCmd, 10*time.Second, 20*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+	} else {
+		o.Eventually(func() error {
+			_, err := e2eoutput.RunHostCmd(ns, podName, curlCmd)
+			return err
+		}, "20s", "10s").Should(o.HaveOccurred())
+	}
 }

@@ -1039,4 +1039,50 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 			o.Expect(findAnnotation).To(o.ContainSubstring(`"service.kubernetes.io/topology-aware-hints":"auto"`))
 		}
 	})
+
+	g.It("Author:mjoseph-NonHyperShiftHOST-ConnectedOnly-Critical-73379-DNSNameResolver CR get updated with IP addresses and TTL of the DNS name [Serial]", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodLabel         = "app=hello-pod"
+			cltPodName          = "hello-pod"
+			egressFirewall      = filepath.Join(buildPruningBaseDir, "egressfirewall-wildcard.yaml")
+		)
+
+		exutil.By("1. Create egressfirewall file")
+		project1 := oc.Namespace()
+		operateResourceFromFile(oc, "create", project1, egressFirewall)
+		waitEgressFirewallApplied(oc, "default", project1)
+
+		exutil.By("2. Create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		exutil.By("3. Verify the record created with the dns name in the DNSNameResolver CR")
+		wildcardDnsName := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
+		o.Expect(wildcardDnsName).To(o.ContainSubstring("*.google.com."))
+
+		exutil.By("4. Verify the allowed rules which matches the wildcard take effect.")
+		// as per the egress firewall, only domains having "*.google.com" will only allowed
+		checkDomainReachability(oc, cltPodName, project1, "www.google.com", true)
+		checkDomainReachability(oc, cltPodName, project1, "www.redhat.com", false)
+		checkDomainReachability(oc, cltPodName, project1, "calendar.google.com", true)
+
+		exutil.By("5. Confirm the wildcard entry is resolved to dnsName with IP address and TTL value")
+		// resolved DNS names
+		dnsName := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..status.resolvedNames..dnsName}")
+		o.Expect(dnsName).To(o.ContainSubstring("www.google.com. calendar.google.com."))
+		// resolved TTL values
+		ttlValues := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..status.resolvedNames..resolvedAddresses..ttlSeconds}")
+		o.Expect(ttlValues).To(o.MatchRegexp(`[0-9]{1,3}`))
+		// resolved IP address
+		ipAddress := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..status.resolvedNames..resolvedAddresses..ip}")
+		o.Expect(ipAddress).To(o.MatchRegexp(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`))
+		o.Expect(strings.Count(ipAddress, ":") >= 2).To(o.BeTrue())
+	})
 })
