@@ -158,6 +158,8 @@ func NewCLIForKube(basename string) *CLI {
 	client.kubeFramework = e2e.NewDefaultFramework(basename)
 	client.showInfo = true
 	client.username = "admin"
+
+	g.BeforeEach(func() { client.SetKubeconf(DuplicateFileToTemp(client.adminConfigPath, "")) })
 	return client
 }
 
