@@ -3,6 +3,7 @@ package mco
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -231,6 +232,55 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		logger.Infof("OK!\n")
 	})
 
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-75110-Propagate a NodeDisruptionPolicy failure condition via degrading the daemon [Disruptive]", func() {
+		var (
+			invalidService = "fake.service"
+			invalidActions = []Action{NewReloadAction(invalidService)}
+			validActions   = []Action{NewReloadAction(TestService)}
+
+			mcp = GetCompactCompatiblePool(oc.AsAdmin())
+
+			mcName      = "mco-tc-75110-failed-node-disruption-policy-action"
+			filePath    = "/etc/test-file-policy-tc-75110-failed-action"
+			fileContent = "test"
+			fileConfig  = getURLEncodedFileConfig(filePath, fileContent, "420")
+
+			expectedNDMessage = regexp.QuoteMeta(fmt.Sprintf("error running systemctl reload %s: Failed to reload %s: Unit %s not found", invalidService, invalidService, invalidService)) // quotemeta to scape regex characters
+			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+		)
+
+		exutil.By("Configure and invalid action")
+		ndp := NewNodeDisruptionPolicy(oc)
+		defer ndp.Rollback()
+		defer mcp.RecoverFromDegraded()
+		o.Expect(ndp.AddFilePolicy(filePath, invalidActions...).Apply()).To(o.Succeed(), "Patch ManchineConfiguration failed")
+		logger.Infof("OK!\n")
+
+		exutil.By("Create a MC using the configured disruption policy")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.SetParams(fmt.Sprintf("FILES=[%s]", fileConfig))
+		mc.skipWaitForMcp = true
+		defer mc.deleteNoWait()
+		mc.create()
+		logger.Infof("OK!\n")
+
+		checkDegraded(mcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 1)
+
+		exutil.By("Fix the disruption policy configuration")
+		o.Expect(ndp.AddFilePolicy(filePath, validActions...).Apply()).To(o.Succeed(), "Patch ManchineConfiguration failed")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the configuration can be applied")
+		o.Eventually(mcp, "10m", "20s").ShouldNot(BeDegraded(),
+			"The node disruption policy was fixed but the MCP didn't stop being degraded")
+		mcp.waitForComplete()
+		o.Eventually(NewResource(oc.AsAdmin(), "co", "machine-config"), "2m", "20s").ShouldNot(BeDegraded(),
+			"machine-config CO should not be degraded anymore once the configuration is applied")
+
+		o.Eventually(NewRemoteFile(mcp.GetSortedNodesOrFail()[0], filePath)).Should(HaveContent(fileContent),
+			"The configuration was applied but the deployed file doesn't have the right content")
+		logger.Infof("OK!\n")
+	})
 })
 
 // test func for file based policy test cases
