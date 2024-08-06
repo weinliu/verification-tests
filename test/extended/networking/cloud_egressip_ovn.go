@@ -5216,6 +5216,97 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 		e2e.Logf("The captured packet is %s", cmdOutput.String())
 		o.Expect(strings.Contains(cmdOutput.String(), egressIP)).To(o.BeTrue())
 	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-75387-[rducluster] [Multi-NIC] Default Routes should be injected to Egress IP Routing Table for Secondary NIC. [Disruptive]", func() {
+		// From bug https://issues.redhat.com/browse/OCPBUGS-31854
+		exutil.By("Get worker nodes\n")
+		if len(workers) < 1 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+
+		exutil.By("create new namespace\n")
+		ns1 := oc.Namespace()
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		exutil.By(" Label EgressIP node\n")
+		egressNode := workers[0]
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+
+		exutil.By("Create first egressip object\n")
+		dstCIDR := "192.168.221.0/24"
+		freeIPs := findFreeIPsForCIDRs(oc, egressNode, dstCIDR, 1)
+		egressip1 := egressIPResource1{
+			name:          "egressip-75387",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+
+		exutil.By("Check only one EgressIP assigned in the object.\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("Apply a label to test namespace.\n")
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create pods in test namespace. \n")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		exutil.By("Apply label to one pod in test namespace\n")
+		testPodName := getPodName(oc, ns1, "name=test-pods")
+		err = exutil.LabelPod(oc, ns1, testPodName[0], "color=pink")
+		defer exutil.LabelPod(oc, ns1, testPodName[0], "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Enabled secondary NIC IP forwarding on egress node.\n")
+		secondaryInf := "enp3s0"
+		defer disableIPForwardingOnSpecNodeNIC(oc, egressNode, secondaryInf)
+		enableIPForwardingOnSpecNodeNIC(oc, egressNode, secondaryInf)
+
+		exutil.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+		// Access rdu2's host IP
+		dstHost = "10.8.1.179"
+		exutil.SetNamespacePrivileged(oc, ns1)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", secondaryInf, dstHost)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+egressNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Access external IP from pod")
+		//Wait 5 seconds to let the tcpdump ready for capturing traffic
+		time.Sleep(5 * time.Second)
+		pingCmd := fmt.Sprintf("ping -c4 %s", dstHost)
+		_, err = e2eoutput.RunHostCmd(ns1, testPodName[0], pingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check captured packets including egressIP")
+		cmdErr := cmdTcpdump.Wait()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The captured packet is %s", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), freeIPs[0])).To(o.BeTrue())
+
+		exutil.By("Verify IP route for secondary NIC includes default route.")
+		testPodIP := getPodIPv4(oc, ns1, testPodName[0])
+		ipRouteCmd := fmt.Sprintf("ip route show table $(ip rule | grep %s | awk '{print $5}')", testPodIP)
+		output, debugNodeErr := exutil.DebugNode(oc, egressNode, "bash", "-c", ipRouteCmd)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf(output)
+		o.Expect(strings.Contains(output, "default ")).Should(o.BeTrue())
+
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {
