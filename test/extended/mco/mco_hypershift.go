@@ -297,6 +297,7 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 	logger.Infof("the hosted cluster namespace is: %s", ht.clusterNS)
 
 	// wait for hosted control plane is available
+	defer ht.oc.AsAdmin().Run("get").Args("-n", fmt.Sprintf("%s-%s", ht.clusterNS, name), "pods").Execute() // for debugging purpose
 	exutil.AssertAllPodsToBeReadyWithPollerParams(ht.oc, fmt.Sprintf("%s-%s", ht.clusterNS, name), 30*time.Second, 10*time.Minute)
 
 	logger.Infof("hosted cluster %s is created successfully on AWS", name)

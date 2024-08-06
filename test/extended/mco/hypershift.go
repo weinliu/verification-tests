@@ -414,26 +414,18 @@ func (np *HypershiftNodePool) WaitUntilVersionIsUpdating() {
 // WaitUntilConfigUpdateIsCompleted poll condition UpdatingConfig until it is disappeared
 func (np *HypershiftNodePool) WaitUntilConfigUpdateIsCompleted() {
 	logger.Infof("wait nodepool %s config update to complete", np.GetName())
-	o.Eventually(func() bool {
-		updatingConfig := JSON(np.GetConditionByType("UpdatingConfig"))
-		if updatingConfig.Exists() { // if the condition is still there. update is in progress
-			return false
-		}
-		return true
-	}, np.EstimateTimeoutInMins(), "30s").Should(o.BeTrue(), "config update is not completed. Nodepool:\n%s", np.PrettyString())
+	o.Eventually(np.GetConditionStatusByType, np.EstimateTimeoutInMins(), "30s").WithArguments("UpdatingConfig").Should(o.Equal("False"),
+		"config update is not completed. Nodepool:\n%s", np.PrettyString())
+
 	logger.Infof("nodepool %s config update is completed", np.GetName())
 }
 
 // WaitUntilVersionUpdateIsCompleted poll condition UpdatingVersion until it is disappeared
 func (np *HypershiftNodePool) WaitUntilVersionUpdateIsCompleted() {
 	logger.Infof("wait nodepool %s version update to complete", np.GetName())
-	o.Eventually(func() bool {
-		updatingVersion := JSON(np.GetConditionByType("UpdatingVersion"))
-		if updatingVersion.Exists() {
-			return false
-		}
-		return true
-	}, np.EstimateTimeoutInMins(), "2s").Should(o.BeTrue(), "version update is not completed. Nodepool:\n%s", np.PrettyString())
+	o.Eventually(np.GetConditionStatusByType, np.EstimateTimeoutInMins(), "2s").WithArguments("UpdatingVersion").Should(o.Equal("False"),
+		"version update is not completed. Nodepool:\n%s", np.PrettyString())
+
 	logger.Infof("nodepool %s version update is completed", np.GetName())
 }
 
