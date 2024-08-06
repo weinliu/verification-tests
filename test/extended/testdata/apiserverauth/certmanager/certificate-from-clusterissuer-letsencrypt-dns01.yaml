@@ -6,14 +6,16 @@ objects:
   - apiVersion: cert-manager.io/v1
     kind: Certificate
     metadata:
-      name: certificate-from-dns01
+      name: "${CERT_NAME}"
     spec:
-      secretName: certificate-from-dns01
+      secretName: "${CERT_NAME}-tls"
       dnsNames:
       - "${DNS_NAME}"
       issuerRef:
         kind: ClusterIssuer
         name: "${ISSUER_NAME}"
 parameters:
+  - name: CERT_NAME
+    value: "certificate-from-dns01"
   - name: DNS_NAME
   - name: ISSUER_NAME

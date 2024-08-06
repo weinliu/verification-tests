@@ -686,6 +686,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
+	// This case contains two Polarion cases: 62500 and 65132. The root case is 62500.
 	g.It("Author:yuewu-ROSA-ConnectedOnly-High-62500-Use IRSA as ambient credential in AWS STS env for ACME dns01 route53 solver to generate certificate [Serial]", func() {
 		const (
 			roleName            = "test-private-62500-cert-manager"
@@ -693,7 +694,9 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			controllerNamespace = "cert-manager"
 			controllerLabel     = "app.kubernetes.io/name=cert-manager"
 			issuerName          = "route53-ambient"
-			certName            = "certificate-from-dns01"
+			certName62500       = "certificate-from-dns01-pod-identity-webhook"
+			certName65132       = "certificate-from-dns01-manual-patch"
+			stsSecretName       = "sts-creds"
 		)
 
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
@@ -819,16 +822,19 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("sa/cert-manager", "eks.amazonaws.com/role-arn="+roleARN, "-n", controllerNamespace, "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
-			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+			// double check if the anno was removed, in case any interruptions occurred before case 65132.
+			output, err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("sa/cert-manager", "-n", controllerNamespace, "--list").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-
-			e2e.Logf("de-annotate the role-arn from the cert-manager ServiceAccount")
-			err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("sa/cert-manager", "eks.amazonaws.com/role-arn-", "-n", controllerNamespace, "--overwrite").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", controllerLabel, "-n", controllerNamespace).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+			if strings.Contains(output, "eks.amazonaws.com/role-arn") {
+				oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("de-annotate the role-arn from the cert-manager ServiceAccount")
+				err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("sa/cert-manager", "eks.amazonaws.com/role-arn-", "-n", controllerNamespace, "--overwrite").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", controllerLabel, "-n", controllerNamespace).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+			}
 		}()
 
 		// delete the old pod and wait for a new one redeployed
@@ -865,14 +871,67 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		dnsName := getRandomString(4) + "." + dnsZone
 
 		certFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certFile, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName62500, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
-		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName62500, 10*time.Second, 300*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+			dumpResource(oc, oc.Namespace(), "certificate", certName62500, "-o=yaml")
 		}
-		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for 62500's certificate to become Ready")
+
+		// author: yuewu@redhat.com
+		// Low-65132-CLOUD_CREDENTIALS_SECRET_NAME should work in AWS STS cluster when pod identity webhook is not used
+		exutil.By("de-annotate the role-arn from the cert-manager ServiceAccount (used by case 62500)")
+		oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("sa/cert-manager", "eks.amazonaws.com/role-arn-", "-n", controllerNamespace, "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", controllerLabel, "-n", controllerNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+
+		exutil.By("create the STS config secret manually")
+		credContent := fmt.Sprintf("[default]\nsts_regional_endpoints = regional\nrole_arn = %s\nweb_identity_token_file = /var/run/secrets/openshift/serviceaccount/token", roleARN)
+		err = oc.AsAdmin().Run("create").Args("-n", "cert-manager", "secret", "generic", stsSecretName, "--from-literal=credentials="+credContent).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("delete the manually created STS secret")
+			err := oc.AsAdmin().Run("delete").Args("-n", "cert-manager", "secret", stsSecretName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("patch the subscription to inject CLOUD_CREDENTIALS_SECRET_NAME env")
+		oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchPath := `{"spec":{"config":{"env":[{"name":"CLOUD_CREDENTIALS_SECRET_NAME","value":"` + stsSecretName + `"}]}}}`
+		err = oc.AsAdmin().Run("patch").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("un-patch the subscription")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patchPath = `{"spec":{"config":{"env":[]}}}`
+			err = oc.AsAdmin().Run("patch").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+		}()
+		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+
+		exutil.By("create another certificate")
+		dnsName = getRandomString(4) + "." + dnsZone
+
+		certFile = filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName65132, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName65132, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName65132, "-o=yaml")
+			e2e.Logf("listing envs of the controller pod, it should contain 'AWS_SDK_LOAD_CONFIG=1'")
+			_ = oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "-l", controllerLabel, "-n", controllerNamespace, "--list").Execute()
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for 65132's certificate to become Ready")
 	})
 
 	// author: yuewu@redhat.com
