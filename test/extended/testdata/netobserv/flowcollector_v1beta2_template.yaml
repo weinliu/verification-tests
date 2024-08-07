@@ -149,7 +149,10 @@ objects:
         advanced:
           port: 9001
           register: true
-      exporters: []
+      networkPolicy:
+        additionalNamespaces: "${{NetworkPolicyAdditionalNamespaces}}"
+        enable: "${{NetworkPolicyEnable}}"
+      exporters: "${{Exporters}}"
 parameters:
   - name: Namespace
     description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"
@@ -166,6 +169,8 @@ parameters:
     value: "Auto"
   - name: EBPFMetricServerTLSType
     value: "Disabled"
+  - name: EBPFeatures
+    value: '[]'
   - name: CacheMaxFlows
     value: "100000"
   - name: MultiClusterDeployment
@@ -210,5 +215,9 @@ parameters:
     value: "netobserv"
   - name: PluginEnable
     value: "true"
-  - name: EBPFeatures
+  - name: NetworkPolicyEnable
+    value: "false"
+  - name: NetworkPolicyAdditionalNamespaces
+    value: '[]'
+  - name: Exporters
     value: '[]'

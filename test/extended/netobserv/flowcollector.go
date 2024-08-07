@@ -14,39 +14,42 @@ import (
 
 // Flowcollector struct to handle Flowcollector resources
 type Flowcollector struct {
-	Namespace                 string
-	ProcessorKind             string
-	MultiClusterDeployment    string
-	AddZone                   string
-	LogType                   string
-	DeploymentModel           string
-	LokiEnable                string
-	LokiMode                  string
-	LokiURL                   string
-	LokiTLSCertName           string
-	LokiStatusTLSEnable       string
-	LokiStatusURL             string
-	LokiStatusTLSCertName     string
-	LokiStatusTLSUserCertName string
-	LokiNamespace             string
-	MonolithicLokiURL         string
-	KafkaAddress              string
-	KafkaTLSEnable            string
-	KafkaClusterName          string
-	KafkaTopic                string
-	KafkaUser                 string
-	KafkaNamespace            string
-	FLPMetricServerTLSType    string
-	EBPFMetricServerTLSType   string
-	EBPFCacheActiveTimeout    string
-	EBPFPrivileged            string
-	EBPFMetrics               string
-	EBPFeatures               []string
-	CacheMaxFlows             string
-	PacketDropEnable          string
-	DNStrackingEnable         string
-	PluginEnable              string
-	Template                  string
+	Namespace                         string
+	ProcessorKind                     string
+	MultiClusterDeployment            string
+	AddZone                           string
+	LogType                           string
+	DeploymentModel                   string
+	LokiEnable                        string
+	LokiMode                          string
+	LokiURL                           string
+	LokiTLSCertName                   string
+	LokiStatusTLSEnable               string
+	LokiStatusURL                     string
+	LokiStatusTLSCertName             string
+	LokiStatusTLSUserCertName         string
+	LokiNamespace                     string
+	MonolithicLokiURL                 string
+	KafkaAddress                      string
+	KafkaTLSEnable                    string
+	KafkaClusterName                  string
+	KafkaTopic                        string
+	KafkaUser                         string
+	KafkaNamespace                    string
+	FLPMetricServerTLSType            string
+	EBPFMetricServerTLSType           string
+	EBPFCacheActiveTimeout            string
+	EBPFPrivileged                    string
+	EBPFMetrics                       string
+	EBPFeatures                       []string
+	CacheMaxFlows                     string
+	PacketDropEnable                  string
+	DNStrackingEnable                 string
+	PluginEnable                      string
+	NetworkPolicyEnable               string
+	NetworkPolicyAdditionalNamespaces []string
+	Exporters                         []string
+	Template                          string
 }
 
 // ForwardClusterRoleBinding struct to handle ClusterRoleBinding in Forward mode

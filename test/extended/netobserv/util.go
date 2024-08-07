@@ -176,7 +176,7 @@ func (r Resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return err
 }
 
-func WaitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
+func WaitForPodReadyWithLabel(oc *exutil.CLI, ns, label string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
@@ -204,7 +204,7 @@ func WaitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 }
 
 // WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
-func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
+func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace, name string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
@@ -224,7 +224,7 @@ func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
 }
 
-func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
+func waitForStatefulsetReady(oc *exutil.CLI, namespace, name string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
@@ -259,7 +259,7 @@ func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
 }
 
 // check pods with label that are fully deleted
-func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string) {
+func checkPodDeleted(oc *exutil.CLI, ns, label, checkValue string) {
 	podCheck := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
 		if err != nil || strings.Contains(output, checkValue) {
@@ -268,6 +268,18 @@ func checkPodDeleted(oc *exutil.CLI, ns string, label string, checkValue string)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", checkValue))
+}
+
+// check networkPolicy with name that are fully deleted
+func checkNetworkPolicyDeleted(oc *exutil.CLI, name, ns string) {
+	NPCheck := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkPolicy", name, "-n", ns).Output()
+		if !strings.Contains(output, "NotFound") {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(NPCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", name))
 }
 
 // For normal user to create resources in the specified namespace from the file (not template)

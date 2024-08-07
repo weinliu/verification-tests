@@ -1,6 +1,7 @@
 package netobserv
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -1182,28 +1183,37 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		createResourceFromFile(oc, IPFIXns, ipfixCollectorTemplatePath)
 		WaitForPodReadyWithLabel(oc, IPFIXns, "app=flowlogs-pipeline")
 
+		IPFIXconfig := map[string]interface{}{
+			"ipfix": map[string]interface{}{
+				"targetHost": "flowlogs-pipeline.ipfix.svc.cluster.local",
+				"targetPort": 2055,
+				"transport":  "UDP"},
+			"type": "IPFIX",
+		}
+
+		config, err := json.Marshal(IPFIXconfig)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		IPFIXexporter := string(config)
+
 		g.By("Deploy FlowCollector with Loki disabled")
 		flow := Flowcollector{
 			Namespace:     namespace,
 			Template:      flowFixturePath,
 			LokiEnable:    "false",
 			LokiNamespace: namespace,
+			Exporters:     []string{IPFIXexporter},
 		}
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
 
-		g.By("Patch flowcollector to export flows to IPFIX collector")
-		patchValue := `[{"ipfix":{"targetHost": "flowlogs-pipeline.ipfix.svc.cluster.local", "targetPort": 2055, "transport": "UDP"}, "type": "IPFIX"}]`
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
+		g.By("Ensure flowcollector is ready")
+		flow.WaitForFlowcollectorReady(oc)
 
-		// check if patch is successful
+		g.By("Verify flowcollector is deployed with IPFIX exporter")
 		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(flowPatch).To(o.Equal(`'IPFIX'`))
-
-		g.By("Ensure flowcollector is ready")
-		flow.WaitForFlowcollectorReady(oc)
 
 		g.By("Wait for 2 mins before logs gets collected and written to IPFIX collector")
 		time.Sleep(120 * time.Second)
@@ -1617,8 +1627,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
 
-		g.It("NonPreRelease-Longduration-Author:aramesha-High-57397-High-65116-Verify network-flows export with Kafka and netobserv installation without Loki [Serial]", func() {
+		g.It("Author:aramesha-NonPreRelease-Longduration-High-57397-High-65116-High-75340-Verify network-flows export with Kafka and netobserv installation without Loki and networkPolicy enabled[Serial]", func() {
 			namespace := oc.Namespace()
+			kafkaAddress := fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace)
 
 			g.By("Deploy kafka Topic for export")
 			// deploy kafka topic for export
@@ -1633,28 +1644,64 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			kafkaTopic2.deployKafkaTopic(oc)
 			waitForKafkaTopicReady(oc, kafkaTopic2.TopicName, kafkaTopic2.Namespace)
 
+			kafkaExporterConfig := map[string]interface{}{
+				"kafka": map[string]interface{}{
+					"address": kafkaAddress,
+					"tls": map[string]interface{}{
+						"caCert": map[string]interface{}{
+							"certFile":  "ca.crt",
+							"name":      "kafka-cluster-cluster-ca-cert",
+							"namespace": namespace,
+							"type":      "secret"},
+						"enable":             true,
+						"insecureSkipVerify": false,
+						"userCert": map[string]interface{}{
+							"certFile":  "user.crt",
+							"certKey":   "user.key",
+							"name":      kafkaUser.UserName,
+							"namespace": namespace,
+							"type":      "secret"},
+					},
+					"topic": kafkaTopic2.TopicName},
+				"type": "Kafka",
+			}
+
+			config, err := json.Marshal(kafkaExporterConfig)
+			o.Expect(err).ToNot(o.HaveOccurred())
+			kafkaConfig := string(config)
+
+			networkPolicyAddNamespaces := "openshift-ingress"
+			config, err = json.Marshal(networkPolicyAddNamespaces)
+			o.Expect(err).ToNot(o.HaveOccurred())
+			AdditionalNamespaces := string(config)
+
 			g.By("Deploy FlowCollector with Kafka TLS")
 			flow := Flowcollector{
-				Namespace:       namespace,
-				DeploymentModel: "Kafka",
-				Template:        flowFixturePath,
-				LokiNamespace:   namespace,
-				KafkaAddress:    fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
-				KafkaTLSEnable:  "true",
-				KafkaNamespace:  namespace,
+				Namespace:                         namespace,
+				DeploymentModel:                   "Kafka",
+				Template:                          flowFixturePath,
+				LokiNamespace:                     namespace,
+				KafkaAddress:                      kafkaAddress,
+				KafkaTLSEnable:                    "true",
+				KafkaNamespace:                    namespace,
+				Exporters:                         []string{kafkaConfig},
+				NetworkPolicyEnable:               "true",
+				NetworkPolicyAdditionalNamespaces: []string{AdditionalNamespaces},
 			}
 
 			defer flow.DeleteFlowcollector(oc)
 			flow.CreateFlowcollector(oc)
 
 			// Scenario1: Verify flows are exported with Kafka DeploymentModel and with Loki enabled
-			g.By("Patch exporter to flowcollector with Kafka deployment model")
-			patchValue := fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "tls":{"caCert":{"certFile": "ca.crt", "name": "kafka-cluster-cluster-ca-cert", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"},"enable": true, "insecureSkipVerify": false, "userCert":{"certFile": "user.crt", "certKey": "user.key", "name": "` + kafkaUser.UserName + `", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"}},"topic": "` + kafkaTopic2.TopicName + `"},"type": "Kafka"}]`)
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
-			// check if patch is successful
-			flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
+			g.By("Verify flowcollector is deployed with KAFKA exporter")
+			exporterType, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
 			o.Expect(err).ToNot(o.HaveOccurred())
-			o.Expect(flowPatch).To(o.Equal(`'Kafka'`))
+			o.Expect(exporterType).To(o.Equal(`'Kafka'`))
+
+			g.By("Verify flowcollector is deployed with openshift-ingress in additionalNamepsaces section")
+			addNamespaces, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.networkPolicy.additionalNamespaces[0]}'").Output()
+			o.Expect(err).ToNot(o.HaveOccurred())
+			o.Expect(addNamespaces).To(o.Equal(`'openshift-ingress'`))
 
 			g.By("Ensure flows are observed, all pods are running and secrets are synced and plugin pod is deployed")
 			flow.WaitForFlowcollectorReady(oc)
@@ -1704,19 +1751,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			//Ensure FLP and eBPF pods are deleted
 			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
 			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
+			// Ensure network-policy is deleted
+			checkNetworkPolicyDeleted(oc, "netobserv", flow.Namespace)
 
 			flow.DeploymentModel = "Direct"
 			flow.LokiEnable = "false"
+			flow.NetworkPolicyEnable = "false"
 			flow.CreateFlowcollector(oc)
-
-			// Scenario2: Verify flows are exported with Direct DeploymentModel and with Loki disabled
-			g.By("Patch exporter to flowcollector with Direct deployment model")
-			patchValue = fmt.Sprintf(`[{"kafka":{"address": "` + flow.KafkaAddress + `", "tls":{"caCert":{"certFile": "ca.crt", "name": "kafka-cluster-cluster-ca-cert", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"},"enable": true, "insecureSkipVerify": false, "userCert":{"certFile": "user.crt", "certKey": "user.key", "name": "` + kafkaUser.UserName + `", "namespace": "` + flow.KafkaNamespace + `", "type": "secret"}},"topic": "` + kafkaTopic2.TopicName + `"},"type": "Kafka"}]`)
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/exporters", "value": `+patchValue+`}]`, "--type=json").Output()
-			// check if patch is succesfull
-			flowPatch, err = oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
-			o.Expect(err).ToNot(o.HaveOccurred())
-			o.Expect(flowPatch).To(o.Equal(`'Kafka'`))
 
 			g.By("Ensure all pods are running")
 			flow.WaitForFlowcollectorReady(oc)
@@ -1741,9 +1782,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			consolePod, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-plugin")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(consolePod)).To(o.Equal(0))
+
+			g.By("Ensure all pods are running")
+			flow.WaitForFlowcollectorReady(oc)
 		})
 
-		g.It("NonPreRelease-Author:aramesha-High-64880-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
+		g.It("Author:aramesha-NonPreRelease-High-64880-High-75340-Verify secrets copied for Loki and Kafka when deployed in NS other than flowcollector pods [Serial]", func() {
 			namespace := oc.Namespace()
 			g.By("Create a new namespace for flowcollector")
 			flowNS := "netobserv-test"
@@ -1754,21 +1798,26 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", ls.Name, namespace)
 
 			flow := Flowcollector{
-				Namespace:       flowNS,
-				DeploymentModel: "Kafka",
-				LokiMode:        "Manual",
-				Template:        flowFixturePath,
-				LokiURL:         lokiURL,
-				LokiTLSCertName: fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
-				LokiNamespace:   namespace,
-				KafkaAddress:    fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
-				KafkaTLSEnable:  "true",
-				KafkaNamespace:  namespace,
+				Namespace:           flowNS,
+				DeploymentModel:     "Kafka",
+				LokiMode:            "Manual",
+				Template:            flowFixturePath,
+				LokiURL:             lokiURL,
+				LokiTLSCertName:     fmt.Sprintf("%s-gateway-ca-bundle", ls.Name),
+				LokiNamespace:       namespace,
+				KafkaAddress:        fmt.Sprintf("kafka-cluster-kafka-bootstrap.%s:9093", namespace),
+				KafkaTLSEnable:      "true",
+				KafkaNamespace:      namespace,
+				NetworkPolicyEnable: "true",
 			}
 
-			flow.Namespace = flowNS
 			defer flow.DeleteFlowcollector(oc)
 			flow.CreateFlowcollector(oc)
+
+			g.By("Verify networkPolicy is deployed")
+			networkPolicy, err := oc.AsAdmin().Run("get").Args("networkPolicy", "netobserv", "-n", flow.Namespace).Output()
+			o.Expect(err).ToNot(o.HaveOccurred())
+			o.Expect(networkPolicy).NotTo(o.BeEmpty())
 
 			g.By("Ensure flows are observed, all pods are running and secrets are synced")
 			flow.WaitForFlowcollectorReady(oc)
