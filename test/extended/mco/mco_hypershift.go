@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
-
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -193,7 +192,8 @@ func (ht *HypershiftTest) InstallOnAws() {
 			WithBucket(ht.StrValue(TestCtxKeyBucket)).
 			WithCredential(awscred.file).
 			WithRegion(awscred.region).
-			WithEnableDefaultingWebhook())
+			WithEnableDefaultingWebhook().
+			WithHypershiftImage(ht.getHypershiftImage()))
 	o.Expect(installErr).NotTo(o.HaveOccurred(), "install hypershift operator via cli failed")
 
 	// check whether pod under ns hypershift is running
@@ -642,4 +642,19 @@ func (ht *HypershiftTest) skipTestIfLatestAcceptedBuildIsSameAsHostedClusterVers
 		g.Skip(fmt.Sprintf("latest accepted build [%s] is same as hosted cluster version [%s], cannot update release image, skip this case", latestAcceptedBuild, hostedclusterVersion))
 	}
 
+}
+
+func (ht *HypershiftTest) getHypershiftImage() string {
+	// get minor release version as image tag
+	imageTag, _, cvErr := exutil.GetClusterVersion(ht.oc)
+	o.Expect(cvErr).NotTo(o.HaveOccurred(), "Get minor release version error")
+	arch := architecture.GetControlPlaneArch(ht.oc)
+	if arch == architecture.ARM64 {
+		imageTag = fmt.Sprintf("%s-%s", imageTag, architecture.ARM64.String())
+	}
+
+	image := fmt.Sprintf("quay.io/hypershift/hypershift-operator:%s", imageTag)
+	logger.Infof("Hypershift image is: %s", image)
+
+	return image
 }

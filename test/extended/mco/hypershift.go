@@ -121,6 +121,12 @@ func (opt *AwsInstallOptions) WithEnableDefaultingWebhook() *AwsInstallOptions {
 	return opt
 }
 
+// WithHypershiftImage builder func to append option enable-defaulting-webhook
+func (opt *AwsInstallOptions) WithHypershiftImage(image string) *AwsInstallOptions {
+	opt.appendOption("--hypershift-image", image)
+	return opt
+}
+
 // NewAwsCreateClusterOptions constructor of create cluster on aws options
 func NewAwsCreateClusterOptions() *AwsCreateClusterOptions {
 	opts := &AwsCreateClusterOptions{
