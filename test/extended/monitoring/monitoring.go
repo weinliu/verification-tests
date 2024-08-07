@@ -1903,6 +1903,21 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkYamlconfig(oc, "openshift-user-workload-monitoring", "cm", "prometheus-user-workload-trusted-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
 			checkYamlconfig(oc, "openshift-user-workload-monitoring", "cm", "alertmanager-trusted-ca-bundle", cmd, `"openshift.io/owning-component":"Monitoring"`, true)
 		})
+
+		//author: juzhao@redhat.com
+		g.It("Author:juzhao-Medium-75489-Set scrape.timestamp tolerance for UWM prometheus", func() {
+			args, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", `-ojsonpath={.spec.additionalArgs[?(@.name=="scrape.timestamp-tolerance")]}`, "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("additionalArgs is: %v", args)
+			o.Expect(args).To(o.ContainSubstring(`"value":"15ms"`))
+			exutil.By("check settings in prometheus pods")
+			podNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=prometheus")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, pod := range podNames {
+				cmd := "-ojsonpath={.spec.containers[?(@.name==\"prometheus\")].args}"
+				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, `--scrape.timestamp-tolerance=15ms`, true)
+			}
+		})
 	})
 
 	//author: tagao@redhat.com
