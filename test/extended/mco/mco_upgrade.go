@@ -233,4 +233,119 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-PreChkUpgrade-NonPreRelease-High-70813-ManagedBootImages update boot image of machineset [Serial]", func() {
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+		SkipIfNoFeatureGate(oc.AsAdmin(), "ManagedBootImages")
+
+		var (
+			tmpNamespace         = NewResource(oc.AsAdmin(), "ns", "tc-70813-tmp-namespace")
+			tmpConfigMap         = NewConfigMap(oc.AsAdmin(), tmpNamespace.GetName(), "tc-70813-tmp-configmap")
+			clonedMSName         = "cloned-tc-70813-label"
+			labelName            = "mcotest"
+			labelValue           = "update"
+			machineSet           = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
+			machineConfiguration = GetMachineConfiguration(oc.AsAdmin())
+			allMachineSets       = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()
+		)
+
+		exutil.By("Persist information in a configmap in a tmp namespace")
+		if !tmpNamespace.Exists() {
+			logger.Infof("Creating namespace %s", tmpNamespace.GetName())
+			err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(tmpNamespace.GetName(), "--skip-config-write").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the temporary namespace %s", tmpNamespace.GetName())
+		}
+		if !tmpConfigMap.Exists() {
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", tmpConfigMap.GetNamespace(), "configmap", tmpConfigMap.GetName()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the temporary configmap %s", tmpConfigMap.GetName())
+		}
+
+		for _, ms := range allMachineSets {
+			logger.Infof("Store bootimage of machineset %s in tmp configmap", ms.GetName())
+			o.Expect(
+				tmpConfigMap.SetData(ms.GetName()+"="+ms.GetCoreOsBootImageOrFail()),
+			).To(o.Succeed(), "Error storing %s data in temporary configmap", ms.GetName())
+		}
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Opt-in boot images update")
+		o.Expect(
+			machineConfiguration.SetPartialManagedBootImagesConfig(labelName, labelValue),
+		).To(o.Succeed(), "Error configuring Partial managedBootImages in the 'cluster' MachineConfiguration resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Clone the first machineset twice")
+		clonedMS, err := machineSet.Duplicate(clonedMSName)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating %s", machineSet)
+		logger.Infof("Successfully created %s machineset", clonedMS.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Label the cloned machineset so that it is updated by MCO")
+		o.Expect(clonedMS.AddLabel(labelName, labelValue)).To(o.Succeed(),
+			"Error labeling %s", clonedMS)
+		logger.Infof("OK!\n")
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-High-70813-ManagedBootImages update boot image of machineset [Serial]", func() {
+		var (
+			tmpNamespace       = NewResource(oc.AsAdmin(), "ns", "tc-70813-tmp-namespace")
+			tmpConfigMap       = NewConfigMap(oc.AsAdmin(), tmpNamespace.GetName(), "tc-70813-tmp-configmap")
+			clonedMSLabelName  = "cloned-tc-70813-label"
+			clonedMS           = NewMachineSet(oc.AsAdmin(), MachineAPINamespace, clonedMSLabelName)
+			allMachineSets     = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()
+			coreosBootimagesCM = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "coreos-bootimages")
+			currentVersion     = NewResource(oc.AsAdmin(), "ClusterVersion", "version").GetOrFail(`{.status.desired.version}`)
+		)
+
+		if !clonedMS.Exists() {
+			g.Skip("PreChkUpgrad part of this test case was skipped, so we skip the PstChkUpgrade part too")
+		}
+		defer clonedMS.Delete()
+
+		o.Expect(tmpConfigMap).To(Exist(), "The configmap with the pre-upgrade information was not found")
+
+		exutil.By("Check that the MCO boot images ConfigMap was updated")
+		o.Eventually(coreosBootimagesCM.Get, "5m", "20s").WithArguments(`{.data.MCOReleaseImageVersion}`).Should(o.Equal(currentVersion),
+			"The MCO boot images configmap doesn't have the right version after the upgrade")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the right machinesets were updated with the right bootimage and user-data secret")
+
+		for _, ms := range allMachineSets {
+			logger.Infof("Checking machineset %s", ms.GetName())
+			if ms.GetName() == clonedMS.GetName() {
+				currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *ms.GetArchitectureOrFail(), coreosBootimagesCM)
+				logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
+				logger.Infof("Machineset %s should be updated", ms.GetName())
+
+				o.Eventually(ms.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
+					"%s was NOT updated to use the right boot image", ms)
+				o.Eventually(ms.GetUserDataSecret, "1m", "20s").Should(o.Equal("worker-user-data-managed"),
+					"%s was NOT updated to use the right boot image", ms)
+			} else {
+				// We check that the machineset has the same boot image that we stored before the upgrade started
+				logger.Infof("Machineset %s should NOT be updated", ms.GetName())
+				oldCoreOsBootImaget, err := tmpConfigMap.GetDataValue(ms.GetName())
+				if err != nil {
+					logger.Warnf("Not checking boot image for machineset %s. No data found in the temporary configmap. %s", ms.GetName(), tmpConfigMap.PrettyString())
+				}
+				logger.Infof("Old coreOsBootImage: %s", oldCoreOsBootImaget)
+
+				o.Expect(ms.GetCoreOsBootImage()).To(o.Equal(oldCoreOsBootImaget),
+					"%s was updated, but it should not be updated", ms)
+			}
+			logger.Infof("OK!\n")
+		}
+
+		exutil.By("Check that the updated machineset can be scaled without problems")
+		defer wMcp.waitForComplete()
+		defer clonedMS.ScaleTo(0)
+		o.Expect(clonedMS.ScaleTo(1)).To(o.Succeed(),
+			"Error scaling up MachineSet %s", clonedMS.GetName())
+		logger.Infof("Waiting %s machineset for being ready", clonedMS)
+		o.Eventually(clonedMS.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", clonedMS.GetName())
+		logger.Infof("OK!\n")
+	})
+
 })
