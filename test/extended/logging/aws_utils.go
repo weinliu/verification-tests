@@ -374,7 +374,7 @@ func checkIfS3bucketExistsWithSTS(cfg aws.Config, stsClient *sts.Client, s3assum
 	if err != nil {
 		if msg, errCode := err.(*s3Types.NoSuchBucket); errCode {
 			// Bucket does not exist
-			e2e.Logf("Bucket does not exist:", msg)
+			e2e.Logf("Bucket does not exist: %s", msg)
 			return false
 		} else {
 			e2e.Logf("Some other error accessing S3..Going ahead with bucket creation")
@@ -426,7 +426,7 @@ func deleteS3bucketWithSTS(cfg aws.Config, stsClient *sts.Client, s3assumeRoleAr
 	if err != nil {
 		// If the bucket isn't empty, it will return an error
 		if msg, errCode := err.(*s3Types.NoSuchBucket); errCode {
-			e2e.Logf("Bucket does not exist:", msg)
+			e2e.Logf("Bucket does not exist: %s", msg)
 		} else {
 			e2e.Failf("Some Error deleting the bucket" + bucketName)
 		}

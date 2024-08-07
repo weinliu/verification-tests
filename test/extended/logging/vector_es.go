@@ -202,7 +202,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "URL="+eesURL, "ES_VERSION="+ees.version, "INDEX=.kubernetes.container_name")
+			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX={.kubernetes.container_name||.log_type||\"none\"}", "INPUT_REFS=[\"application\"]")
 
 			g.By("check indices in externale ES")
 			ees.waitForIndexAppear(oc, containerName+"-0")
@@ -279,14 +279,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "INDEX=.kubernetes.container_name", "URL="+eesURL, "ES_VERSION="+ees.version)
+			clf.create(oc, "INDEX={.kubernetes.container_name||\"none-container-logs\"}", "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INPUT_REFS=[\"application\"]")
 
 			g.By("check indices in externale ES")
-			ees.waitForIndexAppear(oc, "app-"+containerName)
+			ees.waitForIndexAppear(oc, containerName)
 
 			g.By("check data in ES")
 			for _, proj := range []string{app1, app2} {
-				count, err := ees.getDocCount(oc, "app-"+containerName, "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj+"\"}}}")
+				count, err := ees.getDocCount(oc, containerName, "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj+"\"}}}")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(count > 0).To(o.BeTrue())
 			}
@@ -746,7 +746,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			ees.waitForIndexAppear(oc, "audit")
 
 			g.By("Set Old tlsSecurityProfile for the External ES output.")
-			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Old"}}}]`
+			patch = `[{"op": "add", "path": "/spec/outputs/0/tls/securityProfile", "value": {"type": "Old"}}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
@@ -804,7 +804,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "INPUT_REFS=[\"application\"]", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
-			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace":"logging-project-71000-2"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "type": "application", "application": {"excludes": [{"namespace":"logging-project-71000-2"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
@@ -841,7 +841,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			exutil.By("Check data in ES, no logs should be collected")
 			// sleep 10 seconds for collector pods to send the cached records
 			time.Sleep(10 * time.Second)
-			ees.removeIndices(oc, "*-write")
+			ees.removeIndices(oc, "application")
 			// sleep 10 seconds for collector pods to work with new configurations
 			time.Sleep(10 * time.Second)
 			indices, err := ees.getIndices(oc)
@@ -859,7 +859,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 
 			// sleep 10 seconds for collector pods to send the cached records
 			time.Sleep(10 * time.Second)
-			ees.removeIndices(oc, "*-write")
+			ees.removeIndices(oc, "application")
 
 			exutil.By("Check data in ES, logs from project/logging-project-71000-2 and " + appNS + "shouldn't be collected")
 			ees.waitForIndexAppear(oc, "app")
@@ -878,7 +878,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 
 			// sleep 10 seconds for collector pods to send the cached records
 			time.Sleep(10 * time.Second)
-			ees.removeIndices(oc, "*-write")
+			ees.removeIndices(oc, "application")
 
 			exutil.By("Check data in ES, logs from logging-project-71000*, other logs shouldn't be collected")
 			ees.waitForIndexAppear(oc, "app")
@@ -897,7 +897,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			exutil.By("Check data in ES, all application logs should be collected, but no logs from infra projects")
 			// sleep 10 seconds for collector pods to send the cached records
 			time.Sleep(10 * time.Second)
-			ees.removeIndices(oc, "*-write")
+			ees.removeIndices(oc, "application")
 			for _, ns := range []string{appNS, "logging-project-71000-0", "logging-project-71000-1", "logging-project-71000-2"} {
 				ees.waitForProjectLogsAppear(oc, ns, "app")
 			}
@@ -981,17 +981,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			dataInES := ees.searchDocByQuery(oc, "app", "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+app+"\"}}}")
 			k8sLabelsInES := dataInES.Hits.DataHits[0].Source.Kubernetes.Lables
 			o.Expect(len(k8sLabelsInES) > 0).Should(o.BeTrue())
-			o.Expect(k8sLabelsInES["run"] == "").Should(o.BeTrue())
-			o.Expect(k8sLabelsInES["test"] == "").Should(o.BeTrue())
-
-			flatLabelsInES := dataInES.Hits.DataHits[0].Source.Kubernetes.FlatLabels
-			// convert array to map and compare it with labels
-			flatLabelsMap := make(map[string]string)
-			for _, flatLabel := range flatLabelsInES {
-				res := strings.Split(flatLabel, "=")
-				flatLabelsMap[res[0]] = res[1]
-			}
-			o.Expect(reflect.DeepEqual(processedLabels, flatLabelsMap)).Should(o.BeTrue())
+			o.Expect(reflect.DeepEqual(processedLabels, k8sLabelsInES)).Should(o.BeTrue())
 
 			g.By("check data in Loki")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)

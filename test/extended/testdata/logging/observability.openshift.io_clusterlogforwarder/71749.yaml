@@ -47,12 +47,6 @@ objects:
       lokiStack:
           token:
             from: serviceAccount
-        labelKeys:
-        - .hostname
-        - .log_type
-        - .kubernetes_container_name
-        - .kubernetes_namespace_name
-        - .kubernetes_pod_name
         target:
           name: ${LOKISTACK_NAME}
           namespace: ${LOKISTACK_NAMESPACE}

@@ -28,6 +28,7 @@ objects:
       elasticsearch:
         url: ${ES_URL}
         version: ${{ES_VERSION}}
+        index: ${INDEX}
     pipelines:
     - name: forward-app-logs
       inputRefs:
@@ -50,7 +51,8 @@ objects:
       - audit-logs
       outputRefs:
       - es-created-by-user
-    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
+    serviceAccount:
+      name: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -62,3 +64,5 @@ parameters:
   value: ""
 - name: ES_VERSION
   value: "6"
+- name: INDEX
+  value: "{.log_type||\"none-typed-logs\"}"

@@ -38,20 +38,19 @@ objects:
       lokiStack:
         authentication:
           token:
-            from: serviceAccountToken
-        labelKeys:
-        - .hostname
-        - .log_type
-        - .kubernetes_container_name
-        - .kubernetes_namespace_name
-        - .kubernetes_pod_name
+            from: serviceAccount
         target:
           name: ${LOKISTACK_NAME}
           namespace: ${LOKISTACK_NAMESPACE}
+      tls:
+        ca:
+          key: ca-bundle.crt
+          secretName: ${SECRET_NAME}
     - name: es-created-by-user
       type: elasticsearch
       elasticsearch:
         url: ${ES_URL}
+        index: ${INDEX}
         version: ${{ES_VERSION}}
     pipelines:
     - name: forward-to-external-es
@@ -87,3 +86,7 @@ parameters:
   value: "openshift-logging"
 - name: MANAGEMENT_STATE
   value: "managed"
+- name: INDEX
+  value: "{.log_type||\"none-typed-logs\"}"
+- name: SECRET_NAME
+  value: ""

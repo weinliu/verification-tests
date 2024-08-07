@@ -28,7 +28,6 @@ objects:
           key: ca-bundle.crt
           secretName: ${SECRET_NAME} #configmap or secret
         insecureSkipVerify: ${{INSECURE_SKIP_VERIFY}}
-        securityProfile: ${{SECURITY_PROFILE}}
     pipelines:
     - name: forward-to-external-es
       inputRefs: ${{INPUT_REFS}}
@@ -65,5 +64,3 @@ parameters:
   value: "{.log_type||\"none-typed-logs\"}"
 - name: INSECURE_SKIP_VERIFY
   value: "false"
-- name: SECURITY_PROFILE
-  value: "{}"

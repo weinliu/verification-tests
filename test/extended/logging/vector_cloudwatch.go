@@ -388,7 +388,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "type": "application", "application": {"includes": [{"namespace": "openshift*"}]}}]}, {"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			exutil.By("CLF should be rejected as the serviceaccount doesn't have sufficient permissions")
-			checkResource(oc, true, false, `insufficient permissions on service account, not authorized to collect ["infrastructure"] logs`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
+			checkResource(oc, true, false, `insufficient permissions on service account, not authorized to collect ["infrastructure"] logs`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
 
 			exutil.By("Add cluster-role/collect-infrastructure-logs to the serviceaccount")
 			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-infrastructure-logs")
@@ -396,7 +396,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			o.Expect(err).NotTo(o.HaveOccurred())
 			//sleep 2 minutes for CLO to update the CLF
 			time.Sleep(2 * time.Minute)
-			checkResource(oc, false, false, `insufficient permissions on service account, not authorized to collect ["infrastructure"] logs`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
+			checkResource(oc, false, false, `insufficient permissions on service account, not authorized to collect ["infrastructure"] logs`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
 			clf.waitForCollectorPodsReady(oc)
 
 			exutil.By("Check logs in Cloudwatch, should find some logs from openshift* projects")
