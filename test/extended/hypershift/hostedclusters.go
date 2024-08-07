@@ -1324,3 +1324,7 @@ func (h *hostedCluster) encodeConfigmaps(ctx context.Context) {
 		h.encodeConfigmapsNs(ctx, ns.Name)
 	}
 }
+
+func (h *hostedCluster) pollUntilReady() {
+	o.Eventually(h.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.BeTrue())
+}

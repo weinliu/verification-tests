@@ -8,6 +8,12 @@ import (
 	"os"
 	"reflect"
 	"strings"
+
+	o "github.com/onsi/gomega"
+)
+
+const (
+	AzureCredsLocationEnv = "AZURE_AUTH_LOCATION"
 )
 
 type AzureCredentials struct {
@@ -116,4 +122,18 @@ func (ac *AzureCredentials) decode() error {
 	}
 	ac.decoded = true
 	return nil
+}
+
+func GetAzureCredsLocation() (string, error) {
+	credsLocation := os.Getenv(AzureCredsLocationEnv)
+	if len(credsLocation) == 0 {
+		return "", fmt.Errorf("found empty azure credentials location. Please export %s=<path to azure.json>", AzureCredsLocationEnv)
+	}
+	return credsLocation, nil
+}
+
+func MustGetAzureCredsLocation() string {
+	credsLocation, err := GetAzureCredsLocation()
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get azure credentials location")
+	return credsLocation
 }

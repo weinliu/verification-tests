@@ -5,11 +5,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 
 	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
+
+const (
+	ReleaseImageLatestEnv = "RELEASE_IMAGE_LATEST"
+)
+
+func GetLatestReleaseImageFromEnv() string {
+	return os.Getenv(ReleaseImageLatestEnv)
+}
 
 // GetLatest4StableImage to get the latest 4-stable OCP image from releasestream link
 // Return OCP image for sample quay.io/openshift-release-dev/ocp-release:4.11.0-fc.0-x86_64

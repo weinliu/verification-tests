@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -20,11 +21,14 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
+	"github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
@@ -516,5 +520,63 @@ func getTestCaseIDs() (testCaseIDs []string) {
 // getResourceNamePrefix generates a cloud resource name prefix by concatenating the first test case ID
 // with a random string. The resulting string is safe to use as a prefix for cloud resource names.
 func getResourceNamePrefix() string {
-	return fmt.Sprintf("ocp%s-%s", getTestCaseIDs()[0], strings.ToLower(exutil.RandStrDefault()))
+	return fmt.Sprintf("ocp%s-%s", getTestCaseIDs()[0], strings.ToLower(exutil.RandStr(4)))
+}
+
+func createTempDir(dir string) {
+	g.DeferCleanup(func() {
+		e2e.Logf("Removing temporary directory %s", dir)
+		o.Expect(os.RemoveAll(dir)).NotTo(o.HaveOccurred(), "failed to remove temporary directory")
+	})
+	e2e.Logf("Creating temporary directory %s", dir)
+	o.Expect(os.MkdirAll(dir, 0755)).NotTo(o.HaveOccurred(), "failed to create temporary directory")
+}
+
+func logHypershiftCLIVersion(c *CLI) {
+	version, err := c.WithShowInfo(true).Run("hypershift version").Output()
+	if err != nil {
+		e2e.Logf("Failed to get hypershift CLI version: %v", err)
+	}
+	e2e.Logf("Found hypershift CLI version:\n%s", version)
+}
+
+func getNsCount(ctx context.Context, c kubernetes.Interface) (int, error) {
+	nsList, err := c.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("error listing namespaces: %w", err)
+	}
+	return len(nsList.Items), nil
+}
+
+func createAndCheckNs(ctx context.Context, c kubernetes.Interface, logger *slog.Logger, numNsToCreate int, nsNamePrefix string) func() error {
+	return func() error {
+		g.GinkgoRecover()
+		logger = logger.With("id", ctx.Value(ctxKeyId))
+
+		nsCount, err := getNsCount(ctx, c)
+		if err != nil {
+			return fmt.Errorf("error counting namespaces: %v", err)
+		}
+		expectedNsCount := nsCount
+		logger.Info("Got initial namespace count", "nsCount", nsCount)
+
+		for i := 0; i < numNsToCreate; i++ {
+			nsName := fmt.Sprintf("%s-%d", nsNamePrefix, i)
+			logger.Info("Creating namespace", "nsName", nsName)
+
+			if _, err = c.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}, metav1.CreateOptions{}); err != nil {
+				return fmt.Errorf("error creating namespace %v: %v", nsName, err)
+			}
+			expectedNsCount++
+
+			switch nsCount, err = getNsCount(ctx, c); {
+			case err != nil:
+				return fmt.Errorf("error counting namespaces: %v", err)
+			case nsCount != expectedNsCount:
+				return fmt.Errorf("expect %v namespaces but found %v", expectedNsCount, nsCount)
+			}
+			time.Sleep(1 * time.Second)
+		}
+		return nil
+	}
 }

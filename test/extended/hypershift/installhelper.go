@@ -9,7 +9,9 @@ import (
 
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
+
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/utils/ptr"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
@@ -44,6 +46,9 @@ type createCluster struct {
 	InfraAvailabilityPolicy        string                `param:"infra-availability-policy"`
 	Zones                          string                `param:"zones"`
 	SSHKey                         string                `param:"ssh-key"`
+	GenerateSSH                    bool                  `param:"generate-ssh"`
+	OLMCatalogPlacement            string                `param:"olm-catalog-placement"`
+	FIPS                           bool                  `param:"fips"`
 	Annotations                    map[string]string     `param:"annotations"`
 	EndpointAccess                 AWSEndpointAccessType `param:"endpoint-access"`
 	ExternalDnsDomain              string                `param:"external-dns-domain"`
@@ -244,6 +249,25 @@ func (receiver *installHelper) createClusterAzureCommonBuilder() *createCluster 
 	}
 }
 
+func (receiver *installHelper) createClusterAROCommonBuilder() *createCluster {
+	location, err := getClusterRegion(receiver.oc)
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get cluster location")
+	return &createCluster{
+		Annotations:         map[string]string{podSecurityAdmissionOverrideLabelKey: string(podSecurityBaseline)},
+		AzureCreds:          exutil.MustGetAzureCredsLocation(),
+		BaseDomain:          hypershiftBaseDomainAzure,
+		ExternalDnsDomain:   hypershiftExternalDNSDomainAzure,
+		FIPS:                true,
+		GenerateSSH:         true,
+		Location:            location,
+		Namespace:           receiver.oc.Namespace(),
+		NodePoolReplicas:    ptr.To(2),
+		OLMCatalogPlacement: olmCatalogPlacementGuest,
+		PullSecret:          exutil.GetTestEnv().PullSecretLocation,
+		ReleaseImage:        exutil.GetLatestReleaseImageFromEnv(),
+	}
+}
+
 func (receiver *installHelper) createInfraCommonBuilder() *infra {
 	baseDomain, err := getBaseDomain(receiver.oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -352,7 +376,7 @@ func (receiver *installHelper) hyperShiftInstall() {
 		}
 
 		if receiver.externalDNS {
-			cmd += fmt.Sprintf(" --external-dns-provider=aws --external-dns-credentials=%s --external-dns-domain-filter=%s ", receiver.dir+"/credentials", HyperShiftExternalDNS)
+			cmd += fmt.Sprintf(" --external-dns-provider=aws --external-dns-credentials=%s --external-dns-domain-filter=%s ", receiver.dir+"/credentials", hypershiftExternalDNSDomainAWS)
 		}
 	case "azure":
 		e2e.Logf("extract Azure Credentials")
@@ -419,19 +443,21 @@ func (receiver *installHelper) createAWSHostedClusterWithoutCheck(createCluster 
 }
 
 func (receiver *installHelper) createAzureHostedClusters(createCluster *createCluster) *hostedCluster {
-	vars, err := parse(createCluster)
-	o.Expect(err).ShouldNot(o.HaveOccurred())
-	var bashClient = NewCmdClient().WithShowInfo(true)
-	cmd := fmt.Sprintf("hypershift create cluster azure %s", strings.Join(vars, " "))
-	_, err = bashClient.Run(cmd).Output()
-	o.Expect(err).ShouldNot(o.HaveOccurred())
-	e2e.Logf("check azure HostedClusters ready")
-	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
+	cluster := receiver.createAzureHostedClusterWithoutCheck(createCluster)
 	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.BeTrue(), "azure HostedClusters install error")
 	infraID, err := cluster.getInfraID()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	createCluster.InfraID = infraID
 	return cluster
+}
+
+func (receiver *installHelper) createAzureHostedClusterWithoutCheck(createCluster *createCluster) *hostedCluster {
+	vars, err := parse(createCluster)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	cmd := fmt.Sprintf("hypershift create cluster azure %s", strings.Join(vars, " "))
+	_, err = NewCmdClient().WithShowInfo(true).Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
 }
 
 func (receiver *installHelper) createAWSHostedClustersRender(createCluster *createCluster, exec func(filename string) error) *hostedCluster {
@@ -468,12 +494,14 @@ func (receiver *installHelper) destroyAWSHostedClusters(createCluster *createClu
 }
 
 func (receiver *installHelper) destroyAzureHostedClusters(createCluster *createCluster) {
+	e2e.Logf("Destroying Azure HC")
 	var bashClient = NewCmdClient().WithShowInfo(true)
 	cmd := fmt.Sprintf("hypershift destroy cluster azure --azure-creds %s --namespace %s --name %s --location %s", createCluster.AzureCreds, createCluster.Namespace, createCluster.Name, createCluster.Location)
 	_, err := bashClient.Run(cmd).Output()
-	o.Expect(err).ShouldNot(o.HaveOccurred())
-	e2e.Logf("check destroy Azure HostedClusters")
-	o.Eventually(pollGetHostedClusters(receiver.oc, receiver.oc.Namespace()), ShortTimeout, ShortTimeout/10).ShouldNot(o.ContainSubstring(createCluster.Name), "destroy Azure HostedClusters error")
+	o.Expect(err).ShouldNot(o.HaveOccurred(), "error destroying Azure HC")
+
+	e2e.Logf("Making sure that the HC is gone")
+	o.Expect(getHostedClusters(receiver.oc, receiver.oc.Namespace())).ShouldNot(o.ContainSubstring(createCluster.Name), "HC persists even after deletion")
 }
 
 func (receiver *installHelper) deleteHostedClustersManual(createCluster *createCluster) {

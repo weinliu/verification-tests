@@ -16,6 +16,10 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+const (
+	AKSNodeLabel = "kubernetes.azure.com/cluster"
+)
+
 // Extract pull secrect from cluster
 func GetPullSec(oc *CLI, dirname string) (err error) {
 	if err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute(); err != nil {
@@ -330,6 +334,30 @@ func SkipOnOpenShiftNess(expectOpenShift bool) {
 		if !expectOpenShift {
 			g.Skip("Expecting non-OpenShift but the active cluster is OpenShift, skipping the test")
 		}
+	}
+}
+
+// IsAKSCluster checks if the active cluster is an AKS (Azure Kubernetes Service) cluster or not
+func IsAKSCluster(ctx context.Context, oc *CLI) (bool, error) {
+	nodeList, err := oc.AdminKubeClient().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return false, fmt.Errorf("failed to list nodes: %w", err)
+	}
+	_, labelFound := nodeList.Items[0].Labels[AKSNodeLabel]
+	return labelFound, nil
+}
+
+func SkipOnAKSNess(ctx context.Context, oc *CLI, expectAKS bool) {
+	isAKS, err := IsAKSCluster(ctx, oc)
+	if err != nil {
+		e2e.Logf("failed to determine is the active cluster is AKS or not: %v, defaulting to non-AKS", err)
+	}
+
+	if isAKS && !expectAKS {
+		g.Skip("Expecting non-AKS but the active cluster is AKS, skip the test")
+	}
+	if !isAKS && expectAKS {
+		g.Skip("Expecting AKS but the active cluster is not, skip the test")
 	}
 }
 

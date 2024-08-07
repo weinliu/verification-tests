@@ -24,9 +24,10 @@ const (
 	OcpTaint    OcpClientVerb = "taint"
 	OcpExtract  OcpClientVerb = "extract"
 
-	//NodepoolNameSpace is the namespace where the nodepool CR is always created
-	NodepoolNameSpace           = "clusters"
-	hypershiftOperatorNamespace = "hypershift"
+	// nodepoolNameSpace is the namespace where the nodepool CR is always created
+	nodepoolNameSpace                = "clusters"
+	hypershiftOperatorNamespace      = "hypershift"
+	hypershiftSharedingressNamespace = "hypershift-sharedingress"
 
 	ClusterInstallTimeout = 3600 * time.Second
 	DoubleLongTimeout     = 1800 * time.Second
@@ -134,10 +135,13 @@ const (
 	AWSHyperShiftPrivateSecretFile = "AWS_HYPERSHIFT_PRIVATE_SECRET_FILE"
 )
 
-// external dns for qe
+// DNS
 const (
-	HyperShiftExternalDNSBaseDomain = "hypershift-ci.qe.devcluster.openshift.com"
-	HyperShiftExternalDNS           = "hypershift-ext.qe.devcluster.openshift.com"
+	hypershiftExternalDNSBaseDomainAWS = "hypershift-ci.qe.devcluster.openshift.com"
+	hypershiftExternalDNSDomainAWS     = "hypershift-ext.qe.devcluster.openshift.com"
+
+	hypershiftBaseDomainAzure        = "qe.azure.devcluster.openshift.com"
+	hypershiftExternalDNSDomainAzure = "qe1.azure.devcluster.openshift.com"
 )
 
 // cluster infrastructure
@@ -203,6 +207,25 @@ const (
 	kasEncryptionConfigSecretName = "kas-secret-encryption-config"
 )
 
+// olm
+const (
+	olmCatalogPlacementManagement = "management"
+	olmCatalogPlacementGuest      = "guest"
+)
+
+// auth
+const (
+	podSecurityAdmissionOverrideLabelKey = "hypershift.openshift.io/pod-security-admission-label-override"
+)
+
+type podSecurityLevel string
+
+const (
+	podSecurityRestricted podSecurityLevel = "restricted"
+	podSecurityBaseline   podSecurityLevel = "baseline"
+	podSecurityPrivileged podSecurityLevel = "privileged"
+)
+
 // Enum for hosted cluster service
 type hcService string
 
@@ -231,4 +254,10 @@ type K8SResource string
 
 const (
 	Service K8SResource = "services"
+)
+
+type ctxKey string
+
+const (
+	ctxKeyId ctxKey = "id"
 )

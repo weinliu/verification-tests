@@ -251,3 +251,26 @@ func GetHostedClusterVersion(mgmtOc *CLI, hostedClusterName, hostedClusterNs str
 	e2e.Logf("Found hosted cluster %s version = %q", hostedClusterName, hcVersion)
 	return hcVersion
 }
+
+func CheckHypershiftOperatorExistence(mgmtOC *CLI) (bool, error) {
+	stdout, _, err := mgmtOC.AsAdmin().WithoutNamespace().Run("get").
+		Args("pods", "-n", "hypershift", "-o=jsonpath={.items[*].metadata.name}").Outputs()
+	if err != nil {
+		return false, fmt.Errorf("failed to get HO Pods: %v", err)
+	}
+	return len(stdout) > 0, nil
+}
+
+func SkipOnHypershiftOperatorExistence(mgmtOC *CLI, expectHO bool) {
+	HOExist, err := CheckHypershiftOperatorExistence(mgmtOC)
+	if err != nil {
+		e2e.Logf("failed to check Hypershift Operator existence: %v, defaulting to not found", err)
+	}
+
+	if HOExist && !expectHO {
+		g.Skip("Not expecting Hypershift Operator but it is found, skip the test")
+	}
+	if !HOExist && expectHO {
+		g.Skip("Expecting Hypershift Operator but it is not found, skip the test")
+	}
+}

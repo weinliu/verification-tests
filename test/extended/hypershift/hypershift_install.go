@@ -731,8 +731,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withNodePoolReplicas(2).
 			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withEndpointAccess(PublicAndPrivate).
-			withExternalDnsDomain(HyperShiftExternalDNS).
-			withBaseDomain(HyperShiftExternalDNSBaseDomain)
+			withExternalDnsDomain(hypershiftExternalDNSDomainAWS).
+			withBaseDomain(hypershiftExternalDNSBaseDomainAWS)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 
@@ -975,8 +975,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withNodePoolReplicas(2).
 			withAnnotation("hypershift.openshift.io/topology", "dedicated-request-serving-components").
 			withEndpointAccess(PublicAndPrivate).
-			withExternalDnsDomain(HyperShiftExternalDNS).
-			withBaseDomain(HyperShiftExternalDNSBaseDomain).
+			withExternalDnsDomain(hypershiftExternalDNSDomainAWS).
+			withBaseDomain(hypershiftExternalDNSBaseDomainAWS).
 			withReleaseImage(release)
 
 		defer func() {
@@ -1231,8 +1231,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withNodePoolReplicas(2).
 			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withEndpointAccess(PublicAndPrivate).
-			withExternalDnsDomain(HyperShiftExternalDNS).
-			withBaseDomain(HyperShiftExternalDNSBaseDomain).
+			withExternalDnsDomain(hypershiftExternalDNSDomainAWS).
+			withBaseDomain(hypershiftExternalDNSBaseDomainAWS).
 			withReleaseImage(release)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
@@ -1547,8 +1547,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			withNodePoolReplicas(nodeReplicas).
 			withAnnotation("hypershift.openshift.io/cleanup-cloud-resources", "true").
 			withEndpointAccess(PublicAndPrivate).
-			withExternalDnsDomain(HyperShiftExternalDNS).
-			withBaseDomain(HyperShiftExternalDNSBaseDomain)
+			withExternalDnsDomain(hypershiftExternalDNSDomainAWS).
+			withBaseDomain(hypershiftExternalDNSBaseDomainAWS)
 
 		exutil.By("add watcher to catch the resource deletion info")
 		svcCtx, svcCancel := context.WithTimeout(context.Background(), ClusterInstallTimeout+LongTimeout)
@@ -2782,8 +2782,8 @@ spec:
 			withNodePoolReplicas(1).
 			withEndpointAccess(PublicAndPrivate).
 			withReleaseImage(release).
-			withExternalDnsDomain(HyperShiftExternalDNS).
-			withBaseDomain(HyperShiftExternalDNSBaseDomain)
+			withExternalDnsDomain(hypershiftExternalDNSDomainAWS).
+			withBaseDomain(hypershiftExternalDNSBaseDomainAWS)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
 
