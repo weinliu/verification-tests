@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers Storage", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.It("Smokerun-Author:jfrancoa-NonPreRelease-Longduration-Critical-66352-Windows workloads support CSI persistent storage [Serial]", func() {
+	g.It("Author:jfrancoa-NonPreRelease-Longduration-Smokerun-Critical-66352-Windows workloads support CSI persistent storage [Serial]", func() {
 
 		// TODO: Add support for other providers. Only known vSphere and Azure driver installation steps
 		if iaasPlatform != "vsphere" && iaasPlatform != "azure" {

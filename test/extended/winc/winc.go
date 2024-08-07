@@ -647,7 +647,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-Medium-33768-NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes", func() {
+	g.It("Author:sgao-Smokerun-Medium-33768-NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes", func() {
 		g.By("Check NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes")
 		// Retrieve the Prometheus' pod id
 		prometheusPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l=app.kubernetes.io/name=prometheus", "-o", "jsonpath='{.items[0].metadata.name}'").Output()
@@ -869,7 +869,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-NonPreRelease-Longduration-Medium-39030-Re queue on Windows machine's edge cases [Slow][Disruptive]", func() {
+	g.It("Author:sgao-NonPreRelease-Longduration-Smokerun-Medium-39030-Re queue on Windows machine's edge cases [Slow][Disruptive]", func() {
 		if iaasPlatform == "none" {
 			g.Skip("platform none does not support scaling up Windows machines")
 		}
@@ -2048,7 +2048,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to scale down the deployment")
 	})
 
-	g.It("Author:weinliu-Medium-73595-Verify Display of Filesystem Graphs (metrics) for Windows Nodes [Serial]", func() {
+	g.It("Author:weinliu-Smokerun-Medium-73595-Verify Display of Filesystem Graphs (metrics) for Windows Nodes [Serial]", func() {
 		windowsHostNames := getWindowsHostNames(oc)
 		o.Expect(len(windowsHostNames)).To(o.BeNumerically(">", 0), "Test requires at least one Windows node to run")
 
@@ -2067,7 +2067,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
-	g.It("Author:weinliu-Medium-73752-Monitor Network In, and Network Out graphs for Windows Pods managed by wmco", func() {
+	g.It("Author:weinliu-Smokerun-Medium-73752-Monitor Network In, and Network Out graphs for Windows Pods managed by wmco", func() {
 		// Define the metrics queries for Network In, and Network Out
 		networkInMetricQuery := "pod:network_receive_bytes_total:sum"
 		networkOutMetricQuery := "pod:network_transmit_bytes_total:sum"
