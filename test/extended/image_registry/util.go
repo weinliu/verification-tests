@@ -1145,7 +1145,8 @@ func waitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string) error 
 }
 
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
-	return wait.Poll(15*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	var gottenStatus map[string]string
+	err := wait.Poll(15*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)
 		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
 		if eq {
@@ -1154,6 +1155,12 @@ func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus m
 		}
 		return false, nil
 	})
+	if err != nil {
+		for key, value := range gottenStatus {
+			e2e.Logf("\ncheck the %v status %v is %v\n", coName, key, value)
+		}
+	}
+	return err
 }
 
 func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
