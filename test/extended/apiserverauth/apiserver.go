@@ -5011,29 +5011,14 @@ spec:
 		exutil.By("1. Set Invalid featuregate")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", invalidFeatureGate).Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid: spec.featureSet: Unsupported value: "unknown": supported values: "", "CustomNoUpgrade", "LatencySensitive", "TechPreviewNoUpgrade"`))
+		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid`))
+		e2e.Logf("Error message :: %s", output)
 
+		// It is removed in 4.17, detail see https://github.com/openshift/cluster-config-operator/pull/324
 		exutil.By("2. Set featuregate to LatencySensitive")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featurePatch).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		e2e.Logf("Checking kube-apiserver operator should be Available within 1500 seconds")
-		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-		errKASO := waitCoBecomes(oc, "kube-apiserver", 1500, expectedStatus)
-		exutil.AssertWaitPollNoErr(errKASO, "openshift-kube-apiserver pods revisions recovery not completed")
-
-		exutil.By("3. Check featuregate after set to LatencySensitive")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregates", "-o", `jsonpath={.items[0].spec.featureSet}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.BeEmpty())
-
-		exutil.By("4. Check Upgradeable condition of openshift-config and kube-apiserver operators which should be true")
-		conditionsToCheck := []string{"config-operator", "kube-apiserver"}
-		for _, condition := range conditionsToCheck {
-			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", condition, "-o", `jsonpath='{.status.conditions[?(@.type == "Upgradeable")].status}'`).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).Should(o.ContainSubstring("True"))
-		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featurePatch).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid`))
 	})
 
 	// author: rgangwar@redhat.com
@@ -5060,7 +5045,7 @@ spec:
 		exutil.By("3. Check featuregate after set to CustomNoUpgrade")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "--type=json", "-p", featureCustomNoUpgrade).Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, tech preview features may not be disabled`))
+		o.Expect(output).Should(o.ContainSubstring(`The FeatureGate "cluster" is invalid: spec.featureSet: Invalid value: "string": TechPreviewNoUpgrade may not be changed`))
 	})
 
 	// author: kewang@redhat.com
