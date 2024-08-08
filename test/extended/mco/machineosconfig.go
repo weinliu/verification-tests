@@ -10,7 +10,7 @@ import (
 )
 
 type ContainerFile struct {
-	ContainerfileArch string `json:"containerfileArch"` // TODO: CURRENTLY MCO DOES NOT SUPPORT DIFFERENT ARCHITECTURES, BUT IT WILL
+	ContainerfileArch string `json:"containerfileArch,omitempty"` // TODO: CURRENTLY MCO DOES NOT SUPPORT DIFFERENT ARCHITECTURES, BUT IT WILL
 	Content           string `json:"content"`
 }
 

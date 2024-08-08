@@ -171,7 +171,113 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		o.Expect(mcc.GetLogs()).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC pod after deleting OCB resources")
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-73496-OCB use custom Containerfile. New 4.16 OCB API[Disruptive]", func() {
+		// Remove this "skip" checks once the functionality to disable OCL is implemented
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
+
+		SkipIfSNO(oc.AsAdmin()) // We have to skip this test case in SNO until the functionality to disable OCL is ready to work on master nodes
+		var (
+			mcp = GetCompactCompatiblePool(oc.AsAdmin())
+
+			containerFileContent = `
+	# Pull the centos base image and enable the EPEL repository.
+        FROM quay.io/centos/centos:stream9 AS centos
+        RUN dnf install -y epel-release
+
+        # Pull an image containing the yq utility.
+        FROM docker.io/mikefarah/yq:latest AS yq
+
+        # Build the final OS image for this MachineConfigPool.
+        FROM configs AS final
+
+        # Copy the EPEL configs into the final image.
+        COPY --from=yq /usr/bin/yq /usr/bin/yq
+        COPY --from=centos /etc/yum.repos.d /etc/yum.repos.d
+        COPY --from=centos /etc/pki/rpm-gpg/RPM-GPG-KEY-* /etc/pki/rpm-gpg/
+
+        # Install cowsay and ripgrep from the EPEL repository into the final image,
+        # along with a custom cow file.
+        RUN sed -i 's/\$stream/9-stream/g' /etc/yum.repos.d/centos*.repo && \
+            rpm-ostree install cowsay ripgrep
+`
+
+			checkers = []Checker{
+				CommandOutputChecker{
+					Command:  []string{"cowsay", "-t", "hello"},
+					Matcher:  o.ContainSubstring("< hello >"),
+					ErrorMsg: fmt.Sprintf("Cowsay is not working after installing the new image"),
+					Desc:     fmt.Sprintf("Check that cowsay is installed and working"),
+				},
+			}
+		)
+
+		testContainerFile([]ContainerFile{{Content: containerFileContent}}, mcp, checkers)
+	})
+
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73436-OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
+		// Remove this "skip" checks once the functionality to disable OCL is implemented
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
+
+		SkipIfSNO(oc.AsAdmin()) // We have to skip this test case in SNO until the functionality to disable OCL is ready to work on master nodes
+		var (
+			entitlementSecret = NewSecret(oc.AsAdmin(), "openshift-config-managed", "etc-pki-entitlement")
+			mcp               = GetCompactCompatiblePool(oc.AsAdmin())
+
+			containerFileContent = `
+        FROM configs AS final
+    
+        RUN rm -rf /etc/rhsm-host && \
+          rpm-ostree install buildah && \
+          ln -s /run/secrets/rhsm /etc/rhsm-host && \
+          ostree container commit
+`
+
+			checkers = []Checker{
+				CommandOutputChecker{
+					Command:  []string{"rpm", "-q", "buildah"},
+					Matcher:  o.ContainSubstring("buildah-"),
+					ErrorMsg: fmt.Sprintf("Buildah package is not installed after the image was deployed"),
+					Desc:     fmt.Sprintf("Check that buildah is installed"),
+				},
+			}
+		)
+
+		exutil.By("Create the entitlement secret in the MCO namespace")
+		mcoEntitlementSecret, err := CloneResource(entitlementSecret, "etc-pki-entitlement", MachineConfigNamespace, nil)
+		defer mcoEntitlementSecret.Delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error copying %s to the %s namespace", mcoEntitlementSecret, MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		testContainerFile([]ContainerFile{{Content: containerFileContent}}, mcp, checkers)
+	})
 })
+
+func testContainerFile(containerFiles []ContainerFile, mcp *MachineConfigPool, checkers []Checker) {
+	var (
+		oc       = mcp.GetOC().AsAdmin()
+		moscName = "test-" + GetCurrentTestPolarionIDNumber()
+		node     = mcp.GetSortedNodesOrFail()[0]
+	)
+	exutil.By("Configure OCB functionality for the new infra MCP")
+	mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc, moscName, mcp.GetName(), containerFiles)
+	defer DisableOCL(mosc)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+	logger.Infof("OK!\n")
+
+	ValidateSuccessfulMOSC(mosc, nil)
+
+	for _, checker := range checkers {
+		checker.Check(node)
+	}
+
+	exutil.By("Remove the MachineOSConfig resource")
+	o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+	logger.Infof("OK!\n")
+
+	ValidateMOSCIsGarbageCollected(mosc, mcp)
+
+}
 
 func skipTestIfOCBIsEnabled(oc *exutil.CLI) {
 	moscl := NewMachineOSConfigList(oc)
