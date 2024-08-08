@@ -523,7 +523,9 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 				}
 			}
 			if totalUpdating > maxUnavailable {
-				exutil.AssertWaitPollNoErr(fmt.Errorf("maxUnavailable Not Honored"), fmt.Sprintf("Pool %s, error: %d nodes were updating at the same time. Only %d nodes should be updating at the same time.", mcp.GetName(), totalUpdating, maxUnavailable))
+				// print nodes for debug
+				mcp.oc.Run("get").Args("nodes").Execute()
+				exutil.AssertWaitPollNoErr(fmt.Errorf("maxUnavailable Not Honored. Pool %s, error: %d nodes were updating at the same time. Only %d nodes should be updating at the same time.", mcp.GetName(), totalUpdating, maxUnavailable), "")
 			}
 		}
 

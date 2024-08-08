@@ -270,7 +270,7 @@ func (n *Node) GetUnitExecReloadStartTime(unitName string) (time.Time, error) {
 		return time.Time{}, nil
 	}
 
-	iUnixTime, err := strconv.ParseInt(unixTime, 10, 64)
+	iUnixTime, err := strconv.ParseInt(strings.Replace(unixTime, "@", "", 1), 10, 64)
 	if err != nil {
 		return time.Time{}, err
 	}

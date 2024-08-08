@@ -258,21 +258,21 @@ func (v *UpdateBehaviourValidator) checkCrioReload() {
 	if v.ShouldReloadCrio {
 		exutil.By("Checking that crio service was reloaded")
 	} else {
-		exutil.By("Checking that crio service were NOT reloaded")
+		exutil.By("Checking that crio service was NOT reloaded")
 	}
 
 	// If the startTime is empty it means that something went wrong in the automation
 	// If at any moment we decide to allow an empty value here we can transform this assertion into a warning.
 	o.Expect(v.startTime).NotTo(o.Equal(time.Time{}),
-		"The provided comparison time was EMPTY while trying to guess if the crio service was restarted")
+		"The provided comparison time was EMPTY while trying to guess if the crio service was reloaded")
 
 	for _, node := range v.checkedNodes {
 		if v.ShouldReloadCrio {
 			o.Expect(node.GetUnitExecReloadStartTime("crio.service")).To(o.BeTemporally(">", v.startTime),
-				"Crio service was NOT restarted, but it should be")
+				"Crio service was NOT reloaded, but it should be")
 		} else {
 			o.Expect(node.GetUnitExecReloadStartTime("crio.service")).To(o.BeTemporally("<", v.startTime),
-				"Crio service was restarted, but crio restart should have been skipped")
+				"Crio service was reloaded, but crio reload should have been skipped")
 		}
 	}
 
