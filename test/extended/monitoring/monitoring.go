@@ -1906,11 +1906,20 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		//author: juzhao@redhat.com
 		g.It("Author:juzhao-Medium-75489-Set scrape.timestamp tolerance for UWM prometheus", func() {
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+				prometheus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", "-n", "openshift-user-workload-monitoring").Output()
+				if err != nil || strings.Contains(prometheus, "not found") {
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "UWM prometheus not created")
+
 			args, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "user-workload", `-ojsonpath={.spec.additionalArgs[?(@.name=="scrape.timestamp-tolerance")]}`, "-n", "openshift-user-workload-monitoring").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("additionalArgs is: %v", args)
 			o.Expect(args).To(o.ContainSubstring(`"value":"15ms"`))
-			exutil.By("check settings in prometheus pods")
+			exutil.By("check settings in UWM prometheus pods")
 			podNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-user-workload-monitoring", "app.kubernetes.io/name=prometheus")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for _, pod := range podNames {
