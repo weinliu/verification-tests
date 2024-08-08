@@ -17,7 +17,7 @@ describe('node logs related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-43996,yapei,UserInterface) View Master and Worker Node Logs', {tags: ['e2e','admin']}, () => {
+  it('(OCP-43996,yapei,UserInterface) View Master and Worker Node Logs',{tags:['@userinterface','e2e','admin']}, () => {
     cy.log('view master node logs');
     cy.visit('/k8s/cluster/nodes?rowFilter-node-role=control-plane');
     listPage.rows.shouldBeLoaded();
@@ -45,7 +45,7 @@ describe('node logs related features', () => {
     logsPage.filterByUnit('systemd-journald');
     logsPage.logLinesNotContain('crio');
   });
-  it('(OCP-46636,yanpzhan,UserInterface) Support for search and line number in pod/node log', {tags: ['e2e','admin']}, () => {
+  it('(OCP-46636,yanpzhan,UserInterface) Support for search and line number in pod/node log',{tags:['@userinterface','e2e','admin']}, () => {
     cy.exec(`oc create -f ./fixtures/pods/pod-with-white-space-logs.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     //search log on node log page
     cy.visit('/k8s/cluster/nodes');

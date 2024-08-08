@@ -45,7 +45,7 @@ describe('Dynamic Plugins notification features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   })
 
-  it('(OCP-55427,yapei,UserInterface) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
+  it('(OCP-55427,yapei,UserInterface) Improve information for Pending or Failed plugins',{tags:['@userinterface','e2e', 'admin','@osd-ccs']}, () => {
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`)
       .its('stdout')
       .should('include', `"${testParams.failPluginName}"`)

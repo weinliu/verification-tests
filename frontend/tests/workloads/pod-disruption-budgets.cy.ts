@@ -21,7 +21,7 @@ describe('PDB List Page and Detail Page Test', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   })
 
-  it('(OCP-50657,yapei,UserInterface) Add support for PDB(Pod Disruption Budget)', {tags: ['e2e','admin']}, () => {
+  it('(OCP-50657,yapei,UserInterface) Add support for PDB(Pod Disruption Budget)',{tags:['@userinterface','e2e','admin']}, () => {
     cy.adminCLI(`oc new-project ${testParams.projectName}`)
     cy.adminCLI(`oc create -f ./fixtures/${testParams.fileName}.yaml -n ${testParams.projectName}`);
     const pdbParams = {

@@ -17,7 +17,7 @@ describe("yaml editor tests", () => {
     cy.cliLogout();
   });
 
-  it("(OCP-63312,yanpzhan,UserInterface) Add ability to show/hide tooltips in the yaml editor", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+  it("(OCP-63312,yanpzhan,UserInterface) Add ability to show/hide tooltips in the yaml editor",{tags:['@userinterface','e2e','@osd-ccs','@rosa']}, () => {
     cy.exec(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testName}`);
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
     yamlEditor.isLoaded();
@@ -31,7 +31,7 @@ describe("yaml editor tests", () => {
     yamlOptions.setTooltips('show');
   });
 
-  it("(OCP-21956,xiyuzhao,UserInterface) drag and drop file for Import YAML page", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+  it("(OCP-21956,xiyuzhao,UserInterface) drag and drop file for Import YAML page",{tags:['@userinterface','e2e','@osd-ccs','@rosa']}, () => {
     cy.visit(`/k8s/ns/${testName}/import`)
       .contains('[data-test-id="resource-title"]', "Import YAML");
     importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");
@@ -44,7 +44,7 @@ describe("yaml editor tests", () => {
     });
   });
 
-  it("(OCP-42019,yapei,UserInterface) Create multiple resources by importing yaml",{tags: ['e2e','@osd-ccs', '@smoke']},() => {
+  it("(OCP-42019,yapei,UserInterface) Create multiple resources by importing yaml",{tags:['@userinterface','e2e','@osd-ccs', '@smoke']},() => {
     // import multiple resources
     // and check successful creation result on import yaml status page
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
@@ -92,7 +92,7 @@ describe("yaml editor tests", () => {
     cy.contains('successfully created').should('exist');
   });
 
-  it("(OCP-68746,xiyuzhao,UserInterface) Yaml editor can handle a line of data longer than 78 characters", {tags: ['e2e','@osd-ccs','@rosa']}, () => {
+  it("(OCP-68746,xiyuzhao,UserInterface) Yaml editor can handle a line of data longer than 78 characters",{tags:['@userinterface','e2e','@osd-ccs','@rosa']}, () => {
     cy.exec(`oc create -f ./fixtures/configmap_with_multiple_characters.yaml -n ${testName}`);
     Pages.gotoConfigMapDetailsYamlTab(testName, "test-68746");
     cy.contains('span', 'eeee')

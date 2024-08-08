@@ -20,7 +20,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
-  it('(OCP-68675,xiyuzhao,UserInterface) Check Managed Namespaces field when OperatorGourp is set up', {tags: ['e2e','admin','@osd-ccs','@rosa', '@level0']}, () => {
+  it('(OCP-68675,xiyuzhao,UserInterface) Check Managed Namespaces field when OperatorGourp is set up',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa', '@level0']}, () => {
     const params = {
       ns1: "test1-ocp68675",
       ns2: "test2-ocp68675",
@@ -62,7 +62,7 @@ describe('Operators related features', () => {
         cy.get(`[data-test-id="${params.ns2}"]`).should('exist');
       })
   });
-  it('(OCP-40457,yanpzhan,UserInterface) Install multiple operators in one project', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-40457,yanpzhan,UserInterface) Install multiple operators in one project',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
     operatorHubPage.installOperator('etcd', 'community-operators', 'test-ocp40457');
     cy.wait(20000);
     operatorHubPage.installOperator('argocd-operator', 'custom-catalogsource', 'test-ocp40457');
@@ -75,7 +75,7 @@ describe('Operators related features', () => {
     operatorHubPage.checkOperatorStatus('CockroachDB Helm Operator', 'Succeed');
   });
 
-  it('(OCP-56081,xiyuzhao,UserInterface) Check opt out when console deletes operands', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-56081,xiyuzhao,UserInterface) Check opt out when console deletes operands',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
     const testParams = {
       ns1: "test1-ocp56081",
       ns2: "test2-ocp56081",

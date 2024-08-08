@@ -35,7 +35,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`, { timeout: 60000 });
   })
 
-  it('(OCP-68180,xiyuzhao,UserInterface) Check the sort function in Resources Tab in operator details page', {tags: ['e2e','admin']},() => {
+  it('(OCP-68180,xiyuzhao,UserInterface) Check the sort function in Resources Tab in operator details page',{tags:['@userinterface','e2e','admin']},() => {
     cy.visit(`/k8s/ns/${params.ns68180}/clusterserviceversions/${csvname}/kafka.strimzi.io~v1beta2~Kafka/${params.crName}/resources`)
     Operand.sortAndVerifyColumn('Name');
     Operand.sortAndVerifyColumn('Status');
@@ -43,7 +43,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     Operand.sortAndVerifyColumn('Kind');
   })
 
-  it('(OCP-50153,xiyuzhao,UserInterface) - Display All Namespace Operands for Global Operators', {tags: ['e2e','admin']}, () => {
+  it('(OCP-50153,xiyuzhao,UserInterface) - Display All Namespace Operands for Global Operators',{tags:['@userinterface','e2e','admin']}, () => {
     cy.visit(`/k8s/ns/${params.ns50153}/operators.coreos.com~v1alpha1~ClusterServiceVersion/${csvname}/instances`)
     // checkpoint 1: Check column 'Namespace' is added in list
     cy.get('[data-label="Namespace"]').should('be.visible');

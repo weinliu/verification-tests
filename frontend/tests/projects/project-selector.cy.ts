@@ -12,7 +12,7 @@ describe('Projects dropdown tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-43130,yapei,UserInterface) Check default projects toggle bar', {tags: ['e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
+  it('(OCP-43130,yapei,UserInterface) Check default projects toggle bar',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa','@smoke']}, () => {
     // podsPage.goToPodsInAllNamespaces()
     podsPage.goToPodsForGivenNamespace('openshift-apiserver')
     namespaceDropdown.clickTheDropdown()

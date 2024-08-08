@@ -22,7 +22,7 @@ describe('Operators Installed nonlatest operator test', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-63222,xiyuzhao,UserInterface) Console supports installing non-latest Operator versions	',{tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-63222,xiyuzhao,UserInterface) Console supports installing non-latest Operator versions	',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
     let selectedVersion;
     function getSelectedVersion() {
       return new Cypress.Promise((resolve) => {

@@ -28,7 +28,7 @@ describe('show warning info for resources', () => {
     cy.adminCLI(`oc delete k8srequiredlabels.constraints.gatekeeper.sh --all`, {failOnNonZeroExit: false});
     cy.adminCLI(`oc delete project ${testName}`, {failOnNonZeroExit: false});
   });
-  it('(OCP-73390,yanpzhan,UserInterface) Display a warning message from kube-apiserver when creating/updating workloads resources for create/import yaml editor', {tags: ['e2e','@rosa','@osd-ccs']}, () => {
+  it('(OCP-73390,yanpzhan,UserInterface) Display a warning message from kube-apiserver when creating/updating workloads resources for create/import yaml editor',{tags:['@userinterface','e2e','@rosa','@osd-ccs']}, () => {
     const WARNING_FOO = 'pod-must-have-label-foo';
     const WARNING_BAR = 'deploy-must-have-label-bar';
     listPage.createNamespacedResourceWithDefaultYAML('core~v1~Pod', `${testName}`);

@@ -8,7 +8,7 @@ describe('nodes page', () => {
   after(() => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
-  it('(OCP-70839,yanpzhan,UserInterface) Node overview page displays well when related machinehealthcheck does not set spec.unhealthyConditions', {tags: ['e2e','admin']}, function () {
+  it('(OCP-70839,yanpzhan,UserInterface) Node overview page displays well when related machinehealthcheck does not set spec.unhealthyConditions',{tags:['@userinterface','e2e','admin']}, function () {
     cy.isIPICluster().then(value => {
       if(value == false){
         this.skip();

@@ -7,7 +7,7 @@ describe('console feature on sno cluster', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-39677,yanpzhan,UserInterface) Console supports on single-node cluster', {tags: ['e2e','admin']}, () => {
+  it('(OCP-39677,yanpzhan,UserInterface) Console supports on single-node cluster',{tags:['@userinterface','e2e','admin']}, () => {
     cy.exec(`oc get infrastructures.config.openshift.io cluster --template={{.status.controlPlaneTopology}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       if(result.stdout == 'SingleReplica') {
         cy.log("Testing on SNO cluster.");

@@ -12,7 +12,7 @@ describe('console feature about windows node', () => {
     cy.cliLogout();
   });
 
-  it('(OCP-25796,yanpzhan,UserInterface) Check windows node related info on console', {tags: ['e2e','admin']}, function () {
+  it('(OCP-25796,yanpzhan,UserInterface) Check windows node related info on console',{tags:['@userinterface','e2e','admin']}, function () {
     cy.hasWindowsNode().then(value => {
       if(value == false){
         this.skip();

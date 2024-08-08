@@ -11,7 +11,7 @@ describe('MachineConfig related tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-74602,yapei,UserInterface)Simplified view of MachineConfig configuration files)', () => {
+  it('(OCP-74602,yapei,UserInterface)Simplified view of MachineConfig configuration files)',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']},() => {
     const system_mc = '01-worker-kubelet';
     const system_mc_ssh = '99-worker-ssh';
     let mc_contents;

@@ -44,7 +44,7 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   });
 
-  it('(OCP-51743,yapei,UserInterface)Preload - locale files are loaded once plugin is enabled', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-51743,yapei,UserInterface)Preload - locale files are loaded once plugin is enabled',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     cy.intercept(
       {
         method: 'GET',
@@ -66,7 +66,7 @@ describe('Dynamic plugins features', () => {
     cy.wait('@getConsoleCustomizaitonPluginLocales',{timeout: 60000});
   });
 
-  it('(OCP-51743,yapei,UserInterface)Lazy - do not load locale files during enablement',{tags: ['e2e','admin','@osd-ccs']},() => {
+  it('(OCP-51743,yapei,UserInterface)Lazy - do not load locale files during enablement',{tags:['@userinterface','e2e','admin','@osd-ccs']},() => {
     cy.intercept(
       {
         method: 'GET',
@@ -102,7 +102,7 @@ describe('Dynamic plugins features', () => {
       })
   });
 
-  it('(OCP-50757,yapei,UserInterface) Support ordering of plugin nav sections in admin perspective', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-50757,yapei,UserInterface) Support ordering of plugin nav sections in admin perspective',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator');
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
@@ -116,7 +116,7 @@ describe('Dynamic plugins features', () => {
       .and('have.ordered.members', ['Workloads', 'Demo Plugin', 'Networking']);
   });
 
-  it('(OCP-54322,yapei,UserInterface) Expose ErrorBoundary and improve overview detail extension', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-54322,yapei,UserInterface) Expose ErrorBoundary and improve overview detail extension',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     cy.log('Expose ErrorBoundary capabilities');
     cy.switchPerspective('Administrator');
     cy.visit('/sample-error-boundary-page');
@@ -132,7 +132,7 @@ describe('Dynamic plugins features', () => {
     cy.get('[data-test="detail-item-value"]').should('include.text','Custom Overview Detail Info');
   });
 
-  it('(OCP-52366,yapei,UserInterface) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-52366,yapei,UserInterface) Add Dyamic Plugins to Cluster Overview Status card and notification drawer',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator');
     Overview.goToDashboard();
     statusCard.toggleItemPopover("Dynamic Plugins");
@@ -141,7 +141,7 @@ describe('Dynamic plugins features', () => {
     })
   });
 
-  it('(OCP-56239,yapei,UserInterface) Add dynamic plugin info to About modal', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
+  it('(OCP-56239,yapei,UserInterface) Add dynamic plugin info to About modal',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     cy.switchPerspective('Administrator')
     Overview.toggleAbout()
     cy.contains('Dynamic plugins').should('exist')
@@ -150,7 +150,7 @@ describe('Dynamic plugins features', () => {
     Branding.closeModal()
   });
 
-  it('(OCP-42537,yapei,UserInterface) Allow disabling dynamic plugins through a query parameter', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-42537,yapei,UserInterface) Allow disabling dynamic plugins through a query parameter',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     Branding.closeModal()
     cy.switchPerspective('Administrator');
     // disable non-existing plugin will make no changes
@@ -170,7 +170,7 @@ describe('Dynamic plugins features', () => {
     cy.visit('/api-explorer');
   });
 
-  it('(OCP-45629,yapei,UserInterface) dynamic plugins proxy to services on the cluster', {tags: ['e2e','admin','@osd-ccs']},() => {
+  it('(OCP-45629,yapei,UserInterface) dynamic plugins proxy to services on the cluster',{tags:['@userinterface','e2e','admin','@osd-ccs']},() => {
     cy.switchPerspective('Developer');
     nav.sidenav.clickNavLink(['Demo Plugin']);
     // demo plugin in Dev perspective
@@ -190,7 +190,7 @@ describe('Dynamic plugins features', () => {
     cy.contains('success').should('be.visible');
   });
 
-  it('(OCP-53123,yapei,UserInterface) Exposed components in dynamic-plugin-sdk', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-53123,yapei,UserInterface) Exposed components in dynamic-plugin-sdk',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     // ResourceIcon is exposed
     cy.switchPerspective('Administrator');
     cy.visit('/demo-list-page');
@@ -215,7 +215,7 @@ describe('Dynamic plugins features', () => {
     cy.get('h2').contains('openshift-dns').should('exist');
   });
 
-  it('(OCP-41459,yapei,UserInterface)Add support for analytics and integration with Segment', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-41459,yapei,UserInterface)Add support for analytics and integration with Segment',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     cy.visit('/k8s/ns/default/core~v1~Secret', {
       onBeforeLoad (win) {
         cy.spy(win.console, 'log').as('console.log')
@@ -227,7 +227,7 @@ describe('Dynamic plugins features', () => {
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "identify");
   });
 
-  it('(OCP-54170,yapei,UserInterface) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin','@osd-ccs']}, () => {
+  it('(OCP-54170,yapei,UserInterface) Promote ConsolePlugins API version to v1',{tags:['@userinterface','e2e', 'admin','@osd-ccs']}, () => {
     cy.visit('/k8s/cluster/customresourcedefinitions/consoleplugins.console.openshift.io/instances')
     listPage.rows.shouldExist('console-demo-plugin')
     cy.exec(`oc get consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -o yaml | grep 'apiVersion'`)
@@ -235,7 +235,7 @@ describe('Dynamic plugins features', () => {
       .should('contain', 'apiVersion: console.openshift.io/v1')
 })
 
-  it('(OCP-74292,yapei,UserInterface)Add extension point to enable customized create project modal)',{tags:['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-74292,yapei,UserInterface)Add extension point to enable customized create project modal)',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     cy.visit('/k8s/cluster/projects');
     listPage.rows.shouldBeLoaded();
     listPage.clickCreateYAMLbutton();
@@ -256,7 +256,7 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc get networkpolicy -n ${ocp_74292_ns2_name}`).its('stdout').should('include', 'default-deny');
   });
 
-  it('(OCP-53234,yapei,UserInterface) Show alert when console operator is Unmanaged', {tags: ['e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-53234,yapei,UserInterface) Show alert when console operator is Unmanaged',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
     // set console to Unmanaged
     cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Unmanaged"}}' --type merge`).then((result) => {
       expect(result.stdout).contains('patched')

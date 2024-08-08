@@ -72,7 +72,7 @@ describe('Notification drawer tests', () => {
     cy.cliLogout();
   })
 
-  it('(OCP-45305,yanpzhan,UserInterface) check alert on overview page and notification drawer list', {tags: ['e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-45305,yanpzhan,UserInterface) check alert on overview page and notification drawer list',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.adminCLI(`oc new-project test-ocp45305`);
     cy.exec(`echo '${JSON.stringify(testAlert)}' | oc create -f - --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -n test-ocp45305`);
     preferNotifications.goToNotificationsTab();
@@ -92,7 +92,7 @@ describe('Notification drawer tests', () => {
     cy.get('[class$=notification-drawer__list-item-description]').contains('Testing 123');
   });
 
-  it('(OCP-43119,yapei,UserInterface) Check alerts are filtered based on Pod/Project/Node labels', {tags:['e2e', 'admin']}, () => {
+  it('(OCP-43119,yapei,UserInterface) Check alerts are filtered based on Pod/Project/Node labels',{tags:['@userinterface','e2e','admin']}, () => {
     let token, query_command, query_output, scheduled_node_value;
     const alertName = 'KubePodRestartsOften';
     cy.adminCLI('oc new-project test-ocp43119');
