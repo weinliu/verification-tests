@@ -1808,6 +1808,7 @@ spec:
 			badMutatingWebhook           = getTestDataFilePath("MutatingWebhookConfigurationTemplate.yaml")
 			badCrdWebhook                = getTestDataFilePath("CRDWebhookConfigurationTemplate.yaml")
 			kubeApiserverCoStatus        = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			kasRolloutStatus             = map[string]string{"Available": "True", "Progressing": "True", "Degraded": "False"}
 			webHookErrorConditionTypes   = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`}
 			status                       = "True"
 			webhookServiceFailureReasons = []string{`WebhookServiceNotFound`, `WebhookServiceNotReady`, `WebhookServiceConnectionError`}
@@ -1852,13 +1853,19 @@ spec:
 			template:         badCrdWebhook,
 		}
 
-		exutil.By("Pre-requisities, capturing current-context from cluster.")
+		exutil.By("Pre-requisities, capturing current-context from cluster and check the status of kube-apiserver.")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
 		defer func() {
 			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
 			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
 		}()
+
+		e2e.Logf("Check the kube-apiserver operator status before testing.")
+		KAStatusBefore := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !reflect.DeepEqual(KAStatusBefore, kubeApiserverCoStatus) && !reflect.DeepEqual(KAStatusBefore, kasRolloutStatus) {
+			g.Skip("The kube-apiserver operator is not in stable status, will lead to incorrect test results, skip.")
+		}
 
 		exutil.By("1) Create a custom namespace for admission hook references.")
 		err := oc.WithoutNamespace().Run("new-project").Args(namespace).Execute()
@@ -1879,12 +1886,14 @@ spec:
 		exutil.By("5) Check for information error message on kube-apiserver cluster w.r.t bad resource reference for admission webhooks")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, status, webHookErrorConditionTypes)
 		compareAPIServerWebhookConditions(oc, "AdmissionWebhookMatchesVirtualResource", status, []string{`VirtualResourceAdmissionError`})
-
 		e2e.Logf("Step 5 has passed")
-		exutil.By("6) Check for kube-apiserver operator status after bad validating webhook added.")
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
-		e2e.Logf("Step 6 has passed. Test case has passed.")
 
+		exutil.By("6) Check for kube-apiserver operator status after bad validating webhook added.")
+		currentKAStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !(reflect.DeepEqual(currentKAStatus, KAStatusBefore) || reflect.DeepEqual(currentKAStatus, kubeApiserverCoStatus)) {
+			e2e.Failf("Test Failed: kube-apiserver operator status is changed!")
+		}
+		e2e.Logf("Step 6 has passed. Test case has passed.")
 	})
 
 	// author: jmekkatt@redhat.com
@@ -1896,6 +1905,7 @@ spec:
 			badMutatingWebhookName     = "test-mutating-cfg"
 			badCrdWebhookName          = "testcrdwebhooks.tests.com"
 			kubeApiserverCoStatus      = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			kasRolloutStatus           = map[string]string{"Available": "True", "Progressing": "True", "Degraded": "False"}
 			webHookErrorConditionTypes = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`, `VirtualResourceAdmissionError`}
 			status                     = "True"
 		)
@@ -1906,6 +1916,12 @@ spec:
 			oc.Run("delete").Args("crd", badCrdWebhookName, "--ignore-not-found").Execute()
 			oc.WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
 		}()
+
+		e2e.Logf("Check the kube-apiserver operator status before testing.")
+		KAStatusBefore := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !reflect.DeepEqual(KAStatusBefore, kubeApiserverCoStatus) && !reflect.DeepEqual(KAStatusBefore, kasRolloutStatus) {
+			g.Skip("The kube-apiserver operator is not in stable status, will lead to incorrect test results, skip.")
+		}
 
 		exutil.By("1) Check presence of admission webhooks created in pre-upgrade steps.")
 		e2e.Logf("Check availability of ValidatingWebhookConfiguration")
@@ -1920,7 +1936,10 @@ spec:
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, status, webHookErrorConditionTypes)
 
 		exutil.By("3) Check for kube-apiserver operator status after upgrade when cluster has bad webhooks present.")
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		currentKAStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !(reflect.DeepEqual(currentKAStatus, KAStatusBefore) || reflect.DeepEqual(currentKAStatus, kubeApiserverCoStatus)) {
+			e2e.Failf("Test Failed: kube-apiserver operator status is changed!")
+		}
 		e2e.Logf("Step 3 has passed , as kubeapiserver is in expected status.")
 
 		exutil.By("4) Delete all bad webhooks from upgraded cluster.")
@@ -1931,9 +1950,14 @@ spec:
 		exutil.By("5) Check for informational error message presence after deletion of bad webhooks in upgraded cluster.")
 		compareAPIServerWebhookConditions(oc, "", "False", webHookErrorConditionTypes)
 		e2e.Logf("Step 5 has passed , as no error related to webhooks are in cluster.")
+
 		exutil.By("6) Check for kube-apiserver operator status after deletion of bad webhooks in upgraded cluster.")
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		currentKAStatus = getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !(reflect.DeepEqual(currentKAStatus, KAStatusBefore) || reflect.DeepEqual(currentKAStatus, kubeApiserverCoStatus)) {
+			e2e.Failf("Test Failed: kube-apiserver operator status is changed!")
+		}
 		e2e.Logf("Step 6 has passed. Test case has passed.")
+
 	})
 
 	// author: rgangwar@redhat.com
