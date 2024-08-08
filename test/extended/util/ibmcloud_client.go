@@ -146,7 +146,7 @@ func StartIBMInstance(session *IBMSession, instanceID string) error {
 }
 
 // GetIBMInstanceID get IBM instance id
-func GetIBMInstanceID(session *IBMSession, oc *CLI, region string, vpcName string, instanceID string) (string, error) {
+func GetIBMInstanceID(session *IBMSession, oc *CLI, region string, vpcName string, instanceID string, baseDomain string) (string, error) {
 	err := SetVPCServiceURLForRegion(session, region)
 	if err != nil {
 		return "", fmt.Errorf("Failed to set vpc api service url :: %v", err)
@@ -170,7 +170,7 @@ func GetIBMInstanceID(session *IBMSession, oc *CLI, region string, vpcName strin
 
 	if vpcID == "" {
 		// Attempt to extract VPC ID using the DNS base domain
-		vpcID, err = ExtractVPCIDFromBaseDomain(oc, vpcs.Vpcs)
+		vpcID, err = ExtractVPCIDFromBaseDomain(oc, vpcs.Vpcs, baseDomain)
 		if err != nil {
 			return "", fmt.Errorf("VPC not found: %s", vpcName)
 		}
@@ -344,11 +344,7 @@ func GetIBMPowerVsInstanceInfo(powerClient *IBMPowerVsSession, instanceName stri
 }
 
 // ExtractVPCIDFromBaseDomain extracts the VPC ID based on the DNS base domain.
-func ExtractVPCIDFromBaseDomain(oc *CLI, vpcs []vpcv1.VPC) (string, error) {
-	baseDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-o=jsonpath={.spec.baseDomain}").Output()
-	if err != nil {
-		return "", fmt.Errorf("error retrieving DNS base domain: %v", err)
-	}
+func ExtractVPCIDFromBaseDomain(oc *CLI, vpcs []vpcv1.VPC, baseDomain string) (string, error) {
 	baseDomain = strings.TrimSpace(baseDomain)
 	parts := strings.Split(baseDomain, ".")
 	if len(parts) == 0 {
