@@ -2754,6 +2754,28 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="TargetDown",job="prometheus-example-app"}'`, token, `"alertname":"TargetDown"`, 3*uwmLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-74734-Alert for broken Prometheus Kube Service Discovery", func() {
+		var (
+			exampleApp = filepath.Join(monitoringBaseDir, "example-app.yaml")
+		)
+		exutil.By("create a namespace and deploy example-app")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		createResourceFromYaml(oc, ns, exampleApp)
+
+		exutil.By("add label to the namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/cluster-monitoring-").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/cluster-monitoring=true").Execute()
+
+		exutil.By("check logs in prometheus pod")
+		checkLogsInContainer(oc, "openshift-monitoring", "prometheus-k8s-0", "prometheus", `cannot list resource \"pods\" in API group \"\" in the namespace \"`+ns+`\"`)
+
+		exutil.By("check the alert is triggered")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusKubernetesListWatchFailures"}'`, token, `"alertname":"PrometheusKubernetesListWatchFailures"`, 3*uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
