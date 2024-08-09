@@ -1024,7 +1024,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 			egressErr = verifyEgressIPinTCPDump(oc, testPodNs2Name[0], ns2, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
-			egressErr = verifyEgressIPinTCPDump(oc, testPodNs2Name[0], ns2, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, true)
+			egressErr = verifyEgressIPinTCPDump(oc, testPodNs2Name[1], ns2, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 			egressErr = verifyEgressIPinTCPDump(oc, testPodNs3Name[0], ns3, egressIPMaps[0]["egressIP"], dstHost, ns2, tcpdumpDS.name, false)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
