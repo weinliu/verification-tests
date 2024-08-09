@@ -175,6 +175,8 @@ class SummaryClient:
             return True
         if "tls: failed to verify certificate:" in message:
             return True
+        if "Interrupted by User" in message:
+            return True
         return False
 
 
@@ -664,7 +666,6 @@ class JIRAManager:
             issues[issue.key]["link"] = "https://issues.redhat.com/browse/"+issue.key
             
         self.logger.info(pprint.pformat(issues, indent=1))
-        #self.logger.debug(json.dumps(issue.raw['fields'], indent=4, sort_keys=True))
         return issues
     
     def create_sub_task(self, author_map_file, parent_jira, subtasks, case_id, case_title, author, comments):
@@ -692,6 +693,9 @@ Hi, @{author}
                 self.logger.info("add comments to %s", substask)
                 self.jira.add_comment(substask, description_str)
                 case_issue = self.jira.issue(substask)
+                if not case_issue.fields.customfield_12310243:
+                    self.logger.info("update Story Points")
+                    case_issue.update(fields={'customfield_12310243': 1.0})
                 if case_issue.fields.status.name in ['Closed']:
                     self.jira.transition_issue(case_issue, transition='NEW')
                 return substask 
@@ -710,6 +714,7 @@ Hi, @{author}
                         parent={'key': parent_issue_key},
                         assignee= {"name": auth_map[author]}
         )
+        subtask.update(fields={'customfield_12310243': 1.0})
 
         self.logger.info("--------- Sub-task %s is created SUCCESS ----------", subtask.key)
         self.logger.debug(json.dumps(subtask.raw['fields'], indent=4, sort_keys=True))
@@ -742,6 +747,9 @@ if __name__ == "__main__":
     #sclient.create_sub_jira_task_all()
     sclient.collectResult()
     #sclient.get_case_result("393167")
+
+    #task_list = sclient.jiraManager.get_subtask_list("OCPQE-23411")
+    #sclient.jiraManager.create_sub_task(None, "OCPQE-23411", task_list, "OCP-45402", "OLM opm should opm validate should detect cycles in channels", "xzha", "test")
     
     exit(0)
 
