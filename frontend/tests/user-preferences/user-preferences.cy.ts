@@ -19,7 +19,7 @@ describe('user preferences related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-49134,yanpzhan,UserInterface) Support dark theme for admin console',{tags:['@userinterface','e2e','@osd-ccs','@rosa']}, () => {
+  it('(OCP-49134,yanpzhan,UserInterface) Support dark theme for admin console',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
     cy.visit('/user-preferences');
     consoleTheme.setLightTheme();
     cy.get('.pf-theme-dark').should('not.exist');
@@ -28,7 +28,7 @@ describe('user preferences related features', () => {
     consoleTheme.setSystemDefaultTheme();
   });
 
-  it('(OCP-64002,yapei,UserInterface) Implement strict search in console',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-64002,yapei,UserInterface) Implement strict search in console',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.cliLogin();
     cy.exec(`oc new-project ${projectName}`);
     const checkAllItemsExactMatch = (word: string) => {
@@ -148,7 +148,7 @@ describe('user preferences related features', () => {
     checkAllItemsExactMatch('APIServer');
   });
 
-  it('(OCP-72562,yapei,UserInterface)Add French and Spanish language support',{tags:['@userinterface','e2e','@osd-ccs','@rosa']}, () => {
+  it('(OCP-72562,yapei,UserInterface)Add French and Spanish language support',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
     const expectedLanguages = ['English', 'Español - Spanish', 'Français - French', '한국어 - Korean', '日本語 - Japanese', '中文 - Chinese (Simplified)'];
     userPreferences.navToGeneralUserPreferences();
     userPreferences.getLanguageOptions()

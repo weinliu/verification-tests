@@ -1,7 +1,7 @@
 import { Deployment } from "views/deployment";
 
 describe("console related deployments test", () => {
-  it("(OCP-69183,yanpzhan,UserInterface) Set readOnlyRootFilesystem field for both console and console operator related containers",{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it("(OCP-69183,yanpzhan,UserInterface) Set readOnlyRootFilesystem field for both console and console operator related containers",{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     // check console operator deployment
     Deployment.checkDeploymentFilesystem('console-operator','openshift-console-operator',0,true);
     Deployment.checkPodStatus('openshift-console-operator','name=console-operator','Running');

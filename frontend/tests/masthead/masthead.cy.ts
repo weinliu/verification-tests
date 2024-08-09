@@ -11,7 +11,7 @@ describe('masthead related', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-60809,yanpzhan,UserInterface) Add customer feedback to console',{tags:['@userinterface','e2e','admin','@smoke']}, () => {
+  it('(OCP-60809,yanpzhan,UserInterface) Add customer feedback to console',{tags:['@userinterface','@e2e','admin','@smoke']}, () => {
     masthead.openHelpItem('Share Feedback');
     masthead.checkFeedbackModal();
     masthead.cancelFeedback();

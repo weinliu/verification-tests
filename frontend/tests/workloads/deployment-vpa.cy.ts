@@ -18,7 +18,7 @@ describe('deployment vpa related feature', () => {
     cy.adminCLI('oc delete namespace openshift-vertical-pod-autoscaler');
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
-  it('(OCP-68834,yanpzhan,UserInterface) Show recommended value for VerticalPodAutoscaler in the Admin deployments',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-68834,yanpzhan,UserInterface) Show recommended value for VerticalPodAutoscaler in the Admin deployments',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.adminCLI(`oc create -f ./fixtures/deployments/exampledeployment-with-limits.yaml -n ${testName}`);
     //check vpa on deployment details page when no vpa
     cy.visit(`k8s/ns/${testName}/deployments/testd`);

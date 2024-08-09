@@ -13,7 +13,7 @@ describe('Administration pages pesudo translation', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-35766,yapei,UserInterface) administration pages pesudo translation',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-35766,yapei,UserInterface) administration pages pesudo translation',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
     cy.log('cluster settings details pesudo translation');
     //workaround OCPBUGS-30218 Console’s pseudolocalization not working
     userPreferences.chooseDifferentLanguage('English');

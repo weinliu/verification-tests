@@ -25,7 +25,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     const queryCatalogSource = `oc get catalogsource custom-catalogsource -n openshift-marketplace -o jsonpath={.status.connectionState.lastObservedState}`;
     cy.checkCommandResult(queryCatalogSource, 'READY', { retries: 6, interval: 10000 }).then(() => {
       Pages.gotoOperatorHubPage();
@@ -40,7 +40,7 @@ describe('Operator Hub tests', () => {
     });
   });
 
-  it('(OCP-54544,yapei,UserInterface) Check OperatorHub filter to use nodeArchitectures instead of GOARCH',{tags:['@userinterface','e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-54544,yapei,UserInterface) Check OperatorHub filter to use nodeArchitectures instead of GOARCH',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
     // in ocp54544--catalogsource, we have
     // etcd: operatorframework.io/arch.arm64: supported only
     // argocd: didn't define operatorframework.io in CSV, but by default operatorframework.io/arch.amd64 will be added
@@ -68,7 +68,7 @@ describe('Operator Hub tests', () => {
     });
   });
 
-  it('(OCP-74621,yapei,UserInterface)Show deprecated operators in OperatorHub)',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-74621,yapei,UserInterface)Show deprecated operators in OperatorHub)',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     const operator_name_kiali = 'kiali';
     const deprecated_channel_kiali = 'alpha';
     const deprecation_msg_package_kiali = "package kiali is end of life.  Please use 'kiali-new' package for support";
@@ -109,7 +109,7 @@ describe('Operator Hub tests', () => {
     operatorHubPage.cancel();
   });
 
-  it('(OCP-55684,xiyuzhao,UserInterface) Allow operator to specitfy where to run with CSV suggested namespace template annotation',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-55684,xiyuzhao,UserInterface) Allow operator to specitfy where to run with CSV suggested namespace template annotation',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     cy.visit(`operatorhub/subscribe?pkg=flux-operator&catalog=${testParams.catalogName}&catalogNamespace=${testParams.catalogNamespace}&targetNamespace=undefined`)
       .get('[data-test-id="resource-title"]')
       .should('contain.text','Install Operator')
@@ -130,7 +130,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`);
   });
 
-  it('(OCP-42671,xiyuzhao,UserInterface) OperatorHub shows correct operator installation states',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']},  () => {
+  it('(OCP-42671,xiyuzhao,UserInterface) OperatorHub shows correct operator installation states',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']},  () => {
     const params ={
       ns: 'test-42671',
       operatorName: 'infinispan-operator',
@@ -162,7 +162,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${params.ns}`);
   });
 
-  it('(OCP-54037,yapei,UserInterface) Affinity definition support',{tags:['@userinterface','e2e','admin','@osd-ccs']}, ()=> {
+  it('(OCP-54037,yapei,UserInterface) Affinity definition support',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, ()=> {
     cy.createProject(testParams.testNamespace);
     operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
     Pages.gotoInstalledOperatorPage(testParams.testNamespace)
@@ -200,7 +200,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${testParams.testNamespace}`);
   });
 
-  it('(OCP-62266,xiyuzhao,UserInterface)  Filter operators based on nodes OS type',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-62266,xiyuzhao,UserInterface)  Filter operators based on nodes OS type',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     let nodeOS;
     const checkFilterResult = (operator: string, state: string) =>{
       operatorHubPage.filter(operator);
@@ -241,7 +241,7 @@ describe('Operator Hub tests', () => {
     })
   });
 
-  it('(OCP-71516,xiyuzhao,UserInterface) Add TLSProfiles and tokenAuthGCP annotation to Infrastructures features filter section',{tags:['@userinterface','e2e','admin']}, function () {
+  it('(OCP-71516,xiyuzhao,UserInterface) Add TLSProfiles and tokenAuthGCP annotation to Infrastructures features filter section',{tags:['@userinterface','@e2e','admin']}, function () {
     cy.checkClusterType('isGCPCluster').then(value => {
       if (value === false) {
         cy.log('This is not a GCP Platform, Skip the case!!');

@@ -12,7 +12,7 @@ describe("Improve MachineConfigPool list table for update status", () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it("(OCP-51395,xiyuzhao,UserInterface) improve MachineConfigPool list table for update status",{tags:['@userinterface','e2e','admin','@destructive']}, () => {
+  it("(OCP-51395,xiyuzhao,UserInterface) improve MachineConfigPool list table for update status",{tags:['@userinterface','@e2e','admin','@destructive']}, () => {
     ClusterSettingPage.goToClusterSettingDetails();
     ClusterSettingPage.editUpstreamConfig();
     ClusterSettingPage.configureChannel();

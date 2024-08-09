@@ -11,7 +11,7 @@ describe('BareMetalHosts related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-63080,yanpzhan,UserInterface) Check functions in actions list for BMH',{tags:['@userinterface','e2e','admin']}, function () {
+  it('(OCP-63080,yanpzhan,UserInterface) Check functions in actions list for BMH',{tags:['@userinterface','@e2e','admin']}, function () {
     cy.isEdgeCluster().then(value => {
       if(value == false){
         this.skip();

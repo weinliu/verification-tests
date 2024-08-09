@@ -8,7 +8,7 @@ describe('console configs features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-53787,yanpzhan,UserInterface) Backend changes to add nodeArchitectures value to console-config file',{tags:['@userinterface','e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-53787,yanpzhan,UserInterface) Backend changes to add nodeArchitectures value to console-config file',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     let $architectureType;
     cy.exec(`oc get nodes -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | awk '/architecture:/ {print $2}' | sort | uniq`, { failOnNonZeroExit: false }).then((result) => {
       $architectureType = result.stdout;

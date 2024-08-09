@@ -34,7 +34,7 @@ describe('pod page', () => {
     cy.adminCLI(`oc delete project ${testName}`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
-  it('(OCP-72714,yanpzhan,UserInterface) Show last state for container',{tags:['@userinterface','e2e','@rosa','@osd-ccs']}, () => {
+  it('(OCP-72714,yanpzhan,UserInterface) Show last state for container',{tags:['@userinterface','@e2e','@rosa','@osd-ccs']}, () => {
     cy.exec(`oc create -f ./fixtures/pod-72714.yaml -n ${testName}`);
     cy.wait(20000);
     let containerName, lastState;
@@ -55,7 +55,7 @@ describe('pod page', () => {
       })
     }
   });
-  it('(OCP-53357,xiyuzhao,UserInterface) Pod host IP is visible on Pod details page',{tags:['@userinterface','e2e','admin','@rosa','@smoke']}, () => {
+  it('(OCP-53357,xiyuzhao,UserInterface) Pod host IP is visible on Pod details page',{tags:['@userinterface','@e2e','admin','@rosa','@smoke']}, () => {
     const podname = "limitpod-withnetworks"
     podsPage.goToPodDetails(testName,podname)
     cy.get('[data-test="Host IP"]')
@@ -73,7 +73,7 @@ describe('pod page', () => {
         })
   });
 
-  it('(OCP-33771,xiyuzhao,UserInterface) Check limits, requests, and secondary networks to charts in Pod Details	',{tags:['@userinterface','e2e','admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-33771,xiyuzhao,UserInterface) Check limits, requests, and secondary networks to charts in Pod Details	',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs']}, () => {
     const resourceName = ['CPU','Memory','Filesystem', 'Network transfer','Pod count'];
     const params ={
       'ns': testName,
