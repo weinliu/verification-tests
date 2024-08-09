@@ -209,7 +209,7 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 				namespace:           ns2,
 				nad_network_name:    "l3-network-" + ns1, //network name is same as in ns1
 				topology:            "layer3",
-				subnet:              "10.151.0.0/16/24",
+				subnet:              "10.150.0.0/16/24",
 				mtu:                 mtu,
 				net_attach_def_name: ns2 + "/l3-network-" + ns2,
 				role:                "primary",
@@ -239,7 +239,7 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 					namespace:           ns2,
 					nad_network_name:    "l3-network-" + ns1, //network name is same as in ns1
 					topology:            "layer3",
-					subnet:              "2011:100:200::0/60",
+					subnet:              "2010:100:200::0/60",
 					mtu:                 mtu,
 					net_attach_def_name: ns2 + "/l3-network-" + ns2,
 					role:                "primary",
@@ -268,7 +268,7 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 					namespace:           ns2,
 					nad_network_name:    "l3-network-" + ns1, //network name is same as in ns1
 					topology:            "layer3",
-					subnet:              "10.151.0.0/16/24,2011:100:200::0/60",
+					subnet:              "10.150.0.0/16/24,2010:100:200::0/60",
 					mtu:                 mtu,
 					net_attach_def_name: ns2 + "/l3-network-" + ns2,
 					role:                "primary",
