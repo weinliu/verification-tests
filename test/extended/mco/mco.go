@@ -4824,6 +4824,78 @@ desiredState:
 		}
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-75149-Update pool with manually cordoned nodes [Disruptive]", func() {
+		SkipIfSNO(oc.AsAdmin())
+		var (
+			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
+			mcName = "mco-test-75149"
+			// to make the test execution faster we will use a password configuration for the automation
+			passwordHash = "fake-hash"
+			user         = "core"
+			nodeList     = NewNodeList(oc.AsAdmin())
+		)
+		if len(mcp.GetNodesOrFail()) < 3 {
+			logger.Infof("There are less than 3 nodes available in the worker node. Since we need at least 3 nodes we use the master pool for testing")
+			mcp = NewMachineConfigPool(mcp.GetOC(), MachineConfigPoolMaster)
+		}
+
+		exutil.By("Set the maxUnavailable value to 2")
+		mcp.SetMaxUnavailable(2)
+		defer mcp.RemoveMaxUnavailable()
+		logger.Infof("OK!\n")
+
+		exutil.By("Manually cordon one of the nodes")
+		nodes := mcp.GetNodesOrFail()
+		cordonedNode := nodes[0]
+		defer cordonedNode.Uncordon()
+		o.Expect(cordonedNode.Cordon()).To(o.Succeed(),
+			"Could not cordon node %s", cordonedNode.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Create a new MachineConfiguration resource")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
+		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, user, passwordHash)}
+		mc.skipWaitForMcp = true
+
+		defer mc.delete()
+		defer cordonedNode.Uncordon()
+		mc.create()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that only one node is updated at a time (instead of 2) because the manually cordoned node counts as unavailable")
+		// get all nodes with status != Done
+		nodeList.SetItemsFilter(`?(@.metadata.annotations.machineconfiguration\.openshift\.io/state!="Done")`)
+		o.Consistently(func() (int, error) {
+			nodes, err := nodeList.GetAll()
+			return len(nodes), err
+		}, "3m", "10s").Should(o.BeNumerically("<", 2),
+			"The maximun number of nodes updated at a time should be 1, because the manually cordoned node should count as unavailable too")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that all nodes are updated but the manually cordoned one")
+		numNodes := len(nodes)
+		waitDuration := fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes())
+		o.Eventually(mcp.getUpdatedMachineCount, waitDuration, "15s").Should(o.Equal(numNodes-1),
+			"All nodes but one should be udated. %d total nodes, expecting %d to be updated", numNodes, numNodes-1)
+
+		// We check that the desired config for the manually cordoned node is the old config, and not the new one
+		o.Consistently(cordonedNode.GetDesiredMachineConfig, "2m", "20s").Should(o.Equal(mcp.getConfigNameOfStatusOrFail()),
+			"The manually cordoned node should not be updated. The desiredConfig value should be the old one.")
+		logger.Infof("OK!\n")
+
+		exutil.By("Manually undordon the cordoned node")
+		o.Expect(cordonedNode.Uncordon()).To(o.Succeed(),
+			"Could not uncordon the manually cordoned node")
+		logger.Infof("OK!\n")
+
+		exutil.By("All nodes should be updated now")
+		mcp.waitForComplete()
+		// Make sure that the cordoned node is now using the new configuration
+		o.Eventually(cordonedNode.GetDesiredMachineConfig, "30s", "10s").Should(o.Equal(mcp.getConfigNameOfSpecOrFail()),
+			"The manually cordoned node should not be updated. The desiredConfig value should be the old one.")
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason

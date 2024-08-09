@@ -181,6 +181,23 @@ func (mcp *MachineConfigPool) getDegradedMachineCount() (int, error) {
 	return dmachineCount, nil
 }
 
+// getDegradedMachineCount returns the number of updated machines in the pool
+func (mcp *MachineConfigPool) getUpdatedMachineCount() (int, error) {
+	umachineCountStr, ocErr := mcp.Get(`{.status.updatedMachineCount}`)
+	if ocErr != nil {
+		logger.Errorf("Error getting updatedMachineCount: %s", ocErr)
+		return -1, ocErr
+	}
+	umachineCount, convErr := strconv.Atoi(umachineCountStr)
+
+	if convErr != nil {
+		logger.Errorf("Error converting updatedMachineCount to integer: %s", ocErr)
+		return -1, convErr
+	}
+
+	return umachineCount, nil
+}
+
 func (mcp *MachineConfigPool) pollMachineCount() func() string {
 	return mcp.Poll(`{.status.machineCount}`)
 }

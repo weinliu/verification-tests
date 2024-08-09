@@ -380,6 +380,16 @@ func (n Node) GetCurrentBootOSImage() (string, error) {
 	return imageSplit[1], nil
 }
 
+// Cordon cordons the node by running the "oc adm cordon" command
+func (n *Node) Cordon() error {
+	return n.oc.Run("adm").Args("cordon", n.GetName()).Execute()
+}
+
+// Uncordon uncordons the node by running the "oc adm uncordon" command
+func (n *Node) Uncordon() error {
+	return n.oc.Run("adm").Args("uncordon", n.GetName()).Execute()
+}
+
 // IsCordoned returns true if the node is cordoned
 func (n *Node) IsCordoned() (bool, error) {
 	key, err := n.Get(`{.spec.taints[?(@.key=="node.kubernetes.io/unschedulable")].key}`)
