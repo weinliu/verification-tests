@@ -895,4 +895,207 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		checkUDPTraffic(oc, sctpClientPodname, subjectNs, udpPodName[0], nsList[3], udpPort, true)
 
 	})
+	//https://issues.redhat.com/browse/SDN-4517
+	g.It("Author:asood-High-73189-[FdpOvnOvs] BANP and ANP ACL audit log works [Serial]", func() {
+		var (
+			testID                   = "73189"
+			testDataDir              = exutil.FixturePath("testdata", "networking")
+			banpCRTemplate           = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-multi-pod-mixed-rule-template.yaml")
+			anpMultiRuleCRTemplate   = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-multi-pod-mixed-rule-template.yaml")
+			rcPingPodTemplate        = filepath.Join(testDataDir, "rc-ping-for-pod-template.yaml")
+			matchLabelKey            = "kubernetes.io/metadata.name"
+			nsList                   = []string{}
+			podKey                   = "color"
+			podVal                   = "red"
+			coloredPods              = make(map[string]string)
+			unColoredPods            = make(map[string]string)
+			ovnkubeNodeColoredPods   = make(map[string]string)
+			ovnkubeNodeUnColoredPods = make(map[string]string)
+		)
+		exutil.By("1. Get the first namespace (subject) and create three peer namespaces")
+		subjectNs := oc.Namespace()
+		nsList = append(nsList, subjectNs)
+		for i := 0; i < 3; i++ {
+			oc.SetupProject()
+			peerNs := oc.Namespace()
+			nsLabelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", peerNs, "team=qe").Execute()
+			o.Expect(nsLabelErr).NotTo(o.HaveOccurred())
+			nsList = append(nsList, peerNs)
+		}
+		e2e.Logf("Project list %v", nsList)
+		exutil.By("2. Create pods in all the namespaces, label one of the pod and obtain ovnkube-node pod for the scheduled pods in subject namespace.")
+		rcPingPodResource := replicationControllerPingPodResource{
+			name:      "",
+			replicas:  2,
+			namespace: "",
+			template:  rcPingPodTemplate,
+		}
+		for i := 0; i < 4; i++ {
+			rcPingPodResource.namespace = nsList[i]
+			rcPingPodResource.name = testID + "-test-pod-" + strconv.Itoa(i)
+			e2e.Logf("Create replica controller for pods %s", rcPingPodResource.name)
+			defer removeResource(oc, true, true, "replicationcontroller", rcPingPodResource.name, "-n", nsList[i])
+			rcPingPodResource.createReplicaController(oc)
+			err := waitForPodWithLabelReady(oc, rcPingPodResource.namespace, "name="+rcPingPodResource.name)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pods with label name=%s not ready", rcPingPodResource.name))
+			podListNs, podListErr := exutil.GetAllPodsWithLabel(oc, nsList[i], "name="+rcPingPodResource.name)
+			o.Expect(podListErr).NotTo(o.HaveOccurred())
+			o.Expect(len(podListNs)).Should(o.Equal(2))
+			e2e.Logf("Label pod %s in project %s", podListNs[0], nsList[i])
+			_, labelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", podListNs[0], "-n", nsList[i], podKey+"="+podVal).Output()
+			o.Expect(labelErr).NotTo(o.HaveOccurred())
+			coloredPods[nsList[i]] = podListNs[0]
+			unColoredPods[nsList[i]] = podListNs[1]
+			if i == 0 {
+				e2e.Logf("Get ovnkube-node pod scheduled on the same node where first pods %s is scheduled", podListNs[0])
+				nodeName, nodeNameErr := exutil.GetPodNodeName(oc, nsList[i], podListNs[0])
+				o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+				ovnKubePod, podErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+				o.Expect(podErr).NotTo(o.HaveOccurred())
+				ovnkubeNodeColoredPods[nsList[i]] = ovnKubePod
+
+				e2e.Logf("Get equivalent ovnkube-node pod scheduled on the same node where second pod %s is scheduled", podListNs[1])
+				nodeName, nodeNameErr = exutil.GetPodNodeName(oc, nsList[i], podListNs[1])
+				o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+				ovnKubePod, podErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+				o.Expect(podErr).NotTo(o.HaveOccurred())
+				ovnkubeNodeUnColoredPods[nsList[i]] = ovnKubePod
+			}
+
+		}
+
+		exutil.By("3. Create a BANP Policy with egress allow action and ingress deny action for subject namespace")
+		banpCR := multiPodMixedRuleBANPPolicyResource{
+			name:          "default",
+			subjectKey:    matchLabelKey,
+			subjectVal:    subjectNs,
+			subjectPodKey: podKey,
+			subjectPodVal: podVal,
+			policyType1:   "egress",
+			direction1:    "to",
+			ruleName1:     "default-allow-egress-to-colored-pods",
+			ruleAction1:   "Allow",
+			ruleKey1:      "team",
+			ruleVal1:      "qe",
+			rulePodKey1:   podKey,
+			rulePodVal1:   podVal,
+			policyType2:   "ingress",
+			direction2:    "from",
+			ruleName2:     "default-deny-from-colored-pods",
+			ruleAction2:   "Deny",
+			ruleKey2:      "team",
+			ruleVal2:      "qe",
+			rulePodKey2:   podKey,
+			rulePodVal2:   podVal,
+			template:      banpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banpCR.name)
+		banpCR.createMultiPodMixedRuleBANP(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+
+		exutil.By("3.1 Update BANP subject pod selector.")
+		patchBANP := `[{"op": "add", "path": "/spec/subject/pods/podSelector", "value": {}}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2 Update BANP to add another egress rule to BANP")
+		patchBANP = `[{"op": "add", "path": "/spec/egress/1", "value": { "action": "Deny", "name": "default-deny-unlabelled-pods", "to": [{"pods": { "namespaceSelector": {"matchLabels": {"team": "qe"}}, "podSelector": {"matchExpressions": [{"key": "color", "operator": "DoesNotExist"}]}}}]} }]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("3.3 Update BANP to add another ingress rule to BANP")
+		patchBANP = `[{"op": "add", "path": "/spec/ingress/1", "value": { "action": "Allow", "name": "default-allow-unlabelled-pods", "from": [{"pods": { "namespaceSelector": {"matchLabels": {"team": "qe"}}, "podSelector": {"matchExpressions": [{"key": "color", "operator": "DoesNotExist"}]}}}]} }]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("4. BANP ACL audit logging verification for each rule")
+		aclLogSearchString := fmt.Sprintf("name=\"BANP:default:Egress:0\", verdict=allow, severity=alert")
+		exutil.By(fmt.Sprintf("4.1 Verify ACL Logging for rule %s", aclLogSearchString))
+		checkACLLogs(oc, subjectNs, coloredPods[subjectNs], nsList[1], coloredPods[nsList[1]], "pass", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], true)
+
+		aclLogSearchString = fmt.Sprintf("name=\"BANP:default:Egress:1\", verdict=drop, severity=alert")
+		exutil.By(fmt.Sprintf("4.2 Verify ACL Logging for rule %s", aclLogSearchString))
+		checkACLLogs(oc, subjectNs, coloredPods[subjectNs], nsList[1], unColoredPods[nsList[1]], "fail", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], true)
+
+		aclLogSearchString = fmt.Sprintf("name=\"BANP:default:Ingress:0\", verdict=drop, severity=alert")
+		exutil.By(fmt.Sprintf("4.3 Verify ACL Logging for rule %s", aclLogSearchString))
+		checkACLLogs(oc, nsList[2], coloredPods[nsList[2]], subjectNs, coloredPods[subjectNs], "fail", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], true)
+
+		aclLogSearchString = fmt.Sprintf("name=\"BANP:default:Ingress:1\", verdict=allow, severity=alert")
+		exutil.By(fmt.Sprintf("4.4 Verify ACL Logging for rule %s", aclLogSearchString))
+		checkACLLogs(oc, nsList[3], unColoredPods[nsList[3]], subjectNs, unColoredPods[subjectNs], "pass", aclLogSearchString, ovnkubeNodeUnColoredPods[subjectNs], true)
+
+		exutil.By("5. Update BANP to change action on ingress from allow to deny")
+		patchBANP = `[{"op": "add", "path": "/spec/egress/0/action", "value": "Deny"}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy/default", "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("6. Create Admin Network Policy with ingress deny from %s to %s and egress allow to %s and pass to %s from %s namespace", nsList[1], nsList[0], nsList[2], nsList[3], nsList[0]))
+		anpMultiMixedRuleCR := multiPodMixedRuleANPPolicyResource{
+			name:          "anp-" + testID + "-1",
+			subjectKey:    matchLabelKey,
+			subjectVal:    subjectNs,
+			subjectPodKey: podKey,
+			subjectPodVal: podVal,
+			priority:      20,
+			policyType1:   "ingress",
+			direction1:    "from",
+			ruleName1:     "deny-from-" + nsList[1],
+			ruleAction1:   "Deny",
+			ruleKey1:      matchLabelKey,
+			ruleVal1:      nsList[1],
+			rulePodKey1:   podKey,
+			rulePodVal1:   podVal,
+			policyType2:   "egress",
+			direction2:    "to",
+			ruleName2:     "allow-to-" + nsList[2],
+			ruleAction2:   "Allow",
+			ruleKey2:      matchLabelKey,
+			ruleVal2:      nsList[2],
+			rulePodKey2:   podKey,
+			rulePodVal2:   podVal,
+			ruleName3:     "pass-to-" + nsList[3],
+			ruleAction3:   "Pass",
+			ruleKey3:      matchLabelKey,
+			ruleVal3:      nsList[3],
+			rulePodKey3:   "color",
+			rulePodVal3:   "red",
+			template:      anpMultiRuleCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpMultiMixedRuleCR.name)
+		anpMultiMixedRuleCR.createMultiPodMixedRuleANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpMultiMixedRuleCR.name)).To(o.BeTrue())
+
+		aclLogSearchString = fmt.Sprintf("name=\"ANP:%s:Ingress:0\", verdict=drop, severity=alert", anpMultiMixedRuleCR.name)
+		exutil.By(fmt.Sprintf("6.1 Verify ACL Logging for rule %s", aclLogSearchString))
+		checkACLLogs(oc, nsList[1], coloredPods[nsList[1]], subjectNs, coloredPods[subjectNs], "fail", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], true)
+
+		aclLogSearchString = fmt.Sprintf("name=\"ANP:%s:Egress:0\", verdict=allow, severity=warning", anpMultiMixedRuleCR.name)
+		exutil.By(fmt.Sprintf("6.2 Verify ACL Logging for rule %s", aclLogSearchString))
+		checkACLLogs(oc, subjectNs, coloredPods[subjectNs], nsList[2], coloredPods[nsList[2]], "pass", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], true)
+
+		aclLogSearchString = fmt.Sprintf("name=\"ANP:%s:Egress:1\", verdict=pass, severity=info", anpMultiMixedRuleCR.name)
+		exutil.By(fmt.Sprintf("6.3 Verify ACL Logging for rule %s", aclLogSearchString))
+		checkACLLogs(oc, subjectNs, coloredPods[subjectNs], nsList[3], coloredPods[nsList[3]], "fail", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], true)
+
+		exutil.By("7. Update BANP Policy annotation to see allow ACL is no longer audited")
+		aclSettings := aclSettings{DenySetting: "", AllowSetting: "warning"}
+		annotationErr := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("--overwrite", "baselineadminnetworkpolicy", "default", aclSettings.getJSONString()).Execute()
+		o.Expect(annotationErr).NotTo(o.HaveOccurred())
+
+		exutil.By("8. Update ANP Policy ingress rule from allow to pass to verify BANP ACL logging change")
+		patchANP := `[{"op": "replace", "path": "/spec/ingress/0/action", "value": "Pass" }]`
+		patchANPErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("anp", anpMultiMixedRuleCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchANPErr).NotTo(o.HaveOccurred())
+
+		aclLogSearchString = fmt.Sprintf("name=\"BANP:default:Ingress:0\", verdict=drop, severity=alert")
+		exutil.By(fmt.Sprintf("8.1 Verify ACL for rule %s in BANP is not logged", aclLogSearchString))
+		checkACLLogs(oc, nsList[1], coloredPods[nsList[1]], subjectNs, coloredPods[subjectNs], "fail", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], false)
+
+	})
+
 })

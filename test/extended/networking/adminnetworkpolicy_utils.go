@@ -82,6 +82,34 @@ type singleRuleBANPMEPolicyResource struct {
 	template        string
 }
 
+// Struct to create BANP multiple rules with mixed ingress or egress direction
+// Match Label selector
+// pod peer
+type multiPodMixedRuleBANPPolicyResource struct {
+	name          string
+	subjectKey    string
+	subjectVal    string
+	subjectPodKey string
+	subjectPodVal string
+	policyType1   string
+	direction1    string
+	ruleName1     string
+	ruleAction1   string
+	ruleKey1      string
+	ruleVal1      string
+	rulePodKey1   string
+	rulePodVal1   string
+	policyType2   string
+	direction2    string
+	ruleName2     string
+	ruleAction2   string
+	ruleKey2      string
+	ruleVal2      string
+	rulePodKey2   string
+	rulePodVal2   string
+	template      string
+}
+
 // Struct to create ANP with either ingress or egress single rule
 // Match Label selector
 // egress to
@@ -141,6 +169,42 @@ type multiRuleANPPolicyResource struct {
 	ruleKey3    string
 	ruleVal3    string
 	template    string
+}
+
+// Struct to create ANP with multiple rules ingress or egress direction
+// Match Label selector
+// pods peer
+// Two rules of the three will have same direction but action may vary
+type multiPodMixedRuleANPPolicyResource struct {
+	name          string
+	subjectKey    string
+	subjectVal    string
+	subjectPodKey string
+	subjectPodVal string
+	priority      int32
+	policyType1   string
+	direction1    string
+	ruleName1     string
+	ruleAction1   string
+	ruleKey1      string
+	ruleVal1      string
+	rulePodKey1   string
+	rulePodVal1   string
+	policyType2   string
+	direction2    string
+	ruleName2     string
+	ruleAction2   string
+	ruleKey2      string
+	ruleVal2      string
+	rulePodKey2   string
+	rulePodVal2   string
+	ruleName3     string
+	ruleAction3   string
+	ruleKey3      string
+	ruleVal3      string
+	rulePodKey3   string
+	rulePodVal3   string
+	template      string
 }
 type networkPolicyResource struct {
 	name             string
@@ -313,6 +377,24 @@ func (banp *singleRuleBANPMEPolicyResource) createSingleRuleBANPMatchExp(oc *exu
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Baseline Admin Network Policy CR %v", banp.name))
 }
 
+func (banp *multiPodMixedRuleBANPPolicyResource) createMultiPodMixedRuleBANP(oc *exutil.CLI) {
+	exutil.By("Creating Multi rule Baseline Admin Network Policy from template")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", banp.template, "-p", "NAME="+banp.name,
+			"SUBJECTKEY="+banp.subjectKey, "SUBJECTVAL="+banp.subjectVal, "SUBJECTPODKEY="+banp.subjectPodKey, "SUBJECTPODVAL="+banp.subjectPodVal,
+			"POLICYTYPE1="+banp.policyType1, "DIRECTION1="+banp.direction1, "RULENAME1="+banp.ruleName1, "RULEACTION1="+banp.ruleAction1,
+			"RULEKEY1="+banp.ruleKey1, "RULEVAL1="+banp.ruleVal1, "RULEPODKEY1="+banp.rulePodKey1, "RULEPODVAL1="+banp.rulePodVal1,
+			"POLICYTYPE2="+banp.policyType2, "DIRECTION2="+banp.direction2, "RULENAME2="+banp.ruleName2, "RULEACTION2="+banp.ruleAction2,
+			"RULEKEY2="+banp.ruleKey2, "RULEVAL2="+banp.ruleVal2, "RULEPODKEY2="+banp.rulePodKey2, "RULEPODVAL2="+banp.rulePodVal2)
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Admin Network Policy CR %v", banp.name))
+}
+
 func (anp *singleRuleANPPolicyResource) createSingleRuleANP(oc *exutil.CLI) {
 	exutil.By("Creating Single rule Admin Network Policy from template")
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
@@ -379,7 +461,25 @@ func (anp *singleRuleANPMEPolicyResource) createSingleRuleANPMatchExp(oc *exutil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Admin Network Policy CR %v", anp.name))
 }
-
+func (anp *multiPodMixedRuleANPPolicyResource) createMultiPodMixedRuleANP(oc *exutil.CLI) {
+	exutil.By("Creating Multi rule Admin Network Policy from template")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", anp.template, "-p", "NAME="+anp.name, "PRIORITY="+strconv.Itoa(int(anp.priority)),
+			"SUBJECTKEY="+anp.subjectKey, "SUBJECTVAL="+anp.subjectVal, "SUBJECTPODKEY="+anp.subjectPodKey, "SUBJECTPODVAL="+anp.subjectPodVal,
+			"POLICYTYPE1="+anp.policyType1, "DIRECTION1="+anp.direction1, "RULENAME1="+anp.ruleName1, "RULEACTION1="+anp.ruleAction1,
+			"RULEKEY1="+anp.ruleKey1, "RULEVAL1="+anp.ruleVal1, "RULEPODKEY1="+anp.rulePodKey1, "RULEPODVAL1="+anp.rulePodVal1,
+			"POLICYTYPE2="+anp.policyType2, "DIRECTION2="+anp.direction2, "RULENAME2="+anp.ruleName2, "RULEACTION2="+anp.ruleAction2,
+			"RULEKEY2="+anp.ruleKey2, "RULEVAL2="+anp.ruleVal2, "RULEPODKEY2="+anp.rulePodKey2, "RULEPODVAL2="+anp.rulePodVal2,
+			"RULENAME3="+anp.ruleName3, "RULEACTION3="+anp.ruleAction3,
+			"RULEKEY3="+anp.ruleKey2, "RULEVAL3="+anp.ruleVal3, "RULEPODKEY3="+anp.rulePodKey2, "RULEPODVAL3="+anp.rulePodVal3)
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create Admin Network Policy CR %v", anp.name))
+}
 func (rcPingPod *replicationControllerPingPodResource) createReplicaController(oc *exutil.CLI) {
 	exutil.By("Creating replication controller from template")
 	replicasString := fmt.Sprintf("REPLICAS=%v", rcPingPod.replicas)
@@ -562,4 +662,25 @@ func checkSCTPTraffic(oc *exutil.CLI, clientPodName string, clientPodNamespace s
 		}
 		cmdNcat.Process.Kill()
 	}
+}
+
+func checkACLLogs(oc *exutil.CLI, serverPodNs string, serverPodName string, clientPodNs string, clientPodName string, curlCmd string, aclLogSearchString string, ovnKNodePodName string, resultPass bool) {
+	tailACLLog := "tail -f /var/log/ovn/acl-audit-log.log"
+	tailACLLogCmd, cmdOutput, _, cmdErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ovn-kubernetes", ovnKNodePodName, "-c", "ovn-controller", "--", "/bin/bash", "-c", tailACLLog).Background()
+	defer tailACLLogCmd.Process.Kill()
+	o.Expect(cmdErr).NotTo(o.HaveOccurred())
+	if curlCmd == "pass" {
+		CurlPod2PodPass(oc, serverPodNs, serverPodName, clientPodNs, clientPodName)
+	} else {
+		CurlPod2PodFail(oc, serverPodNs, serverPodName, clientPodNs, clientPodName)
+	}
+	e2e.Logf("Log output: \n %s", cmdOutput.String())
+	if resultPass {
+		o.Expect(strings.Contains(cmdOutput.String(), aclLogSearchString)).To(o.BeTrue())
+		e2e.Logf("Found the expected string - %s", aclLogSearchString)
+	} else {
+		o.Expect(strings.Contains(cmdOutput.String(), aclLogSearchString)).To(o.BeFalse())
+	}
+	tailACLLogCmd.Process.Kill()
+
 }
