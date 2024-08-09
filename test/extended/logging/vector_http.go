@@ -339,7 +339,7 @@ ca_file = "/var/run/ocp-collector/secrets/to-fluentd-60933/ca-bundle.crt"`
 			clf := clusterlogforwarder{
 				name:               "http-to-http",
 				namespace:          clfNS,
-				templateFile:       filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "httpserver-to-httpout.yam"),
+				templateFile:       filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "httpserver-to-httpoutput.yaml"),
 				secretName:         fluentdS.secretName,
 				serviceAccountName: "clf-" + getRandomString(),
 				collectAuditLogs:   false,

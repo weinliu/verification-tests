@@ -2750,6 +2750,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 			waitForPodReady:           true,
 			enableMonitoring:          true,
 		}
+		clf.createServiceAccount(oc)
+		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-53817")
+		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-53817", clf.serviceAccountName, clf.namespace)
+		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 

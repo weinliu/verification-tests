@@ -19,7 +19,7 @@ objects:
         method: POST
         url: ${URL}/logs/app
       tls:
-        ca: 
+        ca:
           key: ca-bundle.crt
           secretName: ${SECRET_NAME}
     - name: httpout-infra
@@ -31,7 +31,7 @@ objects:
         method: POST
         url: ${URL}/logs/infra
       tls:
-        ca: 
+        ca:
           key: ca-bundle.crt
           secretName: ${SECRET_NAME}
     - name: httpout-audit
@@ -43,7 +43,7 @@ objects:
         method: POST
         url: ${URL}/logs/audit
       tls:
-        ca: 
+        ca:
           key: ca-bundle.crt
           secretName: ${SECRET_NAME}
     pipelines:
