@@ -1750,3 +1750,27 @@ func checkDomainReachability(oc *exutil.CLI, podName, ns, domainName string, pas
 		}, "20s", "10s").Should(o.HaveOccurred())
 	}
 }
+
+// get all private subnets from machinesets
+func getPrivateSubnetList(oc *exutil.CLI) []string {
+	jsonPath := `{.items[*].spec.template.spec.providerSpec.value.subnet.filters[].values[]}`
+	privateSubnets := getByJsonPath(oc, "openshift-machine-api", "machinesets.machine.openshift.io", jsonPath)
+	privateSubnetList := strings.Split(privateSubnets, " ")
+	e2e.Logf("The private subnet list from machinesets is: %v", privateSubnetList)
+	return privateSubnetList
+}
+
+// convert private subnet list to public subnet list
+func getPublicSubnetList(oc *exutil.CLI) []string {
+	var publicSubnetList []string
+	for _, subnet := range getPrivateSubnetList(oc) {
+		if strings.Contains(subnet, "subnet-private") {
+			subnet := strings.Replace(subnet, "subnet-private", "subnet-public", -1)
+			publicSubnetList = append(publicSubnetList, fmt.Sprintf(`"%s"`, subnet))
+		} else {
+			e2e.Logf("Warning: get one non-private subnets: %v", subnet)
+		}
+	}
+	e2e.Logf("The public subnet list generated from private is: %v", publicSubnetList)
+	return publicSubnetList
+}

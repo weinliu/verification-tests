@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -178,5 +179,106 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("reached max time allowed but the error message doesn't appear", err))
+	})
+
+	// author: hongli@redhat.com
+	g.It("Author:hongli-High-75439-AWS CLB supports to choose subnets", func() {
+		g.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		ns := "openshift-ingress"
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp75439",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Get public subnets and skip conditionally")
+		publicSubnetList := getPublicSubnetList(oc)
+		if len(publicSubnetList) < 1 {
+			g.Skip("Skipping since no public subnet found")
+		}
+
+		exutil.By("2. Create the custom ingresscontroller with CLB")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("3. Patch the custom ingresscontroller, then delete the LB svc manually")
+		jsonPatch := fmt.Sprintf(`{"spec":{"endpointPublishingStrategy":{"type":"LoadBalancerService","loadBalancer":{"providerParameters":{"type":"AWS","aws":{"type":"Classic","classicLoadBalancer":{"subnets":{"ids":null,"names":[%s]}}}}}}}}`, strings.Join(publicSubnetList, ","))
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, jsonPatch)
+		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{.status.conditions[?(@.type == "Progressing")].message}`, "To effectuate this change, you must delete the service")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "service", "router-"+ingctrl.name).Execute()
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("4. Ensure the ingress LB svc is provisioned and the subnets annotation is added")
+		externalLB := getByJsonPath(oc, ns, "service/router-"+ingctrl.name, "{.status.loadBalancer.ingress}")
+		o.Expect(externalLB).To(o.MatchRegexp(`"hostname":.*elb.*amazonaws.com`))
+		findAnnotation := getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
+		e2e.Logf("all annotations are: %v", findAnnotation)
+		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-subnets\":\"" + strings.Replace(strings.Join(publicSubnetList, ","), "\"", "", -1)))
+	})
+
+	// author: hongli@redhat.com
+	g.It("Author:hongli-High-75440-AWS NLB supports to choose subnets", func() {
+		g.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		ns := "openshift-ingress"
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp75440",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Get public subnets and skip conditionally")
+		publicSubnetList := getPublicSubnetList(oc)
+		if len(publicSubnetList) < 1 {
+			g.Skip("Skipping since no public subnet found")
+		}
+
+		exutil.By("2. Create the custom ingresscontroller with NLB")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		// Updating LB type from `Classic` to `NLB` in the yaml file
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|Classic|NLB|g' %s`, customTemp)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("3. Annotate and patch the custom ingresscontroller, enable LB svc can be auto deleted")
+		annotation := `ingress.operator.openshift.io/auto-delete-load-balancer=`
+		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", ingctrl.namespace, "ingresscontroller/"+ingctrl.name, annotation, "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		jsonPatch := fmt.Sprintf(`{"spec":{"endpointPublishingStrategy":{"type":"LoadBalancerService","loadBalancer":{"providerParameters":{"type":"AWS","aws":{"type":"NLB","networkLoadBalancer":{"subnets":{"ids":null,"names":[%s]}}}}}}}}`, strings.Join(publicSubnetList, ","))
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, jsonPatch)
+		// the old svc should be auto deleted in a few seconds and wait the new one has the annotation
+		waitForOutput(oc, ns, "service/router-"+ingctrl.name, `{.metadata.annotations}`, "service.beta.kubernetes.io/aws-load-balancer-subnets")
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("4. Ensure the ingress LB svc is provisioned and subnets annotation is added")
+		externalLB := getByJsonPath(oc, ns, "service/router-"+ingctrl.name, "{.status.loadBalancer.ingress}")
+		o.Expect(externalLB).To(o.MatchRegexp(`"hostname":.*elb.*amazonaws.com`))
+		findAnnotation := getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
+		e2e.Logf("all annotations are: %v", findAnnotation)
+		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-subnets\":\"" + strings.Replace(strings.Join(publicSubnetList, ","), "\"", "", -1)))
 	})
 })
