@@ -129,6 +129,55 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: hongli@redhat.com
+	g.It("Author:hongli-ROSA-OSD_CCS-LEVEL0-High-52837-switching of AWS CLB to NLB without deletion of ingresscontroller", func() {
+		// skip if platform is not AWS
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		ns := "openshift-ingress"
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp52837",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("patch the existing custom ingress controller with NLB")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"NLB\"}}}}}}")
+		// the LB svc keep the same but just annotation is updated
+		waitForOutput(oc, ns, "service/router-"+ingctrl.name, `{.metadata.annotations}`, "aws-load-balancer-type")
+
+		exutil.By("check the LB service and ensure the annotations are updated")
+		findAnnotation := getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
+		e2e.Logf("all annotations are: %v", findAnnotation)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-type":"nlb"`))
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
+
+		exutil.By("patch the existing custom ingress controller with CLB")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"Classic\"}}}}}}")
+		waitForOutput(oc, ns, "service/router-"+ingctrl.name, `{.metadata.annotations}`, "aws-load-balancer-proxy-protocol")
+
+		// Classic LB doesn't has explicit "classic" annotation but it needs proxy-protocol annotation
+		// so we use "aws-load-balancer-proxy-protocol" to check if using CLB
+		exutil.By("check the LB service and ensure the annotations are updated")
+		findAnnotation = getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
+		e2e.Logf("all annotations are: %v", findAnnotation)
+		o.Expect(findAnnotation).To(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-type":"nlb"`))
+	})
+
+	// author: hongli@redhat.com
 	g.It("Author:hongli-High-72126-Support multiple cidr blocks for one NSG rule in the IngressController", func() {
 		g.By("Pre-flight check for the platform type")
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")

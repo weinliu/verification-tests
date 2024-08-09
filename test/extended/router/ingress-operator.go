@@ -149,50 +149,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(checkoutput).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
 	})
 
-	// author: hongli@redhat.com
-	g.It("Author:hongli-LEVEL0-High-52837-switching of AWS CLB to NLB without deletion of ingresscontroller", func() {
-		// skip if platform is not AWS
-		exutil.SkipIfPlatformTypeNot(oc, "AWS")
-
-		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
-		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
-		var (
-			ingctrl = ingressControllerDescription{
-				name:      "ocp52837",
-				namespace: "openshift-ingress-operator",
-				domain:    "",
-				template:  customTemp,
-			}
-		)
-
-		exutil.By("Create one custom ingresscontroller")
-		baseDomain := getBaseDomain(oc)
-		ingctrl.domain = ingctrl.name + "." + baseDomain
-		defer ingctrl.delete(oc)
-		ingctrl.create(oc)
-		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-
-		exutil.By("patch the existing custom ingress controller with NLB")
-		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"NLB\"}}}}}}")
-		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-
-		exutil.By("check the LB service and ensure the annotations are updated")
-		findAnnotation, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
-		o.Expect(findAnnotation).To(o.ContainSubstring("nlb"))
-		o.Expect(findAnnotation).NotTo(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
-
-		exutil.By("patch the existing custom ingress controller with CLB")
-		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"Classic\"}}}}}}")
-		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
-
-		// Classic LB doesn't has explicit "classic" annotation but it needs proxy-protocol annotation
-		// so we use "aws-load-balancer-proxy-protocol" to check if using CLB
-		exutil.By("check the LB service and ensure the annotations are updated")
-		findAnnotation, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
-		o.Expect(findAnnotation).To(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
-		o.Expect(findAnnotation).NotTo(o.ContainSubstring("nlb"))
-	})
-
 	// author: shudili@redhat.com
 	g.It("Author:shudili-High-54868-Configurable dns Management for LoadBalancerService Ingress Controllers on AWS", func() {
 		var (
