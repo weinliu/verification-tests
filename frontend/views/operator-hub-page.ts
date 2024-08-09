@@ -1,6 +1,12 @@
 import { listPage } from "../upstream/views/list-page";
 import { helperfuncs } from 'views/utils';
 import { Pages } from "./pages";
+export const installedOperators = {
+  clickCSVName: (csv_name) => {
+    cy.get(`a[data-test-operator-row*="${csv_name}"]`).click();
+  }
+}
+
 export const operatorHubPage = {
   getAllTileLabels: () => {
     return cy.get('.pf-v5-c-badge')
@@ -37,6 +43,9 @@ export const operatorHubPage = {
   },
   clickOperatorTile: (operator_name) => {
     cy.get(`label[for*="${operator_name}"]`).first().click();
+  },
+  clickOperatorInstall: () => {
+    cy.get('[data-test="install-operator"]').click();
   },
   filter: (name: string) => {
     cy.get('[data-test="search-operatorhub"]').within(() => {

@@ -1,6 +1,7 @@
 import { Pages } from "views/pages";
-import { operatorHubPage, operatorHubModal, OperatorHubSelector, Operand } from "../../views/operator-hub-page";
+import { operatorHubPage, operatorHubModal, OperatorHubSelector, Operand, installedOperators } from "../../views/operator-hub-page";
 import { listPage } from "upstream/views/list-page";
+import { detailsPage } from "upstream/views/details-page";
 
 describe('Operator Hub tests', () => {
   const testParams = {
@@ -17,12 +18,15 @@ describe('Operator Hub tests', () => {
     cy.adminCLI('oc create -f ./fixtures/operators/custom-catalog-source.json')
       .its('stdout')
       .should('contain', 'created');
+    cy.checkCommandResult(`oc get catalogsource custom-catalogsource -n openshift-marketplace -o jsonpath='{.status.connectionState.lastObservedState}'`, 'READY');
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
   after(() => {
     cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI('oc delete sub kiali -n openshift-operators');
+    cy.adminCLI(`oc delete csv kiali-operator.v1.83.0 -n openshift-operators`);
   });
 
   it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
@@ -69,7 +73,27 @@ describe('Operator Hub tests', () => {
   });
 
   it('(OCP-74621,yapei,UserInterface)Show deprecated operators in OperatorHub)',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+    const operator_name_threescale = '3scale-community';
+    const deprecated_channel_threescale = 'threescale-2.11';
+    const deprecated_version_threescale = '0.8.2';
+    const deprecation_msg_version_threescale = "3scale-community-operator.v0.8.2 is deprecated.  Please upgrade to 3scale-community-operator.v0.9.0 or later.";
+    Pages.gotoOperatorHubPage();
+    operatorHubPage.checkSourceCheckBox("custom-auto-source");
+    operatorHubPage.filter(operator_name_threescale);
+    operatorHubPage.checkDeprecationLabel('not.exist');
+    operatorHubPage.clickOperatorTile(operator_name_threescale);
+    operatorHubModal.selectChannel(deprecated_channel_threescale);
+    operatorHubModal.selectVersion(deprecated_version_threescale);
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_version_threescale.slice(0,20));
+    operatorHubPage.checkDeprecationIcon().should('have.length', 2);
+    operatorHubModal.clickInstall();
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_version_threescale.slice(0,20));
+    operatorHubPage.checkDeprecationIcon().should('have.length', 2);
+    operatorHubPage.cancel();
+
+>>>>>>> update OCP-74621
     const operator_name_kiali = 'kiali';
+    const operator_csv_name = 'Kiali Community Operator';
     const deprecated_channel_kiali = 'alpha';
     const deprecation_msg_package_kiali = "package kiali is end of life.  Please use 'kiali-new' package for support";
     const deprecation_msg_channel_kiali = "channel alpha is no longer supported.  Please switch to channel 'stable'";
@@ -89,23 +113,23 @@ describe('Operator Hub tests', () => {
     operatorHubPage.checkDeprecationLabel('exist');
     operatorHubPage.checkDeprecationMsg(deprecation_msg_package_kiali.slice(0,20));
     operatorHubPage.checkDeprecationMsg(deprecation_msg_channel_kiali.slice(0,20));
-    operatorHubPage.cancel();
-
-    const operator_name_threescale = '3scale-community';
-    const deprecated_channel_threescale = 'threescale-2.11';
-    const deprecated_version_threescale = '0.8.2';
-    const deprecation_msg_version_threescale = "3scale-community-operator.v0.8.2 is deprecated.  Please upgrade to 3scale-community-operator.v0.9.0 or later.";
-    operatorHubPage.checkSourceCheckBox("custom-auto-source");
-    operatorHubPage.filter(operator_name_threescale);
-    operatorHubPage.checkDeprecationLabel('not.exist');
-    operatorHubPage.clickOperatorTile(operator_name_threescale);
-    operatorHubModal.selectChannel(deprecated_channel_threescale);
-    operatorHubModal.selectVersion(deprecated_version_threescale);
-    operatorHubPage.checkDeprecationMsg(deprecation_msg_version_threescale.slice(0,20));
-    operatorHubPage.checkDeprecationIcon().should('have.length', 2);
-    operatorHubModal.clickInstall();
-    operatorHubPage.checkDeprecationMsg(deprecation_msg_version_threescale.slice(0,20));
-    operatorHubPage.checkDeprecationIcon().should('have.length', 2);
+    operatorHubPage.clickOperatorInstall();
+    // Deprecation label&icon is shown on Installed Operators list page
+    cy.checkCommandResult('oc get csv -n openshift-operators', 'kiali-operator');
+    Pages.gotoInstalledOperatorPage('openshift-operators');
+    operatorHubPage.checkDeprecationLabel('exist');
+    installedOperators.clickCSVName(operator_csv_name);
+    // Deprecation label&icon and message was shown on Subscription tab
+    detailsPage.selectTab('Subscription');
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_package_kiali.slice(0,20));
+    operatorHubPage.checkDeprecationMsg(deprecation_msg_channel_kiali.slice(0,20));
+    // Deprecation icon is shown in channel update modal
+    cy.get('.co-detail-table__row .co-detail-table__section').first().within(() => {
+      cy.get('button').contains(deprecated_channel_kiali).click();
+    });
+    cy.get('form.modal-content').within(() => {
+      cy.get('svg[class*="yellow-exclamation-icon"]').its('length').should('equal', 1);
+    });
     operatorHubPage.cancel();
   });
 
