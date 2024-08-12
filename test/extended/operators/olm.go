@@ -3636,6 +3636,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("NonHyperShiftHOST-Author:jiazha-High-32559-catalog operator crashed", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-image.yaml")
+		oc.SetupProject()
+		namespace := oc.Namespace()
 		csTypes := []struct {
 			name        string
 			csType      string
@@ -3648,7 +3650,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			exutil.By(fmt.Sprintf("test the %s type CatalogSource", t.csType))
 			cs := catalogSourceDescription{
 				name:        t.name,
-				namespace:   "openshift-marketplace",
+				namespace:   namespace,
 				displayName: "OLM QE",
 				publisher:   "OLM QE",
 				sourceType:  t.csType,
@@ -3660,7 +3662,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			cs.create(oc, itName, dr)
 
 			err := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", cs.name, "-o=jsonpath={.status.message}").Output()
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", cs.name, "-o=jsonpath={.status.message}").Output()
 				if err != nil {
 					e2e.Logf("Fail to get CatalogSource: %s, error: %s and try again", cs.name, err)
 					return false, nil
@@ -3672,7 +3674,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				return false, nil
 			})
 
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("catsrc of openshift-marketplace does not contain %v", t.expectedMSG))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("catsrc of %s does not contain %v", namespace, t.expectedMSG))
 
 			status, err := oc.AsAdmin().Run("get").Args("-n", "openshift-operator-lifecycle-manager", "pods", "-l", "app=catalog-operator", "-o=jsonpath={.items[0].status.phase}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -3683,7 +3685,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		// destroy the two CatalogSource CRs
 		for _, t := range csTypes {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-marketplace", "catalogsource", t.name).Output()
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "catalogsource", t.name).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
