@@ -1047,7 +1047,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:yuewu-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-LEVEL0-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
 		const (
 			minSupportedVersion = "1.14.0"
 		)
