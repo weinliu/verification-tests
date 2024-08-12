@@ -367,7 +367,7 @@ func (mcp *MachineConfigPool) getSelectedNodes(extraLabels string) ([]Node, erro
 		return nil, err
 	}
 	labels := JSON(labelsString)
-	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
+	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool has no matchLabels value defined: %s", mcp.PrettyString()))
 
 	nodeList := NewNodeList(mcp.oc)
 	// Never select windows nodes
