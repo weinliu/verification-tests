@@ -253,12 +253,13 @@ func createCertManagerOperator(oc *exutil.CLI) {
 
 // create selfsigned issuer
 func createIssuer(oc *exutil.CLI) {
-	e2e.Logf("Create selfsigned issuer in ns scope created in last step.")
+	e2e.Logf("create a selfsigned issuer")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
 	err := oc.Run("create").Args("-f", issuerFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
+	e2e.Logf("wait for the selfsigned issuer to become Ready")
 	err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", "default-selfsigned", 10*time.Second, 120*time.Second)
 	if err != nil {
 		dumpResource(oc, oc.Namespace(), "issuer", "default-selfsigned", "-o=yaml")
@@ -268,12 +269,13 @@ func createIssuer(oc *exutil.CLI) {
 
 // create certificate using selfsigned issuer
 func createCertificate(oc *exutil.CLI) {
-	e2e.Logf("As the normal user, create certificate.")
+	e2e.Logf("create a certificate using the selfsigned issuer")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned.yaml")
 	err := oc.Run("create").Args("-f", certFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
+	e2e.Logf("wait for the selfsigned certificate to become Ready")
 	err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "default-selfsigned-cert", 10*time.Second, 300*time.Second)
 	if err != nil {
 		dumpResource(oc, oc.Namespace(), "certificate", "default-selfsigned-cert", "-o=yaml")

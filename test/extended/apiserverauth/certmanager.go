@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -182,11 +181,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
 		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
-		sedCmd := fmt.Sprintf(`sed -i 's/DNS_NAME/%s/g' %s`, dnsName, certHTTP01File)
-		_, err = exec.Command("bash", "-c", sedCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("create").Args("-f", certHTTP01File).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		params := []string{"-f", certHTTP01File, "-p", "ISSUER_NAME=" + "letsencrypt-http01", "CERT_NAME=" + "cert-test-http01", "DNS_NAME=" + dnsName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "cert-test-http01", 10*time.Second, 300*time.Second)
 		if err != nil {
 			dumpResource(oc, oc.Namespace(), "certificate", "cert-test-http01", "-o=yaml")
@@ -202,7 +198,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("ocp-63486: Waiting 1 min to ensure secret have not be removed.\n")
 		time.Sleep(60 * time.Second)
-		err = oc.Run("get").Args("secret", "cert-test-http01").Execute()
+		err = oc.Run("get").Args("secret", "cert-test-http01-tls").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -1310,5 +1306,84 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 		oc.SetupProject()
 		rapidastScan(oc, oc.Namespace(), componentName, apiGroupName, configFile, policyFile)
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-NonPreRelease-PreChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-Prepare cert-manager test data before OCP upgrade", func() {
+		const (
+			acmeIssuerName = "letsencrypt-http01"
+		)
+
+		exutil.By("create a selfsigned issuer and certificate")
+		createIssuer(oc)
+		createCertificate(oc)
+
+		exutil.By("create an ACME http01 issuer")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		acmeIssuerFile := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
+		err := oc.Run("create").Args("-f", acmeIssuerFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("wait for the ACME http01 issuer to become Ready")
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", acmeIssuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", acmeIssuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-NonPreRelease-PstChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-cert-manager functions should work normally after OCP upgrade", func() {
+		const (
+			selfsignedIssuerName = "default-selfsigned"
+			selfsignedCertName   = "default-selfsigned-cert"
+			acmeIssuerName       = "letsencrypt-http01"
+			acmeCertName         = "letsencrypt-http01-cert"
+			operatorNamespace    = "cert-manager-operator"
+			operandNamespace     = "cert-manager"
+		)
+
+		exutil.By("log the CSV post OCP upgrade")
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", operatorNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("check the operator and operands pods status, all of them should be Ready")
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operatorNamespace, 10*time.Second, 120*time.Second)
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
+
+		exutil.By("check the existing issuer and certificate status, all of them should be Ready")
+		resources := []struct {
+			resourceType string
+			resourceName string
+		}{
+			{"issuer", selfsignedIssuerName},
+			{"certificate", selfsignedCertName},
+			{"issuer", acmeIssuerName},
+		}
+		for _, r := range resources {
+			output, err := oc.Run("get").Args(r.resourceType, r.resourceName).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("True"))
+		}
+
+		exutil.By("check if the http01 solver is applicable in current env")
+		skipIfRouteUnreachable(oc)
+
+		exutil.By("create a new certificate using the ACME http01 issuer")
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		dnsName := constructDNSName(ingressDomain)
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		acmeCertFile := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
+		params := []string{"-f", acmeCertFile, "-p", "ISSUER_NAME=" + acmeIssuerName, "CERT_NAME=" + acmeCertName, "DNS_NAME=" + dnsName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		exutil.By("wait for the ACME http01 certificate to become Ready")
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", acmeCertName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", acmeCertName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 	})
 })

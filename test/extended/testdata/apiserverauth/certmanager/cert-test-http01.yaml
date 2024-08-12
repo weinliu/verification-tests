@@ -1,12 +1,22 @@
-apiVersion: cert-manager.io/v1
-kind: Certificate
+apiVersion: template.openshift.io/v1
+kind: Template
 metadata:
-  name: cert-test-http01
-spec:
-  secretName: cert-test-http01
-  usages:
-    - server auth
-  dnsNames:
-    - DNS_NAME
-  issuerRef:
-    name: letsencrypt-http01
+  name: cert-test-http01-template
+objects:
+  - apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: "${CERT_NAME}"
+    spec:
+      secretName: "${CERT_NAME}-tls"
+      usages:
+        - server auth
+      dnsNames:
+        - "${DNS_NAME}"
+      issuerRef:
+        kind: Issuer
+        name: "${ISSUER_NAME}"
+parameters:
+  - name: CERT_NAME
+  - name: ISSUER_NAME
+  - name: DNS_NAME
