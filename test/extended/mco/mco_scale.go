@@ -26,6 +26,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		oc = exutil.NewCLI("mco-scale", exutil.KubeConfigPath())
 		// worker MachineConfigPool
 		wMcp *MachineConfigPool
+		mMcp *MachineConfigPool
 	)
 
 	g.JustBeforeEach(func() {
@@ -33,6 +34,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 
 		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		preChecks(oc)
 	})
 
@@ -43,6 +45,48 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		)
 
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.1 is only supported in AWS. GCP is only supported in versions 4.6+
+		skipTestIfFIPSIsEnabled(oc.AsAdmin())                  // fips was supported for the first time in 4.3, hence it is not supported to scale 4.1 and 4.2 base images in clusters with fips=true
+
+		// Apply workaround
+		// Because of https://issues.redhat.com/browse/OCPBUGS-27273 this test case fails when the cluster has imagecontentsourcepolicies
+		// In prow jobs clusters have 2 imagecontentsourcepolicies (brew-registry and ), we try to remove them to execute this test
+		// It only happens using 4.1 base images. The issue was fixed in 4.2
+
+		// For debugging purposes
+		oc.AsAdmin().Run("get").Args("ImageContentSourcePolicy").Execute()
+		oc.AsAdmin().Run("get").Args("ImageTagMirrorSet").Execute()
+		oc.AsAdmin().Run("get").Args("ImageDigestMirrorSet").Execute()
+
+		cleanedICSPs := []*Resource{NewResource(oc.AsAdmin(), "ImageContentSourcePolicy", "brew-registry"), NewResource(oc.AsAdmin(), "ImageContentSourcePolicy", "image-policy")}
+
+		logger.Warnf("APPLYING WORKAROUND FOR  https://issues.redhat.com/browse/OCPBUGS-27273. Removing expected imageocontentsourcepolicies")
+
+		removedICSP := false
+		defer func() {
+			if removedICSP {
+				wMcp.waitForComplete()
+				mMcp.WaitImmediateForUpdatedStatus()
+			}
+		}()
+
+		for _, item := range cleanedICSPs {
+			icsp := item
+			if icsp.Exists() {
+				logger.Infof("Cleaning the spec of %s", icsp)
+				defer icsp.SetSpec(icsp.GetSpecOrFail())
+				o.Expect(icsp.SetSpec("{}")).To(o.Succeed(),
+					"Error cleaning %s spec", icsp)
+
+				removedICSP = true
+			}
+		}
+
+		if removedICSP {
+			wMcp.waitForComplete()
+			o.Expect(mMcp.WaitImmediateForUpdatedStatus()).To(o.Succeed())
+		} else {
+			logger.Infof("No ICSP was removed!!")
+		}
 
 		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
 	})

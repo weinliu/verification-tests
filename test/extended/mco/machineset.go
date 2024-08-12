@@ -89,8 +89,17 @@ func (ms MachineSet) GetIsReady() bool {
 
 	status := JSON(statusString)
 	logger.Infof("status %s", status)
-	replicasData := status.Get("replicas")
-	readyReplicasData := status.Get("readyReplicas")
+	replicasData, err := status.GetSafe("replicas")
+	if err != nil {
+		logger.Infof("Cannot get the replicas in the status. Err: %s", err)
+		return false
+	}
+
+	readyReplicasData, err := status.GetSafe("readyReplicas")
+	if err != nil {
+		logger.Infof("Cannot get the readyReplicas in the status. Err: %s", err)
+		return false
+	}
 
 	if !replicasData.Exists() {
 		logger.Infof("Replicasdata does not exist")
