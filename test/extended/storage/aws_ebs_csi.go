@@ -465,7 +465,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// Customer Bug: OCPBUGS-23260 Error in namespaces: Expected device to be attached but was attaching for AWS m5.8xlarge and c5a.4xlarge instances
-	g.It("Author:pewang-HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-Medium-74746-[AWS-EBS-CSI-Driver-Operator][bz-storage] reserved volume attachments should be enabled in driver node by default", func() {
+	g.It("Author:pewang-ROSA-OSD_CCS-Medium-74746-[AWS-EBS-CSI-Driver-Operator][bz-storage] reserved volume attachments should be enabled in driver node by default", func() {
 
 		// Set the resource objects definition for the scenario
 		var (
@@ -474,9 +474,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 
 		exutil.By("# Check the reserved-volume-attachments should be enabled in aws ebs csi driver node")
-		if hostedClusterName, _, hostedClusterNS := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc); hostedClusterNS != "" {
-			awsEbsCsiDriverNode.namespace = hostedClusterNS + "-" + hostedClusterName
-		}
 		o.Expect(awsEbsCsiDriverNode.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.containers[?(@.name=="csi-driver")].args}`)).Should(o.ContainSubstring(enableReservedVolumeAttachments))
 	})
 
