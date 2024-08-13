@@ -4813,12 +4813,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(getTimeDifferenceInMinute(startTime[0], endTime[0])).Should(o.BeNumerically("<", 0.1))
 	})
 
-	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-73769-Add chunksize for s3 api compatible object storage - TP [Disruptive]", func() {
-		g.By("Check if the cluster is TechPreviewNoUpgrade")
+	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-73769-Add chunksize for s3 api compatible object storage [Disruptive]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
-		if !exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
-		}
+
 		g.By("Add chunkSizeMiB parameter")
 		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		defer func() {
@@ -4850,12 +4847,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "Failed to push large image")
 	})
 
-	g.It("Author:xiuwang-NonHyperShiftHOST-Low-73770-chunksize neigative test - TP [Disruptive]", func() {
-		g.By("Check if the cluster is TechPreviewNoUpgrade")
+	g.It("Author:xiuwang-NonHyperShiftHOST-Low-73770-chunksize neigative test [Disruptive]", func() {
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
-		if !exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
-		}
+
 		g.By("Set chunkSizeMiB to not allow value ")
 		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		defer func() {
