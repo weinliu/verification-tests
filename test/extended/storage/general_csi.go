@@ -1806,7 +1806,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-47879 - [CSI-Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it successfully
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47879-[CSI-Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it successfully", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "filestore.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "filestore.csi.storage.gke.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -2211,7 +2211,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//OCP-48913 - [CSI-Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source larger than original volume
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-48913-[CSI-Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source larger than original volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -2706,7 +2706,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//OCP-49372 - [CSI-Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-49372-[CSI-Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -3087,7 +3087,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//OCP-27733 - [CSI-Driver] [Snapshot] [Retain deletionPolicy] [Pre-provision] could re-used snapshotcontent after the snapshot/snapshotcontent deletion
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-LEVEL0-Medium-27733-[CSI-Driver] [Snapshot] [Retain deletionPolicy] [Pre-provision] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -3212,7 +3212,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-33607 - [CSI-Driver] [Snapshot] Not READYTOUSE volumesnapshot should be able to delete successfully
 	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Medium-33607-[CSI-Driver] [Snapshot] Not READYTOUSE volumesnapshot should be able to delete successfully", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -3284,7 +3284,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-33606 - [CSI-Driver] [Snapshot] volumesnapshot instance could be deleted even if the volumesnapshotcontent instance's deletionpolicy changed from Delete to Retain
 	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Medium-33606-[CSI-Driver] [Snapshot] volumesnapshot instance could be deleted even if the volumesnapshotcontent instance's deletionpolicy changed from Delete to Retain", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -3382,7 +3382,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-33608 - [CSI-Driver] [Snapshot] Restore pvc with capacity less than snapshot should fail
 	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Medium-33608-[CSI-Driver] [Snapshot] Restore pvc with capacity less than snapshot should fail", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
