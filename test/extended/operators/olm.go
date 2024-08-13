@@ -6080,6 +6080,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after sa is delete", func() {
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipForSNOCluster(oc)
@@ -6159,6 +6162,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after role rule is delete[Serial]", func() {
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipForSNOCluster(oc)
@@ -6523,6 +6529,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// It will cover test case: OCP-24382, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24382-Should restrict CRD update if schema changes [Serial]", func() {
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -12527,6 +12536,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-33241, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-33241-Enable generated operator component adoption for operators with all ns mode [Serial]", func() {
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipNoCapabilities(oc, "marketplace")
 		var (
