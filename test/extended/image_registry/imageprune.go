@@ -636,7 +636,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if curArchitecture == architecture.MULTI {
 				podnode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod/"+isarr[i], "-o=jsonpath={.spec.nodeName}", "-n", oc.Namespace()).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				podnodeArchitecture, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("node/"+podnode, "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
+				podnodeArchitecture, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("node/"+podnode, "-o=jsonpath={.status.nodeInfo.architecture}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				curArchitecture = architecture.FromString(podnodeArchitecture)
 			}
