@@ -711,6 +711,10 @@ var _ = g.Describe("[sig-cli] Workloads test oc works well", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		pullSpec := getLatestPayload("https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest")
+		e2e.Logf("The pullSpec is %s \n", pullSpec)
+		if len(pullSpec) == 0 || strings.TrimSpace(pullSpec) == "" {
+			g.Skip("pullSpec is empty, so skipping the test")
+		}
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc.rhel8", "--to="+extractTmpDirName, pullSpec).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check oc executable to make sure match the platform")
