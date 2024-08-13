@@ -4294,6 +4294,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip for sno cluster")
 		}
 
+		podNum := getImageRegistryPodNumber(oc)
+		if podNum < 2 {
+			g.Skip("Skip when registry is not in HA mode")
+		}
+
 		g.By("Set infra node nodeAffinity when no infra node land - 30266")
 		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
