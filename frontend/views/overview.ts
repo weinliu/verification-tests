@@ -1,3 +1,7 @@
+const feature_name_map = {
+  'OpenShift AI': 'Red Hat OpenShift AI',
+  'OpenShift LightSpeed': 'OpenShift Lightspeed Operator'
+  },
 export const Overview = {
   goToDashboard: () => {
     cy.visit('/dashboards'),
@@ -20,9 +24,12 @@ export const Overview = {
   },
   checkControlplaneStatusHidden: () => cy.get('[data-test="Control Plane"]').should('not.exist'),
   checkGetStartIDPConfHidden: () => cy.get('[data-test="item identity-providers"]').should('not.exist'),
-  ExploreNewFeature: (featureName, OperatorName) => {
+  ExploreNewFeature: (featureName) => {
+    let operatorName = feature_name_map[`${featureName}`];
+    cy.log('operator name: '+`${operatorName}`);
     cy.contains(`${featureName}`).click();
-    cy.contains('h1', `${OperatorName}`, {timeout: 30000}).should('exist');
+    cy.get('[data-test-id="operator-install-btn"]').should('exist');
+    cy.contains('h1', `${operatorName}`, {timeout: 30000}).should('exist');
   }
 };
 export const quotaCard = {

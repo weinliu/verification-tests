@@ -13,7 +13,7 @@ describe('features for get started resources', () => {
     Overview.goToDashboard();
     cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep rhods-operator`, {failOnNonZeroExit: false}).then((result) => {
       if(result.stdout.includes('rhods')){
-	Overview.ExploreNewFeature('OpenShift AI','Red Hat OpenShift AI');
+	Overview.ExploreNewFeature('OpenShift AI');
       }else{
 	cy.contains('OpenShift AI').should('not.exist');
       }
@@ -21,7 +21,7 @@ describe('features for get started resources', () => {
     Overview.goToDashboard();
     cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`, {failOnNonZeroExit: false}).then((result) => {
       if(result.stdout.includes('lightspeed')){
-        Overview.ExploreNewFeature('OpenShift LightSpeed','OpenShift LightSpeed Operator');
+        Overview.ExploreNewFeature('OpenShift LightSpeed');
       }else{
 	cy.contains('OpenShift LightSpeed').should('not.exist');
       }
@@ -35,7 +35,7 @@ describe('features for get started resources', () => {
     cy.get('[data-test="quickstart drawer"]').should('exist');
     cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`, {failOnNonZeroExit: false}).then((result) => {
       if (result.stdout.includes('lightspeed')) {
-        Overview.ExploreNewFeature('OpenShift LightSpeed','OpenShift LightSpeed Operator');
+        Overview.ExploreNewFeature('OpenShift LightSpeed');
       } else {
 	      cy.get('a[data-test~="new-translations"]')
           .should('have.attr', 'href')
