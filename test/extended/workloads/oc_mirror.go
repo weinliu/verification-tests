@@ -1561,4 +1561,51 @@ mirror:
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-75502-make sure IBM Operator Index pod always works fine when mirrored by oc-mirror [Serial]", func() {
+		g.By("Set registry config")
+		dirname := "/tmp/case75502"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		g.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-75502")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-75502")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetConfig := filepath.Join(ocmirrorBaseDir, "config-75502.yaml")
+
+		defer os.RemoveAll("oc-mirror-workspace")
+		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
+			if err != nil {
+				e2e.Logf("mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
+		defer removeCSAndISCP(oc)
+		createCSAndISCPNoPackageCheck(oc, "cs-ibm-operator-catalog", "openshift-marketplace", "Running")
+	})
 })
