@@ -177,6 +177,8 @@ class SummaryClient:
             return True
         if "Interrupted by User" in message:
             return True
+        if "unable to retrieve source image gcr.io/kubebuilder/kube-rbac-proxy" in message:
+            return True
         return False
 
 
