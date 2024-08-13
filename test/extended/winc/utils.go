@@ -1554,7 +1554,7 @@ func extractMetricValue(queryResult string) string {
 
 func isDisconnectedCluster(oc *exutil.CLI) bool {
 	primaryDisconnectedImage := getConfigMapData(oc, wincTestCM, primary_disconnected_image_key, defaultNamespace)
-	if primaryDisconnectedImage == "" || primaryDisconnectedImage == "<primary_windows_container_disconnected_image>" {
+	if primaryDisconnectedImage == "" || strings.Contains(primaryDisconnectedImage, "<primary_windows_container_disconnected_image>") {
 		return false
 	}
 	return true
