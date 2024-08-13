@@ -732,8 +732,12 @@ func exposeRouteFromSVC(oc *exutil.CLI, rType, ns, route, service string) string
 }
 
 func listRepositories(regRoute, expect string) {
-	curlCmd := fmt.Sprintf("curl -k  https://%s/v2/_catalog | grep %s", regRoute, expect)
-	result, _ := exec.Command("bash", "-c", curlCmd).Output()
+	curlCmd := fmt.Sprintf("curl -ks  https://%s/v2/_catalog | grep %s", regRoute, expect)
+	result, err := exec.Command("bash", "-c", curlCmd).CombinedOutput()
+	if err != nil {
+		e2e.Logf("Command: \"%s\" returned: %v", curlCmd, string(result))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 	o.Expect(string(result)).To(o.ContainSubstring(expect))
 }
 
@@ -743,6 +747,7 @@ func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName, image, port strin
 	checkPodsRunningWithLabel(oc, ns, "app="+regName, 1)
 	exposeService(oc, ns, "deploy/"+regName, regName, port)
 	regRoute := exposeRouteFromSVC(oc, "edge", ns, regName, regName)
+	checkDnsCO(oc)
 	waitRouteReady(regRoute)
 	listRepositories(regRoute, "repositories")
 	return regRoute
