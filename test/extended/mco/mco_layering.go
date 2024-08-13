@@ -513,10 +513,10 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		mLayeringMC.create()
 
 		// Wait for pools
-		wMcp.WaitForUpdatedStatus()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("The new osImage was deployed successfully in 'worker' pool\n")
 
-		mMcp.WaitForUpdatedStatus()
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("The new osImage was deployed successfully in 'master' pool\n")
 
 		// Check rpm-ostree status in worker node
@@ -590,10 +590,10 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		mUsbguardMC.create()
 
 		// Wait for pools
-		wMcp.WaitForUpdatedStatus()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("The new config was applied successfully in 'worker' pool\n")
 
-		mMcp.WaitForUpdatedStatus()
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("The new config was applied successfully in 'master' pool\n")
 
 		// Check that rpms are installed in worker node after the extension
@@ -666,10 +666,10 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		logger.Infof("OK!\n")
 
 		// Wait for pools
-		wMcp.WaitForUpdatedStatus()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("The new config was applied successfully in 'worker' pool\n")
 
-		mMcp.WaitForUpdatedStatus()
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("The new config was applied successfully in 'master' pool\n")
 
 		// Check that extension rpm is installed in the worker node, but custom layering rpm is not
@@ -776,8 +776,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		// Wait for the pools to be updated
 		exutil.By("Wait for pools to be updated after applying the new realtime kernel")
-		wMcp.WaitForUpdatedStatus()
-		mMcp.WaitForUpdatedStatus()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is active in worker nodes
@@ -824,8 +824,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		// Wait for the pools to be updated
 		exutil.By("Wait for pools to be updated after applying the new osImage")
-		wMcp.WaitForUpdatedStatus()
-		mMcp.WaitForUpdatedStatus()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("OK!\n")
 
 		// Check rpm is installed in worker node
@@ -894,8 +894,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		// Wait for the pools to be updated
 		exutil.By("Wait for pools to be updated after deleting the realtime kernel configs")
-		wMcp.WaitForUpdatedStatus()
-		mMcp.WaitForUpdatedStatus()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("OK!\n")
 
 		// Check that realtime kernel is not active in worker nodes anymore
@@ -945,6 +945,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-55002-Get OSImageURL override related metric data available in telemetry [Disruptive]", func() {
+		// Due to https://issues.redhat.com/browse/OCPBUGS-31255 in this test case pools will be degraded intermittently. They will be degraded and automatically fixed in a few minutes/seconds
+		// Because of that we need to use WaitForUpdatedStatus instead of waitForComplete, since WaitForUpdatedStatus will not fail if a pool is degraded for just a few minutes but the configuration is applied properly
 		var (
 			osImageURLOverrideQuery = `os_image_url_override`
 
@@ -999,8 +1001,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		wLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
 		wLayeringMC.skipWaitForMcp = true
 
-		defer mMcp.waitForComplete()
-		defer wMcp.waitForComplete()
+		defer mMcp.WaitForUpdatedStatus()
+		defer wMcp.WaitForUpdatedStatus()
 		defer wLayeringMC.deleteNoWait()
 		wLayeringMC.create()
 		logger.Infof("OK!\n")
@@ -1018,8 +1020,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		// Wait for the pools to be updated
 		exutil.By("Wait for pools to be updated after applying the new osImage")
-		wMcp.waitForComplete()
-		mMcp.waitForComplete()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("OK!\n")
 
 		exutil.By("Validating os_image_url_override values with overridden master and worker pools")
@@ -1043,7 +1045,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		exutil.By("Delete the MC that overrides worker pool's osImage and wait for the pool to be updated")
 		wLayeringMC.deleteNoWait()
-		wMcp.waitForComplete()
+		o.Expect(wMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("OK!\n")
 
 		exutil.By("Validating os_image_url_override values with overridden master pool only")
@@ -1067,7 +1069,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 		exutil.By("Delete the MC that overrides master pool's osImage and wait for the pool to be updated")
 		mLayeringMC.deleteNoWait()
-		mMcp.waitForComplete()
+		o.Expect(mMcp.WaitForUpdatedStatus()).To(o.Succeed())
 		logger.Infof("OK!\n")
 
 		exutil.By("Validating os_image_url_override when no pool is overridden")
