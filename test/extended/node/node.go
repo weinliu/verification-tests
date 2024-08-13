@@ -1594,7 +1594,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		var (
 			scaledObjectStatus string
 		)
-		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default52384.yaml")
+		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1657,7 +1657,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 	// author: weinliu@redhat.com
 	g.It("Author:weinliu-ConnectedOnly-Critical-52385-Automatically scaling pods based on Prometheus metrics[Serial]", func() {
 		exutil.By("Create a kedacontroller with default template")
-		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default52384.yaml")
+		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1706,13 +1706,13 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 				oc.WithoutNamespace().AsAdmin().Run("delete").Args("ConfigMap/cluster-monitoring-config", "-n", "openshift-monitoring").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				exutil.By("Create my monitoring configuration")
-				prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap-52385.yaml")
+				prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap.yaml")
 				_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f=" + prometheusConfigmap).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 		} else {
 			e2e.Logf("ConfigMap cluster-monitoring-config does not exist, creating ...")
-			prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap-52385.yaml")
+			prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap.yaml")
 			defer func() {
 				errDelete := oc.WithoutNamespace().AsAdmin().Run("delete").Args("-f=" + prometheusConfigmap).Execute()
 				o.Expect(errDelete).NotTo(o.HaveOccurred())
@@ -1721,7 +1721,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		exutil.By("2) Deploy application that exposes Prometheus metrics")
-		prometheusComsumer := filepath.Join(buildPruningBaseDir, "prometheus-comsumer-deployment-52385.yaml")
+		prometheusComsumer := filepath.Join(buildPruningBaseDir, "prometheus-comsumer-deployment.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f="+prometheusComsumer, "-n", cmaNs).Execute()
 		err = oc.AsAdmin().Run("create").Args("-f="+prometheusComsumer, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1751,7 +1751,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		triggerAuthentication52385.create(oc)
 
 		exutil.By("4) Create a role for reading metric from Thanos")
-		role := filepath.Join(buildPruningBaseDir, "role-52385.yaml")
+		role := filepath.Join(buildPruningBaseDir, "role.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f="+role, "-n", cmaNs).Execute()
 		err = oc.AsAdmin().Run("create").Args("-f="+role, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1786,6 +1786,135 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "scaling failed")
 		exutil.By("prometheus scaling is up and ready")
+	})
+
+	//author: asahay@redhat.com
+
+	g.It("Author:asahay-ConnectedOnly-Critical-73296-KEDA-Operator is missing files causing cron triggers with Timezone Failure [Serial]", func() {
+		exutil.By("Create a kedacontroller with default template")
+		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		triggerAuthenticationTempl := filepath.Join(buildPruningBaseDir, "triggerauthentication-73296.yaml")
+		triggerAuthentication73296 := triggerAuthenticationDescription{
+			secretname: "",
+			namespace:  "",
+			template:   triggerAuthenticationTempl,
+		}
+		cmaNs := "cma-73296"
+		defer deleteProject(oc, cmaNs)
+		createProject(oc, cmaNs)
+
+		exutil.By("1) Create OpenShift monitoring for user-defined projects")
+		// Look for cluster-level monitoring configuration
+		getOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ConfigMap", "cluster-monitoring-config", "-n", "openshift-monitoring", "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Enable user workload monitoring
+		if len(getOutput) > 0 {
+			exutil.By("ConfigMap cluster-monitoring-config exists, extracting cluster-monitoring-config ...")
+			extractOutput, _, _ := oc.AsAdmin().WithoutNamespace().Run("extract").Args("ConfigMap/cluster-monitoring-config", "-n", "openshift-monitoring", "--to=-").Outputs()
+			//if strings.Contains(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(extractOutput, "'", ""), "\"", ""), " ", ""), "enableUserWorkload:true") {
+			cleanedOutput := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(extractOutput, "'", ""), "\"", ""), " ", "")
+			e2e.Logf("cleanedOutput is  %s", cleanedOutput)
+			if matched, _ := regexp.MatchString("enableUserWorkload:\\s*true", cleanedOutput); matched {
+				exutil.By("User workload is enabled, doing nothing ... ")
+			} else {
+				exutil.By("User workload is not enabled, enabling ...")
+				exutil.By("Get current monitoring configuration to recover")
+				originclusterMonitoringConfig, getContentError := oc.AsAdmin().Run("get").Args("ConfigMap/cluster-monitoring-config", "-ojson", "-n", "openshift-monitoring").Output()
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originclusterMonitoringConfig, getContentError = sjson.Delete(originclusterMonitoringConfig, `metadata.resourceVersion`)
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originclusterMonitoringConfig, getContentError = sjson.Delete(originclusterMonitoringConfig, `metadata.uid`)
+				o.Expect(getContentError).NotTo(o.HaveOccurred())
+				originclusterMonitoringConfigFilePath := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-73296.json")
+				o.Expect(os.WriteFile(originclusterMonitoringConfigFilePath, []byte(originclusterMonitoringConfig), 0644)).NotTo(o.HaveOccurred())
+				defer func() {
+					errReplace := oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", originclusterMonitoringConfigFilePath).Execute()
+					o.Expect(errReplace).NotTo(o.HaveOccurred())
+				}()
+				exutil.By("Deleting current monitoring configuration")
+				oc.WithoutNamespace().AsAdmin().Run("delete").Args("ConfigMap/cluster-monitoring-config", "-n", "openshift-monitoring").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				exutil.By("Create my monitoring configuration")
+				prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap.yaml")
+				_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f=" + prometheusConfigmap).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		} else {
+			e2e.Logf("ConfigMap cluster-monitoring-config does not exist, creating ...")
+			prometheusConfigmap := filepath.Join(buildPruningBaseDir, "prometheus-configmap.yaml")
+			defer func() {
+				errDelete := oc.WithoutNamespace().AsAdmin().Run("delete").Args("-f=" + prometheusConfigmap).Execute()
+				o.Expect(errDelete).NotTo(o.HaveOccurred())
+			}()
+			_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f=" + prometheusConfigmap).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		exutil.By("2) Deploy application that exposes Prometheus metrics")
+		prometheusComsumer := filepath.Join(buildPruningBaseDir, "prometheus-comsumer-deployment.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+prometheusComsumer, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+prometheusComsumer, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3) Create a Service Account")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("sa", "thanos-73296", "-n", cmaNs).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "thanos-73296", "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.1) Create Service Account Token")
+		servicetokenTemp := filepath.Join(buildPruningBaseDir, "servicetoken-73296.yaml")
+		token, err := oc.AsAdmin().SetNamespace(cmaNs).Run("apply").Args("-f", servicetokenTemp).Output()
+		e2e.Logf("err %v, token %v", err, token)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2) Make sure the token is still there and didn't get deleted")
+		serviceToken, err := oc.AsAdmin().Run("get").Args("secret", "thanos-token", "-n", cmaNs).Output()
+		e2e.Logf("err %v, token %v", err, serviceToken)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		saTokenName := "thanos-token"
+
+		exutil.By("3.3) Define TriggerAuthentication with the Service Account's token")
+		triggerAuthentication73296.secretname = string(saTokenName[:])
+		triggerAuthentication73296.namespace = cmaNs
+		defer oc.AsAdmin().Run("delete").Args("-n", cmaNs, "TriggerAuthentication", "keda-trigger-auth-prometheus").Execute()
+		triggerAuthentication73296.create(oc)
+
+		exutil.By("4) Create a role for reading metric from Thanos")
+		role := filepath.Join(buildPruningBaseDir, "role.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+role, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+role, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5) Add the role for reading metrics from Thanos to the Service Account")
+		rolebinding := filepath.Join(buildPruningBaseDir, "rolebinding-73296.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+rolebinding, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+rolebinding, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6) Create a Test Deployment")
+		testDeploymentTemp := filepath.Join(buildPruningBaseDir, "testdeployment-73296.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+testDeploymentTemp, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+testDeploymentTemp, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("7) Create a ScaledObject with a cron trigger with timezone applied.")
+		timezoneScaledObjectTemp := filepath.Join(buildPruningBaseDir, "timezonescaledobject-73296.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+timezoneScaledObjectTemp, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+timezoneScaledObjectTemp, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		PodName := getPodNameByLabel(oc, "openshift-keda", "app=keda-operator")
+		waitPodReady(oc, "openshift-keda", "app=keda-operator")
+		exutil.By(" 8) Check the Logs Containig INFO Reconciling ScaledObject")
+		log, err := exutil.GetSpecificPodLogs(oc, "openshift-keda", "", PodName[0], "")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(log, "INFO\tReconciling ScaledObject")).Should(o.BeTrue())
+
 	})
 })
 
