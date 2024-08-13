@@ -774,6 +774,11 @@ func (p *projectDescription) delete(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+func (p *projectDescription) deleteWithForce(oc *exutil.CLI) {
+	_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "ns", p.name, "--force")
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 type serviceAccountDescription struct {
 	name           string
 	namespace      string

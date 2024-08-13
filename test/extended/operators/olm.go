@@ -646,7 +646,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				}
 				defer func(ns string) {
 					exutil.By(fmt.Sprintf(">>>delete project %s", ns))
-					_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns).Output()
+					_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns, "--force").Output()
 					if err != nil {
 						e2e.Failf("Defer !!!Fail to delete project %s, error:%v", ns, err)
 					}
@@ -1205,8 +1205,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			targetNamespace: "",
 		}
 
-		defer p1.delete(oc)
-		defer p2.delete(oc)
+		defer p1.deleteWithForce(oc)
+		defer p2.deleteWithForce(oc)
 		oc.SetupProject()
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
