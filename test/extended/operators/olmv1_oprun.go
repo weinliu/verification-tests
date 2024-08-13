@@ -2,6 +2,7 @@ package operators
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -258,6 +259,149 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-ConnectedOnly-Medium-75492-cluster extension can not be installed with wrong sa or insufficient permission sa", func() {
+		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
+		var (
+			ns                           = "ns-75492"
+			sa                           = "sa75492"
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-nginx-insufficient.yaml")
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				RBACObjects: []olmv1util.ChildResource{
+					{Kind: "RoleBinding", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role-binding", sa)}},
+					{Kind: "Role", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role", sa)}},
+					{Kind: "ClusterRoleBinding", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole-binding", sa),
+						fmt.Sprintf("%s-installer-clusterrole-binding", sa)}},
+					{Kind: "ClusterRole", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole", sa),
+						fmt.Sprintf("%s-installer-clusterrole", sa)}},
+					{Kind: "ServiceAccount", Ns: ns, Names: []string{sa}},
+				},
+				Kinds:    "okv3277775492s",
+				Template: saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75492",
+				Imageref: "quay.io/olmqe/nginx-ok-index:vokv3283",
+				Template: clustercatalogTemplate,
+			}
+			ce75492Insufficient = olmv1util.ClusterExtensionDescription{
+				Name:             "insufficient-75492",
+				PackageName:      "nginx-ok-v3277775492",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+			ce75492WrongSa = olmv1util.ClusterExtensionDescription{
+				Name:             "wrong-75492",
+				PackageName:      "nginx-ok-v3277775492",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           "sa754921",
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found", "--force").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("check Insufficient sa")
+		defer ce75492Insufficient.Delete(oc)
+		ce75492Insufficient.CreateWithoutCheck(oc)
+		ce75492Insufficient.CheckClusterExtensionCondition(oc, "Installed", "message", "could not get information about the resource CustomResourceDefinition", 10, 60, 0)
+
+		exutil.By("check wrong sa")
+		defer ce75492WrongSa.Delete(oc)
+		ce75492WrongSa.CreateWithoutCheck(oc)
+		ce75492WrongSa.CheckClusterExtensionCondition(oc, "Installed", "message", "not found", 10, 60, 0)
+
+	})
+
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-ConnectedOnly-Medium-75493-cluster extension can be installed with enough permission sa", func() {
+		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
+		var (
+			ns                           = "ns-75493"
+			sa                           = "sa75493"
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-nginx-limited.yaml")
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				RBACObjects: []olmv1util.ChildResource{
+					{Kind: "RoleBinding", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role-binding", sa)}},
+					{Kind: "Role", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role", sa)}},
+					{Kind: "ClusterRoleBinding", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole-binding", sa),
+						fmt.Sprintf("%s-installer-clusterrole-binding", sa)}},
+					{Kind: "ClusterRole", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole", sa),
+						fmt.Sprintf("%s-installer-clusterrole", sa)}},
+					{Kind: "ServiceAccount", Ns: ns, Names: []string{sa}},
+				},
+				Kinds:    "okv3277775493s",
+				Template: saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75493",
+				Imageref: "quay.io/olmqe/nginx-ok-index:vokv3283",
+				Template: clustercatalogTemplate,
+			}
+			ce75493 = olmv1util.ClusterExtensionDescription{
+				Name:             "enough-75493",
+				PackageName:      "nginx-ok-v3277775493",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found", "--force").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("check if ce is installed with limited permission")
+		defer ce75493.Delete(oc)
+		ce75493.Create(oc)
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "customresourcedefinitions.apiextensions.k8s.io", "okv3277775493s.cache.example.com")).To(o.BeTrue())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "services", "nginx-ok-v3283-75493-controller-manager-metrics-service", "-n", ns)).To(o.BeTrue())
+		ce75493.Delete(oc)
+		o.Expect(olmv1util.Appearance(oc, exutil.Disappear, "customresourcedefinitions.apiextensions.k8s.io", "okv3277775493s.cache.example.com")).To(o.BeTrue())
+		o.Expect(olmv1util.Appearance(oc, exutil.Disappear, "services", "nginx-ok-v3283-75493-controller-manager-metrics-service", "-n", ns)).To(o.BeTrue())
+	})
+
+	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-Medium-74618-ClusterExtension supports simple registry vzero bundles only", func() {
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
@@ -267,7 +411,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
 				Name:      sa,
 				Namespace: ns,
@@ -387,7 +531,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			clusterextensionTemplate                      = filepath.Join(baseDir, "clusterextension.yaml")
 			clusterextensionWithoutChannelTemplate        = filepath.Join(baseDir, "clusterextensionWithoutChannel.yaml")
 			clusterextensionWithoutChannelVersionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
-			saClusterRoleBindingTemplate                  = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate                  = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                                            = "ns-68821"
 			sa                                            = "sa68821"
 			saCrb                                         = olmv1util.SaCLusterRolebindingDescription{
@@ -468,7 +612,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-69196"
 			sa                           = "sa69196"
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
@@ -549,7 +693,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextensionWithoutVersion.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-74108"
 			sa                           = "sa74108"
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
@@ -723,7 +867,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns1                          = "ns-74923-1"
 			ns2                          = "ns-74923-2"
 			sa1                          = "sa74923-1"
@@ -848,7 +992,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-69193"
 			sa                           = "sa69193"
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
@@ -971,7 +1115,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-70719"
 			sa                           = "sa70719"
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
@@ -1096,7 +1240,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-clusterrolebinding.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-70723"
 			sa                           = "sa70723"
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
