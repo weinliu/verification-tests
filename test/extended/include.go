@@ -32,7 +32,6 @@ import (
 	_ "github.com/openshift/openshift-tests-private/test/extended/psap/nfd"
 	_ "github.com/openshift/openshift-tests-private/test/extended/psap/nto"
 	_ "github.com/openshift/openshift-tests-private/test/extended/psap/sro"
-	_ "github.com/openshift/openshift-tests-private/test/extended/rosacli"
 	_ "github.com/openshift/openshift-tests-private/test/extended/router"
 	_ "github.com/openshift/openshift-tests-private/test/extended/securityandcompliance"
 	_ "github.com/openshift/openshift-tests-private/test/extended/storage"
