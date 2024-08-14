@@ -4424,6 +4424,7 @@ EOF`, dcpolicyrepo)
 			caseID                  = "ocp-11289"
 			dirname                 = "/tmp/-" + caseID
 			ocpObjectCountsYamlFile = dirname + "openshift-object-counts.yaml"
+			expectedQuota           = "openshift.io/imagestreams:2"
 		)
 		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
@@ -4468,7 +4469,12 @@ spec:
 
 			exutil.By(fmt.Sprintf("%s.1 Checking the created Resource Quota of the Image Stream", step))
 			quota := getResourceToBeReady(oc, asAdmin, withoutNamespace, "quota", "openshift-object-counts", `--template={{.status.used}}`, "-n", namespace)
-			o.Expect(quota).Should(o.ContainSubstring("openshift.io/imagestreams:2"), "openshift-object-counts")
+
+			if !strings.Contains(quota, expectedQuota) {
+				out, _ := getResource(oc, asAdmin, withoutNamespace, "imagestream", "-n", namespace)
+				e2e.Logf("imagestream are used: %s", out)
+				e2e.Failf("expected quota openshift-object-counts %s doesn't match the reality %s! Please check!", expectedQuota, quota)
+			}
 		}
 
 		exutil.By("4. Create a source build using source code and check the build info")
