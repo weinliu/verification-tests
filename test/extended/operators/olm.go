@@ -289,7 +289,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-71996-package-server-manager forbidden securityContext.seLinuxOptions [Serial]", func() {
+	g.It("Author:jiazha-NonHyperShiftHOST-High-71996-package-server-manager forbidden securityContext.seLinuxOptions [Serial]", func() {
 		exutil.By("1) Install a custom SCC which the priority is high")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		sccYAML := filepath.Join(buildPruningBaseDir, "scc.yaml")
@@ -4266,7 +4266,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com OCP-40316
-	g.It("ConnectedOnly-Author:scolange-Medium-40316-OLM enters infinite loop if Pending CSV replaces itself [Serial]", func() {
+	g.It("Author:scolange-ConnectedOnly-NonHyperShiftHOST-Medium-40316-enters infinite loop if Pending CSV replaces itself [Serial]", func() {
 
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -5891,7 +5891,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-68521, author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-Medium-68901-Packageserver pod should not crash if pdateStrategy is incorrect	", func() {
+	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-Medium-68901-Packageserver pod should not crash if pdateStrategy is incorrect", func() {
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
