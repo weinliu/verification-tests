@@ -311,7 +311,7 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 		g.By("check should no PodDisruptionBudgetAtLimit warning")
 		url := `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PodDisruptionBudgetAtLimit"}'`
 		getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
-		err = wait.Poll(90*time.Second, 900*time.Second, func() (bool, error) {
+		err = wait.Poll(90*time.Second, 600*time.Second, func() (bool, error) {
 			metrics, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if matched, _ := regexp.MatchString(ns, metrics); matched {
