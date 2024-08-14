@@ -1300,7 +1300,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-24672-ExternalIP configured from autoAssignCIDRs. [Disruptive]", func() {
+	g.It("Author:jechen-ConnectedOnly-High-24672-ExternalIP configured from autoAssignCIDRs. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -1309,8 +1309,8 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		platform := exutil.CheckPlatform(oc)
 		e2e.Logf("platform %s", platform)
 		acceptedPlatform := strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
-		if !acceptedPlatform {
-			g.Skip("Test cases should be run on GCP, Azure, skip for other platforms or other network plugin!!")
+		if !acceptedPlatform || checkDisconnect(oc) {
+			g.Skip("Test cases should be run on connected GCP, Azure, skip for other platforms or disconnected cluster!!")
 		}
 		// skip if no spec.publicZone specified in dns.config
 		// the private cluster will be skipped as well
@@ -1389,9 +1389,16 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		svc4URL := net.JoinHostPort(svcExternalIP, "27017")
 		svcChkCmd := fmt.Sprintf("curl  %s --connect-timeout 30", svc4URL)
 		e2e.Logf("\n svcChkCmd: %v\n", svcChkCmd)
-		output, err := exec.Command("bash", "-c", svcChkCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
+		checkErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
+			output, err1 := exec.Command("bash", "-c", svcChkCmd).Output()
+			if err1 != nil {
+				e2e.Logf("got err:%v, and try next round", err1)
+				return false, nil
+			}
+			o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Fail to curl the externalIP service from test runner %s", svc4URL))
 	})
 
 	// author: jechen@redhat.com
