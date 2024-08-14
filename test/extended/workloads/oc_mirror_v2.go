@@ -1425,4 +1425,145 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		e2e.Logf("The out error is %v", outErr)
 		o.Expect(strings.Contains(outErr, "invalid argument")).To(o.BeTrue())
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-72983-support registries.conf for normal operator mirror of v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72983"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72983.yaml")
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch the first registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "35G", "/var/lib/registry")
+
+		exutil.By("Trying to launch the second registry app")
+		defer registry.deleteregistrySpecifyName(oc, "secondregistry")
+		secondSerInfo := registry.createregistrySpecifyName(oc, "secondregistry")
+		setRegistryVolume(oc, "deploy", "secondregistry", oc.Namespace(), "35G", "/var/lib/registry")
+
+		exutil.By("Mirror to first registry")
+		waitErr := wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+
+		exutil.By("Create and set registries.conf")
+		registryConfContent := getRegistryConfContentStr(serInfo.serviceName, "quay.io", "registry.redhat.io")
+		homePath := getHomePath()
+		homeRistryConfExist, _ := ensureContainersConfigDirectory(homePath)
+		if !homeRistryConfExist {
+			e2e.Failf("Failed to get or create the home registry config directory")
+		}
+
+		defer restoreRegistryConf(homePath)
+		_, errStat := os.Stat(homePath + "/.config/containers/registries.conf")
+		if errStat == nil {
+			backupContainersConfig(homePath)
+			setRegistryConf(registryConfContent, homePath)
+		} else if os.IsNotExist(errStat) {
+			setRegistryConf(registryConfContent, homePath)
+		} else {
+			e2e.Failf("Unexpected error %v", errStat)
+		}
+
+		exutil.By("Mirror to second registry")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+secondSerInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-72982-support registries.conf for OCI of v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72982"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72982.yaml")
+
+		exutil.By("Use skopoe copy catalogsource to localhost")
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 --remove-signatures  --insecure-policy oci://%s --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson"))
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch the first registry app")
+		serInfo := registry.createregistry(oc)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "35G", "/var/lib/registry")
+
+		exutil.By("Trying to launch the second registry app")
+		secondSerInfo := registry.createregistrySpecifyName(oc, "secondregistry")
+		setRegistryVolume(oc, "deploy", "secondregistry", oc.Namespace(), "35G", "/var/lib/registry")
+
+		exutil.By("Mirror to first registry")
+		waitErr := wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+
+		exutil.By("Create and set registries.conf")
+		/*registryConfFile := dirname + "/registries.conf"
+		createRegistryConf(registryConfFile, serInfo.serviceName)
+		defer restoreRegistryConf()
+		setRegistryConf(registryConfFile)*/
+
+		registryConfContent := getRegistryConfContentStr(serInfo.serviceName, "quay.io", "registry.redhat.io")
+		homePath := getHomePath()
+		homeRistryConfExist, _ := ensureContainersConfigDirectory(homePath)
+		if !homeRistryConfExist {
+			e2e.Failf("Failed to get or create the home registry config directory")
+		}
+
+		defer restoreRegistryConf(homePath)
+		_, errStat := os.Stat(homePath + "/.config/containers/registries.conf")
+		if errStat == nil {
+			backupContainersConfig(homePath)
+			setRegistryConf(registryConfContent, homePath)
+		} else if os.IsNotExist(errStat) {
+			setRegistryConf(registryConfContent, homePath)
+		} else {
+			e2e.Failf("Unexpected error %v", errStat)
+		}
+
+		exutil.By("Mirror to second registry")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+secondSerInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+	})
+
 })

@@ -18,6 +18,7 @@ import (
 
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -2171,4 +2172,95 @@ func validateStringFromFile(fileName string, expectedS string) bool {
 		return true
 	}
 	return false
+}
+
+func getHomePath() string {
+	var homePath string
+	u, err := user.Current()
+	if err != nil {
+		e2e.Logf("Failed to get the current user, pod running in Openshift")
+		homePath = os.Getenv("HOME")
+	} else {
+		homePath = u.HomeDir
+	}
+	return homePath
+}
+
+func ensureContainersConfigDirectory(homePath string) (bool, error) {
+	_, errStat := os.Stat(homePath + "/.config/containers")
+	if errStat == nil {
+		return true, nil
+	}
+	if os.IsNotExist(errStat) {
+		err := os.MkdirAll(homePath+"/.config/containers", 0700)
+		if err != nil {
+			e2e.Logf("Failed to create the default continer config directory")
+			return false, nil
+		} else {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func backupContainersConfig(homePath string) {
+	oldRegistryConf := homePath + "/.config/containers/registries.conf"
+	backupRegistryConf := homePath + "/.config/containers/registries.conf.backup"
+	e2e.Logf("Backup origin files")
+	err := os.Rename(oldRegistryConf, backupRegistryConf)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func restoreRegistryConf(homePath string) {
+	_, errStat := os.Stat(homePath + "/.config/containers/registries.conf.backup")
+
+	if errStat == nil {
+		e2e.Logf("Remove registry.conf file")
+		os.Remove(homePath + "/.config/containers/registries.conf")
+		e2e.Logf("Backup origin files")
+		os.Rename(homePath+"/.config/containers/registries.conf.backup", homePath+"/.config/containers/registries.conf")
+	} else if os.IsNotExist(errStat) {
+		os.Remove(homePath + "/.config/containers/registries.conf")
+	} else {
+		e2e.Failf("Unexpected error %v", errStat)
+	}
+}
+
+func getRegistryConfContentStr(registryRoute string, originRegistryF string, originRegistryS string) string {
+	registryConfContent := fmt.Sprintf(`[[registry]]
+  location = "%s"
+  insecure = false
+  blocked = false
+  mirror-by-digest-only = false
+  [[registry.mirror]]
+    location = "%s"
+    insecure = false
+[[registry]]
+  location = "%s"
+  insecure = false
+  blocked = false
+  mirror-by-digest-only = false
+  [[registry.mirror]]
+    location = "%s"
+    insecure = false
+ `, originRegistryF, registryRoute, originRegistryS, registryRoute)
+
+	return registryConfContent
+}
+
+func setRegistryConf(registryConfContent string, homePath string) {
+	f, err := os.Create(homePath + "/.config/containers/registries.conf")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer f.Close()
+	w := bufio.NewWriter(f)
+	_, werr := w.WriteString(registryConfContent)
+	w.Flush()
+	o.Expect(werr).NotTo(o.HaveOccurred())
+}
+
+// delete registry app with special name
+func (registry *registry) deleteregistrySpecifyName(oc *exutil.CLI, registryName string) {
+	_ = oc.Run("delete").Args("svc", registryName, "-n", registry.namespace).Execute()
+	_ = oc.Run("delete").Args("deploy", registryName, "-n", registry.namespace).Execute()
+	_ = oc.Run("delete").Args("is", registryName, "-n", registry.namespace).Execute()
 }
