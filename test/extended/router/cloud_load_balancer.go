@@ -129,7 +129,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-ROSA-OSD_CCS-LEVEL0-High-52837-switching of AWS CLB to NLB without deletion of ingresscontroller", func() {
+	g.It("Author:hongli-ROSA-OSD_CCS-High-52837-switching of AWS CLB to NLB without deletion of ingresscontroller", func() {
 		// skip if platform is not AWS
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
