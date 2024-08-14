@@ -592,7 +592,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 	})
 
 	// Bug: 1916907
-	g.It("Author:mjoseph-Longduration-NonPreRelease-High-56539-Disabling the internal registry should not corrupt /etc/hosts [Disruptive]", func() {
+	// Bug: OCPBUGS-35063
+	g.It("Author:mjoseph-NonHyperShiftHOST-Longduration-NonPreRelease-High-56539-Disabling the internal registry should not corrupt /etc/hosts [Disruptive]", func() {
 		exutil.By("Step1: Get the Cluster IP of image-registry")
 		// Skip the test case if openshift-image-registry namespace is not found
 		clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
