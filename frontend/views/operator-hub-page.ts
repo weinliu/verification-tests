@@ -12,17 +12,17 @@ export const operatorHubPage = {
     return cy.get('.pf-v5-c-badge')
   },
   checkCustomCatalog: (name: string) => {
-    cy.get('form[data-test-group-name="catalogSourceDisplayName"]')
-      .find(`[data-test="catalogSourceDisplayName-${name}"]`)
+    cy.get('form[data-test-group-name="source"]')
+      .find(`[data-test="source-${name}"]`)
   },
   checkSourceCheckBox: (name: string) => {
-    cy.get('form[data-test-group-name="catalogSourceDisplayName"]', {timeout: 60000})
-      .find(`[data-test="catalogSourceDisplayName-${name}"]`)
+    cy.get('form[data-test-group-name="source"]', {timeout: 60000})
+      .find(`[data-test="source-${name}"]`)
       .find('[type="checkbox"]').check()
   },
   uncheckSourceCheckBox: (name: string) => {
-    cy.get('form[data-test-group-name="catalogSourceDisplayName"]', {timeout: 60000})
-      .find(`[data-test="catalogSourceDisplayName-${name}"]`)
+    cy.get('form[data-test-group-name="source"]', {timeout: 60000})
+      .find(`[data-test="source-${name}"]`)
       .find('[type="checkbox"]').uncheck()
   },
   checkInstallStateCheckBox: (state: string) => {
