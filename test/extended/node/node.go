@@ -1128,8 +1128,8 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		e2e.Logf("podNode is :%v", podNode)
 		var cmdOut1 string
 		var cmdOut2 string
-		waitErr := wait.Poll(20*time.Second, 70*time.Second, func() (bool, error) {
-			cmd1 := fmt.Sprintf(`oc get --raw /api/v1/nodes/%v/proxy/metrics/cadvisor  | grep container_network_transmit | grep %v`, podNode, livenessProbeTermP68184.name)
+		waitErr := wait.Poll(10*time.Second, 70*time.Second, func() (bool, error) {
+			cmd1 := fmt.Sprintf(`oc get --raw /api/v1/nodes/%v/proxy/metrics/cadvisor  | grep container_network_transmit | grep %v || true`, podNode, livenessProbeTermP68184.name)
 			cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(cmdOut1), "container_network_transmit_bytes_total") && strings.Contains(string(cmdOut1), "container_network_transmit_errors_total") && strings.Contains(string(cmdOut1), "container_network_transmit_packets_dropped_total") && strings.Contains(string(cmdOut1), "container_network_transmit_packets_total") {
@@ -1147,7 +1147,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			e2e.Logf("restartCount is :%v", restartCount)
 			o.Expect(strconv.Atoi(restartCount)).Should(o.BeNumerically(">=", 1), "error: the pod restart time < 1")
 
-			cmd2 := fmt.Sprintf(`oc get --raw /api/v1/nodes/%v/proxy/metrics/cadvisor  | grep container_network_transmit | grep %v`, podNode, livenessProbeTermP68184.name)
+			cmd2 := fmt.Sprintf(`oc get --raw /api/v1/nodes/%v/proxy/metrics/cadvisor  | grep container_network_transmit | grep %v || true`, podNode, livenessProbeTermP68184.name)
 			cmdOut2, err := exec.Command("bash", "-c", cmd2).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(cmdOut2), "container_network_transmit_bytes_total") && strings.Contains(string(cmdOut2), "container_network_transmit_errors_total") && strings.Contains(string(cmdOut2), "container_network_transmit_packets_dropped_total") && strings.Contains(string(cmdOut2), "container_network_transmit_packets_total") {
