@@ -887,7 +887,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		defer os.RemoveAll("/tmp/redhat-operator-index")
 		g.By("Copy the catalog as OCI FBC")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.13 oci://%s  --remove-signatures --insecure-policy  --authfile %s", "/tmp/redhat-operator-index", dirname+"/.dockerconfigjson")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.16 oci://%s  --remove-signatures --insecure-policy  --authfile %s", "/tmp/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {

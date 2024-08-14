@@ -9,4 +9,4 @@ mirror:
       targetCatalog: "ocicatalog73452"
       targetTag: "v14"
       packages:
-        - name: rhsso-operator
+        - name: cluster-kube-descheduler-operator

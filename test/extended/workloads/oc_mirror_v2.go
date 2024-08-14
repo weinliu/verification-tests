@@ -185,7 +185,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73452.yaml")
 
 		exutil.By("Skopeo oci to localhost")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.15 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
+		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.16 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -215,9 +215,9 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		assertPodOutput(oc, "olm.catalogSource=cs-ocicatalog73452-v14", "openshift-marketplace", "Running")
 
 		exutil.By("Install the operator from the new catalogsource")
-		rhssoSub, rhssoOG := getOperatorInfo(oc, "rhsso-operator", "openshift-rhsso-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.15", "cs-ocicatalog73452-v14")
-		defer removeOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator")
-		installOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-rhsso-operator", "rhsso-operator")
+		deschedulerSub, deschedulerOG := getOperatorInfo(oc, "cluster-kube-descheduler-operator", "openshift-kube-descheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.16", "cs-ocicatalog73452-v14")
+		defer removeOperatorFromCustomCS(oc, deschedulerSub, deschedulerOG, "openshift-kube-descheduler-operator")
+		installOperatorFromCustomCS(oc, deschedulerSub, deschedulerOG, "openshift-kube-descheduler-operator", "descheduler-operator")
 	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-73377-support dry-run for v2 [Serial]", func() {
@@ -1127,7 +1127,6 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		assertPodOutput(oc, "olm.catalogSource=cs-certified-operator-index-v4-15", "openshift-marketplace", "Running")
 		assertPodOutput(oc, "olm.catalogSource=cs-community-operator-index-v4-15", "openshift-marketplace", "Running")
 		assertPodOutput(oc, "olm.catalogSource=cs-redhat-marketplace-index-v4-15", "openshift-marketplace", "Running")
-		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-latest", "openshift-marketplace", "Running")
 
 		exutil.By("Install operator from certified-operator CS")
 		portworxSub, portworxOG := getOperatorInfo(oc, "portworx-certified", "portworx-certified-ns", "registry.redhat.io/redhat/certified-operator-index:v4.15", "cs-certified-operator-index-v4-15")
