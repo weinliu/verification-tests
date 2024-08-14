@@ -256,7 +256,7 @@ func (s *splunkPodServer) deployCustomCertSplunk(oc *exutil.CLI) {
 	filePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "splunk")
 	secretTemplate := filepath.Join(filePath, "secret_tls_splunk_template.yaml")
 	if s.passphrase != "" {
-		secretTemplate = filepath.Join(filePath, "secret_tls_passphase_splunk_template.yaml")
+		secretTemplate = filepath.Join(filePath, "secret_tls_passphrase_splunk_template.yaml")
 	}
 	secret := resource{"secret", s.name, s.namespace}
 	if s.passphrase != "" {
@@ -308,7 +308,7 @@ func (s *splunkPodServer) deployCustomCertClientForceSplunk(oc *exutil.CLI) {
 	filePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "splunk")
 	secretTemplate := filepath.Join(filePath, "secret_tls_splunk_template.yaml")
 	if s.passphrase != "" {
-		secretTemplate = filepath.Join(filePath, "secret_tls_passphase_splunk_template.yaml")
+		secretTemplate = filepath.Join(filePath, "secret_tls_passphrase_splunk_template.yaml")
 	}
 	secret := resource{"secret", s.name, s.namespace}
 	if s.passphrase != "" {

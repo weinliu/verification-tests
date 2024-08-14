@@ -5,12 +5,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
@@ -39,7 +41,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			CLO.SubscribeOperator(oc)
 		})
 
-		g.It("CPaasrunOnly-Author:anli-High-54980-Vector forward logs to Splunk 9.0 over HTTP", func() {
+		g.It("Author:anli-CPaasrunOnly-High-54980-Vector forward logs to Splunk 9.0 over HTTP", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			sp := splunkPodServer{
@@ -93,7 +95,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-56248-vector forward logs to splunk 8.2 over TLS - SkipVerify", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-56248-vector forward logs to splunk 8.2 over TLS - SkipVerify", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -140,7 +142,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-56248",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_skipverify_template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk-serveronly.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -150,7 +152,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=https://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
+			clf.create(oc, "URL=https://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "SKIP_VERIFY=true")
 
 			g.By("create log producer")
 			oc.SetupProject()
@@ -162,7 +164,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Critical-54976-vector forward logs to splunk 9.0 over TLS - ServerOnly", func() {
+		g.It("Author:anli-CPaasrunOnly-Critical-54976-vector forward logs to splunk 9.0 over TLS - ServerOnly", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -205,7 +207,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-55976",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk-serveronly.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -227,7 +229,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(sp.allTypeLogsFound()).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-54978-vector forward logs to splunk 8.2 over TLS - Client Key Passphase", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-54978-vector forward logs to splunk 8.2 over TLS - Client Key Passphase", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -255,7 +257,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-54978",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk-mtls-passphrase.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -292,7 +294,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(sp.anyLogFound()).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-54979-vector forward logs to splunk 9.0 over TLS - ClientAuth", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-54979-vector forward logs to splunk 9.0 over TLS - ClientAuth", func() {
 			oc.SetupProject()
 			splunkProject := oc.Namespace()
 			keysPath := filepath.Join("/tmp/temp" + getRandomString())
@@ -319,7 +321,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-54979",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk-mtls.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -378,7 +380,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			CLO.SubscribeOperator(oc)
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-High-71028-Forward logs to Splunk index by setting indexName", func() {
+		g.It("Author:anli-CPaasrunOnly-High-71028-Forward logs to Splunk index by setting indexName", func() {
 			splunkProject := oc.Namespace()
 			sp := splunkPodServer{
 				namespace: splunkProject,
@@ -425,8 +427,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			exutil.By("check logs in splunk")
 			for _, logType := range []string{"application", "audit", "infrastructure"} {
-				o.Expect(sp.checkLogs("index=\""+indexName+"\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in "+indexName+" index")
-				r, e := sp.searchLogs("index=\"main\", log_type=\"" + logType + "\"")
+				o.Expect(sp.checkLogs("index=\""+indexName+"\" log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in "+indexName+" index")
+				r, e := sp.searchLogs("index=\"main\" log_type=\"" + logType + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in default index, this is not expected")
 			}
@@ -483,23 +485,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.namespace_name}}")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={.kubernetes.namespace_name||\"\"}")
 
 			exutil.By("check logs in splunk")
 			// not all of the projects in cluster have container logs, so here only check some of the projects
 			// container logs should only be stored in the index named as it's namespace name
 			for _, index := range []string{appProj, "openshift-cluster-version", "openshift-dns", "openshift-ingress", "openshift-monitoring"} {
 				o.Expect(sp.checkLogs("index=\""+index+"\"")).To(o.BeTrue(), "can't find logs in "+index+" index")
-				r, e := sp.searchLogs("index=\"" + index + "\", kubernetes.namespace_name!=\"" + index + "\"")
+				r, e := sp.searchLogs("index=\"" + index + "\" kubernetes.namespace_name!=\"" + index + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find logs from other namespaces in "+index+" index, this is not expected")
-				r, e = sp.searchLogs("index!=\"" + index + "\", kubernetes.namespace_name=\"" + index + "\"")
+				r, e = sp.searchLogs("index!=\"" + index + "\" kubernetes.namespace_name=\"" + index + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find logs from project "+index+" in other indexes, this is not expected")
 			}
 			// audit logs and journal logs should be stored in the default index, which is named main
 			for _, logType := range []string{"audit", "infrastructure"} {
-				o.Expect(sp.checkLogs("index=\"main\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in main index")
+				o.Expect(sp.checkLogs("index=\"main\" log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in main index")
 			}
 		})
 
@@ -524,7 +526,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer sp.destroy(oc)
 			sp.deploy(oc)
 
-			index := "multi-splunk-indexes-71031"
+			index := "multi_splunk-indexes_71031"
 			errIndex := sp.createIndexes(oc, index)
 			o.Expect(errIndex).NotTo(o.HaveOccurred())
 
@@ -547,7 +549,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.openshift.labels.test}}")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={.openshift.labels.test||\"\"}")
 			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "labels", "type": "openShiftLabels", "openShiftLabels": {"test": "` + index + `"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["labels"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			clf.waitForCollectorPodsReady(oc)
@@ -556,11 +558,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			time.Sleep(10 * time.Second)
 			exutil.By("check logs in splunk")
 			for _, logType := range []string{"infrastructure", "application", "audit"} {
-				o.Expect(sp.checkLogs("index=\""+index+"\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in "+index+" index")
+				o.Expect(sp.checkLogs("index=\""+index+"\" log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in "+index+" index")
 			}
 
 			for _, logType := range []string{"application", "infrastructure", "audit"} {
-				r, e := sp.searchLogs("index=\"main\", log_type=\"" + logType + "\"")
+				r, e := sp.searchLogs("index=\"main\" log_type=\"" + logType + "\"")
 				o.Expect(e).NotTo(o.HaveOccurred())
 				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in default index, this is not expected")
 			}
@@ -587,7 +589,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer sp.destroy(oc)
 			sp.deploy(oc)
 
-			index := "logging-OCP-71035"
+			index := "logging-OCP_71035"
 			errIndex := sp.createIndexes(oc, index)
 			o.Expect(errIndex).NotTo(o.HaveOccurred())
 
@@ -611,7 +613,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.labels.\"test.logging.io/logging.qe-test-label\"}}")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={.kubernetes.labels.\"test.logging.io/logging.qe-test-label\"||\"\"}")
 
 			exutil.By("check logs in splunk")
 			// logs from project appProj should be stored in 'logging-OCP-71035', other logs should be in default index
@@ -631,7 +633,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-High-71322-Logs should be forwarded to Splunk default index when indexKey is missing from a log.", func() {
+		g.It("Author:anli-CPaasrunOnly-High-75234-logs fallback to default splunk index if template syntax can not be found", func() {
 			exutil.By("create log producer")
 			appProj := oc.Namespace()
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -651,6 +653,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("Deploy splunk")
 			defer sp.destroy(oc)
 			sp.deploy(oc)
+			o.Expect(sp.createIndexes(oc, appProj)).NotTo(o.HaveOccurred())
+			o.Expect(sp.createIndexes(oc, "openshift-operator-lifecycle-manager")).NotTo(o.HaveOccurred())
 
 			clfSecret := toSplunkSecret{
 				name:      "splunk-secret-71322",
@@ -672,18 +676,34 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.non_existing.key}}")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={.kubernetes.namespace_name||\"main\"}")
 
-			exutil.By("check logs in splunk")
-			for _, logType := range []string{"audit", "infrastructure", "application"} {
-				o.Expect(sp.checkLogs("index=\"main\", log_type=\""+logType+"\"")).To(o.BeTrue(), "can't find "+logType+" logs in main index")
-				r, e := sp.searchLogs("index!=\"main\", log_type=\"" + logType + "\"")
-				o.Expect(e).NotTo(o.HaveOccurred())
-				o.Expect(len(r.Results) == 0).Should(o.BeTrue(), "find "+logType+" logs in other index, this is not expected")
+			exutil.By("verify logs can are found in namespace_name index")
+			allFound := true
+			for _, logIndex := range []string{appProj, "openshift-operator-lifecycle-manager"} {
+				if sp.checkLogs("index=" + logIndex) {
+					e2e.Logf("found logs in index " + logIndex)
+				} else {
+					e2e.Logf("can not find logs in index " + logIndex)
+					allFound = false
+				}
 			}
+			o.Expect(allFound).To(o.BeTrue(), "can't find some logs in namespace_name index ")
+
+			exutil.By("verify infra and audit logs are send to main index")
+			allFound = true
+			for _, logType := range []string{"audit", "infrastructure"} {
+				if sp.checkLogs(`index="main" log_type="` + logType + `"`) {
+					e2e.Logf("found logs %s in index main " + logType)
+				} else {
+					e2e.Logf("Can not find logs %s in index main " + logType)
+					allFound = false
+				}
+			}
+			o.Expect(allFound).To(o.BeTrue(), "can't find some type of logs in main index")
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Critical-68303-mCLF Inputs.receiver.http multiple Inputs.receivers to splunk", func() {
+		g.It("Author:anli-CPaasrunOnly-Critical-68303-mCLF Inputs.receiver.http multiple Inputs.receivers to splunk", func() {
 			clfNS := oc.Namespace()
 			splunkProject := clfNS
 
@@ -716,7 +736,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "http-to-splunk",
 				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_httpservers_to-splunk_template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "httpserver-to-splunk.yaml"),
 				secretName:                clfSecret.name,
 				serviceAccountName:        "clf-" + getRandomString(),
 				waitForPodReady:           true,
@@ -736,7 +756,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(sp.auditLogFound()).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-Medium-71051-ClusterLogForwarder input validation testing.", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-75386-ClusterLogForwarder input validation testing.", func() {
 			splunkProject := oc.Namespace()
 			sp := splunkPodServer{
 				namespace: splunkProject,
@@ -751,12 +771,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sp.deploy(oc)
 
 			clfSecret := toSplunkSecret{
-				name:      "splunk-secret-71051",
+				name:      "splunk-secret-75386",
 				namespace: splunkProject,
 				hecToken:  sp.hecToken,
 			}
 			clf := clusterlogforwarder{
-				name:                      "clf-71051",
+				name:                      "clf-75386",
 				namespace:                 splunkProject,
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
@@ -770,26 +790,36 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clfSecret.delete(oc)
 			clfSecret.create(oc)
 			defer clf.delete(oc)
-			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={{.kubernetes.non_existing.key}}")
+			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={.kubernetes.non_existing.key||\"\"}")
 
 			exutil.By("update CLF to set invalid glob for namespace")
-			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "application": {"excludes": [{"namespace":"invalid-name@"}],"includes": [{"namespace":"tes*t"}]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
+			patch := `[{"op":"add","path":"/spec/inputs","value":[{"name":"new-app","type":"application","application":{"excludes":[{"namespace":"invalid-name@"}],"includes":[{"namespace":"tes*t"}]}}]},{"op":"replace","path":"/spec/pipelines/0/inputRefs","value":["new-app"]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "invalid glob for namespace excludes", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputs.new-app[0].message}"})
+			checkResource(oc, true, false, "globs must match", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputsStatus[0].message}"})
 
 			exutil.By("update CLF to set invalid sources for infrastructure logs")
-			patch = `[{"op": "replace", "path": "/spec/inputs", "value": [{"name": "selected-infra", "infrastructure": {"sources": ["nodesd","containersf"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-infra"]}]`
-			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "infrastructure inputs must define at least one valid source: container,node", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputs.selected-infra[0].message}"})
+			patch = `[{"op":"replace","path":"/spec/inputs","value":[{"name":"selected-infra","type":"infrastructure","infrastructure":{"sources":["nodesd","containersf"]}}]},{"op":"replace","path":"/spec/pipelines/0/inputRefs","value":["selected-infra"]}]`
+			outString, _ := clf.patch(oc, patch)
+			o.Expect(strings.Contains(outString, `The ClusterLogForwarder "clf-75386" is invalid`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `Unsupported value: "nodesd": supported values: "container", "node"`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `Unsupported value: "containersf": supported values: "container", "node"`)).To(o.BeTrue())
 
 			exutil.By("update CLF to set invalid sources for audit logs")
-			patch = `[{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-audit"]},{"op": "replace", "path": "/spec/inputs", "value": [{"name": "selected-audit", "audit": {"sources": ["nodess","containersf"]}}]}]`
-			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "infrastructure inputs must define at least one valid source: auditd,kubeAPI,openshiftAPI,ovn", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputs.selected-audit[0].message}"})
+			patch = `[{"op":"replace","path":"/spec/pipelines/0/inputRefs","value":["selected-audit"]},{"op":"replace","path":"/spec/inputs","value":[{"name":"selected-audit","type":"audit","audit":{"sources":["nodess","containersf"]}}]}]`
+			outString, _ = clf.patch(oc, patch)
+			o.Expect(strings.Contains(outString, `The ClusterLogForwarder "clf-75386" is invalid`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `Unsupported value: "nodess": supported values: "auditd", "kubeAPI", "openshiftAPI", "ovn"`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `Unsupported value: "containersf": supported values: "auditd", "kubeAPI", "openshiftAPI", "ovn"`)).To(o.BeTrue())
 
+			exutil.By("update CLF to use string as matchExpressions values")
+			patch = `[{"op":"replace","path":"/spec/inputs/0/application","value":{"selector":{"matchExpressions":[{"key":"test.logging.io/logging.qe-test-label","operator":"Exists","values":"logging-71749-test-1"}]}}}]`
+			outString, _ = clf.patch(oc, patch)
+			o.Expect(strings.Contains(outString, `The ClusterLogForwarder "clf-75386" is invalid`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `spec.inputs[0].application.selector.matchExpressions[0].values: Invalid value: "string"`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `spec.inputs[0].application.selector.matchExpressions[0].values in body must be of type array: "string"`)).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-Medium-71751-CLF should be rejected and show error message if the filters are invalid", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-75390-CLF should be rejected and show error message if the filters are invalid", func() {
 			splunkProject := oc.Namespace()
 			sp := splunkPodServer{
 				namespace: splunkProject,
@@ -804,14 +834,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sp.deploy(oc)
 
 			clfSecret := toSplunkSecret{
-				name:      "splunk-secret-71051",
+				name:      "splunk-secret-75390",
 				namespace: splunkProject,
 				hecToken:  sp.hecToken,
 			}
 			clf := clusterlogforwarder{
-				name:                      "clf-71051",
+				name:                      "clf-75390",
 				namespace:                 splunkProject,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf_to-splunk_template.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "splunk.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -825,35 +855,40 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clf.delete(oc)
 			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name)
 
-			exutil.By("Update CLF to set invalid filters")
-			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "prune-logs", "type": "prune", "prune": {"in": [".kubernetes.namespace_labels.pod-security.kubernetes.io/audit",".file",".kubernetes.annotations"]}}]},
-		{"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["prune-logs"]}]`
-			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, `[".kubernetes.namespace_labels.pod-security.kubernetes.io/audit" must be a valid dot delimited path expression (.kubernetes.container_name or .kubernetes."test-foo")]`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+			exutil.By("verfy clf without drop spec is rejected")
+			patch := `[{"op":"add","path":"/spec/filters","value":[{"name":"drop-logs","type":"drop"}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["drop-logs"]}]`
+			outString, _ := clf.patch(oc, patch)
+			o.Expect(strings.Contains(outString, `The ClusterLogForwarder "clf-75390" is invalid:`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `invalid: spec.filters[0]: Invalid value: "object": Additional type specific spec is required for the filter type`)).To(o.BeTrue())
 
-			exutil.By("Update CLF to prune fields .log_type and .message")
-			patch = `[{"op": "replace", "path": "/spec/filters/0/prune/in", "value": [".log_type",".message",".kubernetes.annotations"]}]`
-			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "[\".log_type\" \".message\"] is/are required fields and must be removed from the `in` list.", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+			exutil.By("verfy clf with invalid drop fileds is rejected")
+			patch = `[{"op":"add","path":"/spec/filters","value":[{"name":"drop-logs","type":"drop","drop":[{"test":[{"field":".kubernetes.labels.test.logging.io/logging.qe-test-label","matches":".+"}]}]}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["drop-logs"]}]`
+			outString, _ = clf.patch(oc, patch)
+			o.Expect(strings.Contains(outString, `The ClusterLogForwarder "clf-75390" is invalid:`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `spec.filters[0].drop[0].test[0].field: Invalid value: ".kubernetes.labels.test.logging.io/logging.qe-test-label"`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `spec.filters[0].drop[0].test[0].field in body should match '^(\.[a-zA-Z0-9_]+|\."[^"]+")(\.[a-zA-Z0-9_]+|\."[^"]+")*$`)).To(o.BeTrue())
 
-			patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".kubernetes",".hostname",."@timestamp"]}}]`
-			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "[[\".log_type\" \".message\"] is/are required fields and must be included in the `notIn` list.]", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+			exutil.By("verify CLF without prune spec is rejected")
+			patch = `[{"op":"add","path":"/spec/filters", "value": [{"name": "prune-logs", "type": "prune"}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["prune-logs"]}]`
+			outString, _ = clf.patch(oc, patch)
+			o.Expect(strings.Contains(outString, `The ClusterLogForwarder "clf-75390" is invalid:`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, ` Invalid value: "object": Additional type specific spec is required for the filter type`)).To(o.BeTrue())
 
-			patch = `[{"op": "replace", "path": "/spec/filters", "value": [{"name": "prune-logs", "type": "prune"}]}]`
-			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "prune filter must have one or both of `in`, `notIn`", []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filters.prune-logs[0].message}"})
+			exutil.By("verify CLF with invalid prune value is rejected")
+			patch = `[{"op":"add","path":"/spec/filters","value":[{"name":"prune-logs","type":"prune","prune":{"in":[".kubernetes.namespace_labels.pod-security.kubernetes.io/audit",".file",".kubernetes.annotations"]}}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["prune-logs"]}]`
+			outString, _ = clf.patch(oc, patch)
+			o.Expect(strings.Contains(outString, `The ClusterLogForwarder "clf-75390" is invalid:`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `Invalid value: ".kubernetes.namespace_labels.pod-security.kubernetes.io/audit"`)).To(o.BeTrue())
+			o.Expect(strings.Contains(outString, `body should match '^(\.[a-zA-Z0-9_]+|\."[^"]+")(\.[a-zA-Z0-9_]+|\."[^"]+")*$'`)).To(o.BeTrue())
 
-			exutil.By("Check filter validation for drop")
-			patch = `[{"op": "replace", "path": "/spec/filters", "value": [{"name": "drop-logs", "type": "drop", "drop": [{"test": [{"field": ".kubernetes.labels.test.logging.io/logging.qe-test-label", "matches": ".+"}]}]}]}, {"op": "replace", "path": "/spec/pipelines/0/filterRefs", "value": ["drop-logs"]}]`
+			exutil.By("verify filtersStatus show error when prune fields include .log_type or .message")
+			patch = `[{"op":"add","path":"/spec/filters","value":[{"name":"prune-logs","prune":{"in":[".log_type",".message"]},"type":"prune"}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["prune-logs"]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, `[".kubernetes.labels.test.logging.io/logging.qe-test-label" must be a valid dot delimited path expression (.kubernetes.container_name or .kubernetes."test-foo")]`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, `-ojsonpath={.status.filters.drop-logs\:\ test\[0\][0].message}`})
-
-			patch = `[{"op": "replace", "path": "/spec/filters", "value": [{"name": "drop-logs", "type": "drop"}]}]`
+			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be removed from the`+" `in` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filtersStatus[0].message}"})
+			patch = `[{"op":"replace","path":"/spec/filters","value":[{"name":"prune-logs","prune":{"notIn":[".kubernetes",".\"@timestamp\"",".openshift",".hostname"]},"type":"prune"}]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, `drop filter must have at least one test spec'd`, []string{"clusterlogforwarder", clf.name, "-n", clf.namespace, `-ojsonpath={.status.filters.drop-logs[0].message}`})
+			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be included in`+" the `notIn` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filtersStatus[0].message}"})
 
 		})
-
 	})
 })

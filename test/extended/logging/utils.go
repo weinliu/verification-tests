@@ -779,6 +779,14 @@ func (clf *clusterlogforwarder) update(oc *exutil.CLI, template string, patches 
 	}
 }
 
+// patch existing clusterlogforwarder CR and return the output,
+// return patch_output and error
+func (clf *clusterlogforwarder) patch(oc *exutil.CLI, patch_string string) (string, error) {
+	parameters := []string{"clusterlogforwarders.observability.openshift.io/" + clf.name, "-n", clf.namespace, "-p"}
+	parameters = append(parameters, patch_string, "--type=json")
+	return oc.AsAdmin().WithoutNamespace().Run("patch").Args(parameters...).Output()
+}
+
 // delete the clusterlogforwarder CR
 func (clf *clusterlogforwarder) delete(oc *exutil.CLI) {
 	err := resource{"clusterlogforwarders.observability.openshift.io", clf.name, clf.namespace}.clear(oc)
