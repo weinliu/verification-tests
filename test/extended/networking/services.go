@@ -1635,5 +1635,120 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		}
 		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
 	})
+	g.It("Author:asood-Medium-75424-SessionAffinity does not work after scaling down the Pods", func() {
+		//Bug: https://issues.redhat.com/browse/OCPBUGS-28604
+		var (
+			buildPruningBaseDir        = exutil.FixturePath("testdata", "networking")
+			servicesBaseDir            = exutil.FixturePath("testdata", "networking/services")
+			pingPodTemplate            = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			sessionAffinitySvcTemplate = filepath.Join(servicesBaseDir, "sessionaffinity-svc-template.yaml")
+			customResponsePodTemplate  = filepath.Join(servicesBaseDir, "custom-response-pod-template.yaml")
+			labelKey                   = "name"
+			labelVal                   = "openshift"
+			testID                     = "75424"
+			curlCmdList                = []string{}
+		)
+
+		ns := oc.Namespace()
+
+		exutil.By(fmt.Sprintf("Create pods that will serve as the endpoints for Session Affinity enabled service in %s project", ns))
+		customResponsePod := customResponsePodResource{
+			name:        " ",
+			namespace:   ns,
+			labelKey:    labelKey,
+			labelVal:    labelVal,
+			responseStr: " ",
+			template:    customResponsePodTemplate,
+		}
+		for i := 0; i < 3; i++ {
+			customResponsePod.name = "hello-pod-" + strconv.Itoa(i)
+			customResponsePod.responseStr = "Hello from " + customResponsePod.name
+			customResponsePod.createCustomResponsePod(oc)
+			waitPodReady(oc, ns, customResponsePod.name)
+		}
+
+		exutil.By(fmt.Sprintf("Create a test pod in %s", ns))
+		testPod := pingPodResource{
+			name:      "test-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		testPod.createPingPod(oc)
+		waitPodReady(oc, ns, testPod.name)
+
+		svc := sessionAffinityServiceResource{
+			name:           " ",
+			namespace:      ns,
+			ipFamilyPolicy: " ",
+			selLabelKey:    labelKey,
+			SelLabelVal:    labelVal,
+			template:       sessionAffinitySvcTemplate,
+		}
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By(fmt.Sprintf("Create a service with session affinity enabled on %s cluster", ipStackType))
+		if ipStackType == "dualstack" {
+			svc.name = "dualstacksvc-" + testID
+			svc.ipFamilyPolicy = "PreferDualStack"
+			defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+			svc.createSessionAffiniltyService(oc)
+			svcOutput, svcErr := oc.AsAdmin().Run("get").Args("service", "-n", svc.namespace).Output()
+			o.Expect(svcErr).NotTo(o.HaveOccurred())
+			o.Expect(svcOutput).To(o.ContainSubstring(svc.name))
+			serviceIPv6, serviceIPv4 := getSvcIP(oc, svc.namespace, svc.name)
+			curlCmdList = append(curlCmdList, fmt.Sprintf("curl %s:8080 --connect-timeout 5", serviceIPv4))
+			curlCmdList = append(curlCmdList, fmt.Sprintf("curl -g -6 [%s]:8080 --connect-timeout 5", serviceIPv6))
+
+		} else {
+			svc.ipFamilyPolicy = "SingleStack"
+			svc.name = "singlestack-" + ipStackType + "-svc-" + testID
+			defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+			svc.createSessionAffiniltyService(oc)
+			svcOutput, svcErr := oc.AsAdmin().Run("get").Args("service", "-n", svc.namespace).Output()
+			o.Expect(svcErr).NotTo(o.HaveOccurred())
+			o.Expect(svcOutput).To(o.ContainSubstring(svc.name))
+
+			if ipStackType == "ipv6single" {
+				serviceIPv6, _ := getSvcIP(oc, svc.namespace, svc.name)
+				curlCmdList = append(curlCmdList, fmt.Sprintf("curl -g -6 [%s]:8080 --connect-timeout 5", serviceIPv6))
+			} else {
+				serviceIPv4 := getSvcIPv4(oc, svc.namespace, svc.name)
+				curlCmdList = append(curlCmdList, fmt.Sprintf("curl %s:8080 --connect-timeout 5", serviceIPv4))
+			}
+		}
+
+		for _, curlCmd := range curlCmdList {
+			exutil.By(fmt.Sprintf("Test session affinity using request '%s' cluster", curlCmd))
+			e2e.Logf("Send first request to service")
+			firstResponse1, requestErr := e2eoutput.RunHostCmd(ns, testPod.name, curlCmd)
+			o.Expect(requestErr).NotTo(o.HaveOccurred())
+			e2e.Logf("Request response: %s", firstResponse1)
+			for i := 0; i < 9; i++ {
+				requestResp, requestErr := e2eoutput.RunHostCmd(ns, testPod.name, curlCmd)
+				o.Expect(requestErr).NotTo(o.HaveOccurred())
+				o.Expect(strings.Contains(requestResp, firstResponse1)).To(o.BeTrue())
+
+			}
+			e2e.Logf("Find the pod serving request and delete it")
+			respStr := strings.Split(strings.TrimRight(firstResponse1, "\n"), " ")
+			o.Expect(len(respStr)).To(o.BeEquivalentTo(3))
+			o.Expect(respStr[2]).NotTo(o.BeEmpty())
+			removeResource(oc, true, true, "pod", respStr[2], "-n", ns)
+
+			e2e.Logf(fmt.Sprintf("Send first request to service after deleting the previously serving pod %s", respStr[2]))
+			firstResponse2, requestErr := e2eoutput.RunHostCmd(ns, testPod.name, curlCmd)
+			o.Expect(requestErr).NotTo(o.HaveOccurred())
+			e2e.Logf("Request response: %s", firstResponse2)
+			o.Expect(strings.Contains(firstResponse2, firstResponse1)).To(o.BeFalse())
+			for i := 0; i < 9; i++ {
+				requestResp, requestErr := e2eoutput.RunHostCmd(ns, testPod.name, curlCmd)
+				o.Expect(requestErr).NotTo(o.HaveOccurred())
+				o.Expect(strings.Contains(requestResp, firstResponse2)).To(o.BeTrue())
+
+			}
+
+		}
+
+	})
 
 })

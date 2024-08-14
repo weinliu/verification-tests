@@ -3972,3 +3972,58 @@ func forceRebootNode(oc *exutil.CLI, nodeName string) {
 	waitForNetworkOperatorState(oc, 100, 10, "True.*True.*False")
 	waitForNetworkOperatorState(oc, 100, 10, "True.*False.*False")
 }
+
+// Create resources in the specified namespace from the file (not template) that is expected to fail
+func createResourceFromFileWithError(oc *exutil.CLI, ns, file string) error {
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "-n", ns).Execute()
+	return err
+}
+
+// Struct to create pod with customized response
+type customResponsePodResource struct {
+	name        string
+	namespace   string
+	labelKey    string
+	labelVal    string
+	responseStr string
+	template    string
+}
+
+func (pod *customResponsePodResource) createCustomResponsePod(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
+			"LABELKEY="+pod.labelKey, "LABELVAL="+pod.labelVal,
+			"RESPONSESTR="+pod.responseStr)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try again...", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create pod %s due to %v", pod.name, err))
+}
+
+// Struct to create service with session ability
+type sessionAffinityServiceResource struct {
+	name           string
+	namespace      string
+	ipFamilyPolicy string
+	selLabelKey    string
+	SelLabelVal    string
+	template       string
+}
+
+func (svc *sessionAffinityServiceResource) createSessionAffiniltyService(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", svc.template, "-p", "NAME="+svc.name, "NAMESPACE="+svc.namespace,
+			"IPFAMILYPOLICY="+svc.ipFamilyPolicy, "SELLABELKEY="+svc.selLabelKey, "SELLABELVAL="+svc.SelLabelVal)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try again...", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create pservice %s due to %v", svc.name, err))
+}
+
+//

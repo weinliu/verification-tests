@@ -1894,5 +1894,14 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		CurlPod2PodFail(oc, ns, "hello-pod", testNs, helloPodName)
 
 	})
+	g.It("Author:asood-Low-75540-Network Policy Validation", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/netpol-30920-75540.yaml")
+		)
+		exutil.By("OCPBUGS-30920 Verify the network policy is not created with invalid value")
+		ns := oc.Namespace()
+		o.Expect(createResourceFromFileWithError(oc, ns, networkPolicyFile)).To(o.HaveOccurred())
+	})
 
 })
