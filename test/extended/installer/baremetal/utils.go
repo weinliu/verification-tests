@@ -336,3 +336,57 @@ func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int) error {
 	}
 	return errNode
 }
+
+func buildFirmwareURL(vendor, currentVersion string) (string, string) {
+	var url, fileName string
+
+	iDRAC_7060 := "https://dl.dell.com/FOLDER10774694M/1/iDRAC_7.00.60.00_A00.exe"
+	iDRAC_7030 := "https://dl.dell.com/FOLDER10452580M/1/iDRAC_7.00.30.00_A00.exe"
+	ilo5_305 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v247527/ilo5_305.fwpkg"
+	ilo5_302 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v243854/ilo5_302.fwpkg"
+	ilo6_157 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v247531/ilo6_160.fwpkg"
+	ilo6_160 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v243858/ilo6_157.fwpkg"
+
+	switch vendor {
+	case "Dell Inc.":
+		fileName = "firmimgFIT.d9"
+		if currentVersion == "7.00.30.00" {
+			url = iDRAC_7060
+		} else if currentVersion == "7.00.60.00" {
+			url = iDRAC_7030
+		} else {
+			url = iDRAC_7060 // Default to 7.00.60.00
+		}
+	case "HPE":
+		// Extract the iLO version and assign the file name accordingly
+		if strings.Contains(currentVersion, "iLO 5") {
+			if currentVersion == "iLO 5 v3.05" {
+				url = ilo5_302
+				fileName = "ilo5_302.bin"
+			} else if currentVersion == "iLO 5 v3.02" {
+				url = ilo5_305
+				fileName = "ilo5_305.bin"
+			} else {
+				url = ilo5_305 // Default to v3.05
+				fileName = "ilo5_305.bin"
+			}
+		} else if strings.Contains(currentVersion, "iLO 6") {
+			if currentVersion == "iLO 6 v1.57" {
+				url = ilo6_160
+				fileName = "ilo6_160.bin"
+			} else if currentVersion == "iLO 6 v1.60" {
+				url = ilo6_157
+				fileName = "ilo6_157.bin"
+			} else {
+				url = ilo6_157 // Default to 1.57
+				fileName = "ilo6_157.bin"
+			}
+		} else {
+			g.Skip("Unsupported HPE BMC version")
+		}
+	default:
+		g.Skip("Unsupported vendor")
+	}
+
+	return url, fileName
+}
