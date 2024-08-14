@@ -6197,6 +6197,7 @@ metadata:
 			alertTimeCriticalExt = "3h"
 			severity             = []string{"critical", "critical"}
 			severityExtended     = []string{"warning", "warning"}
+			timeSleep            = 900
 		)
 		exutil.By("1. Check cluster with the following changes for existing alerts " + alertBudget + " have been applied.")
 		output, alertBasicErr := getResource(oc, asAdmin, withoutNamespace, "prometheusrule/kube-apiserver-slos-basic", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-basic")].rules[?(@.alert=="`+alertBudget+`")].labels.severity}'`)
@@ -6235,24 +6236,29 @@ metadata:
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Master node is %v : ", masterNode)
-		cmd := `ls /sys/class/net |grep -oP '^(ens|eth)\w+'`
+		cmd := `for iface in $(ls /sys/class/net | grep -oP '^(env|ens|eth)\w+'); do ip link show $iface | grep -q 'master' && echo "$iface" || true; done`
 		ethName, ethErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(ethErr).NotTo(o.HaveOccurred())
 		ethName = strings.TrimSpace(ethName)
 		o.Expect(ethName).ShouldNot(o.BeEmpty())
 		e2e.Logf("Found Ethernet :: %v", ethName)
+
 		e2e.Logf("Simulating network conditions: 50% packet loss on the master node")
-		defer func() {
-			cmd := fmt.Sprintf(`sudo tc qdisc del dev %s root`, ethName)
-			_, tcpErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
-			o.Expect(tcpErr).NotTo(o.HaveOccurred())
+		channel := make(chan string)
+		go func() {
+			defer g.GinkgoRecover()
+			cmdStr := fmt.Sprintf(`tc qdisc add dev %s root netem loss 50%%; sleep %v; tc qdisc del dev %s root`, ethName, timeSleep, ethName)
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", fmt.Sprintf("nodes/%s", masterNode), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Output()
+			e2e.Logf("Output:%s", output)
+			channel <- output
 		}()
-		cmd = fmt.Sprintf(`sudo tc qdisc add dev %s root netem loss 50%%`, ethName)
-		_, tcpErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
-		o.Expect(tcpErr).NotTo(o.HaveOccurred())
+		defer func() {
+			receivedMsg := <-channel
+			e2e.Logf("ReceivedMsg:%s", receivedMsg)
+		}()
 
 		e2e.Logf("Check alert " + alertBudget + " firing/pending")
-		errWatcher := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 500*time.Second, false, func(cxt context.Context) (bool, error) {
+		errWatcher := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeSleep)*time.Second, false, func(cxt context.Context) (bool, error) {
 			alertOutput, _ := GetAlertsByName(oc, alertBudget)
 			alertName := gjson.Parse(alertOutput).String()
 			alertOutputWarning1 := gjson.Get(alertName, `data.alerts.#(labels.alertname=="`+alertBudget+`")#`).String()
@@ -6370,7 +6376,7 @@ metadata:
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Master node is %v : ", masterNode)
-		cmd := `ls /sys/class/net |grep -oP '^(ens|eth)\w+'`
+		cmd := `for iface in $(ls /sys/class/net | grep -oP '^(env|ens|eth)\w+'); do ip link show $iface | grep -q 'master' && echo "$iface" || true; done`
 		ethName, ethErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(ethErr).NotTo(o.HaveOccurred())
 		ethName = strings.TrimSpace(ethName)
@@ -6380,6 +6386,7 @@ metadata:
 		e2e.Logf("Add latency to network on the master node")
 		channel := make(chan string)
 		go func() {
+			defer g.GinkgoRecover()
 			cmdStr := fmt.Sprintf(`tc qdisc add dev %s root netem delay 2000ms; sleep %v; tc qdisc del dev %s root`, ethName, timeSleep, ethName)
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", fmt.Sprintf("nodes/%s", masterNode), "--", "chroot", "/host", "/bin/bash", "-c", cmdStr).Output()
 			e2e.Logf("Output:%s", output)

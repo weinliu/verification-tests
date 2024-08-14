@@ -1679,7 +1679,7 @@ func clusterSanityCheck(oc *exutil.CLI) error {
 		}
 	}
 
-	errDeleteProj := oc.WithoutNamespace().Run("delete").Args("project", project_ns, "--ignore-not-found").Execute()
+	errDeleteProj := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", project_ns, "--ignore-not-found").Execute()
 	if errDeleteProj != nil {
 		e2e.Logf("Error deleting project %s: %s", project_ns, errDeleteProj.Error())
 	}
