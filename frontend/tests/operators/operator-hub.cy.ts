@@ -91,7 +91,6 @@ describe('Operator Hub tests', () => {
     operatorHubPage.checkDeprecationIcon().should('have.length', 2);
     operatorHubPage.cancel();
 
->>>>>>> update OCP-74621
     const operator_name_kiali = 'kiali';
     const operator_csv_name = 'Kiali Community Operator';
     const deprecated_channel_kiali = 'alpha';
