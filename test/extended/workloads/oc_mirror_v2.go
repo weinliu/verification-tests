@@ -1359,4 +1359,70 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		}
 
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-75117-support to set max-parallel-downloads for v2 [Serial]", func() {
+		dirname := "/tmp/case75117"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-75117-1.yaml")
+		imageSetYamlFileS := filepath.Join(ocmirrorBaseDir, "config-75117-2.yaml")
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.16 oci://%s --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson"))
+
+		exutil.By("Start m2d with max-parallel-downloads")
+		waitErr := wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--max-parallel-downloads=50", "--authfile", dirname+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed")
+
+		exutil.By("Start d2m with max-parallel-downloads")
+		waitErr = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName+"/maxparallel", "--v2", "--max-parallel-downloads=100", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror still failed")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileS, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--max-parallel-downloads=150", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+
+		exutil.By("Negative test for max-parallel-downloads")
+		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileS, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--max-parallel-downloads=abdedf", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		e2e.Logf("The out error is %v", outErr)
+		o.Expect(strings.Contains(outErr, "invalid argument")).To(o.BeTrue())
+	})
 })
