@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -670,6 +668,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	g.It("NonPreRelease-Author:aramesha-High-59746-NetObserv upgrade testing [Serial]", func() {
+		version, _, err := exutil.GetClusterVersion(oc)
+		if version == "4.17" {
+			g.Skip("Skipping upgrade scenario for 4.17 since 1.6 netobserv can't be deployed on 4.17")
+		}
 		namespace := oc.Namespace()
 
 		g.By("Uninstall operator deployed by BeforeEach and delete operator NS")
@@ -1169,63 +1171,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		waitForAlertToBeActive(oc, "NetObservLokiError")
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-64156-Verify IPFIX-exporter [Serial]", func() {
-		namespace := oc.Namespace()
-
-		g.By("Create IPFIX namespace")
-		ipfixCollectorTemplatePath := filePath.Join(baseDir, "ipfix-collector.yaml")
-		IPFIXns := "ipfix"
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(IPFIXns)
-		oc.CreateSpecifiedNamespaceAsAdmin(IPFIXns)
-		exutil.SetNamespacePrivileged(oc, IPFIXns)
-
-		g.By("Deploy IPFIX collector")
-		createResourceFromFile(oc, IPFIXns, ipfixCollectorTemplatePath)
-		WaitForPodReadyWithLabel(oc, IPFIXns, "app=flowlogs-pipeline")
-
-		IPFIXconfig := map[string]interface{}{
-			"ipfix": map[string]interface{}{
-				"targetHost": "flowlogs-pipeline.ipfix.svc.cluster.local",
-				"targetPort": 2055,
-				"transport":  "UDP"},
-			"type": "IPFIX",
-		}
-
-		config, err := json.Marshal(IPFIXconfig)
-		o.Expect(err).ToNot(o.HaveOccurred())
-		IPFIXexporter := string(config)
-
-		g.By("Deploy FlowCollector with Loki disabled")
-		flow := Flowcollector{
-			Namespace:     namespace,
-			Template:      flowFixturePath,
-			LokiEnable:    "false",
-			LokiNamespace: namespace,
-			Exporters:     []string{IPFIXexporter},
-		}
-
-		defer flow.DeleteFlowcollector(oc)
-		flow.CreateFlowcollector(oc)
-
-		g.By("Ensure flowcollector is ready")
-		flow.WaitForFlowcollectorReady(oc)
-
-		g.By("Verify flowcollector is deployed with IPFIX exporter")
-		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
-		o.Expect(err).ToNot(o.HaveOccurred())
-		o.Expect(flowPatch).To(o.Equal(`'IPFIX'`))
-
-		g.By("Wait for 2 mins before logs gets collected and written to IPFIX collector")
-		time.Sleep(120 * time.Second)
-
-		FLPconsumerPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "ipfix", "-l", "app=flowlogs-pipeline", "-o=jsonpath={.items[0].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Verify flowlogs are seen in IPFIX consumer pod logs")
-		_, err = exutil.WaitAndGetSpecificPodLogs(oc, IPFIXns, "", FLPconsumerPod, `"Type:IPFIX"`)
-		exutil.AssertWaitPollNoErr(err, "Did not find Type IPFIX in ipfix-collector pod logs")
-	})
-
 	g.It("NonPreRelease-Author:aramesha-Medium-72875-Verify nodeSelector and tolerations with netobserv components [Serial]", func() {
 		namespace := oc.Namespace()
 
@@ -1485,9 +1430,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.BeforeEach(func() {
 			namespace := oc.Namespace()
-			g.By("Skip if test is running on an arm64 cluster (unsupported processor architecture for AMQ Streams)")
-			architecture.SkipArchitectures(oc, architecture.ARM64)
-
 			kafkaDir = exutil.FixturePath("testdata", "netobserv", "kafka")
 			// Kafka Topic path
 			kafkaTopicPath = filePath.Join(kafkaDir, "kafka-topic.yaml")

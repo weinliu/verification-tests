@@ -47,13 +47,16 @@ func getMetric(oc *exutil.CLI, query string) ([]metric, error) {
 	bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	promRoute := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s")
 	res, err := queryPrometheus(promRoute, query, bearerToken)
+	if err != nil {
+		return []metric{}, err
+	}
 	attempts := 10
 	for len(res.Data.Result) == 0 && attempts > 0 {
+		time.Sleep(5 * time.Second)
+		res, err = queryPrometheus(promRoute, query, bearerToken)
 		if err != nil {
 			return []metric{}, err
 		}
-		time.Sleep(5 * time.Second)
-		res, err = queryPrometheus(promRoute, query, bearerToken)
 		attempts--
 	}
 	errMsg := fmt.Sprintf("0 results returned for query %s", query)

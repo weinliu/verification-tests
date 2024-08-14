@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -496,4 +497,31 @@ func checkResourceExists(oc *exutil.CLI, resource, name, ns string) (bool, error
 		return true, nil
 	}
 	return false, nil
+}
+
+// get pod logs absolute path
+func getPodLogs(oc *exutil.CLI, namespace, podname string) (string, error) {
+	cargs := []string{"-n", namespace, podname}
+	var podLogs string
+	var err error
+
+	// add polling as logs could be rotated
+	err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+		podLogs, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(cargs...).OutputToFile("podLogs.txt")
+
+		if err != nil {
+			e2e.Logf("unable to get the pod (%s) logs", podname)
+			return false, err
+		}
+		podLogsf, err := os.Stat(podLogs)
+
+		if err != nil {
+			return false, err
+		}
+		return podLogsf.Size() > 0, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s pod logs were not collected", podname))
+
+	e2e.Logf("pod logs file is %s", podLogs)
+	return filepath.Abs(podLogs)
 }
