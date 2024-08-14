@@ -1343,4 +1343,46 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		exutil.AssertWaitPollNoErr(connectErr, fmt.Sprintf("Connection to %s did not succeed!", url))
 	})
 
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-75613-Should be able to access applications when client ephemeral port is 22623 or 22624", func() {
+		// https://issues.redhat.com/browse/OCPBUGS-37541
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+		)
+		g.By("Get new namespace")
+		ns1 := oc.Namespace()
+
+		g.By("Create test pods")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("Should be able to access applications when client ephemeral port is 22623 or 22624")
+		testPodName := getPodName(oc, ns1, "name=test-pods")
+		pod1Name := testPodName[0]
+		localPort := []string{"22623", "22624"}
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			pod2IP1, pod2IP2 := getPodIP(oc, ns1, testPodName[1])
+			for i := 0; i < 2; i++ {
+				curlCmd := fmt.Sprintf("curl --connect-timeout 5 -s %s --local-port %s", net.JoinHostPort(pod2IP1, "8080"), localPort[i])
+				_, err := e2eoutput.RunHostCmdWithRetries(ns1, pod1Name, curlCmd, 60*time.Second, 120*time.Second)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				curlCmd = fmt.Sprintf("curl --connect-timeout 5 -s %s --local-port %s", net.JoinHostPort(pod2IP2, "8080"), localPort[i])
+				// Need wait 1 minute for local binding port released
+				_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod1Name, curlCmd, 60*time.Second, 120*time.Second)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		} else {
+			pod2IP1, _ := getPodIP(oc, ns1, testPodName[1])
+			for i := 0; i < 2; i++ {
+				curlCmd := fmt.Sprintf("curl --connect-timeout 5 -s %s --local-port %s", net.JoinHostPort(pod2IP1, "8080"), localPort[i])
+				_, err := e2eoutput.RunHostCmdWithRetries(ns1, pod1Name, curlCmd, 60*time.Second, 120*time.Second)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+
+	})
 })
