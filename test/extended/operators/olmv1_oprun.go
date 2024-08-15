@@ -985,6 +985,133 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	})
 
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-Medium-75501-the updates of various status fields is orthogonal", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			ns                           = "ns-75501"
+			sa                           = "sa75501"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75501",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75501",
+				Template: clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-75501",
+				InstallNamespace: ns,
+				PackageName:      "nginx75501",
+				Channel:          "candidate-v2.1",
+				Version:          "2.1.0",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create clusterextension with channel candidate-v2.1, version 2.1.0")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		status, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
+		o.Expect(status).To(o.ContainSubstring("True"))
+		reason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
+		o.Expect(reason).To(o.ContainSubstring("Success"))
+		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
+		o.Expect(status).To(o.ContainSubstring("True"))
+		reason, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].reason}`)
+		o.Expect(reason).To(o.ContainSubstring("UnpackSuccess"))
+		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].status}`)
+		o.Expect(status).To(o.ContainSubstring("True"))
+		reason, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].reason}`)
+		o.Expect(reason).To(o.ContainSubstring("Success"))
+		installedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.installedBundle.version}`)
+		o.Expect(installedBundleVersion).To(o.ContainSubstring("2.1.0"))
+		installedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.installedBundle.name}`)
+		o.Expect(installedBundleName).To(o.ContainSubstring("nginx75501.v2.1.0"))
+		resolvedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolvedBundle.version}`)
+		o.Expect(resolvedBundleVersion).To(o.ContainSubstring("2.1.0"))
+		resolvedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolvedBundle.name}`)
+		o.Expect(resolvedBundleName).To(o.ContainSubstring("nginx75501.v2.1.0"))
+
+		clusterextension.Delete(oc)
+
+		exutil.By("Test UnpackFailed, bundle image cannot be pulled successfully")
+		clusterextension.Channel = "candidate-v2.0"
+		clusterextension.Version = "2.0.0"
+		clusterextension.CreateWithoutCheck(oc)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			unpackedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
+			unpackedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].reason}`)
+			unpackedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].message}`)
+			if !strings.Contains(unpackedStatus, "False") || !strings.Contains(unpackedReason, "UnpackFailed") || !strings.Contains(unpackedMessage, "error fetching image") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension status is not correct")
+		}
+		clusterextension.Delete(oc)
+
+		exutil.By("Test ResolutionFailed, wrong version")
+		clusterextension.Version = "3.0.0"
+		clusterextension.CreateWithoutCheck(oc)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
+			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
+			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].message}`)
+			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "ResolutionFailed") || !strings.Contains(resolvedMessage, "no package") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension status is not correct")
+		}
+		clusterextension.Delete(oc)
+
+		exutil.By("Test ResolutionFailed, no package")
+		clusterextension.PackageName = "nginxfake"
+		clusterextension.CreateWithoutCheck(oc)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
+			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
+			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].message}`)
+			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "ResolutionFailed") || !strings.Contains(resolvedMessage, "no package") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "clusterextension status is not correct")
+		}
+
+	})
+
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-69193-OLMv1 major version zero", func() {
 		exutil.SkipOnProxyCluster(oc)
