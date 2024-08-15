@@ -1357,7 +1357,65 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		} else {
 			e2e.Failf("All pods related to ibm deployment are not running")
 		}
+	})
 
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-72708-support delete function with force-cache-delete for V2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72708"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72708.yaml")
+		imageDeleteYamlFileF := filepath.Join(ocmirrorBaseDir, "delete-config-72708.yaml")
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "40G", "/var/lib/registry")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2disk for additionalImages failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk for additionalImages still failed")
+
+		exutil.By("Start mirroring to registry")
+		waitErr = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror of additionalImages failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror for additionalImages still failed")
+
+		exutil.By("Generete delete image file")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--generate").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Execute delete with force-cache-delete")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false", "--force-cache-delete=true").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-75117-support to set max-parallel-downloads for v2 [Serial]", func() {
