@@ -752,6 +752,26 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 		o.Expect(temOutput).To(o.ContainSubstring("not found"))
 	})
 
+	// author: knarra@redhat.com
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-Medium-75375-oc create job fails with cannot set blockOwnerDeletion", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		cronjobF := filepath.Join(buildPruningBaseDir, "cronjob75375.yaml")
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("create cronjob")
+		err := oc.Run("create").Args("-f", cronjobF).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("check if cronjob has been created")
+		cronCreationOutput, err := oc.Run("get").Args("cronjob").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cronCreationOutput).To(o.ContainSubstring("pi75375"))
+		debugErr, err := oc.Run("create").Args("job", "example-75375", "--from=cronjob/pi75375").Output()
+		if err != nil {
+			e2e.Failf("Error occured while creating job: %s", debugErr)
+		}
+	})
+
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
