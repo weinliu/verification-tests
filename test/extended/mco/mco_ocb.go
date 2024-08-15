@@ -42,7 +42,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Configure OCB functionality for the new infra MCP")
-		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), moscName, infraMcpName, nil)
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, infraMcpName, nil)
 		defer mosc.CleanupAndDelete()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 		logger.Infof("OK!\n")
@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Configure OCB functionality for the new infra MCP")
-		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), moscName, infraMcpName, nil)
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, infraMcpName, nil)
 		defer DisableOCL(mosc)
 		// remove after this bug is fixed OCPBUGS-36810
 		defer func() {
@@ -212,7 +212,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			}
 		)
 
-		testContainerFile([]ContainerFile{{Content: containerFileContent}}, mcp, checkers)
+		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers)
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73436-OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
@@ -249,27 +249,56 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error copying %s to the %s namespace", mcoEntitlementSecret, MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
-		testContainerFile([]ContainerFile{{Content: containerFileContent}}, mcp, checkers)
+		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers)
 	})
+
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73947-OCB use OutputImage CurrentImagePullSecret [Disruptive]", func() {
+		// Remove this "skip" checks once the functionality to disable OCL is implemented
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
+
+		SkipIfSNO(oc.AsAdmin()) // We have to skip this test case in SNO until the functionality to disable OCL is ready to work on master nodes
+		var (
+			mcp              = GetCompactCompatiblePool(oc.AsAdmin())
+			tmpNamespaceName = "tc-73947-mco-ocl-images"
+			checkers         = []Checker{
+				CommandOutputChecker{
+					Command:  []string{"rpm-ostree", "status"},
+					Matcher:  o.ContainSubstring(fmt.Sprintf("%s/%s/ocb-%s-image", InternalRegistrySvcURL, tmpNamespaceName, mcp.GetName())),
+					ErrorMsg: fmt.Sprintf("The nodes are not using the expected OCL image stored in the internal registry"),
+					Desc:     fmt.Sprintf("Check that the nodes are using the righ OS image"),
+				},
+			}
+		)
+
+		testContainerFile([]ContainerFile{}, tmpNamespaceName, mcp, checkers)
+	})
+
 })
 
-func testContainerFile(containerFiles []ContainerFile, mcp *MachineConfigPool, checkers []Checker) {
+func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
 	var (
 		oc       = mcp.GetOC().AsAdmin()
 		moscName = "test-" + GetCurrentTestPolarionIDNumber()
-		node     = mcp.GetSortedNodesOrFail()[0]
+		mosc     *MachineOSConfig
+		err      error
 	)
-	exutil.By("Configure OCB functionality for the new infra MCP")
-	mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc, moscName, mcp.GetName(), containerFiles)
+	exutil.By("Configure OCB functionality for the new infra MCP. Create MOSC")
+	switch imageNamespace {
+	case MachineConfigNamespace:
+		mosc, err = CreateMachineOSConfigUsingInternalRegistry(oc, MachineConfigNamespace, moscName, mcp.GetName(), containerFiles)
+	default:
+		tmpNamespace := NewResource(oc.AsAdmin(), "ns", imageNamespace)
+		if !tmpNamespace.Exists() {
+			defer tmpNamespace.Delete()
+			o.Expect(oc.AsAdmin().WithoutNamespace().Run("new-project").Args(tmpNamespace.GetName(), "--skip-config-write").Execute()).To(o.Succeed(), "Error creating a new project to store the OCL images")
+		}
+		mosc, err = CreateMachineOSConfigUsingInternalRegistry(oc, tmpNamespace.GetName(), moscName, mcp.GetName(), containerFiles)
+	}
 	defer DisableOCL(mosc)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 	logger.Infof("OK!\n")
 
-	ValidateSuccessfulMOSC(mosc, nil)
-
-	for _, checker := range checkers {
-		checker.Check(node)
-	}
+	ValidateSuccessfulMOSC(mosc, checkers)
 
 	exutil.By("Remove the MachineOSConfig resource")
 	o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
@@ -396,7 +425,9 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 	numNodes, err := mcp.getMachineCount()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MachineCount from %s", mcp)
 	if numNodes > 0 {
+		exutil.By("Wait for the new image to be applied")
 		mcp.waitForComplete()
+		logger.Infof("OK!\n")
 
 		node := mcp.GetSortedNodesOrFail()[0]
 		for _, checker := range checkers {

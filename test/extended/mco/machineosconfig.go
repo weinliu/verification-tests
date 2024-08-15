@@ -3,10 +3,12 @@ package mco
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
+	"github.com/tidwall/sjson"
 )
 
 type ContainerFile struct {
@@ -56,60 +58,111 @@ func CreateMachineOSConfig(oc *exutil.CLI, name, pool, currentImagePullSecret, b
 	return newMOSC, err
 }
 
-func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, name, pool string, containerFile []ContainerFile) (*MachineOSConfig, error) {
+// CopySecretToMCONamespace copy a secret to the MCO namespace and removes the "ownerReferences" and the "annotations" in this secret
+func CopySecretToMCONamespace(secret *Secret, newName string) (*Secret, error) {
+
+	mcoResource, err := CloneResource(secret, newName, MachineConfigNamespace,
+		func(resString string) (string, error) {
+			newResString, err := sjson.Delete(resString, "metadata.ownerReferences")
+			if err != nil {
+				return "", err
+			}
+			newResString, err = sjson.Delete(newResString, "metadata.annotations")
+			if err != nil {
+				return "", err
+			}
+			return newResString, nil
+		})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Secret{Resource: *mcoResource}, nil
+}
+
+func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, namespace, name, pool string, containerFile []ContainerFile) (*MachineOSConfig, error) {
 	// We use a copy of the cluster's pull secret to pull the images
 	pullSecret := NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
-	baseImagePullSecret, err := CloneResource(pullSecret, "cloned-pull-secret-"+exutil.GetRandomString(), MachineConfigNamespace, nil)
+	baseImagePullSecret, err := CopySecretToMCONamespace(pullSecret, "cloned-pull-secret-"+exutil.GetRandomString())
 	if err != nil {
 		return NewMachineOSConfig(oc, name), err
 	}
 
-	// We use the builder SA secret in MCO to push the images to the internal registry
-	saBuilder := NewNamespacedResource(oc, "sa", MachineConfigNamespace, "builder")
-	renderedImagePushSecretName := saBuilder.GetOrFail(`{.secrets[0].name}`)
-	if renderedImagePushSecretName == "" {
-		return NewMachineOSConfig(oc, name), fmt.Errorf("Rendered image push secret cannot have an empty value")
+	// We use the builder SA secret in the namespace to push the images to the internal registry
+	saBuilder := NewNamespacedResource(oc, "sa", namespace, "builder")
+	renderedImagePushSecret := NewSecret(oc, namespace, saBuilder.GetOrFail(`{.secrets[0].name}`))
+	if !renderedImagePushSecret.Exists() {
+		return NewMachineOSConfig(oc, name), fmt.Errorf("Rendered image push secret does not exist: %s", renderedImagePushSecret)
+	}
+
+	if namespace != MachineConfigNamespace { // If the secret is not in MCO, we copy it there
+		renderedImagePushSecret, err = CopySecretToMCONamespace(renderedImagePushSecret, renderedImagePushSecret.GetName()+"-testcloned")
+		if err != nil {
+			return NewMachineOSConfig(oc, name), err
+		}
 	}
 
 	// We use the default SA secret in MCO to pull the current image from the internal registry
-	saDefault := NewNamespacedResource(oc, "sa", MachineConfigNamespace, "default")
-	currentImagePullSecret := saDefault.GetOrFail(`{.secrets[0].name}`)
-	if currentImagePullSecret == "" {
-		return NewMachineOSConfig(oc, name), fmt.Errorf("Current image pull secret cannot have an empty value")
+	saDefault := NewNamespacedResource(oc, "sa", namespace, "default")
+	currentImagePullSecret := NewSecret(oc, namespace, saDefault.GetOrFail(`{.secrets[0].name}`))
+	if !currentImagePullSecret.Exists() {
+		return NewMachineOSConfig(oc, name), fmt.Errorf("Current image pull secret does not exist: %s", currentImagePullSecret)
+	}
+
+	if namespace != MachineConfigNamespace { // If the secret is not in MCO, we copy it there
+		currentImagePullSecret, err = CopySecretToMCONamespace(currentImagePullSecret, currentImagePullSecret.GetName()+"-testcloned")
+		if err != nil {
+			return NewMachineOSConfig(oc, name), err
+		}
 	}
 
 	// We use a push spec stored in the internal registry in the MCO namespace. We use a different image for every pool
-	pushSpec := fmt.Sprintf("%s/openshift-machine-config-operator/ocb-%s-image:latest", InternalRegistrySvcURL, pool)
+	pushSpec := fmt.Sprintf("%s/%s/ocb-%s-image:latest", InternalRegistrySvcURL, namespace, pool)
 
-	return CreateMachineOSConfig(oc, name, pool, currentImagePullSecret, baseImagePullSecret.GetName(), renderedImagePushSecretName, pushSpec, containerFile)
+	return CreateMachineOSConfig(oc, name, pool, currentImagePullSecret.GetName(), baseImagePullSecret.GetName(), renderedImagePushSecret.GetName(), pushSpec, containerFile)
 }
 
-// GetPullSecret returns the pull secret configured in this MOSC
-func (mosc MachineOSConfig) GetPullSecret() (*Secret, error) {
+// GetBaseImagePullSecret returns the pull secret configured in this MOSC
+func (mosc MachineOSConfig) GetBaseImagePullSecret() (*Secret, error) {
 	pullSecretName, err := mosc.Get(`{.spec.buildInputs.baseImagePullSecret.name}`)
 	if err != nil {
 		return nil, err
 	}
 	if pullSecretName == "" {
-		logger.Warnf("%s has an empty pull secret!! GetPullSecret will return nil", mosc)
+		logger.Warnf("%s has an empty pull secret!! GetBaseImagePullSecret will return nil", mosc)
 		return nil, nil
 	}
 
 	return NewSecret(mosc.oc, MachineConfigNamespace, pullSecretName), nil
 }
 
-// GetPushSecret returns the push secret configured in this MOSC
-func (mosc MachineOSConfig) GetPushSecret() (*Secret, error) {
+// GetRenderedImagePushSecret returns the push secret configured in this MOSC
+func (mosc MachineOSConfig) GetRenderedImagePushSecret() (*Secret, error) {
 	pushSecretName, err := mosc.Get(`{.spec.buildInputs.renderedImagePushSecret.name}`)
 	if err != nil {
 		return nil, err
 	}
 	if pushSecretName == "" {
-		logger.Warnf("%s has an empty push secret!! GetPushSecret will return nil", mosc)
+		logger.Warnf("%s has an empty push secret!! GetRenderedImagePushSecret will return nil", mosc)
 		return nil, nil
 	}
 
 	return NewSecret(mosc.oc, MachineConfigNamespace, pushSecretName), nil
+}
+
+// GetCurrentImagePullSecret returns the pull secret that will be used in the nodes to pull the image when applying it
+func (mosc MachineOSConfig) GetCurrentImagePullSecret() (*Secret, error) {
+	currentImagePullSecretName, err := mosc.Get(`{.spec.buildOutputs.currentImagePullSecret.name}`)
+	if err != nil {
+		return nil, err
+	}
+	if currentImagePullSecretName == "" {
+		logger.Warnf("%s has an empty push secret!! GetCurrentImagePullSecret will return nil", mosc)
+		return nil, nil
+	}
+
+	return NewSecret(mosc.oc, MachineConfigNamespace, currentImagePullSecretName), nil
 }
 
 // CleanupAndDelete removes the secrets in the MachineOSConfig resource and the removes the MachoneOSConfig resource itself
@@ -119,30 +172,44 @@ func (mosc MachineOSConfig) CleanupAndDelete() error {
 		return nil
 	}
 
-	pullSecret, err := mosc.GetPullSecret()
+	baseImagePullSecret, err := mosc.GetBaseImagePullSecret()
 	if err != nil {
-		logger.Errorf("Error getting %s in %s. We continue cleaning.", pullSecret, mosc)
+		logger.Errorf("Error getting %s in %s. We continue cleaning.", baseImagePullSecret, mosc)
 	}
-	if pullSecret == nil {
+	if baseImagePullSecret == nil {
 		logger.Infof("Pull secret is empty in %s, skipping pull secret cleanup", mosc)
 	} else {
-		err := cleanupMOSCSecret(*pullSecret)
+		err := cleanupMOSCSecret(*baseImagePullSecret)
 		if err != nil {
-			logger.Errorf("An error happened cleaning %s in %s. We continue cleaning.\nErr:%s", pullSecret, mosc, err)
+			logger.Errorf("An error happened cleaning %s in %s. We continue cleaning.\nErr:%s", baseImagePullSecret, mosc, err)
 		}
 	}
 
-	pushSecret, err := mosc.GetPushSecret()
+	renderedImagePushSecret, err := mosc.GetRenderedImagePushSecret()
 	if err != nil {
-		logger.Errorf("Error getting %s in %s. We continue cleaning.", pushSecret, mosc)
+		logger.Errorf("Error getting %s in %s. We continue cleaning.", renderedImagePushSecret, mosc)
 	}
 
-	if pushSecret == nil {
+	if renderedImagePushSecret == nil {
 		logger.Infof("Push secret is empty in %s, skipping pull secret cleanup", mosc)
 	} else {
-		cleanupMOSCSecret(*pushSecret)
+		cleanupMOSCSecret(*renderedImagePushSecret)
 		if err != nil {
-			logger.Errorf("An error happened cleaning %s in %s. We continue cleaning.\nErr:%s", pushSecret, mosc, err)
+			logger.Errorf("An error happened cleaning %s in %s. We continue cleaning.\nErr:%s", renderedImagePushSecret, mosc, err)
+		}
+	}
+
+	currentImagePullSecret, err := mosc.GetCurrentImagePullSecret()
+	if err != nil {
+		logger.Errorf("Error getting %s in %s. We continue cleaning.", currentImagePullSecret, mosc)
+	}
+
+	if currentImagePullSecret == nil {
+		logger.Infof("Push secret is empty in %s, skipping pull secret cleanup", mosc)
+	} else {
+		cleanupMOSCSecret(*currentImagePullSecret)
+		if err != nil {
+			logger.Errorf("An error happened cleaning %s in %s. We continue cleaning.\nErr:%s", currentImagePullSecret, mosc, err)
 		}
 	}
 
@@ -195,6 +262,17 @@ func (moscl *MachineOSConfigList) GetAllOrFail() []MachineOSConfig {
 
 // cleanupMOSCSecret helper function to clean the secrets configured in MachineOSConfig resources
 func cleanupMOSCSecret(secret Secret) error {
+
+	originalSecretName, isCanonical := strings.CutSuffix(secret.GetName(), "-canonical")
+	if isCanonical {
+		originalSecret := NewSecret(secret.GetOC(), secret.GetNamespace(), originalSecretName)
+		err := cleanupMOSCSecret(*originalSecret)
+		if err != nil {
+			logger.Errorf("Errors removing the oringal secre of canonical %s: %s", secret, err)
+			return err
+		}
+	}
+
 	if !secret.Exists() {
 		logger.Infof("%s does not exist. Not need to delete it.", secret)
 		return nil
