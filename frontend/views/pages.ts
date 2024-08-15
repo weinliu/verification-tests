@@ -143,6 +143,10 @@ export const Pages = {
     cy.visit(url);
     cy.contains('Installed Operators').should('exist');
   },
+  gotoInstalledExtensionsPage: () => {
+    cy.visit('/k8s/cluster/olm.operatorframework.io~v1alpha1~ClusterExtension');
+    cy.get('[data-test-id="resource-title"]').should('exist');
+  },
   gotoVolumeSnapshotListPage: (namespace: string) => {
     cy.visit(`/k8s/ns/${namespace}/snapshot.storage.k8s.io~v1~VolumeSnapshot`);
   },

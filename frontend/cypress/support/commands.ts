@@ -20,6 +20,7 @@ declare global {
             checkClusterType(commandName);
             isEFSDeployed();
             isPlatformSuitableForNMState();
+            isTechPreviewNoUpgradeEnabled();
             isManagedCluster();
             isIPICluster();
             cliLoginAzureExternalOIDC();
@@ -323,6 +324,20 @@ Cypress.Commands.add("isPlatformSuitableForNMState", () => {
       return cy.wrap(false);
     }
   });
+});
+
+Cypress.Commands.add("isTechPreviewNoUpgradeEnabled", () => {
+  cy.adminCLI(`oc get featuregate cluster -o jsonpath='{.spec.featureSet}'`)
+    .then((result) => {
+      const command_stdout = result.stdout;
+      if(command_stdout.includes('TechPreviewNoUpgrade')) {
+        cy.log('TechPreviewNoUpgrade is Enabled');
+        return cy.wrap(true);
+      } else {
+        cy.log('TechPreviewNoUpgrade is NOT enabled');
+        return cy.wrap(false);
+      }
+    })
 });
 
 Cypress.Commands.add("isManagedCluster", () => {

@@ -1,0 +1,10 @@
+apiVersion: catalogd.operatorframework.io/v1alpha1
+kind: ClusterCatalog
+metadata:
+  name: ui-auto-custom-operators
+spec:
+  source:
+    type: image
+    image:
+      ref: quay.io/openshifttest/ui-cypress-operators-index:latest
+      pollInterval: 24h

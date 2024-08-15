@@ -1,0 +1,11 @@
+apiVersion: olm.operatorframework.io/v1alpha1
+kind: ClusterExtension
+metadata:
+  name: test-ce-75036
+spec:
+  packageName: 3scale-community-operator
+  installNamespace: ns-75036
+  channel: threescale-2.13
+  version: v0.10.1
+  serviceAccount:
+    name: sa75036

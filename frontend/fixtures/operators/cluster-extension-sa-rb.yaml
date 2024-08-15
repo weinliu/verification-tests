@@ -1,0 +1,31 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ns-75036-sa75036
+rules:
+  - apiGroups:
+    - "*"
+    resources:
+    - "*"
+    verbs:
+    - "*"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa75036
+  namespace: ns-75036
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ns-75036-sa75036
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ns-75036-sa75036
+subjects:
+  - kind: ServiceAccount
+    name: sa75036
+    namespace: ns-75036
