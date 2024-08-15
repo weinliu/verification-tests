@@ -41,7 +41,7 @@ export const userpage = {
   impersonateUser: (user: string) => {
     listPage.filter.byName(user);
     listPage.rows.clickKebabAction(user, `Impersonate User ${user}`);
-    cy.get('[data-test="global-notifications"]').should('contain','impersonating');
+    cy.get('[data-test="global-notifications"]', {timeout: 120000 }).should('contain','impersonating');
     guidedTour.close();
   }
 }

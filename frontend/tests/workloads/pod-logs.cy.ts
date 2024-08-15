@@ -38,7 +38,7 @@ describe('pod log page', () => {
        Then Pods log cannot be loaded
        In Command Line: */
     cy.cliLogin(`${normalUser}`, `${normalUserPasswd}`);
-    cy.exec(`oc logs -f examplepod`, {failOnNonZeroExit: false})
+    cy.exec(`oc logs -f examplepod -n ${testns}`, {failOnNonZeroExit: false})
       .then(output => {
          expect(output.stderr).contain('Forbidden');
     });
@@ -54,9 +54,10 @@ describe('pod log page', () => {
     Pages.gotoUsers();
     userpage.impersonateUser(normalUser);
     cy.switchPerspective('Administrator');
-    cy.clickNavLink(['Workloads', 'Pods']);
+    cy.clickNavLink(['Workloads', 'Deployments']);
     cy.byLegacyTestID('namespace-bar-dropdown').contains('Project:').click();
     cy.byTestID('dropdown-menu-item-link').contains(testns).click();
+    cy.clickNavLink(['Workloads', 'Pods']);
     listPage.rows.shouldExist('examplepod').click();
     cy.get('[data-test-id="horizontal-link-Logs"]').should('exist').click();
     checkErrorAlertExistInLogsTab();

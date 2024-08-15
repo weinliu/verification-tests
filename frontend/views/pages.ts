@@ -101,6 +101,7 @@ export const Pages = {
   },
   gotoUsers: () => {
     cy.visit('/k8s/cluster/user.openshift.io~v1~User');
+    listPage.rows.shouldBeLoaded();
   },
   gotoGroupListPage: () => {
     cy.visit('/k8s/cluster/user.openshift.io~v1~Group');
