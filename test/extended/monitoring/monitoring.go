@@ -2778,7 +2778,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/cluster-monitoring=true").Execute()
 
 		exutil.By("check logs in prometheus pod")
-		checkLogsInContainer(oc, "openshift-monitoring", "prometheus-k8s-0", "prometheus", `cannot list resource \"pods\" in API group \"\" in the namespace \"`+ns+`\"`)
+		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus", "prometheus", `cannot list resource \"pods\" in API group \"\" in the namespace \"`+ns+`\"`, true)
 
 		exutil.By("check the alert is triggered")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
