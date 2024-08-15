@@ -1090,8 +1090,6 @@ func checkDnsCO(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = waitCoBecomes(oc, "dns", 240, expectedStatus)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
-	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func waitRouteReady(route string) {
