@@ -684,4 +684,85 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			ns                           = "ns-75122"
+			sa                           = "sa75122"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75122",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75122",
+				Template: clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-75122",
+				InstallNamespace: ns,
+				PackageName:      "nginx75122",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.1",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clusterextension v1.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		exutil.By("upgrade will be prevented if An existing stored version of the CRD is removed")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75122s.cache.example.com failed upgrade safety validation. "NoStoredVersionRemoved" validation failed: stored version "v1alpha1" removed`))
+
+		exutil.By("upgrade will be allowed if A new version of the CRD is added with no modifications to existing versions")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
+		clusterextension.GetBundleResource(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.3-nginxolm75122 successfully"))
+
+		exutil.By("upgrade will be prevented if An existing served version of the CRD is removed")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
+		clusterextension.GetBundleResource(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75122 successfully"))
+
+	})
+
 })
