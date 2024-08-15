@@ -466,9 +466,9 @@ func sortMasterNodeList(oc *exutil.CLI, nodes []Node) ([]Node, error) {
 }
 
 func getMachineConfigControllerPod(oc *exutil.CLI) (string, error) {
-	pods, err := exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, "k8s-app=machine-config-controller")
-	logger.Infof("machine-config-controller pod name is %s", pods[0])
-	return pods[0], err
+	pod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", MachineConfigNamespace, "-l", ControllerLabel+"="+ControllerLabelValue, "-o", `jsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+	logger.Infof("machine-config-controller pod name is %s", pod)
+	return pod, err
 }
 
 func getMachineConfigOperatorPod(oc *exutil.CLI) (string, error) {
@@ -1348,4 +1348,29 @@ func SkipIfSNO(oc *exutil.CLI) {
 	if IsSNO(oc) {
 		g.Skip("There is only 1 node in the cluster. This test is not supported in SNO clusters")
 	}
+}
+
+// getAllKubeProxyPod returns the kube-rbac-proxy- pod for given namespace
+func getAllKubeProxyPod(oc *exutil.CLI, namespace string) ([]string, error) {
+	var kubeRabcProxyPodList []string
+	getKubeProxyPod, err := exutil.GetAllPods(oc.AsAdmin(), namespace)
+	for i := range getKubeProxyPod {
+		if strings.Contains(getKubeProxyPod[i], "kube-rbac-proxy-crio-") {
+			kubeRabcProxyPodList = append(kubeRabcProxyPodList, getKubeProxyPod[i])
+		}
+	}
+	if len(kubeRabcProxyPodList) == 0 {
+		logger.Infof("Empty kube-rbac-proxy-crio- pod list")
+		return kubeRabcProxyPodList, err
+	}
+	return kubeRabcProxyPodList, err
+}
+
+// WaitForStableCluster to wait for all clusteroperators to report Available=true, Progressing=false, Degraded=false.
+func WaitForStableCluster(oc *exutil.CLI, minimumStable, timeout string) error {
+	err := oc.AsAdmin().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period", minimumStable, "--timeout", timeout).Execute()
+	if err != nil {
+		oc.Run("get").Args("co").Execute()
+	}
+	return err
 }

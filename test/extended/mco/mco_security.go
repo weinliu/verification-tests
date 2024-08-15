@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -507,6 +508,83 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		checkAllOperatorsHealthy(oc.AsAdmin(), "20m", "30s")
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-75222-tlSecurityProfile switch and check the expected tlsMinVersion and cipheres suite are seen in MCS,MSS and rbac-kube-proxy pod logs[Disruptive]", func() {
+
+		var (
+			apiServer = NewResource(oc.AsAdmin(), "apiserver", "cluster")
+		)
+
+		exutil.By("Verify for Intermediate TLS Profile")
+		csNameList := getCipherSuitesNameforSpecificVersion(VersionTLS12)
+		var csVersion12 []string
+		for i := range csNameList {
+			if !strings.Contains(csNameList[i], "_CBC_") {
+				csVersion12 = append(csVersion12, csNameList[i])
+			}
+		}
+		validateCorrectTlsProfileSecurity(oc, "", "VersionTLS12", csVersion12)
+		logger.Infof("OK!\n")
+
+		defer func(initialConfig string) {
+			exutil.By("Restore with previous apiserver value")
+			apiServer.SetSpec(initialConfig)
+			exutil.By("Check that all cluster operators are stable")
+			o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+			logger.Infof("Wait for MCC to get the leader lease")
+			o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "6m", "20s").Should(o.BeTrue(),
+				"The controller pod didn't acquire the lease properly.")
+			mMcp.waitForComplete()
+			wMcp.waitForComplete()
+			logger.Infof("OK!\n")
+		}(apiServer.GetSpecOrFail())
+
+		exutil.By("Patch the Custom tlsSecurityProfile")
+		o.Expect(apiServer.Patch("json",
+			`[{ "op": "add", "path": "/spec/tlsSecurityProfile", "value": {"type": "Custom","custom": {"ciphers": ["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305", "ECDHE-RSA-AES128-GCM-SHA256",  "ECDHE-ECDSA-AES128-GCM-SHA256" ],"minTLSVersion": "VersionTLS11"}}}]`)).To(o.Succeed(), "Error patching tlsSecurityProfile")
+
+		logger.Infof("OK!\n")
+		exutil.By("Check that all cluster operators are stable")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		logger.Infof("Wait for MCC to get the leader lease")
+		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
+			"The controller pod didn't acquire the lease properly.")
+		mMcp.waitForComplete()
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify for Custom TLS Profile")
+		customCipherSuite := []string{"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"}
+		validateCorrectTlsProfileSecurity(oc, "Custom", "VersionTLS11", customCipherSuite)
+		logger.Infof("OK!\n")
+
+		exutil.By("Patch the Old tlsSecurityProfile")
+		o.Expect(apiServer.Patch("json",
+			`[{ "op": "add", "path": "/spec/tlsSecurityProfile", "value":  {"type": "Old","old": {}}}]`)).To(o.Succeed(), "Error patching http proxy")
+
+		logger.Infof("OK!\n")
+		exutil.By("Check that all cluster operators are stable")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		logger.Infof("Wait for MCC to get the leader lease")
+		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
+			"The controller pod didn't acquire the lease properly.")
+		mMcp.waitForComplete()
+		wMcp.waitForComplete()
+
+		exutil.By("Verify for Old TLS Profile")
+		csNameList = getCipherSuitesNameforSpecificVersion(VersionTLS10)
+		validateCorrectTlsProfileSecurity(oc, "Old", "VersionTLS10", csNameList)
+		logger.Infof("OK!\n")
+
+		// For now Modern Profile is not supported
+		match := `Unsupported value: "Modern"`
+		exutil.By("Patch the Modern tlsSecurityProfile")
+		tlsPatch := apiServer.Patch("json",
+			`[{ "op": "add", "path": "/spec/tlsSecurityProfile", "value":  {"type": "Modern"}}]`)
+		o.Expect(tlsPatch.(*exutil.ExitError).StdErr).To(o.ContainSubstring(match))
+
+	})
+
 })
 
 // EventuallyFileExistsInNode fails the test if the certificate file does not exist in the node after the time specified as parameters
@@ -608,4 +686,80 @@ func splitBundleCertificates(pemBundle []byte) ([]*x509.Certificate, error) {
 	}
 
 	return certsList, nil
+}
+
+// getCipherSuitesNameforSpecificVersion returns the names of cipher suite for the provided version
+func getCipherSuitesNameforSpecificVersion(version uint16) []string {
+	cipherSuites := getCipherSuitesForVersion(version)
+	cipherSuiteNames := []string{}
+
+	for _, cipherSuite := range cipherSuites {
+		cipherSuiteNames = append(cipherSuiteNames, cipherSuite.Name)
+	}
+
+	return cipherSuiteNames
+}
+
+// getCipherSuitesForVersion returns the cipher suite list along with name,ID, security issues for provided version
+func getCipherSuitesForVersion(version uint16) []*tls.CipherSuite {
+	var suites []*tls.CipherSuite
+	for _, cs := range tls.CipherSuites() {
+		for _, v := range cs.SupportedVersions {
+			if v == version {
+				suites = append(suites, cs)
+				break
+			}
+		}
+	}
+	return suites
+}
+
+// validateCorrectTlsProfileSecurity helps to check the valid tls-min-version and tls-cipher-suite
+func validateCorrectTlsProfileSecurity(oc *exutil.CLI, tlsSecurityProfile string, tlsMinVersionStr string, cipherSuite []string) {
+
+	var (
+		containerArgsPath  = `{.spec.containers[*].args[*]}`
+		tlsProfileTypePath = `{.spec.tlsSecurityProfile.type}`
+		apiServer          = NewResource(oc.AsAdmin(), "apiserver", "cluster")
+	)
+
+	exutil.By("Get the kube-rbac-proxy, MCC, MCS pods")
+	getKubeProxyPod, err := getAllKubeProxyPod(oc.AsAdmin(), MachineConfigNamespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	kubeproxy := NewNamespacedResource(oc.AsAdmin(), "pod", MachineConfigNamespace, getKubeProxyPod[0])
+	logger.Infof("%s\n", kubeproxy.GetOrFail(containerArgsPath))
+	logger.Infof("OK!\n")
+
+	mccPodName, err := getMachineConfigControllerPod(oc.AsAdmin())
+	o.Expect(err).NotTo(o.HaveOccurred())
+	mcc := NewNamespacedResource(oc.AsAdmin(), "pod", MachineConfigNamespace, mccPodName)
+	logger.Infof("%s\n", mcc.GetOrFail(containerArgsPath))
+	logger.Infof("OK!\n")
+
+	mcspod, err := GetMCSPodNames(oc.AsAdmin())
+	o.Expect(err).NotTo(o.HaveOccurred())
+	mcsLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigServer, mcspod[0], "")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	logger.Infof("%s\n", mcsLogs)
+	logger.Infof("OK!\n")
+
+	logger.Infof("%s\n", apiServer.GetOrFail(tlsProfileTypePath))
+	logger.Infof("OK!\n")
+
+	o.Expect(apiServer.GetOrFail(tlsProfileTypePath)).To(o.ContainSubstring(tlsSecurityProfile), "The %s tlsSecuirtyProfile is not applied properly", tlsSecurityProfile)
+	logger.Infof("OK!\n")
+
+	exutil.By(fmt.Sprintf("To check the valid tls-min-version for %s", tlsSecurityProfile))
+	o.Expect(kubeproxy.GetOrFail(containerArgsPath)).To(o.ContainSubstring("--tls-min-version=%s", tlsMinVersionStr), "Error getting required tls-min-version for given tlsSecuirtyProfile in %s pod", getKubeProxyPod[0])
+	o.Expect(mcc.GetOrFail(containerArgsPath)).To(o.ContainSubstring("--tls-min-version=%s", tlsMinVersionStr), "Error getting required tls-min-version for tlsSecuirtyProfile in %s pod", mccPodName)
+	o.Expect(exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigServer, mcspod[0], "")).To(o.ContainSubstring(tlsMinVersionStr), "Error getting required tls-min-version for %s pod", mcspod[0])
+	logger.Infof("OK!\n")
+
+	exutil.By(fmt.Sprintf("To check the valid tls-cipher-suite for %s", tlsSecurityProfile))
+	for i := range cipherSuite {
+		o.Expect(kubeproxy.GetOrFail(containerArgsPath)).To(o.ContainSubstring(cipherSuite[i]), "Error getting %s cipher suite for given tlsSecuirtyProfile of %s pod", cipherSuite[i], getKubeProxyPod[0])
+		o.Expect(mcc.GetOrFail(containerArgsPath)).To(o.ContainSubstring(cipherSuite[i]), "Error getting %s cipher suite for given tlsSecuirtyProfile of  %s pod", cipherSuite[i], mccPodName)
+		o.Expect(exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigServer, mcspod[0], "")).To(o.ContainSubstring(cipherSuite[i]), "Error getting %s cipher suite for given tlsSecuirtyProfile of %s pod", cipherSuite[i], mcspod[0])
+	}
+	logger.Infof("OK!\n")
 }

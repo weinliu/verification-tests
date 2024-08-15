@@ -173,6 +173,15 @@ const (
 
 	// MachineConfigNodesFeature name of the MachineConfigNodes feature
 	MachineConfigNodesFeature = "MachineConfigNodes"
+
+	// MachineConfigServer mcs container name
+	MachineConfigServer = "machine-config-server"
+
+	//TLS Security Version
+	VersionTLS10 = 0x0301
+	VersionTLS11 = 0x0302
+	VersionTLS12 = 0x0303
+	VersionTLS13 = 0x0304
 )
 
 var (
