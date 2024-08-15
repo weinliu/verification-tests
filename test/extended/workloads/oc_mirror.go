@@ -1286,13 +1286,14 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		defer removeCSAndISCP(oc)
 		createCSAndISCPNoPackageCheck(oc, "cs-redhat-marketplace-index", "openshift-marketplace", "Running")
 
-		crunchySub, crunchyOG := getOperatorInfo(oc, "crunchy-postgres-operator-rhmp", "marketoperatortest", "registry.redhat.io/redhat/redhat-marketplace-index:v4.14", "cs-redhat-marketplace-index")
-		defer removeOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest")
-		installOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest", "pgo")
-		operatorSub, operatorOG := getOperatorInfo(oc, "apicast-community-operator", "apicasttest", "registry.redhat.io/redhat/community-operator-index:v4.14", "cs-community-operator-index")
-		defer removeOperatorFromCustomCS(oc, operatorSub, operatorOG, "apicasttest")
-		installOperatorFromCustomCS(oc, operatorSub, operatorOG, "apicasttest", "apicast-operator-controller-manager-v2")
+		aerospikeSub, aerospikeOG := getOperatorInfo(oc, "aerospike-kubernetes-operator-rhmp", "aerospike-ns", "registry.redhat.io/redhat/redhat-marketplace-index:v4.16", "cs-redhat-marketplace-index")
+		defer removeOperatorFromCustomCS(oc, aerospikeSub, aerospikeOG, "aerospike-ns")
+		installCustomOperator(oc, aerospikeSub, aerospikeOG, "aerospike-ns", "aerospike-operator-controller-manager", "2")
+		nsconfigSub, nsconfigOG := getOperatorInfo(oc, "namespace-configuration-operator", "namespace-configuration-operator", "registry.redhat.io/redhat/community-operator-index:v4.16", "cs-community-operator-index")
+		defer removeOperatorFromCustomCS(oc, nsconfigSub, nsconfigOG, "namespace-configuration-operator")
+		installAllNSOperatorFromCustomCS(oc, nsconfigSub, nsconfigOG, "namespace-configuration-operator", "namespace-configuration-operator-controller-manager", "namespace-configuration-operator", "1")
 	})
+
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-66870-oc mirror could mirror and install operator for catalog certified-operator-index [Serial]", func() {
 		g.By("Set registry config")
 		dirname := "/tmp/case66870"
@@ -1338,9 +1339,9 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror still failed")
 		defer removeCSAndISCP(oc)
 		createCSAndISCPNoPackageCheck(oc, "cs-certified-operator-index", "openshift-marketplace", "Running")
-		portworxSub, portworxOG := getOperatorInfo(oc, "portworx-certified", "nvidia-certified-ns", "registry.redhat.io/redhat/certified-operator-index:v4.15", "cs-certified-operator-index")
-		defer removeOperatorFromCustomCS(oc, portworxSub, portworxOG, "nvidia-certified-ns")
-		installOperatorFromCustomCS(oc, portworxSub, portworxOG, "nvidia-certified-ns", "portworx-operator")
+		nginxSub, nginxOG := getOperatorInfo(oc, "nginx-ingress-operator", "nginx-ingress-operator-ns", "registry.redhat.io/redhat/certified-operator-index:v4.16", "cs-certified-operator-index")
+		defer removeOperatorFromCustomCS(oc, nginxSub, nginxOG, "nginx-ingress-operator-ns")
+		installOperatorFromCustomCS(oc, nginxSub, nginxOG, "nginx-ingress-operator-ns", "nginx-ingress-operator-controller-manager")
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:yinzhou-High-70047-Medium-70052-oc-mirror requires that the default channel of an operator is mirrored [Serial]", func() {

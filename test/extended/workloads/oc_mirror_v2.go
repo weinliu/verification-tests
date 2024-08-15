@@ -1124,19 +1124,19 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
 		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
 		exutil.By("Check for the catalogsource pod status")
-		assertPodOutput(oc, "olm.catalogSource=cs-certified-operator-index-v4-15", "openshift-marketplace", "Running")
-		assertPodOutput(oc, "olm.catalogSource=cs-community-operator-index-v4-15", "openshift-marketplace", "Running")
-		assertPodOutput(oc, "olm.catalogSource=cs-redhat-marketplace-index-v4-15", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-certified-operator-index-v4-16", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-community-operator-index-v4-16", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-marketplace-index-v4-16", "openshift-marketplace", "Running")
 
 		exutil.By("Install operator from certified-operator CS")
-		portworxSub, portworxOG := getOperatorInfo(oc, "portworx-certified", "portworx-certified-ns", "registry.redhat.io/redhat/certified-operator-index:v4.15", "cs-certified-operator-index-v4-15")
-		defer removeOperatorFromCustomCS(oc, portworxSub, portworxOG, "portworx-certified-ns")
-		installOperatorFromCustomCS(oc, portworxSub, portworxOG, "portworx-certified-ns", "portworx-operator")
+		nginxSub, nginxOG := getOperatorInfo(oc, "nginx-ingress-operator", "nginx-ingress-operator-ns", "registry.redhat.io/redhat/certified-operator-index:v4.16", "cs-certified-operator-index-v4-16")
+		defer removeOperatorFromCustomCS(oc, nginxSub, nginxOG, "nginx-ingress-operator-ns")
+		installOperatorFromCustomCS(oc, nginxSub, nginxOG, "nginx-ingress-operator-ns", "nginx-ingress-operator-controller-manager")
 
 		exutil.By("Install operator from redhat-marketplace CS")
-		crunchySub, crunchyOG := getOperatorInfo(oc, "crunchy-postgres-operator-rhmp", "marketoperatortest", "registry.redhat.io/redhat/redhat-marketplace-index:v4.15", "cs-redhat-marketplace-index-v4-15")
-		defer removeOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest")
-		installOperatorFromCustomCS(oc, crunchySub, crunchyOG, "marketoperatortest", "pgo")
+		aerospikeSub, aerospikeOG := getOperatorInfo(oc, "aerospike-kubernetes-operator-rhmp", "aerospike-ns", "registry.redhat.io/redhat/redhat-marketplace-index:v4.16", "cs-redhat-marketplace-index-v4-16")
+		defer removeOperatorFromCustomCS(oc, aerospikeSub, aerospikeOG, "aerospike-ns")
+		installCustomOperator(oc, aerospikeSub, aerospikeOG, "aerospike-ns", "aerospike-operator-controller-manager", "2")
 	})
 
 	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-72917-support v2docker2 operator catalog filtering for v2 [Serial]", func() {

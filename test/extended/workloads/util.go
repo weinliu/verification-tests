@@ -1482,24 +1482,9 @@ func getOperatorInfo(oc *exutil.CLI, operatorName string, operatorNamespace stri
 	return &sub, &og
 }
 
+// install the operator from custom catalog source and check the operator running pods numbers as 1
 func installOperatorFromCustomCS(oc *exutil.CLI, operatorSub *customsub, operatorOG *operatorgroup, operatorNamespace string, operatorDeoloy string) {
-	e2e.Logf("Create the operator namespace")
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", operatorNamespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	e2e.Logf("Create the subscription")
-	operatorSub.createCustomSub(oc)
-
-	e2e.Logf("Create the operatorgroup")
-	operatorOG.createOperatorGroup(oc)
-
-	e2e.Logf("Wait for the operator pod running")
-	if ok := waitForAvailableRsRunning(oc, "deploy", operatorDeoloy, operatorNamespace, "1"); ok {
-		e2e.Logf("installed operator runnnig now\n")
-	} else {
-		e2e.Failf("All pods related to deployment are not running")
-	}
-
+	installCustomOperator(oc, operatorSub, operatorOG, operatorNamespace, operatorDeoloy, "1")
 }
 
 func removeOperatorFromCustomCS(oc *exutil.CLI, operatorSub *customsub, operatorOG *operatorgroup, operatorNamespace string) {
@@ -2263,4 +2248,50 @@ func (registry *registry) deleteregistrySpecifyName(oc *exutil.CLI, registryName
 	_ = oc.Run("delete").Args("svc", registryName, "-n", registry.namespace).Execute()
 	_ = oc.Run("delete").Args("deploy", registryName, "-n", registry.namespace).Execute()
 	_ = oc.Run("delete").Args("is", registryName, "-n", registry.namespace).Execute()
+}
+
+func installAllNSOperatorFromCustomCS(oc *exutil.CLI, operatorSub *customsub, operatorOG *operatorgroup, operatorNamespace string, operatorDeoloy string, ogName string, operatorunningNum string) {
+	e2e.Logf("Create the operator namespace")
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", operatorNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Create the subscription")
+	operatorSub.createCustomSub(oc)
+
+	e2e.Logf("Create the operatorgroup")
+	operatorOG.createOperatorGroup(oc)
+
+	e2e.Logf("Remove the targetNamespaces")
+	pathYaml := `[{"op": "remove", "path": "/spec/targetNamespaces"}]`
+	err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("og", ogName, "--type=json", "-p", pathYaml, "-n", operatorNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Wait for the operator pod running")
+	if ok := waitForAvailableRsRunning(oc, "deploy", operatorDeoloy, operatorNamespace, operatorunningNum); ok {
+		e2e.Logf("installed operator runnnig now\n")
+	} else {
+		e2e.Failf("All pods related to deployment are not running")
+	}
+
+}
+
+// install the operator from custom catalog source and check the operator running pods numbers as expected
+func installCustomOperator(oc *exutil.CLI, operatorSub *customsub, operatorOG *operatorgroup, operatorNamespace string, operatorDeoloy string, operatorunningNum string) {
+	e2e.Logf("Create the operator namespace")
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", operatorNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Create the subscription")
+	operatorSub.createCustomSub(oc)
+
+	e2e.Logf("Create the operatorgroup")
+	operatorOG.createOperatorGroup(oc)
+
+	e2e.Logf("Wait for the operator pod running")
+	if ok := waitForAvailableRsRunning(oc, "deploy", operatorDeoloy, operatorNamespace, operatorunningNum); ok {
+		e2e.Logf("installed operator runnnig now\n")
+	} else {
+		e2e.Failf("All pods related to deployment are not running")
+	}
+
 }
