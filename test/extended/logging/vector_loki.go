@@ -134,7 +134,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "TENANT_KEY={{.kubernetes.namespace_name}}", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "INPUT_REFS=[\"application\"]")
+			clf.create(oc, "TENANT_KEY={.kubernetes.namespace_name||\"none\"}", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "INPUT_REFS=[\"application\"]")
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -252,7 +252,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "TENANT_KEY={{.kubernetes.container_name}}", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "INPUT_REFS=[\"application\"]")
+			clf.create(oc, "TENANT_KEY={.kubernetes.container_name||\"none\"}", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "INPUT_REFS=[\"application\"]")
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -282,7 +282,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "TENANT_KEY={{.kubernetes.namespace_name}}", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "INPUT_REFS=[\"application\"]")
+			clf.create(oc, "TENANT_KEY={.kubernetes.namespace_name||\"none\"}", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "INPUT_REFS=[\"application\"]")
 			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "type": "application", "application": {"excludes": [{"container":"exclude*"}]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["new-app"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
@@ -825,9 +825,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lc.waitForLogsAppearByQuery("infrastructure", `{log_type="infrastructure",kubernetes_namespace_name!~".+"}`)
 
 			exutil.By("update CLF to only collect journal logs")
-			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "selected-infra", "infrastructure": {"sources":["node"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-infra"]}]`
+			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "selected-infra", "type": "infrastructure", "infrastructure": {"sources":["node"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-infra"]}]`
 			clf.update(oc, "", patch, "--type=json")
-			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 			// sleep 3 minutes for collector pods to send the cached records
 			time.Sleep(3 * time.Minute)
 			exutil.By("check data in lokistack, only journal logs are collected")
@@ -839,14 +839,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("Update CLF to collect infra container logs")
 			patch = `[{"op": "replace", "path": "/spec/inputs/0/infrastructure/sources", "value": ["container"]}]`
 			clf.update(oc, "", patch, "--type=json")
-			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 			// sleep 3 minutes for collector pods to send the cached records
 			time.Sleep(3 * time.Minute)
 			exutil.By("check data in lokistack, only infra container logs are collected")
 
 			//check vector.toml, logs from logging infra pods should be excluded
 			searchString := `include_paths_glob_patterns = ["/var/log/pods/default_*/*/*.log", "/var/log/pods/kube*_*/*/*.log", "/var/log/pods/openshift*_*/*/*.log"]
-exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.tmp", "/var/log/pods/openshift-logging_*/gateway/*.log", "/var/log/pods/openshift-logging_*/loki*/*.log", "/var/log/pods/openshift-logging_*/opa/*.log", "/var/log/pods/openshift-logging_elasticsearch-*/*/*.log", "/var/log/pods/openshift-logging_kibana-*/*/*.log", "/var/log/pods/openshift-logging_logfilesmetricexporter-*/*/*.log"]`
+exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.log.*", "/var/log/pods/*/*/*.tmp", "/var/log/pods/openshift-logging_*/gateway/*.log", "/var/log/pods/openshift-logging_*/loki*/*.log", "/var/log/pods/openshift-logging_*/opa/*.log", "/var/log/pods/openshift-logging_elasticsearch-*/*/*.log", "/var/log/pods/openshift-logging_kibana-*/*/*.log", "/var/log/pods/openshift-logging_logfilesmetricexporter-*/*/*.log"]`
 			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).To(o.BeTrue(), "the configuration %s is not in vector.toml", searchString)
@@ -991,7 +991,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                   "clf-48489",
 				namespace:              clfNS,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
 				secretName:             sct.name,
 				waitForPodReady:        true,
 				collectApplicationLogs: true,
@@ -1050,14 +1050,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                   "clf-48490",
 				namespace:              clfNS,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
 				secretName:             sct.name,
 				waitForPodReady:        true,
 				collectApplicationLogs: true,
 				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY=kubernetes.labels.test")
+			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY={.kubernetes.labels.test||\"none\"}")
 
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
@@ -1108,14 +1108,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                   "clf-48923",
 				namespace:              clfNS,
-				templateFile:           filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-external-loki-with-secret-tenantKey.yaml"),
 				secretName:             sct.name,
 				waitForPodReady:        true,
 				collectApplicationLogs: true,
 				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY=kubernetes.namespace_name")
+			clf.create(oc, "LOKI_URL="+lokiURL, "TENANTKEY={.kubernetes.namespace_name||\"none\"}")
 
 			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
