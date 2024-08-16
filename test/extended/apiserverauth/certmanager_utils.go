@@ -419,7 +419,18 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 
 // Get the available CatalogSource's name from specific namespace
 func getAvailableCatalogSourceName(oc *exutil.CLI, namespace string) (string, error) {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[?(@.status.connectionState.lastObservedState=="READY")].metadata.name}`).Output()
+	// check if there are any catalogsources that not READY, otherwise it will block the subscription's readiness
+	// ref: https://docs.openshift.com/container-platform/4.16/operators/understanding/olm/olm-understanding-olm.html#olm-cs-health_olm-understanding-olm
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[?(@.status.connectionState.lastObservedState!="READY")].metadata.name}`).Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get catalogsource from namespace: %s", namespace)
+	}
+	if len(output) > 0 {
+		e2e.Logf("at least one catalogsource is not READY: '%s'", output)
+		return "", nil
+	}
+
+	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[*].metadata.name}`).Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get catalogsource from namespace: %s", namespace)
 	}
