@@ -92,7 +92,7 @@ spec:
     type: Service
   proxy:
     - alias: thanos-querier
-      authorize: true
+      authorization: UserToken
       endpoint:
         service:
           name: thanos-querier

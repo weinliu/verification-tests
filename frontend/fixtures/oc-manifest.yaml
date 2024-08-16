@@ -95,5 +95,5 @@ spec:
         name: thanos-querier
         namespace: openshift-monitoring
         port: 9091
-        authorize: true
+        authorization: UserToken
       type: Service
