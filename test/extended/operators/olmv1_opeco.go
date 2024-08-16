@@ -759,6 +759,94 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-High-75218-Disabling the CRD Upgrade Safety preflight checks", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			ns                           = "ns-75218"
+			sa                           = "sa75218"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75218",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75218",
+				Template: clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-75218",
+				InstallNamespace: ns,
+				PackageName:      "nginx75218",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.1",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clusterextension v1.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		exutil.By("update the version to 1.0.2, report messages and upgrade safety fail")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`scope changed from "Namespaced" to "Cluster"`))
+		o.Expect(message).To(o.ContainSubstring(`.spec.field1 may not be removed`))
+		o.Expect(message).To(o.ContainSubstring(`calculating schema diff for CRD version "v1alpha1"`))
+
+		exutil.By("disabled crd upgrade safety check, it will not affect spec.scope: Invalid value: Cluster")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore","preflight":{"crdUpgradeSafety":{"disabled":true}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition.apiextensions.k8s.io "nginxolm75218s.cache.example.com" is invalid: spec.scope: Invalid value: "Cluster": field is immutable`))
+
+		exutil.By("disabled crd upgrade safety check An existing stored version of the CRD is removed")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore","preflight":{"crdUpgradeSafety":{"disabled":true}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`must have exactly one version marked as storage version, status.storedVersions[0]: Invalid value: "v1alpha1": must appear in spec.versions`))
+
+		exutil.By("disabled crd upgrade safety successfully")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.5","upgradeConstraintPolicy":"Ignore","preflight":{"crdUpgradeSafety":{"disabled":true}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
+		clusterextension.GetBundleResource(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.5"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.5-nginxolm75218 successfully"))
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
