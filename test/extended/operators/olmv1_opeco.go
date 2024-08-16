@@ -1174,4 +1174,112 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-High-75516-CRD upgrade checks for the field maximum minimum changes", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			ns                           = "ns-75516"
+			sa                           = "sa75516"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75516",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75516",
+				Template: clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-75516",
+				InstallNamespace: ns,
+				PackageName:      "nginx75516",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.1",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clusterextension v1.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		exutil.By("upgrade will be prevented if The minimum value of an existing field is increased in an existing version and The maximum value of an existing field is decreased in an existing version")
+		exutil.By("Check minimum & maximum")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("maximum constraint decreased from 100 to 80"))
+		o.Expect(message).To(o.ContainSubstring("minimum constraint increased from 10 to 20"))
+
+		exutil.By("Check minLength & maxLength")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("maximum length constraint decreased from 50 to 30"))
+		o.Expect(message).To(o.ContainSubstring("minimum length constraint increased from 3 to 9"))
+
+		exutil.By("Check minProperties & maxProperties")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.4","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("maximum properties constraint decreased from 5 to 4"))
+		o.Expect(message).To(o.ContainSubstring("minimum properties constraint increased from 2 to 3"))
+
+		exutil.By("Check minItems & maxItems")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.5","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("maximum items constraint decreased from 10 to 9"))
+		o.Expect(message).To(o.ContainSubstring("minimum items constraint increased from 2 to 3"))
+
+		exutil.By("upgrade will be prevented if Minimum or maximum field constraints are added to a field that did not previously have constraints")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`version "v1alpha1", field "^.spec.field1": maximum constraint added when one did not exist previously: 100`))
+		o.Expect(message).To(o.ContainSubstring(`version "v1alpha1", field "^.spec.field1": minimum constraint added when one did not exist previously: 10`))
+
+		exutil.By("upgrade will be Allowed if The minimum value of an existing field is decreased in an existing version & The maximum value of an existing field is increased in an existing version")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.7","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
+		clusterextension.GetBundleResource(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.7"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.7-nginxolm75516 successfully"))
+
+	})
+
 })
