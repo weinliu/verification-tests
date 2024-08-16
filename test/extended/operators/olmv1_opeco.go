@@ -840,6 +840,93 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-High-75123-CRD upgrade checks for changes in required field and field type", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			ns                           = "ns-75123"
+			sa                           = "sa75123"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75123",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75123",
+				Template: clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-75123",
+				InstallNamespace: ns,
+				PackageName:      "nginx75123",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.1",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clusterextension v1.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		exutil.By("upgrade will be prevented if A new required field is added to an existing version of the CRD")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec": new required fields added: [requiredfield2]`))
+
+		exutil.By("upgrade will be prevented if An existing field is removed from an existing version of the CRD")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "NoExistingFieldRemoved" validation failed: crd/nginxolm75123s.cache.example.com version/v1alpha1 field/^.spec.field may not be removed`))
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: calculating schema diff for CRD version "v1alpha1"`))
+
+		exutil.By("upgrade will be prevented if An existing field type is changed in an existing version of the CRD")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field" has unknown change, refusing to determine that change is safe`))
+
+		exutil.By("upgrade will be allowed if An existing required field is changed to optional in an existing version")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.8","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
+		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
+		clusterextension.GetBundleResource(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.8"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.8-nginxolm75123 successfully"))
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-High-75124-CRD upgrade checks for changes in default values", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
