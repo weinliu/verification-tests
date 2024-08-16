@@ -25,10 +25,10 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("This is required to run on OVNKubernetes Network Backened")
 		}
-		masterNode, getMasterNodeErr := exutil.GetFirstMasterNode(oc)
-		o.Expect(getMasterNodeErr).NotTo(o.HaveOccurred())
+		workerNode, getWorkerNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getWorkerNodeErr).NotTo(o.HaveOccurred())
 
-		ovnkubePod, getPodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", masterNode)
+		ovnkubePod, getPodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", workerNode)
 		o.Expect(getPodErr).NotTo(o.HaveOccurred())
 
 		//following checks are needed until udn feature gets GA'ed
