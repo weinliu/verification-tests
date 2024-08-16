@@ -1448,4 +1448,26 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 	})
+
+	// author: huliu@redhat.com
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-24721-Add support for machine tags [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure)
+		exutil.By("Create a machineset")
+		machinesetName := infrastructureName + "-24721"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		exutil.By("Update machineset with tags")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"tags":{"key24721a":"value24721a","key24721b":"value24721b"}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		exutil.By("Check machine with tags")
+		tags, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.tags}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("tags:%s", tags)
+		o.Expect(tags).Should(o.ContainSubstring("key24721b"))
+	})
 })
