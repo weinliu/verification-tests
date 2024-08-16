@@ -179,6 +179,8 @@ class SummaryClient:
             return True
         if "unable to retrieve source image gcr.io/kubebuilder/kube-rbac-proxy" in message:
             return True
+        if re.search("Get \"https:.*: EOF",message):
+            return True
         return False
 
 
