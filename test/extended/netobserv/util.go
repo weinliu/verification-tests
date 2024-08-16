@@ -26,6 +26,7 @@ type TestClientServerTemplate struct {
 	ServerNS   string
 	ClientNS   string
 	ObjectSize string
+	LargeBlob  string
 	Template   string
 }
 
@@ -363,7 +364,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 }
 
 func (testTemplate *TestClientServerTemplate) createTestClientServer(oc *exutil.CLI) error {
-	configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVER_NS="+testTemplate.ServerNS, "-p", "CLIENT_NS="+testTemplate.ClientNS, "-p", "OBJECT_SIZE="+testTemplate.ObjectSize)
+	configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVER_NS="+testTemplate.ServerNS, "-p", "CLIENT_NS="+testTemplate.ClientNS, "-p", "OBJECT_SIZE="+testTemplate.ObjectSize, "-p", "LARGE_BLOB="+testTemplate.LargeBlob)
 
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
 	if err != nil {

@@ -129,9 +129,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
 
-		g.By("Ensure flowcollector is ready")
-		flow.WaitForFlowcollectorReady(oc)
-
 		g.By("Verify flowcollector is deployed with IPFIX exporter")
 		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.exporters[0].type}'").Output()
 		o.Expect(err).ToNot(o.HaveOccurred())
@@ -191,7 +188,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-		flow.WaitForFlowcollectorReady(oc)
 
 		g.By("Verify OTEL pods are receiving the logs")
 		otelCollectorPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", otelPodLabel, "-o=jsonpath={.items[0].metadata.name}").Output()
@@ -227,6 +223,5 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		nCount, err := strconv.Atoi(strings.Trim(count, "\n"))
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(nCount).To(o.BeNumerically(">", 0))
-
 	})
 })

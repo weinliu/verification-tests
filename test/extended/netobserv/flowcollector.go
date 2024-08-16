@@ -135,6 +135,7 @@ func (flow Flowcollector) CreateFlowcollector(oc *exutil.CLI) {
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
+	flow.WaitForFlowcollectorReady(oc)
 }
 
 // delete flowcollector CRD from a cluster

@@ -3,10 +3,8 @@ package netobserv
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"os/exec"
-	"strconv"
 
 	filePath "path/filepath"
 	"strings"
@@ -56,7 +54,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiPackageName = "loki-operator"
 		ls              *lokiStack
 		Lokiexisting    = false
-		lokiSource      = CatalogSourceObjects{"stable", catsrc.Name, catsrc.Namespace}
+		lokiSource      = CatalogSourceObjects{"stable-6.0", catsrc.Name, catsrc.Namespace}
 		LO              = SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
 			Namespace:     lokiNS,
@@ -199,7 +197,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				defer flow.DeleteFlowcollector(oc)
 				flow.CreateFlowcollector(oc)
-				flow.WaitForFlowcollectorReady(oc)
 
 				g.By("Verify flowlogs-pipeline metrics")
 				FLPpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=flowlogs-pipeline")
@@ -251,8 +248,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				defer flow.DeleteFlowcollector(oc)
 				flow.CreateFlowcollector(oc)
-				g.By("Ensure flowcollector pods are ready")
-				flow.WaitForFlowcollectorReady(oc)
 
 				g.By("Verify flowlogs-pipeline metrics")
 				tlsScheme, err := getMetricsScheme(oc, flpPromSM, flow.Namespace)
@@ -297,7 +292,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				defer flow.DeleteFlowcollector(oc)
 				flow.CreateFlowcollector(oc)
-				flow.WaitForFlowcollectorReady(oc)
 
 				g.By("Verify eBPF agent metrics")
 				eBPFpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=netobserv-ebpf-agent")
@@ -337,8 +331,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 				defer flow.DeleteFlowcollector(oc)
 				flow.CreateFlowcollector(oc)
-				g.By("Ensure flowcollector pods are ready")
-				flow.WaitForFlowcollectorReady(oc)
 
 				g.By("Verify eBPF metrics")
 				tlsScheme, err := getMetricsScheme(oc, eBPFPromSM, flow.Namespace+"-privileged")
@@ -384,9 +376,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
 
-		g.By("Ensure flows are observed and all pods are running")
-		flow.WaitForFlowcollectorReady(oc)
-
 		g.By("get flowlogs from loki")
 		token := getSAToken(oc, "netobserv-plugin", namespace)
 		lokilabels := Lokilabels{
@@ -414,41 +403,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords > 0")
 
-		g.By("Ensure correctness of flows")
-		var multiplier int = 0
-		switch unit := testTemplate.ObjectSize[len(testTemplate.ObjectSize)-1:]; unit {
-		case "K":
-			multiplier = 1024
-		case "M":
-			multiplier = 1024 * 1024
-		case "G":
-			multiplier = 1024 * 1024 * 1024
-		default:
-			panic("invalid object size unit")
-		}
-		nObject, _ := strconv.Atoi(testTemplate.ObjectSize[0 : len(testTemplate.ObjectSize)-1])
-		// minBytes is the size of the object fetched
-		minBytes := nObject * multiplier
-		// maxBytes is the minBytes +2% tolerance
-		maxBytes := int(float64(minBytes) + (float64(minBytes) * 0.02))
-		var errFlows float64 = 0
-		nflows := float64(len(flowRecords))
-
-		for _, r := range flowRecords {
-			// occurs very rarely but sometimes >= comparison can be flaky
-			// when eBPF-agent evicts packets sooner,
-			// currently it configured to be 15seconds.
-			if r.Flowlog.Bytes <= minBytes {
-				errFlows += 1
-			}
-			if r.Flowlog.Bytes >= maxBytes {
-				errFlows += 1
-			}
-			r.Flowlog.verifyFlowRecord()
-		}
-		// allow only 10% of flows to have Bytes violating minBytes and maxBytes.
-		tolerance := math.Ceil(nflows * 0.10)
-		o.Expect(errFlows).Should(o.BeNumerically("<=", tolerance))
+		// verify flow correctness
+		verifyFlowCorrectness(testTemplate.ObjectSize, flowRecords)
 
 		// verify inner metrics
 		query := fmt.Sprintf(`sum(rate(netobserv_workload_ingress_bytes_total{SrcK8S_Namespace="%s"}[1m]))`, testTemplate.ClientNS)
@@ -485,9 +441,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-
-		g.By("Ensure flows are observed and all pods are running")
-		flow.WaitForFlowcollectorReady(oc)
 
 		// verify logs
 		g.By("Escalate SA to cluster admin")
@@ -583,7 +536,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-		flow.WaitForFlowcollectorReady(oc)
 
 		g.By("Deploying test server and client pods")
 		template := filePath.Join(baseDir, "test-client-server_template.yaml")
@@ -706,7 +658,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-		flow.WaitForFlowcollectorReady(oc)
 
 		g.By("Get NetObserv and components versions")
 		NOCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[1].env[0].value}").Output()
@@ -810,7 +761,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-		flow.WaitForFlowcollectorReady(oc)
 
 		ipStackType := checkIPStackType(oc)
 		var sctpServerPodIP string
@@ -942,9 +892,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
 
-		g.By("Ensure flows are observed and all pods are running")
-		flow.WaitForFlowcollectorReady(oc)
-
 		// verify logs
 		g.By("Escalate SA to cluster admin")
 		defer func() {
@@ -1050,9 +997,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
 
-		g.By("Ensure flowcollector is ready")
-		flow.WaitForFlowcollectorReady(oc)
-
 		// verify logs
 		g.By("Escalate SA to cluster admin")
 		defer func() {
@@ -1104,8 +1048,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-		g.By("Ensure flowcollector is ready")
-		flow.WaitForFlowcollectorReady(oc)
 
 		// verify configured alerts for flp
 		g.By("Get FLP Alert name and Alert Rules")
@@ -1390,7 +1332,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-		flow.WaitForFlowcollectorReady(oc)
 
 		g.By("Escalate SA to cluster admin")
 		defer func() {
@@ -1415,6 +1356,64 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows written to loki > 0")
 	})
 
+	g.It("Author:aramesha-High-67782-Verify large volume downloads [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Deploy FlowCollector")
+		flow := Flowcollector{
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
+		}
+
+		defer flow.DeleteFlowcollector(oc)
+		flow.CreateFlowcollector(oc)
+
+		startTime := time.Now()
+
+		g.By("Deploying test server and client pods")
+		template := filePath.Join(baseDir, "test-client-server_template.yaml")
+		testTemplate := TestClientServerTemplate{
+			ServerNS:   "test-server-67782",
+			ClientNS:   "test-client-67782",
+			ObjectSize: "100M",
+			LargeBlob:  "yes",
+			Template:   template,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
+		err := testTemplate.createTestClientServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err := removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		g.By("Wait for 1 min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testTemplate.ServerNS,
+			DstK8S_Namespace: testTemplate.ClientNS,
+			SrcK8S_OwnerName: "nginx-service",
+			FlowDirection:    "0",
+		}
+
+		g.By("Verify flows are written to loki")
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows written to loki > 0")
+
+		// verify flow correctness
+		verifyFlowCorrectness(testTemplate.ObjectSize, flowRecords)
+	})
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {
@@ -1522,8 +1521,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			defer flow.DeleteFlowcollector(oc)
 			flow.CreateFlowcollector(oc)
 
-			g.By("Ensure flows are observed, all pods are running and secrets are synced")
-			flow.WaitForFlowcollectorReady(oc)
+			g.By("Ensure secrets are synced")
 			// ensure certs are synced to privileged NS
 			secrets, err := getSecrets(oc, namespace+"-privileged")
 			o.Expect(err).ToNot(o.HaveOccurred())
@@ -1701,9 +1699,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			flow.NetworkPolicyEnable = "false"
 			flow.CreateFlowcollector(oc)
 
-			g.By("Ensure all pods are running")
-			flow.WaitForFlowcollectorReady(oc)
-
 			g.By("Verify Kafka consumer pod logs")
 			podLogs, err = exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", consumerPodName, `'{"AgentIP":'`)
 			exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with job-name=network-flows-export-consumer label")
@@ -1760,9 +1755,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			networkPolicy, err := oc.AsAdmin().Run("get").Args("networkPolicy", "netobserv", "-n", flow.Namespace).Output()
 			o.Expect(err).ToNot(o.HaveOccurred())
 			o.Expect(networkPolicy).NotTo(o.BeEmpty())
-
-			g.By("Ensure flows are observed, all pods are running and secrets are synced")
-			flow.WaitForFlowcollectorReady(oc)
 
 			// ensure certs are synced to privileged NS
 			secrets, err := getSecrets(oc, flowNS+"-privileged")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -246,6 +247,44 @@ func verifyConversationRecordTime(record []FlowRecord) {
 	for _, r := range record {
 		r.Flowlog.verifyConversationRecord()
 	}
+}
+
+// Verify flow correctness based on number of bytes
+func verifyFlowCorrectness(objectSize string, flowRecords []FlowRecord) {
+	var multiplier int = 0
+	switch unit := objectSize[len(objectSize)-1:]; unit {
+	case "K":
+		multiplier = 1024
+	case "M":
+		multiplier = 1024 * 1024
+	case "G":
+		multiplier = 1024 * 1024 * 1024
+	default:
+		panic("invalid object size unit")
+	}
+	nObject, _ := strconv.Atoi(objectSize[0 : len(objectSize)-1])
+	// minBytes is the size of the object fetched
+	minBytes := nObject * multiplier
+	// maxBytes is the minBytes +2% tolerance
+	maxBytes := int(float64(minBytes) + (float64(minBytes) * 0.02))
+	var errFlows float64 = 0
+	nflows := float64(len(flowRecords))
+
+	for _, r := range flowRecords {
+		// occurs very rarely but sometimes >= comparison can be flaky
+		// when eBPF-agent evicts packets sooner,
+		// currently it configured to be 15seconds.
+		if r.Flowlog.Bytes <= minBytes {
+			errFlows += 1
+		}
+		if r.Flowlog.Bytes >= maxBytes {
+			errFlows += 1
+		}
+		r.Flowlog.verifyFlowRecord()
+	}
+	// allow only 10% of flows to have Bytes violating minBytes and maxBytes.
+	tolerance := math.Ceil(nflows * 0.10)
+	o.Expect(errFlows).Should(o.BeNumerically("<=", tolerance))
 }
 
 func removeSAFromAdmin(oc *exutil.CLI, saName string, namespace string) error {
