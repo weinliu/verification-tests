@@ -685,6 +685,80 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-High-74978-CRD upgrade will be prevented if the Scope is switched between Namespaced and Cluster", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			ns                           = "ns-74978"
+			sa                           = "sa74978"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-74978",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm74978",
+				Template: clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-74978",
+				InstallNamespace: ns,
+				PackageName:      "nginx74978",
+				Channel:          "candidate-v1.0",
+				Version:          "1.0.1",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clusterextension v1.0.1")
+		defer clusterextension.Delete(oc)
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		exutil.By("Update the version to 1.0.2, check changed from Namespaced to Cluster")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Namespaced" to "Cluster"`))
+
+		clusterextension.Delete(oc)
+
+		exutil.By("Create clusterextension v1.0.2")
+		clusterextension.Version = "1.0.2"
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
+
+		exutil.By("Update the version to 1.0.3, check changed from Cluster to Namespaced")
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
+
+		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Cluster" to "Namespaced"`))
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
