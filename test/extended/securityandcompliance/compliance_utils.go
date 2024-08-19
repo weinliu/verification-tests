@@ -841,7 +841,7 @@ func removeLabelFromWorkerNode(oc *exutil.CLI, workerNodeName string) {
 }
 
 func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) {
-	err := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 480*time.Second, func() (bool, error) {
 		mCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.machineCount}").Output()
 		e2e.Logf("MachineCount:%v", mCount)
 		unmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.unavailableMachineCount}").Output()
@@ -1247,4 +1247,23 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 // Get something existing resource
 func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
 	return doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
+}
+
+func create_machineconfig(oc *exutil.CLI, ns string, mcName string, id int) {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "securityandcompliance")
+	mcTemplate := filepath.Join(buildPruningBaseDir, "machine-config.yaml")
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", mcTemplate, "-n", ns, "-p", "NAME="+mcName, "ID="+strconv.Itoa(id))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func delete_machineconfig(oc *exutil.CLI, nsName string, mcName string) {
+	cleanupObjects(oc, objectTableRef{"machineconfig", nsName, mcName})
+}
+
+func getResouceCnt(oc *exutil.CLI, resource string, keyword string) int {
+	cmd := fmt.Sprintf(`oc get %v -A | grep %v | wc -l | awk '$1=$1' | tr -d '\n'`, resource, keyword)
+	cnt, errCmd := exec.Command("bash", "-c", cmd).Output()
+	o.Expect(errCmd).NotTo(o.HaveOccurred())
+	nsCntint, _ := strconv.Atoi(string(cnt))
+	return nsCntint
 }

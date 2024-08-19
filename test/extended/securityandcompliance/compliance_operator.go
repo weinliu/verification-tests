@@ -6,11 +6,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	"path/filepath"
@@ -60,6 +62,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		consoleNotificationYAML          string
 		networkPolicyYAML                string
 		machineConfigPoolYAML            string
+		mcTemplate                       string
+		mcWithoutIgnitionEnableAuditYAML string
 		prometheusAuditRuleYAML          string
 		wordpressRouteYAML               string
 		resourceQuotaYAML                string
@@ -111,6 +115,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		consoleNotificationYAML = filepath.Join(buildPruningBaseDir, "consolenotification.yaml")
 		networkPolicyYAML = filepath.Join(buildPruningBaseDir, "network-policy.yaml")
 		machineConfigPoolYAML = filepath.Join(buildPruningBaseDir, "machineConfigPool.yaml")
+		mcTemplate = filepath.Join(buildPruningBaseDir, "machine-config.yaml")
+		mcWithoutIgnitionEnableAuditYAML = filepath.Join(buildPruningBaseDir, "machineconfig-no-igntion-enable-audit.yaml")
 		prometheusAuditRuleYAML = filepath.Join(buildPruningBaseDir, "prometheus-audit.yaml")
 		wordpressRouteYAML = filepath.Join(buildPruningBaseDir, "wordpress-route.yaml")
 		resourceQuotaYAML = filepath.Join(buildPruningBaseDir, "resource-quota.yaml")
@@ -6451,6 +6457,127 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Check the scan result pods.. !!!\n")
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 		subD.complianceSuiteResult(oc, ssbCustomNodeselector.name, "NON-COMPLIANT INCONSISTENT")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-Medium-53667-Check the ocp4-pci-dss-modified-api-checks-pod will not in CrashLoopBackoff state with large scale of mc [Disruptive][Slow]", func() {
+		g.By("Set initial value !!!\n")
+		var (
+			cnt           int
+			mcPrefix      = "isc-test-mc-53667-"
+			mcCount       = int64(150)
+			mcEnableAudit = "isc-mc-53667-enable-audit" + getRandomString()
+			ss            = scanSettingDescription{
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "auto-rem-ss" + getRandomString(),
+				namespace:              subD.namespace,
+				roles1:                 "wrscan",
+				rotation:               5,
+				schedule:               "0 1 * * *",
+				strictnodescan:         false,
+				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
+				suspend:                false,
+				template:               scansettingSingleTemplate,
+			}
+			ssb = scanSettingBindingDescription{
+				name:            "pci-dss-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-pci-dss-node",
+				profilename2:    "ocp4-pci-dss",
+				scansettingname: ss.name,
+				template:        scansettingbindingTemplate,
+			}
+		)
+
+		// checking all nodes are in Ready state before the test case starts
+		checkNodeStatus(oc)
+		// adding label to one rhcos worker node to skip rhel and other RHCOS worker nodes
+		g.By("Label one rhcos worker node as wrscan.. !!!\n")
+		workerNodeName := getOneRhcosWorkerNodeName(oc)
+		setLabelToOneWorkerNode(oc, workerNodeName)
+
+		defer func() {
+			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
+			cleanupObjects(oc, objectTableRef{"ssb", subD.namespace, ssb.name})
+			cleanupObjects(oc, objectTableRef{"ss", subD.namespace, ss.name})
+			checkMachineConfigPoolStatus(oc, "worker")
+			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
+			checkMachineConfigPoolStatus(oc, "worker")
+			checkNodeStatus(oc)
+		}()
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+
+		g.By("Create wrscan machineconfigpool.. !!!\n")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, ss.roles1)
+
+		g.By("Update kenel audit... !!!\n")
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, mcEnableAudit})
+		}()
+		errEnableAudit := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", mcWithoutIgnitionEnableAuditYAML, "-p", "NAME="+mcEnableAudit, "ROLE="+ss.roles1)
+		o.Expect(errEnableAudit).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, ss.roles1)
+
+		g.By("Create a large scale of machineconfigs... !!!\n")
+		defer func() {
+			for i := int64(0); i < mcCount; i++ {
+				go func(i int64) {
+					defer g.GinkgoRecover()
+					cleanupObjects(oc, objectTableRef{"mc", subD.namespace, mcPrefix + strconv.Itoa(int(i))})
+				}(i)
+			}
+			err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+				nsCnt := getResouceCnt(oc, "mc", mcPrefix)
+				if nsCnt == int(0) {
+					return true, nil
+				}
+				return false, nil
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		for mcId := int64(0); mcId < mcCount; mcId++ {
+			go func(mcId int64) {
+				defer g.GinkgoRecover()
+				err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", mcTemplate, "-n", subD.namespace, "-p", "NAME="+mcPrefix+strconv.Itoa(int(mcId)), "ID="+strconv.Itoa(int(mcId)))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}(mcId)
+		}
+		errPoll := wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
+			cnt = getResouceCnt(oc, "mc", mcPrefix)
+			if cnt == int(mcCount) {
+				return true, nil
+			}
+			return false, nil
+		})
+		if errPoll != nil {
+			e2e.Logf("The created machineconfig number is: %d", cnt)
+		}
+		o.Expect(errPoll).NotTo(o.HaveOccurred())
+
+		g.By("Create scansetting and scansettingbinding... !!!\n")
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace, ss.name,
+			"-o=jsonpath={.metadata.name}"}).check(oc)
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check test results !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancesuite",
+			ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+		g.By("ocp-53667 Check the ocp4-pci-dss-modified-api-checks-pod will not in CrashLoopBackoff state with large scale of mc... !!!\n")
 	})
 
 	// author: xiyuan@redhat.com
