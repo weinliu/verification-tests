@@ -1523,7 +1523,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 	})
 
 	// author: minmli@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
+	g.It("Author:minmli-ROSA-ARO-OSD_CCS-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
+		ns := "test-50397-" + getRandomString()
 		defer func() {
 			g.By("delete Security Profile Operator !!!")
 			cleanupObjectsIgnoreNotFound(oc,
@@ -1537,7 +1538,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 
 		seccompP = seccompProfile{
 			name:      "sleep-sh-pod",
-			namespace: "spo",
+			namespace: ns,
 			template:  secProfileTemplate,
 		}
 
@@ -1545,7 +1546,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		defer deleteNamespace(oc, seccompP.namespace)
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", seccompP.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("seccompprofiles", "--all", "-n", seccompP.namespace, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("seccompprofiles", "--all", "-n", seccompP.namespace, "--ignore-not-found", "--timeout=20s").Execute()
 		seccompP.create(oc)
 
 		g.By("Check the SeccompProfile is created sucessfully !!!")

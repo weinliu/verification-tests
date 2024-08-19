@@ -118,7 +118,7 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 }
 
 func deleteNamespace(oc *exutil.CLI, namespace string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", namespace, "--ignore-not-found", "--timeout=20s").Execute()
 	if err != nil {
 		nsStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", namespace, "-n", namespace, "-o=jsonpath={.status}").Output()
 		e2e.Logf("The result of \"oc get ns %s -n %s =-o=jsonpath={.status}\" is: %s", namespace, namespace, nsStatus)
