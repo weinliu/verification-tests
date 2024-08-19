@@ -256,6 +256,23 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc get networkpolicy -n ${ocp_74292_ns2_name}`).its('stdout').should('include', 'default-deny');
   });
 
+  it('(OCP-75644,yapei,UserInterface)console plugin proxy should directly copy the plugin service proxy response status code',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
+    let status_code;
+    cy.adminCLI(`oc -n console-demo-plugin create route passthrough --service console-demo-plugin`);
+    cy.adminCLI(`oc get route console-demo-plugin -n console-demo-plugin -o jsonpath='{.spec.host}'`)
+      .then(result => {
+        const console_demo_plugin_host = result.stdout;
+        cy.request(`https://${console_demo_plugin_host}/plugin-manifest.json`)
+          .then(resp => {
+            status_code = resp.status
+          })
+      })
+    cy.request('/api/plugins/console-demo-plugin/plugin-manifest.json')
+      .then(resp => {
+        expect(resp.status).to.eq(status_code);
+      })
+  });
+
   it('(OCP-53234,yapei,UserInterface) Show alert when console operator is Unmanaged',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
     // set console to Unmanaged
     cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Unmanaged"}}' --type merge`).then((result) => {
