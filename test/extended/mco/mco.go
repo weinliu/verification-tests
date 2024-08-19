@@ -2376,6 +2376,8 @@ nulla pariatur.`
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
 		workerNode := skipTestIfOsIsNotCoreOs(oc)
 
+		mcp.SetWaitingTimeForExtensionsChange()
+
 		// Create MC to add kernel arg 'test1'
 		exutil.By(fmt.Sprintf("Create a MC to add a kernel arg: %s", kernelArg1))
 		mcArgs1 := NewMachineConfig(oc.AsAdmin(), mcNameArg1, MachineConfigPoolWorker)

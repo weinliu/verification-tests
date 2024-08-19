@@ -372,12 +372,15 @@ func (n Node) GetCurrentBootOSImage() (string, error) {
 
 	logger.Infof("Current booted container-image-reference: %s", containerRef)
 
-	imageSplit := strings.SplitN(containerRef.ToString(), ":", 2)
-	if len(imageSplit) != 2 {
+	imageSplit := strings.Split(containerRef.ToString(), ":")
+	lenImageSplit := len(imageSplit)
+	if lenImageSplit < 2 {
 		return "", fmt.Errorf("Wrong container-image-reference in deployment:\n%s\n%s", err, deployment)
 	}
 
-	return imageSplit[1], nil
+	image := imageSplit[lenImageSplit-2] + ":" + imageSplit[lenImageSplit-1]
+
+	return image, nil
 }
 
 // Cordon cordons the node by running the "oc adm cordon" command

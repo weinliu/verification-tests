@@ -118,7 +118,10 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Medium-69216-MachineConfigNode UpdateCompatible is Unknown when MC contains kernel argument in ignition section [Disruptive]", func() {
+	// After this PR https://github.com/openshift/machine-config-operator/pull/4158 MCs are checked before applying it to the nodes, and if they cannot be rendered
+	// then the MCP is drectly degraded without modifying any node. Hence, we cannot check  "UpdatePrepared/UpdateCompatible" condition using this test case.
+	// We deprecate the test case until finding a way to test this condition properly.
+	g.It("Author:rioliu-DEPRECATED-NonPreRelease-Medium-69216-MachineConfigNode UpdateCompatible is Unknown when MC contains kernel argument in ignition section [Disruptive]", func() {
 
 		var (
 			mcName            = "mco-tc-66376-reject-ignition-kernel-arguments"
