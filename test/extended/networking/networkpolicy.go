@@ -1904,4 +1904,101 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(createResourceFromFileWithError(oc, ns, networkPolicyFile)).To(o.HaveOccurred())
 	})
 
+	// author: meinli@redhat.com
+	g.It("Author:meinli-High-70009-Pod IP is missing from OVN DB AddressSet when using allow-namespace-only network policy", func() {
+		var (
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
+			allowSameNSNetworkPolicyFile = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-same-namespace.yaml")
+			pingPodNodeTemplate          = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("This case requires 1 nodes, but the cluster has none")
+		}
+
+		exutil.By("1. Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("2. Create a network policy in namespace")
+		createResourceFromFile(oc, ns, allowSameNSNetworkPolicyFile)
+		output, err := oc.AsAdmin().Run("get").Args("networkpolicy", "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-same-namespace"))
+
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
+
+		exutil.By("3. Check the acl from the port-group from the OVNK leader ovnkube-node")
+		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group | grep -C 2 '%s\\:allow-same-namespace'", ns)
+		listPGCOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listPGCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listPGCOutput).NotTo(o.BeEmpty())
+		e2e.Logf("Output %s", listPGCOutput)
+
+		exutil.By("4. Check the addresses in ACL's address-set is empty")
+		var PGCMap map[string]string
+		PGCMap = nbContructToMap(listPGCOutput)
+		acls := strings.Split(strings.Trim(PGCMap["acls"], "[]"), ", ")
+		o.Expect(len(acls)).To(o.Equal(2))
+
+		listAclCmd := fmt.Sprintf("ovn-nbctl list acl %s", strings.Join(acls, " "))
+		listAclOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAclCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listAclOutput).NotTo(o.BeEmpty())
+
+		regex := `\{\$(\w+)\}`
+		re := regexp.MustCompile(regex)
+		addrSetNames := re.FindAllString(listAclOutput, -1)
+		if len(addrSetNames) == 0 {
+			e2e.Fail("No matched address_set name found")
+		}
+		addrSetName := strings.Trim(addrSetNames[0], "{$}")
+		o.Expect(addrSetName).NotTo(o.BeEmpty())
+
+		listAddressSetCmd := fmt.Sprintf("ovn-nbctl list address_set %s", addrSetName)
+		listAddrOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAddressSetCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listAddrOutput).NotTo(o.BeEmpty())
+		var AddrMap map[string]string
+		AddrMap = nbContructToMap(listAddrOutput)
+		addrs := strings.Trim(AddrMap["addresses"], "[]")
+		o.Expect(addrs).To(o.BeEmpty())
+
+		exutil.By("5. Create a hello pod on non existent node")
+		nonexistNodeName := "doesnotexist-" + getRandomString()
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nonexistNodeName,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+
+		exutil.By("6. Verify address is not added to address-set")
+		listAddrOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAddressSetCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listAddrOutput).NotTo(o.BeEmpty())
+		AddrMap = nbContructToMap(listAddrOutput)
+		addrs = strings.Trim(AddrMap["addresses"], "[]")
+		o.Expect(addrs).To(o.BeEmpty())
+
+		exutil.By("7. Delete the pods that did not reach running state and create it with valid node name")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pod1.nodename = nodeList.Items[0].Name
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("8. Verify address is added to address-set")
+		listAddrOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAddressSetCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		o.Expect(listAddrOutput).NotTo(o.BeEmpty())
+		AddrMap = nbContructToMap(listAddrOutput)
+		addrs = strings.Trim(AddrMap["addresses"], "[\"]")
+		o.Expect(addrs).NotTo(o.BeEmpty())
+		Pod1IP, _ := getPodIP(oc, ns, pod1.name)
+		o.Expect(addrs == Pod1IP).To(o.BeTrue())
+	})
 })
