@@ -136,6 +136,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
+	// OCPBUGS-32044
 	// author: jechen@redhat.com
 	g.It("Author:jechen-Medium-42878-Errorfile stanzas and dummy default html files have been added to the router", func() {
 		exutil.By("Get pod (router) in openshift-ingress namespace")
@@ -150,6 +151,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		searchOutput = readRouterPodData(oc, podname, "cat haproxy-config.template", "errorfile")
 		o.Expect(searchOutput).To(o.ContainSubstring(`ROUTER_ERRORFILE_404`))
 		o.Expect(searchOutput).To(o.ContainSubstring(`ROUTER_ERRORFILE_503`))
+
+		// https://issues.redhat.com/browse/OCPBUGS-32044
+		exutil.By("Check if 'idle-close-on-response' have been added into haproxy-config.template")
+		searchOutput = readRouterPodData(oc, podname, "cat haproxy-config.template", "idle-close-on-response")
+		o.Expect(searchOutput).To(o.ContainSubstring(`option idle-close-on-response`))
 	})
 
 	// author: jechen@redhat.com
