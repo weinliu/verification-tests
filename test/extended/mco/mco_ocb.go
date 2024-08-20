@@ -243,6 +243,10 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			}
 		)
 
+		if !entitlementSecret.Exists() {
+			g.Skip(fmt.Sprintf("There is no entitlement secret available in this cluster %s. This test case cannot be executed", entitlementSecret))
+		}
+
 		exutil.By("Create the entitlement secret in the MCO namespace")
 		mcoEntitlementSecret, err := CloneResource(entitlementSecret, "etc-pki-entitlement", MachineConfigNamespace, nil)
 		defer mcoEntitlementSecret.Delete()
