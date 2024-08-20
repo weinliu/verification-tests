@@ -2545,7 +2545,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		exutil.AssertWaitPollNoErr(err, "The crd crontabs72217.stable.example.com is not available in 60 seconds")
 		err = waitCreateCr(oc, cronCRF, ns72217)
 		exutil.AssertWaitPollNoErr(err, "The cr of  crontabs is not created in 120 seconds")
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ct", "-n", ns72217).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ct72217", "-n", ns72217).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create the second CRD and get by short name should see warning")
@@ -2556,7 +2556,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		exutil.AssertWaitPollNoErr(err, "The crd customtasks72217.example.com is not available in 60 seconds")
 		err = waitCreateCr(oc, customCRF, ns72217)
 		exutil.AssertWaitPollNoErr(err, "The cr of custometask is not created in 120 seconds")
-		_, outputWarning, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ct", "-n", ns72217).Outputs()
+		_, outputWarning, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ct72217", "-n", ns72217).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(outputWarning).To(o.ContainSubstring("could also match lower priority resource"))
 
@@ -2568,7 +2568,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		exutil.AssertWaitPollNoErr(err, "The crd cattoys72217.bate.example.com is not available in 60 seconds")
 		err = waitCreateCr(oc, catCRF, ns72217)
 		exutil.AssertWaitPollNoErr(err, "The cr of cattoy is not created in 120 seconds")
-		_, outputWarning, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ct", "-n", ns72217).Outputs()
+		_, outputWarning, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ct72217", "-n", ns72217).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(outputWarning).To(o.ContainSubstring("could also match lower priority resource customtasks72217.example.com"))
 		o.Expect(outputWarning).To(o.ContainSubstring("could also match lower priority resource crontabs72217.stable.example.com"))
