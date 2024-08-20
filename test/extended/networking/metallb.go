@@ -2036,4 +2036,206 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		o.Expect(verifyHostPrefixAdvertised(oc, bgpRouterNamespaceWithSuffix, expectedHostPrefixes)).To(o.BeTrue())
 	})
 
+	g.It("Author:asood-High-50945-Verify the L2 and L3 IP address can be assigned to services respectively from the IP address pool based on the advertisement.[Serial]", func() {
+		var (
+			testID                               = "50945"
+			workers                              []string
+			bgpPeers                             []string
+			namespaces                           []string
+			ipaddresspools                       = make(map[int][]string)
+			expectedHostPrefixes                 []string
+			bgpPassword                          string
+			serviceSelectorKey                   = "environ"
+			serviceSelectorValue                 = [1]string{"Test"}
+			namespaceLabelKey                    = "region"
+			namespaceLabelValue                  = [1]string{"NA"}
+			ipAddresspoolTemplate                = filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+			BGPPeerTemplate                      = filepath.Join(testDataDir, "bgppeer-template.yaml")
+			bgpAdvertisementTemplate             = filepath.Join(testDataDir, "bgpadvertisement-template.yaml")
+			l2AdvertisementTemplate              = filepath.Join(testDataDir, "l2advertisement-template.yaml")
+			loadBalancerServiceAnnotatedTemplate = filepath.Join(testDataDir, "loadbalancer-svc-annotated-template.yaml")
+			loadBalancerServiceTemplate          = filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+			l2Addresses                          = [2][2]string{{"192.168.111.65-192.168.111.69", "192.168.111.70-192.168.111.74"}, {"192.168.111.75-192.168.111.79", "192.168.111.80-192.168.111.85"}}
+			interfaces                           = [3]string{"br-ex", "eno1", "eno2"}
+			expectedAddressList                  = [2]string{"10.10.10.1", "192.168.111.65"}
+		)
+
+		//Two worker nodes needed to create BGP Advertisement object
+		workerList, getWorkersErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(getWorkersErr).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("These cases can only be run on cluster that has at least two worker nodes")
+		}
+		for i := 0; i < 2; i++ {
+			workers = append(workers, workerList.Items[i].Name)
+		}
+
+		exutil.By("1. Get the namespace")
+		ns := oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test"+testID)
+		exutil.By("Label the namespace")
+		_, errNsLabel := oc.AsAdmin().Run("label").Args("namespace", ns, namespaceLabelKey+"="+namespaceLabelValue[0], "--overwrite").Output()
+		o.Expect(errNsLabel).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Set up upstream/external BGP router")
+		suffix := getRandomString()
+		bgpRouterNamespaceWithSuffix := bgpRouterNamespace + "-" + suffix
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(bgpRouterNamespaceWithSuffix)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", bgpRouterPodName, "-n", bgpRouterNamespaceWithSuffix, "--ignore-not-found").Execute()
+		bgpPassword = "bgp-test"
+		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix, bgpPassword)).To(o.BeTrue())
+
+		exutil.By("3. Create BGP Peer")
+		BGPPeerCR := bgpPeerResource{
+			name:          "peer-64500",
+			namespace:     opNamespace,
+			holdTime:      "30s",
+			keepAliveTime: "10s",
+			password:      bgpPassword,
+			myASN:         myASN,
+			peerASN:       peerASN,
+			peerAddress:   peerIPAddress,
+			template:      BGPPeerTemplate,
+		}
+		defer removeResource(oc, true, true, "bgppeers", BGPPeerCR.name, "-n", BGPPeerCR.namespace)
+		bgpPeers = append(bgpPeers, BGPPeerCR.name)
+		o.Expect(createBGPPeerCR(oc, BGPPeerCR)).To(o.BeTrue())
+
+		exutil.By("4. Check BGP Session between speakers and Router")
+		o.Expect(checkBGPSessions(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+
+		exutil.By("5. Create L3 and L2 IP addresspools")
+		ipAddresspool := ipAddressPoolResource{
+			name:                      "ipaddresspool-bgp-" + testID,
+			namespace:                 opNamespace,
+			addresses:                 bgpAddresses[0][:],
+			namespaces:                namespaces,
+			priority:                  10,
+			avoidBuggyIPs:             true,
+			autoAssign:                true,
+			serviceLabelKey:           serviceSelectorKey,
+			serviceLabelValue:         serviceSelectorValue[0],
+			serviceSelectorKey:        serviceSelectorKey,
+			serviceSelectorOperator:   "In",
+			serviceSelectorValue:      serviceSelectorValue[:],
+			namespaceLabelKey:         namespaceLabelKey,
+			namespaceLabelValue:       namespaceLabelValue[0],
+			namespaceSelectorKey:      namespaceLabelKey,
+			namespaceSelectorOperator: "In",
+			namespaceSelectorValue:    namespaceLabelValue[:],
+			template:                  ipAddresspoolTemplate,
+		}
+		defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+		o.Expect(createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)).To(o.BeTrue())
+		ipaddresspools[0] = append(ipaddresspools[0], ipAddresspool.name)
+
+		ipAddresspool.name = "ipaddresspool-l2-" + testID
+		ipAddresspool.addresses = l2Addresses[0][:]
+		defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+		o.Expect(createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)).To(o.BeTrue())
+		ipaddresspools[1] = append(ipaddresspools[1], ipAddresspool.name)
+
+		exutil.By("6. Create BGP and L2 Advertisements")
+		bgpAdvertisement := bgpAdvertisementResource{
+			name:                  "bgp-adv-" + testID,
+			namespace:             opNamespace,
+			aggregationLength:     32,
+			aggregationLengthV6:   128,
+			communities:           bgpCommunties[:],
+			ipAddressPools:        ipaddresspools[0],
+			nodeSelectorsKey:      "kubernetes.io/hostname",
+			nodeSelectorsOperator: "In",
+			nodeSelectorValues:    workers[:],
+			peer:                  bgpPeers[:],
+			template:              bgpAdvertisementTemplate,
+		}
+		defer removeResource(oc, true, true, "bgpadvertisements", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace)
+		o.Expect(createBGPAdvertisementCR(oc, bgpAdvertisement)).To(o.BeTrue())
+
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv-" + testID,
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddresspools[1],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: workers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
+		o.Expect(createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)).To(o.BeTrue())
+
+		svcList := [2]string{"-l3-", "-l2-"}
+
+		exutil.By("7. Create L2 and L3 service")
+		annotatedSvc := loadBalancerServiceResource{
+			name:                          "",
+			namespace:                     ns,
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			annotationKey:                 "metallb.universe.tf/address-pool",
+			annotationValue:               "",
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceAnnotatedTemplate,
+		}
+
+		for i := 0; i < 2; i++ {
+			annotatedSvc.name = "hello-world" + svcList[i] + testID
+			annotatedSvc.annotationValue = ipaddresspools[i][0]
+
+			o.Expect(createLoadBalancerService(oc, annotatedSvc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+			err := checkLoadBalancerSvcStatus(oc, annotatedSvc.namespace, annotatedSvc.name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			svcIP := getLoadBalancerSvcIP(oc, annotatedSvc.namespace, annotatedSvc.name)
+			e2e.Logf("The %s service with annotation %s:%s created successfully, and assigned %s", annotatedSvc.name, annotatedSvc.annotationKey, annotatedSvc.annotationValue, svcIP)
+			o.Expect(strings.Contains(svcIP, expectedAddressList[i])).To(o.BeTrue())
+			masterNodeList, getMastersErr := exutil.GetClusterNodesBy(oc, "master")
+			o.Expect(getMastersErr).NotTo(o.HaveOccurred())
+			o.Expect(validateService(oc, masterNodeList[0], svcIP)).To(o.BeTrue())
+
+		}
+		exutil.By("8. Verify route is advertised")
+		expectedHostPrefixes = append(expectedHostPrefixes, expectedAddressList[0]+"/32")
+		o.Expect(verifyHostPrefixAdvertised(oc, bgpRouterNamespaceWithSuffix, expectedHostPrefixes)).To(o.BeTrue())
+
+		exutil.By(fmt.Sprintf("9. Update the L2 IP Addresspool %s", ipaddresspools[1][0]))
+		patchL2AddressPool := `[{"op": "replace", "path": "/spec/serviceAllocation/serviceSelectors/0/matchLabels", "value": {"environ": "Dev"}}, {"op": "replace", "path": "/spec/serviceAllocation/serviceSelectors/0/matchExpressions", "value":[{"key":"environ", "operator":"In", "values":["Dev"]}]} ]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", opNamespace, "ipaddresspools", ipaddresspools[1][0], "--type=json", "-p", patchL2AddressPool).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("10. Delete previously created services and create new ones without ip address pool annotation")
+		for i := 0; i < 2; i++ {
+			svcName := "hello-world" + svcList[i] + testID
+			removeResource(oc, true, true, "service", svcName, "-n", ns)
+		}
+
+		svcLabelValList := [2]string{"Test", "Dev"}
+		svc := loadBalancerServiceResource{
+			name:                          "",
+			namespace:                     ns,
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      serviceLabelKey,
+			labelValue:                    "",
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceTemplate,
+		}
+		exutil.By("11. Create L3 and L2 services")
+		for i := 0; i < 2; i++ {
+			svc.name = "hello-world" + svcList[i] + testID
+			svc.labelValue = svcLabelValList[i]
+			defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+			o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)).To(o.BeTrue())
+			err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+			e2e.Logf("The %s service created successfully IP %s assigned to it", svc.name, svcIP)
+			o.Expect(strings.Contains(svcIP, expectedAddressList[i])).To(o.BeTrue())
+			masterNodeList, getMastersErr := exutil.GetClusterNodesBy(oc, "master")
+			o.Expect(getMastersErr).NotTo(o.HaveOccurred())
+			o.Expect(validateService(oc, masterNodeList[0], svcIP)).To(o.BeTrue())
+
+		}
+
+	})
+
 })

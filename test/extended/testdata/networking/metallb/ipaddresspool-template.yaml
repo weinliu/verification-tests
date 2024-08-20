@@ -23,7 +23,7 @@ objects:
       - "${NAMESPACE2}"
       serviceSelectors:
         - matchLabels:
-          "${MLSERVICEKEY1}": ${MLSERVICEVALUE1}""
+            "${MLSERVICEKEY1}": "${MLSERVICEVALUE1}"
         - matchExpressions:
           - key: "${MESERVICEKEY1}"
             operator: "${MESERVICEOPERATOR1}"
