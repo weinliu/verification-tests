@@ -1385,4 +1385,36 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		}
 
 	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-75758-Bad certificate should not cause ovn pods crash. [Disruptive]", func() {
+		// https://issues.redhat.com/browse/OCPBUGS-36195
+
+		exutil.By("Get one worker node.")
+		node1, err := exutil.GetFirstCoreOsWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(node1) < 1 {
+			g.Skip("Skip the test as no enough worker nodes.")
+		}
+
+		exutil.By("Get the ovnkube-node pod on specific node.")
+		ovnPod, err := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", node1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ovnPod).ShouldNot(o.BeEmpty())
+
+		exutil.By("Create bad ovnkube-node-certs certificate")
+		cmd := `cd /var/lib/ovn-ic/etc/ovnkube-node-certs && ls | grep '^ovnkube-client-.*\.pem$' | grep -v 'ovnkube-client-current.pem' | xargs -I {} sh -c 'echo "" > {}'`
+		_, err = exutil.DebugNodeWithChroot(oc, node1, "bash", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Restart ovnkube-node pod on specific node.")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", ovnPod, "-n", "openshift-ovn-kubernetes", "--ignore-not-found=true").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Wait ovnkube-node pod to be running")
+		ovnPod, err = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", node1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ovnPod).ShouldNot(o.BeEmpty())
+		exutil.AssertPodToBeReady(oc, ovnPod, "openshift-ovn-kubernetes")
+	})
 })
