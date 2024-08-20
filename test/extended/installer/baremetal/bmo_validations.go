@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 	var (
 		oc           = exutil.NewCLI("cluster-baremetal-operator", exutil.KubeConfigPath())
 		iaasPlatform string
-		dirname      = "/tmp/-OCP-74940/"
+		dirname      string
 	)
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
@@ -140,6 +140,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 
 	// author: jhajyahy@redhat.com
 	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-74940-Root device hints should accept by-path device alias [Disruptive]", func() {
+		dirname = "OCP-74940.log"
 		bmhName, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		o.Expect(getBmhErr).NotTo(o.HaveOccurred(), "Failed to get bmh name")
 		baseDir := exutil.FixturePath("testdata", "installer")
@@ -147,9 +148,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		bmcAddress, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.spec.bmc.address}").Output()
 		bootMACAddress, getBbootMACAddressErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.spec.bootMACAddress}").Output()
 		o.Expect(getBbootMACAddressErr).NotTo(o.HaveOccurred(), "Failed to get bootMACAddress")
-		vendor, getVendorErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
-		o.Expect(getVendorErr).NotTo(o.HaveOccurred(), "Failed to get vendor")
-		rootDeviceHints := getBypathDeviceName(vendor)
+		rootDeviceHints := getBypathDeviceName(oc, bmhName)
 		bmcSecretName, getBMHSecretErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.spec.bmc.credentialsName}").Output()
 		o.Expect(getBMHSecretErr).NotTo(o.HaveOccurred(), "Failed to get bmh secret")
 		bmcSecretuser, getBmcUserErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", machineAPINamespace, bmcSecretName, "-o=jsonpath={.data.username}").Output()
@@ -187,7 +186,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 				Value: bootMACAddress,
 			},
 			{
-				Path:  "spec.rootDeviceHints",
+				Path:  "spec.rootDeviceHints.deviceName",
 				Value: rootDeviceHints,
 			},
 			{
@@ -261,7 +260,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
 		exutil.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators do not recover healthy in time!")
 
-		actualRootDeviceHints, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.spec.rootDeviceHints}").Output()
+		actualRootDeviceHints, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.spec.rootDeviceHints.deviceName}").Output()
 		o.Expect(actualRootDeviceHints).Should(o.Equal(rootDeviceHints))
 
 	})

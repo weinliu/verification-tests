@@ -272,19 +272,10 @@ func waitForBMHDeletion(oc *exutil.CLI, bmhName string) {
 	exutil.AssertWaitPollNoErr(err, "The BMH was not deleted as expected")
 }
 
-func getBypathDeviceName(vendor string) string {
-	var deviceName string
-
-	switch vendor {
-	case "Dell Inc.":
-		deviceName = `{"deviceName":"/dev/disk/by-path/pci-0000:01:00.0-scsi-0:0:0:0"}`
-	case "HPE":
-		deviceName = `{"deviceName":"/dev/disk/by-path/pci-0000:00:14.0-usb-0:4:1.0-scsi-0:0:0:0"}`
-	default:
-		g.Skip("Unsupported vendor")
-	}
-
-	return deviceName
+func getBypathDeviceName(oc *exutil.CLI, bmhName string) string {
+	byPath, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, bmhName, "-o=jsonpath={.status.hardware.storage[0].name}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return byPath
 }
 
 // clusterOperatorHealthcheck check abnormal operators
