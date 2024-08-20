@@ -2058,11 +2058,20 @@ spec:
 			serviceName                       = "example-service"
 			ServiceNameNotFound               = "service-unknown"
 			kubeApiserverCoStatus             = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			kasRolloutStatus                  = map[string]string{"Available": "True", "Progressing": "True", "Degraded": "False"}
 			webhookConditionErrors            = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`}
 			webhookServiceFailureReasons      = []string{`WebhookServiceNotFound`, `WebhookServiceNotReady`, `WebhookServiceConnectionError`}
 			webhookClusterip                  string
 			webhookService                    service
 		)
+
+		exutil.By("Pre-requisities, check the status of kube-apiserver.")
+
+		e2e.Logf("Check the kube-apiserver operator status before testing.")
+		KAStatusBefore := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !reflect.DeepEqual(KAStatusBefore, kubeApiserverCoStatus) && !reflect.DeepEqual(KAStatusBefore, kasRolloutStatus) {
+			g.Skip("The kube-apiserver operator is not in stable status, will lead to incorrect test results, skip.")
+		}
 
 		exutil.By("1) Create new namespace for the tests.")
 		oc.SetupProject()
@@ -2136,7 +2145,10 @@ spec:
 		exutil.By("5) Check for information error message 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to invalid service.")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
 		exutil.By("6) Check for kubeapiserver operator status when bad admissionwebhooks configured.")
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		currentKAStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !(reflect.DeepEqual(currentKAStatus, KAStatusBefore) || reflect.DeepEqual(currentKAStatus, kubeApiserverCoStatus)) {
+			e2e.Failf("Test Failed: kube-apiserver operator status is changed!")
+		}
 
 		exutil.By("7) Create services and check service presence for test steps")
 		clusterIP, err := oc.AsAdmin().Run("get").Args("service", "kubernetes", "-o=jsonpath={.spec.clusterIP}", "-n", "default").Output()
@@ -2225,7 +2237,10 @@ spec:
 		crdWebHookUnknown.createAdmissionWebhookFromTemplate(oc)
 
 		exutil.By("10) Check for kube-apiserver operator status.")
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		currentKAStatus = getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !(reflect.DeepEqual(currentKAStatus, KAStatusBefore) || reflect.DeepEqual(currentKAStatus, kubeApiserverCoStatus)) {
+			e2e.Failf("Test Failed: kube-apiserver operator status is changed!")
+		}
 
 		exutil.By("11) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points both unknown and unreachable services.")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
@@ -2247,7 +2262,10 @@ spec:
 		// Before checking APIServer WebhookConditions, need to delete service to avoid bug https://issues.redhat.com/browse/OCPBUGS-15587 in ENV that ingressnodefirewall CRD and config are installed.
 		oc.AsAdmin().Run("delete").Args("service", serviceName, "-n", oc.Namespace(), "--ignore-not-found").Execute()
 
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		currentKAStatus = getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !(reflect.DeepEqual(currentKAStatus, KAStatusBefore) || reflect.DeepEqual(currentKAStatus, kubeApiserverCoStatus)) {
+			e2e.Failf("Test Failed: kube-apiserver operator status is changed!")
+		}
 		compareAPIServerWebhookConditions(oc, "", "False", webhookConditionErrors)
 		exutil.By("Test case steps are passed")
 	})
