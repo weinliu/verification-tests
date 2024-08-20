@@ -2295,3 +2295,15 @@ func installCustomOperator(oc *exutil.CLI, operatorSub *customsub, operatorOG *o
 	}
 
 }
+
+func checkImageRegistryPodNum(oc *exutil.CLI) bool {
+	podNum, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.replicas}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	number, _ := strconv.Atoi(podNum)
+	podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
+	if len(podList.Items) != number {
+		e2e.Logf("the pod number is not %d", number)
+		return false
+	}
+	return true
+}

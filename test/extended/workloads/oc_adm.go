@@ -287,6 +287,10 @@ var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 
 		}
 
+		if !checkImageRegistryPodNum(oc) {
+			g.Skip("Skip for the test due to image registry not running well as expected")
+		}
+
 		g.By("Create new namespace")
 		oc.SetupProject()
 		ns11111 := oc.Namespace()
