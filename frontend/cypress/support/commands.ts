@@ -16,7 +16,6 @@ declare global {
             isEdgeCluster();
             isAWSSTSCluster();
             isAzureWIFICluster();
-            isClusterType(commandName, credentialMode: string, infraPlatform: string, authIssuer: string);
             checkClusterType(commandName);
             isEFSDeployed();
             isPlatformSuitableForNMState();
@@ -271,36 +270,48 @@ Cypress.Commands.add("isAzureWIFICluster", (credentialMode: string, infraPlatfor
     return cy.wrap(false);
   }
 });
-Cypress.Commands.add("isClusterType", (commandName, credentialMode: string, infraPlatform: string, authIssuer: string) => {
-  if (commandName === 'isGCPCluster') {
-    if (credentialMode === '' && infraPlatform === 'GCP' && authIssuer === '') {
-      cy.log('Testing on GCP cluster!');
-      return cy.wrap(true);
-    } else {
-      cy.log('Not GCP cluster, skip!');
-      return cy.wrap(false);
-    }
-  }
-});
 Cypress.Commands.add("checkClusterType", (commandName) => {
-  const kubeconfig = Cypress.env('KUBECONFIG_PATH');
-  let credentialMode: string;
-  let infraPlatform: string;
-  let authIssuer: string;
+  const clusterTypes = {
+    isGCPCluster: {
+      condition: (credentialMode, infraPlatform, authIssuer) =>
+        infraPlatform === 'GCP',
+      message: 'Continuing testing on a GCP cluster!',
+      skipMessage: 'This is not a GCP cluster!!!'
+    },
+    isGCPWIFICluster: {
+      condition: (credentialMode, infraPlatform, authIssuer) =>
+        credentialMode === 'Manual' && infraPlatform === 'GCP' && authIssuer !== '',
+      message: 'Continuing testing a GCP WIFI enabled cluster!',
+      skipMessage: 'This is not a GCP WIFI enabled cluster!!!'
+    }
+  };
+  const clusterType = clusterTypes[commandName];
 
-  cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${kubeconfig}`).then(result => {
-    credentialMode = result.stdout.trim();
-    return cy.exec(`oc get infrastructure cluster --template={{.status.platform}} --kubeconfig=${kubeconfig}`);
-  }).then(result => {
-    infraPlatform = result.stdout.trim();
-    return cy.exec(`oc get authentication cluster --template={{.spec.serviceAccountIssuer}} --kubeconfig=${kubeconfig}`);
-  }).then(result => {
-    authIssuer = result.stdout.trim();
-    cy.log(`platform: ${infraPlatform} #########`);
-    cy.log(`credentialMode: ${credentialMode} #########`);
-    cy.log(`authIssuer: ${authIssuer} #########`);
-    return cy.isClusterType(commandName,credentialMode, infraPlatform, authIssuer);
-  });
+  if (!clusterType) {
+    cy.log(`Unknown command: ${commandName}`);
+    return;
+  }
+
+  return cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${kubeconfig}`)
+    .then(result => {
+      const credentialMode = result.stdout.trim();
+      return cy.exec(`oc get infrastructure cluster --template={{.status.platform}} --kubeconfig=${kubeconfig}`)
+        .then(result => ({ credentialMode, infraPlatform: result.stdout.trim() }));
+    })
+    .then(({ credentialMode, infraPlatform }) => {
+      return cy.exec(`oc get authentication cluster --template={{.spec.serviceAccountIssuer}} --kubeconfig=${kubeconfig}`)
+        .then(result => ({ credentialMode, infraPlatform, authIssuer: result.stdout.trim() }));
+    })
+    .then(({ credentialMode, infraPlatform, authIssuer }) => {
+      cy.log(`platform: ${infraPlatform} #########`);
+      cy.log(`credentialMode: ${credentialMode} #########`);
+      cy.log(`authIssuer: ${authIssuer} #########`);
+
+      const result = clusterType.condition(credentialMode, infraPlatform, authIssuer);
+      const message = result ? clusterType.message : clusterType.skipMessage;
+      cy.log(message);
+      return cy.wrap(result);
+    });
 });
 
 Cypress.Commands.add("isEFSDeployed", () => {

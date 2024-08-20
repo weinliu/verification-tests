@@ -111,29 +111,45 @@ export const operatorHubPage = {
   checkDeprecationMsg: (message: string) => {
     cy.get('div').contains(message).should('exist');
   },
-  checkWarningInfo: (warningInfo) => { cy.get('h4.pf-v5-c-alert__title').should('contain', `${warningInfo}`); },
-  checkSTSwarningOnOperator: (operatorName, catalogSource, warningInfo, installNamespace, clusterType) => {
-    cy.visit(`/operatorhub/all-namespaces?keyword=${operatorName}&catalogSourceDisplayName=%5B"${catalogSource}"%5D`);
+  checkWarningInfo: (warningInfo) => {
+    cy.get('[class*="alert__title"]').should('contain', `${warningInfo}`);
+  },
+  checkSTSWarningOnOperator: (operatorName, catalogSource, warningInfo, installNamespace, clusterType) => {
+    //Check STS/WIFI warning message on operator details and installation page
+    cy.visit(`/operatorhub/all-namespaces?keyword=${operatorName}&source=%5B"${catalogSource}"%5D`);
     cy.get('.co-catalog-tile').click();
-    operatorHubPage.checkWarningInfo(`${warningInfo}`);
+    operatorHubPage.checkWarningInfo(warningInfo);
     cy.get('a[data-test-id="operator-install-btn"]').click({force: true});
-    operatorHubPage.checkWarningInfo(`${warningInfo}`);
-    if ( clusterType == 'aws' ) {
-      cy.get('input[aria-label="role ARN"]').clear().type('testrolearn');
+    operatorHubPage.checkWarningInfo(warningInfo);
+    // Check manual installation Mode is subscribe by default
+    cy.get('input[value="Manual"]').should('have.attr', 'data-checked-state', 'true');
+    // Check&Input specific inputs based on cluster type
+    switch (clusterType) {
+      case 'aws':
+        cy.get('input[aria-label="role ARN"]').clear().type('testrolearn');
+        break;
+      case 'azure':
+        cy.get('input[aria-label="Azure Client ID"]').clear().type('testazureclientid');
+        cy.get('input[aria-label="Azure Tenant ID"]').clear().type('testazuretenantid');
+        cy.get('input[aria-label="Azure Subscription ID"]').clear().type('testazuresubscriptionid');
+        break;
+      case 'gcp':
+        cy.get('input[aria-label="GCP Project Number"]').clear().type('testgcpprojectid');
+        cy.get('input[aria-label="GCP Pool ID"]').clear().type('testgcppoolid');
+        cy.get('input[aria-label="GCP Provider ID"]').clear().type('testgcpproviderid');
+        cy.get('input[aria-label="GCP Service Account Email"]').clear().type('testgcpemail');
+        break;
+      default:
+        break;
     }
-    if ( clusterType == 'azure' ) {
-      cy.get('input[aria-label="Azure Client ID"]').clear().type('testazureclientid');
-      cy.get('input[aria-label="Azure Tenant ID"]').clear().type('testazuretenantid');
-      cy.get('input[aria-label="Azure Subscription ID"]').clear().type('testazuresubscriptionid');
-    }
+    // Install the operator into the selected namespace
     if (installNamespace) {
       cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
       cy.get('button#dropdown-selectbox').click();
       cy.contains('span', `${installNamespace}`).click();
     }
-    cy.get('input[value="Manual"]').should('have.attr', 'data-checked-state', 'true');
     cy.get('[data-test="install-operator"]').click();
-    cy.contains('Approve').click();
+    cy.contains('Approve', {timeout: 240000}).click();
   },
   cancel: () => {
     cy.get('button').contains('Cancel').click({force: true});

@@ -1,20 +1,30 @@
+import { Pages } from "views/pages";
 import { operatorHubPage } from "../../views/operator-hub-page";
 
 describe('Operators related features on sts cluster mode', () => {
+  const params ={
+    'ns': 'pro-ocp-sts',
+    'csName': 'custom-catalogsource',
+    'catalogsource': "Custom-Auto-Source",
+    'operatorName': 'apicast',
+    'subscriptionName': "apicast-operator"
+  }
+
   before(() => {
-    cy.adminCLI(`oc new-project pro-ocp-sts`);
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.adminCLI(`oc create -f ./fixtures/test-cs.yaml`);
+    cy.adminCLI(`oc new-project ${params.ns}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`);
+    Pages.gotoCatalogSourcePage();
   });
 
   after(() => {
-    cy.adminCLI(`oc delete project pro-ocp-sts`);
-    cy.exec(`oc delete catalogsources.operators.coreos.com uitestcs -n openshift-marketplace --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false });
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false });
+    cy.adminCLI(`oc delete project ${params.ns}`);
+    cy.adminCLI(`oc delete catalogsource ${params.csName} -n openshift-marketplace`, { failOnNonZeroExit: false });
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`, { failOnNonZeroExit: false });
   });
 
- it('(OCP-66651,yanpzhan,UserInterface) Add support for Azure Workload Identity / Federated identity operator installs',{tags:['@userinterface','@e2e','admin']}, function () {
+  it('(OCP-66651,yanpzhan,UserInterface) Add support for Azure Workload Identity / Federated identity operator installs',{tags:['@userinterface','@e2e','admin']}, function () {
     let credentialMOde, infraPlatform, authIssuer;
     cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       credentialMOde = result.stdout;
@@ -34,8 +44,8 @@ describe('Operators related features on sts cluster mode', () => {
         });
       });
     });
-    operatorHubPage.checkSTSwarningOnOperator('apicast', 'UI-Test-CS', 'Workload Identity / Federated Identity Mode', 'pro-ocp-sts', 'azure');
-    cy.exec(`oc get subscriptions apicast-operator -n pro-ocp-sts -o jsonpath='{.spec.config.env}' --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => {
+    operatorHubPage.checkSTSWarningOnOperator(`${params.operatorName}`, `${params.catalogsource}`, 'Workload Identity / Federated Identity Mode', `${params.ns}`, 'azure');
+    cy.exec(`oc get subscriptions ${params.subscriptionName} -n ${params.ns} -o jsonpath='{.spec.config.env}' --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => {
       expect(output.stdout).contains('testazureclientid');
       expect(output.stdout).contains('testazuretenantid');
       expect(output.stdout).contains('testazuresubscriptionid');
@@ -64,10 +74,26 @@ describe('Operators related features on sts cluster mode', () => {
       });
     });
 
-    operatorHubPage.checkSTSwarningOnOperator('apicast', 'UI-Test-CS', 'Cluster in STS Mode', 'pro-ocp-sts', 'aws')
-    cy.exec(`oc get subscriptions apicast-operator -n pro-ocp-sts -o jsonpath='{.spec.config.env}' --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => {
+    operatorHubPage.checkSTSWarningOnOperator(`${params.operatorName}`, `${params.catalogsource}`, 'Cluster in STS Mode', `${params.ns}`, 'aws')
+    cy.exec(`oc get subscriptions ${params.subscriptionName} -n ${params.ns} -o jsonpath='{.spec.config.env}' --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((output) => {
       expect(output.stdout).contains('testrolearn');
     });
   });
 
+  it('(OCP-75413,xiyuzhao,UserInterface) Add support for GCP Workload Identity / Federated identity operator installs',{tags:['@userinterface','@e2e','admin']}, function () {
+    cy.checkClusterType('isGCPWIFICluster').then(value => {
+      if (value === false) {
+        Cypress.log({message:'Skip case OCP-75413, cluster is not GCP WIFI enabled!!'})
+        this.skip();
+      }
+    });
+    const warnmessage = 'GCP Workload Identity / Federated Identity Mode'
+    operatorHubPage.checkSTSWarningOnOperator(`${params.operatorName}`, `${params.catalogsource}`, `${warnmessage}`, `${params.ns}`, 'gcp')
+    cy.adminCLI(`oc get subscriptions ${params.subscriptionName} -n ${params.ns} -o jsonpath='{.spec.config.env}'`, { timeout:120000}).then((output) => {
+      expect(output.stdout).contains('testgcpprojectid');
+      expect(output.stdout).contains('testgcppoolid');
+      expect(output.stdout).contains('testgcpproviderid');
+      expect(output.stdout).contains('testgcpemail');
+    });
+  });
 })
