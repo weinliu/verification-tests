@@ -252,33 +252,33 @@ func createCertManagerOperator(oc *exutil.CLI) {
 }
 
 // create selfsigned issuer
-func createIssuer(oc *exutil.CLI) {
+func createIssuer(oc *exutil.CLI, ns string) {
 	e2e.Logf("create a selfsigned issuer")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
-	err := oc.Run("create").Args("-f", issuerFile).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	e2e.Logf("wait for the selfsigned issuer to become Ready")
-	err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", "default-selfsigned", 10*time.Second, 120*time.Second)
+	err = waitForResourceReadiness(oc, ns, "issuer", "default-selfsigned", 10*time.Second, 120*time.Second)
 	if err != nil {
-		dumpResource(oc, oc.Namespace(), "issuer", "default-selfsigned", "-o=yaml")
+		dumpResource(oc, ns, "issuer", "default-selfsigned", "-o=yaml")
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 }
 
 // create certificate using selfsigned issuer
-func createCertificate(oc *exutil.CLI) {
+func createCertificate(oc *exutil.CLI, ns string) {
 	e2e.Logf("create a certificate using the selfsigned issuer")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned.yaml")
-	err := oc.Run("create").Args("-f", certFile).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", certFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	e2e.Logf("wait for the selfsigned certificate to become Ready")
-	err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "default-selfsigned-cert", 10*time.Second, 300*time.Second)
+	err = waitForResourceReadiness(oc, ns, "certificate", "default-selfsigned-cert", 10*time.Second, 300*time.Second)
 	if err != nil {
-		dumpResource(oc, oc.Namespace(), "certificate", "default-selfsigned-cert", "-o=yaml")
+		dumpResource(oc, ns, "certificate", "default-selfsigned-cert", "-o=yaml")
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 }

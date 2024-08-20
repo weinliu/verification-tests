@@ -205,8 +205,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	// author: geliu@redhat.com
 	g.It("ROSA-ARO-ConnectedOnly-Author:geliu-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
 		e2e.Logf("Create an issuer and certificate before performing deletion")
-		createIssuer(oc)
-		createCertificate(oc)
+		createIssuer(oc, oc.Namespace())
+		createCertificate(oc, oc.Namespace())
 		e2e.Logf("Verify the issued certificate")
 		verifyCertificate(oc, "default-selfsigned-cert", oc.Namespace())
 
@@ -1055,8 +1055,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		skipUnsupportedVersion(oc, minSupportedVersion)
 
 		exutil.By("create a self-signed Issuer and Certificate")
-		createIssuer(oc)
-		createCertificate(oc)
+		createIssuer(oc, oc.Namespace())
+		createCertificate(oc, oc.Namespace())
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-ca.yaml")
@@ -1311,23 +1311,28 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-NonPreRelease-PreChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-Prepare cert-manager test data before OCP upgrade", func() {
 		const (
-			acmeIssuerName = "letsencrypt-http01"
+			acmeIssuerName  = "letsencrypt-http01"
+			sharedNamespace = "ocp-65134-shared-ns"
 		)
 
+		exutil.By("create a shared testing namespace")
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", sharedNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("create a selfsigned issuer and certificate")
-		createIssuer(oc)
-		createCertificate(oc)
+		createIssuer(oc, sharedNamespace)
+		createCertificate(oc, sharedNamespace)
 
 		exutil.By("create an ACME http01 issuer")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		acmeIssuerFile := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-		err := oc.Run("create").Args("-f", acmeIssuerFile).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", sharedNamespace, "-f", acmeIssuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("wait for the ACME http01 issuer to become Ready")
-		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", acmeIssuerName, 10*time.Second, 120*time.Second)
+		err = waitForResourceReadiness(oc, sharedNamespace, "issuer", acmeIssuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "issuer", acmeIssuerName, "-o=yaml")
+			dumpResource(oc, sharedNamespace, "issuer", acmeIssuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 	})
@@ -1341,10 +1346,18 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			acmeCertName         = "letsencrypt-http01-cert"
 			operatorNamespace    = "cert-manager-operator"
 			operandNamespace     = "cert-manager"
+			sharedNamespace      = "ocp-65134-shared-ns"
 		)
 
+		// check if the shared testing namespace exists first
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", sharedNamespace).Execute()
+		if err != nil {
+			g.Skip("Skip the PstChkUpgrade test as namespace '" + sharedNamespace + "' does not exist, PreChkUpgrade test did not finish successfully")
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", sharedNamespace, "--ignore-not-found").Execute()
+
 		exutil.By("log the CSV post OCP upgrade")
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", operatorNamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", operatorNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check the operator and operands pods status, all of them should be Ready")
@@ -1361,7 +1374,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			{"issuer", acmeIssuerName},
 		}
 		for _, r := range resources {
-			output, err := oc.Run("get").Args(r.resourceType, r.resourceName).Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sharedNamespace, r.resourceType, r.resourceName).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("True"))
 		}
@@ -1377,12 +1390,12 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		acmeCertFile := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
 		params := []string{"-f", acmeCertFile, "-p", "ISSUER_NAME=" + acmeIssuerName, "CERT_NAME=" + acmeCertName, "DNS_NAME=" + dnsName}
-		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		exutil.ApplyNsResourceFromTemplate(oc, sharedNamespace, params...)
 
 		exutil.By("wait for the ACME http01 certificate to become Ready")
-		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", acmeCertName, 10*time.Second, 300*time.Second)
+		err = waitForResourceReadiness(oc, sharedNamespace, "certificate", acmeCertName, 10*time.Second, 300*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "certificate", acmeCertName, "-o=yaml")
+			dumpResource(oc, sharedNamespace, "certificate", acmeCertName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 	})
