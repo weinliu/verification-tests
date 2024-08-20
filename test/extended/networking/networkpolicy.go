@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1000,54 +1001,60 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		}
 
 		var namespaces [2]string
+		policyList := [2]string{"default-deny-ingress", "allow-from-same-namespace"}
 		for i := 0; i < 2; i++ {
-
-			g.By("Obtain and create the namespace")
-			oc.SetupProject()
-			ns := oc.Namespace()
-			namespaces[i] = ns
-
-			g.By(fmt.Sprintf("Enable ACL looging on the namespace %s", namespaces[i]))
-			aclSettings := aclSettings{DenySetting: "alert", AllowSetting: "alert"}
+			namespaces[i] = oc.Namespace()
+			exutil.By(fmt.Sprintf("Enable ACL looging on the namespace %s", namespaces[i]))
+			aclSettings := aclSettings{DenySetting: "alert", AllowSetting: "warning"}
 			err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", namespaces[i], aclSettings.getJSONString()).Execute()
 			o.Expect(err1).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("create default deny ingress networkpolicy in %s", namespaces[i]))
+			exutil.By(fmt.Sprintf("Create default deny ingress networkpolicy in %s", namespaces[i]))
 			createResourceFromFile(oc, namespaces[i], ingressTypeFile)
+			output, err := oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring(policyList[0]))
 
-			g.By(fmt.Sprintf("create allow same namespace networkpolicy in %s", namespaces[i]))
+			exutil.By(fmt.Sprintf("Create allow same namespace networkpolicy in %s", namespaces[i]))
 			createResourceFromFile(oc, namespaces[i], allowFromSameNS)
+			output, err = oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring(policyList[1]))
 
-			g.By(fmt.Sprintf("create 1st hello pod in %s", namespaces[i]))
-			pod1ns := pingPodResourceNode{
-				name:      "hello-pod1",
+			pod := pingPodResourceNode{
+				name:      "",
 				namespace: namespaces[i],
-				nodename:  nodeList.Items[0].Name,
+				nodename:  "",
 				template:  pingPodNodeTemplate,
 			}
-			pod1ns.createPingPodNode(oc)
-			waitPodReady(oc, pod1ns.namespace, pod1ns.name)
-
-			g.By(fmt.Sprintf("create 2nd hello pod in %s", namespaces[i]))
-			pod2ns := pingPodResourceNode{
-				name:      "hello-pod2",
-				namespace: namespaces[i],
-				nodename:  nodeList.Items[1].Name,
-				template:  pingPodNodeTemplate,
+			for j := 0; j < 2; j++ {
+				exutil.By(fmt.Sprintf("Create hello pod in %s", namespaces[i]))
+				pod.name = "hello-pod" + strconv.Itoa(j)
+				pod.nodename = nodeList.Items[j].Name
+				pod.createPingPodNode(oc)
+				waitPodReady(oc, pod.namespace, pod.name)
 			}
-			pod2ns.createPingPodNode(oc)
-			waitPodReady(oc, pod2ns.namespace, pod2ns.name)
-
-			g.By(fmt.Sprintf("Checking connectivity from pod2 to pod1 to generate messages in %s", namespaces[i]))
-			CurlPod2PodPass(oc, namespaces[i], "hello-pod2", namespaces[i], "hello-pod1")
+			exutil.By(fmt.Sprintf("Checking connectivity from second pod to  first pod to generate messages in %s", namespaces[i]))
+			CurlPod2PodPass(oc, namespaces[i], "hello-pod1", namespaces[i], "hello-pod0")
+			oc.SetupProject()
 		}
 
-		output, err3 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
-		o.Expect(err3).NotTo(o.HaveOccurred())
+		output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ACL logs for allow-from-same-namespace policy \n %s", output)
+		// policy name truncated to allow-from-same-name in ACL log message
 		for i := 0; i < len(namespaces); i++ {
-			o.Expect(strings.Contains(output, "verdict=allow")).To(o.BeTrue())
-			o.Expect(strings.Contains(output, namespaces[i])).To(o.BeTrue())
-
+			searchString := fmt.Sprintf("name=\"NP:%s:allow-from-same-name\", verdict=allow, severity=warning", namespaces[i])
+			o.Expect(strings.Contains(output, searchString)).To(o.BeTrue())
+			removeResource(oc, true, true, "networkpolicy", policyList[1], "-n", namespaces[i])
+			CurlPod2PodFail(oc, namespaces[i], "hello-pod0", namespaces[i], "hello-pod1")
+		}
+		output, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[1].Name, "--path=ovn/acl-audit-log.log").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("ACL logs for default-deny-ingress policy \n %s", output)
+		for i := 0; i < len(namespaces); i++ {
+			searchString := fmt.Sprintf("name=\"NP:%s:Ingress\", verdict=drop, severity=alert", namespaces[i])
+			o.Expect(strings.Contains(output, searchString)).To(o.BeTrue())
 		}
 
 	})
