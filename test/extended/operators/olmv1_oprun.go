@@ -118,143 +118,130 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-Medium-68936-BundleDeployment Health resource healthy and install fail", func() {
+	g.It("Author:kuiwang-ConnectedOnly-Medium-68936-cluster extension can not be installed with insufficient permission sa for operand", func() {
+		e2e.Logf("the rukpak is deprecated, so this case is deprecated, but here use 68936 for case 75492 becasue the duration of 75492 is too long")
 		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
 		var (
-			ns                           = "ns-68936"
-			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			basicBdPlainImageTemplate    = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
-			basicBdRegistryImageTemplate = filepath.Join(baseDir, "basic-bd-registry-image.yaml")
-			healthBd                     = olmv1util.BundleDeploymentDescription{
-				BdName:    "68903-healthy",
-				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-healthy",
+			ns                                  = "ns-68936"
+			sa                                  = "68936"
+			baseDir                             = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate              = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate            = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingOperandTemplate = filepath.Join(baseDir, "sa-nginx-insufficient-operand-clusterrole.yaml")
+			saCrb                               = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
 				Namespace: ns,
-				Template:  basicBdPlainImageTemplate,
+				RBACObjects: []olmv1util.ChildResource{
+					{Kind: "RoleBinding", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role-binding", sa)}},
+					{Kind: "Role", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role", sa)}},
+					{Kind: "ClusterRoleBinding", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole-binding", sa),
+						fmt.Sprintf("%s-installer-clusterrole-binding", sa)}},
+					{Kind: "ClusterRole", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole", sa),
+						fmt.Sprintf("%s-installer-clusterrole", sa)}},
+					{Kind: "ServiceAccount", Ns: ns, Names: []string{sa}},
+				},
+				Kinds:    "okv68936s",
+				Template: saClusterRoleBindingOperandTemplate,
 			}
-			healthChild = []olmv1util.ChildResource{
-				{Kind: "CustomResourceDefinition", Ns: ""},
-				{Kind: "pod", Ns: "olmv1-68903-healthy"},
-				{Kind: "APIService", Ns: ""},
-				{Kind: "namespace", Ns: ""},
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-68936",
+				Imageref: "quay.io/olmqe/nginx-ok-index:vokv68936",
+				Template: clustercatalogTemplate,
 			}
-			unhealthyDp = olmv1util.BundleDeploymentDescription{
-				BdName:    "68903-deployment-unhealthy",
-				Address:   "quay.io/olmqe/olmv1bundle:registry-68903-deployunhealthy",
-				Namespace: ns,
-				Template:  basicBdRegistryImageTemplate,
-			}
-			unhealthyDpChild = []olmv1util.ChildResource{
-				// {Kind: "CustomResourceDefinition", Ns: ""},
-				// {Kind: "namespace", Ns: ""},
-			}
-			unhealthyRC = olmv1util.BundleDeploymentDescription{
-				BdName:    "68903-rc-unhealthy",
-				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-rcunhealth",
-				Namespace: ns,
-				Template:  basicBdPlainImageTemplate,
-			}
-			unhealthyRCChild = []olmv1util.ChildResource{
-				{Kind: "namespace", Ns: ""},
-			}
-			unhealthyInstall = olmv1util.BundleDeploymentDescription{
-				BdName:    "68903-install-unhealthy",
-				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-installunhealthy",
-				Namespace: ns,
-				Template:  basicBdPlainImageTemplate,
+			ceInsufficient = olmv1util.ClusterExtensionDescription{
+				Name:             "insufficient-68936",
+				PackageName:      "nginx-ok-v68936",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
 			}
 		)
 
 		exutil.By("Create namespace")
-		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found", "--force").Execute()
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
 
-		exutil.By("Create health bundledeployment")
-		defer healthBd.DeleteWithoutCheck(oc)
-		healthBd.Create(oc)
-		healthBd.Delete(oc, healthChild)
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
 
-		exutil.By("Create unhealthy deployment")
-		defer unhealthyDp.DeleteWithoutCheck(oc)
-		unhealthyDp.CreateWithoutCheck(oc)
-		unhealthyDp.AssertHealthyWithConsistent(oc, "false")
-		unhealthyDp.Delete(oc, unhealthyDpChild)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
-		exutil.By("Create unhealthy RC")
-		defer unhealthyRC.DeleteWithoutCheck(oc)
-		unhealthyRC.CreateWithoutCheck(oc)
-		unhealthyRC.AssertHealthy(oc, "true") // here is possible issue
-		unhealthyRC.Delete(oc, unhealthyRCChild)
-
-		exutil.By("install fails")
-		defer unhealthyInstall.DeleteWithoutCheck(oc)
-		unhealthyInstall.CreateWithoutCheck(oc)
-		unhealthyInstall.AssertHealthyWithConsistent(oc, "false")
-		unhealthyInstall.DeleteWithoutCheck(oc)
+		exutil.By("check Insufficient sa from operand")
+		defer ceInsufficient.Delete(oc)
+		ceInsufficient.CreateWithoutCheck(oc)
+		ceInsufficient.CheckClusterExtensionCondition(oc, "Installed", "message", "cannot set blockOwnerDeletion", 10, 60, 0)
 
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-Medium-68937-BundleDeployment Health resource unhealthy ss rs unspport", func() {
+	g.It("Author:kuiwang-ConnectedOnly-Medium-68937-cluster extension can not be installed with insufficient permission sa for operand rbac object", func() {
+		e2e.Logf("the rukpak is deprecated, so this case is deprecated, but here use 68937 for case 75492 becasue the duration of 75492 is too long")
 		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
 		var (
-			ns                        = "ns-68937"
-			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
-			basicBdPlainImageTemplate = filepath.Join(baseDir, "basic-bd-plain-image.yaml")
-			unhealthySS               = olmv1util.BundleDeploymentDescription{
-				BdName:    "68903-ss-unhealthy",
-				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-ssunhealthy",
+			ns                                  = "ns-68937"
+			sa                                  = "68937"
+			baseDir                             = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate              = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate            = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingOperandTemplate = filepath.Join(baseDir, "sa-nginx-insufficient-operand-rbac.yaml")
+			saCrb                               = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
 				Namespace: ns,
-				Template:  basicBdPlainImageTemplate,
+				RBACObjects: []olmv1util.ChildResource{
+					{Kind: "RoleBinding", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role-binding", sa)}},
+					{Kind: "Role", Ns: ns, Names: []string{fmt.Sprintf("%s-installer-role", sa)}},
+					{Kind: "ClusterRoleBinding", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole-binding", sa),
+						fmt.Sprintf("%s-installer-clusterrole-binding", sa)}},
+					{Kind: "ClusterRole", Ns: "", Names: []string{fmt.Sprintf("%s-installer-rbac-clusterrole", sa),
+						fmt.Sprintf("%s-installer-clusterrole", sa)}},
+					{Kind: "ServiceAccount", Ns: ns, Names: []string{sa}},
+				},
+				Kinds:    "okv68937s",
+				Template: saClusterRoleBindingOperandTemplate,
 			}
-			unhealthySSChild = []olmv1util.ChildResource{
-				{Kind: "namespace", Ns: ""},
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-68937",
+				Imageref: "quay.io/olmqe/nginx-ok-index:vokv68937",
+				Template: clustercatalogTemplate,
 			}
-			unhealthyRS = olmv1util.BundleDeploymentDescription{
-				BdName:    "68903-rs-unhealthy",
-				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-rsunhealthy",
-				Namespace: ns,
-				Template:  basicBdPlainImageTemplate,
-			}
-			unhealthyRSChild = []olmv1util.ChildResource{
-				{Kind: "namespace", Ns: ""},
-			}
-
-			healthUnspport = olmv1util.BundleDeploymentDescription{
-				BdName:    "68903-unspport-healthy",
-				Address:   "quay.io/olmqe/olmv1bundle:plain-68903-unsupporthealthy",
-				Namespace: ns,
-				Template:  basicBdPlainImageTemplate,
-			}
-			healthUnspportChild = []olmv1util.ChildResource{
-				{Kind: "namespace", Ns: ""},
+			ceInsufficient = olmv1util.ClusterExtensionDescription{
+				Name:             "insufficient-68937",
+				PackageName:      "nginx-ok-v68937",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
 			}
 		)
 
 		exutil.By("Create namespace")
-		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found", "--force").Execute()
 		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
 
-		exutil.By("Create unhealthy SS")
-		defer unhealthySS.DeleteWithoutCheck(oc)
-		unhealthySS.CreateWithoutCheck(oc)
-		unhealthySS.AssertHealthyWithConsistent(oc, "false")
-		unhealthySS.Delete(oc, unhealthySSChild)
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
 
-		exutil.By("Create unhealthy RS")
-		defer unhealthyRS.DeleteWithoutCheck(oc)
-		unhealthyRS.CreateWithoutCheck(oc)
-		unhealthyRS.AssertHealthyWithConsistent(oc, "false")
-		unhealthyRS.Delete(oc, unhealthyRSChild)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
 
-		exutil.By("unsupport health")
-		defer healthUnspport.DeleteWithoutCheck(oc)
-		healthUnspport.CreateWithoutCheck(oc)
-		healthUnspport.AssertHealthy(oc, "true")
-		healthUnspport.Delete(oc, healthUnspportChild)
+		exutil.By("check Insufficient sa from operand rbac")
+		defer ceInsufficient.Delete(oc)
+		ceInsufficient.CreateWithoutCheck(oc)
+		ceInsufficient.CheckClusterExtensionCondition(oc, "Installed", "message", "permissions not currently held", 10, 60, 0)
 
 	})
 
@@ -268,7 +255,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
 			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
-			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-nginx-insufficient.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-nginx-insufficient-bundle.yaml")
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
 				Name:      sa,
 				Namespace: ns,
@@ -323,7 +310,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		defer clustercatalog.Delete(oc)
 		clustercatalog.Create(oc)
 
-		exutil.By("check Insufficient sa")
+		exutil.By("check Insufficient sa from bundle")
 		defer ce75492Insufficient.Delete(oc)
 		ce75492Insufficient.CreateWithoutCheck(oc)
 		ce75492Insufficient.CheckClusterExtensionCondition(oc, "Installed", "message", "could not get information about the resource CustomResourceDefinition", 10, 60, 0)
