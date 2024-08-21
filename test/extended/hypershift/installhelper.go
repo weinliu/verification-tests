@@ -496,7 +496,7 @@ func (receiver *installHelper) destroyAWSHostedClusters(createCluster *createClu
 func (receiver *installHelper) destroyAzureHostedClusters(createCluster *createCluster) {
 	e2e.Logf("Destroying Azure HC")
 	var bashClient = NewCmdClient().WithShowInfo(true)
-	cmd := fmt.Sprintf("hypershift destroy cluster azure --azure-creds %s --namespace %s --name %s --location %s --cluster-grace-period 15m", createCluster.AzureCreds, createCluster.Namespace, createCluster.Name, createCluster.Location)
+	cmd := fmt.Sprintf("hypershift destroy cluster azure --azure-creds %s --namespace %s --name %s --location %s", createCluster.AzureCreds, createCluster.Namespace, createCluster.Name, createCluster.Location)
 	out, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred(), "error destroying Azure HC")
 	e2e.Logf("hypershift destroy output:\n%v", out)
