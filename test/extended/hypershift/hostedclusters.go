@@ -1328,3 +1328,7 @@ func (h *hostedCluster) encodeConfigmaps(ctx context.Context) {
 func (h *hostedCluster) pollUntilReady() {
 	o.Eventually(h.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.BeTrue())
 }
+
+func (h *hostedCluster) getKASResourceVersion() string {
+	return doOcpReq(h.oc, OcpGet, true, "deploy/kube-apiserver", "-n", h.getHostedComponentNamespace(), "-o=jsonpath={.metadata.resourceVersion}")
+}

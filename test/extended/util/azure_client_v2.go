@@ -6,6 +6,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
@@ -30,6 +31,7 @@ type AzureClientSet struct {
 	keysClient                     *armkeyvault.KeysClient
 	resourceGroupsClient           *armresources.ResourceGroupsClient
 	vaultsClient                   *armkeyvault.VaultsClient
+	virtualMachinesClient          *armcompute.VirtualMachinesClient
 }
 
 func NewAzureClientSet(subscriptionId string, tokenCredential azcore.TokenCredential) *AzureClientSet {
@@ -47,6 +49,22 @@ func NewAzureClientSetWithRootCreds(oc *CLI) *AzureClientSet {
 	azureCredentials, err := azidentity.NewDefaultAzureCredential(nil)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return NewAzureClientSet(azCreds.AzureSubscriptionID, azureCredentials)
+}
+
+// NewAzureClientSetWithCredsFromFile constructs an AzureClientSet with info gleaned from a file.
+func NewAzureClientSetWithCredsFromFile(filePath string) *AzureClientSet {
+	azCreds := NewEmptyAzureCredentialsFromFile()
+	o.Expect(azCreds.LoadFromFile(filePath)).NotTo(o.HaveOccurred())
+	o.Expect(azCreds.SetSdkEnvVars()).NotTo(o.HaveOccurred())
+	azureCredentials, err := azidentity.NewDefaultAzureCredential(nil)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return NewAzureClientSet(azCreds.AzureSubscriptionID, azureCredentials)
+}
+
+// NewAzureClientSetWithCredsFromCanonicalFile creates an AzureClientSet using credentials from
+// the canonical file location defined by AZURE_CREDS_LOCATION.
+func NewAzureClientSetWithCredsFromCanonicalFile() *AzureClientSet {
+	return NewAzureClientSetWithCredsFromFile(MustGetAzureCredsLocation())
 }
 
 // GetResourceGroupClient gets the resource group client from the AzureClientSet, constructs it if necessary.
@@ -99,6 +117,16 @@ func (cs *AzureClientSet) GetKeysClient(options *arm.ClientOptions) *armkeyvault
 		cs.keysClient = keysClient
 	}
 	return cs.keysClient
+}
+
+// GetVirtualMachinesClient gets the virtual machine client from AzureClientSet, constructs it if necessary.
+func (cs *AzureClientSet) GetVirtualMachinesClient(options *arm.ClientOptions) *armcompute.VirtualMachinesClient {
+	if cs.virtualMachinesClient == nil {
+		virtualMachineClient, err := armcompute.NewVirtualMachinesClient(cs.SubscriptionID, cs.tokenCredential, options)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cs.virtualMachinesClient = virtualMachineClient
+	}
+	return cs.virtualMachinesClient
 }
 
 // GetGraphServiceClient gets the graph service client from AzureClientSet, constructs it if necessary.
@@ -224,4 +252,18 @@ func (cs *AzureClientSet) GetServicePrincipalObjectId(ctx context.Context, appId
 		return "", fmt.Errorf("object ID is nil")
 	}
 	return *objectId, nil
+}
+
+func ProcessAzurePages[T any](ctx context.Context, pager *runtime.Pager[T], handlePage func(page T) error) error {
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to fetch next page: %w", err)
+		}
+		err = handlePage(page)
+		if err != nil {
+			return fmt.Errorf("error processing page: %w", err)
+		}
+	}
+	return nil
 }

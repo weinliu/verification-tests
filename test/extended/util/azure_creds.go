@@ -33,25 +33,7 @@ func NewEmptyAzureCredentials() *AzureCredentials {
 }
 
 func (ac *AzureCredentials) String() string {
-	var sb strings.Builder
-	v := reflect.ValueOf(*ac)
-	t := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		fieldType := t.Field(i)
-		if !fieldType.IsExported() {
-			continue
-		}
-		// Censorship
-		if tag, ok := fieldType.Tag.Lookup("sensitive"); ok && tag == "true" {
-			continue
-		}
-
-		if i > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(fmt.Sprintf("%s: %v", fieldType.Name, v.Field(i)))
-	}
-	return sb.String()
+	return AzureCredentialsStructToString(*ac)
 }
 
 func (ac *AzureCredentials) GetFromClusterAndDecode(oc *CLI) error {
@@ -122,6 +104,64 @@ func (ac *AzureCredentials) decode() error {
 	}
 	ac.decoded = true
 	return nil
+}
+
+type AzureCredentialsFromFile struct {
+	AzureClientID       string `json:"clientId,omitempty"`
+	AzureClientSecret   string `json:"clientSecret,omitempty" sensitive:"true"`
+	AzureSubscriptionID string `json:"subscriptionId,omitempty"`
+	AzureTenantID       string `json:"tenantId,omitempty"`
+}
+
+func NewEmptyAzureCredentialsFromFile() *AzureCredentialsFromFile {
+	return &AzureCredentialsFromFile{}
+}
+
+func (ac *AzureCredentialsFromFile) String() string {
+	return AzureCredentialsStructToString(*ac)
+}
+
+func (ac *AzureCredentialsFromFile) LoadFromFile(filePath string) error {
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("error reading credentials file: %v", err)
+	}
+	if err = json.Unmarshal(fileData, ac); err != nil {
+		return fmt.Errorf("error unmarshaling credentials file: %v", err)
+	}
+	return nil
+}
+
+// SetSdkEnvVars sets some environment variables used by azure-sdk-for-go.
+// See https://github.com/Azure/azure-sdk-for-go/blob/main/sdk/azidentity/README.md#environment-variables.
+func (ac *AzureCredentialsFromFile) SetSdkEnvVars() error {
+	return errors.Join(
+		os.Setenv("AZURE_CLIENT_ID", ac.AzureClientID),
+		os.Setenv("AZURE_CLIENT_SECRET", ac.AzureClientSecret),
+		os.Setenv("AZURE_TENANT_ID", ac.AzureTenantID),
+	)
+}
+
+func AzureCredentialsStructToString[T any](s T) string {
+	var sb strings.Builder
+	v := reflect.ValueOf(s)
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		fieldType := t.Field(i)
+		if !fieldType.IsExported() {
+			continue
+		}
+		// Censorship
+		if tag, ok := fieldType.Tag.Lookup("sensitive"); ok && tag == "true" {
+			continue
+		}
+
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("%s: %v", fieldType.Name, v.Field(i)))
+	}
+	return sb.String()
 }
 
 func GetAzureCredsLocation() (string, error) {
