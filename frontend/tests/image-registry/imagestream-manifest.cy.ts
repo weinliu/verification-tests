@@ -17,7 +17,7 @@ describe('ImageStream Manifest', () => {
     cy.logout;
   });
 
-  it('(OCP-59762,xiuwang,Image_Registry) Show manifest lists in the web console', {tags: ['e2e']}, () => {
+  it('(OCP-59762,xiuwang,Image_Registry) Show manifest lists in the web console', {tags: ['e2e','@smoke']}, () => {
     cy.visit(`/k8s/ns/${projectName}/imagestreamtags/multiarch%3Alatest`)
     cy.get('[data-test-section-heading="ImageStreamTag details"]', {timeout: 60000}).should('be.visible');
     cy.contains('Supported Platforms').should('exist')
