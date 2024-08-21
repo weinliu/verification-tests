@@ -143,6 +143,28 @@ func (clusterextension *ClusterExtensionDescription) GetClusterExtensionMessage(
 	return message
 }
 
+func (clusterextension *ClusterExtensionDescription) WaitResolvedBundleVersion(oc *exutil.CLI, version string) {
+
+	e2e.Logf("========= wait clusterextension %v resolvedBundle version is %s =========", clusterextension.Name, version)
+	jsonpath := fmt.Sprintf("jsonpath={.status.resolvedBundle.version}")
+	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+		output, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", jsonpath)
+		if err != nil {
+			e2e.Logf("output is %v, error is %v, and try next", output, err)
+			return false, nil
+		}
+		if !strings.Contains(strings.ToLower(output), strings.ToLower(version)) {
+			e2e.Logf("version is %v, not %v, and try next", output, version)
+			return false, nil
+		}
+		return true, nil
+	})
+	if errWait != nil {
+		GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("clusterextension resolvedBundle version is not %s", version))
+	}
+}
+
 func (clusterextension *ClusterExtensionDescription) GetClusterExtensionField(oc *exutil.CLI, conditionType, field string) string {
 
 	var content string

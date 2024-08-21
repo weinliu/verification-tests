@@ -738,6 +738,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Namespaced" to "Cluster"`))
 
@@ -753,6 +754,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Cluster" to "Namespaced"`))
 
@@ -812,6 +814,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`scope changed from "Namespaced" to "Cluster"`))
 		o.Expect(message).To(o.ContainSubstring(`.spec.field1 may not be removed`))
@@ -822,6 +825,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition.apiextensions.k8s.io "nginxolm75218s.cache.example.com" is invalid: spec.scope: Invalid value: "Cluster": field is immutable`))
 
@@ -830,6 +834,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`must have exactly one version marked as storage version, status.storedVersions[0]: Invalid value: "v1alpha1": must appear in spec.versions`))
 
@@ -841,6 +846,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.5"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.5")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.5-nginxolm75218 successfully"))
 
@@ -900,6 +906,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75122s.cache.example.com failed upgrade safety validation. "NoStoredVersionRemoved" validation failed: stored version "v1alpha1" removed`))
 
@@ -911,6 +918,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.3-nginxolm75122 successfully"))
 
@@ -922,6 +930,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75122 successfully"))
 
@@ -981,6 +990,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec": new required fields added: [requiredfield2]`))
 
@@ -989,6 +999,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "NoExistingFieldRemoved" validation failed: crd/nginxolm75123s.cache.example.com version/v1alpha1 field/^.spec.field may not be removed`))
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: calculating schema diff for CRD version "v1alpha1"`))
@@ -998,6 +1009,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field" has unknown change, refusing to determine that change is safe`))
 
@@ -1009,6 +1021,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.8"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.8")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.8-nginxolm75123 successfully"))
 
@@ -1068,6 +1081,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field": new value added as default when previously no default value existed: &JSON{Raw:*[34 100 101 102 97 117 108 116 45 115 116 114 105 110 103 45 106 105 116 108 105 34],}`))
 
@@ -1076,6 +1090,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultenum": default value has been changed from [34 118 97 108 117 101 49 34] to [34 118 97 108 117 101 51 34]`))
 
@@ -1084,6 +1099,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultint": default value has been removed when previously a default value existed: [57]`))
 
@@ -1143,6 +1159,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75515s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.unenumfield": enums added when there were no enum restrictions previously`))
 
@@ -1158,6 +1175,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.5")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75515s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.enumfield": enum values removed: ["value2"]`))
 
@@ -1169,6 +1187,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75515 successfully"))
 
@@ -1229,6 +1248,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
 		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("maximum constraint decreased from 100 to 80"))
 		o.Expect(message).To(o.ContainSubstring("minimum constraint increased from 10 to 20"))
@@ -1238,6 +1258,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("maximum length constraint decreased from 50 to 30"))
 		o.Expect(message).To(o.ContainSubstring("minimum length constraint increased from 3 to 9"))
@@ -1247,6 +1268,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.4")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("maximum properties constraint decreased from 5 to 4"))
 		o.Expect(message).To(o.ContainSubstring("minimum properties constraint increased from 2 to 3"))
@@ -1256,6 +1278,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.5")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("maximum items constraint decreased from 10 to 9"))
 		o.Expect(message).To(o.ContainSubstring("minimum items constraint increased from 2 to 3"))
@@ -1265,6 +1288,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring(`version "v1alpha1", field "^.spec.field1": maximum constraint added when one did not exist previously: 100`))
 		o.Expect(message).To(o.ContainSubstring(`version "v1alpha1", field "^.spec.field1": minimum constraint added when one did not exist previously: 10`))
@@ -1277,6 +1301,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.7"))
 
+		clusterextension.WaitResolvedBundleVersion(oc, "1.0.7")
 		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.7-nginxolm75516 successfully"))
 
