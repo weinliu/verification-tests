@@ -585,6 +585,104 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 	})
 
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-75543-tlsSecurity setting is also propagated on node in kubelet.conf [Disruptive]", func() {
+
+		var (
+			node              = wMcp.GetSortedNodesOrFail()[0]
+			apiServer         = NewResource(oc.AsAdmin(), "apiserver", "cluster")
+			kcName            = "tc-75543-set-kubelet-custom-tls-profile"
+			kcTemplate        = generateTemplateAbsolutePath("custom-tls-profile-kubelet-config.yaml")
+			customCipherSuite = []string{"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"}
+		)
+		csNameList := getCipherSuitesNameforSpecificVersion(VersionTLS12)
+		var csVersion12 []string
+		for _, name := range csNameList {
+			if !strings.Contains(name, "_CBC_") {
+				csVersion12 = append(csVersion12, name)
+			}
+		}
+		exutil.By("Verify for Intermediate TLS Profile in kubeletConfig")
+		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS12", csVersion12)
+		exutil.By("Verify for Intermediate TLS Profile pod logs")
+		validateCorrectTlsProfileSecurity(oc, "", "VersionTLS12", csVersion12)
+
+		defer func(initialConfig string) {
+			exutil.By("Restore with previous apiserver value")
+			apiServer.SetSpec(initialConfig)
+			exutil.By("Check that all cluster operators are stable")
+			o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+			logger.Infof("Wait for MCC to get the leader lease")
+			o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "6m", "20s").Should(o.BeTrue(),
+				"The controller pod didn't acquire the lease properly.")
+			mMcp.waitForComplete()
+			wMcp.waitForComplete()
+			logger.Infof("OK!\n")
+		}(apiServer.GetSpecOrFail())
+
+		exutil.By("Patch the Old tlsSecurityProfile")
+		o.Expect(apiServer.Patch("json",
+			`[{ "op": "add", "path": "/spec/tlsSecurityProfile", "value":  {"type": "Old","old": {}}}]`)).To(o.Succeed(), "Error patching http proxy")
+		logger.Infof("OK!\n")
+		exutil.By("Check that all cluster operators are stable")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		logger.Infof("Wait for MCC to get the leader lease")
+		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
+			"The controller pod didn't acquire the lease properly.")
+		mMcp.waitForComplete()
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify for Old TLS Profile in kubeletConfig")
+		csVersion10 := getCipherSuitesNameforSpecificVersion(VersionTLS10)
+		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS10", csVersion10)
+		exutil.By("Verify for Old TLS Profile in pod logs")
+		validateCorrectTlsProfileSecurity(oc, "Old", "VersionTLS10", csVersion10)
+
+		exutil.By("Create Kubeletconfig to configure a custom tlsSecurityProfile")
+		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		defer kc.Delete()
+		kc.create()
+		logger.Infof("KubeletConfig was created. Waiting for success.")
+		kc.waitUntilSuccess("5m")
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for Worker MachineConfigPool to be updated")
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify for Custom TLS Profile in kubeletConfig")
+		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS11", customCipherSuite)
+
+		exutil.By("Patch the Intermediate tlsSecurityProfile to check kubeletconfig settings are not changed")
+		o.Expect(apiServer.Patch("json",
+			`[{ "op": "add", "path": "/spec/tlsSecurityProfile", "value":  {"type": "Intermediate","intermediate": {}}}]`)).To(o.Succeed(), "Error patching http proxy")
+		logger.Infof("OK!\n")
+		exutil.By("Check that all cluster operators are stable")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		logger.Infof("Wait for MCC to get the leader lease")
+		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
+			"The controller pod didn't acquire the lease properly.")
+		mMcp.waitForComplete()
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify for Intermediate TLS Profile pod logs")
+		validateCorrectTlsProfileSecurity(oc, "Intermediate", "VersionTLS12", csVersion12)
+		exutil.By("Verify for Custom TLS Profile not changed in kubeletConfig")
+		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS11", customCipherSuite)
+
+		exutil.By("Delete create kubeletConfig template")
+		kc.DeleteOrFail()
+		o.Expect(kc).NotTo(Exist())
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("To check the kubeletConfig to have same tls setting as of API server")
+		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS12", csVersion12)
+		logger.Infof("OK!\n")
+
+	})
+
 })
 
 // EventuallyFileExistsInNode fails the test if the certificate file does not exist in the node after the time specified as parameters
@@ -760,6 +858,17 @@ func validateCorrectTlsProfileSecurity(oc *exutil.CLI, tlsSecurityProfile string
 		o.Expect(kubeproxy.GetOrFail(containerArgsPath)).To(o.ContainSubstring(cipherSuite[i]), "Error getting %s cipher suite for given tlsSecuirtyProfile of %s pod", cipherSuite[i], getKubeProxyPod[0])
 		o.Expect(mcc.GetOrFail(containerArgsPath)).To(o.ContainSubstring(cipherSuite[i]), "Error getting %s cipher suite for given tlsSecuirtyProfile of  %s pod", cipherSuite[i], mccPodName)
 		o.Expect(exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigServer, mcspod[0], "")).To(o.ContainSubstring(cipherSuite[i]), "Error getting %s cipher suite for given tlsSecuirtyProfile of %s pod", cipherSuite[i], mcspod[0])
+	}
+	logger.Infof("OK!\n")
+}
+
+func validateCorrectTlsProfileSecurityInKubeletConfig(oc *exutil.CLI, node Node, tlsMinVersion string, cipherSuite []string) {
+	stdout, err := node.DebugNodeWithChroot("cat", "/etc/kubernetes/kubelet.conf")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	exutil.By("To check the kubeletConfig to have same tls setting as of API server")
+	o.Expect(stdout).To(o.ContainSubstring("tlsMinVersion: %s", tlsMinVersion), "Error %s tlsMinVersion is not updated in kubelet config", tlsMinVersion)
+	for _, csname := range cipherSuite {
+		o.Expect(stdout).To(o.ContainSubstring(csname), "Error %s cipher suite is not updated in kubelet config", csname)
 	}
 	logger.Infof("OK!\n")
 }
