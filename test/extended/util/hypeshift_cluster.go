@@ -1,15 +1,18 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/blang/semver/v4"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -273,4 +276,33 @@ func SkipOnHypershiftOperatorExistence(mgmtOC *CLI, expectHO bool) {
 	if !HOExist && expectHO {
 		g.Skip("Expecting Hypershift Operator but it is not found, skip the test")
 	}
+}
+
+// WaitForHypershiftHostedClusterReady waits for the hostedCluster ready
+func WaitForHypershiftHostedClusterReady(oc *CLI, hostedClusterName, hostedClusterNS string) {
+	pollWaitErr := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 10*time.Minute, false, func(cxt context.Context) (bool, error) {
+		hostedClusterAvailable, getStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", hostedClusterNS, "--ignore-not-found", hostedClusterName, `-ojsonpath='{.status.conditions[?(@.type=="Available")].status}'`).Output()
+		if getStatusErr != nil {
+			e2e.Logf("Failed to get hosted cluster %q status: %v, try next round", hostedClusterName, getStatusErr)
+			return false, nil
+		}
+		if !strings.Contains(hostedClusterAvailable, "True") {
+			e2e.Logf("Hosted cluster %q status: Available=%s, try next round", hostedClusterName, hostedClusterAvailable)
+			return false, nil
+		}
+
+		hostedClusterProgressState, getStateErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", hostedClusterNS, "--ignore-not-found", hostedClusterName, `-ojsonpath={.status.version.history[?(@.state!="")].state}`).Output()
+		if getStateErr != nil {
+			e2e.Logf("Failed to get hosted cluster %q progress state: %v, try next round", hostedClusterName, getStateErr)
+			return false, nil
+		}
+		if !strings.Contains(hostedClusterProgressState, "Completed") {
+			e2e.Logf("Hosted cluster %q progress state: %q, try next round", hostedClusterName, hostedClusterProgressState)
+			return false, nil
+		}
+		e2e.Logf("Hosted cluster %q is ready now", hostedClusterName)
+		return true, nil
+	})
+	AssertWaitPollNoErr(pollWaitErr, fmt.Sprintf("Hosted cluster %q still not ready", hostedClusterName))
+
 }

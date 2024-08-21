@@ -1001,6 +1001,13 @@ func (dep *deployment) getSpecifiedJSONPathValue(oc *exutil.CLI, jsonPath string
 	return value
 }
 
+// pollGetSpecifiedJSONPathValue gets the specified jsonpath value of the Deployment satisfy the Eventually check
+func (dep *deployment) pollGetSpecifiedJSONPathValue(oc *exutil.CLI, jsonPath string) func() string {
+	return func() string {
+		return dep.getSpecifiedJSONPathValue(oc, jsonPath)
+	}
+}
+
 // Restart the Deployment by rollout restart
 func (dep *deployment) restart(oc *exutil.CLI) {
 	resourceVersionOri := dep.getSpecifiedJSONPathValue(oc, "{.metadata.resourceVersion}")

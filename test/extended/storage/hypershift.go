@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -12,23 +14,28 @@ import (
 var _ = g.Describe("[sig-storage] STORAGE", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc               = exutil.NewCLI("storage-hypershift", exutil.KubeConfigPath())
+		oc               = exutil.NewCLIForKubeOpenShift("storage-hypershift")
 		guestClusterName string
 		guestClusterKube string
 		hostedClusterNS  string
+		isAKS            bool
+		ctx              context.Context
 	)
 
 	// aws-csi test suite cloud provider support check
 	g.BeforeEach(func() {
-		// Function to check optional enabled capabilities
-		checkOptionalCapability(oc, "Storage")
+		ctx = context.Background()
+		if isAKS, _ = exutil.IsAKSCluster(ctx, oc); isAKS {
+			cloudProvider = "azure"
+		} else {
+			// Function to check optional enabled capabilities
+			checkOptionalCapability(oc, "Storage")
+			cloudProvider = getCloudProvider(oc)
+			generalCsiSupportCheck(cloudProvider)
+			getClusterVersionChannel(oc)
+		}
 
-		cloudProvider = getCloudProvider(oc)
-		generalCsiSupportCheck(cloudProvider)
-
-		exutil.By("# Get the Mgmt cluster version and Guest cluster name")
-		getClusterVersionChannel(oc)
-
+		exutil.By("# Get the Mgmt cluster and Guest cluster name")
 		// The tc is skipped if it do not find hypershift operator pod inside cluster
 		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		e2e.Logf("Guest cluster name is %s", hostedClusterNS+"-"+guestClusterName)
@@ -41,7 +48,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Skipping the tc on Private kind as we need bastion process to login to Guest cluster
 		endPointAccess, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", guestClusterName, "-n", hostedClusterNS, "-o=jsonpath={.spec.platform."+cloudProvider+".endpointAccess}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if endPointAccess != "Public" {
+		if cloudProvider == "aws" && endPointAccess != "Public" {
 			g.Skip("Cluster is not of Public kind and skipping the tc")
 		}
 
@@ -50,7 +57,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Currently listing the AWS platforms deployment operators
 		// To do: Include other platform operators when the hypershift operator is supported
 		depNames := map[string][]string{
-			"aws": {"aws-ebs-csi-driver-controller", "aws-ebs-csi-driver-operator", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator", "csi-snapshot-webhook"},
+			"aws":   {"aws-ebs-csi-driver-controller", "aws-ebs-csi-driver-operator", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator", "csi-snapshot-webhook"},
+			"azure": {"azure-disk-csi-driver-operator", "azure-disk-csi-driver-controller", "azure-file-csi-driver-operator", "azure-file-csi-driver-controller", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator", "csi-snapshot-webhook"},
 		}
 
 		exutil.By("# Check the deployment operator status in hosted control ns")
@@ -98,10 +106,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
 
-		// Currently listing the AWS platforms deployment operators
-		// To do: Include other platform operators when the hypershift operator is supported
-		var operatorNames = make(map[string][]string, 0)
-		operatorNames["aws"] = []string{"aws-ebs-csi-driver-operator", "aws-ebs-csi-driver-controller-sa"}
+		// TODO: Add more operators when the hypershift operator is supported
+		operatorNames := map[string][]string{
+			"aws":   {"aws-ebs-csi-driver-operator", "aws-ebs-csi-driver-controller-sa"},
+			"azure": {"azure-disk-csi-driver-operator", "azure-disk-csi-driver-controller-sa", "azure-file-csi-driver-operator", "azure-file-csi-driver-controller-sa"},
+		}
 
 		// Append general operator csi-snapshot-controller-operator to all platforms
 		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller-operator")
@@ -122,10 +131,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
 
-		// Currently listing the AWS platforms deployment operators
-		// To do: Include other platform operators when the hypershift operator is supported
-		var operatorNames = make(map[string][]string, 0)
-		operatorNames["aws"] = []string{"aws-ebs-csi-driver-operator"}
+		// TODO: Add more operators when the hypershift operator is supported
+		operatorNames := map[string][]string{
+			"aws":   {"aws-ebs-csi-driver-operator"},
+			"azure": {"azure-disk-csi-driver-operator", "azure-file-csi-driver-operator"},
+		}
 
 		// Append general operator csi-snapshot-controller to all platforms
 		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller", "csi-snapshot-webhook")
@@ -146,10 +156,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
 
-		// Currently listing the AWS platforms deployment operators
-		// To do: Include other platform operators when the hypershift operator is supported
-		var operatorNames = make(map[string][]string, 0)
-		operatorNames["aws"] = []string{"aws-ebs-csi-driver-operator"}
+		// TODO: Add more operators when the hypershift operator is supported
+		operatorNames := map[string][]string{
+			"aws": {"aws-ebs-csi-driver-operator"},
+			// TODO: Currently azure has known bug, add azure back when the bug solved
+			// https://issues.redhat.com/browse/OCPBUGS-38519
+			// "azure": {"azure-disk-csi-driver-operator", "azure-file-csi-driver-operator"},
+		}
 
 		// Append general operator csi-snapshot-controller to all platforms
 		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller", "csi-snapshot-controller-operator")
@@ -169,4 +182,59 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
 	})
+
+	// author: pewang@redhat.com
+	// https://issues.redhat.com/browse/STOR-1874
+	g.It("Author:pewang-HyperShiftMGMT-NonHyperShiftHOST-ROSA-OSD_CCS-High-75643-[CSI-Driver-Operator][HCP] Driver operator and controller should populate the hostedcluster nodeSelector configuration [Serial]", func() {
+
+		hostedClusterControlPlaneNs := fmt.Sprintf("%s-%s", hostedClusterNS, guestClusterName)
+		// The nodeSelector should have no impact with the hcp
+		newNodeSelector := `{"beta.kubernetes.io/os":"linux"}`
+		cloudsCSIDriverOperatorsMapping := map[string][]deployment{
+			"aws": {
+				newDeployment(setDeploymentName("aws-ebs-csi-driver-operator"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+					setDeploymentApplabel("name=aws-ebs-csi-driver-operator")),
+				newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+					setDeploymentApplabel("app=aws-ebs-csi-driver-controller"))},
+			"azure": {
+				newDeployment(setDeploymentName("azure-disk-csi-driver-operator"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+					setDeploymentApplabel("name=azure-disk-csi-driver-operator")),
+				newDeployment(setDeploymentName("azure-disk-csi-driver-controller"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+					setDeploymentApplabel("app=azure-disk-csi-driver-controller")),
+				newDeployment(setDeploymentName("azure-file-csi-driver-operator"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+					setDeploymentApplabel("name=azure-file-csi-driver-operator")),
+				newDeployment(setDeploymentName("azure-file-csi-driver-controller"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+					setDeploymentApplabel("app=azure-file-csi-driver-controller"))},
+		}
+
+		exutil.By("# Check hcp driver operator and controller should populate the hc nodeSelector configuration")
+		hostedClusterNodeSelector, getHostedClusterNodeSelectorErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o=jsonpath={.spec.nodeSelector}").Output()
+		o.Expect(getHostedClusterNodeSelectorErr).ShouldNot(o.HaveOccurred(), "Failed to get hosted cluster nodeSelector")
+
+		for _, driverDeploy := range cloudsCSIDriverOperatorsMapping[cloudProvider] {
+			exutil.By(fmt.Sprintf("# Check the hcp %s should update the nodeSelector configuration as expected", driverDeploy.name))
+			o.Eventually(driverDeploy.pollGetSpecifiedJSONPathValue(oc, `{.spec.template.spec.nodeSelector}`)).
+				WithTimeout(defaultMaxWaitingTime).WithPolling(defaultMaxWaitingTime/defaultIterationTimes).
+				Should(o.ContainSubstring(hostedClusterNodeSelector), fmt.Sprintf("%s nodeSelector is not populated", driverDeploy.name))
+		}
+
+		if hostedClusterNodeSelector == "" {
+			exutil.By("# Update the hosted cluster nodeSelector configuration")
+			defer func() {
+				patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, `[{"op": "remove", "path": "/spec/nodeSelector"}]`, "json")
+				exutil.WaitForHypershiftHostedClusterReady(oc, guestClusterName, hostedClusterNS)
+			}()
+			patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, fmt.Sprintf(`{"spec":{"nodeSelector":%s}}`, newNodeSelector), "merge")
+			exutil.WaitForHypershiftHostedClusterReady(oc, guestClusterName, hostedClusterNS)
+
+			for _, driverDeploy := range cloudsCSIDriverOperatorsMapping[cloudProvider] {
+				exutil.By(fmt.Sprintf("# Check the hcp %s should update the nodeSelector configuration as expected", driverDeploy.name))
+				o.Eventually(driverDeploy.pollGetSpecifiedJSONPathValue(oc, `{.spec.template.spec.nodeSelector}`)).
+					WithTimeout(defaultMaxWaitingTime).WithPolling(defaultMaxWaitingTime/defaultIterationTimes).
+					Should(o.ContainSubstring(newNodeSelector), fmt.Sprintf("%s nodeSelector is not populated", driverDeploy.name))
+			}
+		}
+
+	})
+
 })
