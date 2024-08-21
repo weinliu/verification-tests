@@ -18,8 +18,73 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
-// Tests related to CR creation that can be executed on all platforms
+// Test for staging pipeline
 var _ = g.Describe("[sig-networking] SDN metallb", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc          = exutil.NewCLI("networking-metallb", exutil.KubeConfigPath())
+		opNamespace = "metallb-system"
+		opName      = "metallb-operator"
+		testDataDir = exutil.FixturePath("testdata", "networking/metallb")
+	)
+
+	g.BeforeEach(func() {
+
+		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
+		operatorGroupTemplate := filepath.Join(testDataDir, "operatorgroup-template.yaml")
+		subscriptionTemplate := filepath.Join(testDataDir, "subscription-template.yaml")
+		sub := subscriptionResource{
+			name:             "metallb-operator-sub",
+			namespace:        opNamespace,
+			operatorName:     opName,
+			channel:          "stable",
+			catalog:          "qe-app-registry",
+			catalogNamespace: "openshift-marketplace",
+			template:         subscriptionTemplate,
+		}
+		ns := namespaceResource{
+			name:     opNamespace,
+			template: namespaceTemplate,
+		}
+		og := operatorGroupResource{
+			name:             opName,
+			namespace:        opNamespace,
+			targetNamespaces: opNamespace,
+			template:         operatorGroupTemplate,
+		}
+		catalogSource := getOperatorSource(oc, "openshift-marketplace")
+		if catalogSource == "" {
+			g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+		}
+		sub.catalog = catalogSource
+		operatorInstall(oc, sub, ns, og)
+		g.By("Making sure CRDs are successfully installed")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "bfdprofiles.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "bgpadvertisements.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "bgppeers.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "communities.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "ipaddresspools.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "l2advertisements.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
+
+	})
+
+	g.It("Author:asood-LEVEL0-StagerunBoth-High-43074-MetalLB-Operator installation ", func() {
+		g.By("Checking metalLB operator installation")
+		e2e.Logf("Operator install check successfull as part of setup !!!!!")
+		g.By("SUCCESS - MetalLB operator installed")
+
+	})
+
+})
+
+// Tests related to metallb install and CR creation that can be executed more frequently
+var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -34,6 +99,11 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 	)
 
 	g.BeforeEach(func() {
+		// TODO remove this check after due diligence if these tests can run on prow workflow for metal clusters
+		exutil.By("Check the platform if it is suitable for running the test")
+		if !(isPlatformSuitable(oc)) {
+			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
+		}
 
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
 		operatorGroupTemplate := filepath.Join(testDataDir, "operatorgroup-template.yaml")
@@ -136,7 +206,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-LEVEL0-StagerunBoth-High-54857-Validate controller and pod can be scheduled based on node selectors.[Serial]", func() {
+	g.It("Author:asood-High-54857-Validate controller and pod can be scheduled based on node selectors.[Serial]", func() {
 		var nodeSelKey = "kubernetes.io/hostname"
 		exutil.By("Obtain the worker nodes in cluster")
 		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
