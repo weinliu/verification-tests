@@ -11,16 +11,16 @@ objects:
   spec:
     filters:
     - name: app-logs
-      type: openShiftLabels
-      openShiftLabels:
+      type: openshiftLabels
+      openshiftLabels:
         logging: app-logs
     - name: infra-logs
-      type: openShiftLabels
-      openShiftLabels:
+      type: openshiftLabels
+      openshiftLabels:
         logging: infra-logs
     - name: audit-logs
-      type: openShiftLabels
-      openShiftLabels:
+      type: openshiftLabels
+      openshiftLabels:
         logging: audit-logs
     outputs:
     - name: es-created-by-user

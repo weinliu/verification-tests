@@ -11,8 +11,8 @@ objects:
   spec:
     filters:
     - name: my-policy
-      type: kubeAPIAudit
-      kubeAPIAudit:
+      type: kubeApiAudit
+      kubeApiAudit:
         omitStages:
         - "RequestReceived"
         rules:
@@ -92,7 +92,7 @@ parameters:
 - name: LOKISTACK_NAMESPACE
   value: "openshift-logging"
 - name: MANAGEMENT_STATE
-  value: "Managed"
+  value: "managed"
 - name: FILTER_REFS
   value: "[\"my-policy\"]"
 - name: SECRET_NAME

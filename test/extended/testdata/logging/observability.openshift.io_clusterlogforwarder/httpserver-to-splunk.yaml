@@ -9,20 +9,20 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    managementState: Managed
+    managementState: managed
     inputs:
     - name: httpserver1
       type: receiver
       receiver:
         http:
-          format: kubeAPIAudit
+          format: kubeApiAudit
         port: 8081
         type: http
     - name: httpserver2
       type: receiver
       receiver:
         http:
-          format: kubeAPIAudit
+          format: kubeApiAudit
         port: 8082
         type: http
       type: receiver
@@ -30,7 +30,7 @@ objects:
       type: receiver
       receiver:
         http:
-          format: kubeAPIAudit
+          format: kubeApiAudit
         port: 8083
         type: http
     outputs:

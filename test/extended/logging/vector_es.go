@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc             = exutil.NewCLI("vector-es-namespace", exutil.KubeConfigPath())
+		oc             = exutil.NewCLI("vector-es", exutil.KubeConfigPath())
 		loggingBaseDir string
 	)
 
@@ -197,17 +197,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				namespace:              esProj,
 				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
 				secretName:             ees.secretName,
-				waitForPodReady:        true,
 				collectApplicationLogs: true,
 				serviceAccountName:     "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX={.kubernetes.container_name||.log_type||\"none\"}", "INPUT_REFS=[\"application\"]")
+			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX=app-{.kubernetes.container_name||.log_type||\"none\"}", "INPUT_REFS=[\"application\"]")
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "parse-json-logs", "type": "parse"}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["parse-json-logs"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
 
 			g.By("check indices in externale ES")
-			ees.waitForIndexAppear(oc, containerName+"-0")
-			ees.waitForIndexAppear(oc, containerName+"-1")
-			ees.waitForIndexAppear(oc, "app-"+app)
+			ees.waitForIndexAppear(oc, "app-"+containerName+"-0")
+			ees.waitForIndexAppear(oc, "app-"+containerName+"-1")
+			ees.waitForIndexAppear(oc, "app-"+containerName+"-2")
 
 			queryContainerLog := func(container string) string {
 				return "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \"" + container + "\"}}}"
@@ -232,12 +234,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(log12.Hits.DataHits) == 0).To(o.BeTrue())
 
 			// in index app-$app-project, only logs in container $containerName-2 are stored in it, and json logs are parsed
-			log2 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-2"))
+			log2 := ees.searchDocByQuery(oc, "app-"+containerName+"-2", queryContainerLog(containerName+"-2"))
 			o.Expect(len(log2.Hits.DataHits) > 0).To(o.BeTrue())
 			o.Expect(log2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
-			log20 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-0"))
+			log20 := ees.searchDocByQuery(oc, "app-"+containerName+"-2", queryContainerLog(containerName+"-0"))
 			o.Expect(len(log20.Hits.DataHits) == 0).To(o.BeTrue())
-			log21 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-1"))
+			log21 := ees.searchDocByQuery(oc, "app-"+containerName+"-2", queryContainerLog(containerName+"-1"))
 			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
 		})
 
@@ -332,7 +334,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ees.waitForIndexAppear(oc, "audit")
 
 			g.By("Add pipeline labels to the ClusterLogForwarder instance")
-			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "test-label", "type": "openShiftLabels", "openShiftLabels": {"logging-labels":"test-labels"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["test-label"]}]`
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "test-label", "type": "openshiftLabels", "openshiftLabels": {"logging-labels":"test-labels"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["test-label"]}]`
 			clf.update(oc, "", patch, "--type=json")
 
 			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
@@ -703,6 +705,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				version:    "6",
 				serverName: "elasticsearch-server",
 				httpSSL:    true,
+				clientAuth: true,
 				secretName: "ees-https",
 				loggingNS:  esProj,
 			}
@@ -720,7 +723,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-61450",
 				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-mtls.yaml"),
 				secretName:                ees.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -735,6 +738,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			searchString := `[sinks.output_es_created_by_user.tls]
 min_tls_version = "VersionTLS10"
 ciphersuites = "ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256"
+key_file = "/var/run/ocp-collector/secrets/ees-https/tls.key"
+crt_file = "/var/run/ocp-collector/secrets/ees-https/tls.crt"
 ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -754,6 +759,8 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			searchString = `[sinks.output_es_created_by_user.tls]
 min_tls_version = "VersionTLS10"
 ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-CHACHA20-POLY1305,ECDHE-RSA-CHACHA20-POLY1305,DHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-CHACHA20-POLY1305,ECDHE-ECDSA-AES128-SHA256,ECDHE-RSA-AES128-SHA256,ECDHE-ECDSA-AES128-SHA,ECDHE-RSA-AES128-SHA,ECDHE-ECDSA-AES256-SHA384,ECDHE-RSA-AES256-SHA384,ECDHE-ECDSA-AES256-SHA,ECDHE-RSA-AES256-SHA,DHE-RSA-AES128-SHA256,DHE-RSA-AES256-SHA256,AES128-GCM-SHA256,AES256-GCM-SHA384,AES128-SHA256,AES256-SHA256,AES128-SHA,AES256-SHA,DES-CBC3-SHA"
+key_file = "/var/run/ocp-collector/secrets/ees-https/tls.key"
+crt_file = "/var/run/ocp-collector/secrets/ees-https/tls.crt"
 ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			result, err = checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString)
 			o.Expect(err).NotTo(o.HaveOccurred())

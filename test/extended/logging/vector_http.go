@@ -16,7 +16,7 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc             = exutil.NewCLI("logfwdhttp-namespace", exutil.KubeConfigPath())
+		oc             = exutil.NewCLI("logfwdhttp", exutil.KubeConfigPath())
 		loggingBaseDir string
 	)
 
@@ -287,7 +287,7 @@ ca_file = "/var/run/ocp-collector/secrets/to-fluentd-60933/ca-bundle.crt"`
 			fluentdS.checkData(oc, true, "app.log")
 
 			g.By("Set Intermediate tlsSecurityProfile for the External HTTP output.")
-			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Intermediate"}}}]`
+			patch = `[{"op": "add", "path": "/spec/outputs/0/tls/securityProfile", "value": {"type": "Intermediate"}}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 

@@ -20,7 +20,7 @@ objects:
       tls:
         ca:
           key: ca-bundle.crt
-          secreName: ${SECRET_NAME}
+          secretName: ${SECRET_NAME}
       type: http
     pipelines:
     - inputRefs:

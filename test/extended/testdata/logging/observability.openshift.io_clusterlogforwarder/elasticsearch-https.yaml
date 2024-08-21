@@ -24,10 +24,10 @@ objects:
         version: ${{ES_VERSION}}
       tls:
         ca:
-          configMapName:
           key: ca-bundle.crt
-          secretName: ${SECRET_NAME} #configmap or secret
+          secretName: ${SECRET_NAME}
         insecureSkipVerify: ${{INSECURE_SKIP_VERIFY}}
+        securityProfile: ${{SECURITY_PROFILE}}
     pipelines:
     - name: forward-to-external-es
       inputRefs: ${{INPUT_REFS}}
@@ -57,10 +57,12 @@ parameters:
 - name: RESOURCES
   value: "{}"
 - name: MANAGEMENT_STATE
-  value: "Managed"
+  value: "managed"
 - name: TUNING
   value: "{}"
 - name: INDEX
   value: "{.log_type||\"none-typed-logs\"}"
 - name: INSECURE_SKIP_VERIFY
   value: "false"
+- name: SECURITY_PROFILE
+  value: "{}"

@@ -9,7 +9,7 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    managementState: Managed
+    managementState: managed
     outputs:
     - name: gcp-logging
       type: googleCloudLogging
@@ -23,7 +23,7 @@ objects:
           value: ${ID_VALUE}
         logId : ${LOG_ID}
         tuning:
-          delivery: ${DELIVERY}
+          deliveryMode: ${DELIVERY}
           maxWrite: ${MAX_WRITE}
           minRetryDuration: ${{MIN_RETRY_DURATION}}
           maxRetryDuration: ${{MAX_RETRY_DURATION}}

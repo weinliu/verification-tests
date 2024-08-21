@@ -3,7 +3,6 @@ package logging
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,7 +18,7 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc             = exutil.NewCLI("vector-syslog-namespace", exutil.KubeConfigPath())
+		oc             = exutil.NewCLI("vector-syslog", exutil.KubeConfigPath())
 		loggingBaseDir string
 	)
 
@@ -70,7 +69,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "RFC=RFC3164", "URL=udp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
+			clf.create(oc, "RFC=rfc3164", "URL=udp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
 
 			g.By("Check logs in rsyslog server")
 			rsyslog.checkData(oc, true, "app-container.log")
@@ -79,48 +78,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:gkarager-Medium-61478-Vector-Forward logs to syslog(default rfc)", func() {
-			g.By("Create log producer")
-			appProj := oc.Namespace()
-			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Deploy rsyslog server")
-			oc.SetupProject()
-			syslogProj := oc.Namespace()
-			rsyslog := rsyslog{
-				serverName: "rsyslog",
-				namespace:  syslogProj,
-				tls:        false,
-				loggingNS:  syslogProj,
-			}
-			defer rsyslog.remove(oc)
-			rsyslog.deploy(oc)
-
-			g.By("Create clusterlogforwarder/instance without rfc value")
-			clf := clusterlogforwarder{
-				name:                      "instance",
-				namespace:                 syslogProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-default.yaml"),
-				waitForPodReady:           true,
-				collectApplicationLogs:    true,
-				collectAuditLogs:          true,
-				collectInfrastructureLogs: true,
-				serviceAccountName:        "test-clf-" + getRandomString(),
-			}
-			defer clf.delete(oc)
-			clf.create(oc, "URL=tcp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
-			assertResourceStatus(oc, "clusterlogforwarder", clf.name, clf.namespace, "{.spec.outputs[0].syslog.rfc}", "RFC5424")
-
-			g.By("Check logs in rsyslog server")
-			rsyslog.checkData(oc, true, "app-container.log")
-			rsyslog.checkData(oc, true, "infra-container.log")
-			rsyslog.checkData(oc, true, "audit.log")
-			rsyslog.checkData(oc, true, "infra.log")
-		})
-
-		g.It("CPaasrunOnly-Author:gkarager-Medium-61479-Vector-Forward logs to syslog(tls)", func() {
+		g.It("Author:gkarager-CPaasrunOnly-Critical-61479-Vector-Forward logs to syslog(tls)", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -144,7 +102,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "instance",
 				namespace:                 syslogProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "rsyslog-serverAuth.yaml"),
 				secretName:                rsyslog.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -162,7 +120,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-WRS-Author:gkarager-Medium-61477-Vector-Forward logs to syslog (mtls with private key passphrase)", func() {
+		g.It("Author:gkarager-CPaasrunOnly-WRS-High-61477-Vector-Forward logs to syslog - mtls with private key passphrase", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -190,7 +148,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-61477",
 				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "rsyslog-mtls.yaml"),
 				secretName:                rsyslog.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -200,26 +158,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514")
-
 			g.By("Check logs in rsyslog server")
 			rsyslog.checkData(oc, true, "app-container.log")
 			rsyslog.checkData(oc, true, "infra-container.log")
 			rsyslog.checkData(oc, true, "audit.log")
 			rsyslog.checkData(oc, true, "infra.log")
 
-			g.By("Check vector config")
-			dirname := "/tmp/" + oc.Namespace() + "-61477"
-			err = os.MkdirAll(dirname, 0777)
+			searchString := `key_file = "/var/run/ocp-collector/secrets/rsyslog-mtls/tls.key"
+crt_file = "/var/run/ocp-collector/secrets/rsyslog-mtls/tls.crt"
+ca_file = "/var/run/ocp-collector/secrets/rsyslog-mtls/ca-bundle.crt"`
+			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", searchString, rsyslog.clientKeyPassphrase)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer os.RemoveAll(dirname)
-			err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", clf.namespace, "secret/"+clf.name+"-config", "--to="+dirname, "--confirm").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			data, err := os.ReadFile(filepath.Join(dirname, "vector.toml"))
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(string(data), "/var/run/ocp-collector/secrets/"+rsyslog.secretName+"/tls.key")).Should(o.BeTrue())
-			o.Expect(strings.Contains(string(data), "/var/run/ocp-collector/secrets/"+rsyslog.secretName+"/tls.crt")).Should(o.BeTrue())
-			o.Expect(strings.Contains(string(data), "/var/run/ocp-collector/secrets/"+rsyslog.secretName+"/ca-bundle.crt")).Should(o.BeTrue())
-			o.Expect(strings.Contains(string(data), rsyslog.clientKeyPassphrase)).Should(o.BeTrue())
+			o.Expect(result).To(o.BeTrue())
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-62527-Collector External syslog output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
@@ -265,7 +215,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := clusterlogforwarder{
 				name:                      "clf-62527",
 				namespace:                 syslogProj,
-				templateFile:              filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "rsyslog-serverAuth.yaml"),
 				secretName:                rsyslog.secretName,
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
@@ -293,7 +243,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			rsyslog.checkData(oc, true, "infra.log")
 
 			g.By("Set Intermediate tlsSecurityProfile for the External Syslog output.")
-			patch = `[{"op": "add", "path": "/spec/outputs/0/tls", "value": {"securityProfile": {"type": "Intermediate"}}}]`
+			patch = `[{"op": "add", "path": "/spec/outputs/0/tls/securityProfile", "value": {"type": "Intermediate"}}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
@@ -343,7 +293,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			clf := clusterlogforwarder{
 				name:               "clf-71143",
 				namespace:          syslogProj,
-				templateFile:       filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-rsyslog-with-secret.yaml"),
+				templateFile:       filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "rsyslog-serverAuth.yaml"),
 				secretName:         rsyslog.secretName,
 				waitForPodReady:    true,
 				collectAuditLogs:   true,
@@ -356,7 +306,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			rsyslog.checkData(oc, true, "audit.log")
 
 			exutil.By("Update CLF to collect linux audit logs")
-			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "selected-audit", "audit": {"sources":["auditd"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-audit"]}]`
+			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "selected-audit", "type": "audit", "audit": {"sources":["auditd"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-audit"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 			// sleep 10 seconds for collector pods to send the cached records

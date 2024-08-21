@@ -550,7 +550,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfSecret.create(oc)
 			defer clf.delete(oc)
 			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={.openshift.labels.test||\"\"}")
-			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "labels", "type": "openShiftLabels", "openShiftLabels": {"test": "` + index + `"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["labels"]}]`
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "labels", "type": "openshiftLabels", "openshiftLabels": {"test": "` + index + `"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["labels"]}]`
 			clf.update(oc, "", patch, "--type=json")
 			clf.waitForCollectorPodsReady(oc)
 
@@ -572,7 +572,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("create log producer")
 			appProj := oc.Namespace()
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", josnLogTemplate, "-p", `LABELS={"test-logging": "logging-OCP-71035", "test.logging.io/logging.qe-test-label": "logging-OCP-71035"}`).Execute()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", josnLogTemplate, "-p", `LABELS={"test-logging": "logging-OCP_71035", "test.logging.io/logging.qe-test-label": "logging-OCP_71035"}`).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			oc.SetupProject()
@@ -616,7 +616,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf.create(oc, "URL=http://"+sp.serviceURL+":8088", "SECRET_NAME="+clfSecret.name, "INDEX={.kubernetes.labels.\"test.logging.io/logging.qe-test-label\"||\"\"}")
 
 			exutil.By("check logs in splunk")
-			// logs from project appProj should be stored in 'logging-OCP-71035', other logs should be in default index
+			// logs from project appProj should be stored in 'logging-OCP_71035', other logs should be in default index
 			o.Expect(sp.checkLogs("index=\""+index+"\"")).To(o.BeTrue(), "can't find logs in "+index+" index")
 			r, e := sp.searchLogs("index=\"" + index + "\", kubernetes.namespace_name!=\"" + appProj + "\"")
 			o.Expect(e).NotTo(o.HaveOccurred())

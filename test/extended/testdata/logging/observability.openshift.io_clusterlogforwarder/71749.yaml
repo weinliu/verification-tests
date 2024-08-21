@@ -38,6 +38,8 @@ objects:
       - test:
         - field: .log_type
           matches: "infrastructure"
+        - field: .log_source
+          matches: "container"
         - field: .kubernetes.namespace_name
           notMatches: "openshift-cluster*"
     managementState: ${MANAGEMENT_STATE}
@@ -45,6 +47,7 @@ objects:
     - name: lokistack
       type: lokiStack
       lokiStack:
+        authentication:
           token:
             from: serviceAccount
         target:
@@ -79,6 +82,6 @@ parameters:
 - name: LOKISTACK_NAMESPACE
   value: "openshift-logging"
 - name: MANAGEMENT_STATE
-  value: "Managed"
+  value: "managed"
 - name: SECRET_NAME
   value: ""

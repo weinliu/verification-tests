@@ -1,9 +1,9 @@
 kind: Template
-apiversion: template.openshift.io/v1
+apiVersion: template.openshift.io/v1
 metadata:
   name: clusterlogforwarder-template
 objects:
-- apiVersion: logging.openshift.io/v1
+- apiVersion: observability.openshift.io/v1
   kind: ClusterLogForwarder
   metadata:
     name: ${NAME}
@@ -12,19 +12,22 @@ objects:
     outputs:
     - name: external-syslog
       type: syslog
-      secret:
-        name: ${SECRET_NAME}
       syslog:
         facility: local0
         rfc: ${RFC}
         severity: informational
-      url: ${URL}
+        url: ${URL}
+      tls:
+        ca:
+          key: ca-bundle.crt
+          secretName: ${SECRET_NAME}
     pipelines:
     - name: forward-to-external-syslog
       inputRefs: ${{INPUTREFS}}
       outputRefs:
         - external-syslog
-    serviceAccountName: ${SERVICE_ACCOUNT_NAME}
+    serviceAccount:
+      name: ${SERVICE_ACCOUNT_NAME}
 parameters:
 - name: NAME
   value: "instance"
@@ -35,7 +38,7 @@ parameters:
 - name: URL
   value: tls://rsyslogserver.openshift-logging.svc:6514
 - name: RFC
-  value: RFC5424
+  value: rfc5424
 - name: INPUTREFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME

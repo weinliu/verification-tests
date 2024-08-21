@@ -684,8 +684,10 @@ func (clf *clusterlogforwarder) create(oc *exutil.CLI, optionalParameters ...str
 		parameters = append(parameters, "SECRET_NAME="+clf.secretName)
 	}
 
-	clf.createServiceAccount(oc)
-	parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+clf.serviceAccountName)
+	if clf.serviceAccountName != "" {
+		clf.createServiceAccount(oc)
+		parameters = append(parameters, "SERVICE_ACCOUNT_NAME="+clf.serviceAccountName)
+	}
 
 	if len(optionalParameters) > 0 {
 		parameters = append(parameters, optionalParameters...)
@@ -2062,7 +2064,7 @@ func checkTLSProfile(oc *exutil.CLI, profile string, algo string, server string,
 	return true
 }
 
-func checkCollectorConfiguration(oc *exutil.CLI, ns, cmName string, searchString ...string) (bool, error) {
+func checkCollectorConfiguration(oc *exutil.CLI, ns, cmName string, searchStrings ...string) (bool, error) {
 	// Parse the vector.toml file
 	dirname := "/tmp/" + oc.Namespace() + "-vectortoml"
 	defer os.RemoveAll(dirname)
@@ -2088,8 +2090,9 @@ func checkCollectorConfiguration(oc *exutil.CLI, ns, cmName string, searchString
 		return false, err
 	}
 
-	for _, s := range searchString {
+	for _, s := range searchStrings {
 		if !strings.Contains(string(content), s) {
+			e2e.Logf("can't find %s in vector.toml", s)
 			return false, nil
 		}
 	}
@@ -2248,14 +2251,14 @@ func convertInterfaceToArray(t interface{}) []string {
 
 // send logs over http
 func postDataToHttpserver(oc *exutil.CLI, clfNS string, httpURL string, postJsonString string) bool {
-	CollectorPods, err := oc.AdminKubeClient().CoreV1().Pods(clfNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
-	if err != nil || len(CollectorPods.Items) < 1 {
-		e2e.Logf("failed to get pods: component=collector")
+	collectorPods, err := oc.AdminKubeClient().CoreV1().Pods(clfNS).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=collector"})
+	if err != nil || len(collectorPods.Items) < 1 {
+		e2e.Logf("failed to get pods by label app.kubernetes.io/component=collector")
 		return false
 	}
 	//ToDo, send logs to httpserver using service ca, oc get cm/openshift-service-ca.crt -o json |jq '.data."service-ca.crt"'
 	cmd := `curl -s -k -w "%{http_code}" ` + httpURL + " -d '" + postJsonString + "'"
-	result, err := e2eoutput.RunHostCmdWithRetries(clfNS, CollectorPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+	result, err := e2eoutput.RunHostCmdWithRetries(clfNS, collectorPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
 	if err != nil {
 		e2e.Logf("Show more status as data can not be sent to httpserver")
 		oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", clfNS, "endpoints").Output()

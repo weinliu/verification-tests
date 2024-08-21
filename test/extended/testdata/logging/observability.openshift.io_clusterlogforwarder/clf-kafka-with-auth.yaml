@@ -23,7 +23,7 @@ objects:
         url: ${URL}
         tuning:
           compression: ${COMPRESSION}
-          delivery: ${DELIVERY}
+          deliveryMode: ${DELIVERY}
           maxWrite: ${MAX_WRITE}
       name: kafka-app
       tls:

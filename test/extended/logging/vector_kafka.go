@@ -19,7 +19,7 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc             = exutil.NewCLI("vector-kafka-namespace", exutil.KubeConfigPath())
+		oc             = exutil.NewCLI("vector-kafka", exutil.KubeConfigPath())
 		loggingBaseDir string
 	)
 

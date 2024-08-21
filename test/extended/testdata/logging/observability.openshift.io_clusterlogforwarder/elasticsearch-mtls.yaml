@@ -35,7 +35,6 @@ objects:
         key:
           key: tls.key
           secretName: ${SECRET_NAME}
-        securityProfile: ${{SECURITY_PROFILE}}
     pipelines:
     - name: forward-to-external-es
       inputRefs: ${{INPUT_REFS}}
@@ -65,12 +64,10 @@ parameters:
 - name: RESOURCES
   value: "{}"
 - name: MANAGEMENT_STATE
-  value: "Managed"
+  value: "managed"
 - name: TUNING
   value: "{}"
 - name: INDEX
   value: "{.log_type||\"none-typed-logs\"}"
 - name: INSECURE_SKIP_VERIFY
   value: "false"
-- name: SECURITY_PROFILE
-  value: "{}"

@@ -9,16 +9,11 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    managementState: Managed
     outputs:
     - name: rsyslog
       type: syslog
       syslog:
-        appName: ${APP_NAME}
         facility: ${FACILITY}
-        msgID: ${MSG_ID}
-        payloadKey: ${PAYLOAD_KEY}
-        procID: ${PROC_ID}
         rfc: ${RFC}
         severity: ${SEVERITY}
         url: ${URL}
@@ -36,12 +31,6 @@ parameters:
   value: "openshift-logging"
 - name: FACILITY
   value: "local0"
-- name: MSG_ID
-  value: ""
-- name: PAYLOAD_KEY
-  value: ""
-- name: PROC_ID
-  value: ""
 - name: SEVERITY
   value: "informational"
 - name: URL
@@ -51,6 +40,4 @@ parameters:
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: RFC
-  value: RFC5424
-- name: APP_NAME
-  value: ""
+  value: rfc5424

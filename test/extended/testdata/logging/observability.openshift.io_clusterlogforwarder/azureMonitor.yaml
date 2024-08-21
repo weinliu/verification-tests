@@ -9,7 +9,7 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    managementState: Managed
+    managementState: managed
     outputs:
     - name: azure-app
       type: azureMonitor
@@ -22,11 +22,6 @@ objects:
         logType: ${PREFIX_OR_NAME}app_log
         azureResourceId: ${RESOURCE_ID}
         host: ${AZURE_HOST}
-        tuning:
-          delivery:
-          maxRetryDuration:
-          maxWrite:
-          minRetryDuration:
     - name: azure-infra
       type: azureMonitor
       azureMonitor:

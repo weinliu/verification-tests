@@ -491,6 +491,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 			waitForPodReady:           true,
 			enableMonitoring:          true,
 		}
+		clf.createServiceAccount(oc)
+		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-53817")
+		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-53817", clf.serviceAccountName, clf.namespace)
+		saToken := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, saToken)
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -525,82 +531,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-65405-ClusterLogForwarder validation for name and namespace.", func() {
-		g.By("Create Loki project and deploy Loki Server")
-		lokiNS := oc.Namespace()
-		loki := externalLoki{"loki-server", lokiNS}
-		defer loki.remove(oc)
-		loki.deployLoki(oc)
-		lokiURL := "http://" + loki.name + "." + lokiNS + ".svc:3100"
-
-		clfTemplate := filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml")
-		g.By("Create ClusterLogForwarder with serviceAccountName=logcollector in openshift-logging project")
-		clfInvalidSA := clusterlogforwarder{
-			name:                   "invalid-sa",
-			namespace:              loggingNS,
-			templateFile:           clfTemplate,
-			serviceAccountName:     "logcollector",
-			collectApplicationLogs: true,
-			waitForPodReady:        false,
-		}
-		defer clfInvalidSA.delete(oc)
-		clfInvalidSA.create(oc, "URL="+lokiURL, "INPUTREFS=[\"application\"]")
-		checkResource(oc, true, false, "logcollector is a reserved serviceaccount name for legacy ClusterLogForwarder(openshift-logging/instance)", []string{"clf/" + clfInvalidSA.name, "-n", clfInvalidSA.namespace, "-ojsonpath={.status.conditions[*].message}"})
-
-		g.By("Create ClusterLogForwarder with name=collector in openshift-logging project")
-		clfInvalidName := clusterlogforwarder{
-			name:                   "collector",
-			namespace:              loggingNS,
-			templateFile:           clfTemplate,
-			serviceAccountName:     "test-invalid-name",
-			collectApplicationLogs: true,
-			waitForPodReady:        false,
-		}
-		defer clfInvalidName.delete(oc)
-		clfInvalidName.create(oc, "URL="+lokiURL, "INPUTREFS=[\"application\"]")
-		checkResource(oc, true, false, "Name \"collector\" conflicts with an object for the legacy ClusterLogForwarder deployment.  Choose another", []string{"clf/" + clfInvalidName.name, "-n", clfInvalidName.namespace, "-ojsonpath={.status.conditions[*].message}"})
-
-		exutil.By("Create ClusterLogForwarder, set it's name starts with numerical character")
-		clfInvalidName2 := clusterlogforwarder{
-			name:                   "65045-test-invalid-name",
-			namespace:              loggingNS,
-			templateFile:           clfTemplate,
-			serviceAccountName:     "65045-test-invalid-name",
-			collectApplicationLogs: true,
-			waitForPodReady:        false,
-		}
-		defer clfInvalidName2.delete(oc)
-		clfInvalidName2.create(oc, "URL="+lokiURL, "INPUTREFS=[\"application\"]")
-		checkResource(oc, true, false, "Name \""+clfInvalidName2.name+"\" will result in an invalid object", []string{"clf/" + clfInvalidName2.name, "-n", clfInvalidName2.namespace, "-ojsonpath={.status.conditions[*].message}"})
-
-		exutil.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
-		clf := clusterlogforwarder{
-			name:                      "test-65405",
-			namespace:                 loggingNS,
-			templateFile:              clfTemplate,
-			serviceAccountName:        "collector-65405",
-			collectInfrastructureLogs: true,
-			waitForPodReady:           true,
-		}
-		defer clf.delete(oc)
-		inputRefs := "[\"infrastructure\"]"
-		clf.create(oc, "URL="+lokiURL, "INPUTREFS="+inputRefs)
-		route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
-		lc := newLokiClient(route)
-		g.By("Searching for Application Logs in Loki")
-
-		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-			infraLogs, err := lc.searchByKey("", "log_type", "infrastructure")
-			if err != nil {
-				return false, err
-			}
-			return len(infraLogs.Data.Result) > 0, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "failed searching for infrastructure logs in Loki")
-		e2e.Logf("Infrastructure Logs Query is a success")
-	})
-
-	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-65407-ClusterLogForwarder validation for the serviceaccount.[Slow]", func() {
 		clfNS := oc.Namespace()
 		exutil.By("Deploy ES server")
@@ -624,11 +554,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		clf := clusterlogforwarder{
 			name:         "collector-65407",
 			namespace:    clfNS,
-			templateFile: filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-es.yaml"),
+			templateFile: filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch.yaml"),
 		}
 		defer clf.delete(oc)
-		clf.create(oc, "ES_URL=http://"+ees.serverName+"."+ees.namespace+".svc:9200", "ES_VERSION="+ees.version, "SERVICE_ACCOUNT_NAME=logcollector", "INPUTREFS=[\"application\"]")
-		checkResource(oc, true, false, "service account not found: "+clf.namespace+"/logcollector", []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
+		clf.create(oc, "ES_URL=http://"+ees.serverName+"."+ees.namespace+".svc:9200", "ES_VERSION="+ees.version, "SERVICE_ACCOUNT_NAME=logcollector", "INPUT_REFS=[\"application\"]")
+		checkResource(oc, true, false, `ServiceAccount "logcollector" not found`, []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
 
 		ds := resource{
 			kind:      "daemonset",
@@ -669,7 +599,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		exutil.By("Delete the serviceaccount, the collector pods should be removed")
 		err = sa.clear(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		checkResource(oc, true, false, "service account not found: "+clf.namespace+"/"+sa.name, []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
+		checkResource(oc, true, false, "ServiceAccount \""+sa.name+"\" not found", []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
 		dsErr = ds.WaitUntilResourceIsGone(oc)
 		o.Expect(dsErr).NotTo(o.HaveOccurred())
 
@@ -679,11 +609,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		addClusterRoleToServiceAccount(oc, sa.namespace, sa.name, "collect-application-logs")
 		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 
-		exutil.By("Remove spec.serviceAccountName from CLF")
-		clf.update(oc, "", `[{"op": "remove", "path": "/spec/serviceAccountName"}]`, "--type=json")
-		checkResource(oc, true, false, "custom clusterlogforwarders must specify a service account name", []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
-		dsErr = ds.WaitUntilResourceIsGone(oc)
-		o.Expect(dsErr).NotTo(o.HaveOccurred())
+		exutil.By("Remove spec.serviceAccount from CLF")
+		msg, err := clf.patch(oc, `[{"op": "remove", "path": "/spec/serviceAccount"}]`)
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(strings.Contains(msg, "spec.serviceAccount: Required value")).To(o.BeTrue())
 	})
 
 	// author qitang@redhat.com
@@ -697,7 +626,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		clf := clusterlogforwarder{
 			name:               "collector-65408",
 			namespace:          clfNS,
-			templateFile:       filepath.Join(loggingBaseDir, "clusterlogforwarder", "clf-external-loki.yaml"),
+			templateFile:       filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "loki.yaml"),
 			serviceAccountName: "clf-collector",
 		}
 		defer clf.delete(oc)
@@ -717,7 +646,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, "collect-application-logs", "collect-application-logs")
 		err = addClusterRoleToServiceAccount(oc, clf.namespace, "collect-application-logs", "collect-application-logs")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clf.update(oc, "", "{\"spec\": {\"serviceAccountName\": \"collect-application-logs\"}}", "--type=merge")
+		clf.update(oc, "", "{\"spec\": {\"serviceAccount\": {\"name\": \"collect-application-logs\"}}}", "--type=merge")
 		checkResource(oc, true, false, `insufficient permissions on service account, not authorized to collect ["audit" "infrastructure"] logs`, []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
 		dsErr = ds.WaitUntilResourceIsGone(oc)
 		o.Expect(dsErr).NotTo(o.HaveOccurred())
@@ -728,7 +657,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, "collect-infrastructure-logs", "collect-infrastructure-logs")
 		err = addClusterRoleToServiceAccount(oc, clf.namespace, "collect-infrastructure-logs", "collect-infrastructure-logs")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clf.update(oc, "", "{\"spec\": {\"serviceAccountName\": \"collect-infrastructure-logs\"}}", "--type=merge")
+		clf.update(oc, "", "{\"spec\": {\"serviceAccount\": {\"name\": \"collect-infrastructure-logs\"}}}", "--type=merge")
 		checkResource(oc, true, false, `insufficient permissions on service account, not authorized to collect ["application" "audit"] logs`, []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
 		dsErr = ds.WaitUntilResourceIsGone(oc)
 		o.Expect(dsErr).NotTo(o.HaveOccurred())
@@ -739,7 +668,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, "collect-audit-logs", "collect-audit-logs")
 		err = addClusterRoleToServiceAccount(oc, clf.namespace, "collect-audit-logs", "collect-audit-logs")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clf.update(oc, "", "{\"spec\": {\"serviceAccountName\": \"collect-audit-logs\"}}", "--type=merge")
+		clf.update(oc, "", "{\"spec\": {\"serviceAccount\": {\"name\": \"collect-audit-logs\"}}}", "--type=merge")
 		checkResource(oc, true, false, `insufficient permissions on service account, not authorized to collect ["application" "infrastructure"] logs`, []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[*].message}"})
 		dsErr = ds.WaitUntilResourceIsGone(oc)
 		o.Expect(dsErr).NotTo(o.HaveOccurred())
@@ -753,7 +682,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 			err = addClusterRoleToServiceAccount(oc, clf.namespace, "collect-all-logs", role)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		clf.update(oc, "", "{\"spec\": {\"serviceAccountName\": \"collect-all-logs\"}}", "--type=merge")
+		clf.update(oc, "", "{\"spec\": {\"serviceAccount\": {\"name\": \"collect-all-logs\"}}}", "--type=merge")
 		checkResource(oc, true, false, "True", []string{"clf/" + clf.name, "-n", clf.namespace, "-ojsonpath={.status.conditions[?(@.type == \"Ready\")].status}"})
 		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
 

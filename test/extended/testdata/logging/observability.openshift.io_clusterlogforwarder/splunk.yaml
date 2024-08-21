@@ -9,7 +9,7 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    managementState: Managed
+    managementState: managed
     outputs:
     - name: splunk-aosqe
       type: splunk
