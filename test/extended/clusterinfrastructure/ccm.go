@@ -474,7 +474,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 		principalId, _ := exutil.GetUserAssignedIdentityPrincipalID(az, resourceGroup, identityName)
 		roleAssignmentName, scope := "", ""
 		defer func() {
-			exutil.DeleteRoleAssignments(az, roleAssignmentName, scope)
+			err := exutil.DeleteRoleAssignments(az, roleAssignmentName, scope)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		//AcrPull id is 7f951dda-4ed3-4680-a7ca-43fe172d538d, check from https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
 		roleAssignmentName, scope = exutil.GrantRoleToPrincipalIDByResourceGroup(az, principalId, "os4-common", "7f951dda-4ed3-4680-a7ca-43fe172d538d")

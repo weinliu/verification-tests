@@ -453,7 +453,7 @@ func DeleteRoleAssignments(sess *AzureSession, roleAssignmentName string, scope 
 	defer cancel()
 
 	roleAssignmentsClient := getRoleAssignmentsClient(sess)
-	_, err := roleAssignmentsClient.Delete(ctx, roleAssignmentName, scope)
+	_, err := roleAssignmentsClient.Delete(ctx, scope, roleAssignmentName)
 	if err != nil {
 		return fmt.Errorf("error deleting role assignment: %v", err)
 	}
