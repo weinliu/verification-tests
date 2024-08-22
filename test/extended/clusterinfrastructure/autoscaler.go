@@ -787,4 +787,53 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAS", func() 
 		}, defaultTimeout, defaultTimeout/10).Should(o.Equal(1), "The machinesets should scale to 1")
 		o.Expect(exutil.CompareMachineCreationTime(oc, machineSetNames[0], machineSetNames[1])).Should(o.Equal(true))
 	})
+
+	// author: zhsun@redhat.com
+	// This case failed because of bug https://issues.redhat.com/browse/OCPBUGS-9841, so add Flaky
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-68627-Cluster autoscaler can rescale up from 0 after the first scale up and taint nodes directly [Disruptive][Flaky]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.VSphere, clusterinfra.OpenStack, clusterinfra.Nutanix)
+		machinesetName := infrastructureName + "-68627"
+		machineAutoscaler = machineAutoscalerDescription{
+			name:           "machineautoscaler-68627",
+			namespace:      "openshift-machine-api",
+			maxReplicas:    1,
+			minReplicas:    0,
+			template:       machineAutoscalerTemplate,
+			machineSetName: machinesetName,
+		}
+
+		exutil.By("Create machineset")
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		exutil.By("Create MachineAutoscaler")
+		defer machineAutoscaler.deleteMachineAutoscaler(oc)
+		machineAutoscaler.createMachineAutoscaler(oc)
+
+		exutil.By("Create clusterautoscaler")
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		exutil.By("Create workload and wait for machine running")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		exutil.By("Taint node NoSchedule with a custom taint")
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0])
+		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", nodeName, "key1=value1:NoSchedule").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+
+		exutil.By("Delete workload pod and wait for cluster stable")
+		workLoad.deleteWorkLoad(oc)
+		clusterinfra.WaitForMachinesRunning(oc, 0, machinesetName)
+
+		exutil.By("Once a zero, create another wave of pods to scale up cluster")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+	})
 })
