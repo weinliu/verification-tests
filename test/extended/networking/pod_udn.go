@@ -461,4 +461,96 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(pod2IPs, "net1@")).To(o.BeTrue())
 	})
+
+	g.It("Author:huirwang-Medium-75658-Check sctp traffic work well via udn pods user defined networks.	[Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			sctpClientPod       = filepath.Join(buildPruningBaseDir, "sctp/sctpclient.yaml")
+			sctpServerPod       = filepath.Join(buildPruningBaseDir, "sctp/sctpserver.yaml")
+			sctpModule          = filepath.Join(buildPruningBaseDir, "sctp/load-sctp-module.yaml")
+			udnCRDdualStack     = filepath.Join(buildPruningBaseDir, "udn/udn_crd_dualstack2_template.yaml")
+			udnCRDSingleStack   = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			sctpServerPodName   = "sctpserver"
+			sctpClientPodname   = "sctpclient"
+		)
+		exutil.By("Preparing the nodes for SCTP")
+		prepareSCTPModule(oc, sctpModule)
+
+		ipStackType := checkIPStackType(oc)
+
+		exutil.By("Setting privileges on the namespace")
+		ns := oc.Namespace()
+
+		var cidr, ipv4cidr, ipv6cidr string
+		var prefix, ipv4prefix, ipv6prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+			prefix = 24
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+				prefix = 64
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv4prefix = 24
+				ipv6cidr = "2010:100:200::0/48"
+				ipv6prefix = 64
+			}
+		}
+
+		exutil.By("Create CRD for UDN")
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:    "udn-network-75658",
+				namespace:  ns,
+				role:       "Primary",
+				mtu:        1400,
+				IPv4cidr:   ipv4cidr,
+				IPv4prefix: ipv4prefix,
+				IPv6cidr:   ipv6cidr,
+				IPv6prefix: ipv6prefix,
+				template:   udnCRDdualStack,
+			}
+			udncrd.createUdnCRDDualStack(oc)
+
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-75658",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				prefix:    prefix,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createUdnCRDSingleStack(oc)
+		}
+		err := waitUDNCRDApplied(oc, ns, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		exutil.By("create sctpClientPod")
+		createResourceFromFile(oc, ns, sctpClientPod)
+		err1 := waitForPodWithLabelReady(oc, ns, "name=sctpclient")
+		exutil.AssertWaitPollNoErr(err1, "sctpClientPod is not running")
+
+		exutil.By("create sctpServerPod")
+		createResourceFromFile(oc, ns, sctpServerPod)
+		err2 := waitForPodWithLabelReady(oc, ns, "name=sctpserver")
+		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
+
+		exutil.By("Verify sctp server pod can be accessed for UDN network.")
+		if ipStackType == "dualstack" {
+			sctpServerIPv6, sctpServerIPv4 := getPodIPUDN(oc, ns, sctpServerPodName, "ovn-udn1")
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv4, sctpServerPodName, sctpClientPodname, true)
+			verifySctpConnPod2IP(oc, ns, sctpServerIPv6, sctpServerPodName, sctpClientPodname, true)
+		} else {
+			sctpServerIP, _ := getPodIPUDN(oc, ns, sctpServerPodName, "ovn-udn1")
+			verifySctpConnPod2IP(oc, ns, sctpServerIP, sctpServerPodName, sctpClientPodname, true)
+		}
+
+	})
 })

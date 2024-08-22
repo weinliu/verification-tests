@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	o "github.com/onsi/gomega"
@@ -38,6 +39,20 @@ type udnNetDefResource struct {
 	net_attach_def_name string
 	role                string
 	template            string
+}
+
+type udnCRDResource struct {
+	crdname    string
+	namespace  string
+	IPv4cidr   string
+	IPv4prefix int32
+	IPv6cidr   string
+	IPv6prefix int32
+	cidr       string
+	prefix     int32
+	mtu        int32
+	role       string
+	template   string
 }
 
 func (pod *udnPodResource) createUdnPod(oc *exutil.CLI) {
@@ -134,4 +149,48 @@ func CurlPod2PodFailUDN(oc *exutil.CLI, namespaceSrc string, podNameSrc string, 
 		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 	}
+}
+
+func (udncrd *udnCRDResource) createUdnCRDSingleStack(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", udncrd.template, "-p", "CRDNAME="+udncrd.crdname, "NAMESPACE="+udncrd.namespace, "CIDR="+udncrd.cidr, "PREFIX="+strconv.Itoa(int(udncrd.prefix)), "MTU="+strconv.Itoa(int(udncrd.mtu)), "ROLE="+udncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create udn CRD %s due to %v", udncrd.crdname, err))
+}
+
+func (udncrd *udnCRDResource) createUdnCRDDualStack(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", udncrd.template, "-p", "CRDNAME="+udncrd.crdname, "NAMESPACE="+udncrd.namespace, "IPv4CIDR="+udncrd.IPv4cidr, "IPv4PREFIX="+strconv.Itoa(int(udncrd.IPv4prefix)), "IPv6CIDR="+udncrd.IPv6cidr, "IPv6PREFIX="+strconv.Itoa(int(udncrd.IPv6prefix)), "MTU="+strconv.Itoa(int(udncrd.mtu)), "ROLE="+udncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create udn CRD %s due to %v", udncrd.crdname, err))
+}
+
+func (udncrd *udnCRDResource) deleteUdnCRDDef(oc *exutil.CLI) {
+	removeResource(oc, true, true, "UserDefinedNetwork", udncrd.crdname, "-n", udncrd.namespace)
+}
+
+func waitUDNCRDApplied(oc *exutil.CLI, ns, crdName string) error {
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("UserDefinedNetwork/"+crdName, "-n", ns, "-o=jsonpath={.status.conditions[0].type}").Output()
+		if efErr != nil {
+			e2e.Logf("Failed to get UDN %v, error: %s. Trying again", crdName, efErr)
+			return false, nil
+		}
+		if !strings.Contains(output, "NetworkReady") {
+			e2e.Logf("UDN CRD was not applied yet, trying again. \n %s", output)
+			return false, nil
+		}
+		return true, nil
+	})
+	return checkErr
 }
