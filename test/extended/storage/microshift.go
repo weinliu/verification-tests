@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -9,6 +11,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -1494,9 +1497,336 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		deleteSpecifiedResource(oc, "deployment", dep.name, e2eTestNamespace)
 		deleteSpecifiedResource(oc, "pvc", pvcName, e2eTestNamespace)
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-75650-[MicroShift] [Snapshot] [Filesystem] CSI Plugability: Check volume Snapshotting is togglable when CSI Storage is enabled
+	g.It("Author:rdeore-MicroShiftOnly-High-75650-[MicroShift] [Snapshot] [Filesystem] CSI Plugability: Check volume Snapshotting is togglable when CSI Storage is enabled [Disruptive]", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID                      = "75650"
+			e2eTestNamespace            = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			nodeName                    = getWorkersList(oc)[0]
+			configDir                   = "/etc/microshift"
+			configFile                  = "config.yaml"
+			kubeSysNS                   = "kube-system"
+			pvcTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageMicroshiftBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageMicroshiftBaseDir, "volumesnapshotclass-template.yaml")
+			snapshotDeployList          = []string{"csi-snapshot-controller", "csi-snapshot-webhook"}
+		)
+
+		// Check if thin-pool lvm device supported storageClass exists in cluster
+		thinPoolSC := []string{"mysnap-sc"}
+		snapshotSupportedSC := sliceIntersect(thinPoolSC, getAllStorageClass(oc))
+		if len(snapshotSupportedSC) == 0 {
+			g.Skip("Skip test case as thin-pool lvm supported storageClass is not available in microshift cluster!!!")
+		}
+
+		exutil.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		oc.SetNamespace(e2eTestNamespace)
+
+		// Set the storage resource definition for the original pod
+		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(oc.Namespace()))
+		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodNamespace(oc.Namespace()))
+
+		exutil.By("#. Create a pvc with the preset csi storageclass")
+		pvcOri.scname = thinPoolSC[0]
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		exutil.By("#. Write file to volume")
+		podOri.checkMountedVolumeCouldRW(oc)
+
+		exutil.By("#. Delete CSI Snapshotter deployment resources")
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "deployment/"+snapshotDeployList[0], kubeSysNS) {
+				execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+				restartMicroshiftService(oc, nodeName) // restarting microshift service re-creates LVMS and CSI snapshotter side-car deployments
+				waitCSISnapshotterPodsReady(oc)
+				waitLVMSProvisionerReady(oc)
+			}
+		}()
+		for _, deploymentName := range snapshotDeployList {
+			deleteSpecifiedResource(oc.AsAdmin(), "deployment", deploymentName, kubeSysNS)
+		}
+
+		exutil.By("#. Disable CSI snapshotting by creating 'config.yaml' in cluster node")
+		defer func() {
+			execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+		}()
+		configCmd := fmt.Sprintf(`sudo touch %v/%v && cat > %v/%v << EOF
+storage:
+  optionalCsiComponents:
+  - none
+EOF`, configDir, configFile, configDir, configFile)
+		_, err := execCommandInSpecificNode(oc, nodeName, configCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("#. Restart microshift service")
+		restartMicroshiftService(oc, nodeName)
+		waitNodeAvailable(oc, nodeName)
+
+		exutil.By("#. Check CSI Snapshotter deployment resources are not re-created in cluster")
+		o.Consistently(func() int {
+			snapshotDeployments := sliceIntersect(snapshotDeployList, getSpecifiedNamespaceDeployments(oc, kubeSysNS))
+			return len(snapshotDeployments)
+		}, 20*time.Second, 5*time.Second).Should(o.Equal(0))
+
+		exutil.By("#. Create a volumeSnapshotClass")
+		volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate),
+			setVolumeSnapshotClassDriver(topolvmProvisioner), setVolumeSnapshotDeletionpolicy("Delete"))
+		volumesnapshotClass.create(oc)
+		defer volumesnapshotClass.deleteAsAdmin(oc)
+
+		exutil.By("#. Create volumesnapshot and check it is not ready_to_use")
+		volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name),
+			setVolumeSnapshotVscname(volumesnapshotClass.name), setVolumeSnapshotNamespace(e2eTestNamespace))
+		volumesnapshot.create(oc)
+		defer volumesnapshot.delete(oc)
+		o.Consistently(func() bool {
+			isSnapshotReady, _ := volumesnapshot.checkVsStatusReadyToUse(oc)
+			return isSnapshotReady
+		}, 20*time.Second, 5*time.Second).Should(o.BeFalse())
+
+		exutil.By("#. Check volumesnapshotContent resource is not generated")
+		o.Consistently(func() string {
+			vsContentName := strings.Trim(volumesnapshot.getContentName(oc), " ")
+			return vsContentName
+		}, 20*time.Second, 5*time.Second).Should(o.Equal(""))
+
+		exutil.By("#. Re-enable CSI Snapshotting by removing config.yaml and restarting microshift service")
+		_, err = execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, nodeName)
+		waitNodeAvailable(oc, nodeName)
+
+		exutil.By("#. Wait for LVMS storage resource Pods to get ready")
+		waitLVMSProvisionerReady(oc)
+
+		exutil.By("#. Wait for CSI Snapshotter resource Pods to get ready")
+		waitCSISnapshotterPodsReady(oc)
+
+		exutil.By("#. Check volumesnapshot resource is ready_to_use")
+		o.Eventually(func() bool {
+			isSnapshotReady, _ := volumesnapshot.checkVsStatusReadyToUse(oc)
+			return isSnapshotReady
+		}, 120*time.Second, 10*time.Second).Should(o.BeTrue())
+
+		// Set the resource definition for restore Pvc/Pod
+		pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name),
+			setPersistentVolumeClaimNamespace(oc.Namespace()))
+		podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodNamespace(oc.Namespace()))
+
+		exutil.By("#. Create a restored pvc with the thin-pool device supported storageclass")
+		pvcRestore.scname = thinPoolSC[0]
+		pvcRestore.capacity = pvcOri.capacity
+		pvcRestore.createWithSnapshotDataSource(oc)
+		defer pvcRestore.deleteAsAdmin(oc)
+
+		exutil.By("#. Create pod with the restored pvc and wait for the pod ready")
+		podRestore.create(oc)
+		defer podRestore.deleteAsAdmin(oc)
+		podRestore.waitReady(oc)
+
+		exutil.By("#. Check the file exist in restored volume")
+		output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("storage test"))
+		podRestore.checkMountedVolumeCouldRW(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-75652-[MicroShift] CSI Plugability: Check both CSI Snapshotting & Storage are togglable independently
+	g.It("Author:rdeore-MicroShiftOnly-High-75652-[MicroShift] CSI Plugability: Check both CSI Snapshotting & Storage are togglable independently [Disruptive]", func() {
+		// Set the resource template for the scenario
+		var (
+			caseID             = "75652"
+			e2eTestNamespace   = "e2e-ushift-storage-" + caseID + "-" + getRandomString()
+			nodeName           = getWorkersList(oc)[0]
+			configDir          = "/etc/microshift"
+			configFile         = "config.yaml"
+			kubeSysNS          = "kube-system"
+			lvmsNS             = "openshift-storage"
+			pvcTemplate        = filepath.Join(storageMicroshiftBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageMicroshiftBaseDir, "pod-template.yaml")
+			snapshotDeployList = []string{"csi-snapshot-controller", "csi-snapshot-webhook"}
+		)
+
+		exutil.By("#. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		oc.SetNamespace(e2eTestNamespace)
+
+		exutil.By("#. Check LVMS storage resource Pods are ready")
+		waitLVMSProvisionerReady(oc)
+
+		exutil.By("#. Check CSI Snapshotter resource Pods are ready")
+		waitCSISnapshotterPodsReady(oc)
+
+		exutil.By("#. Delete LVMS Storage deployment and daemonset resources")
+		defer func() {
+			lvmsPodList, _ := getPodsListByLabel(oc.AsAdmin(), lvmsNS, "app.kubernetes.io/part-of=lvms-provisioner")
+			if len(lvmsPodList) < 2 {
+				execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+				restartMicroshiftService(oc, nodeName) // restarting microshift service re-creates LVMS storage resources
+				waitLVMSProvisionerReady(oc)
+			}
+		}()
+		deleteSpecifiedResource(oc.AsAdmin(), "deployment", "lvms-operator", lvmsNS)
+		deleteSpecifiedResource(oc.AsAdmin(), "daemonset", "vg-manager", lvmsNS)
+
+		exutil.By("#. Disable CSI storage by creating 'config.yaml' in cluster node")
+		defer func() {
+			execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+		}()
+		configCmd := fmt.Sprintf(`sudo touch %v/%v && cat > %v/%v << EOF
+storage:
+  driver: none
+EOF`, configDir, configFile, configDir, configFile)
+		_, err := execCommandInSpecificNode(oc, nodeName, configCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("#. Restart microshift service")
+		restartMicroshiftService(oc, nodeName)
+		waitNodeAvailable(oc, nodeName)
+
+		exutil.By("#. Check LVMS storage resource pods are not re-created in cluster")
+		o.Consistently(func() int {
+			lvmsPods, _ := getPodsListByLabel(oc.AsAdmin(), lvmsNS, "app.kubernetes.io/part-of=lvms-provisioner")
+			return len(lvmsPods)
+		}, 20*time.Second, 5*time.Second).Should(o.Equal(0))
+
+		exutil.By("Check CSI Snapshotter pods are still 'Running', not impacted by disabling storage")
+		snapshotPodList := getPodsListByKeyword(oc.AsAdmin(), kubeSysNS, "csi-snapshot")
+		for _, podName := range snapshotPodList {
+			status, _ := getPodStatus(oc, kubeSysNS, podName)
+			o.Expect(strings.Trim(status, " ")).To(o.Equal("Running"))
+		}
+
+		// Set the storage resource definition for the original pod
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"), setPersistentVolumeClaimNamespace(oc.Namespace()))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name), setPodNamespace(oc.Namespace()))
+
+		exutil.By("#. Create a pvc with the preset csi storageclass")
+		pvc.scname = "topolvm-provisioner"
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Create a pod with the pvc and check pod scheduling failed")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		o.Eventually(func() string {
+			reason, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod.name, "-n", pod.namespace, "-ojsonpath={.status.conditions[*].reason}").Output()
+			return reason
+		}, 60*time.Second, 5*time.Second).Should(o.ContainSubstring("Unschedulable"))
+
+		exutil.By("#. Delete CSI Snapshotter deployment resources")
+		defer func() {
+			if !isSpecifiedResourceExist(oc, "deployment/"+snapshotDeployList[0], kubeSysNS) {
+				execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+				restartMicroshiftService(oc, nodeName) // restarting microshift service re-creates LVMS and CSI snapshotter side-car deployments
+				waitCSISnapshotterPodsReady(oc)
+				waitLVMSProvisionerReady(oc)
+			}
+		}()
+		for _, deploymentName := range snapshotDeployList {
+			deleteSpecifiedResource(oc.AsAdmin(), "deployment", deploymentName, kubeSysNS)
+		}
+
+		exutil.By("#. Disable both CSI storage and snapshotting by re-creating 'config.yaml' in cluster node")
+		execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+		configCmd = fmt.Sprintf(`sudo touch %v/%v && cat > %v/%v << EOF
+storage:
+  driver: none
+  optionalCsiComponents:
+  - none
+EOF`, configDir, configFile, configDir, configFile)
+		_, err = execCommandInSpecificNode(oc, nodeName, configCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("#. Restart microshift service")
+		restartMicroshiftService(oc, nodeName)
+		waitNodeAvailable(oc, nodeName)
+
+		exutil.By("#. Check CSI Snapshotter deployment resources are not re-created in cluster")
+		o.Consistently(func() int {
+			snapshotDeployments := sliceIntersect(snapshotDeployList, getSpecifiedNamespaceDeployments(oc, kubeSysNS))
+			return len(snapshotDeployments)
+		}, 20*time.Second, 5*time.Second).Should(o.Equal(0))
+
+		exutil.By("#. Re-enable CSI storage and Snapshotting by removing config.yaml and restarting microshift service")
+		_, err = execCommandInSpecificNode(oc, nodeName, "sudo rm -rf "+configDir+"/"+configFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, nodeName)
+		waitNodeAvailable(oc, nodeName)
+
+		exutil.By("#. Wait for LVMS storage resource Pods to get ready")
+		waitLVMSProvisionerReady(oc)
+
+		exutil.By("#. Wait for CSI Snapshotter resource Pods to get ready")
+		waitCSISnapshotterPodsReady(oc)
+
+		exutil.By("#. Check Pod scheduling is successful")
+		pod.waitReady(oc)
+
+		exutil.By("#. Write file to volume")
+		pod.checkMountedVolumeCouldRW(oc)
+	})
 })
 
 // Delete the logicalVolume created by lvms/topoLVM provisioner
 func deleteLogicalVolume(oc *exutil.CLI, logicalVolumeName string) error {
 	return oc.WithoutNamespace().Run("delete").Args("logicalvolume", logicalVolumeName).Execute()
+}
+
+// Restarts MicroShift service
+func restartMicroshiftService(oc *exutil.CLI, nodeName string) {
+	var svcStatus string
+	restartCmd := "sudo systemctl restart microshift"
+	isActiveCmd := "sudo systemctl is-active microshift"
+	// As microshift service gets restarted, the debug node pod will quit with error
+	_, err := execCommandInSpecificNode(oc, nodeName, restartCmd)
+	pollErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(ctx context.Context) (bool, error) {
+		svcStatus, err = execCommandInSpecificNode(oc, nodeName, isActiveCmd)
+		if err != nil {
+			return false, nil // Retry
+		}
+		return strings.TrimSpace(svcStatus) == "active", nil
+	})
+	if pollErr != nil {
+		e2e.Logf("MicroShift service status is : %v", getMicroShiftSvcStatus(oc, nodeName))
+	}
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Failed to restart microshift service %v", pollErr))
+	e2e.Logf("Microshift service restarted successfully")
+}
+
+// Returns Microshift service status description
+func getMicroShiftSvcStatus(oc *exutil.CLI, nodeName string) string {
+	statusCmd := "sudo systemctl status microshift"
+	svcStatus, _err := execCommandInSpecificNode(oc, nodeName, statusCmd)
+	o.Expect(_err).NotTo(o.HaveOccurred())
+	return svcStatus
+}
+
+// Wait for CSI Snapshotter resource pods to get ready
+func waitCSISnapshotterPodsReady(oc *exutil.CLI) {
+	var snapshotPodList []string
+	kubeSysNS := "kube-system"
+	o.Eventually(func() bool {
+		snapshotPodList = getPodsListByKeyword(oc.AsAdmin(), kubeSysNS, "csi-snapshot")
+		return len(snapshotPodList) >= 2
+	}, 120*time.Second, 5*time.Second).Should(o.BeTrue())
+	for _, podName := range snapshotPodList {
+		waitPodReady(oc, kubeSysNS, podName)
+	}
 }

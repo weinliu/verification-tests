@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -621,7 +622,22 @@ func getPodDetailsByLabel(oc *exutil.CLI, namespace string, labelName string) (s
 func getPodsListByLabel(oc *exutil.CLI, namespace string, selectorLabel string) ([]string, error) {
 	podsOp, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return strings.Split(podsOp, " "), err
+	return strings.Fields(podsOp), err
+}
+
+// Get the pods List by namespace
+func getPodsListByNamespace(oc *exutil.CLI, namespace string) []string {
+	podsOp, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Fields(podsOp)
+}
+
+// Get the pods List by keyword and namespace
+func getPodsListByKeyword(oc *exutil.CLI, namespace string, keyword string) []string {
+	cmd := fmt.Sprintf(`oc get pod -n %v -o custom-columns=POD:.metadata.name --no-headers | grep %v`, namespace, keyword)
+	podlist, err := exec.Command("bash", "-c", cmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Fields(string(podlist))
 }
 
 // Get the pvcName from the pod

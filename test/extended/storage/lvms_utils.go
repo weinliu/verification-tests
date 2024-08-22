@@ -483,3 +483,16 @@ func getTotalDiskSizeOnAllWorkers(oc *exutil.CLI, diskPath string) int {
 	e2e.Logf("Total Disk size of %s is equals %d Gi", diskPath, totalDiskSize)
 	return totalDiskSize
 }
+
+// Wait for LVMS resource pods to get ready
+func waitLVMSProvisionerReady(oc *exutil.CLI) {
+	var lvmsPodList []string
+	lvmsNS := "openshift-storage"
+	o.Eventually(func() bool {
+		lvmsPodList, _ = getPodsListByLabel(oc.AsAdmin(), lvmsNS, "app.kubernetes.io/part-of=lvms-provisioner")
+		return len(lvmsPodList) >= 2
+	}, 120*time.Second, 5*time.Second).Should(o.BeTrue())
+	for _, podName := range lvmsPodList {
+		waitPodReady(oc, lvmsNS, podName)
+	}
+}
