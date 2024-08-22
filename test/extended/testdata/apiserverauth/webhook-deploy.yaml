@@ -39,7 +39,7 @@ spec:
     spec:
       containers:
       - name: dev
-        image: quay.io/deepakpunia/validationwebhook:1.0
+        image: quay.io/openshifttest/validationwebhook:multiarch
         # Image used is build from repository https://github.com/darryk10/CVE-2021-25735.
         imagePullPolicy: IfNotPresent
         ports:
