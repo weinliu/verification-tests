@@ -1089,4 +1089,95 @@ etcd:
 			e2e.Failf("ETCD_QUOTA_BACKEND_BYTES is not expected value: 17179869184")
 		}
 	})
+	// author: geliu@redhat.com
+	g.It("Author:geliu-NonHyperShiftHOST-NonPreRelease-Longduration-High-75259-Auto rotation of etcd signer certs from ocp 4.17. [Disruptive]", func() {
+		g.By("Check the remaining lifetime of the signer certificate in openshift-etcd namespace.")
+		certificateNotBefore0, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-o=jsonpath={.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		certificateNotAfter0, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-o=jsonpath={.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-after}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("etcd signer certificate expired Not After: %v", certificateNotAfter0)
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+		if err != nil {
+			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
+		}
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+			if err != nil {
+				e2e.Failf("Cluster health check failed after running case :: %v ", err)
+			}
+		}()
+
+		g.By("update the existing signer: when notAfter or notBefore is malformed.")
+		err = oc.AsAdmin().Run("patch").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-p", fmt.Sprintf("{\"metadata\": {\"annotations\": {\"auth.openshift.io/certificate-not-after\": \"%s\"}}}", certificateNotBefore0), "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for etcd-signer rotation and cluster health.")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=30m").Execute()
+		if err != nil {
+			e2e.Failf("Cluster health check failed after delete etcd-signer :: %v ", err)
+		}
+
+		g.By("2nd Check the remaining lifetime of the new signer certificate in openshift-etcd namespace")
+		certificateNotAfter1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-o=jsonpath={.metadata.annotations.auth\\.openshift\\.io/certificate-not-after}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		layout := "2006-01-02T15:04:05Z"
+		timeStr0, perr := time.Parse(layout, certificateNotAfter0)
+		o.Expect(perr).NotTo(o.HaveOccurred())
+		timeStr1, perr := time.Parse(layout, certificateNotAfter1)
+		o.Expect(perr).NotTo(o.HaveOccurred())
+		if timeStr1.Before(timeStr0) || timeStr1.Equal(timeStr0) {
+			e2e.Failf(fmt.Sprintf("etcd-signer certificate-not-after time value is wrong for new one %s is not after old one %s.", timeStr1, timeStr0))
+		}
+	})
+	// author: geliu@redhat.com
+	g.It("Author:geliu-NonHyperShiftHOST-NonPreRelease-Longduration-High-75224-Manual rotation of etcd signer certs from ocp 4.17. [Disruptive]", func() {
+		g.By("Check the remaining lifetime of the signer certificate in openshift-etcd namespace.")
+		certificateNotAfter0, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-o=jsonpath={.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-after}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("etcd signer certificate expired Not After: %v", certificateNotAfter0)
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+		if err != nil {
+			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
+		}
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+			if err != nil {
+				e2e.Failf("Cluster health check failed after running case :: %v ", err)
+			}
+			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("Delete the existing signer.")
+		_, err = oc.AsAdmin().Run("delete").Args("-n", "openshift-etcd", "secret", "etcd-signer").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for etcd-signer rotation and cluster health.")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=40m").Execute()
+		if err != nil {
+			e2e.Failf("Cluster health check failed after delete etcd-signer :: %v ", err)
+		}
+
+		g.By("Check revision again, the output means that the last revision is >= 8")
+		revisionValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "configmap", "etcd-all-bundles", "-o=jsonpath={.metadata.annotations.openshift\\.io\\/ceo-bundle-rollout-revision}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		revisionValueInt, err := strconv.Atoi(revisionValue)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if revisionValueInt <= 8 {
+			e2e.Failf(fmt.Sprintf("etcd-signer revision value is %s, but not >=8", revisionValue))
+		}
+
+		g.By("2nd Check the remaining lifetime of the new signer certificate in openshift-etcd namespace")
+		certificateNotAfter1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-etcd", "secret", "etcd-signer", "-o=jsonpath={.metadata.annotations.auth\\.openshift\\.io/certificate-not-after}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		layout := "2006-01-02T15:04:05Z"
+		timeStr0, perr := time.Parse(layout, certificateNotAfter0)
+		o.Expect(perr).NotTo(o.HaveOccurred())
+		timeStr1, perr := time.Parse(layout, certificateNotAfter1)
+		o.Expect(perr).NotTo(o.HaveOccurred())
+		if timeStr1.Before(timeStr0) || timeStr1.Equal(timeStr0) {
+			e2e.Failf(fmt.Sprintf("etcd-signer certificate-not-after time value is wrong for new one %s is not after old one %s.", timeStr1, timeStr0))
+		}
+	})
 })
