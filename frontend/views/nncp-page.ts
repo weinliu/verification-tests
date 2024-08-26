@@ -176,4 +176,18 @@ export const nncpPage = {
             cy.get('[aria-label="Search by label..."]').type(selectorVal).get('span.co-text-node').contains(selectorVal).click();
         };
     },
+    checkNNCPStatus: (policyName, expStatus) => {
+        cy.visit("k8s/cluster/nmstate.io~v1~NodeNetworkConfigurationPolicy/");
+        cy.get(`[data-test-rows="resource-row"]`, {timeout: 60000}).contains(policyName).parents('tr').within(() => {
+        cy.get('td[id="status"]').contains(" "+expStatus, {timeout: 60000});
+    });
+    },
+    createNNCPWithYAML: (file, policyName) => {
+        nncpPage.goToNNCP();
+        cy.byTestID('item-create').click();
+        cy.byTestID('list-page-create-dropdown-item-yaml').click();
+        cy.get('.ocs-yaml-editor__root').selectFile(`./fixtures/${file}`, {action: 'drag-drop'});
+        cy.get('span').contains(policyName, {timeout: 60000}).should('exist');
+        cy.get('[data-test="save-changes"]').click();
+    },
 };

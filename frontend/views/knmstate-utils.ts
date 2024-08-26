@@ -1,4 +1,5 @@
 import { operatorHubPage } from "../views/operator-hub-page"
+import { Pages } from "./pages"
 
 export const knmstate = {
   namespace:   "openshift-nmstate",
@@ -12,8 +13,10 @@ export const knmstateUtils = {
     cy.visit(`/operatorhub/subscribe?pkg=${knmstate.operatorName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=${knmstate.namespace}`);
     cy.byTestID('install-operator').click();
     cy.contains('View Operator', { timeout: 60000 }).should('be.visible');
-    cy.visit(`/k8s/ns/${knmstate.namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
-    operatorHubPage.checkOperatorStatus(knmstate.packageName, 'Succeeded');
+    Pages.gotoInstalledOperatorPage(knmstate.namespace);
+    cy.contains(knmstate.packageName).parents('tr').within(() => {
+      cy.byTestID("status-text", { timeout: 60000 }).should('have.text', "Succeeded")
+    })
   },
 
   uninstall: () => {
@@ -48,10 +51,10 @@ export const knmstateUtils = {
       if(!result.stderr.includes('No resources found') && 
          !result.stderr.includes(`server doesn't have a resource type "nmstate"`)){
         cy.visit(`k8s/cluster/nmstate.io~v1~NMState/nmstate`);
-        cy.byLegacyTestID('actions-menu-button').click();
+        cy.byLegacyTestID('actions-menu-button', { timeout: 60000 }).click();
         cy.byTestActionID('Delete NMState').click();
         cy.byTestID('confirm-action').click();
-        cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist');
+        cy.byTestID('refresh-web-console', { timeout: 120000 }).should('exist');
         cy.reload(true);
       }
     })

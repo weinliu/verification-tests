@@ -1,0 +1,10 @@
+apiVersion: nmstate.io/v1
+kind: NodeNetworkConfigurationPolicy
+metadata:
+  name: nncp-64803
+spec:
+  desiredState:
+    interfaces:
+    - name: dummy3
+      type: dummy
+      state: up
