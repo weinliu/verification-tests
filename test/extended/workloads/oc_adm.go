@@ -35,6 +35,9 @@ var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") {
 			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
+		if !isBaselineCapsSet(oc, "ImageRegistry") || !isEnabledCapability(oc, "Build") {
+			g.Skip("Can't find the cluster operator imageregistry or build, skip it.")
+		}
 		if !checkMustgatherImagestreamTag(oc) {
 			g.Skip("Skipping the test as can't find the imagestreamtag for must-gather")
 		}
