@@ -175,8 +175,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 
 		labelsAfter := "machine.openshift.io/instance-type=" + changeInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
 		labelsBefore := "machine.openshift.io/instance-type=" + currentInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
-		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + changeInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][updateFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
-		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + currentInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][recoverFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+
+		g.By("Check if any other fields need to be updated")
+		otherUpdateFields := otherUpdateFieldsByCloud[iaasPlatform][updateFieldsCon]
+		otherRecoverFields := otherUpdateFieldsByCloud[iaasPlatform][recoverFieldsCon]
+		if iaasPlatform == clusterinfra.AWS {
+			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if region != "us-east-2" && region != "us-east-1" {
+				otherUpdateFields = ``
+				otherRecoverFields = ``
+			}
+		}
+		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + changeInstanceType + `"` + otherUpdateFields + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + currentInstanceType + `"` + otherRecoverFields + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
 
 		g.By("Change instanceType to trigger RollingUpdate")
 		defer printNodeInfo(oc)
@@ -298,8 +310,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		}
 
 		labelsAfter := "machine.openshift.io/instance-type=" + changeInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
-		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + changeInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][updateFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
-		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + currentInstanceType + `"` + otherUpdateFieldsByCloud[iaasPlatform][recoverFieldsCon] + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrChange := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + changeInstanceType + `"` + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
+		patchstrRecover := getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypePrefixCon] + `"` + currentInstanceType + `"` + getInstanceTypeJsonByCloud[iaasPlatform][patchInstanceTypeSuffixCon]
 
 		g.By("Update strategy to OnDelete, change instanceType to trigger OnDelete update")
 		defer printNodeInfo(oc)
