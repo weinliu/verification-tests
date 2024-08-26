@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(newClusterIP).NotTo(o.ContainSubstring(clusterIP))
 
 		exutil.By("Step5: SSH to the node and confirm the /etc/hosts details, after deletion")
-		hostOutput1, err3 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
+		hostOutput1, err3 := exutil.DebugNodeRetryWithOptionsAndChroot(oc, node, []string{}, "cat", "/etc/hosts")
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(hostOutput1).To(o.And(
 			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
