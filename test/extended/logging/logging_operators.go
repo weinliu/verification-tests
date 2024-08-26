@@ -492,11 +492,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 			enableMonitoring:          true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-53817")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-53817", clf.serviceAccountName, clf.namespace)
-		saToken := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, saToken)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 

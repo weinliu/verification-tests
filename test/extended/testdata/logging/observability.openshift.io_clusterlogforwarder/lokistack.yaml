@@ -16,10 +16,7 @@ objects:
       lokiStack:
         authentication:
           token:
-            from: secret
-            secret:
-              key: token
-              name: ${SECRET_NAME}
+            from: serviceAccount
         target:
           name: ${LOKISTACK_NAME}
           namespace: ${LOKISTACK_NAMESPACE}

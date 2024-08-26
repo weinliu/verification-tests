@@ -993,20 +993,6 @@ func (l lokiStack) createSecretFromGateway(oc *exutil.CLI, name, namespace, toke
 
 }
 
-func grantLokiPermissionsToSA(oc *exutil.CLI, rbacName, sa, ns string) {
-	rbac := exutil.FixturePath("testdata", "logging", "lokistack", "loki-rbac.yaml")
-	file, err := processTemplate(oc, "-f", rbac, "-p", "NAME="+rbacName, "-p", "SA="+sa, "NAMESPACE="+ns)
-	defer os.Remove(file)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func removeLokiStackPermissionFromSA(oc *exutil.CLI, rbacName string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole/"+rbacName, "clusterrolebinding/"+rbacName).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
 // TODO: add an option to provide TLS config
 type lokiClient struct {
 	username        string //Username for HTTP basic auth.

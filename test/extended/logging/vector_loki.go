@@ -456,11 +456,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-48646")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-48646", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "GATEWAY_SVC="+lokiGatewaySVC)
 
@@ -520,12 +520,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-54663")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-54663", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
-
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -616,11 +615,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				collectInfrastructureLogs: true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-57063")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-57063", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, `INPUT_REFS=["infrastructure", "audit"]`)
 			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "new-app", "type": "application", "application": {"includes": [{"namespace":"` + appProj2 + `"}]}}]}, {"op": "add", "path": "/spec/pipelines/0/inputRefs/-", "value": "new-app"}]`
@@ -714,11 +713,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				collectInfrastructureLogs: true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-61968")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-61968", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "detectmultiline", "type": "detectMultilineException"}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value":["detectmultiline"]}]`
@@ -822,11 +821,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-71144")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-71144", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "INPUT_REFS=[\"infrastructure\"]")
 
@@ -910,11 +909,11 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.lo
 				enableMonitoring:          true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-71749")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-71749", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -993,11 +992,11 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.lo
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-71049")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-71049", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -1572,11 +1571,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-54523")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-54523", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -1691,11 +1690,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-54525")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-54525", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -1806,11 +1805,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-54526")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-54526", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -1924,11 +1923,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReady:           true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-54527")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-54527", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -2148,11 +2147,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				enableMonitoring:          true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-52779")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-52779", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -2238,11 +2237,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				enableMonitoring:          true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-55415")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-55415", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -2337,11 +2336,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				enableMonitoring:          true,
 			}
 			clf.createServiceAccount(oc)
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-61435")
-			grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-61435", clf.serviceAccountName, clf.namespace)
-			token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 			defer clf.delete(oc)
 			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -2508,11 +2507,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 			waitForPodReady:           true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-65193")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-65193", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "INPUT_REFS=[\"application\"]")
 		patch := fmt.Sprintf(`[{"op": "add", "path": "/spec/inputs", "value": [{"application": {"includes": [{"namespace": %s}], "tuning": {"rateLimitPerContainer": {"maxRecordsPerSecond": 10}}}, "name": "limited-rates-1", "type": "application"}, {"application": {"selector": {"matchLabels": {"logging-flow-control": "centos-logtest"}}, "tuning": {"rateLimitPerContainer": {"maxRecordsPerSecond": 20}}}, "name": "limited-rates-2", "type": "application"}, {"application": {"selector": {"matchLabels": {"multiple-containers": "centos-logtest"}}, "tuning": {"rateLimitPerContainer": {"maxRecordsPerSecond": 30}}}, "name": "limited-rates-3", "type": "application"}]},{ "op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["limited-rates-1","limited-rates-2","limited-rates-3"]}]`, multiplePods)
@@ -2629,11 +2628,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 			collectInfrastructureLogs: true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-65194")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-65194", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 		patch := `[{"op": "add", "path": "/spec/outputs/-", "value": {"name":"loki-server","type":"loki", "loki": {"url":"http://` + loki.name + `.` + loki.namespace + `.svc:3100"}, "rateLimit": {"maxRecordsPerSecond": 10}}}, {"op": "add", "path": "/spec/pipelines/0/outputRefs/-", "value": "loki-server"}]`
@@ -2856,11 +2855,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 			enableMonitoring:          true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-53817")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-53817", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -3023,11 +3022,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 			waitForPodReady:    true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-67421")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-67421", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "ES_VERSION="+es.version, "ES_URL=http://"+es.serverName+"."+es.namespace+".svc:9200")
 
@@ -3107,11 +3106,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 			waitForPodReady:    true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-68318")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-68318", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -3249,11 +3248,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 			enableMonitoring:          true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-67565")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-67565", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -3359,11 +3358,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 			waitForPodReady:           true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-67643")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-67643", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -3463,11 +3462,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Efficie
 			waitForPodReady:           true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-70683")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-70683", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
@@ -3658,11 +3657,11 @@ spec:
 			waitForPodReady:           true,
 		}
 		clf.createServiceAccount(oc)
-		defer removeLokiStackPermissionFromSA(oc, "lokistack-tenant-logs-70685")
-		grantLokiPermissionsToSA(oc, "lokistack-tenant-logs-70685", clf.serviceAccountName, clf.namespace)
-		token := getSAToken(oc, clf.serviceAccountName, clf.namespace)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
-		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, token)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
