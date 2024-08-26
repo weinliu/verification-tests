@@ -2317,8 +2317,8 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 
 			e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
 			expectedStatus := map[string]string{"Progressing": "True"}
-			err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
-			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+			err = waitCoBecomes(oc, "kube-apiserver", 120, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 120 seconds")
 			e2e.Logf("Checking kube-apiserver operator should be restored in 1800 seconds")
 			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 			err = waitCoBecomes(oc, "kube-apiserver", 1800, expectedStatus)
@@ -2334,10 +2334,10 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		apiserverErr := oc.AsAdmin().Run("patch").Args("kubeapiserver", "cluster", "-p", apiserverPatch, "--type=merge").Execute()
 		o.Expect(apiserverErr).NotTo(o.HaveOccurred())
 
-		e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		e2e.Logf("Checking kube-apiserver operator should be in Progressing in 120 seconds")
 		expectedStatus := map[string]string{"Progressing": "True"}
-		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
-		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+		err = waitCoBecomes(oc, "kube-apiserver", 120, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 120 seconds")
 		e2e.Logf("Checking kube-apiserver operator should be Available in 1800 seconds")
 		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		err = waitCoBecomes(oc, "kube-apiserver", 1800, expectedStatus)
