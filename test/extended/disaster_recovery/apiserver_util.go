@@ -18,19 +18,19 @@ import (
 
 var (
 	startStates = map[string]bool{
-		"poweredon": true,
-		"running":   true,
-		"active":    true,
-		"ready":     true,
+		exutil.BMPoweredOn: true,
+		"running":          true,
+		"active":           true,
+		"ready":            true,
 	}
 	stopStates = map[string]bool{
-		"poweredoff":  true,
-		"stopped":     true,
-		"shutoff":     true,
-		"terminated":  true,
-		"paused":      true,
-		"deallocated": true,
-		"notready":    true,
+		exutil.BMPoweredOff: true,
+		"stopped":           true,
+		"shutoff":           true,
+		"terminated":        true,
+		"paused":            true,
+		"deallocated":       true,
+		"notready":          true,
 	}
 )
 
