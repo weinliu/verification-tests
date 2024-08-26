@@ -1,5 +1,5 @@
-import { listPage } from "../upstream/views/list-page";
 import { helperfuncs } from 'views/utils';
+import { listPage } from "../upstream/views/list-page";
 import { Pages } from "./pages";
 export const installedOperators = {
   clickCSVName: (csv_name) => {
@@ -88,6 +88,13 @@ export const operatorHubPage = {
       cy.get('button#dropdown-selectbox').click();
       cy.contains('span', `${installNamespace}`).click();
     }
+    cy.get('[data-test="install-operator"]').click();
+  },
+  installOperatorWithRecomendNamespace: (operatorName, csName) => {
+    cy.visit(`/operatorhub/subscribe?pkg=${operatorName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
+    cy.get('body').should('be.visible');
+    cy.get('[data-test="Operator recommended Namespace:-radio-input"]').click();
+    cy.get('[data-test="enable-monitoring"]').click();
     cy.get('[data-test="install-operator"]').click();
   },
   checkOperatorStatus: (csvName, csvStatus) => {
