@@ -8,7 +8,7 @@ describe('Monitoring dashboards related features', () => {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
         cy.logout;
     });
-    it('(OCP-59699,juzhao,Cluster_Observability) Add node-role dropdown to node related dashboards', { tags: ['e2e', 'admin'] }, () => {
+    it('(OCP-59699,juzhao,Cluster_Observability) Add node-role dropdown to node related dashboards', { tags: ['e2e', 'admin', '@smoke'] }, () => {
         // 4.16 "Kubernetes / Compute Resources / Node (Pods)" dashboard name is dashboard-k8s-resources-node, 4.15 is grafana-dashboard-k8s-resources-node
         dashboard.visitDashboard('dashboard-k8s-resources-node');
 	cy.byTestID('role-dropdown').should('exist').click();
