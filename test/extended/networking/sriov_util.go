@@ -72,6 +72,36 @@ type sriovPod struct {
 	pingip       string
 }
 
+// struct for using nncp to create VF on sriov node
+type VFPolicyResource struct {
+	name     string
+	intfname string
+	nodename string
+	totalvfs int
+	template string
+}
+
+type sriovNetworkNodePolicySpecificNode struct {
+	policyName   string
+	deviceType   string
+	pfName       string
+	numVfs       int
+	resourceName string
+	nodename     string
+	namespace    string
+	template     string
+}
+
+// struct for sriov pod with static or dynamic MAC address
+type sriovTestPodMAC struct {
+	name         string
+	namespace    string
+	ipaddr       string
+	macaddr      string
+	sriovnetname string
+	tempfile     string
+}
+
 // delete sriov resource
 func (rs *sriovNetResource) delete(oc *exutil.CLI) {
 	e2e.Logf("delete %s %s in namespace %s", rs.kind, rs.name, rs.namespace)
@@ -523,12 +553,24 @@ func chkPodsPassTraffic(oc *exutil.CLI, pod1name string, pod2name string, infNam
 	e2e.Logf("The ip connection of %v show: \n %v", pod2name, podConnectStatus2)
 	//if podConnectStatus including NO-CARRIER, then skip the connection testing
 	if !strings.Contains(podConnectStatus1, "NO-CARRIER") && !strings.Contains(podConnectStatus2, "NO-CARRIER") {
-		exutil.By("Check test pod have second interface with assigned ip")
-		cmd = "ip -o -4 addr show dev " + infName + " | awk '$3 == \"inet\" {print $4}' | cut -d'/' -f1"
-		pod2ns1IPv4, err := e2eoutput.RunHostCmdWithRetries(ns, pod2name, cmd, 3*time.Second, 30*time.Second)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		CurlMultusPod2PodPass(oc, ns, pod1name, pod2ns1IPv4, infName, "Hello")
+		exutil.By("Get destination Pod's IP on secondary interface")
+		cmd = "ip addr show dev " + infName + " | grep global"
+		net1Output, _ := e2eoutput.RunHostCmdWithRetries(ns, pod2name, cmd, 3*time.Second, 30*time.Second)
+		net1Output = strings.TrimSpace(net1Output)
+
+		// Match our IPv4 and IPv6 address on net1 ip address output
+		rev4 := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+		ipv4Addresses := rev4.FindAllString(net1Output, -1)
+		rev6 := regexp.MustCompile(`(?i)(?<ipv6>(?:[\da-f]{0,4}:){1,7}(?:(?<ipv4>(?:(?:25[0-5]|2[0-4]\d|1?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|1?\d\d?))|[\da-f]{0,4}))`)
+		ipv6Addresses := rev6.FindAllString(net1Output, -1)
+		e2e.Logf("\n destination pod %s net1 IPv4 address: %s, net1 IPv6 address: %s\n", pod2name, ipv4Addresses, ipv6Addresses)
+
+		if len(ipv4Addresses) != 0 {
+			CurlMultusPod2PodPass(oc, ns, pod1name, ipv4Addresses[0], infName, "Hello")
+		}
+		if len(ipv6Addresses) != 0 {
+			CurlMultusPod2PodPass(oc, ns, pod1name, ipv6Addresses[0], infName, "Hello")
+		}
 	}
 
 }
@@ -604,13 +646,17 @@ func chkPfExist(oc *exutil.CLI, deviceid string, pfname string) bool {
 	return res
 }
 
-func chkNAD(oc *exutil.CLI, ns string, name string) error {
-	return wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+func chkNAD(oc *exutil.CLI, ns string, name string, expected bool) error {
+	return wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("net-attach-def", "-n", ns, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("the NAD list in ns %v is %v", ns, output)
-		if !strings.Contains(output, name) {
-			e2e.Logf("the err:%v, and try next round", err)
+		if expected && !strings.Contains(output, name) {
+			e2e.Logf("Can not get NAD, got err:%v, and try next round", err)
+			return false, nil
+		}
+		if !expected && strings.Contains(output, name) {
+			e2e.Logf("NAD has not beem removed, try again")
 			return false, nil
 		}
 		return true, nil
@@ -767,4 +813,62 @@ func getOperatorSource(oc *exutil.CLI, namespace string) string {
 	} else {
 		return ""
 	}
+}
+
+// check if interface is not connected with CARRIER
+func checkInterfaceNoCarrier(oc *exutil.CLI, nodeName string, interfaceName string) bool {
+	var output string
+	var err error
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, err = exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", "/usr/sbin/ip address show dev "+interfaceName)
+		if output == "" || err != nil {
+			e2e.Logf("Did not get node's management interface, errors: %v, try again", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("fail to check if interface %s on node %s has carrier, err: %v", interfaceName, nodeName, checkErr))
+	return strings.Contains(output, "NO-CARRIER")
+}
+
+// Create VF policy through NMstate
+func (vfpolicy *VFPolicyResource) createVFPolicy(oc *exutil.CLI) error {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", vfpolicy.template, "-p", "NAME="+vfpolicy.name, "INTFNAME="+vfpolicy.intfname, "NODENAME="+vfpolicy.nodename, "TOTALVFS="+strconv.Itoa(int(vfpolicy.totalvfs)))
+		if err1 != nil {
+			e2e.Logf("Creating VF on sriov node failed :%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("fail to VF on sriov node %v", vfpolicy.name)
+	}
+	return nil
+}
+
+// Create SRIOVNetworkNodePolicy on specific node
+func (sriovNNPolicy *sriovNetworkNodePolicySpecificNode) createPolicySpecificNode(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNNPolicy.template, "-p", "NAMESPACE="+sriovNNPolicy.namespace, "SRIOVNETPOLICY="+sriovNNPolicy.policyName, "DEVICETYPE="+sriovNNPolicy.deviceType, "PFNAME="+sriovNNPolicy.pfName, "NUMVFS="+strconv.Itoa(sriovNNPolicy.numVfs), "RESOURCENAME="+sriovNNPolicy.resourceName, "NODENAME="+sriovNNPolicy.nodename)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create sriovnetworknodePolicy %v", sriovNNPolicy.policyName))
+}
+
+// Create SRIOV test pod with MAC address
+func (sriovTestPod *sriovTestPodMAC) createSriovTestPodMAC(oc *exutil.CLI) {
+	err := wait.Poll(2*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovTestPod.tempfile, "-p", "PODNAME="+sriovTestPod.name, "SRIOVNETNAME="+sriovTestPod.sriovnetname, "TARGETNS="+sriovTestPod.namespace, "IP_ADDR="+sriovTestPod.ipaddr, "MAC_ADDR="+sriovTestPod.macaddr)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create test pod %v", sriovTestPod.name))
 }
