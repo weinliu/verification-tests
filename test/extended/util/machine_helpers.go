@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -18,6 +19,13 @@ const (
 	//MapiMachine means the fullname of mapi machine
 	MapiMachine = "machines.machine.openshift.io"
 )
+
+func ExtendedCheckPlatform(ctx context.Context, oc *CLI) string {
+	if CheckAKSCluster(ctx, oc) {
+		return "azure"
+	}
+	return CheckPlatform(oc)
+}
 
 // CheckPlatform check the cluster's platform
 func CheckPlatform(oc *CLI) string {

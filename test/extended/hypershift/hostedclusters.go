@@ -1332,3 +1332,7 @@ func (h *hostedCluster) pollUntilReady() {
 func (h *hostedCluster) getKASResourceVersion() string {
 	return doOcpReq(h.oc, OcpGet, true, "deploy/kube-apiserver", "-n", h.getHostedComponentNamespace(), "-o=jsonpath={.metadata.resourceVersion}")
 }
+
+func (h *hostedCluster) getOLMCatalogPlacement() string {
+	return doOcpReq(h.oc, OcpGet, true, "hc", h.name, "-n", h.namespace, "-o=jsonpath={.spec.olmCatalogPlacement}")
+}

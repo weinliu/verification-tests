@@ -41,13 +41,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                                             = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
+		oc                                             = exutil.NewCLIForKubeOpenShift("hypershift")
 		iaasPlatform, hypershiftTeamBaseDir, hcInfraID string
 		hostedcluster                                  *hostedCluster
 		hostedclusterPlatform                          PlatformType
 	)
 
-	g.BeforeEach(func() {
+	g.BeforeEach(func(ctx context.Context) {
 		hostedClusterName, hostedclusterKubeconfig, hostedClusterNs := exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		oc.SetGuestKubeconf(hostedclusterKubeconfig)
 		hostedcluster = newHostedCluster(oc, hostedClusterNs, hostedClusterName)
@@ -59,7 +59,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 
 		// get IaaS platform
-		iaasPlatform = exutil.CheckPlatform(oc)
+		iaasPlatform = exutil.ExtendedCheckPlatform(ctx, oc)
 		hypershiftTeamBaseDir = exutil.FixturePath("testdata", "hypershift")
 		// hosted cluster infra ID
 		hcInfraID = doOcpReq(oc, OcpGet, true, "hc", hostedClusterName, "-n", hostedClusterNs, `-ojsonpath={.spec.infraID}`)
@@ -404,7 +404,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"hypershift-control-plane": {
 				"capi-provider",
 				"catalog-operator",
-				"certified-operators-catalog",
 				"cluster-api",
 				"cluster-autoscaler",
 				"cluster-image-registry-operator",
@@ -413,7 +412,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				"cluster-policy-controller",
 				"cluster-storage-operator",
 				"cluster-version-operator",
-				"community-operators-catalog",
 				"control-plane-operator",
 				"csi-snapshot-controller",
 				"csi-snapshot-controller-operator",
@@ -430,14 +428,19 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				"olm-operator",
 				"openshift-controller-manager",
 				"openshift-route-controller-manager",
-				"redhat-marketplace-catalog",
-				"redhat-operators-catalog",
 				"cloud-network-config-controller",
 			},
 		}
 
-		if iaasPlatform == "aws" {
+		if hostedcluster.getOLMCatalogPlacement() == olmCatalogPlacementManagement {
+			priorityClasses["hypershift-control-plane"] = append(priorityClasses["hypershift-control-plane"], "certified-operators-catalog", "community-operators-catalog", "redhat-marketplace-catalog", "redhat-operators-catalog")
+		}
+
+		switch iaasPlatform {
+		case "aws":
 			priorityClasses["hypershift-control-plane"] = append(priorityClasses["hypershift-control-plane"], "aws-ebs-csi-driver-operator", "aws-ebs-csi-driver-controller")
+		case "azure":
+			priorityClasses["hypershift-control-plane"] = append(priorityClasses["hypershift-control-plane"], "azure-disk-csi-driver-controller", "azure-disk-csi-driver-operator", "azure-file-csi-driver-controller", "azure-file-csi-driver-operator", "azure-cloud-controller-manager")
 		}
 
 		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
@@ -519,7 +522,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"packageserver",
 			"capi-provider",
 			"catalog-operator",
-			"certified-operators-catalog",
 			"cluster-api",
 			// ingore it for the Azure failure when checking the label hypershift.openshift.io/hosted-control-plane=clusters-{cluster-name}
 			//"cluster-autoscaler",
@@ -529,7 +531,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"cluster-policy-controller",
 			"cluster-storage-operator",
 			"cluster-version-operator",
-			"community-operators-catalog",
 			"control-plane-operator",
 			"csi-snapshot-controller-operator",
 			"dns-operator",
@@ -543,8 +544,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"olm-operator",
 			"openshift-controller-manager",
 			"openshift-route-controller-manager",
-			"redhat-marketplace-catalog",
-			"redhat-operators-catalog",
 			//"cloud-network-config-controller",
 			"csi-snapshot-controller",
 			"csi-snapshot-webhook",
@@ -554,6 +553,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		if hostedclusterPlatform == AWSPlatform {
 			controlplaneComponents = append(controlplaneComponents, []string{"aws-ebs-csi-driver-controller" /*"aws-ebs-csi-driver-operator"*/}...)
+		}
+
+		if hostedcluster.getOLMCatalogPlacement() == olmCatalogPlacementManagement {
+			controlplaneComponents = append(controlplaneComponents, "certified-operators-catalog", "community-operators-catalog", "redhat-marketplace-catalog", "redhat-operators-catalog")
 		}
 
 		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
@@ -924,10 +927,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: mihuang@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-49108-Critical-49499-Critical-59546-Critical-60490-Critical-61970-Separate client certificate trust from the global Hypershift CA", func() {
+	g.It("Author:mihuang-ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Critical-49108-Critical-49499-Critical-59546-Critical-60490-Critical-61970-Separate client certificate trust from the global hypershift CA", func(ctx context.Context) {
 		if iaasPlatform != "aws" && iaasPlatform != "azure" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 49108 is for AWS or Azure - For other platforms, please set the corresponding expectedMetric to make this case effective. Skipping test ...")
 		}
+		exutil.SkipOnAKSNess(ctx, oc, false)
 
 		g.By("OCP-61970: OCPBUGS-10792-Changing the api group of the hypershift namespace servicemonitor back to coreos.com")
 		o.Expect(doOcpReq(oc, OcpGet, true, "servicemonitor", "-n", "hypershift", "-ojsonpath={.items[*].apiVersion}")).Should(o.ContainSubstring("coreos.com"))
@@ -1018,7 +1022,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:mihuang-Critical-60744-Better signal for NodePool inability to talk to management side [Disruptive] [Flaky]", func() {
 		g.By("Create a nodepool to verify that NodePool inability to talk to management side")
 
-		if hostedclusterPlatform == AgentPlatform || hostedclusterPlatform == KubevirtPlatform {
+		if hostedclusterPlatform != "aws" {
 			g.Skip("HostedCluster platform is " + hostedclusterPlatform + " which is not supported in this test.")
 		}
 
@@ -1080,7 +1084,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check must-gather works well on the hostedcluster.")
-		doOcpReq(oc, OcpAdm, true, "must-gather", "--dest-dir="+mustgatherDir, "--", "/usr/bin/gather_audit_logs", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)
+		err = oc.AsGuestKubeconf().Run(OcpAdm).Args("must-gather", "--dest-dir="+mustgatherDir, "--", "/usr/bin/gather_audit_logs").Execute()
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "error running must-gather against the HC")
 		var bashClient = NewCmdClient().WithShowInfo(true)
 		cmdOut, err := bashClient.Run(fmt.Sprintf(`du -h %v`, mustgatherDir)).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -1354,7 +1359,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:heli-Critical-52318-[AWS]-Enforce machineconfiguration.openshift.io/role worker in machine config[Serial]", func() {
-		exutil.SkipIfPlatformTypeNot(oc, "aws")
+		if iaasPlatform != "aws" {
+			g.Skip(fmt.Sprintf("Skipping incompatible platform %s", iaasPlatform))
+		}
 
 		g.By("create a configmap for MachineConfig")
 		fakePubKey := "AAAAB3NzaC1yc2EAAAADAQABAAABgQC0IRdwFtIIy0aURM64dDy0ogqJlV0aqDqw1Pw9VFc8bFSI7zxQ2c3Tt6GrC+Eg7y6mXQbw59laiGlyA+Qmyg0Dgd7BUVg1r8j" +
@@ -1547,7 +1554,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: liangli@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:liangli-Critical-63535-Stop triggering rollout on labels/taint change[Serial]", func() {
-		exutil.SkipIfPlatformTypeNot(oc, "aws")
+		if iaasPlatform != "aws" {
+			g.Skip(fmt.Sprintf("Skipping incompatible platform %s", iaasPlatform))
+		}
 
 		caseID := "63535"
 		dir := "/tmp/hypershift" + caseID
@@ -1848,7 +1857,9 @@ data:
 	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:fxie-Critical-72055-Automated etcd backups for Managed services", func() {
 		// Skip incompatible platforms
 		// The etcd snapshots will be backed up to S3 so this test case runs on AWS only
-		exutil.SkipIfPlatformTypeNot(oc, "aws")
+		if iaasPlatform != "aws" {
+			g.Skip(fmt.Sprintf("Skipping incompatible platform %s", iaasPlatform))
+		}
 		// The management cluster has to be an STS cluster as the SA token will be used to assume an existing AWS role
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("This test case must run on an STS management cluster, skipping")

@@ -347,12 +347,17 @@ func IsAKSCluster(ctx context.Context, oc *CLI) (bool, error) {
 	return labelFound, nil
 }
 
-func SkipOnAKSNess(ctx context.Context, oc *CLI, expectAKS bool) {
+func CheckAKSCluster(ctx context.Context, oc *CLI) bool {
 	isAKS, err := IsAKSCluster(ctx, oc)
 	if err != nil {
-		e2e.Logf("failed to determine is the active cluster is AKS or not: %v, defaulting to non-AKS", err)
+		e2e.Logf("failed to determine if the active cluster is AKS or not: %v, defaulting to non-AKS", err)
+		return false
 	}
+	return isAKS
+}
 
+func SkipOnAKSNess(ctx context.Context, oc *CLI, expectAKS bool) {
+	isAKS := CheckAKSCluster(ctx, oc)
 	if isAKS && !expectAKS {
 		g.Skip("Expecting non-AKS but the active cluster is AKS, skip the test")
 	}
