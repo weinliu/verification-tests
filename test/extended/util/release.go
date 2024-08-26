@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,12 +10,56 @@ import (
 	"os/exec"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/coreos/stream-metadata-go/stream"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type CoreOSImageArch string
+
 const (
+	CoreOSBootImagesFile                      = "0000_50_installer_coreos-bootimages.yaml"
+	CoreOSBootImageArchX86_64 CoreOSImageArch = "x86_64"
+
 	ReleaseImageLatestEnv = "RELEASE_IMAGE_LATEST"
 )
+
+func (a CoreOSImageArch) String() string {
+	return string(a)
+}
+
+// ExtractCoreOSBootImagesConfigMap extracts the CoreOS boot images ConfigMap from the given release image
+func ExtractCoreOSBootImagesConfigMap(oc *CLI, releaseImage, pullSecretFile string) (*corev1.ConfigMap, error) {
+	stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("adm", "release", "extract").Args(releaseImage, "--file", CoreOSBootImagesFile, "-a", pullSecretFile).Outputs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract CoreOS boot images from release image: %v", err)
+	}
+
+	var coreOSBootImagesCM corev1.ConfigMap
+	if err = yaml.Unmarshal([]byte(stdout), &coreOSBootImagesCM); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal CoreOS boot images file content: %v", err)
+	}
+
+	return &coreOSBootImagesCM, nil
+}
+
+// GetRHCOSImageURLForAzureDisk retrieves the RHCOS URL for the specified architecture's Azure disk image
+func GetRHCOSImageURLForAzureDisk(oc *CLI, releaseImage string, pullSecretFile string, arch CoreOSImageArch) (string, error) {
+	coreOSBootImagesCM, err := ExtractCoreOSBootImagesConfigMap(oc, releaseImage, pullSecretFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract CoreOS boot images ConfigMap: %v", err)
+	}
+
+	var coreOSBootImagesStream stream.Stream
+	if err = json.Unmarshal([]byte(coreOSBootImagesCM.Data["stream"]), &coreOSBootImagesStream); err != nil {
+		return "", fmt.Errorf("failed to unmarshal CoreOS bootimages stream data: %v", err)
+	}
+
+	return coreOSBootImagesStream.Architectures[arch.String()].RHELCoreOSExtensions.AzureDisk.URL, nil
+}
 
 func GetLatestReleaseImageFromEnv() string {
 	return os.Getenv(ReleaseImageLatestEnv)

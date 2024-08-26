@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -307,5 +308,34 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 		hc.waitForKASDeployUpdate(ctx, kasResourceVersion)
 		hc.waitForKASDeployReady(ctx)
 		hc.checkAzureEtcdEncryption(backupKey, nil)
+	})
+
+	// Test run duration: ~40min
+	// Also included: https://issues.redhat.com/browse/OCPBUGS-31090, https://issues.redhat.com/browse/OCPBUGS-31089
+	g.It("Author:fxie-Longduration-NonPreRelease-Critical-75856-Create AZURE Infrastructure and Hosted Cluster Separately [Serial]", func() {
+		var (
+			resourceNamePrefix = getResourceNamePrefix()
+			hcName             = fmt.Sprintf("%s-hc", resourceNamePrefix)
+			infraID            = fmt.Sprintf("%s-infra", resourceNamePrefix)
+			tempDir            = path.Join(os.TempDir(), "hypershift", resourceNamePrefix)
+			infraJSON          = path.Join(tempDir, "infra.json")
+			installhelper      = installHelper{oc: oc, dir: tempDir}
+		)
+
+		createTempDir(tempDir)
+
+		exutil.By("Looking up RHCOS image URL for Azure Disk")
+		rhcosImage, err := exutil.GetRHCOSImageURLForAzureDisk(oc, exutil.GetLatestReleaseImageFromEnv(), exutil.GetTestEnv().PullSecretLocation, exutil.CoreOSBootImageArchX86_64)
+		o.Expect(err).NotTo(o.HaveOccurred(), "error getting RHCOS image for Azure Disk")
+
+		exutil.By("Creating Infrastructure")
+		infra := installhelper.createInfraAROCommonBuilder().withInfraID(infraID).withOutputFile(infraJSON).withRHCOSImage(rhcosImage).withName(hcName)
+		defer installhelper.destroyAzureInfra(infra)
+		installhelper.createAzureInfra(infra)
+
+		exutil.By("Creating HostedCluster")
+		createCluster := installhelper.createClusterAROCommonBuilder().withInfraJSON(infraJSON).withName(hcName)
+		defer doOcpReq(oc, OcpDelete, true, "hc", createCluster.Name, "-n", createCluster.Namespace)
+		_ = installhelper.createAzureHostedClusters(createCluster)
 	})
 })

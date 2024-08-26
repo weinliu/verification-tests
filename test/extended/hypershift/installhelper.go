@@ -59,10 +59,13 @@ type createCluster struct {
 
 type infra struct {
 	AWSCreds   string `param:"aws-creds"`
+	AzureCreds string `param:"azure-creds"`
 	Name       string `param:"name"`
 	BaseDomain string `param:"base-domain"`
 	InfraID    string `param:"infra-id"`
+	Location   string `param:"location"`
 	Region     string `param:"region"`
+	RHCOSImage string `param:"rhcos-image"`
 	Zones      string `param:"zones"`
 	OutputFile string `param:"output-file"`
 }
@@ -161,6 +164,11 @@ func (i *infra) withOutputFile(OutputFile string) *infra {
 
 func (i *infra) withName(Name string) *infra {
 	i.Name = Name
+	return i
+}
+
+func (i *infra) withRHCOSImage(rhcosImage string) *infra {
+	i.RHCOSImage = rhcosImage
 	return i
 }
 
@@ -276,6 +284,16 @@ func (receiver *installHelper) createInfraCommonBuilder() *infra {
 		AWSCreds:   receiver.dir + "/credentials",
 		BaseDomain: baseDomain,
 		Region:     receiver.region,
+	}
+}
+
+func (receiver *installHelper) createInfraAROCommonBuilder() *infra {
+	location, err := getClusterRegion(receiver.oc)
+	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get cluster location")
+	return &infra{
+		AzureCreds: exutil.MustGetAzureCredsLocation(),
+		BaseDomain: hypershiftBaseDomainAzure,
+		Location:   location,
 	}
 }
 
@@ -537,6 +555,22 @@ func (receiver *installHelper) destroyAWSInfra(infra *infra) {
 	e2e.Logf("destroy AWS infrastructure")
 	var bashClient = NewCmdClient().WithShowInfo(true)
 	cmd := fmt.Sprintf("hypershift destroy infra aws --infra-id %s --aws-creds %s --base-domain %s --region %s", infra.InfraID, infra.AWSCreds, infra.BaseDomain, infra.Region)
+	_, err := bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (receiver *installHelper) createAzureInfra(infra *infra) {
+	vars, err := parse(infra)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create infra azure %s", strings.Join(vars, " "))
+	_, err = bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (receiver *installHelper) destroyAzureInfra(infra *infra) {
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift destroy infra azure --infra-id %s --azure-creds %s --location %s --name %s", infra.InfraID, infra.AzureCreds, infra.Location, infra.Name)
 	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }

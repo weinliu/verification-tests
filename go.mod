@@ -41,6 +41,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.5
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/blang/semver/v4 v4.0.0
+	github.com/coreos/stream-metadata-go v0.4.4
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/fsouza/go-dockerclient v1.9.8
