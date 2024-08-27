@@ -173,6 +173,7 @@ if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
     fi
 fi
 
+rm -rf ${XDG_RUNTIME_DIR}/containers/auth.json
 cp -f ~/.docker/auto/config.json ~/.docker
 podman login quay.io
 cd $CURRENTDIR
