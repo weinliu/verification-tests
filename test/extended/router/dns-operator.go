@@ -20,21 +20,28 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		// Store the clusterip from the cluster
 		clusterIp := getByJsonPath(oc, "openshift-dns", "service/dns-default", "{.spec.clusterIP}")
 
-		exutil.By("Step1: Delete DNS operator pod and delete the default DNS service")
+		exutil.By("Step1: Scale the DNS operator pod to zero and delete the default DNS service")
 		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")[0]
-		defer deleteDnsOperatorToRestore(oc)
-		_, errDelpod := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", dnsOperatorPodName, "-n", "openshift-dns-operator").Output()
-		o.Expect(errDelpod).NotTo(o.HaveOccurred())
+		defer func() {
+			exutil.By("Recover the DNS")
+			oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment.apps/dns-operator", "--replicas=1", "-n", "openshift-dns-operator").Output()
+			// if the dns-default svc didn't came up in given time, dns operator restoration will help
+			deleteDnsOperatorToRestore(oc)
+		}()
+		_, errScalpod := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment.apps/dns-operator", "--replicas=0", "-n", "openshift-dns-operator").Output()
+		o.Expect(errScalpod).NotTo(o.HaveOccurred())
+		errPodDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)
+		exutil.AssertWaitPollNoErr(errPodDis, fmt.Sprintf("resource %v does not disapper", "pod/"+dnsOperatorPodName))
 		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "dns-default", "-n", "openshift-dns").Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 
-		exutil.By("Step2: Create a test server with the Cluster IP")
+		exutil.By("Step2: Create a test server with the Cluster IP and scale up the dns operator")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "svc-37912", "-n", "openshift-dns").Execute()
-		err2 := oc.AsAdmin().WithoutNamespace().Run("create").Args("svc", "clusterip", "svc-37912", "--tcp=53:53", "--clusterip="+clusterIp, "-n", "openshift-dns").Execute()
+		err2 := oc.AsAdmin().WithoutNamespace().Run("create").Args(
+			"svc", "clusterip", "svc-37912", "--tcp=53:53", "--clusterip="+clusterIp, "-n", "openshift-dns").Execute()
 		o.Expect(err2).NotTo(o.HaveOccurred())
+		oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment.apps/dns-operator", "--replicas=1", "-n", "openshift-dns-operator").Output()
 		// wait for the dns operator pod to come up
-		errPodDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)
-		exutil.AssertWaitPollNoErr(errPodDis, fmt.Sprintf("resource %v does not disapper", "pod/"+dnsOperatorPodName))
 		errPodRdy := waitForPodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
 		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("dns-operator pod isn't ready"))
 
@@ -43,7 +50,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(newClusterIp).To(o.BeEquivalentTo(clusterIp))
 
 		exutil.By("Step4: Confirm the error message from the DNS operator status")
-		outputOpcfg, errOpcfg := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].message}}`).Output()
+		outputOpcfg, errOpcfg := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"dns.operator", "default", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].message}}`).Output()
 		o.Expect(errOpcfg).NotTo(o.HaveOccurred())
 		o.Expect(outputOpcfg).To(o.ContainSubstring("No IP address is assigned to the DNS service"))
 
