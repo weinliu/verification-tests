@@ -693,6 +693,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-ConnectedOnly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
+		SkipDnsFailure(oc)
 		var (
 			expectedStatus1 = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 			mc              = machineConfig{
@@ -1879,7 +1880,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-51055-Image pullthrough does pass 429 errors back to capable clients", func() {
-
+		SkipDnsFailure(oc)
 		g.By("Create a registry could limit quota")
 		oc.SetupProject()
 		regRoute := setSecureRegistryWithoutAuth(oc, oc.Namespace(), "myregistry", "quay.io/openshifttest/registry-toomany-request@sha256:56b816ca086d714680235d0ee96320bc9b1375a8abd037839d17a8759961e842", "8080")
@@ -3038,6 +3039,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-18984-Request to view all imagestreams via registry catalog api [Serial]", func() {
+		SkipDnsFailure(oc)
 		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3078,6 +3080,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("Author:xiuwang-Low-18559-Use SAR request to access registry metrics [Serial]", func() {
+		SkipDnsFailure(oc)
 		g.By("Set an registry route")
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
@@ -3381,6 +3384,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:xiuwang-High-21482-Medium-21926-Set default externalRegistryHostname in image policy config globally[Disruptive]", func() {
+		SkipDnsFailure(oc)
 		// OCP-21926: Check function of oc registry info command
 		g.By("Check options for oc registry info")
 		output, err := oc.AsAdmin().Run("registry").Args("info", "--internal=true").Output()
@@ -3920,6 +3924,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("NonPreRelease-Longduration-ConnectedOnly-Author:wewang-Critical-61598-Uploading large layers should success when push large size image [Serial]", func() {
+		SkipDnsFailure(oc)
 		g.By("Check image registry storage type")
 		out, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.storage.s3}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

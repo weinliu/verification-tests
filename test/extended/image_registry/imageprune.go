@@ -354,6 +354,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: wewang@redhat.com
 	g.It("ConnectedOnly-Author:wewang-High-16495-High-19196-No prune layer of a valid Image due to minimum aging and prune images when DC reference to invalid image [Disruptive]", func() {
+		SkipDnsFailure(oc)
 		// TODO: remove this skip when the builds v1 API will support producing manifest list images
 		architecture.SkipArchitectures(oc, architecture.MULTI)
 		// Check if openshift-sample operator installed
@@ -519,6 +520,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("Author:wewang-High-54905-Critical-54904-Critical-54051-Critical-54050-Critical-54171-Could import manifest lists via ImageStreamImport and sub-manifests did not be pruned when prune image [Serial]", func() {
+		SkipDnsFailure(oc)
 		g.By("Create ImageStreamImport with docker multiarch image")
 		var (
 			isImportFile = filepath.Join(imageRegistryBaseDir, "imagestream-import-oci.yaml")
@@ -709,6 +711,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-LEVEL0-Critical-12400-Prune images by command 'oc adm prune images' [Serial]", func() {
+		SkipDnsFailure(oc)
 		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())

@@ -1090,6 +1090,7 @@ func checkDnsCO(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = waitCoBecomes(oc, "dns", 240, expectedStatus)
 	o.Expect(err).NotTo(o.HaveOccurred())
+
 }
 
 func waitRouteReady(route string) {
@@ -1468,4 +1469,16 @@ func checkMirrorRegistry(oc *exutil.CLI, repo string) string {
 		return mirrorReg
 	}
 	return ""
+}
+
+func SkipDnsFailure(oc *exutil.CLI) {
+	expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+	err := waitCoBecomes(oc, "ingress", 240, expectedStatus)
+	if err != nil {
+		g.Skip("Ingress is not ready, skip the case test!")
+	}
+	err = waitCoBecomes(oc, "dns", 240, expectedStatus)
+	if err != nil {
+		g.Skip("Dns is not ready, skip the case test!")
+	}
 }

@@ -30,6 +30,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
+		SkipDnsFailure(oc)
 		var (
 			ns = "26401-upgrade-ns"
 			mc = machineConfig{
@@ -240,6 +241,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-VMonly-PreChkUpgrade-Author:wewang-High-71533-Upgrade cluster with pull Internal Registry custom images successfully prepare[Disruptive]", func() {
+		SkipDnsFailure(oc)
 		var (
 			podmanCLI       = container.NewPodmanCLI()
 			ns              = "71533-upgrade-ns"
@@ -321,6 +323,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-VMonly-PstChkUpgrade-Author:wewang-Critical-71533-Upgrade cluster with pull Internal Registry custom images successfully after upgrade[Disruptive]", func() {
+		SkipDnsFailure(oc)
 		var (
 			podmanCLI       = container.NewPodmanCLI()
 			ns              = "71533-upgrade-ns"
