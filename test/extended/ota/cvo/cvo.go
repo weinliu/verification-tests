@@ -949,15 +949,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:jiajliu-Medium-41736-cvo alert ClusterOperatorDown on unavailable operators [Disruptive][Slow]", func() {
 		operator := "image-registry"
-		namespaceCCO := "openshift-cloud-credential-operator"
-
-		exutil.By("Cordon master nodes")
-		masterNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		nodeLabel := "node-role.kubernetes.io/worker="
+		exutil.By("Cordon worker nodes")
+		workerNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector", nodeLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "fail to get node list: %v", err)
-		nodeList := strings.Fields(masterNodes)
+		nodeList := strings.Fields(workerNodes)
 		defer func() {
-			e2e.Logf("Restore master node in defer")
-			oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "-l", "node-role.kubernetes.io/master=").Execute()
+			e2e.Logf("Restore worker node in defer")
+			oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "-l", nodeLabel).Execute()
 			for _, node := range nodeList {
 				err = wait.PollUntilContextTimeout(context.Background(), 1*time.Minute, 5*time.Minute, true, func(context.Context) (bool, error) {
 					nodeReady, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
@@ -969,9 +968,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				})
 				exutil.AssertWaitPollNoErr(err, "timeout to restore node!")
 			}
-			e2e.Logf("Restore operator in defer if it's not avalable after uncordon")
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", "app=cloud-credential-operator", "-n", namespaceCCO).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred(), "fail to delete cco pod: %v", err)
+			e2e.Logf("Ensure operator back to good status after uncordon")
 			err = wait.PollUntilContextTimeout(context.Background(), 1*time.Minute, 5*time.Minute, true, func(context.Context) (bool, error) {
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", operator).Output()
 				matched, _ := regexp.MatchString("True.*False.*False", output)
@@ -984,8 +981,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			exutil.AssertWaitPollNoErr(err, "timeout to restore operator!")
 		}()
 
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", "-l", "node-role.kubernetes.io/master=").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred(), "fail to cordon master node: %v", err)
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", "-l", nodeLabel).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to cordon worker node: %v", err)
 		exutil.By("Delete namespace openshift-image-registry")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", "openshift-image-registry").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred(), "fail to delete namespace: %v", err)
@@ -1017,12 +1014,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ClusterOperatorDown alert is not fired in 10m: %v", alertDown))
 
 		exutil.By("Disable ClusterOperatorDown alert")
-		e2e.Logf("Uncordon master node")
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "-l", "node-role.kubernetes.io/master=").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred(), "fail to uncordon master node: %v", err)
-		e2e.Logf("Restart cco pod")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-l", "app=cloud-credential-operator", "-n", namespaceCCO).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred(), "fail to delete cco pod: %v", err)
+		e2e.Logf("Uncordon worker node")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "-l", nodeLabel).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "fail to uncordon worker node: %v", err)
 
 		exutil.By("Check alert is disabled")
 		exutil.AssertWaitPollNoErr(wait.Poll(1*time.Minute, 5*time.Minute, func() (bool, error) {
