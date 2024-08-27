@@ -1,7 +1,6 @@
 package clusterinfrastructure
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func() {
@@ -42,7 +40,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		capiMachinesetvsphereTemplate  string
 		vsphereMachineTemplateTemplate string
 		vsphere_server                 string
-		vsphere_host                   string
 		diskGiB                        string
 		int_diskGiB                    int
 		datacenter                     string
@@ -53,24 +50,19 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		int_numCPUs                    int
 		networkname                    string
 		memoryMiB                      string
-		vspheresecretTemplate          string
-		usernamebase64                 string
-		passwordbase64                 string
 		int_memoryMiB                  int
-		vsphereClusterTemplate         string
 
-		err                    error
-		cluster                clusterDescription
-		awsMachineTemplate     awsMachineTemplateDescription
-		gcpcluster             gcpClusterDescription
-		gcpMachineTemplate     gcpMachineTemplateDescription
-		capiMachineSetAWS      capiMachineSetAWSDescription
-		capiMachineSetgcp      capiMachineSetgcpDescription
-		clusterNotInCapi       clusterDescriptionNotInCapi
-		vspherecluster         vsphereClusterDescription
+		err                error
+		cluster            clusterDescription
+		awsMachineTemplate awsMachineTemplateDescription
+		gcpcluster         gcpClusterDescription
+		gcpMachineTemplate gcpMachineTemplateDescription
+		capiMachineSetAWS  capiMachineSetAWSDescription
+		capiMachineSetgcp  capiMachineSetgcpDescription
+		clusterNotInCapi   clusterDescriptionNotInCapi
+
 		vsphereMachineTemplate vsphereMachineTemplateDescription
 		capiMachineSetvsphere  capiMachineSetvsphereDescription
-		vspheresecret          vsphereSecretDescription
 	)
 
 	g.BeforeEach(func() {
@@ -113,8 +105,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		case clusterinfra.VSphere:
 			vsphere_server, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.vsphere.vcenters[0].server}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			vsphere_host, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.vsphere.apiServerInternalIP}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 			diskGiB, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.diskGiB}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -135,22 +125,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			memoryMiB, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.memoryMiB}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			int_memoryMiB, err = strconv.Atoi(memoryMiB)
-			var data map[string]string
-			secretData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "vsphere-creds", "-n", "kube-system", "-o=jsonpath={.data}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if err := json.Unmarshal([]byte(secretData), &data); err != nil {
-				e2e.Logf("Error:", err)
-				return
-			}
-			// Iterate over the map
-			for key, value := range data {
-				if strings.Contains(key, "username") {
-					usernamebase64 = value
-				}
-				if strings.Contains(key, "password") {
-					passwordbase64 = value
-				}
-			}
+
 		default:
 			g.Skip("IAAS platform is " + iaasPlatform.String() + " which is NOT supported cluster api ...")
 		}
@@ -172,10 +147,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		gcpMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-gcp.yaml")
 		capiMachinesetAWSTemplate = filepath.Join(capiBaseDir, "machinesetaws.yaml")
 		capiMachinesetgcpTemplate = filepath.Join(capiBaseDir, "machinesetgcp.yaml")
-		vsphereClusterTemplate = filepath.Join(capiBaseDir, "vspherecluster.yaml")
+
 		vsphereMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-vsphere.yaml")
 		capiMachinesetvsphereTemplate = filepath.Join(capiBaseDir, "machinesetvsphere.yaml")
-		vspheresecretTemplate = filepath.Join(capiBaseDir, "vsphere-secret.yaml")
 
 		cluster = clusterDescription{
 			name:     clusterID,
@@ -192,16 +166,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			host:     host,
 			network:  network,
 			template: gcpClusterTemplate,
-		}
-		vspherecluster = vsphereClusterDescription{
-			name:        clusterID,
-			namespace:   "openshift-cluster-api",
-			secret_name: clusterID,
-			server:      vsphere_server,
-			kind:        "VSphereCluster",
-			host:        vsphere_host,
-			port:        6443,
-			template:    vsphereClusterTemplate,
 		}
 		awsMachineTemplate = awsMachineTemplateDescription{
 			name:         "aws-machinetemplate",
@@ -276,10 +240,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			capiMachineSetvsphere.kind = "VSphereMachineTemplate"
 			capiMachineSetvsphere.machineTemplateName = vsphereMachineTemplate.name
 			capiMachineSetvsphere.dataSecretName = ""
-			vspheresecret.username = usernamebase64
-			vspheresecret.password = passwordbase64
-			vspheresecret.template = vspheresecretTemplate
-			vspheresecret.name = clusterID
 
 		default:
 			g.Skip("IAAS platform is " + iaasPlatform.String() + " which is NOT supported cluster api ...")
@@ -399,11 +359,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 
 		g.By("Create capi machineset")
 		cluster.createCluster(oc)
-		defer vspherecluster.deletevsphereCluster(oc)
-		vspherecluster.createvsphereCluster(oc)
-
-		defer vspheresecret.deletevspheresecret(oc)
-		vspheresecret.createvspheresecret(oc)
 
 		defer vsphereMachineTemplate.deletevsphereMachineTemplate(oc)
 		vsphereMachineTemplate.createvsphereMachineTemplate(oc)

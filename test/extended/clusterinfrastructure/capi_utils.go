@@ -95,16 +95,6 @@ type capiMachineSetvsphereDescription struct {
 	dataSecretName      string
 }
 
-type vsphereClusterDescription struct {
-	name        string
-	namespace   string
-	secret_name string
-	server      string
-	kind        string
-	host        string
-	port        int
-	template    string
-}
 type vsphereMachineTemplateDescription struct {
 	kind         string
 	name         string
@@ -121,14 +111,6 @@ type vsphereMachineTemplateDescription struct {
 	networkName  string
 	template     string
 	cloneMode    string
-}
-type vsphereSecretDescription struct {
-	kind      string
-	name      string
-	namespace string
-	username  string
-	password  string
-	template  string
 }
 
 // skipForCAPINotExist skip the test if capi doesn't exist
@@ -220,17 +202,6 @@ func (capiMachineSetgcp *capiMachineSetgcpDescription) deleteCapiMachineSetgcp(o
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(capiMachineset, capiMachineSetgcp.name, "-n", clusterAPINamespace).Execute()
 }
 
-func (vsphereCluster *vsphereClusterDescription) createvsphereCluster(oc *exutil.CLI) {
-	e2e.Logf("Creating vsphereCluster ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", vsphereCluster.template, "-p", "KIND="+vsphereCluster.kind, "NAME="+vsphereCluster.name, "NAMESPACE="+clusterAPINamespace, "VSPHERE_SERVER="+vsphereCluster.server, "SECRET_NAME="+vsphereCluster.secret_name, "VSPHERE_HOST="+vsphereCluster.host, "VSPHERE_PORT="+strconv.Itoa(vsphereCluster.port))
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func (vpshereCluster *vsphereClusterDescription) deletevsphereCluster(oc *exutil.CLI) error {
-	e2e.Logf("Deleting a vsphereCluster ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("VSphereCluster", vpshereCluster.name, "-n", clusterAPINamespace).Execute()
-}
-
 func (vsphereMachineTemplate *vsphereMachineTemplateDescription) createvsphereMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating vsphereMachineTemplate ...")
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", vsphereMachineTemplate.template, "-p", "KIND="+vsphereMachineTemplate.kind, "NAME="+vsphereMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "VSPHERE_SERVER="+vsphereMachineTemplate.server, "DISKGIB="+strconv.Itoa(vsphereMachineTemplate.diskGiB), "CLONEMODE="+"linkedClone", "DATASTORE="+vsphereMachineTemplate.datastore, "DATACENTER="+vsphereMachineTemplate.datacenter, "FOLDER="+vsphereMachineTemplate.folder, "RESOURCEPOOL="+vsphereMachineTemplate.resourcePool, "NUMCPUS="+strconv.Itoa(vsphereMachineTemplate.numCPUs), "MEMORYMIB="+strconv.Itoa(vsphereMachineTemplate.memoryMiB), "NETWORKNAME="+vsphereMachineTemplate.networkName)
@@ -254,16 +225,6 @@ func (capiMachineSetvsphere *capiMachineSetvsphereDescription) createCapiMachine
 func (capiMachineSetvsphere *capiMachineSetvsphereDescription) deleteCapiMachineSetvsphere(oc *exutil.CLI) error {
 	e2e.Logf("Deleting vsphereMachineSet ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(capiMachineset, capiMachineSetvsphere.name, "-n", clusterAPINamespace).Execute()
-}
-func (vspheresecret *vsphereSecretDescription) createvspheresecret(oc *exutil.CLI) {
-	e2e.Logf("Creating secret ...")
-
-	err := applyResourceFromTemplateWithoutInfo(oc, "--ignore-unknown-parameters=true", "-f", vspheresecret.template, "-p", "KIND="+"Secret", "NAME="+vspheresecret.name, "NAMESPACE="+clusterAPINamespace, "USERNAME="+vspheresecret.username, "PASSWORD="+vspheresecret.password)
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-func (vspheresecret *vsphereSecretDescription) deletevspheresecret(oc *exutil.CLI) error {
-	e2e.Logf("Deleting vspheresecret ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", vspheresecret.name, "-n", clusterAPINamespace).Execute()
 }
 
 // waitForCapiMachinesRunning check if all the machines are Running in a MachineSet
