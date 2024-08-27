@@ -50,5 +50,6 @@ func IsDeploymentReady(deploy *appsv1.Deployment) bool {
 	return expectedReplicas == deploy.Status.AvailableReplicas &&
 		expectedReplicas == deploy.Status.UpdatedReplicas &&
 		expectedReplicas == deploy.Status.ReadyReplicas &&
-		deploy.Generation <= deploy.Status.ObservedGeneration
+		deploy.Generation <= deploy.Status.ObservedGeneration &&
+		deploy.Status.UnavailableReplicas == 0
 }
