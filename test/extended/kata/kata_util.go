@@ -57,6 +57,7 @@ type TestRunDescription struct {
 	enablePeerPods     bool
 	enableGPU          bool
 	podvmImageUrl      string
+	workloadImage      string
 }
 
 // If you changes this please make changes to func createPeerPodSecrets
@@ -202,7 +203,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub Subscr
 	msg, err = waitForKataconfig(oc, kataconf.name, sub.namespace)
 	return msg, err
 }
-func createKataPodAnnotated(oc *exutil.CLI, podNs, template, basePodName, runtimeClassName string, annotations map[string]string) (msg string, err error) {
+func createKataPodAnnotated(oc *exutil.CLI, podNs, template, basePodName, runtimeClassName, workloadImage string, annotations map[string]string) (msg string, err error) {
 	var (
 		newPodName string
 		configFile string
@@ -212,7 +213,7 @@ func createKataPodAnnotated(oc *exutil.CLI, podNs, template, basePodName, runtim
 	newPodName = getRandomString() + basePodName
 	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", template, "-p", "NAME="+newPodName,
 		"-p", "MEMORY="+annotations["MEMORY"], "-p", "CPU="+annotations["CPU"], "-p",
-		"INSTANCESIZE="+annotations["INSTANCESIZE"], "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
+		"INSTANCESIZE="+annotations["INSTANCESIZE"], "-p", "RUNTIMECLASSNAME="+runtimeClassName, "IMAGE="+workloadImage).OutputToFile(getRandomString() + "Pod-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName, phase)
 }
@@ -237,7 +238,7 @@ func createKataPodFromTemplate(oc *exutil.CLI, podNs, newPodName, configFile, ru
 }
 
 // author: abhbaner@redhat.com
-func createKataPod(oc *exutil.CLI, podNs, commonPod, basePodName, runtimeClassName string) string {
+func createKataPod(oc *exutil.CLI, podNs, commonPod, basePodName, runtimeClassName, workloadImage string) string {
 	var (
 		err        error
 		newPodName string
@@ -247,7 +248,7 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, basePodName, runtimeClassNa
 
 	newPodName = getRandomString() + basePodName
 	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", commonPod, "-p",
-		"NAME="+newPodName, "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
+		"NAME="+newPodName, "-p", "RUNTIMECLASSNAME="+runtimeClassName, "-p", "IMAGE="+workloadImage).OutputToFile(getRandomString() + "Pod-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	podname, err := createKataPodFromTemplate(oc, podNs, newPodName, configFile, runtimeClassName, phase)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1710,6 +1711,12 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 		testrun.podvmImageUrl = gjson.Get(configmapData, "podvmImageUrl").String()
 	} else {
 		errorMessage = fmt.Sprintf("podvmImageUrl is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "workloadImage").Exists() {
+		testrun.workloadImage = gjson.Get(configmapData, "workloadImage").String()
+	} else {
+		errorMessage = fmt.Sprintf("workloadImage is missing from data\n%v", errorMessage)
 	}
 
 	if errorMessage != "" {

@@ -89,6 +89,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		enablePeerPods:     kataconfig.enablePeerPods,
 		enableGPU:          false,
 		podvmImageUrl:      "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/",
+		workloadImage:      "quay.io/openshift/origin-hello-openshift",
 	}
 
 	g.BeforeEach(func() {
@@ -376,7 +377,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
 		defer deleteKataResource(oc, "pod", podNs, newPodName)
 		// checkKataPodStatus() replace with checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
@@ -437,7 +438,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
 		defer deleteKataResource(oc, "pod", podNs, newPodName)
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		if err != nil {
@@ -472,7 +473,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
 		defer deleteKataResource(oc, "pod", podNs, newPodName)
 
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
@@ -504,7 +505,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
 		defer deleteKataResource(oc, "pod", podNs, newPodName)
 
 		g.By("Verifying pod state")
@@ -597,7 +598,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		g.By("Deploy a pod with kata runtime")
-		podName = createKataPod(oc, podNs, defaultPod, "admtop", kataconfig.runtimeClassName)
+		podName = createKataPod(oc, podNs, defaultPod, "admtop", kataconfig.runtimeClassName, testrun.workloadImage)
 		defer deleteKataResource(oc, "pod", podNs, podName)
 		msg, err = checkResourceJsonpath(oc, "pod", podName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 
@@ -656,7 +657,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		g.By("Deploying pod and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed: %v %v", newPodName, msg, err)
 
@@ -710,7 +711,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		)
 
 		g.By("Create deployment config from template")
-		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
+			"-p", "NAME="+deployName, "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName,
+			"-p", "IMAGE="+testrun.workloadImage).OutputToFile(getRandomString() + "dep-common.json")
 		if err != nil {
 			e2e.Logf("Could not create configFile %v %v", configFile, err)
 		}
@@ -857,7 +860,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			service unavailable
 			exit status 1 */
 		errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
-			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(deploymentFile)
+			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
+				"-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount),
+				"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName, "-p", "IMAGE="+testrun.workloadImage).OutputToFile(deploymentFile)
 			if strings.Contains(deployConfigFile, deploymentFile) {
 				return true, nil
 			}
@@ -1095,7 +1100,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		g.By("Create deployment config from template")
-		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
+			"-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas),
+			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName, "-p", "IMAGE="+testrun.workloadImage).OutputToFile(getRandomString() + "dep-common.json")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not create deployment configFile %v", configFile))
 
 		g.By("Applying deployment file " + configFile)
@@ -1151,7 +1158,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		g.By("Create deployment config from template")
-		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
+			"-p", "NAME="+deployName, "-p", "REPLICAS="+strconv.Itoa(initReplicas), "-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName,
+			"-p", "IMAGE="+testrun.workloadImage).OutputToFile(getRandomString() + "dep-common.json")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not create deployment configFile %v", configFile))
 
 		g.By("Applying deployment file " + configFile)
@@ -1195,7 +1204,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 			msg           string
 			statusCode    = 200
 			testPageBody  = "Hello OpenShift!"
-			ocpHelloImage = "quay.io/openshifttest/hello-openshift:1.2.0"
+			ocpHelloImage = "quay.io/openshifttest/hello-openshift:1.2.0" // should this be testrun.workloadImage?
 		)
 
 		g.By("Create deployment config from template")
@@ -1260,7 +1269,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		initReplicas := strconv.Itoa(podIntLimit * kataNodesAmount)
 		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment,
 			"-p", "NAME="+deployName, "-p", "REPLICAS="+initReplicas,
-			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
+			"-p", "RUNTIMECLASSNAME="+kataconfig.runtimeClassName, "-p", "IMAGE="+testrun.workloadImage).OutputToFile(getRandomString() + "dep-common.json")
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not create deployment configFile %v", configFile))
 
 		g.By("Applying deployment file " + configFile)
@@ -1401,7 +1410,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		oc.SetupProject()
 		podNamespace := oc.Namespace()
 
-		podName := createKataPod(oc, podNamespace, defaultPod, "pod68945", kataconfig.runtimeClassName)
+		podName := createKataPod(oc, podNamespace, defaultPod, "pod68945", kataconfig.runtimeClassName, testrun.workloadImage)
 		defer deleteKataResource(oc, "pod", podNamespace, podName)
 		msg, err := checkResourceJsonpath(oc, "pod", podName, podNamespace, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: pod %v could not be created: %v %v", podName, msg, err))
@@ -1455,7 +1464,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		annotations["INSTANCESIZE"] = val
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
+		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, testrun.workloadImage, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1495,7 +1504,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		annotations["INSTANCESIZE"] = val
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
+		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, testrun.workloadImage, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1529,7 +1538,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		g.By("Deploying pod with kata runtime and verify it")
-		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, annotations)
+		podName, err := createKataPodAnnotated(oc, podNs, podAnnotatedTemplate, basePodName, kataconfig.runtimeClassName, testrun.workloadImage, annotations)
 		defer deleteKataResource(oc, "pod", podNs, podName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
