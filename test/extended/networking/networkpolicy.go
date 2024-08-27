@@ -2009,3 +2009,113 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(addrs == Pod1IP).To(o.BeTrue())
 	})
 })
+
+var _ = g.Describe("[sig-networking] SDN networkpolicy StressTest", func() {
+	//This case will only be run in perf stress ci which can be deployed for stress testing.
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("networking-networkpolicy-stress", exutil.KubeConfigPath())
+
+	//author: meinli@redhat.com
+	g.It("Author:meinli-High-69234-high memory usage on ovnkube-master leader pods on some clusters when a network policy is deleted. [Serial]", func() {
+		var (
+			buildPruningBaseDir           = exutil.FixturePath("testdata", "networking")
+			ingressNPPolicyTemplate       = filepath.Join(buildPruningBaseDir, "networkpolicy/generic-networkpolicy-template.yaml")
+			matchLabelKey                 = "kubernetes.io/metadata.name"
+			master_port             int32 = 8100
+		)
+
+		exutil.By("0. Get namespace.\n")
+		ns := oc.Namespace()
+
+		exutil.By("1. Get port from ovnk-master leader pod.\n")
+		ovnMasterPodName := getOVNKMasterPod(oc)
+		ovnMasterPodNames := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-control-plane")
+		var port string
+		var flag int
+		for i, ovnPod := range ovnMasterPodNames {
+			if ovnPod == ovnMasterPodName {
+				port = strconv.Itoa(int(master_port))
+				flag = i + 1
+				break
+			}
+			master_port++
+		}
+
+		exutil.By("2. Get initial pprof goroutine value from ovnk-master leader after enabling forwarding.\n")
+		cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("-n", "openshift-ovn-kubernetes", ovnMasterPodName, port+":29103", "--request-timeout=40s").Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cmd.Process.Kill()
+		output, err := exec.Command("bash", "-c", "ps -ef | grep 29103").Output()
+		e2e.Logf("output is: %s", output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(ovnMasterPodName))
+
+		// wait port start listening
+		checkErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 100*time.Second, false, func(cxt context.Context) (bool, error) {
+			checkOutput, _ := exec.Command("bash", "-c", "lsof -iTCP:"+port+" -sTCP:LISTEN").Output()
+			// no need to check error since some system output stderr for valid result
+			if len(checkOutput) != 0 {
+				return true, nil
+			}
+			e2e.Logf("Port is not listening, trying again...")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkErr, "Port cannot listen")
+
+		getGoroutineOut := "curl -ks --noproxy localhost http://localhost:" + port + "/debug/pprof/goroutine\\?debug\\=1 | grep -C 1 'periodicallyRetryResources' | awk 'NR==1{print $1}'"
+		PreGoroutineOut, err := exec.Command("bash", "-c", getGoroutineOut).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(PreGoroutineOut).NotTo(o.BeEmpty())
+		e2e.Logf("PreGoroutineOut is: %s", PreGoroutineOut)
+
+		exutil.By("3. Get initial ovnk-master pod memory usage.\n")
+		checkMemoryCmd := fmt.Sprintf("oc -n openshift-ovn-kubernetes adm top pod | sed '1d' | awk 'NR==%d{print $1,$3}'", flag)
+		checkMemory1, err := exec.Command("bash", "-c", checkMemoryCmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Repeat creating, deleting then recreating same network policy 15 times.\n")
+		networkPolicyResource := networkPolicyResource{
+			name:             "ingress-networkpolicy",
+			namespace:        ns,
+			policy:           "ingress",
+			policyType:       "Ingress",
+			direction1:       "from",
+			namespaceSel1:    "matchLabels",
+			namespaceSelKey1: matchLabelKey,
+			namespaceSelVal1: ns,
+			template:         ingressNPPolicyTemplate,
+		}
+		for i := 0; i < 15; i++ {
+			// Create network policy
+			networkPolicyResource.createNetworkPolicy(oc)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, networkPolicyResource.name)).To(o.BeTrue())
+
+			// Delete network policy
+			removeResource(oc, true, true, "networkpolicy", networkPolicyResource.name, "-n", ns)
+		}
+
+		exutil.By("5. Compare the goroutine call value between pre and post output.\n")
+		PostGoroutineOut, err := exec.Command("bash", "-c", getGoroutineOut).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(PostGoroutineOut).NotTo(o.BeEmpty())
+		e2e.Logf("PostGoroutineOut is: %s", PostGoroutineOut)
+		o.Expect(string(PreGoroutineOut) == string(PostGoroutineOut)).To(o.BeTrue())
+
+		exutil.By("6. Verify ovnk-master pod memory usage should be the same as previous.\n")
+		// wait for ovnk-master leader pod to be stable
+		checkErr = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
+			checkMemory2, err := exec.Command("bash", "-c", checkMemoryCmd).CombinedOutput()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if string(checkMemory2) == string(checkMemory1) {
+				e2e.Logf("Memory usage is the same as previous.")
+				return true, nil
+			}
+			e2e.Logf("%v,Waiting for ovnk-master pod stable, try again ...,", err)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkErr, "Check the memory usage timeout.")
+	})
+})
