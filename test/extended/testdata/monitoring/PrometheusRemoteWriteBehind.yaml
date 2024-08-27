@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    prometheusK8s:
+      remoteWrite:
+        - url: "http://invalid-remote-storage.example.com:9090/api/v1/write"
+          queue_config:
+            max_samples_per_send: 100
+            batch_send_deadline: 5s
+            max_retries: 1

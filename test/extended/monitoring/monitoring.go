@@ -2785,6 +2785,32 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusKubernetesListWatchFailures"}'`, token, `"alertname":"PrometheusKubernetesListWatchFailures"`, 3*uwmLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-74311-trigger PrometheusRemoteWriteBehind alert [Serial]", func() {
+		var (
+			PrometheusRemoteWriteBehind = filepath.Join(monitoringBaseDir, "PrometheusRemoteWriteBehind.yaml")
+		)
+		exutil.By("delete uwm-config/cm-config at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		exutil.By("create fake remoteWrite")
+		createResourceFromYaml(oc, "openshift-monitoring", PrometheusRemoteWriteBehind)
+
+		exutil.By("check the alert exist")
+		cmd := "-ojsonpath={.spec.groups[].rules[?(@.alert==\"PrometheusRemoteWriteBehind\")]}"
+		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "prometheus-k8s-prometheus-rules", cmd, "PrometheusRemoteWriteBehind", true)
+
+		exutil.By("check logs in pod")
+		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus", "prometheus", "no such host", true)
+
+		exutil.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		exutil.By("check alert triggered")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusRemoteWriteBehind"}'`, token, `"alertname":"PrometheusRemoteWriteBehind"`, 2*uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
