@@ -55,9 +55,31 @@ type udnCRDResource struct {
 	template   string
 }
 
+type udnPodWithProbeResource struct {
+	name             string
+	namespace        string
+	label            string
+	port             int
+	failurethreshold int
+	periodseconds    int
+	template         string
+}
+
 func (pod *udnPodResource) createUdnPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "LABEL="+pod.label)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (pod *udnPodWithProbeResource) createUdnPodWithProbe(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "LABEL="+pod.label, "PORT="+strconv.Itoa(int(pod.port)), "FAILURETHRESHOLD="+strconv.Itoa(int(pod.failurethreshold)), "PERIODSECONDS="+strconv.Itoa(int(pod.periodseconds)))
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil

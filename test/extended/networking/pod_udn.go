@@ -3,6 +3,7 @@ package networking
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -552,5 +553,138 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 			verifySctpConnPod2IP(oc, ns, sctpServerIP, sctpServerPodName, sctpClientPodname, true)
 		}
 
+	})
+
+	g.It("Author:qiowang-High-75254-Check kubelet probes are allowed via default network's LSP for the UDN pods", func() {
+		var (
+			udnCRDdualStack         = filepath.Join(testDataDirUDN, "udn_crd_dualstack2_template.yaml")
+			udnCRDSingleStack       = filepath.Join(testDataDirUDN, "udn_crd_singlestack_template.yaml")
+			udnPodLivenessTemplate  = filepath.Join(testDataDirUDN, "udn_test_pod_liveness_template.yaml")
+			udnPodReadinessTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_readiness_template.yaml")
+			udnPodStartupTemplate   = filepath.Join(testDataDirUDN, "udn_test_pod_startup_template.yaml")
+			livenessProbePort       = 8080
+			readinessProbePort      = 8081
+			startupProbePort        = 1234
+		)
+
+		exutil.By("1. Create privileged namespace")
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		exutil.By("2. Create CRD for UDN")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		var prefix, ipv4prefix, ipv6prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+			prefix = 24
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+				prefix = 64
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv4prefix = 24
+				ipv6cidr = "2010:100:200::0/48"
+				ipv6prefix = 64
+			}
+		}
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:    "udn-network-ds-75254",
+				namespace:  ns,
+				role:       "Primary",
+				mtu:        1400,
+				IPv4cidr:   ipv4cidr,
+				IPv4prefix: ipv4prefix,
+				IPv6cidr:   ipv6cidr,
+				IPv6prefix: ipv6prefix,
+				template:   udnCRDdualStack,
+			}
+			udncrd.createUdnCRDDualStack(oc)
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-ss-75254",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				prefix:    prefix,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createUdnCRDSingleStack(oc)
+		}
+		err := waitUDNCRDApplied(oc, ns, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create a udn hello pod with liveness probe in ns1")
+		pod1 := udnPodWithProbeResource{
+			name:             "hello-pod-ns1-liveness",
+			namespace:        ns,
+			label:            "hello-pod",
+			port:             livenessProbePort,
+			failurethreshold: 1,
+			periodseconds:    1,
+			template:         udnPodLivenessTemplate,
+		}
+		pod1.createUdnPodWithProbe(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("4. Capture packets in pod " + pod1.name + ", check liveness probe traffic is allowed via default network")
+		tcpdumpCmd1 := fmt.Sprintf("timeout 5s tcpdump -nni eth0 port %v", pod1.port)
+		cmdTcpdump1, cmdOutput1, _, err1 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, pod1.name, "--", "bash", "-c", tcpdumpCmd1).Background()
+		defer cmdTcpdump1.Process.Kill()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		cmdTcpdump1.Wait()
+		e2e.Logf("The captured packet is %s", cmdOutput1.String())
+		expPacket1 := strconv.Itoa(pod1.port) + ": Flags [S]"
+		o.Expect(strings.Contains(cmdOutput1.String(), expPacket1)).To(o.BeTrue())
+
+		exutil.By("5. Create a udn hello pod with readiness probe in ns1")
+		pod2 := udnPodWithProbeResource{
+			name:             "hello-pod-ns1-readiness",
+			namespace:        ns,
+			label:            "hello-pod",
+			port:             readinessProbePort,
+			failurethreshold: 1,
+			periodseconds:    1,
+			template:         udnPodReadinessTemplate,
+		}
+		pod2.createUdnPodWithProbe(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		exutil.By("6. Capture packets in pod " + pod2.name + ", check readiness probe traffic is allowed via default network")
+		tcpdumpCmd2 := fmt.Sprintf("timeout 5s tcpdump -nni eth0 port %v", pod2.port)
+		cmdTcpdump2, cmdOutput2, _, err2 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, pod2.name, "--", "bash", "-c", tcpdumpCmd2).Background()
+		defer cmdTcpdump2.Process.Kill()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		cmdTcpdump2.Wait()
+		e2e.Logf("The captured packet is %s", cmdOutput2.String())
+		expPacket2 := strconv.Itoa(pod2.port) + ": Flags [S]"
+		o.Expect(strings.Contains(cmdOutput2.String(), expPacket2)).To(o.BeTrue())
+
+		exutil.By("7. Create a udn hello pod with startup probe in ns1")
+		pod3 := udnPodWithProbeResource{
+			name:             "hello-pod-ns1-startup",
+			namespace:        ns,
+			label:            "hello-pod",
+			port:             startupProbePort,
+			failurethreshold: 100,
+			periodseconds:    2,
+			template:         udnPodStartupTemplate,
+		}
+		pod3.createUdnPodWithProbe(oc)
+		waitPodReady(oc, pod3.namespace, pod3.name)
+
+		exutil.By("8. Capture packets in pod " + pod3.name + ", check readiness probe traffic is allowed via default network")
+		tcpdumpCmd3 := fmt.Sprintf("timeout 10s tcpdump -nni eth0 port %v", pod3.port)
+		cmdTcpdump3, cmdOutput3, _, err3 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, pod3.name, "--", "bash", "-c", tcpdumpCmd3).Background()
+		defer cmdTcpdump3.Process.Kill()
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		cmdTcpdump3.Wait()
+		e2e.Logf("The captured packet is %s", cmdOutput3.String())
+		expPacket3 := strconv.Itoa(pod3.port) + ": Flags [S]"
+		o.Expect(strings.Contains(cmdOutput3.String(), expPacket3)).To(o.BeTrue())
 	})
 })
