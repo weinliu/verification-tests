@@ -1596,7 +1596,12 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		)
 		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		if err == nil {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		kafaksNs := "kafka-52384"
@@ -1659,7 +1664,13 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		exutil.By("Create a kedacontroller with default template")
 		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		if err == nil {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		}
+
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		var scaledObjectStatus string
@@ -1669,6 +1680,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 			namespace:  "",
 			template:   triggerAuthenticationTempl,
 		}
+
 		cmaNs := "cma-52385"
 		defer deleteProject(oc, cmaNs)
 		createProject(oc, cmaNs)
