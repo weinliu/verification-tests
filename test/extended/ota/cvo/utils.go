@@ -32,12 +32,6 @@ type JSONp struct {
 	Valu interface{} `json:"value,omitempty"`
 }
 
-type invalidStore struct {
-	value   []map[string]string
-	path    string
-	errinfo string
-}
-
 type annotationCO struct {
 	name       string
 	annotation map[string]string

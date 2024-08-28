@@ -585,43 +585,6 @@ func skipUnsupportedOCPVer(oc *exutil.CLI, version string) {
 	}
 }
 
-// Check metadata in the OSUS application works and return digests
-func checkMetadata(oc *exutil.CLI, podName string) (digests []string, err error) {
-	e2e.Logf("Check the metadata service works...")
-	// Workaound OCPBUGS-33292, will restore it after the bug fix
-	// instance, err := getOSUSApp(oc)
-	// if err != nil {
-	// 	 return
-	// }
-	// MetadataURI, err := oc.AsAdmin().Run("get").Args("-o", "jsonpath={.status.MetadataURI}", "updateservice", instance).Output()
-
-	host, err := oc.AsAdmin().Run("get").Args("route", "update-service-oc-mirror-meta-route", "-o", "jsonpath={.spec.host}").Output()
-	if err != nil || host == "" {
-		return nil, fmt.Errorf("fail to get metadata URI: %v", err)
-	}
-	MetadataURI := "https://" + host
-	result, err := oc.AsAdmin().Run("exec").Args(podName, "-c", "graph-builder", "--", "ls", "/var/lib/cincinnati/graph-data/signatures/sha256/").Output()
-	if err != nil || result == "" {
-		return nil, fmt.Errorf("fail to get signatures info: %v", err)
-	}
-	digests = strings.Fields(result)
-	transCfg := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: transCfg}
-	for _, digest := range digests {
-		api := MetadataURI + "/api/upgrades_info/signatures/sha256=" + digest + "/signature-1"
-		response, err := client.Get(api)
-		if err != nil {
-			return nil, fmt.Errorf("fail to access metadataURI through %s: %v", api, err)
-		}
-		if response.StatusCode != 200 {
-			return nil, fmt.Errorf("no signature found for %s, return: %d", digest, response.StatusCode)
-		}
-	}
-	return
-}
-
 // check if osus instance re-deployed sucessfully
 func verifyAppRolling(oc *exutil.CLI, usname string, prelist []string) (postlist []string, err error) {
 	e2e.Logf("Waiting for operand pods rolling...")
