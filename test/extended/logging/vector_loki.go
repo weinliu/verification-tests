@@ -3256,6 +3256,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
+		// Creating cluster roles to allow read access from LokiStack
+		defer deleteLokiClusterRolesForReadAccess(oc)
+		createLokiClusterRolesForReadAccess(oc)
+
 		g.By("Create app project with non-admin/regular user")
 		oc.SetupProject()
 		userName := oc.Username()
@@ -3365,6 +3369,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
+
+		// Creating cluster roles to allow read access from LokiStack
+		defer deleteLokiClusterRolesForReadAccess(oc)
+		createLokiClusterRolesForReadAccess(oc)
 
 		g.By("Create RBAC for groups to access infra/audit logs")
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "infra-admin-group-67643").Execute()

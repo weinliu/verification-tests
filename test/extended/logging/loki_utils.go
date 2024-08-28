@@ -1622,3 +1622,21 @@ func (l lokiStack) validateExternalObjectStorageForLogs(oc *exutil.CLI, tenants 
 		}
 	}
 }
+
+// This function creates the cluster roles 'cluster-logging-application-view', 'cluster-logging-infrastructure-view' and 'cluster-logging-audit-view' introduced
+// for fine grained read access to LokiStack logs. The ownership of these roles is moved to Cluster Observability Operator (COO) from Cluster Logging Operator (CLO) in Logging 6.0+
+func createLokiClusterRolesForReadAccess(oc *exutil.CLI) {
+	rbacFile := exutil.FixturePath("testdata", "logging", "lokistack", "fine-grained-access-roles.yaml")
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", rbacFile).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), msg)
+}
+
+func deleteLokiClusterRolesForReadAccess(oc *exutil.CLI) {
+	roles := []string{"cluster-logging-application-view", "cluster-logging-infrastructure-view", "cluster-logging-audit-view"}
+	for _, role := range roles {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", role).Output()
+		if err != nil {
+			e2e.Logf("Failed to delete Loki RBAC role '%s': %s", role, msg)
+		}
+	}
+}
