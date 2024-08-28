@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -174,7 +175,7 @@ func CurlPod2PodFailUDN(oc *exutil.CLI, namespaceSrc string, podNameSrc string, 
 }
 
 func (udncrd *udnCRDResource) createUdnCRDSingleStack(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", udncrd.template, "-p", "CRDNAME="+udncrd.crdname, "NAMESPACE="+udncrd.namespace, "CIDR="+udncrd.cidr, "PREFIX="+strconv.Itoa(int(udncrd.prefix)), "MTU="+strconv.Itoa(int(udncrd.mtu)), "ROLE="+udncrd.role)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -186,7 +187,7 @@ func (udncrd *udnCRDResource) createUdnCRDSingleStack(oc *exutil.CLI) {
 }
 
 func (udncrd *udnCRDResource) createUdnCRDDualStack(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", udncrd.template, "-p", "CRDNAME="+udncrd.crdname, "NAMESPACE="+udncrd.namespace, "IPv4CIDR="+udncrd.IPv4cidr, "IPv4PREFIX="+strconv.Itoa(int(udncrd.IPv4prefix)), "IPv6CIDR="+udncrd.IPv6cidr, "IPv6PREFIX="+strconv.Itoa(int(udncrd.IPv6prefix)), "MTU="+strconv.Itoa(int(udncrd.mtu)), "ROLE="+udncrd.role)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -202,7 +203,7 @@ func (udncrd *udnCRDResource) deleteUdnCRDDef(oc *exutil.CLI) {
 }
 
 func waitUDNCRDApplied(oc *exutil.CLI, ns, crdName string) error {
-	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+	checkErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("UserDefinedNetwork/"+crdName, "-n", ns, "-o=jsonpath={.status.conditions[0].type}").Output()
 		if efErr != nil {
 			e2e.Logf("Failed to get UDN %v, error: %s. Trying again", crdName, efErr)
@@ -215,4 +216,28 @@ func waitUDNCRDApplied(oc *exutil.CLI, ns, crdName string) error {
 		return true, nil
 	})
 	return checkErr
+}
+
+func (udncrd *udnCRDResource) createLayer2DualStackUDNCRD(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", udncrd.template, "-p", "CRDNAME="+udncrd.crdname, "NAMESPACE="+udncrd.namespace, "IPv4CIDR="+udncrd.IPv4cidr, "IPv6CIDR="+udncrd.IPv6cidr, "MTU="+strconv.Itoa(int(udncrd.mtu)), "ROLE="+udncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create udn CRD %s due to %v", udncrd.crdname, err))
+}
+
+func (udncrd *udnCRDResource) createLayer2SingleStackUDNCRD(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", udncrd.template, "-p", "CRDNAME="+udncrd.crdname, "NAMESPACE="+udncrd.namespace, "CIDR="+udncrd.cidr, "MTU="+strconv.Itoa(int(udncrd.mtu)), "ROLE="+udncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create udn CRD %s due to %v", udncrd.crdname, err))
 }
