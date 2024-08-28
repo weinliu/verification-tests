@@ -38,6 +38,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		podWithSelinuxProfileTemplate             string
 		errorLoggerPodWithSecuritycontextTemplate string
 		profileRecordingTemplate                  string
+		profileBindingWildcardTemplate            string
 		profileBindingTemplate                    string
 		saRoleRolebindingTemplate                 string
 		selinuxProfileCustomTemplate              string
@@ -84,6 +85,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		podWithOneLabelTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-one-label.yaml")
 		profileRecordingTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-recording.yaml")
 		profileBindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-binding.yaml")
+		profileBindingWildcardTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-binding-wildcard.yaml")
 		saRoleRolebindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/sa-previleged-role-rolebinding.yaml")
 		workloadDaeTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-daemonset.yaml")
 		workloadDeployTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment.yaml")
@@ -1044,6 +1046,72 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		}
 		result2, _ := oc.AsAdmin().Run("exec").Args(podBusyboxNs2, "-n", ns2, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
 		if strings.Contains(result2, "/tmpo/foo") && !strings.Contains(result2, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result2)
+		}
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-ROSA-ARO-OSD_CCS-ConnectedOnly-High-75255-Check profilebinding could use wildcard attribute to bind all new pods with a default seccompprofile in a given namespace", func() {
+		ns := "test-spo-" + getRandomString()
+		pod1 := "test-pod-1-" + getRandomString()
+		pod2 := "test-pod-2-" + getRandomString()
+
+		var (
+			seccomp = seccompProfile{
+				name:      "sleep-sh-pod-" + getRandomString(),
+				namespace: ns,
+				template:  secProfileTemplate,
+			}
+			profileBinding = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   ns,
+				kind:        "SeccompProfile",
+				profilename: seccomp.name,
+				image:       "quay.io/openshifttest/busybox:latest",
+				template:    profileBindingWildcardTemplate,
+			}
+		)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns, ns})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns, "-n", ns, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		g.By("Create seccompprofiles and check status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"seccompprofile", ns, seccomp.name})
+		seccomp.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", seccomp.name, "-n", ns, "-o=jsonpath={.status.status}"})
+
+		g.By("Created a pod!!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"pod", ns, pod1})
+		errPod1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podBusybox, "-p", "NAME="+pod1, "NAMESPACE="+ns)
+		o.Expect(errPod1).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", pod1, "-n", ns, "-o=jsonpath={.status.phase}"})
+
+		g.By("Create profilebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilebinding", ns, profileBinding.name})
+		profileBinding.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profileBinding.name, ok, []string{"profilebinding", "-n", ns,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Created pods with seccompprofiles and check pods status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"pod", ns, pod2})
+		errPod2 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podBusybox, "-p", "NAME="+pod2, "NAMESPACE="+ns)
+		o.Expect(errPod2).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", pod2, "-n", ns, "-o=jsonpath={.status.phase}"})
+
+		g.By("Check the securityContext and whether mkdir operator allowed for pods !!!")
+		localhostProfile := "operator/" + ns + "/" + seccomp.name + ".json"
+		newCheck("expect", asAdmin, withoutNamespace, compare, localhostProfile, ok, []string{"pod", pod1, "-n", ns, "-o=jsonpath={.spec.securityContext}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, "operator/"+ns+"/"+seccomp.name+".json", ok, []string{"pod", pod2, "-n", ns, "-o=jsonpath={.spec.securityContext.seccompProfile}"})
+		result1, _ := oc.AsAdmin().Run("exec").Args(pod1, "-n", ns, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result1, "/tmpo/foo") && !strings.Contains(result1, "Operation not permittedd") {
+			e2e.Logf("%s is expected result", result1)
+		}
+		result2, _ := oc.AsAdmin().Run("exec").Args(pod2, "-n", ns, "--", "sh", "-c", "mkdir /tmp/foo", "&&", "ls", "-d", "/tmp/foo").Output()
+		if strings.Contains(result2, "Operation not permittedd") {
 			e2e.Logf("%s is expected result", result2)
 		}
 	})
