@@ -769,4 +769,148 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		expPacket3 := strconv.Itoa(pod3.port) + ": Flags [S]"
 		o.Expect(strings.Contains(cmdOutput3.String(), expPacket3)).To(o.BeTrue())
 	})
+
+	g.It("Author:anusaxen-Critical-75876-Check udn pods are not isolated if same nad network is shared across two namespaces(layer 2)", func() {
+		var (
+			udnNadtemplate       = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			udnPodTemplate       = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			mtu            int32 = 1300
+		)
+
+		ipStackType := checkIPStackType(oc)
+		g.By("1. Create first namespace")
+		ns1 := oc.Namespace()
+
+		g.By("2. Create 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		nadResourcename := []string{"l2-network-" + ns1, "l2-network-" + ns2}
+		nadNS := []string{ns1, ns2}
+		var subnet string
+		if ipStackType == "ipv4single" {
+			subnet = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				subnet = "2010:100:200::0/60"
+			} else {
+				subnet = "10.150.0.0/16,2010:100:200::0/60"
+			}
+		}
+
+		nad := make([]udnNetDefResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			nad[i] = udnNetDefResource{
+				nadname:             nadResourcename[i],
+				namespace:           nadNS[i],
+				nad_network_name:    "l2-network",
+				topology:            "layer2",
+				subnet:              subnet,
+				mtu:                 mtu,
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[i],
+				role:                "primary",
+				template:            udnNadtemplate,
+			}
+			nad[i].createUdnNad(oc)
+		}
+
+		g.By("create a udn hello pod in ns1")
+		pod1 := udnPodResource{
+			name:      "hello-pod-ns1",
+			namespace: ns1,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod1.createUdnPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("create a udn hello pod in ns2")
+		pod2 := udnPodResource{
+			name:      "hello-pod-ns2",
+			namespace: ns2,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+
+		pod2.createUdnPod(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		//udn network connectivity should NOT be isolated
+		CurlPod2PodPassUDN(oc, ns1, pod1.name, ns2, pod2.name)
+		//default network connectivity should be isolated
+		CurlPod2PodFail(oc, ns1, pod1.name, ns2, pod2.name)
+	})
+
+	g.It("Author:anusaxen-Critical-75875-Check udn pods isolation on user defined networks (layer 2)", func() {
+		var (
+			udnNadtemplate       = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			udnPodTemplate       = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			mtu            int32 = 1300
+		)
+
+		ipStackType := checkIPStackType(oc)
+		g.By("1. Create first namespace")
+		ns1 := oc.Namespace()
+
+		g.By("2. Create 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		nadResourcename := []string{"l2-network-" + ns1, "l2-network-" + ns2}
+		nadNS := []string{ns1, ns2}
+		var subnet []string
+		if ipStackType == "ipv4single" {
+			subnet = []string{"10.150.0.0/16", "10.151.0.0/16"}
+		} else {
+			if ipStackType == "ipv6single" {
+				subnet = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+			} else {
+				subnet = []string{"10.150.0.0/16,2010:100:200::0/60", "10.151.0.0/16,2011:100:200::0/60"}
+			}
+		}
+
+		nad := make([]udnNetDefResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			nad[i] = udnNetDefResource{
+				nadname:             nadResourcename[i],
+				namespace:           nadNS[i],
+				nad_network_name:    nadResourcename[i],
+				topology:            "layer2",
+				subnet:              subnet[i],
+				mtu:                 mtu,
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[i],
+				role:                "primary",
+				template:            udnNadtemplate,
+			}
+			nad[i].createUdnNad(oc)
+		}
+		g.By("create a udn hello pod in ns1")
+		pod1 := udnPodResource{
+			name:      "hello-pod-ns1",
+			namespace: ns1,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod1.createUdnPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("create a udn hello pod in ns2")
+		pod2 := udnPodResource{
+			name:      "hello-pod-ns2",
+			namespace: ns2,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+
+		pod2.createUdnPod(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		//udn network connectivity should be isolated
+		CurlPod2PodFailUDN(oc, ns1, pod1.name, ns2, pod2.name)
+		//default network connectivity should also be isolated
+		CurlPod2PodFail(oc, ns1, pod1.name, ns2, pod2.name)
+	})
+
 })
