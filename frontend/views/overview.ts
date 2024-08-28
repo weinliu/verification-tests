@@ -1,6 +1,6 @@
 const feature_name_map = {
   'OpenShift AI': 'Red Hat OpenShift AI',
-  'OpenShift LightSpeed': 'OpenShift Lightspeed Operator'
+  'OpenShift Lightspeed': 'OpenShift Lightspeed Operator'
   },
 export const Overview = {
   goToDashboard: () => {
