@@ -537,7 +537,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		exutil.By("Prune .hostname, the CLF should be rejected")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/in", "value": [".hostname",".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}]`
 		clf.update(oc, "", patch, "--type=json")
-		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelinesStatus[0].message}"})
+		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelineConditions[0].message}"})
 
 		exutil.By("Update CLF to only reserve several fields")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift",".hostname"]}}]`
@@ -562,7 +562,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		exutil.By("Prune .hostname, the CLF should be rejected")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/notIn", "value": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift"]}]`
 		clf.update(oc, "", patch, "--type=json")
-		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelinesStatus[0].message}"})
+		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelineConditions[0].message}"})
 
 		exutil.By("Combine in and notIn")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".hostname"],

@@ -795,7 +795,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("update CLF to set invalid glob for namespace")
 			patch := `[{"op":"add","path":"/spec/inputs","value":[{"name":"new-app","type":"application","application":{"excludes":[{"namespace":"invalid-name@"}],"includes":[{"namespace":"tes*t"}]}}]},{"op":"replace","path":"/spec/pipelines/0/inputRefs","value":["new-app"]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, "globs must match", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputsStatus[0].message}"})
+			checkResource(oc, true, false, "globs must match", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.inputConditions[0].message}"})
 
 			exutil.By("update CLF to set invalid sources for infrastructure logs")
 			patch = `[{"op":"replace","path":"/spec/inputs","value":[{"name":"selected-infra","type":"infrastructure","infrastructure":{"sources":["nodesd","containersf"]}}]},{"op":"replace","path":"/spec/pipelines/0/inputRefs","value":["selected-infra"]}]`
@@ -884,10 +884,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.By("verify filtersStatus show error when prune fields include .log_type or .message")
 			patch = `[{"op":"add","path":"/spec/filters","value":[{"name":"prune-logs","prune":{"in":[".log_type",".message"]},"type":"prune"}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["prune-logs"]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be removed from the`+" `in` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filtersStatus[0].message}"})
+			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be removed from the`+" `in` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filterConditions[0].message}"})
 			patch = `[{"op":"replace","path":"/spec/filters","value":[{"name":"prune-logs","prune":{"notIn":[".kubernetes",".\"@timestamp\"",".openshift",".hostname"]},"type":"prune"}]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be included in`+" the `notIn` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filtersStatus[0].message}"})
+			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be included in`+" the `notIn` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filterConditions[0].message}"})
 
 		})
 	})

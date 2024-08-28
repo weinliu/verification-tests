@@ -14,7 +14,7 @@ objects:
       receiver:
         type: http
         http:
-          format: kubeApiAudit
+          format: kubeAPIAudit
         port: 8443
       type: receiver
     outputs:

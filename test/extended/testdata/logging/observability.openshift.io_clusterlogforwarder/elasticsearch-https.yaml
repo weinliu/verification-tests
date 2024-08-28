@@ -57,7 +57,7 @@ parameters:
 - name: RESOURCES
   value: "{}"
 - name: MANAGEMENT_STATE
-  value: "managed"
+  value: "Managed"
 - name: TUNING
   value: "{}"
 - name: INDEX

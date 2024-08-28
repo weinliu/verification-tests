@@ -38,7 +38,7 @@ parameters:
 - name: URL
   value: tls://rsyslogserver.openshift-logging.svc:6514
 - name: RFC
-  value: rfc5424
+  value: RFC5424
 - name: INPUTREFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME

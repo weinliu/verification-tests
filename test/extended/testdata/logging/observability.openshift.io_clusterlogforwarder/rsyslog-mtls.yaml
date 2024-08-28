@@ -49,4 +49,4 @@ parameters:
 - name: SERVICE_ACCOUNT_NAME
   value: ""
 - name: RFC
-  value: rfc5424
+  value: RFC5424

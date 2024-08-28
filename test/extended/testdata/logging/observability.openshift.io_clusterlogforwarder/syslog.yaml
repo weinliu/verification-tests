@@ -40,4 +40,4 @@ parameters:
 - name: INPUT_REFS
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: RFC
-  value: rfc5424
+  value: RFC5424

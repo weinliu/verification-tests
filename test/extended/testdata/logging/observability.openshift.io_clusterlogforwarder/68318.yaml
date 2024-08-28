@@ -10,7 +10,7 @@ objects:
     namespace: ${NAMESPACE}
   spec:
     filters:
-    - kubeApiAudit:
+    - kubeAPIAudit:
         omitStages:
         - RequestReceived
         rules:
@@ -20,8 +20,8 @@ objects:
             resources:
             - pods
       name: my-policy-0
-      type: kubeApiAudit
-    - kubeApiAudit:
+      type: kubeAPIAudit
+    - kubeAPIAudit:
         omitResponseCodes: []
         rules:
         - level: Request
@@ -31,7 +31,7 @@ objects:
             - pods
             - secrets
       name: my-policy-1
-      type: kubeApiAudit
+      type: kubeAPIAudit
     managementState: ${MANAGEMENT_STATE}
     outputs:
     - name: lokistack
@@ -70,6 +70,6 @@ parameters:
 - name: LOKISTACK_NAMESPACE
   value: "openshift-logging"
 - name: MANAGEMENT_STATE
-  value: "managed"
+  value: "Managed"
 - name: SECRET_NAME
   value: ""

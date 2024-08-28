@@ -71,4 +71,4 @@ parameters:
 - name: MAX_WRITE
   value: "10M"
 - name: DELIVERY
-  value: "atLeastOnce"
+  value: "AtLeastOnce"

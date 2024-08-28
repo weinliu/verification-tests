@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "RFC=rfc3164", "URL=udp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
+			clf.create(oc, "RFC=RFC3164", "URL=udp://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:514")
 
 			g.By("Check logs in rsyslog server")
 			rsyslog.checkData(oc, true, "app-container.log")

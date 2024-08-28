@@ -9,7 +9,7 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    managementState: managed
+    managementState: Managed
     outputs:
     - name: cloudwatch
       type: cloudwatch

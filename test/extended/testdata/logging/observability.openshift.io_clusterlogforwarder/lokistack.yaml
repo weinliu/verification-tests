@@ -46,7 +46,7 @@ parameters:
 - name: LOKISTACK_NAMESPACE
   value: "openshift-logging"
 - name: MANAGEMENT_STATE
-  value: "managed"
+  value: "Managed"
 - name: TUNING
   value: "{}"
 - name: SECRET_NAME
