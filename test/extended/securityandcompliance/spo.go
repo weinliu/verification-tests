@@ -35,12 +35,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		podWithProfileTemplate                    string
 		selinuxProfileNginxTemplate               string
 		podBusybox                                string
+		podBusyboxSaTemplate                      string
 		podWithSelinuxProfileTemplate             string
 		errorLoggerPodWithSecuritycontextTemplate string
 		profileRecordingTemplate                  string
 		profileBindingWildcardTemplate            string
 		profileBindingTemplate                    string
 		saRoleRolebindingTemplate                 string
+		sccSelinuxprofileTemplate                 string
 		selinuxProfileCustomTemplate              string
 		workloadDaeTemplate                       string
 		workloadDeployTemplate                    string
@@ -79,6 +81,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		pathWebhookBinding = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-binding.yaml")
 		pathWebhookRecording = filepath.Join(buildPruningBaseDir, "/spo/patch-webhook-recording.yaml")
 		podBusybox = filepath.Join(buildPruningBaseDir, "spo/pod-busybox.yaml")
+		podBusyboxSaTemplate = filepath.Join(buildPruningBaseDir, "spo/pod-busybox-sa.yaml")
 		podLegacySeccompTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-legacy-seccomp.yaml")
 		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
 		podWithLabelsTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-pod-with-labels.yaml")
@@ -87,6 +90,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		profileBindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-binding.yaml")
 		profileBindingWildcardTemplate = filepath.Join(buildPruningBaseDir, "/spo/profile-binding-wildcard.yaml")
 		saRoleRolebindingTemplate = filepath.Join(buildPruningBaseDir, "/spo/sa-previleged-role-rolebinding.yaml")
+		sccSelinuxprofileTemplate = filepath.Join(buildPruningBaseDir, "/spo/scc-selinuxprofile.yaml")
 		workloadDaeTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-daemonset.yaml")
 		workloadDeployTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment.yaml")
 		workloadDeployHelloTemplate = filepath.Join(buildPruningBaseDir, "/spo/workload-deployment-hello-openshift.yaml")
@@ -1198,6 +1202,86 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		o.Expect(result1).Should(o.BeEmpty())
 		result2, _ := oc.AsAdmin().Run("logs").Args("pod/"+podErrorloggerNs2, "-n", ns2, "-c", "errorlogger").Output()
 		o.Expect(strings.Contains(result2, "Permission denied")).To(o.BeTrue())
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-ROSA-ARO-OSD_CCS-ConnectedOnly-High-75305-Check profilebinding working as expected for selinuxprofile", func() {
+		ns := "do-binding" + getRandomString()
+		errorLoggerSelTemplate := filepath.Join(buildPruningBaseDir, "spo/selinux-profile-errorlogger.yaml")
+		errorLoggerPodTemplate := filepath.Join(buildPruningBaseDir, "spo/pod-errorlogger.yaml")
+		podBefore := "pod-before-" + getRandomString()
+		podAfter := "pod-after-" + getRandomString()
+		saName := "test-profilebinding-" + getRandomString()
+		sccName := "test-profilebinding-" + getRandomString()
+
+		var (
+			selinuxprofile = selinuxProfile{
+				name:      "error-logger-" + getRandomString(),
+				namespace: ns,
+				template:  errorLoggerSelTemplate,
+			}
+			profilebinding = profileBindingDescription{
+				name:        "spo-binding-sec-" + getRandomString(),
+				namespace:   ns,
+				kind:        "SelinuxProfile",
+				profilename: selinuxprofile.name,
+				template:    profileBindingWildcardTemplate,
+			}
+		)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"ns", ns, ns})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns, "-n", ns, "spo.x-k8s.io/enable-binding=true", "--overwrite=true")
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		g.By("Created a pod !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"pod", ns, podBefore})
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodTemplate, "-p", "NAME="+podBefore, "NAMESPACE="+ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertPodToBeReady(oc, podBefore, ns)
+		newCheck("expect", asAdmin, withoutNamespace, contain, `{"capabilities":{"drop":["MKNOD"]}}`, ok, []string{"pod", podBefore, "-n", ns,
+			"-o=jsonpath={.spec.initContainers[0].securityContext}"}).check(oc)
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+podBefore, "-c", "errorlogger", "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(msg, `/var/log/test.log: Permission denied`)).To(o.BeTrue())
+
+		g.By("Create selinuxprofile and check status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"selinuxprofile", ns, selinuxprofile.name})
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxprofile.template, "-p", "NAME="+selinuxprofile.name, "NAMESPACE="+selinuxprofile.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxprofile.name, "-o=jsonpath={.status.status}", "-n", ns)
+		usageNs1 := selinuxprofile.name + "_" + selinuxprofile.namespace + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usageNs1, ok, []string{"selinuxprofiles", selinuxprofile.name, "-n", selinuxprofile.namespace,
+			"-o=jsonpath={.status.usage}"}).check(oc)
+
+		g.By("Create profilebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"profilebinding", ns, profilebinding.name})
+		profilebinding.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, profilebinding.name, ok, []string{"profilebinding", "-n", ns,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Created pods with seccompprofiles and check pods status !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"sa", ns, saName})
+		_, errCreate := oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", saName, "-n", ns).Output()
+		o.Expect(errCreate).NotTo(o.HaveOccurred())
+		//sccSelinuxprofileTemplate
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"scc", ns, sccName})
+		user := "system:serviceaccount:" + ns + ":" + saName
+		errApply := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sccSelinuxprofileTemplate, "-n", ns, "-p", "NAME="+sccName, "USER="+user)
+		o.Expect(errApply).NotTo(o.HaveOccurred())
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"pod", ns, podAfter})
+		//podBusyboxSaTemplate
+		errPodAfter := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podBusyboxSaTemplate, "-p", "NAME="+podAfter, "NAMESPACE="+ns, "SERVICEACCOUNTNAME="+saName)
+		o.Expect(errPodAfter).NotTo(o.HaveOccurred())
+		exutil.AssertPodToBeReady(oc, podAfter, ns)
+
+		g.By("Check whether the profilebinding take effect !!!")
+		seLinuxOptionsType := selinuxprofile.name + "_" + selinuxprofile.namespace + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, seLinuxOptionsType, nok, []string{"pod", podBefore, "-n", ns, "-o=jsonpath={.spec.securityContext}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, seLinuxOptionsType, ok, []string{"pod", podAfter, "-n", ns, "-o=jsonpath={.spec.securityContext.seLinuxOptions.type}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ns+"/"+podAfter, ok, []string{"profilebinding", profilebinding.name, "-n", ns, "-o=jsonpath={.status.activeWorkloads}"}).check(oc)
 	})
 
 	// author: xiyuan@redhat.com

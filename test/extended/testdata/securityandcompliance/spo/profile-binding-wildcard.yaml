@@ -1,7 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: spo-profile-recording-template
+  name: spo-profile-recording-wildcard-template
 objects:
 - apiVersion: security-profiles-operator.x-k8s.io/v1alpha1
   kind: ProfileBinding
@@ -18,4 +18,3 @@ parameters:
 - name: NAMESPACE
 - name: KIND
 - name: PROFILENAME
-- name: IMAGE
