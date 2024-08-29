@@ -138,12 +138,15 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer func() {
-			errApply := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filePath).Execute()
-			o.Expect(errApply).NotTo(o.HaveOccurred())
-			waitForDeployStatus(oc, "metal3", machineAPINamespace, "True")
-			cboStatus, err := checkOperator(oc, "baremetal")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(cboStatus).To(o.BeTrue())
+			err := oc.AsAdmin().Run("get").Args("provisioning", "provisioning-configuration").Execute()
+			if err != nil {
+				errApply := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filePath).Execute()
+				o.Expect(errApply).NotTo(o.HaveOccurred())
+				waitForDeployStatus(oc, "metal3", machineAPINamespace, "True")
+				cboStatus, err := checkOperator(oc, "baremetal")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(cboStatus).To(o.BeTrue())
+			}
 		}()
 
 		g.By("Delete provisioning-configuration")
