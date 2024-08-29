@@ -1624,4 +1624,234 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
 	})
 
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75425-Validate oc-mirror is able to pull hypershift kubevirt coreos container image and mirror the same [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case75425"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-75425.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputm2d, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("Mirror2disk for kubevirt coreos container image failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(kubeVirtContainerImageOutputm2d, "kubeVirtContainer set to true [ including : quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f7f96da0be48b0010bcc45caec160409cbdbc50c15e3cf5f47abfa6203498c3b ]") {
+				e2e.Logf("Mirror to disk for KubeVirt CoreOs Container image completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for kubevirt core os container failed")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputd2m, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("Disk2mirror for kubeVirt coreos container image failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(kubeVirtContainerImageOutputd2m, "kubeVirtContainer set to true [ including : quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f7f96da0be48b0010bcc45caec160409cbdbc50c15e3cf5f47abfa6203498c3b ]") {
+				e2e.Logf("Disk to mirror for KubeVirt CoreOs Container image completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for KubeVirt CoreOs Container image failed")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputm2m, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName+"/m2m", "--workspace", "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for KubeVirt Coreos Container image failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(kubeVirtContainerImageOutputm2m, "kubeVirtContainer set to true [ including : quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f7f96da0be48b0010bcc45caec160409cbdbc50c15e3cf5f47abfa6203498c3b ]") {
+				e2e.Logf("Mirror to mirror for KubeVirt CoreOs Container image completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror for kubevirt coreos container image still failed")
+
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75437-Validate oc-mirror does not error out when kubeVirtContainer is set to false in the ImageSetConfig yaml [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case75437"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-75437.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputm2d, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("Mirror2disk when kubevirtContainer set to false is still failing, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(kubeVirtContainerImageOutputm2d, "kubeVirtContainer set to true [ including : quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f7f96da0be48b0010bcc45caec160409cbdbc50c15e3cf5f47abfa6203498c3b ]") {
+				e2e.Logf("Mirror to disk completed successfully when kubeVirtContainer is set to false in the imageSetConfig.yaml file")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed, when kubeVirtContainer is set to false")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputd2m, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("Disk2mirror when kubeVirtContainer set to false is still failing, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(kubeVirtContainerImageOutputd2m, "kubeVirtContainer set to true [ including : quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f7f96da0be48b0010bcc45caec160409cbdbc50c15e3cf5f47abfa6203498c3b ]") {
+				e2e.Logf("Disk to mirror when kubeVirtContainer set to false has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror still failed, when kubeVirtContainer is set to false")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputm2m, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName+"/m2m", "--workspace", "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror when kubeVirtContainer set to false still failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(kubeVirtContainerImageOutputm2m, "kubeVirtContainer set to true [ including : quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f7f96da0be48b0010bcc45caec160409cbdbc50c15e3cf5f47abfa6203498c3b ]") {
+				e2e.Logf("Mirror to mirror when kubeVirtContainer set to false has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed, when kubevirtContainer is set to false")
+
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75438-Validate oc-mirror does not error out when kubeVirtContainer is set to true for a release that does not contain this image [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case75438"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-75438.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputm2d, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("Mirror2disk when kubeVirtContainer set to true for a release that does not have this image failing, retrying...")
+				return false, nil
+			}
+			if strings.Contains(kubeVirtContainerImageOutputm2d, "could not find kubevirt image in release payload") {
+				e2e.Logf("Mirror to disk completed successfully when kubeVirtContainer set to true for a release that does not have this image")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but the mirror2disk still failed, when kubeVirtContainer set to true for a release that does not have this image")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputd2m, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("Disk2mirror when kubeVirtContainer set to true for a release that does not have this image is still failing, retrying...")
+				return false, nil
+			}
+			if strings.Contains(kubeVirtContainerImageOutputd2m, "could not find kubevirt image in release payload") {
+				e2e.Logf("Disk to mirror when kubeVirtContainer set to true for a release that does not have this image completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but the disk2mirror still failed, when kubeVirtContainer set to true for a release that does not have this image")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			kubeVirtContainerImageOutputm2m, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName+"/m2m", "--workspace", "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror when kubeVirtContainer set to true that does not contain this image still failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(kubeVirtContainerImageOutputm2m, "could not find kubevirt image in release payload") {
+				e2e.Logf("Mirror to mirror when kubeVirtContainer set to true for a release that does not have this image has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed, when kubevirtContainer set to true for a release that does not have this image")
+
+	})
 })
