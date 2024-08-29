@@ -1,0 +1,34 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: operator-template
+objects:
+- apiVersion: olm.operatorframework.io/v1alpha1
+  kind: ClusterExtension
+  metadata:
+    name: "${NAME}"
+  spec:
+    catalogSelector:
+      matchLabels:
+        "${LABELKEY}": "${LABELVALUE}"
+    installNamespace: "${INSTALLNAMESPACE}"
+    serviceAccount:
+      name: "${SANAME}"
+    packageName: "${PACKAGE}"
+    channel: "${CHANNEL}"
+    version: "${VERSION}"
+    upgradeConstraintPolicy: "${POLICY}"
+parameters:
+- name: NAME
+- name: INSTALLNAMESPACE
+- name: PACKAGE
+- name: CHANNEL
+- name: VERSION
+- name: SANAME
+- name: POLICY
+  value: "Enforce"
+- name: LABELVALUE
+  # suggest to use case id
+- name: LABELKEY
+  value: "olmv1-test"
+

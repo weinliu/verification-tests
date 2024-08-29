@@ -26,6 +26,8 @@ type ClusterCatalogDescription struct {
 	ContentURL   string
 	Status       string
 	PollInterval string
+	LabelKey     string // default is olmv1-test
+	LabelValue   string // suggest to use case id
 	Template     string
 }
 
@@ -53,6 +55,12 @@ func (clustercatalog *ClusterCatalogDescription) CreateWithoutCheck(oc *exutil.C
 	}
 	if len(clustercatalog.PollInterval) > 0 {
 		paremeters = append(paremeters, "POLLINTERVAL="+clustercatalog.PollInterval)
+	}
+	if len(clustercatalog.LabelKey) > 0 {
+		paremeters = append(paremeters, "LABELKEY="+clustercatalog.LabelKey)
+	}
+	if len(clustercatalog.LabelValue) > 0 {
+		paremeters = append(paremeters, "LABELVALUE="+clustercatalog.LabelValue)
 	}
 	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, paremeters...)
 	return err

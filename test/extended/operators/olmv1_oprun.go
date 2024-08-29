@@ -250,11 +250,16 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
-			ns                           = "ns-75492"
-			sa                           = "sa75492"
+			caseID                       = "75492"
+			ns                           = "ns-" + caseID
+			sa                           = "sa" + caseID
+			labelValue                   = caseID
+			catalogName                  = "clustercatalog-" + caseID
+			ceInsufficientName           = "ce-insufficient-" + caseID
+			ceWrongSaName                = "ce-wrongsa-" + caseID
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension-withselectorlabel.yaml")
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-nginx-insufficient-bundle.yaml")
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
 				Name:      sa,
@@ -272,26 +277,29 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 				Template: saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:     "clustercatalog-75492",
-				Imageref: "quay.io/olmqe/nginx-ok-index:vokv3283",
-				Template: clustercatalogTemplate,
+				Name:       catalogName,
+				Imageref:   "quay.io/olmqe/nginx-ok-index:vokv3283",
+				LabelValue: labelValue,
+				Template:   clustercatalogTemplate,
 			}
 			ce75492Insufficient = olmv1util.ClusterExtensionDescription{
-				Name:             "insufficient-75492",
+				Name:             ceInsufficientName,
 				PackageName:      "nginx-ok-v3277775492",
 				Channel:          "alpha",
 				Version:          ">=0.0.1",
 				InstallNamespace: ns,
 				SaName:           sa,
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 			ce75492WrongSa = olmv1util.ClusterExtensionDescription{
-				Name:             "wrong-75492",
+				Name:             ceWrongSaName,
 				PackageName:      "nginx-ok-v3277775492",
 				Channel:          "alpha",
 				Version:          ">=0.0.1",
 				InstallNamespace: ns,
-				SaName:           "sa754921",
+				SaName:           sa + "1",
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -327,11 +335,15 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
-			ns                           = "ns-75493"
-			sa                           = "sa75493"
+			caseID                       = "75493"
+			ns                           = "ns-" + caseID
+			sa                           = "sa" + caseID
+			labelValue                   = caseID
+			catalogName                  = "clustercatalog-" + caseID
+			ceSufficientName             = "ce-sufficient" + caseID
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension-withselectorlabel.yaml")
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-nginx-limited.yaml")
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
 				Name:      sa,
@@ -349,17 +361,19 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 				Template: saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:     "clustercatalog-75493",
-				Imageref: "quay.io/olmqe/nginx-ok-index:vokv3283",
-				Template: clustercatalogTemplate,
+				Name:       catalogName,
+				Imageref:   "quay.io/olmqe/nginx-ok-index:vokv3283",
+				LabelValue: labelValue,
+				Template:   clustercatalogTemplate,
 			}
 			ce75493 = olmv1util.ClusterExtensionDescription{
-				Name:             "enough-75493",
+				Name:             ceSufficientName,
 				PackageName:      "nginx-ok-v3277775493",
 				Channel:          "alpha",
 				Version:          ">=0.0.1",
 				InstallNamespace: ns,
 				SaName:           sa,
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 		)

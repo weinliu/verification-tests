@@ -22,6 +22,8 @@ type ClusterExtensionDescription struct {
 	InstallNamespace        string
 	SaName                  string
 	UpgradeConstraintPolicy string
+	LabelKey                string // default is olmv1-test
+	LabelValue              string // suggest to use case id
 	Template                string
 	InstalledBundle         string
 	ResolvedBundle          string
@@ -59,6 +61,12 @@ func (clusterextension *ClusterExtensionDescription) CreateWithoutCheck(oc *exut
 	}
 	if len(clusterextension.UpgradeConstraintPolicy) > 0 {
 		paremeters = append(paremeters, "POLICY="+clusterextension.UpgradeConstraintPolicy)
+	}
+	if len(clusterextension.LabelKey) > 0 {
+		paremeters = append(paremeters, "LABELKEY="+clusterextension.LabelKey)
+	}
+	if len(clusterextension.LabelValue) > 0 {
+		paremeters = append(paremeters, "LABELVALUE="+clusterextension.LabelValue)
 	}
 	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, paremeters...)
 	return err
