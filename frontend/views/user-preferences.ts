@@ -72,6 +72,45 @@ export const userPreferences = {
       }
     })
   },
+  toggleLightspeed: (action: string) => {
+    cy.get('input[id="console.hideLightspeedButton"]').as('hideLightspeed').then(($elem) => {
+      const checkedstate = $elem.attr('data-checked-state');
+      if(checkedstate === 'true') {
+        if(action === 'hide'){
+          cy.log('Lightspeed button is already hidden, nothing to do!');
+	} else if(action === 'display')	{
+          cy.log('Lightspeed button is hidden, click to display.');
+          cy.get('@hideLightspeed').click();
+	}	
+      } else if(checkedstate === 'false') {
+        if(action === 'display') {
+          cy.log('Lightspeed button is already displayed, nothing to do!');
+        } else if (action === 'hide') {
+          cy.log('Lightspeed button is displayed, click to hide.');
+          cy.get('@hideLightspeed').click();
+	}
+      }
+    })
+  },
+  checkLightspeedModal: (userRole: string) => {
+    cy.get('.lightspeed__popover-button').click();
+    cy.contains('h1', 'Meet Openshift Lightspeed').should('exist');
+    cy.contains('Benefits').should('exist');
+    if(userRole === 'normal-user') {
+      cy.contains('Must have administrator access').should('exist');
+      cy.contains('Get started in OperatorHub').should('not.exist');
+    }
+    if(userRole === 'cluster-admin') {
+      cy.contains('Must have administrator access').should('not.exist');
+      cy.contains('Get started in OperatorHub').scrollIntoView().click();
+      cy.get('[data-test-id="operator-install-btn"]').should('exist');
+      cy.contains('h1', 'OpenShift Lightspeed Operator', {timeout: 30000}).should('exist');
+    }
+    cy.visit('/');
+    cy.get('.lightspeed__popover-button').click();
+    cy.contains('button', "Don't show again").scrollIntoView().click();
+    cy.url().should('include',`/user-preferences`);
+  },
   getLanguageOptions: () => {
     cy.get('ul > li > a[data-test="tab language"]').click({force: true});
     cy.get('input#default-language-checkbox').uncheck();

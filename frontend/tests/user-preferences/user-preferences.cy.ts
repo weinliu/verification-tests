@@ -13,10 +13,33 @@ describe('user preferences related features', () => {
   });
 
   after(() => {
-    cy.adminCLI(`oc delete project ${projectName}`);
     userPreferences.navToGeneralUserPreferences();
     userPreferences.toggleExactMatch('disable');
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+  });
+
+  it('(OCP-75494,yanpzhan,UserInterface) Show Lightspeed hover button on pages',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
+    cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`).then((result) => {
+      if(result.stdout.includes('lightspeed')){
+	// check lightspeed button with normal user
+        cy.visit('/user-preferences');
+        userPreferences.toggleLightspeed('display');
+        cy.get('button.lightspeed__popover-button').as('lightspeedbutton').should('exist');
+        userPreferences.checkLightspeedModal('normal-user');
+        userPreferences.toggleLightspeed('hide');
+	cy.get('@lightspeedbutton').should('not.exist');
+	// check lightspeed button with cluster-admin user
+	cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+	cy.visit('/user-preferences');
+        userPreferences.toggleLightspeed('hide');
+        cy.get('@lightspeedbutton').should('not.exist');
+        userPreferences.toggleLightspeed('display');
+        cy.get('@lightspeedbutton').should('exist');
+        userPreferences.checkLightspeedModal('cluster-admin');
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+      }else{
+        cy.get('@lightspeedbutton').should('not.exist');
+      }
+    });
   });
 
   it('(OCP-49134,yanpzhan,UserInterface) Support dark theme for admin console',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
@@ -146,6 +169,8 @@ describe('user preferences related features', () => {
     searchPage.searchBy('APIServer');
     cy.wait(3000);
     checkAllItemsExactMatch('APIServer');
+    cy.adminCLI(`oc delete project ${projectName}`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OCP-72562,yapei,UserInterface)Add French and Spanish language support',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
