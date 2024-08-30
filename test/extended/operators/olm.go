@@ -5017,7 +5017,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-Medium-Longduration-NonPreRelease-43975-olm-operator-serviceaccount should not rely on external networking for health check[Disruptive][Slow]", func() {
+	g.It("Author:xzha-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-43975-olm operator serviceaccount should not rely on external networking for health check[Disruptive][Slow]", func() {
 		exutil.By("1) get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
