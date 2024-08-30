@@ -1,0 +1,8 @@
+apiVersion: fileintegrity.openshift.io/v1alpha1
+kind: FileIntegrity
+metadata:
+  name: example-fileintegrity
+spec:
+  debug: true
+  config: 
+    gracePeriod: 30
