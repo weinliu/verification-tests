@@ -387,6 +387,23 @@ func (a *AwsClient) DeleteDhcpOptions(dhcpOptionsID string) error {
 	return err
 }
 
+// GetPlacementGroupByName Get placement group by group-name
+func (a *AwsClient) GetPlacementGroupByName(groupName string) (string, error) {
+	input := &ec2.DescribePlacementGroupsInput{
+		GroupNames: []*string{
+			aws.String(groupName),
+		},
+	}
+	result, err := a.svc.DescribePlacementGroups(input)
+	if err != nil {
+		e2e.Logf("err: %v", err)
+		return "", err
+	}
+	placementGroupID := *result.PlacementGroups[0].GroupId
+	e2e.Logf("The %s placement group ID is %s ", groupName, placementGroupID)
+	return placementGroupID, err
+}
+
 // GetAwsInstanceVPCId gives the instance vpcID
 func (a *AwsClient) GetAwsInstanceVPCId(instanceID string) (string, error) {
 	filters := []*ec2.Filter{

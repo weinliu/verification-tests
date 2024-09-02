@@ -180,9 +180,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		otherUpdateFields := otherUpdateFieldsByCloud[iaasPlatform][updateFieldsCon]
 		otherRecoverFields := otherUpdateFieldsByCloud[iaasPlatform][recoverFieldsCon]
 		if iaasPlatform == clusterinfra.AWS {
-			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if region != "us-east-2" && region != "us-east-1" {
+			clusterinfra.GetAwsCredentialFromCluster(oc)
+			awsClient := exutil.InitAwsSession()
+			_, err := awsClient.GetPlacementGroupByName("pgpartition3")
+			if err != nil {
 				otherUpdateFields = ``
 				otherRecoverFields = ``
 			}
