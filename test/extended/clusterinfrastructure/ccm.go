@@ -587,6 +587,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-NonHyperShiftHOST-Medium-70621-cloud-controller-manager should be Upgradeable is True when Degraded is False [Disruptive]", func() {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.IBMCloud, clusterinfra.Nutanix, clusterinfra.VSphere, clusterinfra.OpenStack)
 		ccm, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager").Output()
 		if !strings.Contains(ccm, "cloud-controller-manager") {
 			g.Skip("This case is not executable when cloud-controller-manager CO is absent")
