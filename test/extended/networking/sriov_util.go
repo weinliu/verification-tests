@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -871,4 +872,133 @@ func (sriovTestPod *sriovTestPodMAC) createSriovTestPodMAC(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create test pod %v", sriovTestPod.name))
+}
+
+// uninstall SRIOV operator, but leave SriovNetworkPoolConfig and openshift-sriov-network-operator namespace behind so offload cases are not impacted
+func uninstallSriovOperator(oc *exutil.CLI, namespace string) {
+
+	// Delete SRIOV network related config except SriovNetworkPoolConfig, subscription, CSV, and DS under openshift-sriov-network-operator namespace
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("sriovnetwork", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting sirovnetwork")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("sriovnetworknodepolicy", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting sirovnetworknodepolicy")
+
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting subscription under openshift-sriov-network-operator namespace")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "--all", "-n", namespace).Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting CSV under openshift-sriov-network-operator namespace")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ds", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting DS under openshift-sriov-network-operator namespace")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", "sriov-network-operator", "-n", namespace, "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting deployment/sriov-network-operator under openshift-sriov-network-operator namespace")
+
+	// Verify SRIOV network related config, subscription, CSV, and DS under openshift-sriov-network-operator namespace are removed
+	sriovconfigs := [6]string{"sriovnetwork", "sriovnetworknodepolicy", "subscription", "csv", "ds", "deployment"}
+	for _, config := range sriovconfigs {
+		sriovChkErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 90*time.Second, false, func(cxt context.Context) (bool, error) {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(config, "-n", namespace).Output()
+			e2e.Logf("\n output after deleting %s: %s\n", config, output)
+			if strings.Contains(output, "not found") || strings.Contains(output, "No resources found") {
+				e2e.Logf("mutatingwebhookconfigs %s is delete successfully", config)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(sriovChkErr, fmt.Sprintf("Failed to delete resource %s", config))
+	}
+
+	// Delete SRIOV related CRD under openshift-sriov-network-operator namespace
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "sriovibnetworks.sriovnetwork.openshift.io "+
+		"sriovnetworknodepolicies.sriovnetwork.openshift.io "+
+		"sriovnetworknodestates.sriovnetwork.openshift.io "+
+		"sriovnetworkpoolconfigs.sriovnetwork.openshift.io "+
+		"sriovnetworks.sriovnetwork.openshift.io "+
+		"sriovoperatorconfigs.sriovnetwork.openshift.io", "-n", namespace, "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting SRIOV related CRD")
+
+	// Verify SRIOV related CRD under openshift-sriov-network-operator namespace are removed
+	chkOutput, _ := exec.Command("bash", "-c", "oc crd | grep sriov").Output()
+	o.Expect(string(chkOutput)).Should(o.BeEmpty(), "Not all SRIOV CRD were removed")
+
+	// Delete webhook related configurations
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("mutatingwebhookconfigurations", "network-resources-injector-config", "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting network-resources-injector-config")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", "sriov-operator-webhook-config", "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting MutatingWebhookConfiguration sriov-operator-webhook-config")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", "sriov-operator-webhook-config", "--ignore-not-found").Execute()
+	exutil.AssertWaitPollNoErr(err, "Got error when deleting ValidatingWebhookConfiguration sriov-operator-webhook-config")
+
+	// Verify webhook related configurations are removed
+	mutatingwebhookconfigs := [2]string{"network-resources-injector-config", "sriov-operator-webhook-config"}
+	for _, config := range mutatingwebhookconfigs {
+		sriovChkErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 90*time.Second, false, func(cxt context.Context) (bool, error) {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfigurations", config).Output()
+			e2e.Logf("\n output after deleting %s: %s\n", config, output)
+			if strings.Contains(output, "not found") || strings.Contains(output, "No resources found") {
+				e2e.Logf("mutatingwebhookconfigs %s is delete successfully", config)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(sriovChkErr, fmt.Sprintf("Failed to delete resource %s", config))
+	}
+
+	sriovChkErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 90*time.Second, false, func(cxt context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ValidatingWebhookConfiguration", "sriov-operator-webhook-config").Output()
+		e2e.Logf("\n\n\n output after deleting ValidatingWebhookConfiguration sriov-operator-webhook-config: %s\n\n\n", output)
+		if strings.Contains(output, "not found") || strings.Contains(output, "No resources found") {
+			e2e.Logf("ValidatingWebhookConfiguration sriov-operator-webhook-config is delete successfully")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(sriovChkErr, "Failed to delete ValidatingWebhookConfiguration sriov-operator-webhook-config")
+}
+
+func installSriovOperator(oc *exutil.CLI, opNamespace string) {
+	var (
+		buildPruningBaseDir   = exutil.FixturePath("testdata", "networking/sriov")
+		namespaceTemplate     = filepath.Join(buildPruningBaseDir, "namespace-template.yaml")
+		operatorGroupTemplate = filepath.Join(buildPruningBaseDir, "operatorgroup-template.yaml")
+		subscriptionTemplate  = filepath.Join(buildPruningBaseDir, "subscription-template.yaml")
+		sriovOperatorconfig   = filepath.Join(buildPruningBaseDir, "sriovoperatorconfig.yaml")
+		opName                = "sriov-network-operators"
+	)
+	sub := subscriptionResource{
+		name:             "sriov-network-operator-subsription",
+		namespace:        opNamespace,
+		operatorName:     opName,
+		channel:          "stable",
+		catalog:          "qe-app-registry",
+		catalogNamespace: "openshift-marketplace",
+		template:         subscriptionTemplate,
+	}
+	ns := namespaceResource{
+		name:     opNamespace,
+		template: namespaceTemplate,
+	}
+	og := operatorGroupResource{
+		name:             opName,
+		namespace:        opNamespace,
+		targetNamespaces: opNamespace,
+		template:         operatorGroupTemplate,
+	}
+	catalogSource := getOperatorSource(oc, "openshift-marketplace")
+	if catalogSource == "" {
+		g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+	}
+	sub.catalog = catalogSource
+	operatorInstall(oc, sub, ns, og)
+	e2e.Logf("Operator install check successfull as part of setup !!!!!")
+	exutil.By("SUCCESS - sriov operator installed")
+	exutil.By("check sriov version if match the ocp version")
+	operatorVersion := getOperatorVersion(oc, sub.name, sub.namespace)
+	ocpversion, _, err := exutil.GetClusterVersion(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(operatorVersion).Should(o.MatchRegexp(ocpversion))
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", sriovOperatorconfig, "-n", opNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	exutil.By("Check all pods in sriov namespace are running")
+	chkSriovOperatorStatus(oc, sub.namespace)
+
 }

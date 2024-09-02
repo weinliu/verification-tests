@@ -418,161 +418,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		}
 	})
 
-	g.It("Author:jechen-Longduration-NonPreRelease-High-63527-Verify ExternallyManaged SR-IOV connectivity with different IP stacks [Disruptive][Flaky]", func() {
-
-		nmstateCRTemplate := filepath.Join(testDataDir, "nmstate", "nmstate-cr-template.yaml")
-		nncpVFTemplate := filepath.Join(testDataDir, "nmstate", "nncp-vfs-specific-node-template.yaml")
-		sriovNodeNetworkPolicyTemplate := filepath.Join(testDataDir, "sriov", "sriovnodepolicy-externallymanaged-template.yaml")
-		sriovNeworkTemplate := filepath.Join(testDataDir, "sriov", "sriovnetwork2-template.yaml")
-		sriovTestPodTemplate := filepath.Join(testDataDir, "sriov", "sriovtestpod2-with-mac-template.yaml")
-		opNamespace := "openshift-nmstate"
-
-		exutil.By("\n 1. Install nmstate operator and create nmstate CR \n")
-		installNMstateOperator(oc)
-		nmstateCR := nmstateCRResource{
-			name:     "nmstate",
-			template: nmstateCRTemplate,
-		}
-		defer deleteNMStateCR(oc, nmstateCR)
-		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
-		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
-		o.Expect(result).To(o.BeTrue())
-		e2e.Logf("SUCCESS - NMState CR Created")
-
-		exutil.By("\n 2. Apply policy to create VFs on SR-IOV node by nmstate \n")
-		VFPolicy := VFPolicyResource{
-			name:     "vf-policy-63527",
-			intfname: sriovDevices[node].InterfaceName,
-			nodename: node,
-			totalvfs: 2,
-			template: nncpVFTemplate,
-		}
-
-		// defer cleanup VFs by recreating VFPolicy with 0 VFs, then defer delete the VFPolicy
-		defer deleteNNCP(oc, VFPolicy.name)
-		defer func() {
-			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, VFPolicy.nodename, "nmcli", "con", "show")
-			o.Expect(deferErr).NotTo(o.HaveOccurred())
-			VFPolicy.totalvfs = 0
-			if strings.Contains(ifaces, VFPolicy.intfname) {
-				VFPolicy.createVFPolicy(oc)
-				nncpErr1 := checkNNCPStatus(oc, VFPolicy.name, "Available")
-				exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
-				e2e.Logf("SUCCESS - NNCP policy to create VFs applied")
-			}
-		}()
-
-		VFPolicy.createVFPolicy(oc)
-		exutil.By("\n 2.1 Verify the policy is applied \n")
-		nncpErr1 := checkNNCPStatus(oc, VFPolicy.name, "Available")
-		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
-		e2e.Logf("SUCCESS - NNCP policy to create VFs applied")
-
-		exutil.By("\n 2.2 Verify the created VFs found in node network state \n")
-		output, nnsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", node, "-ojsonpath={.status.currentState.interfaces[?(@.name==\""+sriovDevices[node].InterfaceName+"\")].ethernet.sr-iov.vfs}").Output()
-		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
-		e2e.Logf("\n output: %v\n", output)
-
-		o.Expect(output).Should(o.And(
-			o.ContainSubstring(sriovDevices[node].InterfaceName+"v0"),
-			o.ContainSubstring(sriovDevices[node].InterfaceName+"v1"),
-		), "Not all %d VFs are created.\n", VFPolicy.totalvfs)
-
-		exutil.By("\n 3. Create SR-IOV policy on the node with ExternallyManaged set to true \n")
-		sriovOpNs = "openshift-sriov-network-operator"
-		sriovNNPolicy := sriovNetworkNodePolicySpecificNode{
-			policyName:   "sriovnn",
-			deviceType:   "netdevice",
-			pfName:       sriovDevices[node].InterfaceName,
-			numVfs:       2,
-			resourceName: "sriovnn",
-			nodename:     node,
-			namespace:    sriovOpNs,
-			template:     sriovNodeNetworkPolicyTemplate,
-		}
-		defer removeResource(oc, true, true, "SriovNetworkNodePolicy", sriovNNPolicy.policyName, "-n", sriovOpNs)
-		sriovNNPolicy.createPolicySpecificNode(oc)
-		waitForSriovPolicyReady(oc, sriovOpNs)
-
-		exutil.By("\n 4. Create a target namespce, then create sriovNetwork to generate net-attach-def on the target namespace \n")
-		ns1 := oc.Namespace()
-		exutil.SetNamespacePrivileged(oc, ns1)
-
-		sriovnetwork := sriovNetwork{
-			name:             sriovNNPolicy.policyName,
-			resourceName:     sriovNNPolicy.resourceName,
-			networkNamespace: ns1,
-			template:         sriovNeworkTemplate,
-			namespace:        sriovOpNs,
-		}
-		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
-		sriovnetwork.createSriovNetwork(oc)
-
-		e2e.Logf("\n expect to see NAD of %s in namespace : %s\n", sriovnetwork.name, ns1)
-		errChk1 := chkNAD(oc, ns1, sriovnetwork.name, true)
-		exutil.AssertWaitPollNoErr(errChk1, "Did not find NAD in the namespace")
-
-		exutil.By("\n 5. Create test pod1 with static MAC and test pod2 with dynamic MAC in target namespace\n")
-		exutil.By("\n Test pods with IPv4, IPv6 and dualstack addresses will be tested in 3 iterations\n")
-		addressPool1 := []string{"192.168.10.1/24", "2001:db8:abcd:0012::1/64", "192.168.10.1/24\", \"2001:db8:abcd:0012::1/64"}
-		addressPool2 := []string{"192.168.10.2/24", "2001:db8:abcd:0012::2/64", "192.168.10.2/24\", \"2001:db8:abcd:0012::2/64"}
-
-		for i := 0; i < 3; i++ {
-			e2e.Logf("\n ************************* No %d set of test pods ******************\n", i+1)
-			exutil.By("\n Create test pod1 on the target namespace \n")
-			sriovTestPod1 := sriovTestPodMAC{
-				name:         "sriov-63527-test-pod1",
-				namespace:    ns1,
-				ipaddr:       addressPool1[i],
-				macaddr:      "20:04:0f:f1:88:01",
-				sriovnetname: sriovnetwork.name,
-				tempfile:     sriovTestPodTemplate,
-			}
-			sriovTestPod1.createSriovTestPodMAC(oc)
-			err := waitForPodWithLabelReady(oc, sriovTestPod1.namespace, "app="+sriovTestPod1.name)
-			exutil.AssertWaitPollNoErr(err, "SRIOV client test pod is not ready")
-
-			exutil.By("\n 5.2 Create test pod2 on the target namespace \n")
-			sriovTestPod2 := sriovTestPodMAC{
-				name:         "sriov-63527-test-pod2",
-				namespace:    ns1,
-				ipaddr:       addressPool2[i],
-				macaddr:      "",
-				sriovnetname: sriovnetwork.name,
-				tempfile:     sriovTestPodTemplate,
-			}
-			sriovTestPod2.createSriovTestPodMAC(oc)
-			err = waitForPodWithLabelReady(oc, sriovTestPod2.namespace, "app="+sriovTestPod2.name)
-			exutil.AssertWaitPollNoErr(err, "SRIOV server test pod is not ready")
-
-			exutil.By("\n 5.3 Check traffic between two test pods \n")
-
-			chkPodsPassTraffic(oc, sriovTestPod1.name, sriovTestPod2.name, "net1", ns1)
-			chkPodsPassTraffic(oc, sriovTestPod2.name, sriovTestPod1.name, "net1", ns1)
-
-			removeResource(oc, true, true, "pod", sriovTestPod1.name, "-n", sriovTestPod1.namespace)
-			removeResource(oc, true, true, "pod", sriovTestPod2.name, "-n", sriovTestPod2.namespace)
-
-			// wait a little before going to next iteration to recreate test pods with next set of addresses
-			time.Sleep(3 * time.Second)
-		}
-
-		exutil.By("\n 6. Remove SR-IOV policy, wait for nns state to be stable, then verify VFs still remind \n")
-		removeResource(oc, true, true, "SriovNetworkNodePolicy", sriovNNPolicy.policyName, "-n", sriovOpNs)
-		waitForSriovPolicyReady(oc, sriovOpNs)
-
-		output, nnsErr1 = oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", node, "-ojsonpath={.status.currentState.interfaces[?(@.name==\""+sriovDevices[node].InterfaceName+"\")].ethernet.sr-iov.vfs}").Output()
-		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
-		e2e.Logf("\n output: %v\n", output)
-
-		o.Expect(output).Should(o.And(
-			o.ContainSubstring(sriovDevices[node].InterfaceName+"v0"),
-			o.ContainSubstring(sriovDevices[node].InterfaceName+"v1"),
-		), "Not all %d VFs reminded!!!", VFPolicy.totalvfs)
-
-	})
-
-	g.It("Author:jechen-Longduration-NonPreRelease-High-63533-ExternallyManaged: Recreate VFs when SR-IOV policy is applied [Disruptive]", func() {
+	g.It("Author:jechen-Longduration-NonPreRelease-High-63533-ExternallyManaged: Recreate VFs when SR-IOV policy is applied [Disruptive][Flaky]", func() {
 
 		nmstateCRTemplate := filepath.Join(testDataDir, "nmstate", "nmstate-cr-template.yaml")
 		nncpAddVFTemplate := filepath.Join(testDataDir, "nmstate", "nncp-vfs-specific-node-template.yaml")
@@ -634,7 +480,6 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		), "Not all %d VFs are created.\n", VFPolicy.totalvfs)
 
 		exutil.By("\n 3. Create SR-IOV policy on the node with ExternallyManaged set to true \n")
-		sriovOpNs = "openshift-sriov-network-operator"
 		sriovNNPolicy := sriovNetworkNodePolicySpecificNode{
 			policyName:   "sriovnn",
 			deviceType:   "netdevice",
@@ -702,8 +547,21 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		removeResource(oc, true, true, "pod", sriovTestPod1.name, "-n", sriovTestPod1.namespace)
 		removeResource(oc, true, true, "pod", sriovTestPod2.name, "-n", sriovTestPod2.namespace)
 
-		exutil.By("\n 6. Apply policy by nmstate to remove VFs then recreate VFs with one extra VF\n")
-		exutil.By("\n 6.1. Apply policy by nmstate to remove VFs\n")
+		exutil.By("\n 6. Remove SR-IOV policy, wait for nns state to be stable, then verify VFs still remind \n")
+		removeResource(oc, true, true, "SriovNetworkNodePolicy", sriovNNPolicy.policyName, "-n", sriovOpNs)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+		output, nnsErr1 = oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", node, "-ojsonpath={.status.currentState.interfaces[?(@.name==\""+sriovDevices[node].InterfaceName+"\")].ethernet.sr-iov.vfs}").Output()
+		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
+		e2e.Logf("\n output: %v\n", output)
+
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(sriovDevices[node].InterfaceName+"v0"),
+			o.ContainSubstring(sriovDevices[node].InterfaceName+"v1"),
+		), "Not all %d VFs reminded!!!", VFPolicy.totalvfs)
+
+		exutil.By("\n 7. Apply policy by nmstate to remove VFs then recreate VFs with one extra VF\n")
+		exutil.By("\n 7.1. Apply policy by nmstate to remove VFs\n")
 		VFPolicy.template = nncpDelVFTemplate
 
 		VFPolicy.createVFPolicy(oc)
@@ -720,7 +578,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 			o.ContainSubstring(sriovDevices[node].InterfaceName+"v1"),
 		), "Not all %d VFs are deleted correctly.\n", VFPolicy.totalvfs)
 
-		exutil.By("\n 6.2. Apply policy by nmstate to add VFs with an extra VF\n")
+		exutil.By("\n 7.2. Apply policy by nmstate to add VFs with an extra VF\n")
 		VFPolicy.template = nncpAddVFTemplate
 		VFPolicy.totalvfs = 3
 
@@ -739,7 +597,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 			o.ContainSubstring(sriovDevices[node].InterfaceName+"v2"),
 		), "Not all %d VFs are added correctly.\n", VFPolicy.totalvfs)
 
-		exutil.By("\n 7. Recreate test pods and verify connectivity betwen two pods\n")
+		exutil.By("\n 8. Recreate test pods and verify connectivity betwen two pods\n")
 		sriovTestPod1.createSriovTestPodMAC(oc)
 		err = waitForPodWithLabelReady(oc, sriovTestPod1.namespace, "app="+sriovTestPod1.name)
 		exutil.AssertWaitPollNoErr(err, "SRIOV client test pod is not ready")
@@ -750,7 +608,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		chkPodsPassTraffic(oc, sriovTestPod1.name, sriovTestPod2.name, "net1", ns1)
 		chkPodsPassTraffic(oc, sriovTestPod2.name, sriovTestPod1.name, "net1", ns1)
 
-		exutil.By("\n 8. Apply policy by nmstate to remove VFs\n")
+		exutil.By("\n 9. Apply policy by nmstate to remove VFs\n")
 		VFPolicy.template = nncpDelVFTemplate
 
 		VFPolicy.createVFPolicy(oc)
@@ -832,7 +690,6 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		), "Not all %d VFs are created.\n", VFPolicy.totalvfs)
 
 		exutil.By("\n 3. Create SR-IOV policy on the node with ExternallyManaged set to true \n")
-		sriovOpNs = "openshift-sriov-network-operator"
 		sriovNNPolicy := sriovNetworkNodePolicySpecificNode{
 			policyName:   "sriovnn",
 			deviceType:   "netdevice",
@@ -940,6 +797,252 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 			o.ContainSubstring(sriovDevices[node].InterfaceName+"v1"),
 		), "Not all %d VFs are deleted correctly.\n", VFPolicy.totalvfs)
 
+	})
+
+	g.It("Author:jechen-Longduration-NonPreRelease-High-63527-High-63537-High-46528-High-46530-High-46532-High-46533-Verify ExternallyManaged functionality with different IP protocols before and after SRIOV operator removal and re-installation [Disruptive]", func() {
+
+		nmstateCRTemplate := filepath.Join(testDataDir, "nmstate", "nmstate-cr-template.yaml")
+		nncpAddVFTemplate := filepath.Join(testDataDir, "nmstate", "nncp-vfs-specific-node-template.yaml")
+		nncpDelVFTemplate := filepath.Join(testDataDir, "nmstate", "nncp-remove-vfs-specific-node-template.yaml")
+		sriovNodeNetworkPolicyTemplate := filepath.Join(testDataDir, "sriov", "sriovnodepolicy-externallymanaged-template.yaml")
+		sriovNeworkTemplate := filepath.Join(testDataDir, "sriov", "sriovnetwork2-template.yaml")
+		sriovTestPodTemplate := filepath.Join(testDataDir, "sriov", "sriovtestpod2-with-mac-template.yaml")
+		opNamespace := "openshift-nmstate"
+
+		exutil.By("\n  **************** Before SRIOV un-installation: verify externallyManaged SRIOV functionality ***********************\n")
+		exutil.By("\n 1. Before SRIOV un-stallation: install nmstate operator and create nmstate CR \n")
+		installNMstateOperator(oc)
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		exutil.By("\n 2. Before SRIOV un-stallation: Apply policy to create VFs on SR-IOV node by nmstate \n")
+		VFPolicy := VFPolicyResource{
+			name:     "vf-policy-63537",
+			intfname: sriovDevices[node].InterfaceName,
+			nodename: node,
+			totalvfs: 2,
+			template: nncpAddVFTemplate,
+		}
+
+		// defer cleanup VFs by recreating VFPolicy with 0 VFs, then defer delete the VFPolicy
+		defer deleteNNCP(oc, VFPolicy.name)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, VFPolicy.nodename, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			VFPolicy.totalvfs = 0
+			if strings.Contains(ifaces, VFPolicy.intfname) {
+				VFPolicy.createVFPolicy(oc)
+				nncpErr1 := checkNNCPStatus(oc, VFPolicy.name, "Available")
+				exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+				e2e.Logf("SUCCESS - NNCP policy to create VFs applied")
+			}
+		}()
+
+		VFPolicy.createVFPolicy(oc)
+		exutil.By("\n 2.1 Verify the policy is applied \n")
+		nncpErr1 := checkNNCPStatus(oc, VFPolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - NNCP policy to create VFs applied")
+
+		exutil.By("\n 2.2 Verify the created VFs found in node network state \n")
+		output, nnsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", node, "-ojsonpath={.status.currentState.interfaces[?(@.name==\""+sriovDevices[node].InterfaceName+"\")].ethernet.sr-iov.vfs}").Output()
+		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
+		e2e.Logf("\n output: %v\n", output)
+
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(sriovDevices[node].InterfaceName+"v0"),
+			o.ContainSubstring(sriovDevices[node].InterfaceName+"v1"),
+		), "Not all %d VFs are created.\n", VFPolicy.totalvfs)
+
+		exutil.By("\n 3. Before SRIOV un-stallation: create SR-IOV policy on the node with ExternallyManaged set to true \n")
+		sriovNNPolicy := sriovNetworkNodePolicySpecificNode{
+			policyName:   "sriovnn",
+			deviceType:   "netdevice",
+			pfName:       sriovDevices[node].InterfaceName,
+			numVfs:       2,
+			resourceName: "sriovnn",
+			nodename:     node,
+			namespace:    sriovOpNs,
+			template:     sriovNodeNetworkPolicyTemplate,
+		}
+		defer removeResource(oc, true, true, "SriovNetworkNodePolicy", sriovNNPolicy.policyName, "-n", sriovOpNs)
+		sriovNNPolicy.createPolicySpecificNode(oc)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+		exutil.By("\n 4. Before SRIOV un-stallation: create a target namespce, then create sriovNetwork to generate net-attach-def on the target namespace \n")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		sriovnetwork := sriovNetwork{
+			name:             sriovNNPolicy.policyName,
+			resourceName:     sriovNNPolicy.resourceName,
+			networkNamespace: ns1,
+			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
+		}
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+		errChk1 := chkNAD(oc, ns1, sriovnetwork.name, true)
+		exutil.AssertWaitPollNoErr(errChk1, "Did not find NAD in the namespace")
+
+		exutil.By("\n 5. Before SRIOV un-stallation: create test pod1 with static MAC and test pod2 with dynamic MAC in target namespace\n")
+		exutil.By("\n Test pods with IPv4, IPv6 and dualstack addresses will be tested in 3 iterations\n")
+		addressPool1 := []string{"192.168.10.1/24", "2001:db8:abcd:0012::1/64", "192.168.10.1/24\", \"2001:db8:abcd:0012::1/64"}
+		addressPool2 := []string{"192.168.10.2/24", "2001:db8:abcd:0012::2/64", "192.168.10.2/24\", \"2001:db8:abcd:0012::2/64"}
+
+		var sriovTestPod1, sriovTestPod2 sriovTestPodMAC
+		for i := 0; i < 3; i++ {
+			e2e.Logf("\n ************************* No %d set of test pods ******************\n", i+1)
+			exutil.By("\n 5.1 Create test pod1 on the target namespace \n")
+			sriovTestPod1 = sriovTestPodMAC{
+				name:         "sriov-test-pod1",
+				namespace:    ns1,
+				ipaddr:       addressPool1[i],
+				macaddr:      "20:04:0f:f1:88:01",
+				sriovnetname: sriovnetwork.name,
+				tempfile:     sriovTestPodTemplate,
+			}
+			sriovTestPod1.createSriovTestPodMAC(oc)
+			err := waitForPodWithLabelReady(oc, sriovTestPod1.namespace, "app="+sriovTestPod1.name)
+			exutil.AssertWaitPollNoErr(err, "SRIOV client test pod is not ready")
+
+			exutil.By("\n 5.2 Create test pod2 on the target namespace \n")
+			sriovTestPod2 = sriovTestPodMAC{
+				name:         "sriov-test-pod2",
+				namespace:    ns1,
+				ipaddr:       addressPool2[i],
+				macaddr:      "",
+				sriovnetname: sriovnetwork.name,
+				tempfile:     sriovTestPodTemplate,
+			}
+			sriovTestPod2.createSriovTestPodMAC(oc)
+			err = waitForPodWithLabelReady(oc, sriovTestPod2.namespace, "app="+sriovTestPod2.name)
+			exutil.AssertWaitPollNoErr(err, "SRIOV server test pod is not ready")
+
+			exutil.By("\n 5.3 Check traffic between two test pods \n")
+
+			chkPodsPassTraffic(oc, sriovTestPod1.name, sriovTestPod2.name, "net1", ns1)
+			chkPodsPassTraffic(oc, sriovTestPod2.name, sriovTestPod1.name, "net1", ns1)
+
+			removeResource(oc, true, true, "pod", sriovTestPod1.name, "-n", sriovTestPod1.namespace)
+			removeResource(oc, true, true, "pod", sriovTestPod2.name, "-n", sriovTestPod2.namespace)
+
+			// wait a little before going to next iteration to recreate test pods with next set of addresses
+			time.Sleep(3 * time.Second)
+		}
+
+		exutil.By("\n 6.1 Apply VF removal policy by nmstate to remove VFs\n")
+		VFPolicy.template = nncpDelVFTemplate
+		VFPolicy.createVFPolicy(oc)
+		nncpErr1 = checkNNCPStatus(oc, VFPolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - NNCP policy to delete VFs applied")
+
+		exutil.By("\n 6.2 Delete the VFPolicy\n")
+		deleteNNCP(oc, VFPolicy.name)
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("nncp", VFPolicy.name).Output()
+		o.Expect(strings.Contains(output, "not found")).To(o.BeTrue())
+
+		exutil.By("\n . ****************** SRIOV operator un-installation then re-installation ***********************\n")
+		exutil.By("\n 7. Uninstall SRIOV operator \n")
+		defer installSriovOperator(oc, sriovOpNs)
+		uninstallSriovOperator(oc, sriovOpNs)
+
+		exutil.By("\n 8. Re-install SRIOV operator")
+		installSriovOperator(oc, sriovOpNs)
+
+		// Due to https://bugzilla.redhat.com/show_bug.cgi?id=2033440, keep the placeholder but comment out the webhook failurePolicy check for now
+		// exutil.By("\n 3. Check webhook failurePolicy after re-installation \n")
+		// chkOutput, _ := exec.Command("bash", "-c", "oc get mutatingwebhookconfigurations network-resources-injector-config -oyaml | grep failurePolicy").Output()
+		// e2e.Logf("\n failurePolicy for mutatingwebhookconfigurations network-resources-injector-config: %s\n", chkOutput)
+		// o.Expect(strings.Contains(string(chkOutput), "Ignore")).To(o.BeTrue())
+		// chkOutput, _ = exec.Command("bash", "-c", "oc get mutatingwebhookconfigurations sriov-operator-webhook-config -oyaml | grep failurePolicy").Output()
+		// e2e.Logf("\n failurePolicy for mutatingwebhookconfigurations sriov-operator-webhook-config: %s\n", chkOutput)
+		// o.Expect(strings.Contains(string(chkOutput), "Ignore")).To(o.BeTrue())
+		// chkOutput, _ = exec.Command("bash", "-c", "oc get ValidatingWebhookConfiguration sriov-operator-webhook-config -oyaml | grep failurePolicy").Output()
+		// e2e.Logf("\n failurePolicy for ValidatingWebhookConfiguration sriov-operator-webhook-config: %s\n", chkOutput)
+		// o.Expect(strings.Contains(string(chkOutput), "Ignore")).To(o.BeTrue())
+
+		exutil.By("\n  *********************** Post SRIOV re-installation: verify externallyManaged SRIOV functionality again ***********************\n")
+		exutil.By("\n 9. Post sriov re-installation: re-apply policy to create VFs on SR-IOV node by nmstate \n")
+
+		VFPolicy.template = nncpAddVFTemplate
+
+		// defer cleanup VFs by recreating VFPolicy with 0 VFs, then defer delete the VFPolicy
+		defer deleteNNCP(oc, VFPolicy.name)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, VFPolicy.nodename, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			VFPolicy.totalvfs = 0
+			if strings.Contains(ifaces, VFPolicy.intfname) {
+				VFPolicy.createVFPolicy(oc)
+				nncpErr1 := checkNNCPStatus(oc, VFPolicy.name, "Available")
+				exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+				e2e.Logf("SUCCESS - NNCP policy to create VFs applied")
+			}
+		}()
+
+		VFPolicy.createVFPolicy(oc)
+		exutil.By("\n 9.1 Verify the policy is applied \n")
+		nncpErr1 = checkNNCPStatus(oc, VFPolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - NNCP policy to create VFs applied")
+
+		exutil.By("\n 9.2 Verify the created VFs found in node network state \n")
+		output, nnsErr1 = oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", node, "-ojsonpath={.status.currentState.interfaces[?(@.name==\""+sriovDevices[node].InterfaceName+"\")].ethernet.sr-iov.vfs}").Output()
+		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
+		e2e.Logf("\n output: %v\n", output)
+
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(sriovDevices[node].InterfaceName+"v0"),
+			o.ContainSubstring(sriovDevices[node].InterfaceName+"v1"),
+		), "Not all %d VFs are created.\n", VFPolicy.totalvfs)
+
+		exutil.By("\n 10. Post sriov re-installation: re-create SR-IOV policy on the node with ExternallyManaged set to true \n")
+		defer removeResource(oc, true, true, "SriovNetworkNodePolicy", sriovNNPolicy.policyName, "-n", sriovOpNs)
+		sriovNNPolicy.createPolicySpecificNode(oc)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+		exutil.By("\n 11. Post sriov re-installation: re-create sriovNetwork to generate net-attach-def on the target namespace \n")
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+		errChk1 = chkNAD(oc, ns1, sriovnetwork.name, true)
+		exutil.AssertWaitPollNoErr(errChk1, "Did not find NAD in the namespace")
+
+		exutil.By("\n 12. Post sriov re-installation: re-create test pod1 with static MAC and test pod2 with dynamic MAC in target namespace\n")
+		exutil.By("\n Test pods with IPv4, IPv6 and dualstack addresses will be tested in 3 iterations\n")
+
+		for i := 0; i < 3; i++ {
+			e2e.Logf("\n ************************* No %d set of test pods ******************\n", i+1)
+			exutil.By("\n 12.1 Create test pod1 on the target namespace \n")
+			sriovTestPod1.ipaddr = addressPool1[i]
+			sriovTestPod1.createSriovTestPodMAC(oc)
+			err := waitForPodWithLabelReady(oc, sriovTestPod1.namespace, "app="+sriovTestPod1.name)
+			exutil.AssertWaitPollNoErr(err, "SRIOV client test pod is not ready")
+
+			exutil.By("\n 12.2 Create test pod2 on the target namespace \n")
+			sriovTestPod2.ipaddr = addressPool2[i]
+			sriovTestPod2.createSriovTestPodMAC(oc)
+			err = waitForPodWithLabelReady(oc, sriovTestPod2.namespace, "app="+sriovTestPod2.name)
+			exutil.AssertWaitPollNoErr(err, "SRIOV server test pod is not ready")
+
+			exutil.By("\n 12.3 Check traffic between two test pods \n")
+			chkPodsPassTraffic(oc, sriovTestPod1.name, sriovTestPod2.name, "net1", ns1)
+			chkPodsPassTraffic(oc, sriovTestPod2.name, sriovTestPod1.name, "net1", ns1)
+
+			removeResource(oc, true, true, "pod", sriovTestPod1.name, "-n", sriovTestPod1.namespace)
+			removeResource(oc, true, true, "pod", sriovTestPod2.name, "-n", sriovTestPod2.namespace)
+
+			// wait a little before going to next iteration to recreate test pods with next set of addresses
+			time.Sleep(3 * time.Second)
+		}
 	})
 
 })
