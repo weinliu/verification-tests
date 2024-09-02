@@ -147,6 +147,12 @@ type podInitConDescription struct {
 	template  string
 }
 
+type podSigstoreDescription struct {
+	name      string
+	namespace string
+	template  string
+}
+
 type podUserNSDescription struct {
 	name      string
 	namespace string
@@ -618,6 +624,16 @@ func (podInitCon *podInitConDescription) create(oc *exutil.CLI) {
 
 func (podInitCon *podInitConDescription) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podInitCon.namespace, "pod", podInitCon.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podSigstore *podSigstoreDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podSigstore.template, "-p", "NAME="+podSigstore.name, "NAMESPACE="+podSigstore.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podSigstore *podSigstoreDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podSigstore.namespace, "pod", podSigstore.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1246,7 +1262,7 @@ func configExist(oc *exutil.CLI, config []string, configPath string) error {
 
 func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) error {
 	//when mcp master change cgroup from v2 to v1, it takes more than 15 minutes
-	return wait.Poll(10*time.Second, 18*time.Minute, func() (bool, error) {
+	return wait.Poll(30*time.Second, 18*time.Minute, func() (bool, error) {
 		mCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.machineCount}").Output()
 		unmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.unavailableMachineCount}").Output()
 		dmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.degradedMachineCount}").Output()
@@ -2349,4 +2365,30 @@ func (sub *subscriptionDescription) skipMissingCatalogsources(oc *exutil.CLI) {
 	} else {
 		o.Expect(errQeReg).NotTo(o.HaveOccurred())
 	}
+}
+
+// this function check sigstore signature verified from crio log
+func checkSigstoreVerified(oc *exutil.CLI, namespace string, podName string, image string, docker_ns string) {
+	waitErr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+		nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-o=jsonpath={.spec.nodeName}", "-n", namespace).Output()
+		if err != nil {
+			e2e.Logf("failed to get the pod's node name, error: %s ", err)
+			return false, nil
+		}
+		out, err := exutil.DebugNodeWithChroot(oc, nodename, "/bin/bash", "-c", "journalctl -u crio --since=\"5 minutes ago\"")
+		if err != nil {
+			e2e.Logf("failed to get crio log, error: %s ", err)
+			return false, nil
+		}
+
+		o.Expect(strings.Contains(string(out), "Looking for sigstore attachments in "+image)).Should(o.BeTrue()) //need uncomment
+		//for docker_ns, for example:
+		//docker.io ~ docker.io/lyman9966/rhel8
+		//quay.io/openshift-release-dev/ocp-release ~ quay.io/openshift-release-dev/ocp-release@sha256:c17d4489c1b283ee71c76dda559e66a546e16b208a57eb156ef38fb30098903a
+		o.Expect(strings.Contains(string(out), "Sigstore attachments: using \\\"docker\\\" namespace "+docker_ns)).Should(o.BeTrue()) //need uncomment
+		o.Expect(strings.Contains(string(out), "Found a sigstore attachment manifest with 1 layers")).Should(o.BeTrue())
+		o.Expect(strings.Contains(string(out), "Fetching sigstore attachment")).Should(o.BeTrue())
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "check sigstore signature failed!")
 }

@@ -34,6 +34,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		customTemp                = filepath.Join(buildPruningBaseDir, "pod-modify.yaml")
 		podTerminationTemp        = filepath.Join(buildPruningBaseDir, "pod-termination.yaml")
 		podInitConTemp            = filepath.Join(buildPruningBaseDir, "pod-initContainer.yaml")
+		podSigstoreTemp           = filepath.Join(buildPruningBaseDir, "pod-sigStore.yaml")
 		podSleepTemp              = filepath.Join(buildPruningBaseDir, "sleepPod46306.yaml")
 		kubeletConfigTemp         = filepath.Join(buildPruningBaseDir, "kubeletconfig-hardeviction.yaml")
 		memHogTemp                = filepath.Join(buildPruningBaseDir, "mem-hog-ocp11600.yaml")
@@ -135,6 +136,12 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			name:      "",
 			namespace: "",
 			template:  podInitConTemp,
+		}
+
+		podSigstore73667 = podSigstoreDescription{
+			name:      "",
+			namespace: "",
+			template:  podSigstoreTemp,
 		}
 
 		podSleep = podSleepDescription{
@@ -1487,6 +1494,107 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.By("7)Check cpu-quota is disabled from container scope and pod cgroup correctly")
 		cgroupV := getCgroupVersion(oc)
 		checkCpuQuotaDisabled(oc, podCpuLoadBalance62985.namespace, podCpuLoadBalance62985.name, cgroupV)
+	})
+
+	//author: minmli@redhat.com
+	g.It("Author:minmli-NonHyperShiftHOST-NonPreRelease-Longduration-High-73667-High-73412-Crio verify the sigstore signature using default policy when pulling images [Disruptive][Slow]", func() {
+		exutil.By("1)Enable featureGate of TechPreviewNoUpgrade")
+
+		exutil.By("Check if exist any featureSet in featuregate cluster")
+		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("featureSet is: %s", featureSet)
+
+		if featureSet == "TechPreviewNoUpgrade" {
+			e2e.Logf("featureSet is TechPreviewNoUpgrade already, no need setting again!")
+			/*
+				//comment the part of [featureSet == ""] to abserve the execution of tp profile in CI
+				} else if featureSet == "" {
+					_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "-p", "{\"spec\": {\"featureSet\": \"TechPreviewNoUpgrade\"}}", "--type=merge").Output()
+					if err != nil {
+						e2e.Failf("Fail to enable TechPreviewNoUpgrade, error:%v", err)
+					}
+
+					exutil.By("check mcp master and worker finish updating")
+					err = checkMachineConfigPoolStatus(oc, "master")
+					exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+					err = checkMachineConfigPoolStatus(oc, "worker")
+					exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+				} else {
+					g.Skip("featureSet is neither empty nor TechPreviewNoUpgrade,skip it!")
+				}
+			*/
+		} else {
+			g.Skip("featureSet is not TechPreviewNoUpgrade,skip it!")
+		}
+
+		exutil.By("2)Check the featureGate take effect")
+		//featureConfig := []string{"SignatureStores: true", "SigstoreImageVerification: true"} //4.17 be so
+		featureConfig := []string{"\"SignatureStores\": true", "\"SigstoreImageVerification\": true"} //4.16 be so
+		kubeletPath := "/etc/kubernetes/kubelet.conf"
+		err = configExist(oc, featureConfig, kubeletPath)
+		exutil.AssertWaitPollNoErr(err, "featureGate config check failed")
+
+		exutil.By("3)Set the crio loglevel [debug]")
+		ctrcfgLog := filepath.Join(buildPruningBaseDir, "containerRuntimeConfig_log_level.yaml")
+		mcpName := "worker"
+		defer func() {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + ctrcfgLog).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + ctrcfgLog).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("Check the crio loglevel")
+		nodeName := getSingleWorkerNode(oc)
+		out, _ := exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "crio config | grep log_level")
+		o.Expect(strings.Contains(string(out), "log_level = \"debug\"")).Should(o.BeTrue())
+
+		exutil.By("4)Apply the ClusterImagePolicy manifest")
+		imgPolicy := filepath.Join(buildPruningBaseDir, "imagePolicy.yaml")
+		defer func() {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + imgPolicy).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = checkMachineConfigPoolStatus(oc, "master")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+			err = checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + imgPolicy).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, "master")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool master update failed")
+		err = checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		exutil.By("5)Create a pod with an image containing sigstore signature")
+		podSigstore73667.name = "pod-73667-sig"
+		podSigstore73667.namespace = oc.Namespace()
+
+		defer podSigstore73667.delete(oc)
+		podSigstore73667.create(oc)
+
+		exutil.By("6)Check the pod status")
+		err = podStatus(oc, podSigstore73667.namespace, podSigstore73667.name)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		exutil.By("7)check the crio log about sigstore signature verification")
+		docker_ns := "docker.io"
+		image := "docker.io/lyman9966/rhel8"
+		checkSigstoreVerified(oc, podSigstore73667.namespace, podSigstore73667.name, image, docker_ns)
+
+		exutil.By("8)validate pulling an image not containing sigstore signature will fail")
+		nodeName = getSingleWorkerNode(oc)
+		out, _ = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "crictl pull docker.io/ocpqe/hello-pod:latest")
+		o.Expect(strings.Contains(string(out), "Source image rejected: A signature was required, but no signature exists")).Should(o.BeTrue())
 	})
 })
 
