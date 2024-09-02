@@ -49,9 +49,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 			if strings.Contains(bmhMastersWorkers, "master") {
 				bmhMasters := bmhMastersWorkers
 				g.By("Check if master bmh is provisioned")
-				state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", bmhMasters, "-n", machineAPINamespace, "-o=jsonpath={.spec.Provisioned}").Output()
+				errorCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", bmhMasters, "-n", machineAPINamespace, "-o=jsonpath={.status.errorCount}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				if state != "true" {
+				if errorCount != "0" {
 					e2e.Failf("baremetal master not provisioned")
 				}
 			}
