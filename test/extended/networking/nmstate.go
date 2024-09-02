@@ -1426,3 +1426,118 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator upgrade", func() {
 		o.Expect(strings.Contains(ifaceState2, "up")).Should(o.BeTrue())
 	})
 })
+
+var _ = g.Describe("[sig-networking] SDN nmstate-operator testing on plateforms including Azure", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc          = exutil.NewCLI("networking-nmstate", exutil.KubeConfigPath())
+		opNamespace = "openshift-nmstate"
+		workers     = exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker")
+	)
+
+	g.BeforeEach(func() {
+		g.By("Check the platform if it is suitable for running the test")
+		platform := checkPlatform(oc)
+		e2e.Logf("platform is %v", platform)
+		if !(isPlatformSuitableForNMState(oc)) && !strings.Contains(platform, "azure") {
+			g.Skip("It is not a suitable platform, it is not Azure either. Skip this testing!")
+		}
+
+		if len(workers) < 1 {
+			g.Skip("These cases can only be run for cluster that has atleast one worker nodes. Skip this testing")
+		}
+		installNMstateOperator(oc)
+	})
+
+	g.It("Author:yingwang-NonHyperShiftHOST-NonPreRelease-Medium-75671-Verify global DNS via NMstate [Disruptive]", func() {
+		var (
+			nmstateCRTemplate = generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+			dnsNncpTemplate   = generateTemplateAbsolutePath("global-dns-nncp-template.yaml")
+			dnsDomain         = "testglobal.com"
+			ipAddr            string
+		)
+
+		ipStackType := checkIPStackType(oc)
+		switch ipStackType {
+		case "ipv4single":
+			ipAddr = "8.8.8.8"
+		case "dualstack":
+			ipAddr = "2003::3"
+		case "ipv6single":
+			ipAddr = "2003::3"
+		default:
+			e2e.Logf("Get ipStackType as %s", ipStackType)
+			g.Skip("Skip for not supported IP stack type!! ")
+		}
+
+		g.By("1. Create NMState CR")
+
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		g.By("2. Create NNCP for Gloabal DNS")
+		g.By("2.1 create policy")
+
+		dnsServerIP1 := getAvaliableNameServer(oc, workers[0])
+		dnsServerIP2 := ipAddr
+
+		nncpDns := networkingRes{
+			name:      "dns-" + getRandomString(),
+			namespace: opNamespace,
+			kind:      "NodeNetworkConfigurationPolicy",
+			tempfile:  dnsNncpTemplate,
+		}
+
+		defer func() {
+			removeResource(oc, true, true, nncpDns.kind, nncpDns.name, "-n", nncpDns.namespace)
+			//configure nncp with empty dns server to clear configuration
+			dnsClearNncpTemplate := generateTemplateAbsolutePath("global-dns-nncp-recover-template.yaml")
+			nncpDns_clear := networkingRes{
+				name:      "dns-" + getRandomString(),
+				namespace: opNamespace,
+				kind:      "NodeNetworkConfigurationPolicy",
+				tempfile:  dnsClearNncpTemplate,
+			}
+			nncpDns_clear.create(oc, "NAME="+nncpDns_clear.name, "NAMESPACE="+nncpDns_clear.namespace, "NODE="+workers[0])
+			nncpErr1 := checkNNCPStatus(oc, nncpDns_clear.name, "Available")
+			exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+			e2e.Logf("SUCCESS - policy is applied")
+
+			g.By("2.3 Verify the status of enactments is updated")
+			nnceName_clear := workers[0] + "." + nncpDns_clear.name
+			nnceErr1 := checkNNCEStatus(oc, nnceName_clear, "Available")
+			exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+			e2e.Logf("SUCCESS - status of enactments is updated")
+
+			removeResource(oc, true, true, nncpDns_clear.kind, nncpDns_clear.name, "-n", nncpDns_clear.namespace)
+
+		}()
+		nncpDns.create(oc, "NAME="+nncpDns.name, "NAMESPACE="+nncpDns.namespace, "NODE="+workers[0], "DNSDOMAIN="+dnsDomain,
+			"SERVERIP1="+dnsServerIP1, "SERVERIP2="+dnsServerIP2)
+
+		g.By("2.2 Verify the policy is applied")
+		nncpErr1 := checkNNCPStatus(oc, nncpDns.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("2.3 Verify the status of enactments is updated")
+		nnceName := workers[0] + "." + nncpDns.name
+		nnceErr1 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("2.4 Verify dns server record")
+		dnsServerIP := make([]string, 2)
+		dnsServerIP[0] = dnsServerIP1
+		dnsServerIP[1] = dnsServerIP2
+		checkDNSServer(oc, workers[0], dnsDomain, dnsServerIP)
+
+	})
+})

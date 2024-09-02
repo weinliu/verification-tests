@@ -499,3 +499,44 @@ func verifyIPSecTunnelUphost2netTunnel(oc *exutil.CLI, nodeName, src, dst, mode 
 	o.Expect(ipsecErr).NotTo(o.HaveOccurred())
 	o.Expect(strings.Contains(ipXfrmPolicy, mode)).Should(o.BeTrue())
 }
+
+// check dns server
+func checkDNSServer(oc *exutil.CLI, nodeName string, dnsDomain string, dnsServerIP []string) {
+	cmd1 := "cat /etc/resolv.conf"
+	cmd2 := "cat /var/run/NetworkManager/resolv.conf"
+	cmd3 := `cat /var/lib/NetworkManager/NetworkManager-intern.conf`
+
+	resOuput1, dnsErr1 := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", cmd1)
+	o.Expect(dnsErr1).NotTo(o.HaveOccurred())
+	resOuput2, dnsErr2 := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", cmd2)
+	o.Expect(dnsErr2).NotTo(o.HaveOccurred())
+	resOuput3, dnsErr3 := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", cmd3)
+	o.Expect(dnsErr3).NotTo(o.HaveOccurred())
+
+	e2e.Logf("check resolv.conf results are %v \n , %v, and \n %v \n", resOuput1, resOuput2, resOuput3)
+
+	resOuput4, dnsErr4 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, "-o=jsonpath={.status.currentState.dns-resolver.running}").Output()
+	o.Expect(dnsErr4).NotTo(o.HaveOccurred())
+
+	e2e.Logf("The nns running dns status of node %v is %v", nodeName, resOuput4)
+	// check domain name
+	o.Expect(strings.Contains(resOuput1, dnsDomain)).Should(o.BeTrue())
+	o.Expect(strings.Contains(resOuput2, dnsDomain)).Should(o.BeTrue())
+	o.Expect(strings.Contains(resOuput3, dnsDomain)).Should(o.BeTrue())
+	o.Expect(strings.Contains(resOuput4, dnsDomain)).Should(o.BeTrue())
+	//check nameservers
+	for _, serverIP := range dnsServerIP {
+		matchServerIP := "nameserver " + serverIP
+		o.Expect(strings.Contains(resOuput1, matchServerIP)).Should(o.BeTrue())
+		o.Expect(strings.Contains(resOuput2, matchServerIP)).Should(o.BeTrue())
+		o.Expect(strings.Contains(resOuput3, serverIP)).Should(o.BeTrue())
+		o.Expect(strings.Contains(resOuput4, serverIP)).Should(o.BeTrue())
+	}
+}
+
+func getAvaliableNameServer(oc *exutil.CLI, nodeName string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, "-o=jsonpath={.status.currentState.dns-resolver.running.server[0]}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).NotTo(o.BeEmpty())
+	return output
+}
