@@ -363,6 +363,14 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Low-62957-Prometheus and Alertmanager should configure ExternalURL correctly", func() {
+		exutil.By("skip the case if there is not console operator enabled")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperators", "console").Output()
+		// Error from server (NotFound): clusteroperators.config.openshift.io "console" not found
+		if strings.Contains(output, `"console" not found`) {
+			e2e.Logf("output: %s", output)
+			g.Skip("this cluster does not have console clusteroperator, skip the case")
+		}
+
 		exutil.By("get console route")
 		consoleURL, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "console", `-ojsonpath={.spec.host}`, "-n", "openshift-console").Output()
 		e2e.Logf("console route is: %v", consoleURL)
