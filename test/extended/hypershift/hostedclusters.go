@@ -610,7 +610,7 @@ func (h *hostedCluster) checkFIPInHostedCluster() bool {
 	nodes, err := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpGet).Args("no", "-ojsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	for _, nodename := range strings.Split(nodes, " ") {
-		res, err := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpDebug).Args("node/"+nodename, "-q", "--", "fips-mode-setup", "--check").Output()
+		res, err := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpDebug).Args("node/"+nodename, "-q", "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		if !strings.Contains(res, "FIPS mode is enabled") {
 			e2e.Logf("Warning: node %s fips-mode-setup check FIP false", nodename)
