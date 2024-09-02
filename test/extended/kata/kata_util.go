@@ -58,6 +58,7 @@ type TestRunDescription struct {
 	enableGPU          bool
 	podvmImageUrl      string
 	workloadImage      string
+	installKataRPM     bool
 }
 
 // If you changes this please make changes to func createPeerPodSecrets
@@ -1719,6 +1720,12 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 		errorMessage = fmt.Sprintf("workloadImage is missing from data\n%v", errorMessage)
 	}
 
+	if gjson.Get(configmapData, "installKataRPM").Exists() {
+		testrun.installKataRPM = gjson.Get(configmapData, "installKataRPM").Bool()
+	} else {
+		errorMessage = fmt.Sprintf("installKataRPM is missing from data\n%v", errorMessage)
+	}
+
 	if errorMessage != "" {
 		err = fmt.Errorf("%v", errorMessage)
 		// testrun.checked still == false. Setup is wrong & all tests will fail
@@ -1867,4 +1874,56 @@ func getPodvmEnableGPU(oc *exutil.CLI, opNamespace, cmName string) (enGPU string
 	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not find %v in %v\n Error: %v", jsonpath, cmName, err))
 	e2e.Logf("ENABLE_NVIDIA_GPU is %v", msg)
 	return msg
+}
+
+func installKataContainerRPM(oc *exutil.CLI, testrun *TestRunDescription) (rpmName string, err error) {
+
+	workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+	if err != nil || len(workerNodeList) < 1 {
+		err = fmt.Errorf("Error: no worker nodes: %v, %v", workerNodeList, err)
+		return rpmName, err
+	}
+
+	rpmName, err = checkNodesForKataContainerRPM(oc, testrun, workerNodeList)
+	if err != nil {
+		return rpmName, err
+	}
+
+	errors := ""
+	cmd := fmt.Sprintf("mount -o remount,rw /usr; rpm -Uvh /var/local/%v", rpmName)
+	for index := range workerNodeList {
+		msg, err := exutil.DebugNodeWithOptionsAndChroot(oc, workerNodeList[index], []string{"-q"}, "/bin/sh", "-c", cmd)
+		if !(strings.Contains(msg, "already installed") || strings.Contains(msg, "installing")) {
+			if err != nil {
+				errors = fmt.Sprintf("%vError trying to rpm -Uvh %v on %v: %v %v\n", errors, rpmName, workerNodeList[index], msg, err)
+			}
+		}
+	}
+
+	if errors != "" {
+		err = fmt.Errorf("Error: Scratch rpm errors: %v", errors)
+	}
+	return rpmName, err
+}
+
+func checkNodesForKataContainerRPM(oc *exutil.CLI, testrun *TestRunDescription, workerNodeList []string) (rpmName string, err error) {
+	// check if rpm exists
+	errors := ""
+	msg := ""
+	cmd := fmt.Sprintf("ls -1 /var/local | grep '^kata-containers.*rpm$'")
+	for index := range workerNodeList {
+		msg, err = exutil.DebugNodeWithOptionsAndChroot(oc, workerNodeList[index], []string{"-q"}, "/bin/sh", "-c", cmd)
+		if strings.Contains(msg, "kata-containers") && strings.Contains(msg, ".rpm") {
+			rpmName = strings.TrimRight(msg, "\n") // need test
+		}
+		if rpmName == "" {
+			errors = fmt.Sprintf("%vError finding /var/local/kata-containers.*rpm on %v: %v %v\n", errors, workerNodeList[index], msg, err)
+		}
+	}
+
+	if errors != "" {
+		err = fmt.Errorf("Errors finding rpm in /var/local: %v", errors)
+	}
+	return rpmName, err
+
 }

@@ -53,6 +53,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		podAnnotatedTemplate       = filepath.Join(testDataDir, "pod-annotations-template.yaml")
 		testrunConfigmapNs         = "default"
 		testrunConfigmapName       = "osc-config"
+		scratchRpmName             string
 	)
 
 	subscription := SubscriptionDescription{
@@ -90,6 +91,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		enableGPU:          false,
 		podvmImageUrl:      "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/",
 		workloadImage:      "quay.io/openshift/origin-hello-openshift",
+		installKataRPM:     false,
 	}
 
 	g.BeforeEach(func() {
@@ -107,6 +109,9 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		// always log cluster setup on each test
 		if testrun.checked {
 			e2e.Logf("\n    Cluster: %v.%v on %v\n    configmapExists %v\n    testrun %v\n    subscription %v\n    kataconfig %v\n\n", ocpMajorVer, ocpMinorVer, cloudPlatform, configmapExists, testrun, subscription, kataconfig)
+			if scratchRpmName != "" {
+				e2e.Logf("Scratch rpm %v was installed", scratchRpmName)
+			}
 		} else {
 			cloudPlatform = getCloudProvider(oc)
 			clusterVersion, ocpMajorVer, ocpMinorVer, minorVer = getClusterVersion(oc)
@@ -143,6 +148,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 				labelEligibleNodes(oc, testrun)
 				// o.Expect(err).NotTo(o.HaveOccurred(), err)
 			}
+
 			testrun.checked = true
 		}
 
@@ -156,6 +162,21 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		if checkKataInstalled(oc, subscription, kataconfig.name) {
 			msgSuccess := fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, kataconfig.name)
 			e2e.Logf(msgSuccess)
+
+			// kata is installed already
+			// have rpms been installed before we skip out of g.BeforeEach()?
+			if testrun.installKataRPM {
+				e2e.Logf("INFO Trying to install scratch rpm")
+				scratchRpmName, err = installKataContainerRPM(oc, &testrun)
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not rpm -Uvh /var/local/%v: %v", scratchRpmName, err))
+				// Its installed now
+				e2e.Logf("INFO Scratch rpm %v was installed", scratchRpmName)
+				testrun.installKataRPM = false
+				msg, err = oc.AsAdmin().Run("patch").Args("configmap", testrunConfigmapName, "-n", testrunConfigmapNs, "--type", "merge",
+					"--patch", "{\"data\":{\"installKataRPM\":\"false\"}}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Error: Patching fails on %v with installKataRPM=false: %v %v", testrunConfigmapName, msg, err))
+
+			}
 			return
 		}
 
@@ -215,6 +236,21 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		if kataconfig.enablePeerPods {
 			checkPeerPodControl(oc, opNamespace, podRunState)
 		}
+
+		// kata wasn't installed before so this isn't skipped
+		// Do rpms need installion?
+		if testrun.installKataRPM {
+			e2e.Logf("INFO Trying to install scratch rpm")
+			scratchRpmName, err = installKataContainerRPM(oc, &testrun)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not install scratch %v failed: %v", scratchRpmName, err))
+			// Its installed now
+			e2e.Logf("INFO Scratch rpm %v was installed", scratchRpmName)
+			testrun.installKataRPM = false
+			msg, err = oc.AsAdmin().Run("patch").Args("configmap", testrunConfigmapName, "-n", testrunConfigmapNs, "--type", "merge",
+				"--patch", "{\"data\":{\"installKataRPM\":\"false\"}}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Error: Patching fails on %v with installKataRPM=false: %v %v", testrunConfigmapName, msg, err))
+		}
+
 	})
 
 	g.It("Author:abhbaner-High-39499-Operator installation", func() {

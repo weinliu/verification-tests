@@ -23,6 +23,7 @@ objects:
       enableGPU: "${ENABLENVIDIAGPU}"
       podvmImageUrl: "${PODVMIMAGEURL}"
       workloadImage: "${WORKLOADIMAGE}"
+      installKataRPM: "${INSTALLKATARPM}"
 
 # oc process --ignore-unknown-parameters=true -f configmap-input-template.yaml -p [name]=[value] [name]=[value] > osc-config.yaml...
 # oc apply -f osc-config.yaml
@@ -60,3 +61,5 @@ parameters:
     value: "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/"
   - name: WORKLOADIMAGE
     value: "quay.io/openshift/origin-hello-openshift"
+  - name: INSTALLKATARPM
+    value: "false"
