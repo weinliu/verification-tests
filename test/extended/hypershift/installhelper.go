@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 
+	g "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 
@@ -20,6 +23,7 @@ type installHelper struct {
 	oc           *exutil.CLI
 	bucketName   string
 	region       string
+	artifactDir  string
 	dir          string
 	s3Client     *exutil.S3Client
 	iaasPlatform string
@@ -462,7 +466,7 @@ func (receiver *installHelper) createAWSHostedClusterWithoutCheck(createCluster 
 
 func (receiver *installHelper) createAzureHostedClusters(createCluster *createCluster) *hostedCluster {
 	cluster := receiver.createAzureHostedClusterWithoutCheck(createCluster)
-	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.BeTrue(), "azure HostedClusters install error")
+	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeoutAzure, ClusterInstallTimeoutAzure/20).Should(o.BeTrue(), "azure HostedClusters install error")
 	infraID, err := cluster.getInfraID()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	createCluster.InfraID = infraID
@@ -521,6 +525,56 @@ func (receiver *installHelper) destroyAzureHostedClusters(createCluster *createC
 
 	e2e.Logf("Making sure that the HC is gone")
 	o.Expect(getHostedClusters(receiver.oc, receiver.oc.Namespace())).ShouldNot(o.ContainSubstring(createCluster.Name), "HC persists even after deletion")
+}
+
+func (receiver *installHelper) dumpHostedCluster(createCluster *createCluster) error {
+	// Ensure dump dir exists
+	dumpDir := path.Join(receiver.dir, createCluster.Name)
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dumpDir, err)
+	}
+
+	// Dump HC
+	cmd := fmt.Sprintf("hypershift dump cluster --artifact-dir %s --dump-guest-cluster --name %s --namespace %s", dumpDir, createCluster.Name, createCluster.Namespace)
+	_ = NewCmdClient().WithShowInfo(true).Run(cmd).Execute()
+
+	// Ensure dump artifact dir exists
+	dumpArtifactDir := path.Join(receiver.artifactDir, createCluster.Name)
+	if err := os.MkdirAll(dumpArtifactDir, 0755); err != nil {
+		return fmt.Errorf("failed to create artifact directory %s: %w", dumpArtifactDir, err)
+	}
+
+	// Move dump archive to artifact dir
+	if err := os.Rename(path.Join(dumpDir, dumpArchiveName), path.Join(dumpArtifactDir, dumpArchiveName)); err != nil {
+		return fmt.Errorf("failed to move dump archive from %s to %s: %w", dumpDir, dumpArtifactDir, err)
+	}
+	e2e.Logf("Dump archive saved to %s", dumpArtifactDir)
+	return nil
+}
+
+func (receiver *installHelper) dumpAROHostedCluster(createCluster *createCluster) error {
+	if err := os.Setenv(managedServiceKey, managedServiceAROHCP); err != nil {
+		e2e.Logf("Error setting env %s to %s: %v", managedServiceKey, managedServiceAROHCP, err)
+	}
+	return receiver.dumpHostedCluster(createCluster)
+}
+
+func (receiver *installHelper) dumpDestroyAROHostedCluster(createCluster *createCluster) {
+	if g.GetFailer().GetState().Is(types.SpecStateFailureStates) {
+		if err := receiver.dumpAROHostedCluster(createCluster); err != nil {
+			e2e.Logf("Error dumping ARO hosted cluster %s: %v", createCluster.Name, err)
+		}
+	}
+	receiver.destroyAzureHostedClusters(createCluster)
+}
+
+func (receiver *installHelper) dumpDeleteAROHostedCluster(createCluster *createCluster) {
+	if g.GetFailer().GetState().Is(types.SpecStateFailureStates) {
+		if err := receiver.dumpAROHostedCluster(createCluster); err != nil {
+			e2e.Logf("Error dumping ARO hosted cluster %s: %v", createCluster.Name, err)
+		}
+	}
+	doOcpReq(receiver.oc, OcpDelete, true, "hc", createCluster.Name, "-n", createCluster.Namespace)
 }
 
 func (receiver *installHelper) deleteHostedClustersManual(createCluster *createCluster) {

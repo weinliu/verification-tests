@@ -29,11 +29,12 @@ const (
 	hypershiftOperatorNamespace      = "hypershift"
 	hypershiftSharedingressNamespace = "hypershift-sharedingress"
 
-	ClusterInstallTimeout = 3600 * time.Second
-	DoubleLongTimeout     = 1800 * time.Second
-	LongTimeout           = 900 * time.Second
-	DefaultTimeout        = 300 * time.Second
-	ShortTimeout          = 50 * time.Second
+	ClusterInstallTimeout      = 3600 * time.Second
+	ClusterInstallTimeoutAzure = 2700 * time.Second
+	DoubleLongTimeout          = 1800 * time.Second
+	LongTimeout                = 900 * time.Second
+	DefaultTimeout             = 300 * time.Second
+	ShortTimeout               = 50 * time.Second
 )
 
 const (
@@ -260,4 +261,15 @@ type ctxKey string
 
 const (
 	ctxKeyId ctxKey = "id"
+)
+
+// Managed service types
+const (
+	managedServiceKey    = "MANAGED_SERVICE"
+	managedServiceAROHCP = "ARO-HCP"
+)
+
+// Dump
+const (
+	dumpArchiveName = "hypershift-dump.tar.gz"
 )

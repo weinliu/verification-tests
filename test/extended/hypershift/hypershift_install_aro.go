@@ -48,8 +48,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 			resourceNamePrefix = getResourceNamePrefix()
 			hc1Name            = fmt.Sprintf("%s-hc1", resourceNamePrefix)
 			hc2Name            = fmt.Sprintf("%s-hc2", resourceNamePrefix)
-			tempDir            = path.Join("/tmp", "hypershift", resourceNamePrefix)
-			installhelper      = installHelper{oc: oc, dir: tempDir}
+			tempDir            = path.Join(os.TempDir(), "hypershift", resourceNamePrefix)
+			artifactDir        = path.Join(exutil.GetTestEnv().ArtifactDir, "hypershift-artifact", resourceNamePrefix)
+			installhelper      = installHelper{oc: oc, dir: tempDir, artifactDir: artifactDir}
 		)
 
 		createTempDir(tempDir)
@@ -63,12 +64,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 			go func() {
 				defer g.GinkgoRecover()
 				defer wg.Done()
-				installhelper.destroyAzureHostedClusters(createCluster1)
+				installhelper.dumpDestroyAROHostedCluster(createCluster1)
 			}()
 			go func() {
 				defer g.GinkgoRecover()
 				defer wg.Done()
-				installhelper.destroyAzureHostedClusters(createCluster2)
+				installhelper.dumpDestroyAROHostedCluster(createCluster2)
 			}()
 			wg.Wait()
 		}()
@@ -124,8 +125,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 			npName             = fmt.Sprintf("%s-np", resourceNamePrefix)
 			npNodeCount        = 1
 			vmRootDiskSize     = 90
-			tempDir            = path.Join("/tmp", "hypershift", resourceNamePrefix)
-			installhelper      = installHelper{oc: oc, dir: tempDir}
+			tempDir            = path.Join(os.TempDir(), "hypershift", resourceNamePrefix)
+			artifactDir        = path.Join(exutil.GetTestEnv().ArtifactDir, "hypershift-artifact", resourceNamePrefix)
+			installhelper      = installHelper{oc: oc, dir: tempDir, artifactDir: artifactDir}
 			azClientSet        = exutil.NewAzureClientSetWithCredsFromCanonicalFile()
 		)
 
@@ -137,7 +139,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 			withResourceGroupTags("foo=bar,baz=quux").
 			withRootDiskSize(vmRootDiskSize).
 			withName(hcName)
-		defer installhelper.destroyAzureHostedClusters(createCluster)
+		defer installhelper.dumpDestroyAROHostedCluster(createCluster)
 		hc := installhelper.createAzureHostedClusterWithoutCheck(createCluster)
 
 		exutil.By("Creating additional NodePool")
@@ -195,11 +197,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 			hcName             = fmt.Sprintf("%s-hc", resourceNamePrefix)
 			kvName             = fmt.Sprintf("%s-kv", resourceNamePrefix)
 			rgName             = fmt.Sprintf("%s-rg", resourceNamePrefix)
-			tmpDir             = path.Join("/tmp", "hypershift", resourceNamePrefix)
-			installhelper      = installHelper{oc: oc, dir: tmpDir}
+			tempDir            = path.Join(os.TempDir(), "hypershift", resourceNamePrefix)
+			artifactDir        = path.Join(exutil.GetTestEnv().ArtifactDir, "hypershift-artifact", resourceNamePrefix)
+			installhelper      = installHelper{oc: oc, dir: tempDir, artifactDir: artifactDir}
 		)
 
-		createTempDir(tmpDir)
+		createTempDir(tempDir)
 
 		e2e.Logf("Getting Azure location from MC")
 		location, err := getClusterRegion(oc)
@@ -277,7 +280,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 
 		exutil.By("Creating hosted cluster")
 		createCluster := installhelper.createClusterAROCommonBuilder().withEncryptionKeyId(*createActiveKeyResp.Properties.KeyURIWithVersion).withName(hcName)
-		defer installhelper.destroyAzureHostedClusters(createCluster)
+		defer installhelper.dumpDestroyAROHostedCluster(createCluster)
 		hc := installhelper.createAzureHostedClusters(createCluster)
 
 		e2e.Logf("Extracting kubeconfig of the hosted cluster")
@@ -318,8 +321,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 			hcName             = fmt.Sprintf("%s-hc", resourceNamePrefix)
 			infraID            = fmt.Sprintf("%s-infra", resourceNamePrefix)
 			tempDir            = path.Join(os.TempDir(), "hypershift", resourceNamePrefix)
+			artifactDir        = path.Join(exutil.GetTestEnv().ArtifactDir, "hypershift-artifact", resourceNamePrefix)
 			infraJSON          = path.Join(tempDir, "infra.json")
-			installhelper      = installHelper{oc: oc, dir: tempDir}
+			installhelper      = installHelper{oc: oc, dir: tempDir, artifactDir: artifactDir}
 		)
 
 		createTempDir(tempDir)
@@ -335,7 +339,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift [HyperShiftAKSINSTALL]", func() 
 
 		exutil.By("Creating HostedCluster")
 		createCluster := installhelper.createClusterAROCommonBuilder().withInfraJSON(infraJSON).withName(hcName)
-		defer doOcpReq(oc, OcpDelete, true, "hc", createCluster.Name, "-n", createCluster.Namespace)
+		defer installhelper.dumpDeleteAROHostedCluster(createCluster)
 		_ = installhelper.createAzureHostedClusters(createCluster)
 	})
 })

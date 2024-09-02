@@ -102,3 +102,9 @@ func (c *CLI) Output() (string, error) {
 		return "", nil
 	}
 }
+
+func (c *CLI) Execute() error {
+	out, err := c.Output()
+	e2e.Logf("Command executed successfully with output:\n%s", out)
+	return err
+}
