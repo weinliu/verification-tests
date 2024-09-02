@@ -8,11 +8,14 @@ RUN make go-mod-tidy; \
     cp /go/src/github.com/openshift/openshift-tests-private/pipeline/handleresult.py /tmp/build/handleresult.py; \
     cp /go/src/github.com/openshift/openshift-tests-private/bin/extended-platform-tests /tmp/build/extended-platform-tests
 FROM registry.ci.openshift.org/ci/rosa-aws-cli:latest as rosacli
+FROM registry.ci.openshift.org/netobserv/network-observability-cli:ci as netobservcli
 
 FROM registry.ci.openshift.org/ci/tests-private-base:4.17
 COPY --from=builder /tmp/build/extended-platform-tests /usr/bin/
 COPY --from=builder /tmp/build/handleresult.py /usr/bin/
 COPY --from=rosacli /usr/bin/rosa /usr/bin/
+COPY --from=netobservcli /oc-netobserv /usr/bin/
+
 RUN MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/candidate && \
     curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/ -o ocp.html && curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp-dev-preview/ -o pre.html && \
     ecver=$(grep -E "<a href=\"candidate-4\.17" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
