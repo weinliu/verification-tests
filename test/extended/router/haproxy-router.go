@@ -3461,7 +3461,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(service1Name))
 
-		exutil.By("patch the route with alternate backends and weights")
+		// the below test step was for [OCPBUGS-29690] haproxy shouldn't be oom
+		exutil.By("check the default weights for the selected routes are 1")
+		routerpod := getRouterPod(oc, "default")
 		srvPod1Name, err := oc.Run("get").Args("pods", "-l", srv1Label, "-o=jsonpath=\"{.items[0].metadata.name}\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		srvPod2Name, err := oc.Run("get").Args("pods", "-l", srv2Label, "-o=jsonpath=\"{.items[0].metadata.name}\"").Output()
@@ -3471,13 +3473,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		srvPod1Name = strings.Trim(srvPod1Name, "\"")
 		srvPod2Name = strings.Trim(srvPod2Name, "\"")
 		srvPod3Name = strings.Trim(srvPod3Name, "\"")
+		selectedSrvNum := fmt.Sprintf("cat haproxy.config | grep -E \"server pod:ingress-canary|server pod:%s|server pod:%s|server pod:%s\"| wc -l", srvPod1Name, srvPod3Name, srvPod3Name)
+		selectedWeight1Num := fmt.Sprintf("cat haproxy.config | grep -E \"server pod:ingress-canary|server pod:%s|server pod:%s|server pod:%s\"| grep \"weight 1\" |wc -l", srvPod1Name, srvPod3Name, srvPod3Name)
+		srvPodNum, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", selectedSrvNum).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		weight1Num, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", selectedWeight1Num).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(srvPodNum).To(o.Equal(weight1Num))
+
+		exutil.By("patch the route with alternate backends and weights")
 		patchRrAlBackend := "{\"metadata\":{\"annotations\":{\"haproxy.router.openshift.io/balance\": \"roundrobin\"}}, " +
 			"\"spec\": {\"to\": {\"kind\": \"Service\", \"name\": \"" + service1Name + "\", \"weight\": 20}, \"alternateBackends\": [{\"kind\": \"Service\", \"name\": \"" + service2Name + "\", \"weight\": 10}, {\"kind\": \"Service\", \"name\": \"" + service3Name + "\", \"weight\": 10}]}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", project1, "route/"+service1Name, "--type=merge", "-p", patchRrAlBackend).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check the route's backend config")
-		routerpod := getRouterPod(oc, "default")
 		backend := "be_http:" + project1 + ":" + service1Name
 		bk1Re := regexp.MustCompile("server pod:" + srvPod1Name + ".+weight 256")
 		bk2Re := regexp.MustCompile("server pod:" + srvPod2Name + ".+weight 128")
