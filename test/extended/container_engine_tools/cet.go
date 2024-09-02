@@ -131,7 +131,7 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	})
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-High-43789-High-46278-Check podman and crictl version to check if bug fixed", func() {
+	g.It("Author:pmali-DEPRECATED-High-43789-High-46278-Check podman and crictl version to check if bug fixed", func() {
 
 		g.By("Check podman and crictl version\n")
 		err := checkPodmanCrictlVersion(oc)
