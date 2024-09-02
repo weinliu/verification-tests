@@ -534,8 +534,10 @@ func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	}
 	// AzureStack test clusters don't support azure file storage
 	// Ref: https://learn.microsoft.com/en-us/azure-stack/user/azure-stack-acs-differences?view=azs-2108
-	if cloudProvider == "azure" && (isAzureStackCluster(oc) || checkFips(oc)) {
-		e2e.Logf("***%s \"Azure-file CSI Driver\" don't support AzureStackCluster or FIPS enabled env, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
+	// https://issues.redhat.com/browse/OCPBUGS-38922
+	// temporarily skip general cases in Azure internal image registry cluster
+	if cloudProvider == "azure" && (isAzureStackCluster(oc) || checkFips(oc) || isAzureInternalRegistryConfigured(oc)) {
+		e2e.Logf("***%s \"Azure-file CSI Driver\" don't support AzureStackCluster or FIPS enabled env or AzureInternalRegistry cluster, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
 		supportProvisioners = deleteElement(supportProvisioners, "file.csi.azure.com")
 	}
 	return supportProvisioners
@@ -1151,4 +1153,11 @@ func parseCapacityToBytes(capacityWithUnit string) int64 {
 	o.Expect(parseBytesErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to parse capacity size with unit: %q", capacityWithUnit))
 	e2e.Logf("%q bytes size is %d bytes", capacityWithUnit, bytesSize.Value())
 	return bytesSize.Value()
+}
+
+// isAzureInternalRegistryConfigured checks if internal imageregistry is configured
+func isAzureInternalRegistryConfigured(oc *exutil.CLI) bool {
+	registryType, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.azure.networkAccess.type}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return registryType == "Internal"
 }

@@ -137,7 +137,9 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// See https://issues.redhat.com/browse/OCPBUGS-18581 for detail
 		// Adding "networkEndpointType: privateEndpoint" for "nfs" protocol when there is compact node
-		if provisioner == "file.csi.azure.com" && finalParameters["protocol"] == "nfs" && len(getCompactNodeList(oc)) > 0 {
+		// See another Jira bug https://issues.redhat.com/browse/OCPBUGS-38922
+		// Adding "networkEndpointType: privateEndpoint" if it is Azure internal registry cluster
+		if provisioner == "file.csi.azure.com" && ((finalParameters["protocol"] == "nfs" && len(getCompactNodeList(oc)) > 0) || isAzureInternalRegistryConfigured(oc)) {
 			sc.parameters["networkEndpointType"] = "privateEndpoint"
 		}
 
