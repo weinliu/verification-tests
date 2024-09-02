@@ -12357,6 +12357,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		if infra == "SingleReplica" {
 			g.Skip("it is not supported")
 		}
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		o.Expect(errFips).NotTo(o.HaveOccurred())
+		if strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
