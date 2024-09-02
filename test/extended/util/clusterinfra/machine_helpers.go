@@ -273,8 +273,12 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 // WaitForMachineFailed check if all the machines are Failed in a MachineSet
 func WaitForMachineFailed(oc *exutil.CLI, machineSetName string) {
 	e2e.Logf("Wait for machines to go into Failed phase")
-	machineNames := GetMachineNamesFromMachineSet(oc, machineSetName)
 	err := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+		machineNames := GetMachineNamesFromMachineSet(oc, machineSetName)
+		if len(machineNames) == 0 {
+			e2e.Logf("no machine for machineset %s", machineSetName)
+			return false, nil
+		}
 		for _, machine := range machineNames {
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machine, "-n", "openshift-machine-api", "-o=jsonpath={.status.phase}").Output()
 			if output != "Failed" {

@@ -396,7 +396,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAS", func() 
 			o.Expect(err).NotTo(o.HaveOccurred())
 			replicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.replicas}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if replicas == "0" && strings.Contains(autoscalerLog, "Scale-up timed out for node group") && strings.Contains(autoscalerLog, "Removing unregistered node failed-machine-openshift-machine-api_") && strings.Contains(autoscalerLog, "openshift-machine-api/"+machinesetName+" is not ready for scaleup - backoff") {
+			if replicas == "0" && strings.Contains(autoscalerLog, "Scale-up timed out for node group") && strings.Contains(autoscalerLog, "Marking unregistered node failed-machine-openshift-machine-api_") && strings.Contains(autoscalerLog, "openshift-machine-api/"+machinesetName+" is not ready for scaleup - backoff") {
 				return true, nil
 			}
 			e2e.Logf("cluster didn't autoscale down or node group didn't be marked as backoff")
