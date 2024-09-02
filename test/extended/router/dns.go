@@ -1086,4 +1086,119 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(ipAddress).To(o.MatchRegexp(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`))
 		o.Expect(strings.Count(ipAddress, ":") >= 2).To(o.BeTrue())
 	})
+
+	// Bug: OCPBUGS-33750
+	g.It("Author:mjoseph-NonHyperShiftHOST-ConnectedOnly-High-75426-DNSNameResolver CR should resolve multiple DNS names [Serial]", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodLabel         = "app=hello-pod"
+			cltPodName          = "hello-pod"
+			egressFirewall      = filepath.Join(buildPruningBaseDir, "egressfirewall-wildcard.yaml")
+			egressFirewall2     = filepath.Join(buildPruningBaseDir, "egressfirewall-multiDomain.yaml")
+		)
+
+		exutil.By("1. Create four egressfirewall rules and client pods in different namepaces, then wait until there are available")
+		var project []string
+		for i := range 4 {
+			project = append(project, oc.Namespace())
+			exutil.SetNamespacePrivileged(oc, project[i])
+			operateResourceFromFile(oc, "create", project[i], clientPod)
+			operateResourceFromFile(oc, "create", project[i], egressFirewall)
+			err := waitForPodWithLabelReady(oc, project[i], cltPodLabel)
+			exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+			waitEgressFirewallApplied(oc, "default", project[i])
+			oc.SetupProject()
+		}
+
+		exutil.By("2. Check whether the default dnsnameresolver CR got created and its resolved dns name")
+		wildcardDnsName := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
+		o.Expect(wildcardDnsName).To(o.ContainSubstring("*.google.com."))
+		randomNS := getRandomElementFromList(project)
+		checkDomainReachability(oc, cltPodName, randomNS, "www.google.com", true)
+
+		exutil.By("3. Edit some egressfirewalls")
+		updateValueTest1 := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/dnsName\", \"value\":\"www.yahoo.com\"}]"
+		updateValueTest2 := "[{\"op\":\"add\",\"path\":\"/spec/egress/1\", \"value\":{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.redhat.com\"}}}]"
+		updateValueTest3 := "[{\"op\":\"add\",\"path\":\"/spec/egress/0\", \"value\":{\"type\":\"Deny\",\"to\":{\"dnsName\":\"calendar.google.com\"}}}]"
+		updateValueTest4 := "[{\"op\":\"add\",\"path\":\"/spec/egress/1\", \"value\":{\"type\":\"Deny\",\"to\":{\"dnsName\":\"calendar.google.com\"}}}]"
+		patchResourceAsAdminAnyType(oc, project[0], "egressfirewall.k8s.ovn.org/default", updateValueTest1, "json")
+		patchResourceAsAdminAnyType(oc, project[1], "egressfirewall.k8s.ovn.org/default", updateValueTest2, "json")
+		patchResourceAsAdminAnyType(oc, project[2], "egressfirewall.k8s.ovn.org/default", updateValueTest3, "json")
+		patchResourceAsAdminAnyType(oc, project[3], "egressfirewall.k8s.ovn.org/default", updateValueTest4, "json")
+		waitEgressFirewallApplied(oc, "default", project[0])
+		waitEgressFirewallApplied(oc, "default", project[1])
+		waitEgressFirewallApplied(oc, "default", project[2])
+		waitEgressFirewallApplied(oc, "default", project[3])
+
+		exutil.By("4. Check the changes made to dnsnameresolver CR and its resolved dns name in different namespace")
+		wildcardDnsName = getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
+		o.Expect(wildcardDnsName).To(o.And(o.ContainSubstring(
+			"calendar.google.com."), o.ContainSubstring(
+			"*.google.com."), o.ContainSubstring(
+			"www.redhat.com."), o.ContainSubstring(
+			"www.yahoo.com.")))
+		checkDomainReachability(oc, cltPodName, project[0], "www.yahoo.com", true)
+		checkDomainReachability(oc, cltPodName, project[0], "www.google.com", false)
+		checkDomainReachability(oc, cltPodName, project[1], "www.google.com", true)
+		checkDomainReachability(oc, cltPodName, project[1], "www.redhat.com", false)
+		checkDomainReachability(oc, cltPodName, project[2], "calendar.google.com", false)
+		checkDomainReachability(oc, cltPodName, project[2], "www.google.com", true)
+		checkDomainReachability(oc, cltPodName, project[3], "calendar.google.com", true)
+
+		exutil.By("5. Delete an egressfirewall and confirm the same")
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressfirewall", "default", "-n", project[0]).Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		// the firewall was previous blocking the dns resolution of 'google.com' in the namespace and now not
+		checkDomainReachability(oc, cltPodName, project[0], "www.google.com", true)
+		wildcardDnsName = getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
+		o.Expect(wildcardDnsName).NotTo(o.ContainSubstring("www.yahoo.com."))
+
+		exutil.By("6. Recreate an egressfirewall and confirm the same")
+		// Updating in the yaml file with dnsName '*.google.com' as 'amazon.com'
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|"\*.google.com\"|www.amazon.com|g' %s`, egressFirewall)
+		_, sedErr := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(sedErr).NotTo(o.HaveOccurred())
+		operateResourceFromFile(oc, "create", project[0], egressFirewall)
+		waitEgressFirewallApplied(oc, "default", project[0])
+		checkDomainReachability(oc, cltPodName, project[0], "www.amazon.com", true)
+		wildcardDnsName = getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
+		o.Expect(wildcardDnsName).To(o.ContainSubstring("www.amazon.com."))
+
+		exutil.By("7. Create another egressfirewall and its client pod in a different namespace")
+		project5 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project5)
+		operateResourceFromFile(oc, "create", project5, egressFirewall2)
+		waitEgressFirewallApplied(oc, "default", project5)
+		operateResourceFromFile(oc, "create", project5, clientPod)
+		err := waitForPodWithLabelReady(oc, project5, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		exutil.By("8. Verify the  three dnsnameresolver records created in DNSNameResolver CR")
+		wildcardDnsNames := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
+		o.Expect(wildcardDnsNames).To(o.And(o.ContainSubstring("*.google.com."), o.ContainSubstring(
+			"www.facebook.com."), o.ContainSubstring("registry-1.docker.io.")))
+
+		exutil.By("9. Verify the dns records are resolved based on allowed rules only")
+		checkDomainReachability(oc, cltPodName, project5, "www.facebook.com:80", true)
+		checkDomainReachability(oc, cltPodName, project5, "registry-1.docker.io", true)
+		// as per the egress firewall, domain name having "www.facebook.com" with port 80 will only resolved
+		checkDomainReachability(oc, cltPodName, project5, "www.facebook.com:443", false)
+
+		exutil.By("10. Confirm the dns records are resolved with IP address and TTL value")
+		// resolved DNS names
+		dnsName := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..status.resolvedNames..dnsName}")
+		o.Expect(dnsName).To(o.And(o.ContainSubstring("www.facebook.com."), o.ContainSubstring("registry-1.docker.io.")))
+		// resolved TTL values
+		ttlValues := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..status.resolvedNames..resolvedAddresses..ttlSeconds}")
+		o.Expect(ttlValues).To(o.MatchRegexp(`[0-9]{1,3}`))
+		// resolved IP address
+		ipAddress := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..status.resolvedNames..resolvedAddresses..ip}")
+		o.Expect(ipAddress).To(o.MatchRegexp(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`))
+		o.Expect(strings.Count(ipAddress, ":") >= 2).To(o.BeTrue())
+	})
 })

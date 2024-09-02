@@ -326,9 +326,15 @@ func patchResourceAsUser(oc *exutil.CLI, ns, resource, patch string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-// For Admin to patch a resource in the specified namespace
+// For Admin to patch a resource in the specified namespace with 'merge' type
 func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, patch string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "-p", patch, "--type=merge", "-n", ns).Execute()
+	patchResourceAsAdminAnyType(oc, ns, resource, patch, "merge")
+}
+
+// For Admin to patch a resource in the specified namespace with any TYPE
+// Type can be any like 'merge', 'json' etc
+func patchResourceAsAdminAnyType(oc *exutil.CLI, ns, resource, patch, typ string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "-p", patch, "--type="+typ, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
