@@ -181,14 +181,15 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		}
 
 		// should be ensurePeerPodSecrets & configmaps
-		//create peer pods secret and peer pods cm
+		//create peer pods secret and peer pods cm for OSC prev to 1.7.0
 		if kataconfig.enablePeerPods {
-			msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
-			if err != nil {
-				err = fmt.Errorf("Cloud Credentials not found") // Generate a custom error
-				e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
+			if strings.Contains(testrun.operatorVer, "1.6.0") || strings.Contains(testrun.operatorVer, "1.5.3") {
+				msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
+				if err != nil {
+					err = fmt.Errorf("Cloud Credentials not found") // Generate a custom error
+					e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
+				}
 			}
-
 			switch cloudPlatform {
 			case "azure":
 				ppConfigMapTemplate = ppAzureConfigMapTemplate
