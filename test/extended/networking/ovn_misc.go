@@ -1327,7 +1327,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		cmd := fmt.Sprintf("curl --local-port 32012 -v -I -L http://%s", url)
 		expectedString := fmt.Sprintf(`^* Connected to %s \(([\d\.]+)\) port 80 `, url)
 		re := regexp.MustCompile(expectedString)
-		connectErr := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		connectErr := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 15*time.Second, false, func(cxt context.Context) (bool, error) {
 			_, execCmdOutput, err := e2eoutput.RunHostCmdWithFullOutput(ns, pod.name, cmd)
 			if err != nil {
 				e2e.Logf("Getting err :%v, trying again...", err)
