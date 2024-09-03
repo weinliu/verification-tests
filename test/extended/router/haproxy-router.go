@@ -550,6 +550,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat /etc/redhat-release").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Red Hat Enterprise Linux release 9"))
+		// added OCP-75905([OCPBUGS-33900] [OCPBUGS-32369] HAProxy shouldn't consume high cpu usage) in 4.14+
+		output2, err2 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "rpm -qa haproxy28 --changelog | grep -A2 OCPBUGS-32369").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(output2).Should(o.And(
+			o.ContainSubstring(`Resolve https://issues.redhat.com/browse/OCPBUGS-32369`),
+			o.ContainSubstring(`Carry fix for https://github.com/haproxy/haproxy/issues/2537`),
+			o.ContainSubstring(`Fix for issue 2537 picked from https://git.haproxy.org/?p=haproxy.git;a=commit;h=4a9e3e102e192b9efd17e3241a6cc659afb7e7dc`)))
 	})
 
 	// author: shudili@redhat.com
