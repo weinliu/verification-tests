@@ -1112,7 +1112,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		checkCrun(oc)
 	})
 
-	g.It("Author:minmli-High-68184-container_network metrics should keep reporting after container restart", func() {
+	g.It("Author:minmli-DEPRECATED-High-68184-container_network metrics should keep reporting after container restart", func() {
 		livenessProbeTermP68184 := liveProbeTermPeriod{
 			name:                  "liveness-probe",
 			namespace:             oc.Namespace(),
