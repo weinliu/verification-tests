@@ -3,7 +3,6 @@ package clusterinfrastructure
 import (
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -18,7 +17,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		iaasPlatform                   clusterinfra.PlatformType
 		clusterID                      string
 		region                         string
-		host                           string
 		profile                        string
 		instanceType                   string
 		zone                           string
@@ -28,12 +26,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		sgName                         string
 		image                          string
 		machineType                    string
-		network                        string
 		subnetwork                     string
 		capiBaseDir                    string
 		clusterTemplate                string
 		awsMachineTemplateTemplate     string
-		gcpClusterTemplate             string
 		gcpMachineTemplateTemplate     string
 		capiMachinesetAWSTemplate      string
 		capiMachinesetgcpTemplate      string
@@ -55,7 +51,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		err                error
 		cluster            clusterDescription
 		awsMachineTemplate awsMachineTemplateDescription
-		gcpcluster         gcpClusterDescription
 		gcpMachineTemplate gcpMachineTemplateDescription
 		capiMachineSetAWS  capiMachineSetAWSDescription
 		capiMachineSetgcp  capiMachineSetgcpDescription
@@ -98,8 +93,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			machineType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.machineType}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			network, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].network}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			subnetwork, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].subnetwork}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		case clusterinfra.VSphere:
@@ -130,11 +123,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			g.Skip("IAAS platform is " + iaasPlatform.String() + " which is NOT supported cluster api ...")
 		}
 		clusterID = clusterinfra.GetInfrastructureName(oc)
-		apiServerInternalURI, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.apiServerInternalURI}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		start := strings.Index(apiServerInternalURI, "://")
-		end := strings.LastIndex(apiServerInternalURI, ":")
-		host = apiServerInternalURI[start+3 : end]
 
 		capiBaseDir = exutil.FixturePath("testdata", "clusterinfrastructure", "capi")
 		clusterTemplate = filepath.Join(capiBaseDir, "cluster.yaml")
@@ -143,7 +131,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		} else {
 			awsMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-aws-id.yaml")
 		}
-		gcpClusterTemplate = filepath.Join(capiBaseDir, "gcpcluster.yaml")
 		gcpMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-gcp.yaml")
 		capiMachinesetAWSTemplate = filepath.Join(capiBaseDir, "machinesetaws.yaml")
 		capiMachinesetgcpTemplate = filepath.Join(capiBaseDir, "machinesetgcp.yaml")
@@ -160,13 +147,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			namespace: "openshift-machine-api",
 			template:  clusterTemplate,
 		}
-		gcpcluster = gcpClusterDescription{
-			name:     clusterID,
-			region:   region,
-			host:     host,
-			network:  network,
-			template: gcpClusterTemplate,
-		}
+
 		awsMachineTemplate = awsMachineTemplateDescription{
 			name:         "aws-machinetemplate",
 			profile:      profile,
@@ -274,8 +255,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 
 		g.By("Create capi machineset")
 		cluster.createCluster(oc)
-		defer gcpcluster.deleteGCPCluster(oc)
-		gcpcluster.createGCPCluster(oc)
 
 		defer gcpMachineTemplate.deleteGCPMachineTemplate(oc)
 		gcpMachineTemplate.createGCPMachineTemplate(oc)
