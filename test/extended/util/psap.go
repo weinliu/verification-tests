@@ -1009,3 +1009,18 @@ func GetRelicasByMachinesetName(oc *CLI, machinesetName string) string {
 	e2e.Logf("machineseReplicas is %v in GetRelicasByMachinesetName", machineseReplicas)
 	return machineseReplicas
 }
+
+// CountNodeNumByOS used for count how many worker node by windows or linux
+func CountLinuxWorkerNodeNumByOS(oc *CLI) (linuxNum int) {
+	//Count how many windows node and linux node
+	rhcosWorkerNodes, err := GetAllWorkerNodesByOSID(oc, "rhcos")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	rhelWorkerNodes, err := GetAllWorkerNodesByOSID(oc, "rhel")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("rhcosWorkerNodes is:%v", rhcosWorkerNodes[:])
+	e2e.Logf("rhelWorkerNodes is:%v", rhelWorkerNodes[:])
+	rhcosNum := len(rhcosWorkerNodes)
+	rhelNum := len(rhelWorkerNodes)
+	e2e.Logf("rhcos node is:%v, rhel node is %v", rhcosNum, rhelNum)
+	return rhcosNum + rhelNum
+}

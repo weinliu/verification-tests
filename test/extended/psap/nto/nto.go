@@ -3079,6 +3079,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
+		totalLinuxWorkerNode := exutil.CountLinuxWorkerNodeNumByOS(oc)
+		totalLinuxWorkerNodes := strconv.Itoa(totalLinuxWorkerNode)
+		if totalLinuxWorkerNode < 3 {
+			g.Skip("The total linux worker node is " + totalLinuxWorkerNodes + ". The OCP do not have enough worker node, skip it.")
+		}
+
 		tunedNodeName := choseOneWorkerNodeToRunCase(oc, 0)
 
 		//Get how many cpus on the specified worker node
@@ -3224,6 +3230,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) || isSNO {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		totalLinuxWorkerNode := exutil.CountLinuxWorkerNodeNumByOS(oc)
+		totalLinuxWorkerNodes := strconv.Itoa(totalLinuxWorkerNode)
+		if totalLinuxWorkerNode < 3 {
+			g.Skip("The total linux worker node is " + totalLinuxWorkerNodes + ". The OCP do not have enough worker node, skip it.")
 		}
 
 		tunedNodeName, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker-pao", "-ojsonpath={.items[*].metadata.name}").Output()
