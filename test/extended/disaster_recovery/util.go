@@ -76,6 +76,8 @@ func getUserNameAndKeyonBationByPlatform(iaasPlatform string) string {
 		user = os.Getenv("SSH_CLOUD_PRIV_GCP_USER")
 	case "azure":
 		user = os.Getenv("SSH_CLOUD_PRIV_AZURE_USER")
+	case "ibmcloud":
+		user = os.Getenv("SSH_CLOUD_PRIV_IBMCLOUD_USER")
 	}
 	return user
 }

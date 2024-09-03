@@ -84,7 +84,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			userForBastion = ""
 		)
 		g.By("check the platform is supported or not")
-		supportedList := []string{"aws", "gcp", "azure", "vsphere", "nutanix"}
+		supportedList := []string{"aws", "gcp", "azure", "vsphere", "nutanix", "ibmcloud"}
 		platformListWithoutBastion := []string{"vsphere", "nutanix"}
 		support := in(iaasPlatform, supportedList)
 		if support != true {
