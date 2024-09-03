@@ -1307,4 +1307,47 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
+	// author: jfan@redhat.com
+	g.It("Author:jfan-ConnectedOnly-Critical-75441-Catalogd supports compression and jsonlines format", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
+			clustercatalog         = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75441",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75441",
+				Template: clustercatalogTemplate,
+			}
+			clustercatalog1 = olmv1util.ClusterCatalogDescription{
+				Name:     "clustercatalog-75441v2",
+				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75441v2",
+				Template: clustercatalogTemplate,
+			}
+		)
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+		defer clustercatalog1.Delete(oc)
+		clustercatalog1.Create(oc)
+
+		exutil.By("Get the gzip response")
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "passthrough", "passthrough75441", "--service=catalogd-catalogserver", "-n", "openshift-catalogd").Execute()
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("route", "passthrough75441", "-n", "openshift-catalogd").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "passthrough75441", "-o", "jsonpath={..spec.host}", "-n", "openshift-catalogd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the url response")
+		getCmd := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441/all.json -H \"Accept-Encoding: gzip\"", url)
+		stringMessage, err := exec.Command("bash", "-c", getCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stringMessage).To(o.ContainSubstring("Content-Encoding: gzip"))
+		o.Expect(stringMessage).To(o.ContainSubstring("Content-Type: application/jsonl"))
+
+		getCmd2 := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441v2/all.json -H \"Accept-Encoding: gzip\"", url)
+		stringMessage2, err := exec.Command("bash", "-c", getCmd2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stringMessage2).NotTo(o.ContainSubstring("Content-Encoding: gzip"))
+		o.Expect(stringMessage2).To(o.ContainSubstring("Content-Type: application/jsonl"))
+	})
 })
