@@ -51,11 +51,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 	// author qitang@redhat.com
 	g.It("Author:qitang-WRS-CPaasrunBoth-Critical-53817-vector to lokistack[Slow][Serial]", func() {
-		platform := exutil.CheckPlatform(oc)
-		if exutil.IsSTSCluster(oc) && platform == "aws" {
-			g.Skip("skip this case on sts cluster, the test is replaced by OCP-71534 now ")
-		}
-
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
 		s := getStorageType(oc)

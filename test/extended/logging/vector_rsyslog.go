@@ -260,7 +260,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")
 			time.Sleep(60 * time.Second)
-			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
+			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=app.kubernetes.io/component=collector").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Syslog server.")
 
@@ -313,6 +313,9 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			time.Sleep(10 * time.Second)
 			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", rsyslog.namespace, "-l", "component="+rsyslog.serverName).Execute()
 			WaitForDeploymentPodsToBeReady(oc, rsyslog.namespace, rsyslog.serverName)
+			nodeName, err := genLinuxAuditLogsOnWorker(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
 			exutil.By("Check data in log store, only linux audit logs should be collected")
 			rsyslog.checkData(oc, true, "audit-linux.log")
 			rsyslog.checkData(oc, false, "audit-ovn.log")

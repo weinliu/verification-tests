@@ -18,23 +18,16 @@ objects:
       module(load="imudp" TimeRequery="500")
       input(type="imptcp" port="514")
       input(type="imudp" port="514")
-      :programname, contains, "kubernetes.var.log.containers" {
-        if $msg contains "namespace_name=openshift" or $msg contains "namespace_name=default" or $msg contains "namespace_name=kube" then /var/log/custom/infra-container.log
-        if not ($msg contains "namespace_name=openshift" or $msg contains "namespace_name=default" or $msg contains "namespace_name=kube") then /var/log/custom/app-container.log
+      :msg, contains, "\"log_type\":\"application\"" /var/log/clf/app-container.log
+      :msg, contains, "\"log_type\":\"infrastructure\""{
+        if $msg contains "\"log_source\":\"container\"" then /var/log/clf/infra-container.log
+        if $msg contains "\"log_source\":\"node\"" then /var/log/clf/infra.log
       }
-      :programname, contains, "journal.system" /var/log/custom/infra.log
-      :programname, contains, "k8s-audit.log" /var/log/custom/audit.log
-      :programname, contains, "openshift-audit.log" /var/log/custom/audit.log
-      :msg, contains, "container_name"{
-        if $msg contains "infrastructure" then /var/log/clf/infra-container.log
-        if $msg contains "application" then /var/log/clf/app-container.log
-      }
-      :msg, contains, "_STREAM_ID" /var/log/clf/infra.log
-      :msg, contains, "auditID" /var/log/clf/audit.log
-      :msg, contains, "audit.linux" /var/log/clf/audit-linux.log
-      :msg, contains, "k8s_audit_level" /var/log/clf/audit-kubeAPI.log
-      :msg, contains, "openshift_audit_level" /var/log/clf/audit-openshiftAPI.log
-      :msg, contains, "/var/log/ovn/acl-audit-log.log" /var/log/clf/audit-ovn.log
+      :msg, contains, "\"log_type\":\"audit\"" /var/log/clf/audit.log
+      :msg, contains, "\"log_source\":\"auditd\"" /var/log/clf/audit-linux.log
+      :msg, contains, "\"log_source\":\"kubeAPI\"" /var/log/clf/audit-kubeAPI.log
+      :msg, contains, "\"log_source\":\"openshiftAPI\"" /var/log/clf/audit-openshiftAPI.log
+      :msg, contains, "\"log_source\":\"ovn\"" /var/log/clf/audit-ovn.log
 parameters:
 - name: NAME
   value: "rsyslogserver"

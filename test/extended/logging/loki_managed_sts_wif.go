@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		LO.SubscribeOperator(oc)
 	})
 
-	g.It("Author:kbharti-CPaasrunBoth--Critical-71534-Verify CCO support on AWS STS cluster and forward logs to default Loki[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-71534-Verify CCO support on AWS STS cluster and forward logs to default Loki[Serial]", func() {
 		currentPlatform := exutil.CheckPlatform(oc)
 		if strings.ToLower(currentPlatform) != "aws" {
 			g.Skip("The platform is not AWS. Skipping case..")

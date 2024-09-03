@@ -1325,7 +1325,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 
 			g.By("Check for errors in collector pod logs.")
 			err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 3*time.Minute, true, func(context.Context) (done bool, err error) {
-				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=component=collector").Output()
+				collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=app.kubernetes.io/component=collector").Output()
 				if err != nil {
 					return false, nil
 				}
@@ -2171,7 +2171,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
 			err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			bearerToken := getSAToken(oc, "default", loggingNS)
+			bearerToken := getSAToken(oc, "default", oc.Namespace())
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			appRules, err := lc.queryRules("application", appProj)
@@ -2722,7 +2722,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		}
 		defer clf.delete(oc)
 		clf.create(oc, "URL=http://"+loki.name+"."+loki.namespace+".svc:3100")
-		patch := fmt.Sprintf(`{"spec": {"outputs": [{"name":"loki-server","type":"loki","loki":{"url":"http://%s.%s.svc:3100"},"rateLimit": {"maxRecordsPerSecond": 20}}, {"name":"rsyslog-server","type":"syslog","syslog":{"url":"udp://%s.%s.svc:514"},"rateLimit": {"maxRecordsPerSecond": 30}}, {"name":"elasticsearch-server","type":"elasticsearch","rateLimit":{"maxRecordsPerSecond": 10},"elasticsearch":{"version":8,"url":"http://%s.%s.svc:9200","index":"{.log_type||\"none-typed-logs\"}"}}]}}`, loki.name, loki.namespace, rsyslog.serverName, rsyslog.namespace, es.serverName, es.namespace)
+		patch := fmt.Sprintf(`{"spec": {"outputs": [{"name":"loki-server","type":"loki","loki":{"url":"http://%s.%s.svc:3100"},"rateLimit": {"maxRecordsPerSecond": 20}}, {"name":"rsyslog-server","type":"syslog","syslog":{"url":"udp://%s.%s.svc:514","rfc":"RFC5424"},"rateLimit": {"maxRecordsPerSecond": 30}}, {"name":"elasticsearch-server","type":"elasticsearch","rateLimit":{"maxRecordsPerSecond": 10},"elasticsearch":{"version":8,"url":"http://%s.%s.svc:9200","index":"{.log_type||\"none-typed-logs\"}"}}]}}`, loki.name, loki.namespace, rsyslog.serverName, rsyslog.namespace, es.serverName, es.namespace)
 		clf.update(oc, "", patch, "--type=merge")
 		outputRefs := `[{"op": "replace", "path": "/spec/pipelines/0/outputRefs", "value": ["loki-server", "rsyslog-server", "elasticsearch-server"]}]`
 		clf.update(oc, "", outputRefs, "--type=json")

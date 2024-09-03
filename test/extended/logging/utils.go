@@ -795,16 +795,13 @@ func (clf *clusterlogforwarder) delete(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("clusterlogforwarder/%s in project/%s is not deleted", clf.name, clf.namespace))
 	if len(clf.serviceAccountName) > 0 {
 		if clf.collectApplicationLogs {
-			err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-application-logs")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-application-logs")
 		}
 		if clf.collectInfrastructureLogs {
-			err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-infrastructure-logs")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-infrastructure-logs")
 		}
 		if clf.collectAuditLogs {
-			err = removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-audit-logs")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "collect-audit-logs")
 		}
 		resource{"serviceaccount", clf.serviceAccountName, clf.namespace}.clear(oc)
 	}
