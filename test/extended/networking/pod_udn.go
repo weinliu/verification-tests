@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN udn", func() {
@@ -552,7 +554,123 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 			sctpServerIP, _ := getPodIPUDN(oc, ns, sctpServerPodName, "ovn-udn1")
 			verifySctpConnPod2IP(oc, ns, sctpServerIP, sctpServerPodName, sctpClientPodname, true)
 		}
+	})
 
+	g.It("Author:weliang-Medium-75623-Feature Integration UDN with multus. [Disruptive]", func() {
+		var (
+			udnNadtemplate               = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			mtu                    int32 = 1300
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
+			dualstackNADTemplate         = filepath.Join(buildPruningBaseDir, "multus/dualstack-NAD-template.yaml")
+			multihomingPodTemplate       = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+		)
+
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
+
+		ns1 := oc.Namespace()
+
+		exutil.By("Creating NAD1 for ns1")
+		nad1 := udnNetDefResource{
+			nadname:             "udn-primary-net",
+			namespace:           ns1,
+			nad_network_name:    "udn-primary-net",
+			topology:            "layer3",
+			subnet:              "10.100.0.0/16/24",
+			mtu:                 mtu,
+			net_attach_def_name: ns1 + "/" + "udn-primary-net",
+			role:                "primary",
+			template:            udnNadtemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad1.nadname, "-n", ns1).Execute()
+		nad1.createUdnNad(oc)
+
+		exutil.By("Verifying the configured NAD1")
+		if checkNAD(oc, ns1, nad1.nadname) {
+			e2e.Logf("The correct network-attach-definition: %v is created!", nad1.nadname)
+		} else {
+			e2e.Failf("The correct network-attach-definition: %v is not created!", nad1.nadname)
+		}
+
+		exutil.By("Creating NAD2 for ns1")
+		nad2 := dualstackNAD{
+			nadname:        "dualstack",
+			namespace:      ns1,
+			plugintype:     "macvlan",
+			mode:           "bridge",
+			ipamtype:       "whereabouts",
+			ipv4range:      "192.168.10.0/24",
+			ipv6range:      "fd00:dead:beef:10::/64",
+			ipv4rangestart: "",
+			ipv4rangeend:   "",
+			ipv6rangestart: "",
+			ipv6rangeend:   "",
+			template:       dualstackNADTemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad2.nadname, "-n", ns1).Execute()
+		nad2.createDualstackNAD(oc)
+
+		exutil.By("Verifying the configured NAD2")
+		if checkNAD(oc, ns1, nad2.nadname) {
+			e2e.Logf("The correct network-attach-definition: %v is created!", nad2.nadname)
+		} else {
+			e2e.Failf("The correct network-attach-definition: %v is not created!", nad2.nadname)
+		}
+
+		exutil.By("Configuring pod1 for additional network using NAD2")
+		pod1 := testMultihomingPod{
+			name:       "dualstack-pod-1",
+			namespace:  ns1,
+			podlabel:   "dualstack-pod1",
+			nadname:    "dualstack",
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod1.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=dualstack-pod1")).NotTo(o.HaveOccurred())
+
+		exutil.By("Configuring pod2 for additional network using NAD2")
+		pod2 := testMultihomingPod{
+			name:       "dualstack-pod-2",
+			namespace:  ns1,
+			podlabel:   "dualstack-pod2",
+			nadname:    "dualstack",
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod2.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=dualstack-pod2")).NotTo(o.HaveOccurred())
+
+		exutil.By("Getting two pods' names")
+		podList, podListErr := exutil.GetAllPods(oc, ns1)
+		o.Expect(podListErr).NotTo(o.HaveOccurred())
+		o.Expect(len(podList)).Should(o.Equal(2))
+
+		exutil.By("Verifying the pod1 has the primary network")
+		pod1IPs, err := execCommandInSpecificPod(oc, ns1, podList[0], "ip a")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(pod1IPs, "ovn-udn1@")).To(o.BeTrue())
+
+		exutil.By("Verifying the pod2 has the primary network")
+		pod2IPs, err := execCommandInSpecificPod(oc, ns1, podList[1], "ip a")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(pod2IPs, "ovn-udn1@")).To(o.BeTrue())
+
+		exutil.By("Getting IPs from pod1's secondary interface")
+		pod1v4, pod1v6 := getPodMultiNetwork(oc, ns1, podList[0])
+
+		exutil.By("Getting IPs from pod2's secondary interface")
+		pod2v4, pod2v6 := getPodMultiNetwork(oc, ns1, podList[1])
+
+		exutil.By("Verifying both ipv4 and ipv6 communication between two pods through their secondary interface")
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[0], pod2v4, pod2v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[1], pod1v4, pod1v6)
 	})
 
 	g.It("Author:huirwang-Medium-75239-Check sctp traffic work well via udn pods user defined networks for layer2.	[Disruptive]", func() {
@@ -913,4 +1031,188 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		CurlPod2PodFail(oc, ns1, pod1.name, ns2, pod2.name)
 	})
 
+	g.It("Author:weliang-NonPreRelease-Longduration-Medium-75624-Feture intergration UDN with multinetworkpolicy. [Disruptive]", func() {
+		var (
+			udnNadtemplate               = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			mtu                    int32 = 1300
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
+			dualstackNADTemplate         = filepath.Join(buildPruningBaseDir, "multus/dualstack-NAD-template.yaml")
+			multihomingPodTemplate       = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			policyFile                   = filepath.Join(testDataDirUDN, "udn_with_multiplenetworkpolicy.yaml")
+			patchSResource               = "networks.operator.openshift.io/cluster"
+		)
+
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
+
+		exutil.By("Enabling useMultiNetworkPolicy in the cluster")
+		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
+		patchInfoFalse := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
+		defer func() {
+			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
+			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
+			waitForNetworkOperatorState(oc, 100, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 100, 15, "True.*False.*False")
+		}()
+		patchResourceAsAdmin(oc, patchSResource, patchInfoTrue)
+		waitForNetworkOperatorState(oc, 100, 5, "True.*True.*False")
+		waitForNetworkOperatorState(oc, 100, 15, "True.*False.*False")
+
+		exutil.By("Creating a new namespace for this MultiNetworkPolicy testing")
+		ns1 := "project75624"
+		defer oc.AsAdmin().Run("delete").Args("project", ns1, "--ignore-not-found").Execute()
+		nserr1 := oc.Run("new-project").Args(ns1).Execute()
+		o.Expect(nserr1).NotTo(o.HaveOccurred())
+		_, proerr1 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "user="+ns1).Output()
+		o.Expect(proerr1).NotTo(o.HaveOccurred())
+
+		exutil.By("Creating NAD1 for ns1")
+		nad1 := udnNetDefResource{
+			nadname:             "udn-primary-net",
+			namespace:           ns1,
+			nad_network_name:    "udn-primary-net",
+			topology:            "layer3",
+			subnet:              "10.100.0.0/16/24",
+			mtu:                 mtu,
+			net_attach_def_name: ns1 + "/" + "udn-primary-net",
+			role:                "primary",
+			template:            udnNadtemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad1.nadname, "-n", ns1).Execute()
+		nad1.createUdnNad(oc)
+
+		exutil.By("Verifying the configured NAD1")
+		if checkNAD(oc, ns1, nad1.nadname) {
+			e2e.Logf("The correct network-attach-definition: %v is created!", nad1.nadname)
+		} else {
+			e2e.Failf("The correct network-attach-definition: %v is not created!", nad1.nadname)
+		}
+
+		exutil.By("Creating NAD2 for ns1")
+		nad2 := dualstackNAD{
+			nadname:        "dualstack",
+			namespace:      ns1,
+			plugintype:     "macvlan",
+			mode:           "bridge",
+			ipamtype:       "whereabouts",
+			ipv4range:      "192.168.10.0/24",
+			ipv6range:      "fd00:dead:beef:10::/64",
+			ipv4rangestart: "",
+			ipv4rangeend:   "",
+			ipv6rangestart: "",
+			ipv6rangeend:   "",
+			template:       dualstackNADTemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad2.nadname, "-n", ns1).Execute()
+		nad2.createDualstackNAD(oc)
+
+		exutil.By("Verifying the configured NAD2")
+		if checkNAD(oc, ns1, nad2.nadname) {
+			e2e.Logf("The correct network-attach-definition: %v is created!", nad2.nadname)
+		} else {
+			e2e.Failf("The correct network-attach-definition: %v is not created!", nad2.nadname)
+		}
+
+		nadName := "dualstack"
+		nsWithnad := ns1 + "/" + nadName
+
+		exutil.By("Configuring pod1 for additional network using NAD2")
+		pod1 := testMultihomingPod{
+			name:       "blue-pod-1",
+			namespace:  ns1,
+			podlabel:   "blue-pod",
+			nadname:    nsWithnad,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod1.createTestMultihomingPod(oc)
+
+		exutil.By("Configuring pod2 for additional network using NAD2")
+		pod2 := testMultihomingPod{
+			name:       "blue-pod-2",
+			namespace:  ns1,
+			podlabel:   "blue-pod",
+			nadname:    nsWithnad,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod2.createTestMultihomingPod(oc)
+
+		exutil.By("Verifying both pods with same label of blue-pod are ready for testing")
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=blue-pod")).NotTo(o.HaveOccurred())
+
+		exutil.By("Configuring pod3 for additional network using NAD2")
+		pod3 := testMultihomingPod{
+			name:       "red-pod-1",
+			namespace:  ns1,
+			podlabel:   "red-pod",
+			nadname:    nsWithnad,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod3.createTestMultihomingPod(oc)
+
+		exutil.By("Configuring pod4 for additional network NAD2")
+		pod4 := testMultihomingPod{
+			name:       "red-pod-2",
+			namespace:  ns1,
+			podlabel:   "red-pod",
+			nadname:    nsWithnad,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod4.createTestMultihomingPod(oc)
+
+		exutil.By("Verifying both pods with same label of red-pod are ready for testing")
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=red-pod")).NotTo(o.HaveOccurred())
+
+		exutil.By("Getting the deployed pods' names")
+		podList, podListErr := exutil.GetAllPods(oc, ns1)
+		o.Expect(podListErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Getting the IPs of the pod1's secondary interface")
+		pod1v4, pod1v6 := getPodMultiNetwork(oc, ns1, podList[0])
+
+		exutil.By("Getting the IPs of the pod2's secondary interface")
+		pod2v4, pod2v6 := getPodMultiNetwork(oc, ns1, podList[1])
+
+		exutil.By("Getting the IPs of the pod3's secondary interface")
+		pod3v4, pod3v6 := getPodMultiNetwork(oc, ns1, podList[2])
+
+		exutil.By("Getting the IPs of the pod4's secondary interface")
+		pod4v4, pod4v6 := getPodMultiNetwork(oc, ns1, podList[3])
+
+		exutil.By("Verifying the curling should pass before applying multinetworkpolicy")
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[2], pod1v4, pod1v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[2], pod2v4, pod2v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[3], pod1v4, pod1v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[3], pod2v4, pod2v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[2], pod4v4, pod4v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[3], pod3v4, pod3v6)
+
+		exutil.By("Creating the ingress-allow-same-podSelector-with-same-namespaceSelector policy in ns1")
+		defer removeResource(oc, true, true, "multi-networkpolicy", "ingress-allow-same-podselector-with-same-namespaceselector", "-n", ns1)
+		oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", policyFile, "-n", ns1).Execute()
+		output, err := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verifying the ingress-allow-same-podSelector-with-same-namespaceSelector policy is created in ns1")
+		o.Expect(output).To(o.ContainSubstring("ingress-allow-same-podselector-with-same-namespaceselector"))
+
+		exutil.By("Verifying the configured multinetworkpolicy will deny or allow the traffics as policy defined")
+		curlPod2PodMultiNetworkFail(oc, ns1, podList[2], pod1v4, pod1v6)
+		curlPod2PodMultiNetworkFail(oc, ns1, podList[2], pod2v4, pod2v6)
+		curlPod2PodMultiNetworkFail(oc, ns1, podList[3], pod1v4, pod1v6)
+		curlPod2PodMultiNetworkFail(oc, ns1, podList[3], pod2v4, pod2v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[2], pod4v4, pod4v6)
+		curlPod2PodMultiNetworkPass(oc, ns1, podList[3], pod3v4, pod3v6)
+	})
 })

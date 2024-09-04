@@ -1618,7 +1618,6 @@ func isValueInList(value string, list []string) bool {
 }
 
 // getPodMultiNetwork is designed to get both v4 and v6 addresses from pod's secondary interface(net1) which is not in the cluster's SDN or OVN network
-// currently the v4 address of pod's secondary interface is always displyed before v6 address no matter the order configred in the net-attach-def YAML file
 func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (string, string) {
 	cmd1 := "ip -o -4 addr show dev net1 | awk '$3 == \"inet\" {print $4}' | cut -d'/' -f1"
 	cmd2 := "ip -o -6 addr show dev net1 | awk '$3 == \"inet6\" {print $4}' | head -1 | cut -d'/' -f1"
@@ -1626,17 +1625,20 @@ func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (strin
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("pod net1 ipv4 is: %s", podIPv4)
 	o.Expect(podIPv4).NotTo(o.BeNil())
-	pod2ns1IPv4 := strings.TrimSpace(podIPv4)
+	podipv4 := strings.TrimSpace(podIPv4)
 	podIPv6, err1 := e2eoutput.RunHostCmdWithRetries(namespace, podName, cmd2, 2*time.Second, 10*time.Second)
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	e2e.Logf("pod net1 ipv6 is: %s", podIPv6)
 	o.Expect(podIPv6).NotTo(o.BeNil())
-	pod2ns1IPv6 := strings.TrimSpace(podIPv6)
-	return pod2ns1IPv4, pod2ns1IPv6
+	podipv6 := strings.TrimSpace(podIPv6)
+	e2e.Logf("The v4 address of %s is: %v", podName, podipv4)
+	e2e.Logf("The v4 address of %s is: %v", podName, podipv6)
+	return podipv4, podipv6
 }
 
 // Pinging pod's secondary interfaces should pass
 func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
+	// Poll to check IPv4 connectivity
 	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if !strings.Contains(msg, "Hello OpenShift!") {
@@ -1645,13 +1647,23 @@ func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc
 		}
 		return true, nil
 	})
-	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
-	//msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
+
+	// Poll to check IPv6 connectivity
+	err1 := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+		msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 ["+podIPv6+"]:8080  --connect-timeout 5")
+		if !strings.Contains(msg1, "Hello OpenShift!") {
+			e2e.Logf("The curl should pass but fail, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("Test fail with err:%s", err1))
 }
 
 // Pinging pod's secondary interfaces should fail
 func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
+	// Poll to check IPv4 connectivity
 	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if strings.Contains(msg, "Hello OpenShift!") {
@@ -1660,9 +1672,18 @@ func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc
 		}
 		return true, nil
 	})
-	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
-	//msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
+
+	// Poll to check IPv6 connectivity
+	err1 := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+		msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 ["+podIPv6+"]:8080  --connect-timeout 5")
+		if strings.Contains(msg1, "Hello OpenShift!") {
+			e2e.Logf("The curl should fail but pass, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("Test fail with err:%s", err1))
 }
 
 // This function will bring 2 namespaces, 5 pods and 2 NADs for all multus multinetworkpolicy cases
