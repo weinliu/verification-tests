@@ -292,6 +292,17 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 			e2e.Logf("Source and destination for mirror2disk are set correctly")
 		}
 
+		exutil.By("Start mirror2disk")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed")
+
 		exutil.By("Start dry run of disk2mirror")
 		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
 			diskToMirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName+":5000/d2m", "--v2", "--dry-run", "--authfile", dirname+"/.dockerconfigjson").Output()
@@ -1264,7 +1275,8 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 
 	})
 
-	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-73124-Validate operator mirroring works fine for the catalog that does not follow same structure as RHOI [Serial]", func() {
+	// Marking the test flaky due to issue https://issues.redhat.com/browse/CLID-214
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-73124-Validate operator mirroring works fine for the catalog that does not follow same structure as RHOI [Serial] [Flaky]", func() {
 		exutil.By("Set registry config")
 		dirname := "/tmp/case73124"
 		defer os.RemoveAll(dirname)

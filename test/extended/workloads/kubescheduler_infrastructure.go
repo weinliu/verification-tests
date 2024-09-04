@@ -471,16 +471,9 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 			g.Skip("Skip Testing on SNO ...")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
-		deploynpcT := filepath.Join(buildPruningBaseDir, "non_preempting_priority.yaml")
+		deploynpc := filepath.Join(buildPruningBaseDir, "non_preempting_priority36110.yaml")
 		deploypcT := filepath.Join(buildPruningBaseDir, "priorityclassm.yaml")
 		deploypodlT := filepath.Join(buildPruningBaseDir, "priorityl.yaml")
-
-		// Create nonpreempting priorityclasses
-		priorityclassnp := priorityClassDefinition{
-			name:          "prioritym",
-			priorityValue: 99,
-			template:      deploynpcT,
-		}
 
 		// Create priorityclassh
 		priorityclassh := priorityClassDefinition{
@@ -490,8 +483,9 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 		}
 
 		exutil.By("Create nonpreemptingpriority class")
-		defer priorityclassnp.deletePriorityClass(oc)
-		priorityclassnp.createPriorityClass(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", deploynpc).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deploynpc).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create priorityh class")
 		defer priorityclassh.deletePriorityClass(oc)
@@ -557,7 +551,7 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 			name:              "prioritym36110",
 			label:             "pm36110",
 			memory:            totalMemoryInBytes,
-			priorityClassName: "prioritym",
+			priorityClassName: "prioritym36110",
 			namespace:         oc.Namespace(),
 			template:          deploypodlT,
 		}
