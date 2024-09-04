@@ -562,16 +562,21 @@ func chkPodsPassTraffic(oc *exutil.CLI, pod1name string, pod2name string, infNam
 		// Match our IPv4 and IPv6 address on net1 ip address output
 		rev4 := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
 		ipv4Addresses := rev4.FindAllString(net1Output, -1)
-		rev6 := regexp.MustCompile(`(?i)(?<ipv6>(?:[\da-f]{0,4}:){1,7}(?:(?<ipv4>(?:(?:25[0-5]|2[0-4]\d|1?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|1?\d\d?))|[\da-f]{0,4}))`)
-		ipv6Addresses := rev6.FindAllString(net1Output, -1)
-		e2e.Logf("\n destination pod %s net1 IPv4 address: %s, net1 IPv6 address: %s\n", pod2name, ipv4Addresses, ipv6Addresses)
+		rev6 := regexp.MustCompile(`inet6\s+([0-9a-fA-F:]{2,39})(?:/\d{1,3})?`)
+		ipv6Addresses := rev6.FindAllStringSubmatch(net1Output, -1)
+		for _, match := range ipv6Addresses {
+			if len(match) > 1 {
+				ipv6Address := match[1]
+				e2e.Logf("\n destination pod %s net1 IPv6 address: %s\n", pod2name, ipv6Address)
+				CurlMultusPod2PodPass(oc, ns, pod1name, ipv6Address, infName, "Hello")
+			}
+		}
 
+		e2e.Logf("\n destination pod %s net1 IPv4 address: %s\n", pod2name, ipv4Addresses)
 		if len(ipv4Addresses) != 0 {
 			CurlMultusPod2PodPass(oc, ns, pod1name, ipv4Addresses[0], infName, "Hello")
 		}
-		if len(ipv6Addresses) != 0 {
-			CurlMultusPod2PodPass(oc, ns, pod1name, ipv6Addresses[0], infName, "Hello")
-		}
+
 	}
 
 }
