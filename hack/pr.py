@@ -49,7 +49,7 @@ for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
                 continue
             if not lineIndex.startswith("+"):
                 continue
-            if re.search("VMonly|NonUnifyCI｜CPaasrunOnly｜ProdrunOnly｜StagerunOnly|DisconnectedOnly|HyperShiftMGMT|MicroShiftOnly|ChkUpgrade", lineIndex):
+            if re.search("Flaky|VMonly|NonUnifyCI｜CPaasrunOnly｜ProdrunOnly｜StagerunOnly|DisconnectedOnly|HyperShiftMGMT|MicroShiftOnly|ChkUpgrade", lineIndex):
                 continue
             if "\"" not in lineIndex:
                 continue
