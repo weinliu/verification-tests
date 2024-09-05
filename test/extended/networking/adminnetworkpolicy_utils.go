@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -683,4 +684,36 @@ func checkACLLogs(oc *exutil.CLI, serverPodNs string, serverPodName string, clie
 	}
 	tailACLLogCmd.Process.Kill()
 
+}
+
+func checkSpecificPolicyStatus(oc *exutil.CLI, policyType string, policyName string, lookupStatusKey string, expectedStatusStr string) (result bool, resultMsg string) {
+	e2e.Logf("Checking status of %s named %s for '%s' in '%s'", strings.ToUpper(policyType), policyName, expectedStatusStr, lookupStatusKey)
+	result = true
+	resultMsg = ""
+	allNodes, err := exutil.GetAllNodes(oc)
+	if err != nil {
+		return false, fmt.Sprintf("%v", err)
+	}
+	statusOutput, messagesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args(policyType, policyName, `-ojsonpath={.status}`).Output()
+	if messagesErr != nil {
+		return false, fmt.Sprintf("%v", messagesErr)
+	}
+	var data map[string]interface{}
+	json.Unmarshal([]byte(statusOutput), &data)
+	allConditions := data["conditions"].([]interface{})
+	if len(allConditions) != len(allNodes) {
+		resultMsg = "Failed to obtain status for all nodes in cluster"
+		return false, resultMsg
+	}
+	for i := 0; i < len(allConditions); i++ {
+		for statusKey, statusVal := range allConditions[i].(map[string]interface{}) {
+			if statusKey == lookupStatusKey && !strings.Contains(statusVal.(string), expectedStatusStr) {
+				resultMsg = fmt.Sprintf("Failed to find: %s", expectedStatusStr)
+				return false, resultMsg
+			}
+		}
+
+	}
+
+	return result, resultMsg
 }

@@ -1087,5 +1087,100 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		checkACLLogs(oc, nsList[1], coloredPods[nsList[1]], subjectNs, coloredPods[subjectNs], "fail", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], false)
 
 	})
+	g.It("Author:asood-High-73604-[FdpOvnOvs] BANP and ANP validation", func() {
+		var (
+			testID           = "73604"
+			testDataDir      = exutil.FixturePath("testdata", "networking")
+			banpCRTemplate   = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-single-rule-cidr-template.yaml")
+			anpCRTemplate    = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-cidr-template.yaml")
+			validCIDR        = "10.10.10.1/24"
+			matchLabelKey    = "kubernetes.io/metadata.name"
+			invalidCIDR      = "10.10.10.1-10.10.10.1"
+			invalidIPv6      = "2001:db8:a0b:12f0::::0:1/128"
+			expectedMessages = [3]string{"Duplicate value", "Invalid CIDR format provided", "Invalid CIDR format provided"}
+			resourceType     = [2]string{"banp", "anp"}
+			patchCIDR        = []string{}
+			resourceName     = []string{}
+			patchAction      string
+		)
+
+		subjectNs := oc.Namespace()
+		exutil.By("Create BANP with single rule with CIDR")
+		banp := singleRuleCIDRBANPPolicyResource{
+			name:       "default",
+			subjectKey: matchLabelKey,
+			subjectVal: subjectNs,
+			ruleName:   "Egress to CIDR",
+			ruleAction: "Deny",
+			cidr:       validCIDR,
+			template:   banpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banp.name)
+		banp.createSingleRuleCIDRBANP(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banp.name)).To(o.BeTrue())
+		resourceName = append(resourceName, banp.name)
+
+		anpCR := singleRuleCIDRANPPolicyResource{
+			name:       "anp-0-" + testID,
+			subjectKey: matchLabelKey,
+			subjectVal: subjectNs,
+			priority:   10,
+			ruleName:   "Egress to CIDR",
+			ruleAction: "Deny",
+			cidr:       validCIDR,
+			template:   anpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpCR.name)
+		anpCR.createSingleRuleCIDRANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+		resourceName = append(resourceName, anpCR.name)
+
+		patchCIDR = append(patchCIDR, fmt.Sprintf("[{\"op\": \"add\", \"path\": \"/spec/egress/0/to/0/networks/1\", \"value\": %s }]", validCIDR))
+		patchCIDR = append(patchCIDR, fmt.Sprintf("[{\"op\": \"replace\", \"path\": \"/spec/egress/0/to/0/networks/0\", \"value\": %s}]", invalidCIDR))
+		patchCIDR = append(patchCIDR, fmt.Sprintf("[{\"op\": \"replace\", \"path\": \"/spec/egress/0/to/0/networks/0\", \"value\": %s}]", invalidIPv6))
+		exutil.By("BANP and ANP validation with invalid CIDR values")
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("Validating %s with name %s", strings.ToUpper(resourceType[i]), resourceName[i]))
+			for j := 0; j < len(expectedMessages); j++ {
+				exutil.By(fmt.Sprintf("Validating %s message", expectedMessages[j]))
+				patchOutput, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceType[i], resourceName[i], "--type=json", "-p", patchCIDR[j]).Output()
+				o.Expect(patchErr).To(o.HaveOccurred())
+				o.Expect(strings.Contains(patchOutput, expectedMessages[j])).To(o.BeTrue())
+			}
+
+		}
+		exutil.By("BANP and ANP validation with action values in lower case")
+		policyActions := map[string][]string{"banp": {"allow", "deny"}, "anp": {"allow", "deny", "pass"}}
+		idx := 0
+		for _, polType := range resourceType {
+			exutil.By(fmt.Sprintf("Validating %s with name %s", strings.ToUpper(polType), resourceName[idx]))
+			for _, actionStr := range policyActions[polType] {
+				exutil.By(fmt.Sprintf("Validating  invalid  action %s", actionStr))
+				patchAction = fmt.Sprintf("[{\"op\": \"replace\", \"path\": \"/spec/egress/0/action\", \"value\": %s}]", actionStr)
+				patchOutput, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(polType, resourceName[idx], "--type=json", "-p", patchAction).Output()
+				o.Expect(patchErr).To(o.HaveOccurred())
+				o.Expect(strings.Contains(patchOutput, fmt.Sprintf("Unsupported value: \"%s\"", actionStr))).To(o.BeTrue())
+			}
+			idx = idx + 1
+		}
+
+		exutil.By("ANP validation for priority more than 99")
+		anpCR.name = "anp-1-" + testID
+		anpCR.priority = 100
+		defer removeResource(oc, true, true, "anp", anpCR.name)
+		anpCR.createSingleRuleCIDRANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+
+		statusChk, statusChkMsg := checkSpecificPolicyStatus(oc, "anp", anpCR.name, "message", "OVNK only supports priority ranges 0-99")
+		o.Expect(statusChk).To(o.BeTrue())
+		o.Expect(statusChkMsg).To(o.BeEmpty())
+
+	})
 
 })
