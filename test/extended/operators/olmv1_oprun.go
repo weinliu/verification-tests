@@ -1436,4 +1436,14 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.AssertWaitPollNoErr(errWait, "nginx70723 2.0.0 is not installed")
 	})
 
+	// author: bandrade@redhat.com
+	g.It("Author:bandrade-Medium-75877-Make sure that rukpak is removed from payload", func() {
+		exutil.By("1) Check if bundledeployments.core.rukpak.io CRD is not installed")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "bundledeployments.core.rukpak.io").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		exutil.By("2) Check if openshift-rukpak is not created")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-rukpak").Output()
+		o.Expect(err).To(o.HaveOccurred())
+	})
+
 })
