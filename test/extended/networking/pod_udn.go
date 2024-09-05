@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN udn", func() {
@@ -1214,5 +1216,140 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		curlPod2PodMultiNetworkFail(oc, ns1, podList[3], pod2v4, pod2v6)
 		curlPod2PodMultiNetworkPass(oc, ns1, podList[2], pod4v4, pod4v6)
 		curlPod2PodMultiNetworkPass(oc, ns1, podList[3], pod3v4, pod3v6)
+	})
+
+	g.It("Author:huirwang-NonPreRelease-Longduration-High-75503-Overlapping pod CIDRs/IPs are allowed in different primary NADs.", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnNadtemplate            = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			testPodFile               = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			mtu                 int32 = 1300
+		)
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has fewer than two nodes.")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Obtain first namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Obtain 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		nadResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2}
+		nadNS := []string{ns1, ns2}
+		var subnet []string
+		if ipStackType == "ipv4single" {
+			subnet = []string{"10.150.0.0/26/29", "10.150.0.0/26/29"}
+		} else {
+			if ipStackType == "ipv6single" {
+				subnet = []string{"2010:100:200::0/60", "2010:100:200::0/60"}
+			} else {
+				subnet = []string{"10.150.0.0/26/29,2010:100:200::0/60", "10.150.0.0/26/29,2010:100:200::0/60"}
+			}
+		}
+
+		nad := make([]udnNetDefResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			nad[i] = udnNetDefResource{
+				nadname:             nadResourcename[i],
+				namespace:           nadNS[i],
+				nad_network_name:    nadResourcename[i],
+				topology:            "layer3",
+				subnet:              subnet[i],
+				mtu:                 mtu,
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[i],
+				role:                "primary",
+				template:            udnNadtemplate,
+			}
+			nad[i].createUdnNad(oc)
+			exutil.By("Verifying the configued NetworkAttachmentDefinition")
+			if checkNAD(oc, nadNS[i], nadResourcename[i]) {
+				e2e.Logf("The correct network-attach-defintion: %v is created!", nadResourcename[i])
+			} else {
+				e2e.Failf("The correct network-attach-defintion: %v is not created!", nadResourcename[i])
+			}
+		}
+
+		exutil.By("Create replica pods in ns1")
+		createResourceFromFile(oc, ns1, testPodFile)
+		numberOfPods := "8"
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas="+numberOfPods, "-n", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
+		e2e.Logf("Collect all the pods IPs in namespace %s", ns1)
+		var podsNS1IP1, podsNS1IP2 []string
+		for i := 0; i < len(testpodNS1Names); i++ {
+			podIP1, podIP2 := getPodIPUDN(oc, ns1, testpodNS1Names[i], "ovn-udn1")
+			if podIP2 != "" {
+				podsNS1IP2 = append(podsNS1IP2, podIP2)
+			}
+			podsNS1IP1 = append(podsNS1IP1, podIP1)
+		}
+		e2e.Logf("The IPs of pods in first namespace %s for UDN:\n %v %v", ns1, podsNS1IP1, podsNS1IP2)
+
+		exutil.By("create replica pods in ns2")
+		createResourceFromFile(oc, ns2, testPodFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas="+numberOfPods, "-n", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ns2, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS2Names := getPodName(oc, ns2, "name=test-pods")
+		e2e.Logf("Collect all the pods IPs in namespace %s", ns2)
+		var podsNS2IP1, podsNS2IP2 []string
+		for i := 0; i < len(testpodNS2Names); i++ {
+			podIP1, podIP2 := getPodIPUDN(oc, ns2, testpodNS2Names[i], "ovn-udn1")
+			if podIP2 != "" {
+				podsNS2IP2 = append(podsNS2IP2, podIP2)
+			}
+			podsNS2IP1 = append(podsNS2IP1, podIP1)
+		}
+		e2e.Logf("The IPs of pods in second namespace %s for UDN:\n %v %v", ns2, podsNS2IP1, podsNS2IP2)
+
+		testpodNS1NamesLen := len(testpodNS1Names)
+		podsNS1IP1Len := len(podsNS1IP1)
+		podsNS1IP2Len := len(podsNS1IP2)
+		exutil.By("Verify udn network should be able to access in same network.")
+		for i := 0; i < testpodNS1NamesLen; i++ {
+			for j := 0; j < podsNS1IP1Len; j++ {
+				if podsNS1IP2Len > 0 && podsNS1IP2[j] != "" {
+					_, err = e2eoutput.RunHostCmd(ns1, testpodNS1Names[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(podsNS1IP2[j], "8080"))
+					o.Expect(err).NotTo(o.HaveOccurred())
+				}
+				_, err = e2eoutput.RunHostCmd(ns1, testpodNS1Names[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(podsNS1IP1[j], "8080"))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+
+		podsNS2IP1Len := len(podsNS2IP1)
+		podsNS2IP2Len := len(podsNS2IP2)
+		exutil.By("Verify udn network should be isolated in different network.")
+		for i := 0; i < testpodNS1NamesLen; i++ {
+			for j := 0; j < podsNS2IP1Len; j++ {
+				if podsNS2IP2Len > 0 && podsNS2IP2[j] != "" {
+					if contains(podsNS1IP2, podsNS2IP2[j]) {
+						// as the destination IP in ns2 is same as one in NS1, then it will be able to access that IP and has been executed in previous steps.
+						continue
+					} else {
+						_, err = e2eoutput.RunHostCmd(ns1, testpodNS1Names[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(podsNS2IP2[j], "8080"))
+						o.Expect(err).To(o.HaveOccurred())
+					}
+				}
+				if contains(podsNS1IP1, podsNS2IP1[j]) {
+					// as the destination IP in ns2 is same as one in NS1, then  it will be able to access that IP and has been executed in previous steps..
+					continue
+				} else {
+					_, err = e2eoutput.RunHostCmd(ns1, testpodNS1Names[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(podsNS2IP1[j], "8080"))
+					o.Expect(err).To(o.HaveOccurred())
+				}
+			}
+		}
 	})
 })
