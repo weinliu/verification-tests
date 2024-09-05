@@ -25,13 +25,6 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 
 	var oc = exutil.NewCLI("networking-ovnkubernetes", exutil.KubeConfigPath())
 
-	g.BeforeEach(func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Incompatible networkType, skipping test!!!")
-		}
-	})
-
 	// author: anusaxen@redhat.com
 	g.It("Author:anusaxen-Medium-49216-ovnkube-node logs should not print api token in logs. ", func() {
 		g.By("it's for bug 2009857")
@@ -56,11 +49,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	g.It("Author:anusaxen-NonHyperShiftHOST-NonPreRelease-High-55144-[FdpOvnOvs] Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
 		exutil.By("it's for bug 2042516")
 		var desiredMode string
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network backend")
-		}
+
 		//need to find out original mode cluster is on so that we can revert back to same post test
 		origMode := getOVNGatewayMode(oc)
 		if origMode == "local" {

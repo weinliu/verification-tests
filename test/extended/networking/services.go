@@ -367,11 +367,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "aws") || strings.Contains(platform, "azure")) {
 			g.Skip("Skip for non-supported auto scaling machineset platforms!!")
 		}
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("OVN constructs would not be on the cluster")
-		}
+
 		workerNodes, err := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -686,12 +682,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 		)
-		exutil.By("0. Check the network plugin")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("Unsupported network plugin for this test")
-		}
+
 		ipStackType := checkIPStackType(oc)
 		o.Expect(ipStackType).NotTo(o.BeEmpty())
 
@@ -1182,11 +1173,6 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		var workers, nonExternalIPNodes []string
 		var proxyHost string
 
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Incompatible networkType, skipping test!!!")
-		}
-
 		platform := exutil.CheckPlatform(oc)
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 		if err != nil || strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
@@ -1414,12 +1400,11 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		genericServiceTemplate := filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 
 		platform := exutil.CheckPlatform(oc)
-		networkType := checkNetworkType(oc)
-		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
+
 		scheduleableNodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		acceptedPlatform := strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
-		if !acceptedPlatform || !strings.Contains(networkType, "ovn") || len(scheduleableNodeList.Items) < 2 {
+		if !acceptedPlatform || len(scheduleableNodeList.Items) < 2 {
 			g.Skip("Test cases should be run on GCP or Azure cluster with ovn network plugin, minimal 2 nodes are required, skip for others that do not meet the test requirement")
 		}
 

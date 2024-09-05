@@ -595,10 +595,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			svc_names            = [2]string{"hello-world-cluster", "hello-world-local"}
 			svc_etp              = [2]string{"Cluster", "Local"}
 		)
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Incompatible networkType, skipping test!!!")
-		}
+
 		exutil.By("1. Determine suitability of worker nodes for the test")
 		//Two worker nodes needed to create l2advertisement object
 		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)

@@ -674,23 +674,13 @@ func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, 
 }
 
 func execCommandInNetworkingPod(oc *exutil.CLI, command string) (string, error) {
-	networkType := checkNetworkType(oc)
 	var cmd []string
-	if strings.Contains(networkType, "ovn") {
-		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-node", "-o=jsonpath={.items[0].metadata.name}").Output()
-		if err != nil {
-			e2e.Logf("Cannot get onv-kubernetes pods, errors: %v", err)
-			return "", err
-		}
-		cmd = []string{"-n", "openshift-ovn-kubernetes", "-c", "ovnkube-controller", podName, "--", "/bin/sh", "-c", command}
-	} else if strings.Contains(networkType, "sdn") {
-		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-sdn", "-l", "app=sdn", "-o=jsonpath={.items[0].metadata.name}").Output()
-		if err != nil {
-			e2e.Logf("Cannot get openshift-sdn pods, errors: %v", err)
-			return "", err
-		}
-		cmd = []string{"-n", "openshift-sdn", "-c", "sdn", podName, "--", "/bin/sh", "-c", command}
+	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-node", "-o=jsonpath={.items[0].metadata.name}").Output()
+	if err != nil {
+		e2e.Logf("Cannot get ovn-kubernetes pods, errors: %v", err)
+		return "", err
 	}
+	cmd = []string{"-n", "openshift-ovn-kubernetes", "-c", "ovnkube-controller", podName, "--", "/bin/sh", "-c", command}
 
 	msg, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(cmd...).Output()
 	if err != nil {
@@ -1918,21 +1908,13 @@ func patchReplaceResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch str
 // IPv6 single stack not supported on openshiftSDN
 func getNodeSubnet(oc *exutil.CLI, nodeName string) string {
 
-	networkType := checkNetworkType(oc)
-
-	if networkType == "ovnkubernetes" {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-subnets}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		var data map[string]interface{}
-		json.Unmarshal([]byte(output), &data)
-		hostSubnets := data["default"].([]interface{})
-		hostSubnet := hostSubnets[0].(string)
-		return hostSubnet
-	}
-	nodeSubnet, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", nodeName, "-o=jsonpath={.subnet}").Output()
-	o.Expect(nodeSubnet).NotTo(o.BeEmpty())
-	o.Expect(err1).NotTo(o.HaveOccurred())
-	return nodeSubnet
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-subnets}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var data map[string]interface{}
+	json.Unmarshal([]byte(output), &data)
+	hostSubnets := data["default"].([]interface{})
+	hostSubnet := hostSubnets[0].(string)
+	return hostSubnet
 
 }
 
@@ -1990,21 +1972,16 @@ func disableACLOnNamespace(oc *exutil.CLI, namespace string) {
 }
 
 func getNodeMacAddress(oc *exutil.CLI, nodeName string) string {
-	networkType := checkNetworkType(oc)
 	var macAddress string
-	if networkType == "ovnkubernetes" {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/l3-gateway-config}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		var data map[string]interface{}
-		json.Unmarshal([]byte(output), &data)
-		l3GatewayConfigAnnotations := data["default"].(interface{})
-		l3GatewayConfigAnnotationsJSON := l3GatewayConfigAnnotations.(map[string]interface{})
-		macAddress = l3GatewayConfigAnnotationsJSON["mac-address"].(string)
-		return macAddress
-	}
-	macAddress, err1 := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bin/sh", "-c", "cat /sys/class/net/br0/address")
-	o.Expect(err1).NotTo(o.HaveOccurred())
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/l3-gateway-config}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var data map[string]interface{}
+	json.Unmarshal([]byte(output), &data)
+	l3GatewayConfigAnnotations := data["default"].(interface{})
+	l3GatewayConfigAnnotationsJSON := l3GatewayConfigAnnotations.(map[string]interface{})
+	macAddress = l3GatewayConfigAnnotationsJSON["mac-address"].(string)
 	return macAddress
+
 }
 
 // check if an env is in a configmap in specific namespace [usage: checkConfigMap(oc, namesapce, configmapName, envString)]
@@ -4046,5 +4023,3 @@ func (svc *sessionAffinityServiceResource) createSessionAffiniltyService(oc *exu
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create pservice %s due to %v", svc.name, err))
 }
-
-//

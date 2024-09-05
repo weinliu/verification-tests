@@ -19,16 +19,6 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 	var oc = exutil.NewCLI("networking-adminnetworkpolicy", exutil.KubeConfigPath())
 
-	g.BeforeEach(func() {
-		// Check the cluster type
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip(fmt.Sprintf("Baseline Admin and Admin network policies not supported on  cluster type : %s", networkType))
-		}
-
-	})
-
 	//https://issues.redhat.com/browse/SDN-2931
 	g.It("Author:asood-High-67103-[FdpOvnOvs] Egress BANP, NP and ANP policy with allow, deny and pass action. [Serial]", func() {
 		var (

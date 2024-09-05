@@ -931,11 +931,6 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
-		}
 
 		g.By("Obtain the namespace")
 		ns1 := oc.Namespace()
@@ -993,11 +988,6 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
-		}
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
 		}
 
 		var namespaces [2]string
@@ -1072,11 +1062,6 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
-		}
 
 		g.By("Configure audit message logging destination to journald")
 		patchSResource := "networks.operator.openshift.io/cluster"
@@ -1148,11 +1133,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
 		)
 		g.By("This is for BZ 2095852")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network backend")
-		}
+
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -1189,11 +1170,6 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/egress-ingress-62524.yaml")
 		)
 		g.By("Check cluster network type")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network backend")
-		}
 
 		g.By("Get namespace")
 		ns := oc.Namespace()
@@ -1270,13 +1246,6 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-ingress-red.yaml")
 			testPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		)
-
-		exutil.By("Check cluster network type")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network plugin")
-		}
 
 		exutil.By("Obtain the namespace")
 		ns := oc.Namespace()
@@ -1421,12 +1390,6 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			ipBlockEgressTemplateSingle = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-single-multiple-CIDRs-template.yaml")
 			pingPodNodeTemplate         = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		)
-		exutil.By("Check cluster network type")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network plugin")
-		}
 
 		ipStackType := checkIPStackType(oc)
 		o.Expect(ipStackType).NotTo(o.BeEmpty())
@@ -1531,12 +1494,6 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			allowToNSNetworkPolicyFile = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-to-same-namespace.yaml")
 			pingPodTemplate            = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		)
-		exutil.By("Check cluster network type")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network plugin")
-		}
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1615,12 +1572,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			networkPolicyFileDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
 			policyName              = "ipblock-64788"
 		)
-		exutil.By("Check cluster network type")
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network backend")
-		}
+
 		ipStackType := checkIPStackType(oc)
 		o.Expect(ipStackType).NotTo(o.BeEmpty())
 

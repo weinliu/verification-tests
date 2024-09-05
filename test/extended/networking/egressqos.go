@@ -25,11 +25,10 @@ var _ = g.Describe("[sig-networking] SDN egressqos", func() {
 	g.BeforeEach(func() {
 
 		platform := exutil.CheckPlatform(oc)
-		networkType := checkNetworkType(oc)
-		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
+
 		acceptedPlatform := strings.Contains(platform, "aws")
-		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		if !acceptedPlatform {
+			g.Skip("Test cases should be run on AWS cluster with ovn network plugin, skip for other platforms !!")
 		}
 
 		switch platform {

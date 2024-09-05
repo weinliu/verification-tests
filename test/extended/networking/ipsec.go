@@ -25,13 +25,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 		// Epic https://issues.redhat.com/browse/SDN-2629
 
 		platform := checkPlatform(oc)
-		networkType := checkNetworkType(oc)
-		e2e.Logf("\nThe platform is %v,  networkType is %v\n", platform, networkType)
 		if !strings.Contains(platform, "ibmcloud") {
 			g.Skip("Test requires IBMCloud, skip for other platforms!")
-		}
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Test requires OVN, skipping!")
 		}
 		ipsecState := checkIPsec(oc)
 		if ipsecState != "{}" {
@@ -79,10 +74,9 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	)
 	g.BeforeEach(func() {
 		platform := exutil.CheckPlatform(oc)
-		networkType := checkNetworkType(oc)
-		e2e.Logf("\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") || !strings.Contains(networkType, "ovn")) {
-			g.Skip("Test cases should be run on GCP/BJBM/RDU2 cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+
+		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")) {
+			g.Skip("Test cases should be run on GCP/BJBM/RDU2 cluster with ovn network plugin, skip for other platforms !!")
 		}
 
 		ipsecState := checkIPsec(oc)

@@ -27,11 +27,6 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 	g.BeforeEach(func() {
 
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("This is required to run on OVNKubernetes Network Backened")
-		}
-
 		windowNodeList, err := exutil.GetAllNodesbyOSType(oc, "windows")
 		o.Expect(err).NotTo(o.HaveOccurred())
 

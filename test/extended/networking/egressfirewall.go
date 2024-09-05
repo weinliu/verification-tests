@@ -30,11 +30,6 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	var oc = exutil.NewCLI("networking-egressfirewall", exutil.KubeConfigPath())
 	var aclLogPath = "--path=ovn/acl-audit-log.log"
 	g.BeforeEach(func() {
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVNK network plugin")
-		}
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, egressfirewall cannot be tested on proxy cluster, skip the test.")
 		}
@@ -1821,11 +1816,6 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall-techpreview", func() {
 		if !exutil.IsTechPreviewNoUpgrade(oc) {
 			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
 		}
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
-			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVNK network plugin")
-		}
 
 		if checkProxy(oc) || checkDisconnect(oc) {
 			g.Skip("This is proxy/disconnect cluster, skip the test.")
@@ -2150,153 +2140,5 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall-techpreview", func() {
 		e2e.Logf("The dnsnameresolver output is : \n %s ", output)
 		o.Expect(strings.Contains(output, "dnsName: www.facebook.com")).NotTo(o.BeTrue())
 		o.Expect(strings.Contains(output, "dnsName: registry-1.docker.io")).To(o.BeTrue())
-	})
-})
-
-var _ = g.Describe("[sig-networking] SDN egressnetworkpolicy", func() {
-	defer g.GinkgoRecover()
-
-	var oc = exutil.NewCLI("networking-egressnetworkpolicy", exutil.KubeConfigPath())
-	g.BeforeEach(func() {
-		networkType := exutil.CheckNetworkType(oc)
-		o.Expect(networkType).NotTo(o.BeEmpty())
-		if !strings.Contains(networkType, "sdn") {
-			g.Skip("EgressNetworkpolicy should run on SDN network cluster, skipped for other network plugin clusters.")
-		}
-		if checkProxy(oc) {
-			g.Skip("This is proxy cluster, egressNetworkpolicy cannot be tested on proxy cluster, skip the test.")
-		}
-	})
-
-	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-63742-High-62896-Medium-49154-EgressNetworkPolicy DNS resolution should fall back to TCP for truncated responses,updating egressnetworkpolicy should delete the old version egressnetworkpolicy.", func() {
-		// From customer bugs
-		// https://issues.redhat.com/browse/OCPBUGS-12435
-		// https://issues.redhat.com/browse/OCPBUGS-11887
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
-			egressNPTemplate    = filepath.Join(buildPruningBaseDir, "egressnetworkpolicy-template.yaml")
-		)
-
-		exutil.By("Get namespace")
-		ns := oc.Namespace()
-
-		exutil.By("Create an EgressNetworkpolicy object with a dnsName")
-		egressNetworkpolicy := egressNetworkpolicy{
-			name:      "egressnetworkpolicy-63742",
-			namespace: ns,
-			ruletype:  "Deny",
-			rulename:  "dnsName",
-			rulevalue: "aerserv-bc-us-east.bidswitch.net",
-			template:  egressNPTemplate,
-		}
-		defer removeResource(oc, true, true, "egressnetworkpolicy", egressNetworkpolicy.name, "-n", egressNetworkpolicy.namespace)
-		egressNetworkpolicy.createEgressNetworkPolicyObj(oc)
-
-		exutil.By("Checking SDN logs, should no trancted message for dns")
-		sdnPod := getPodName(oc, "openshift-sdn", "app=sdn")
-		o.Consistently(func() bool {
-			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPod[0], "-n", "openshift-sdn", "-c", "sdn", "--since", "60s").Output()
-			result := strings.Contains(podlogs, "dns: failed to unpack truncated message")
-			if result {
-				e2e.Logf("The SDN logs is :%s \n", podlogs)
-			}
-			return result
-		}, 30*time.Second, 10*time.Second).ShouldNot(o.BeTrue())
-
-		exutil.By("Update egressnetworkpolicy")
-		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNetworkpolicy.name+"", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.cnn.com\"}},{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.facebook.com\"}}]}}", "--type=merge").Execute()
-		o.Expect(errPatch).NotTo(o.HaveOccurred())
-		errPatch = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNetworkpolicy.name+"", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.yahoo.com\"}},{\"type\":\"Deny\",\"to\":{\"dnsName\":\"www.redhat.com\"}}]}}", "--type=merge").Execute()
-		o.Expect(errPatch).NotTo(o.HaveOccurred())
-
-		exutil.By("Checking SDN logs, should no cannot find netid message for egressnetworkpolicy.")
-		o.Consistently(func() bool {
-			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPod[0], "-n", "openshift-sdn", "-c", "sdn", "--since", "60s").Output()
-			result := strings.Contains(podlogs, "Could not find netid for namespace \"\": failed to find netid for namespace: , resource name may not be empty")
-			if result {
-				e2e.Logf("The SDN logs is :%s \n", podlogs)
-			}
-			return result
-		}, 30*time.Second, 10*time.Second).ShouldNot(o.BeTrue())
-
-		// Add coverage for OCP-49154 which is from customer bug https://bugzilla.redhat.com/show_bug.cgi?id=2040338
-		exutil.By("Remove egressnetworkpolicy in foreground.")
-		errDel := oc.AsAdmin().Run("delete").Args("--cascade=foreground", "egressnetworkpolicy", egressNetworkpolicy.name, "-n", ns).Execute()
-		o.Expect(errDel).NotTo(o.HaveOccurred())
-
-		exutil.By("Verify egressnetworkpolicy was removed.")
-		output, errGet := oc.AsAdmin().Run("get").Args("egressnetworkpolicy", "-n", ns).Output()
-		o.Expect(errGet).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(output, "No resources found")).Should(o.BeTrue())
-
-	})
-
-	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
-			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
-			egressNPTemplate    = filepath.Join(buildPruningBaseDir, "egressnetworkpolicy-template.yaml")
-			ns                  = "64761-upgrade-ns"
-		)
-
-		exutil.By("create new namespace")
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("Create an egressnetworkpolicy object with rule deny.")
-		egressNP := egressNetworkpolicy{
-			name:      "egressnetworkpolicy-64761",
-			namespace: ns,
-			ruletype:  "Deny",
-			rulename:  "cidrSelector",
-			rulevalue: "0.0.0.0/0",
-			template:  egressNPTemplate,
-		}
-		egressNP.createEgressNetworkPolicyObj(oc)
-		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressnetworkpolicy.network.openshift.io/"+egressNP.name, "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.redhat.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
-		o.Expect(errPatch).NotTo(o.HaveOccurred())
-
-		exutil.By("Create a pod in the namespace")
-		createResourceFromFile(oc, ns, statefulSetHelloPod)
-		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
-		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
-		helloPodname := getPodName(oc, ns, "app=hello")[0]
-
-		exutil.By("Check the allowed website can be accessed!")
-		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.By("Check the other website can be blocked!")
-		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
-		o.Expect(err).To(o.HaveOccurred())
-	})
-
-	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:huirwang-High-64761-Check egressnetworkpolicy is functional post upgrade", func() {
-		ns := "64761-upgrade-ns"
-		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
-		if nsErr != nil {
-			g.Skip("Skip the PstChkUpgrade test as 64761-upgrade-ns namespace does not exist, PreChkUpgrade test did not run")
-		}
-
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
-
-		exutil.By("Verify if egressnetworkpolicy existed")
-		output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressnetworkpolicy", "-n", ns).Output()
-		o.Expect(efErr).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("egressnetworkpolicy-64761"))
-
-		exutil.By("Get the pod in the namespace")
-		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
-		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
-		helloPodname := getPodName(oc, ns, "app=hello")[0]
-
-		exutil.By("Check the allowed website can be accessed!")
-		_, err := e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.By("Check the other website can be blocked!")
-		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
-		o.Expect(err).To(o.HaveOccurred())
 	})
 })

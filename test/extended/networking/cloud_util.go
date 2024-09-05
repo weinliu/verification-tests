@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -203,20 +204,13 @@ func findUnUsedIPsOnNode(oc *exutil.CLI, nodeName, cidr string, number int) []st
 	//shuffle the ips slice
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(ipRange), func(i, j int) { ipRange[i], ipRange[j] = ipRange[j], ipRange[i] })
-	networkType := checkNetworkType(oc)
 	var err error
 	var podName string
 	var ns string
-	if strings.Contains(networkType, "ovn") {
-		podName, err = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		ns = "openshift-ovn-kubernetes"
-	}
-	if strings.Contains(networkType, "sdn") {
-		podName, err = exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nodeName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		ns = "openshift-sdn"
-	}
+	podName, err = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	ns = "openshift-ovn-kubernetes"
+
 	for _, ip := range ipRange {
 		if len(ipUnused) < number {
 			pingCmd := "ping -c4 -t1 " + ip
@@ -907,33 +901,24 @@ func waitCloudPrivateIPconfigUpdate(oc *exutil.CLI, egressIP string, exist bool)
 
 // getSnifPhyInf Get physical interface
 func getSnifPhyInf(oc *exutil.CLI, nodeName string) (string, error) {
-	networkType := checkNetworkType(oc)
 	var phyInf string
-	if strings.Contains(networkType, "ovn") {
-		ifaceErr2 := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-			ifaceList2, ifaceErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
-			if ifaceErr != nil {
-				e2e.Logf("Debug node Error: %v", ifaceErr)
-				return false, nil
+	ifaceErr2 := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 15*time.Second, false, func(cxt context.Context) (bool, error) {
+		ifaceList2, ifaceErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		if ifaceErr != nil {
+			e2e.Logf("Debug node Error: %v", ifaceErr)
+			return false, nil
+		}
+		e2e.Logf(ifaceList2)
+		infList := strings.Split(ifaceList2, "\n")
+		for _, inf := range infList {
+			if strings.Contains(inf, "ovs-if-phys0") {
+				phyInf = strings.Fields(inf)[3]
 			}
-			e2e.Logf(ifaceList2)
-			infList := strings.Split(ifaceList2, "\n")
-			for _, inf := range infList {
-				if strings.Contains(inf, "ovs-if-phys0") {
-					phyInf = strings.Fields(inf)[3]
-				}
-			}
+		}
 
-			return true, nil
-		})
-		return phyInf, ifaceErr2
-	}
-
-	if strings.Contains(networkType, "sdn") {
-		phyInf, error := getDefaultInterface(oc)
-		return phyInf, error
-	}
-	return "", nil
+		return true, nil
+	})
+	return phyInf, ifaceErr2
 
 }
 

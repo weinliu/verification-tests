@@ -31,11 +31,8 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 			ovncmName = "kube-rbac-proxy-ovn-metrics"
 			podLabel  = "app=ovnkube-node"
 		)
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
-		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
+
+		podName := getLeaderInfo(oc, namespace, podLabel, "ovnkubernetes")
 		prometheusURL := "localhost:29105/metrics"
 		metricName1 := "ovn_controller_if_status_mgr_run_total_samples"
 		metricName2 := "ovn_controller_if_status_mgr_run_long_term_avg"
@@ -78,12 +75,8 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 			ovncmName = "kube-rbac-proxy-ovn-metrics"
 			podLabel  = "app=ovnkube-node"
 		)
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
-		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
+		podName := getLeaderInfo(oc, namespace, podLabel, "ovnkubernetes")
 		metricName1 := "ovnkube_controller_pod_first_seen_lsp_created_duration_seconds_count"
 		metricName2 := "ovnkube_controller_pod_lsp_created_port_binding_duration_seconds_count"
 		metricName3 := "ovnkube_controller_pod_port_binding_port_binding_chassis_duration_seconds_count"
@@ -110,12 +103,8 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 			ovncmName = "kube-rbac-proxy-ovn-metrics"
 			podLabel  = "app=ovnkube-node"
 		)
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
-		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
+		podName := getLeaderInfo(oc, namespace, podLabel, "ovnkubernetes")
 		prometheusURL := "localhost:29105/metrics"
 
 		metricName := "ovn_controller_integration_bridge_openflow_total"
@@ -135,81 +124,51 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 			namespace           = "openshift-ovn-kubernetes"
 			ovncmName           = "kube-rbac-proxy-ovn-metrics"
 			podLabel            = "app=ovnkube-node"
-			sdnnamespace        = "openshift-sdn"
-			sdncmName           = "openshift-network-controller"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/metrics")
 			egressFirewall      = filepath.Join(buildPruningBaseDir, "OVN-Rules.yaml")
-			egressNetworkpolicy = filepath.Join(buildPruningBaseDir, "SDN-Rules.yaml")
 		)
 		exutil.By("create new namespace")
 		oc.SetupProject()
 		ns := oc.Namespace()
 
-		networkType := checkNetworkType(oc)
 		var metricValue1 string
 		var metricValue2 string
-		if networkType == "ovnkubernetes" {
-			podName := getLeaderInfo(oc, namespace, podLabel, networkType)
-			metricName := "ovnkube_controller_num_egress_firewall_rules"
-			prometheusURL := "localhost:29103/metrics"
+		podName := getLeaderInfo(oc, namespace, podLabel, "ovnkubernetes")
+		metricName := "ovnkube_controller_num_egress_firewall_rules"
+		prometheusURL := "localhost:29103/metrics"
 
-			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
-			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				metricValue1 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
-				e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics before applying egressfirewall rules is : %v", metricValue1)
-				if metricValue1 >= "0" {
-					return true, nil
-				}
-				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
-
-			exutil.By("create egressfirewall rules in OVN cluster")
-			fwErr := oc.AsAdmin().Run("create").Args("-n", ns, "-f", egressFirewall).Execute()
-			o.Expect(fwErr).NotTo(o.HaveOccurred())
-			defer oc.AsAdmin().Run("delete").Args("-n", ns, "-f", egressFirewall).Execute()
-			fwOutput, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressfirewall", "-n", ns).Output()
-			o.Expect(fwOutput).To(o.ContainSubstring("EgressFirewall Rules applied"))
-
-			metricsOutputAfter := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				metricValue2 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
-				e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics after applying egressfirewall rules is : %v", metricValue1)
-				metricValue1Int, _ := strconv.Atoi(metricValue1)
-				metricValue2Int, _ := strconv.Atoi(metricValue2)
-				if metricValue2Int == metricValue1Int+3 {
-					return true, nil
-				}
-				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(metricsOutputAfter, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
-		}
-
-		if networkType == "openshiftsdn" {
-			exutil.By("get the metrics of sdn_controller_num_egress_firewalls before configuration")
-			leaderPodName := getLeaderInfo(oc, sdnnamespace, sdncmName, networkType)
-			output := getSDNMetrics(oc, leaderPodName)
-			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep sdn_controller_num_egress_firewall_rules | awk 'NR==3{print $2}'").Output()
-			metricValue1 := strings.TrimSpace(string(metricOutput))
-			metricValue1Int, _ := strconv.Atoi(metricValue1)
+		exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
+		metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			metricValue1 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
 			e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics before applying egressfirewall rules is : %v", metricValue1)
+			if metricValue1 >= "0" {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
 
-			exutil.By("create egressNetworkpolicy rules in SDN cluster")
-			fwErr := oc.AsAdmin().Run("create").Args("-n", ns, "-f", egressNetworkpolicy).Execute()
-			o.Expect(fwErr).NotTo(o.HaveOccurred())
-			defer oc.AsAdmin().Run("delete").Args("-n", ns, "-f", egressNetworkpolicy).Execute()
-			fwOutput, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressnetworkpolicy", "-n", ns).Output()
-			o.Expect(fwOutput).To(o.ContainSubstring("sdn-egressnetworkpolicy"))
+		exutil.By("create egressfirewall rules in OVN cluster")
+		fwErr := oc.AsAdmin().Run("create").Args("-n", ns, "-f", egressFirewall).Execute()
+		o.Expect(fwErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().Run("delete").Args("-n", ns, "-f", egressFirewall).Execute()
+		fwOutput, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressfirewall", "-n", ns).Output()
+		o.Expect(fwOutput).To(o.ContainSubstring("EgressFirewall Rules applied"))
 
-			exutil.By("get the metrics of sdn_controller_num_egress_firewalls after configuration")
-			output1 := getSDNMetrics(oc, leaderPodName)
-			metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep sdn_controller_num_egress_firewall_rules | awk 'NR==3{print $2}'").Output()
-			metricValue2 := strings.TrimSpace(string(metricOutput1))
-			e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics after applying egressfirewall rules is : %v", metricValue2)
+		metricsOutputAfter := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			metricValue2 = getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+			e2e.Logf("The output of the ovnkube_master_num_egress_firewall_rules metrics after applying egressfirewall rules is : %v", metricValue1)
+			metricValue1Int, _ := strconv.Atoi(metricValue1)
 			metricValue2Int, _ := strconv.Atoi(metricValue2)
-			o.Expect(metricValue2Int).Should(o.Equal(metricValue1Int + 2))
-		}
+			if metricValue2Int == metricValue1Int+3 {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricsOutputAfter, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
+
 	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-45842-Metrics for IPSec enabled/disabled", func() {
@@ -218,14 +177,10 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 			ovncmName = "kube-rbac-proxy-ovn-metrics"
 			podLabel  = "app=ovnkube-node"
 		)
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
 		ipsecState := checkIPsec(oc)
 		e2e.Logf("The ipsec state is : %v", ipsecState)
-		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
+		podName := getLeaderInfo(oc, namespace, podLabel, "ovnkubernetes")
 		prometheusURL := "localhost:29103/metrics"
 
 		metricName := "ovnkube_controller_ipsec_enabled"
@@ -273,8 +228,6 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-45685-Metrics for Metrics for egressIP. [Disruptive]", func() {
 		var (
 			ovncmName           = "kube-rbac-proxy"
-			sdnnamespace        = "openshift-sdn"
-			sdncmName           = "openshift-network-controller"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressIPTemplate    = filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		)
@@ -283,97 +236,64 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 		if !strings.Contains(platform, "vsphere") {
 			g.Skip("Skip for un-expected platform, egreeIP testing need to be executed on a vsphere cluster!")
 		}
-		networkType := checkNetworkType(oc)
 
-		if networkType == "ovnkubernetes" {
-			exutil.By("create new namespace")
-			oc.SetupProject()
-			ns := oc.Namespace()
+		exutil.By("create new namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
 
-			podName := getOVNKMasterPod(oc)
-			metricName := "ovnkube_clustermanager_num_egress_ips"
-			prometheusURL := "localhost:29108/metrics"
+		podName := getOVNKMasterPod(oc)
+		metricName := "ovnkube_clustermanager_num_egress_ips"
+		prometheusURL := "localhost:29108/metrics"
 
-			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
-			metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
-				if metricValue == "0" {
-					return true, nil
-				}
-				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
-
-			exutil.By("Label EgressIP node")
-			var EgressNodeLabel = "k8s.ovn.org/egress-assignable"
-			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
-			if err != nil {
-				e2e.Logf("Unexpected error occurred: %v", err)
+		exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules before configuration")
+		metricsOutput := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+			if metricValue == "0" {
+				return true, nil
 			}
-			exutil.By("Apply EgressLabel Key on one node.")
-			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel)
-			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
 
-			exutil.By("Apply label to namespace")
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name-").Output()
-			_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name=test").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Label EgressIP node")
+		var EgressNodeLabel = "k8s.ovn.org/egress-assignable"
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		if err != nil {
+			e2e.Logf("Unexpected error occurred: %v", err)
+		}
+		exutil.By("Apply EgressLabel Key on one node.")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
 
-			exutil.By("Create an egressip object")
-			sub1, _ := getDefaultSubnet(oc)
-			ips := findUnUsedIPs(oc, sub1, 2)
-			egressip1 := egressIPResource1{
-				name:      "egressip-45685",
-				template:  egressIPTemplate,
-				egressIP1: ips[0],
-				egressIP2: ips[1],
+		exutil.By("Apply label to namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name-").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name=test").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an egressip object")
+		sub1, _ := getDefaultSubnet(oc)
+		ips := findUnUsedIPs(oc, sub1, 2)
+		egressip1 := egressIPResource1{
+			name:      "egressip-45685",
+			template:  egressIPTemplate,
+			egressIP1: ips[0],
+			egressIP2: ips[1],
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject1(oc)
+
+		exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules after configuration")
+		metricsOutputAfter := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
+			if metricValue == "1" {
+				return true, nil
 			}
-			defer egressip1.deleteEgressIPObject1(oc)
-			egressip1.createEgressIPObject1(oc)
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricsOutputAfter, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutputAfter))
 
-			exutil.By("get the metrics of ovnkube_controller_num_egress_firewall_rules after configuration")
-			metricsOutputAfter := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				metricValue := getOVNMetricsInSpecificContainer(oc, ovncmName, podName, prometheusURL, metricName)
-				if metricValue == "1" {
-					return true, nil
-				}
-				e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(metricsOutputAfter, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutputAfter))
-		}
-
-		if networkType == "openshiftsdn" {
-			exutil.By("create new namespace")
-			oc.SetupProject()
-			ns := oc.Namespace()
-			ip := "192.168.249.145"
-
-			exutil.By("get the metrics of sdn_controller_num_egress_ips before egress_ips configurations")
-			leaderPodName := getLeaderInfo(oc, sdnnamespace, sdncmName, networkType)
-			output := getSDNMetrics(oc, leaderPodName)
-			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep sdn_controller_num_egress_ips | awk 'NR==3{print $2}'").Output()
-			metricValue := strings.TrimSpace(string(metricOutput))
-			e2e.Logf("The output of the sdn_controller_num_egress_ips is : %v", metricValue)
-			o.Expect(metricValue).To(o.ContainSubstring("0"))
-
-			patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+ip+"\"]}")
-			defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
-
-			nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			egressNode := nodeList.Items[0].Name
-			patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+ip+"\"]}")
-			defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
-
-			exutil.By("get the metrics of sdn_controller_num_egress_ips after egress_ips configurations")
-			output1 := getSDNMetrics(oc, leaderPodName)
-			metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep sdn_controller_num_egress_ips | awk 'NR==3{print $2}'").Output()
-			metricValue1 := strings.TrimSpace(string(metricOutput1))
-			e2e.Logf("The output of the sdn_controller_num_egress_ips is : %v", metricValue1)
-			o.Expect(metricValue1).To(o.ContainSubstring("1"))
-		}
 	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
@@ -462,12 +382,8 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 			namespace = "openshift-ovn-kubernetes"
 			podLabel  = "app=ovnkube-node"
 		)
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
-		podName := getLeaderInfo(oc, namespace, podLabel, networkType)
+		podName := getLeaderInfo(oc, namespace, podLabel, "ovnkubernetes")
 		leaderNodeIP := getPodIPv4(oc, namespace, podName)
 		ip := net.ParseIP(leaderNodeIP)
 		var prometheusURL string
@@ -483,25 +399,7 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName2)
 	})
 
-	g.It("NonHyperShiftHOST-Author:zzhao-Medium-53030-NodeProxyApplySlow should have correct value.", func() {
-		//This script is for https://bugzilla.redhat.com/show_bug.cgi?id=2060079
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "openshiftsdn") {
-			g.Skip("Skip testing on non-sdn cluster!!!")
-		}
-
-		alertExpr, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-sdn", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NodeProxyApplySlow\")].expr}").Output()
-		o.Expect(NameErr).NotTo(o.HaveOccurred())
-		e2e.Logf("The alertExpr is %v", alertExpr)
-		o.Expect(alertExpr).To(o.ContainSubstring("histogram_quantile(.95, sum(rate(kubeproxy_sync_proxy_rules_duration_seconds_bucket[5m])) by (le, namespace, pod))"))
-
-	})
-
 	g.It("Author:qiowang-Medium-53969-Verify OVN controller SB DB connection status metric works [Disruptive]", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
 		var (
 			namespace  = "openshift-ovn-kubernetes"
@@ -569,10 +467,6 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 	})
 
 	g.It("Author:qiowang-Medium-60539-Verify metrics ovs_vswitchd_interfaces_total. [Serial]", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
 		var (
 			namespace           = "openshift-ovn-kubernetes"
@@ -644,10 +538,6 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 	})
 
 	g.It("NonPreRelease-Longduration-Author:qiowang-Medium-60708-Verify metrics ovnkube_resource_retry_failures_total. [Serial] [Slow]", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
 		var (
 			namespace           = "openshift-ovn-kubernetes"
@@ -715,11 +605,10 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:qiowang-Medium-60192-Verify metrics for egress ip unreachable and re-balance total [Disruptive] [Slow]", func() {
-		networkType := exutil.CheckNetworkType(oc)
 		platform := exutil.CheckPlatform(oc)
 		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "nutanix")
-		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal/Nutanix cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		if !acceptedPlatform {
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal/Nutanix cluster with ovn network plugin, skip for other platforms !!")
 		}
 
 		var (
@@ -832,10 +721,6 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 	})
 
 	g.It("Author:qiowang-Medium-60704-Verify metrics ovs_vswitchd_interface_up_wait_seconds_total. [Serial]", func() {
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
 
 		var (
 			namespace           = "openshift-ovn-kubernetes"
@@ -886,10 +771,7 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 		var (
 			metricName = "ovnkube_controller_ipsec_enabled"
 		)
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Skip testing on non-ovn cluster!!!")
-		}
+
 		ipsecState := checkIPsec(oc)
 		if ipsecState == "{}" || ipsecState == "Full" || ipsecState == "External" {
 			g.Skip("Skip the testing in the ipsec enabled clusters!!!")
