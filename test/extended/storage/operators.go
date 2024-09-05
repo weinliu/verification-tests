@@ -427,6 +427,55 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: wduan@redhat.com
+	// OCP-75983-[vSphere-csi-driver-Operator] support disable vsphere csi driver
+	// Mark as Serial as test changes clustercsidriver.spec.managementState to "Removed" and vSphere CSI Driver will be unstalled
+	g.It("Author:wduan-NonHyperShiftHOST-High-75983-[vSphere-csi-driver-Operator] support disable vsphere csi driver [Serial]", func() {
+		cloudProvider = getCloudProvider(oc)
+		if !strings.Contains(cloudProvider, "vsphere") {
+			g.Skip("Skip for non-supported cloud provider: *" + cloudProvider + "* !!!")
+		}
+
+		var (
+			csidriver           = "csi.vsphere.vmware.com"
+			csiNamespace        = "openshift-cluster-csi-drivers"
+			csiDriverNode       = newDaemonSet(setDsName("vmware-vsphere-csi-driver-node"), setDsNamespace(csiNamespace), setDsApplabel("app=vmware-vsphere-csi-driver-node"))
+			csiDriverController = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-controller"), setDeploymentNamespace(csiNamespace), setDeploymentApplabel("app=vmware-vsphere-csi-driver-controller"))
+			csiDriverWebhook    = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-webhook"), setDeploymentNamespace(csiNamespace), setDeploymentApplabel("app=vmware-vsphere-csi-driver-webhook"))
+		)
+
+		savedClustercsidriversManagementState, ManagementStateError := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercsidriver", csidriver, "-o=jsonpath={.spec.managementState}").Output()
+		o.Expect(ManagementStateError).ShouldNot(o.HaveOccurred())
+
+		// Skip test if ClustercsidriversManagementState
+		if savedClustercsidriversManagementState == "Removed" {
+			g.Skip("Skip for unexpected clustercsidriver managementState, it is *" + savedClustercsidriversManagementState + "*!")
+		}
+
+		exutil.By("# Updating clustercsidrivers.spec.managementState to Removed")
+		setClustercsidriversManagementState(oc, csidriver, "Removed")
+
+		defer func() {
+			setClustercsidriversManagementState(oc, csidriver, savedClustercsidriversManagementState)
+			waitCSOhealthy(oc)
+		}()
+
+		checkResourcesNotExist(oc.AsAdmin(), "csidriver", csidriver, "")
+		checkResourcesNotExist(oc.AsAdmin(), "daemonset", csiDriverNode.name, csiDriverNode.namespace)
+		checkResourcesNotExist(oc.AsAdmin(), "deployments", csiDriverController.name, csiDriverController.namespace)
+		checkResourcesNotExist(oc.AsAdmin(), "deployments", csiDriverWebhook.name, csiDriverWebhook.namespace)
+
+		exutil.By("# Updating clustercsidrivers.spec.managementState to Managed")
+		setClustercsidriversManagementState(oc, csidriver, "Managed")
+
+		csiDriverNode.waitReady(oc.AsAdmin())
+		csiDriverController.waitReady(oc.AsAdmin())
+		csiDriverWebhook.waitReady(oc.AsAdmin())
+		expectSpecifiedResourceExist(oc, "csidriver/"+csidriver, "", true)
+		waitCSOhealthy(oc)
+
+	})
+
 })
 
 func verifyTLSInCSIDriver(oc *exutil.CLI, provisioner string, expectedCipher string, expectedVersion string) {
@@ -475,4 +524,10 @@ func verifyTLSInCSIController(oc *exutil.CLI, provisioner string, expectedCipher
 		}
 		return []string{cipher, version}
 	}, 120*time.Second, 5*time.Second).Should(o.Equal([]string{expectedCipher, expectedVersion}))
+}
+
+func setClustercsidriversManagementState(oc *exutil.CLI, clustercsidriver string, status string) {
+	patchCmd := fmt.Sprintf(`{"spec": {"managementState": "%s"}}`, status)
+	exeErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clustercsidrivers", clustercsidriver, "--type=merge", "-p", patchCmd).Execute()
+	o.Expect(exeErr).ShouldNot(o.HaveOccurred())
 }
