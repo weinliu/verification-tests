@@ -1065,6 +1065,12 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		waitForNetworkOperatorState(oc, 100, 15, "True.*False.*False")
 
 		exutil.By("Creating a new namespace for this MultiNetworkPolicy testing")
+		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		defer func() {
+			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
+			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+		}()
 		ns1 := "project75624"
 		defer oc.AsAdmin().Run("delete").Args("project", ns1, "--ignore-not-found").Execute()
 		nserr1 := oc.Run("new-project").Args(ns1).Execute()
