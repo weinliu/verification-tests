@@ -39,6 +39,13 @@ type pvcDescription struct {
 	template    string
 }
 
+type PodDisruptionBudget struct {
+	name      string
+	namespace string
+	template  string
+	label     string
+}
+
 func (pvc *pvcDescription) createPvc(oc *exutil.CLI) {
 	e2e.Logf("Creating pvc ...")
 	exutil.CreateNsResourceFromTemplate(oc, "openshift-machine-api", "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "STORAGESIZE="+pvc.storageSize)
@@ -94,4 +101,15 @@ func waitForDefaultMachinesRunning(oc *exutil.CLI, machineNumber int, machineSet
 	})
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 16 minutes ...", machineNumber))
 	e2e.Logf("All machines are Running ...")
+}
+
+func (pdb *PodDisruptionBudget) createPDB(oc *exutil.CLI) {
+	e2e.Logf("Creating pod disruption budget: %s", pdb.name)
+	exutil.CreateNsResourceFromTemplate(oc, pdb.namespace, "--ignore-unknown-parameters=true", "-f", pdb.template, "-p", "NAME="+pdb.name, "LABEL="+pdb.label)
+}
+
+func (pdb *PodDisruptionBudget) deletePDB(oc *exutil.CLI) {
+	e2e.Logf("Deleting pod disruption budget: %s", pdb.name)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pdb", pdb.name, "-n", pdb.namespace, "--ignore-not-found=true").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

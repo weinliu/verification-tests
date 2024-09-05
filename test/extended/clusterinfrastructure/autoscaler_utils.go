@@ -46,6 +46,7 @@ type workLoadDescription struct {
 	template  string
 	arch      architecture.Architecture
 	cpu       string
+	label     string
 }
 
 type priorityExpanderDescription struct {
@@ -89,6 +90,8 @@ func (workLoad *workLoadDescription) createWorkLoad(oc *exutil.CLI) {
 	var err error
 	if strings.Contains(workLoad.template, "affinity") {
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workLoad.template, "-p", "NAME="+workLoad.name, "NAMESPACE="+workLoad.namespace, "ARCH="+workLoad.arch.String(), "CPU="+workLoad.cpu)
+	} else if strings.Contains(workLoad.template, "label") {
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workLoad.template, "-p", "NAME="+workLoad.name, "NAMESPACE="+workLoad.namespace, "LABEL="+workLoad.label)
 	} else {
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", workLoad.template, "-p", "NAME="+workLoad.name, "NAMESPACE="+workLoad.namespace)
 	}

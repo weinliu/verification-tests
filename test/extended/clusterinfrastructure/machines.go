@@ -1470,4 +1470,46 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		e2e.Logf("tags:%s", tags)
 		o.Expect(tags).Should(o.ContainSubstring("key24721b"))
 	})
+
+	//author: zhsun@redhat.com
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-52602-Drain operation should be asynchronous from the other machine operations [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.Azure, clusterinfra.IBMCloud, clusterinfra.Nutanix, clusterinfra.VSphere, clusterinfra.OpenStack)
+
+		exutil.By("Create a new machineset")
+		machinesetName := infrastructureName + "-52602"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		exutil.By("Scale machineset to 5")
+		clusterinfra.ScaleMachineSet(oc, machinesetName, 5)
+
+		exutil.By("Create PDB")
+		miscDir := exutil.FixturePath("testdata", "clusterinfrastructure", "misc")
+		pdbTemplate := filepath.Join(miscDir, "pdb.yaml")
+		workloadTemplate := filepath.Join(miscDir, "workload-with-label.yaml")
+		pdb := PodDisruptionBudget{name: "pdb-52602", namespace: machineAPINamespace, template: pdbTemplate, label: "label-52602"}
+		workLoad := workLoadDescription{name: "workload-52602", namespace: machineAPINamespace, template: workloadTemplate, label: "label-52602"}
+		defer pdb.deletePDB(oc)
+		pdb.createPDB(oc)
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		exutil.By("Delete machines")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "--wait=false").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check machines can quickly be created without waiting for the other Nodes to drain.")
+		o.Eventually(func() bool {
+			machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machines := strings.Fields(machineNames)
+			if len(machines) == 10 {
+				return true
+			}
+			return false
+		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(o.BeTrue())
+	})
 })
