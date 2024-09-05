@@ -139,6 +139,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-NonHyperShiftHOST-High-53610-Operator control-plane-machine-set should be in Available state and report version information", func() {
+		capability, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(capability, "MachineAPI") {
+			g.Skip("MachineAPI not enabled so co control-plane-machine-set wont be present")
+		}
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.versions[0].version}").Output()
