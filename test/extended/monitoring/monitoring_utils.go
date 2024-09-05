@@ -456,3 +456,21 @@ func checkConfigInsidePod(oc *exutil.CLI, ns string, container string, pod strin
 	})
 	exutil.AssertWaitPollNoErr(configCheck, fmt.Sprintf("base on `expectExist=%v`, did (not) find \"%s\" exist", expectExist, checkValue))
 }
+
+// ensures the pod remains in Ready state for a specific duration
+func ensurePodRemainsReady(oc *exutil.CLI, podName string, namespace string, timeout time.Duration, interval time.Duration) {
+	endTime := time.Now().Add(timeout)
+
+	for time.Now().Before(endTime) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace).Output()
+		if err != nil || !strings.Contains(output, "Running") {
+			e2e.Logf("Pod %s is not in Running state, err: %v\n", podName, err)
+		} else {
+			e2e.Logf("Pod %s is Running and Ready\n", podName)
+		}
+		time.Sleep(interval)
+	}
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get the pod %s in namespace %s", podName, namespace)
+	o.Expect(strings.Contains(output, "Running")).To(o.BeTrue(), "Pod %s did not remain Ready within the given timeout", podName)
+}
