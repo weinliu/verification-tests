@@ -9,6 +9,5 @@ spec:
   channel: v1.0
   installPlanApproval: Automatic
   name: ibm-zcon-zosconnect
-  source: cs-ibm-catalog-6f02ecef4602
+  source: cs-ibm-catalog-latest
   sourceNamespace: openshift-marketplace
-  startingCSV: ibm-zcon-zosconnect.v1.0.3

@@ -1242,7 +1242,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 				e2e.Logf("The mirror2disk failed, retrying...")
 				return false, nil
 			}
-			if !validateStringFromFile(m2dOutputFile, "bundle secondaryscheduleroperator.v5.0 of operator openshift-secondary-scheduler-operator not found in catalog: SKIPPING") && !validateStringFromFile(m2dOutputFile, "bundle cockroach-operator.v2.13.1 of operator cockroachdb-certified not found in catalog: SKIPPING") && !validateStringFromFile(m2dOutputFile, "bundle 3scale-community-operator.v0.9.1 of operator 3scale-community-operator not found in catalog: SKIPPING") {
+			if !validateStringFromFile(m2dOutputFile, "bundle clusterkubedescheduleroperator.v3.0 of operator  cluster-kube-descheduler-operator not found in catalog: SKIPPING") && !validateStringFromFile(m2dOutputFile, "bundle cockroach-operator.v2.13.1 of operator cockroachdb-certified not found in catalog: SKIPPING") && !validateStringFromFile(m2dOutputFile, "bundle 3scale-community-operator.v0.9.1 of operator 3scale-community-operator not found in catalog: SKIPPING") {
 				return false, fmt.Errorf("Do not see any bundles being skipped which is not expected")
 			}
 			return true, nil
@@ -1266,12 +1266,12 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
 		assertPodOutput(oc, "olm.catalogSource=cs-certified-operator-index-v4-14", "openshift-marketplace", "Running")
 		assertPodOutput(oc, "olm.catalogSource=cs-community-operator-index-v4-14", "openshift-marketplace", "Running")
-		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-15", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-16", "openshift-marketplace", "Running")
 
 		exutil.By("Install the operator from the new catalogsource")
-		rhssoSub, rhssoOG := getOperatorInfo(oc, "openshift-secondary-scheduler-operator", "openshift-secondary-scheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.15", "cs-redhat-operator-index-v4-15")
-		defer removeOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-secondary-scheduler-operator")
-		installOperatorFromCustomCS(oc, rhssoSub, rhssoOG, "openshift-secondary-scheduler-operator", "secondary-scheduler-operator")
+		rhkdoSub, rhkdoOG := getOperatorInfo(oc, "cluster-kube-descheduler-operator", "openshift-kube-descheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.16", "cs-redhat-operator-index-v4-16")
+		defer removeOperatorFromCustomCS(oc, rhkdoSub, rhkdoOG, "openshift-kube-descheduler-operator")
+		installOperatorFromCustomCS(oc, rhkdoSub, rhkdoOG, "openshift-kube-descheduler-operator", "descheduler-operator")
 
 	})
 
@@ -1311,7 +1311,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73124.yaml")
 
 		exutil.By("Skopeo oci to localhost")
-		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-zcon-zosconnect-catalog@sha256:6f02ecef46020bcd21bdd24a01f435023d5fc3943972ef0d9769d5276e178e76 oci://%s  --remove-signatures --insecure-policy", dirname+"/ibm-catalog")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-bts-operator-catalog@sha256:866f0212eab7bc70cc7fcf7ebdbb4dfac561991f6d25900bd52f33cd90846adf oci://%s  --remove-signatures --insecure-policy", dirname+"/ibm-catalog")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
