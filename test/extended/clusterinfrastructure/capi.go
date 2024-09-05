@@ -162,4 +162,28 @@ ipaddresses.ipam.cluster.x-k8s.io`
 			o.Expect(terminationMessagePolicy).To(o.ContainSubstring("FallbackToLogsOnError"))
 		}
 	})
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-NonHyperShiftHost-Low-75986-[CAPI]-vspherecluster reconciliation should not fail [Disruptive]", func() {
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSphere)
+		skipForCAPINotExist(oc)
+
+		g.By("get vsphereCluster resource name in openshift-cluster-api namespace")
+		vsphereCluster, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("vspherecluster", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].spec.identityRef.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Delete vsphereCluster in openshift-cluster-api namespace")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("vspherecluster", vsphereCluster, "-n", clusterAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check vsphereCluster is reconciled")
+		err = wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+			vsphereClusterDetails, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("vspherecluster", "-n", clusterAPINamespace).Output()
+			if strings.Contains(vsphereClusterDetails, vsphereCluster) {
+				return true, nil
+			}
+			e2e.Logf("Continue to look for vspherecluster reconciliation...")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "vspherecluster reconciliation has failed , this could be an error/bug")
+	})
 })
