@@ -1957,8 +1957,15 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		AddrMap = nbContructToMap(listAddrOutput)
 		addrs = strings.Trim(AddrMap["addresses"], "[\"]")
 		o.Expect(addrs).NotTo(o.BeEmpty())
-		Pod1IP, _ := getPodIP(oc, ns, pod1.name)
-		o.Expect(addrs == Pod1IP).To(o.BeTrue())
+
+		ipStack := checkIPStackType(oc)
+		if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
+			Pod1IP, _ := getPodIP(oc, ns, pod1.name)
+			o.Expect(addrs == Pod1IP).To(o.BeTrue())
+		} else {
+			_, Pod1IPv4 := getPodIP(oc, ns, pod1.name)
+			o.Expect(addrs == Pod1IPv4).To(o.BeTrue())
+		}
 	})
 })
 
