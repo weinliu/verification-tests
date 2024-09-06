@@ -71,6 +71,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "servicel2statuses.metallb.io")).To(o.BeTrue())
 
 	})
 
@@ -99,10 +100,11 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 	)
 
 	g.BeforeEach(func() {
-		// TODO remove this check after due diligence if these tests can run on prow workflow for metal clusters
+		// Install metallb on vSphere and baremetal but skip on all platforms
 		exutil.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitable(oc)) {
-			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
+		platform := exutil.CheckPlatform(oc)
+		if !(isPlatformSuitable(oc)) || !strings.Contains(platform, "vsphere") || !strings.Contains(platform, "baremetal") {
+			g.Skip("These cases can only be run on networking team's private RDU cluster, vSphere and BM, skip for other envrionment!!!")
 		}
 
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
@@ -145,6 +147,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "servicel2statuses.metallb.io")).To(o.BeTrue())
 
 	})
 
@@ -311,6 +314,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "servicel2statuses.metallb.io")).To(o.BeTrue())
 
 		exutil.By("Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -1047,8 +1051,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			name:                          "hello-world-" + testID + "-" + strconv.Itoa(i),
 			namespace:                     ns,
 			externaltrafficpolicy:         "Cluster",
-			labelKey:                      "environ",
-			labelValue:                    "Prod",
+			labelKey:                      serviceSelectorKey,
+			labelValue:                    serviceSelectorValue[0],
 			annotationKey:                 "metallb.universe.tf/address-pool",
 			annotationValue:               ipaddresspools[1],
 			allocateLoadBalancerNodePorts: true,
@@ -1227,8 +1231,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			name:                          "hello-world-" + testID,
 			namespace:                     namespaces[0],
 			externaltrafficpolicy:         "Cluster",
-			labelKey:                      "environ",
-			labelValue:                    "Prod",
+			labelKey:                      serviceSelectorKey,
+			labelValue:                    serviceSelectorValue[0],
 			annotationKey:                 "metallb.universe.tf/loadBalancerIPs",
 			annotationValue:               requestedIp,
 			allocateLoadBalancerNodePorts: true,
@@ -1554,6 +1558,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "servicel2statuses.metallb.io")).To(o.BeTrue())
 
 		exutil.By("Create MetalLB CR")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -1764,8 +1769,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 			name:                          "hello-world-60159",
 			namespace:                     namespaces[0],
 			externaltrafficpolicy:         "Cluster",
-			labelKey:                      "environ",
-			labelValue:                    "Prod",
+			labelKey:                      serviceSelectorKey,
+			labelValue:                    serviceSelectorValue[0],
 			annotationKey:                 "metallb.universe.tf/address-pool",
 			annotationValue:               ipaddrpools[0],
 			allocateLoadBalancerNodePorts: true,
