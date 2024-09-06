@@ -89,7 +89,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}{
 			{
 				folder:   "/payload",
-				expected: "azure-cloud-node-manager.exe cni containerd csi-proxy ecr-credential-provider.exe generated hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe",
+				expected: "azure-cloud-node-manager.exe cni containerd csi-proxy ecr-credential-provider.exe generated hybrid-overlay-node.exe kube-node powershell windows-exporter windows-instance-config-daemon.exe",
+			},
+			{
+				folder:   "/payload/windows-exporter",
+				expected: "windows-exporter-webconfig.yaml windows_exporter.exe",
 			},
 			{
 				folder:   "/payload/containerd",
