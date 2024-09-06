@@ -20,6 +20,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/google/go-github/v57/github"
+	"github.com/tidwall/gjson"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
@@ -636,6 +637,90 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(credential).To(o.ContainSubstring(azureCred.value))
 		}
+	})
+
+	g.It("Author:jshu-NonHyperShiftHOST-OSD_CCS-Critical-75429-GCP workload identity management for olm managed operators", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
+		if !exutil.IsWorkloadIdentityCluster(oc) {
+			g.Skip("This test case is for GCP Workload Identity only, skipping")
+		}
+		//Provide the following GCP Credentials with fake values
+		gcpCredList := []gcpCredential{
+			{
+				key:   "audience",
+				value: "//iam.googleapis.com/projects/1042363005003/locations/global/workloadIdentityPools/cco-test/providers/cco-test",
+			},
+			{
+				key:   "serviceAccountEmail",
+				value: "cco-test-cloud-crede-gtqkl@openshift-qe.iam.gserviceaccount.com",
+			},
+			{
+				key:   "cloudTokenPath",
+				value: "/var/run/secrets/token",
+			},
+		}
+
+		var (
+			testDataDir      = exutil.FixturePath("testdata", "cluster_operator/cloudcredential")
+			testCaseID       = "75429"
+			crName           = "cr-" + testCaseID
+			targetSecretName = crName
+			targetNs         = oc.Namespace()
+		)
+
+		var (
+			targetSecretCreated = func() bool {
+				stdout, _, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Secret", "-n", targetNs).Outputs()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return strings.Contains(stdout, targetSecretName)
+			}
+		)
+
+		exutil.By("Creating the dummy CR")
+		cr := credentialsRequest{
+			name:      crName,
+			namespace: targetNs,
+			provider:  "GCPProviderSpec",
+			template:  filepath.Join(testDataDir, "credentials_request.yaml"),
+		}
+		defer func() {
+			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("CredentialsRequest", crName, "-n", ccoNs).Execute()
+		}()
+		cr.create(oc)
+
+		exutil.By("Making sure the target Secret is not created")
+		o.Consistently(targetSecretCreated).WithTimeout(60 * time.Second).WithPolling(30 * time.Second).Should(o.BeFalse())
+
+		exutil.By("Patching the GCP Credentials and cloudTokenPath to the CR")
+		crPatch := `
+spec:
+  cloudTokenPath: ` + gcpCredList[2].value + `
+  providerSpec:
+    audience: ` + gcpCredList[0].value + `
+    serviceAccountEmail: ` + gcpCredList[1].value
+		err := oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("patch").
+			Args("CredentialsRequest", crName, "-n", ccoNs, "--type", "merge", "-p", crPatch).
+			Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Making sure the target Secret is created correctly")
+		o.Eventually(targetSecretCreated).WithTimeout(60 * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
+		credentialBase64, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", targetSecretName, "-n", targetNs, "-o=jsonpath={.data.service_account\\.json}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		credential, err := base64.StdEncoding.DecodeString(credentialBase64)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//compare audience
+		gen_audience := gjson.Get(string(credential), `audience`).String()
+		o.Expect(gen_audience).To(o.Equal(gcpCredList[0].value))
+		//check serviceAccountEmail
+		gen_service_account := gjson.Get(string(credential), `service_account_impersonation_url`).String()
+		o.Expect(gen_service_account).To(o.ContainSubstring(gcpCredList[1].value))
+		//compare token path
+		gen_token_path := gjson.Get(string(credential), `credential_source.file`).String()
+		o.Expect(gen_token_path).To(o.Equal(gcpCredList[2].value))
 	})
 })
 

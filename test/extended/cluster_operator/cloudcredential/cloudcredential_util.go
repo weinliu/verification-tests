@@ -57,6 +57,11 @@ type azureCredential struct {
 	value string
 }
 
+type gcpCredential struct {
+	key   string
+	value string
+}
+
 type OcpClientVerb = string
 
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
