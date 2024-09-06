@@ -173,7 +173,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.Context("FLP and Console metrics:", func() {
 		g.When("processor.metrics.TLS == Disabled", func() {
-			g.It("Author:aramesha-LEVEL0-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
+			g.It("Author:aramesha-LEVEL0-Critical-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
 					namespace = oc.Namespace()
@@ -225,7 +225,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		})
 
 		g.When("processor.metrics.TLS == Auto", func() {
-			g.It("Author:aramesha-LEVEL0-High-54043-High-66031-Verify flowlogs-pipeline and Console metrics [Serial]", func() {
+			g.It("Author:aramesha-LEVEL0-Critical-54043-Critical-66031-Verify flowlogs-pipeline and Console metrics [Serial]", func() {
 				var (
 					flpPromSM = "flowlogs-pipeline-monitor"
 					flpPromSA = "flowlogs-pipeline-prom"
@@ -276,7 +276,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.Context("eBPF metrics", func() {
 		g.When("agent.ebpf.metrics.TLS == Disabled", func() {
-			g.It("Author:aramesha-High-72959-Verify eBPF agent metrics and health [Serial]", func() {
+			g.It("Author:aramesha-LEVEL0-Critical-72959-Verify eBPF agent metrics and health [Serial]", func() {
 				var (
 					eBPFPromSM = "ebpf-agent-svc-monitor"
 					namespace  = oc.Namespace()
