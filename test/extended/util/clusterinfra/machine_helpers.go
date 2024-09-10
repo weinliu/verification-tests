@@ -233,10 +233,10 @@ func DeleteMachine(oc *exutil.CLI, machineName string) error {
 func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
 	if machineNumber >= 1 {
-		// Wait 180 seconds first, as exutil.WaitForMachinesRunning() uses total 960 seconds in wait.poll, it may not be enough for some platform(s)
+		// Wait 180 seconds first, as it uses total 1200 seconds in wait.poll, it may not be enough for some platform(s)
 		time.Sleep(180 * time.Second)
 	}
-	pollErr := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", MachineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
@@ -248,7 +248,7 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 			}
 			if strings.Contains(phase, "Provisioning") {
 				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
-				if strings.Contains(output, "InsufficientInstanceCapacity") {
+				if strings.Contains(output, "InsufficientInstanceCapacity") || strings.Contains(output, "InsufficientCapacityOnOutpost") {
 					e2e.Logf("%v", output)
 					return false, fmt.Errorf("InsufficientInstanceCapacity")
 				}
@@ -265,7 +265,7 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 		}
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
 		e2e.Logf("%v", output)
-		e2e.Failf("Expected %v  machines are not Running after waiting up to 16 minutes ...", machineNumber)
+		e2e.Failf("Expected %v  machines are not Running after waiting up to 20 minutes ...", machineNumber)
 	}
 	e2e.Logf("All machines are Running ...")
 }

@@ -210,7 +210,11 @@ func (capiMachineSetvsphere *capiMachineSetvsphereDescription) deleteCapiMachine
 // waitForCapiMachinesRunning check if all the machines are Running in a MachineSet
 func waitForCapiMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
-	pollErr := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
+	if machineNumber >= 1 {
+		// Wait 180 seconds first, as it uses total 1200 seconds in wait.poll, it may not be enough for some platform(s)
+		time.Sleep(180 * time.Second)
+	}
+	pollErr := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", clusterAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
@@ -220,7 +224,7 @@ func waitForCapiMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetNam
 		e2e.Logf("Expected %v  machines are Running", machineNumber)
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 16 minutes ...", machineNumber))
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 20 minutes ...", machineNumber))
 	e2e.Logf("All machines are Running ...")
 }
 
