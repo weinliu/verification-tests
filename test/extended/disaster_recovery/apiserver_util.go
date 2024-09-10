@@ -63,11 +63,39 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 		return err
 	}
 
-	// Deploy the application
 	err = pollAndLog(10*time.Second, 600*time.Second, func() error {
-		return oc.AsAdmin().WithoutNamespace().Run("new-app").
-			Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
+		// Run the oc new-app command
+		output, err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Output()
+		// Check for specific errors related to existing resources
+		if err != nil && strings.Contains(output, "already exists") {
+			// Log the conflict
+			e2e.Logf("Resource already exists, attempting to clean up...")
+
+			// Delete existing deployment and service
+			errDel := oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", "hello-openshift", "-n", projectName).Execute()
+			if errDel != nil {
+				return fmt.Errorf("failed to delete existing deployment: %v", errDel)
+			}
+
+			errDel = oc.AsAdmin().WithoutNamespace().Run("delete").Args("service", "hello-openshift", "-n", projectName).Execute()
+			if errDel != nil {
+				return fmt.Errorf("failed to delete existing service: %v", errDel)
+			}
+
+			// Retry the oc new-app command after cleanup
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").
+				Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
+
+			if err != nil {
+				return fmt.Errorf("failed to create new app after cleanup: %v", err)
+			}
+		}
+
+		// If there are no errors or the app was created successfully
+		return err
 	}, "oc new app succeeded", "oc new app failed")
+
+	// Return the error if the process fails
 	if err != nil {
 		return err
 	}
