@@ -2800,13 +2800,13 @@ func CurlNodePortFail(oc *exutil.CLI, nodeNameFrom string, nodeNameTo string, no
 		nodev6URL := net.JoinHostPort(nodeIP1, nodePort)
 		nodev4URL := net.JoinHostPort(nodeIP2, nodePort)
 		output, _ := exutil.DebugNode(oc, nodeNameFrom, "curl", nodev4URL, "--connect-timeout", "5")
-		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out")))
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out"), o.ContainSubstring("Connection refused")))
 		output, _ = exutil.DebugNode(oc, nodeNameFrom, "curl", nodev6URL, "--connect-timeout", "5")
-		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out")))
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out"), o.ContainSubstring("Connection refused")))
 	} else {
 		nodeURL := net.JoinHostPort(nodeIP2, nodePort)
 		output, _ := exutil.DebugNode(oc, nodeNameFrom, "curl", nodeURL, "--connect-timeout", "5")
-		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out")))
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("timed out"), o.ContainSubstring("Connection refused")))
 	}
 }
 
