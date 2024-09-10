@@ -2641,7 +2641,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Author:xiyuan-Critical-50013-check Log enricher based seccompprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
+	g.It("Author:xiyuan-ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Critical-50013-check Log enricher based seccompprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
+
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingPod = profileRecordingDescription{

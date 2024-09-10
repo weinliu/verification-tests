@@ -442,6 +442,15 @@ func labelTaintNode(oc *exutil.CLI, parameters ...string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// skipNotelemetryFound means to skip test if telemetry not found
+func skipNotelemetryFound(oc *exutil.CLI) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "telemetry", "-n", "openshift-monitoring").Output()
+	if strings.Contains(output, `"telemetry" not found`) {
+		e2e.Logf("output: %s", output)
+		g.Skip("this env does not have telemetry prometheusrule, skip the case")
+	}
+}
+
 // SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available
 func SkipMissingCatalogsource(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()

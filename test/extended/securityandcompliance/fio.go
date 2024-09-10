@@ -778,6 +778,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 
 	//author: xiyuan@redhat.com
 	g.It("Author:xiyuan-NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-NonPreRelease-CPaasrunOnly-High-43136-Medium-55781-Check FIO metrics and alerting [Serial][Slow]", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
 		var alerts []byte
 		var errAlert error
 

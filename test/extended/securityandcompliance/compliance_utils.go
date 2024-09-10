@@ -1047,6 +1047,7 @@ func assertKeywordsExists(oc *exutil.CLI, timeout int, keywords string, paramete
 }
 
 func getAlertManager(oc *exutil.CLI) string {
+	exutil.AssertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
 	alertManager, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "alertmanager-main", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(alertManager).NotTo(o.BeEmpty())
@@ -1055,7 +1056,6 @@ func getAlertManager(oc *exutil.CLI) string {
 
 func checkAlert(oc *exutil.CLI, labelName string, alertString string, timeout time.Duration) {
 	var alerts []byte
-	var errBash error
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	url := getAlertManager(oc)
 	alertManagerVersion, errGetAlertmanagerVersion := getAlertmanagerVersion(oc)
@@ -1064,8 +1064,7 @@ func checkAlert(oc *exutil.CLI, labelName string, alertString string, timeout ti
 	o.Expect(errGetAlertQueries).NotTo(o.HaveOccurred())
 	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/%s/alerts", token, url, alertManagerVersion)
 	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
-		alerts, errBash = exec.Command("bash", "-c", alertCMD).Output()
-		o.Expect(errBash).NotTo(o.HaveOccurred())
+		alerts, _ = exec.Command("bash", "-c", alertCMD).Output()
 		if strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertName).String(), labelName) && strings.Contains(gjson.Get(string(alerts), gjsonQueryAlertNameEqual+labelName+").annotations.description").String(), alertString) {
 			return true, nil
 		}

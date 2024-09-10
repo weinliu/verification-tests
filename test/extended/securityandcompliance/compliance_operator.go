@@ -3925,7 +3925,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-43066-check the metrics and alerts are available for Compliance Operator [Serial]", func() {
+	g.It("Author:pdhamdhe-ConnectedOnly-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-43066-check the metrics and alerts are available for Compliance Operator [Serial]", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
+
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-test" + getRandomString(),
 			namespace:       "",
@@ -3972,8 +3975,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Low-43072-check the metrics and alerts are available for compliance_operator_compliance_scan_error_total [Slow]", func() {
+	g.It("Author:pdhamdhe-ConnectedOnly-NonHyperShiftHOST-ARO-ConnectedOnly-Low-43072-check the metrics and alerts are available for compliance_operator_compliance_scan_error_total [Slow]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
 
 		var csuiteD = complianceSuiteDescription{
 			name:         "worker-compliancesuite" + getRandomString(),
@@ -5086,7 +5091,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-48643-Check if the prometheusRule that verifies the Compliance alerts [Serial]", func() {
+	g.It("Author:xiyuan-ConnectedOnly-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Medium-48643-Check if the prometheusRule that verifies the Compliance alerts [Serial]", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
+
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "pci-test",
