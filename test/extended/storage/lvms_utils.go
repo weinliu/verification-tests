@@ -472,16 +472,25 @@ func getTotalDiskSizeOnAllWorkers(oc *exutil.CLI, diskPath string) int {
 	workerNodes := getWorkersList(oc)
 	var totalDiskSize int = 0
 	for _, workerName := range workerNodes {
-		output, _ := execCommandInSpecificNode(oc, workerName, "lsblk --output SIZE -n -d "+diskPath)
+		size := 0
+		output, _ := execCommandInSpecificNode(oc, workerName, "lsblk -b --output SIZE -n -d "+diskPath)
 		if !strings.Contains(output, "not a block device") {
 			e2e.Logf("Disk: %s found in worker node: %s", diskPath, workerName)
-			size, err := strconv.ParseInt(strings.TrimSpace(strings.TrimRight(output, "G")), 10, 64)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			totalDiskSize = totalDiskSize + (int(size))
+			size = bytesToGiB(strings.TrimSpace(output))
+			totalDiskSize = totalDiskSize + size
 		}
+
 	}
 	e2e.Logf("Total Disk size of %s is equals %d Gi", diskPath, totalDiskSize)
 	return totalDiskSize
+}
+
+// Takes size in Bytes as string and returns equivalent int value in GiB
+func bytesToGiB(bytesStr string) int {
+	const bytesPerGiB = 1 << 30 // 1 GiB = 2^30 bytes
+	bytes, err := strconv.ParseUint(bytesStr, 10, 64)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return int(bytes / bytesPerGiB)
 }
 
 // Wait for LVMS resource pods to get ready
