@@ -3693,3 +3693,331 @@ spec:
 		lc.waitForLogsAppearByProject("application", appProj3)
 	})
 })
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack with tenant level labelkeys", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                    = exutil.NewCLI("lokistack-labelkeys", exutil.KubeConfigPath())
+		loggingBaseDir, s, sc string
+	)
+
+	g.BeforeEach(func() {
+		s = getStorageType(oc)
+		if len(s) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		sc, _ = getStorageClassName(oc)
+		if len(sc) == 0 {
+			g.Skip("The cluster doesn't have a storage class for this test!")
+		}
+
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		g.By("deploy CLO and LO")
+		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
+	})
+
+	g.It("Author:kbharti-CPaasrunOnly-Critical-75334-Forward logs to lokiStack via clusterLogForwarder.observability.openshift.io API using per tenant and global labelKeys[Serial]", func() {
+
+		var (
+			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		)
+
+		exutil.By("Create an application")
+		oc.SetupProject()
+		user1 := oc.Username()
+		appProj := oc.Namespace()
+		userToken, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a group and role bindings to access loki logs")
+		defer oc.AsAdmin().Run("delete").Args("group", "admin-group-75334").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "admin-group-75334").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "admin-group-75334", user1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer deleteLokiClusterRolesForReadAccess(oc)
+		createLokiClusterRolesForReadAccess(oc)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "admin-group-75334").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-infrastructure-view", "admin-group-75334").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-audit-view", "admin-group-75334").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-audit-view", "admin-group-75334").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-application-view", "admin-group-75334").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-application-view", "admin-group-75334").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Deploying LokiStack with adminGroup")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-75334",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-75334",
+			storageClass:  sc,
+			bucketName:    "logging-loki-75334-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc, "-p", "ADMIN_GROUPS=[\"admin-group-75334\"]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("create a CLF to test forward to Lokistack")
+		clf := clusterlogforwarder{
+			name:                      "instance-75334",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector-75334",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack-with-labelkeys.yaml"),
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+		}
+		clf.createServiceAccount(oc)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "APP_LABELKEYS=[\"kubernetes.container_name\"]", "IGNORE_GLOBAL_INFRA=true", "INFRA_LABELKEYS=[\"kubernetes.namespace_name\"]", "GLOBAL_LABELKEYS=[\"log_type\"]")
+
+		exutil.By("Check that logs are forwarded to LokiStack")
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(userToken).retry(5)
+		lc.waitForLogsAppearByKey("audit", "log_type ", "audit")
+		lc.waitForLogsAppearByKey("infrastructure", "kubernetes_namespace_name", "openshift-monitoring")
+		lc.waitForLogsAppearByKey("application", "log_type", "application")
+
+		// Get some pod and container names under extracted infra logs
+		logs, err := lc.searchByKey("infrastructure", "kubernetes_namespace_name", "openshift-monitoring")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs := extractLogEntities(logs)
+		var infraLogPodNames []string
+		var infraLogContainerNames []string
+		for _, log := range extractedLogs {
+			infraLogPodNames = append(infraLogPodNames, log.Kubernetes.PodName)
+			infraLogContainerNames = append(infraLogContainerNames, log.Kubernetes.ContainerName)
+		}
+
+		exutil.By("Validating application logs with labelKeys")
+		// Since global labelkeys is defined as 'log_type' and application labelkeys is defined as 'kubernetes.container_name' with ignoreGlobal as 'false',
+		// application tenant can be queried with 'log_type' and 'kubernetes_container_name' keys only.
+
+		// Query with key 'kubernetes_namespace_name' - should yield an empty response
+		logs, err = lc.searchByKey("application", "kubernetes_namespace_name", appProj)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		// Query with key 'kubernetes_pod_name' - should yield an empty response
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		logs, err = lc.searchByKey("application", "kubernetes_pod_name", podList.Items[0].Name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		// Query with key 'kubernetes_container_name' - should yield a NON empty response
+		logs, err = lc.searchByKey("application", "kubernetes_container_name", "logging-centos-logtest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		e2e.Logf("Validation with application labelKeys is success")
+
+		exutil.By("Validating infrastructure log streams with labelKeys")
+		// Since global labelkeys is defined as 'log_type' BUT infrastructure labelkeys is defined as 'kubernetes.namespace_name' with ignoreGlobal as 'true',
+		// Infrastructure tenant can be queried with 'kubernetes_namespace_name' key only.
+
+		// Query with key 'log_type' - should yield an empty response
+		logs, err = lc.searchByKey("infrastructure", "log_type", "infrastructure")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		// Query with key 'kubernetes_pod_name' - should yield an empty response
+		for _, pod := range infraLogPodNames {
+			logs, err = lc.searchByKey("infrastructure", "kubernetes_pod_name", pod)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		}
+		// Query with key 'kubernetes_container_name' - should yield a empty response
+		for _, container := range infraLogContainerNames {
+			logs, err := lc.searchByKey("infrastructure", "kubernetes_container_name", container)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		}
+		e2e.Logf("Validation with infrastructure labelKeys is success")
+	})
+
+	g.It("Author:kbharti-CPaasrunOnly-High-75369-Forward logs to lokiStack via ClusterLogForwarder.observability.openshift.io API using per tenant keys and no global overrides[Serial]", func() {
+
+		var (
+			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		)
+
+		exutil.By("Create an application")
+		oc.SetupProject()
+		user1 := oc.Username()
+		appProj := oc.Namespace()
+		userToken, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a group and role bindings to access loki logs")
+		defer oc.AsAdmin().Run("delete").Args("group", "admin-group-75369").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "admin-group-75369").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "admin-group-75369", user1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer deleteLokiClusterRolesForReadAccess(oc)
+		createLokiClusterRolesForReadAccess(oc)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "admin-group-75369").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-infrastructure-view", "admin-group-75369").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-audit-view", "admin-group-75369").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-audit-view", "admin-group-75369").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-application-view", "admin-group-75369").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-application-view", "admin-group-75369").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Deploying LokiStack with adminGroup")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-75369",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-75369",
+			storageClass:  sc,
+			bucketName:    "logging-loki-75369-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc, "-p", "ADMIN_GROUPS=[\"admin-group-75369\"]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("create a CLF to test forward to Lokistack")
+		clf := clusterlogforwarder{
+			name:                      "instance-75369",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector-75369",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack-with-labelkeys.yaml"),
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+		}
+		clf.createServiceAccount(oc)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "APP_LABELKEYS=[\"kubernetes.labels.test\"]", "IGNORE_GLOBAL_INFRA=true", "INFRA_LABELKEYS=[\"kubernetes.namespace_name\"]", "GLOBAL_LABELKEYS=[]")
+
+		exutil.By("Check that logs are forwarded to LokiStack")
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(userToken).retry(5)
+		lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+		lc.waitForLogsAppearByKey("application", "log_type", "application")
+		lc.waitForLogsAppearByKey("infrastructure", "kubernetes_namespace_name", "openshift-monitoring")
+
+		// Get some pod and container names under extracted infra logs
+		logs, err := lc.searchByKey("infrastructure", "kubernetes_namespace_name", "openshift-monitoring")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs := extractLogEntities(logs)
+		var infraLogPodNames []string
+		var infraLogContainerNames []string
+		for _, log := range extractedLogs {
+			infraLogPodNames = append(infraLogPodNames, log.Kubernetes.PodName)
+			infraLogContainerNames = append(infraLogContainerNames, log.Kubernetes.ContainerName)
+		}
+
+		exutil.By("Validating application logs with labelKeys")
+		// Since global labelkeys are 'undefined/not overridden' and application labelkeys is defined as 'kubernetes.labels.test' with ignoreGlobal as 'false',
+		// application tenant can be queried with the default labelKeys and 'kubernetes.labels.test' keys.
+
+		// Query with key 'kubernetes_namespace_name' - should yield a NON empty response
+		logs, err = lc.searchByKey("application", "kubernetes_namespace_name", appProj)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		// Query with key 'kubernetes_pod_name' - should yield a NON empty response
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		logs, err = lc.searchByKey("application", "kubernetes_pod_name", podList.Items[0].Name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		// Query with key 'kubernetes_container_name' - should yield a NON empty response
+		logs, err = lc.searchByKey("application", "kubernetes_container_name", "logging-centos-logtest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		// Query with key 'kubernetes.labels.test' - should yield a NON empty response
+		logs, err = lc.searchByKey("application", "kubernetes_labels_test", "centos-logtest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		e2e.Logf("Validation with application labelKeys is success")
+
+		exutil.By("Validating infrastructure log streams with labelKeys")
+		// Since global labelkeys is 'undefined/not overridden' BUT infrastructure labelkeys is defined as 'kubernetes.namespace_name' with ignoreGlobal as 'true',
+		// Infrastructure tenant can be queried with 'kubernetes_namespace_name' key only.
+
+		// Query with key 'log_type' - should yield an empty response
+		logs, err = lc.searchByKey("infrastructure", "log_type", "infrastructure")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		// Query with key 'kubernetes_pod_name' - should yield an empty response
+		for _, pod := range infraLogPodNames {
+			logs, err = lc.searchByKey("infrastructure", "kubernetes_pod_name", pod)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		}
+		// Query with key 'kubernetes_container_name' - should yield a empty response
+		for _, container := range infraLogContainerNames {
+			logs, err := lc.searchByKey("infrastructure", "kubernetes_container_name", container)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		}
+		e2e.Logf("Validation with infrastructure labelKeys is success")
+	})
+
+})
