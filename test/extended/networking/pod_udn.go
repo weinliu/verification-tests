@@ -1358,4 +1358,175 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 			}
 		}
 	})
+
+	g.It("Author:meinli-High-75880-Check udn pods connection and isolation on user defined networks when NADs are created via CRD(Layer 3)", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_dualstack2_template.yaml")
+			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			testPodFile               = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			mtu                 int32 = 1300
+		)
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Create first namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Create 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		exutil.By("3. Create CRD for UDN")
+		udnResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2}
+		udnNS := []string{ns1, ns2}
+
+		var cidr, ipv4cidr, ipv6cidr []string
+		var prefix, ipv4prefix, ipv6prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+			prefix = 24
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+				prefix = 64
+			} else {
+				ipv4cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+				ipv4prefix = 24
+				ipv6cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+				ipv6prefix = 64
+			}
+		}
+		udncrd := make([]udnCRDResource, 2)
+		for i := 0; i < 2; i++ {
+			if ipStackType == "dualstack" {
+				udncrd[i] = udnCRDResource{
+					crdname:    udnResourcename[i],
+					namespace:  udnNS[i],
+					role:       "Primary",
+					mtu:        mtu,
+					IPv4cidr:   ipv4cidr[i],
+					IPv4prefix: ipv4prefix,
+					IPv6cidr:   ipv6cidr[i],
+					IPv6prefix: ipv6prefix,
+					template:   udnCRDdualStack,
+				}
+				udncrd[i].createUdnCRDDualStack(oc)
+
+			} else {
+				udncrd[i] = udnCRDResource{
+					crdname:   udnResourcename[i],
+					namespace: udnNS[i],
+					role:      "Primary",
+					mtu:       mtu,
+					cidr:      cidr[i],
+					prefix:    prefix,
+					template:  udnCRDSingleStack,
+				}
+				udncrd[i].createUdnCRDSingleStack(oc)
+			}
+			err := waitUDNCRDApplied(oc, udnNS[i], udncrd[i].crdname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("4. Create replica pods in ns1")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
+		CurlPod2PodPassUDN(oc, ns1, testpodNS1Names[0], ns1, testpodNS1Names[1])
+
+		exutil.By("5. create replica pods in ns2")
+		createResourceFromFile(oc, ns2, testPodFile)
+		err = waitForPodWithLabelReady(oc, ns2, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS2Names := getPodName(oc, ns2, "name=test-pods")
+
+		exutil.By("6. verify isolation on user defined networks")
+		//udn network connectivity should be isolated
+		CurlPod2PodFailUDN(oc, ns1, testpodNS1Names[0], ns2, testpodNS2Names[0])
+		//default network connectivity should also be isolated
+		CurlPod2PodFail(oc, ns1, testpodNS1Names[0], ns2, testpodNS2Names[0])
+	})
+
+	g.It("Author:meinli-High-75881-Check udn pods connection and isolation on user defined networks when NADs are created via CRD(Layer 2)", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
+			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_singlestack_template.yaml")
+			testPodFile               = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			mtu                 int32 = 1300
+		)
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Create first namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Create 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		exutil.By("3. Create CRD for UDN")
+		udnResourcename := []string{"l2-network-" + ns1, "l2-network-" + ns2}
+		udnNS := []string{ns1, ns2}
+
+		var cidr, ipv4cidr, ipv6cidr []string
+		if ipStackType == "ipv4single" {
+			cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+			} else {
+				ipv4cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+				ipv6cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+			}
+		}
+		udncrd := make([]udnCRDResource, 2)
+		for i := 0; i < 2; i++ {
+			if ipStackType == "dualstack" {
+				udncrd[i] = udnCRDResource{
+					crdname:   udnResourcename[i],
+					namespace: udnNS[i],
+					role:      "Primary",
+					mtu:       mtu,
+					IPv4cidr:  ipv4cidr[i],
+					IPv6cidr:  ipv6cidr[i],
+					template:  udnCRDdualStack,
+				}
+				udncrd[i].createLayer2DualStackUDNCRD(oc)
+
+			} else {
+				udncrd[i] = udnCRDResource{
+					crdname:   udnResourcename[i],
+					namespace: udnNS[i],
+					role:      "Primary",
+					mtu:       mtu,
+					cidr:      cidr[i],
+					template:  udnCRDSingleStack,
+				}
+				udncrd[i].createLayer2SingleStackUDNCRD(oc)
+			}
+
+			err := waitUDNCRDApplied(oc, udnNS[i], udncrd[i].crdname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("4. Create replica pods in ns1")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
+		CurlPod2PodPassUDN(oc, ns1, testpodNS1Names[0], ns1, testpodNS1Names[1])
+
+		exutil.By("5. create replica pods in ns2")
+		createResourceFromFile(oc, ns2, testPodFile)
+		err = waitForPodWithLabelReady(oc, ns2, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS2Names := getPodName(oc, ns2, "name=test-pods")
+
+		exutil.By("6. verify isolation on user defined networks")
+		//udn network connectivity should be isolated
+		CurlPod2PodFailUDN(oc, ns1, testpodNS1Names[0], ns2, testpodNS2Names[0])
+		//default network connectivity should also be isolated
+		CurlPod2PodFail(oc, ns1, testpodNS1Names[0], ns2, testpodNS2Names[0])
+	})
 })
