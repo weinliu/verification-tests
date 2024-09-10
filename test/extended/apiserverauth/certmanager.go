@@ -683,16 +683,16 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	// This case contains two Polarion cases: 62500 and 65132. The root case is 62500.
-	g.It("Author:yuewu-ROSA-ConnectedOnly-High-62500-Use IRSA as ambient credential in AWS STS env for ACME dns01 route53 solver to generate certificate [Serial]", func() {
+	g.It("Author:yuewu-ROSA-ConnectedOnly-High-62500-Use IRSA as ambient credential in AWS STS env for ACME dns01 route53 solver to generate certificate [Serial] [Flaky]", func() {
 		const (
-			roleName            = "test-private-62500-cert-manager"
-			policyName          = "test-private-62500-cert-manager-dns"
+			rolePrefix          = "test-private-62500-sts-"
+			policyPrefix        = "test-private-62500-dns01-"
 			controllerNamespace = "cert-manager"
 			controllerLabel     = "app.kubernetes.io/name=cert-manager"
 			issuerName          = "route53-ambient"
-			certName62500       = "certificate-from-dns01-pod-identity-webhook"
-			certName65132       = "certificate-from-dns01-manual-patch"
-			stsSecretName       = "sts-creds"
+			certName62500       = "certificate-from-dns01-route53-pod-identity-webhook"
+			certName65132       = "certificate-from-dns01-route53-manual-patch"
+			stsSecretName       = "aws-sts-creds"
 		)
 
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
@@ -750,6 +750,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		}`
 		roleTrustPolicy = fmt.Sprintf(roleTrustPolicy, accountID, oidcProvider, oidcProvider)
 
+		roleName := rolePrefix + getRandomString(4)
 		createRoleOutput, err := iamClient.CreateRole(context.TODO(), &iam.CreateRoleInput{
 			AssumeRolePolicyDocument: aws.String(roleTrustPolicy),
 			RoleName:                 aws.String(roleName),
@@ -757,6 +758,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		roleARN := aws.ToString(createRoleOutput.Role.Arn)
 		defer func() {
+			e2e.Logf("cleanup the created AWS IAM Role")
 			_, err = iamClient.DeleteRole(context.TODO(), &iam.DeleteRoleInput{RoleName: aws.String(roleName)})
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
@@ -785,6 +787,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 				}
 			]
 		}`
+		policyName := policyPrefix + getRandomString(4)
 		createPolicyOutput, err := iamClient.CreatePolicy(context.TODO(), &iam.CreatePolicyInput{
 			PolicyDocument: aws.String(dnsPolicy),
 			PolicyName:     aws.String(policyName),
@@ -792,6 +795,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		policyARN := aws.ToString(createPolicyOutput.Policy.Arn)
 		defer func() {
+			e2e.Logf("cleanup the created AWS IAM Policy")
 			_, err = iamClient.DeletePolicy(context.TODO(), &iam.DeletePolicyInput{PolicyArn: aws.String(policyARN)})
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
@@ -803,6 +807,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
+			e2e.Logf("detach the AWS IAM Role with Policy")
 			_, err = iamClient.DetachRolePolicy(context.TODO(), &iam.DetachRolePolicyInput{
 				PolicyArn: aws.String(policyARN),
 				RoleName:  aws.String(roleName),
