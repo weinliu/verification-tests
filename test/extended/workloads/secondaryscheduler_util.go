@@ -2,7 +2,9 @@ package workloads
 
 import (
 	"fmt"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"strings"
 	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -141,4 +143,21 @@ func getSchedulerImage(oc *exutil.CLI) string {
 	o.Expect(schedulerPodName).NotTo(o.BeEmpty())
 	schedulerImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-kube-scheduler", schedulerPodName, "-o", "yaml", "-o=jsonpath={.spec.containers[0].image}").Output()
 	return schedulerImage
+}
+
+func (sub *ssoSubscription) skipMissingCatalogsources(oc *exutil.CLI) {
+	output, errQeReg := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if errQeReg != nil && strings.Contains(output, "NotFound") {
+		output, errRed := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "redhat-operators").Output()
+		if errRed != nil && strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsources not available")
+		} else {
+			o.Expect(errRed).NotTo(o.HaveOccurred())
+		}
+		sub.opsrcName = "redhat-operators"
+	} else if errQeReg != nil && strings.Contains(output, "doesn't have a resource type \"catalogsource\"") {
+		g.Skip("Skip since catalogsource is not available")
+	} else {
+		o.Expect(errQeReg).NotTo(o.HaveOccurred())
+	}
 }
