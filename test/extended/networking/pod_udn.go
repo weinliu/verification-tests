@@ -26,24 +26,7 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 
 	g.BeforeEach(func() {
 
-		networkType := checkNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("This is required to run on OVNKubernetes Network Backened")
-		}
-		workerNode, getWorkerNodeErr := exutil.GetFirstWorkerNode(oc)
-		o.Expect(getWorkerNodeErr).NotTo(o.HaveOccurred())
-
-		ovnkubePod, getPodErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", workerNode)
-		o.Expect(getPodErr).NotTo(o.HaveOccurred())
-
-		//following checks are needed until udn feature gets GA'ed
-		expectedString := "EnableNetworkSegmentation"
-		podLogs, LogErr := checkLogMessageInPod(oc, "openshift-ovn-kubernetes", "ovnkube-controller", ovnkubePod, expectedString)
-		o.Expect(LogErr).NotTo(o.HaveOccurred())
-
-		if !strings.Contains(podLogs, "EnableNetworkSegmentation:true") {
-			g.Skip("This case is required to run on network segmentation enabled cluster")
-		}
+		SkipIfNoFeatureGate(oc, "NetworkSegmentation")
 	})
 
 	g.It("Author:anusaxen-Critical-74921-Check udn pods isolation on user defined networks", func() {

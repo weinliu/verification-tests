@@ -4023,3 +4023,35 @@ func (svc *sessionAffinityServiceResource) createSessionAffiniltyService(oc *exu
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create pservice %s due to %v", svc.name, err))
 }
+
+func getEnabledFeatureGates(oc *exutil.CLI) ([]string, error) {
+	enabledFeatureGates, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.status.featureGates[0].enabled[*].name}").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	return strings.Split(enabledFeatureGates, " "), nil
+}
+
+// IsFeaturegateEnabled check whether a featuregate is in enabled or not
+func IsFeaturegateEnabled(oc *exutil.CLI, featuregate string) (bool, error) {
+	enabledFeatureGates, err := getEnabledFeatureGates(oc)
+	if err != nil {
+		return false, err
+	}
+	for _, f := range enabledFeatureGates {
+		if f == featuregate {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func SkipIfNoFeatureGate(oc *exutil.CLI, featuregate string) {
+	enabled, err := IsFeaturegateEnabled(oc, featuregate)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting enabled featuregates")
+
+	if !enabled {
+		g.Skip(fmt.Sprintf("Featuregate %s is not enabled in this cluster", featuregate))
+	}
+}
