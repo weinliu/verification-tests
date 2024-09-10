@@ -118,10 +118,13 @@ print("{}\n\n".format(content))
 importance = ["Critical", "High", "Medium", "Low"]
 
 patternDescribe = re.compile(r'^\+.*g\.Describe\("([^"]+)"', re.MULTILINE)
-patternIt = re.compile('\+\s+g.It\(\".*\"')
-
-itContent = patternIt.findall(content)
 desContent = patternDescribe.findall(content)
+
+patternIt = re.compile(r'^\+\s+(g\.It|g\.DescribeTable)\(\".*\"', re.MULTILINE)
+itContent = []
+itIters = patternIt.finditer(content)
+for itIter in itIters:
+    itContent.append(itIter.group(0))
 
 displayDesc = "\n".join(desContent)
 displayIt = "\n".join(itContent)
@@ -144,22 +147,23 @@ for des in desContent:
     else:
         errList.append("the g.Describe \"{}\" is less than two words\n".format(des))
 
-titlePatten = re.compile(r'g\.It\("([^"]*)')
+titlePatten = re.compile(r'\"(.*?)\"')
 importancePatten = re.compile(r'(\w+)-(\d+)(-?)')
 for it in itContent:
     # print(f"the it:\n{it}")
     it=it.replace("'", "")
     match = titlePatten.search(it)
+    spec = patternIt.findall(it)[0]
 
     if match:
         title = match.group(1)
 
         if not title.startswith("Author:"):
-            errList.append("g.It \"{}\" does not start with \"Author:<your Kerberos ID>-\", please put it at the begining of the title\n".format(title))
+            errList.append("{} \"{}\" does not start with \"Author:<your Kerberos ID>-\", please put it at the begining of the title\n".format(spec, title))
 
         for sub in subteam:
             if sub in title:
-                errList.append("g.It \"{}\" has subteam {}, please remove it because it should be in g.Describe even it is your own subteam because currently there is no way to check if it is your subteam or not. thanks to understand it \n".format(title, sub))
+                errList.append("{} \"{}\" has subteam {}, please remove it because it should be in g.Describe even it is your own subteam because currently there is no way to check if it is your subteam or not. thanks to understand it \n".format(spec, title, sub))
 
         importances = importancePatten.finditer(title)        
         mList = list(importances)
@@ -167,34 +171,38 @@ for it in itContent:
         if len(mList) > 0:
             for m in mList:
                 if not m.group(1) in importance:
-                    errList.append("g.It \"{}\" has wrong importance value {}\n".format(title, m.group(1)))
+                    errList.append("{} \"{}\" has wrong importance value {}\n".format(spec, title, m.group(1)))
                 if len(m.group(2)) < 5:
-                    errList.append("g.It \"{}\" has wrong case id {}\n".format(title, m.group(2)))
+                    errList.append("{} \"{}\" has wrong case id {}\n".format(spec, title, m.group(2)))
                     correctCaseID = False
                 if not m.group(3):
-                    errList.append("g.It \"{}\" has no \"-\" after case id {}\n".format(title, m.group(2)))
+                    errList.append("{} \"{}\" has no \"-\" after case id {}\n".format(spec, title, m.group(2)))
                     correctCaseID = False
             if correctCaseID:
                 caseids = re.findall(r'\d{5,}-', title)
                 if len(caseids) == 0:
-                    errList.append("g.It \"{}\" has no case id\n".format(title))
+                    errList.append("{} \"{}\" has no case id\n".format(spec, title))
                 else:
                     titleDescription = title.split(caseids[-1])[1]
+                    if "[serial]" in titleDescription:
+                        errList.append("case title \"{}\" has framework label \"[serial]\", and it should be \"[Serial]\"\n".format(titleDescription))
+                    if "[disruptive]" in titleDescription:
+                        errList.append("case title \"{}\" has framework label \"[disruptive]\", and it should be \"[Disruptive]\"\n".format(titleDescription))
                     for frameworkLabel in frameworkLabels:
                         if frameworkLabel in titleDescription:
                             errList.append("case title \"{}\" has framework label \"{}\", and it should in framework labels parts of title, not in title description\n".format(titleDescription, frameworkLabel))
         else:
-            errList.append("g.It \"{}\" has wrong importance format, please check it".format(title))
+            errList.append("{} \"{}\" has wrong importance format, please check it".format(spec, title))
 
     else:
-        errList.append("the g.It has no case title, please check the title\n")
+        errList.append("the {} has no case title, please check the title\n".format(spec))
 
 if len(errList) > 0:
     errList.append("""
 Note:
 We know it is new rule and the existing code does not follow it.
-So, for existing code, you do not need dedicated PR to udpate g.Describe or g.It.
-Only when you modify the exiting g.Describe and g.It for some other reasons or make new g.Describe and g.It, please follow it.
+So, for existing code, you do not need dedicated PR to udpate g.Describe or g.It/g.DescribeTable.
+Only when you modify the exiting g.Describe and g.It/g.DescribeTable for some other reasons or make new g.Describe and g.It/g.DescribeTable, please follow it.
 """)
     errs = "\n".join(errList)
     print("\nthe errors: \n{}\n".format(errs))
