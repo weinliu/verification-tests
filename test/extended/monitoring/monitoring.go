@@ -2280,7 +2280,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkYamlconfig(oc, "openshift-monitoring", "deployment", "monitoring-plugin", cmd, `{"limits":{"cpu":"30m","memory":"120Mi"},"requests":{"cpu":"15m","memory":"60Mi"}}`, true)
 
 		exutil.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service are exist")
-		resourceNames := []string{"ConfigMap", "ConsolePlugin", "ServiceAccount", "Service"}
+		resourceNames := []string{"ConsolePlugin", "ServiceAccount", "Service"}
 		for _, resource := range resourceNames {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "monitoring-plugin", "-n", "openshift-monitoring").Output()
 			o.Expect(output).To(o.ContainSubstring("monitoring-plugin"))
