@@ -5880,7 +5880,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-68521, author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-Medium-68521-Check failureThreshold of redhat-operators catalog", func() {
+	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-Medium-68521-Check failureThreshold of redhat-operators catalog", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		redhatOperators, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "redhat-operators", "-n", "openshift-marketplace").Output()
 		if err != nil && strings.Contains(redhatOperators, "not found") {
