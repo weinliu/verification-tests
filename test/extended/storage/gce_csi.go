@@ -373,12 +373,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 				"type":             "pd-standard",
 				"replication-type": "regional-pd"}
-
-			extraParameters = map[string]interface{}{
-				"parameters":           storageClassParameters,
-				"allowVolumeExpansion": true,
-			}
 		)
+
+		//Check if pre-defind disk kms key is set, add the kms key to created sc.
+		byokKeyID := getByokKeyIDFromClusterCSIDriver(oc, "pd.csi.storage.gke.io")
+		if byokKeyID != "" {
+			storageClassParameters["disk-encryption-kms-key"] = byokKeyID
+		}
+
+		extraParameters := map[string]interface{}{
+			"parameters":           storageClassParameters,
+			"allowVolumeExpansion": true,
+		}
 
 		pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 		podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
