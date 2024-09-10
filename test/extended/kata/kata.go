@@ -19,7 +19,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
+var _ = g.Describe("[sig-kata] Kata", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -673,7 +673,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	})
 
-	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive][Serial][Slow]", func() {
+	g.It("Author:tbuskey-High-43523-Monitor deletion[Disruptive][Serial][Slow]", func() {
+		g.Skip("kataconfig deletion steps are skipped")
 		g.By("Delete kataconfig and verify it")
 		msg, err := deleteKataConfig(oc, kataconfig.name)
 		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", kataconfig.name, msg, err)
@@ -681,7 +682,8 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 		g.By("SUCCESS")
 	})
 
-	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive][Serial][Slow]", func() {
+	g.It("Author:tbuskey-High-41813-Build Acceptance test with deletion[Disruptive][Serial][Slow]", func() {
+		g.Skip("kataconfig deletion steps are skipped")
 		//This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
 
 		oc.SetupProject()
@@ -810,6 +812,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	// author: tbuskey@redhat.com
 	g.It("Longduration-NonPreRelease-Author:tbuskey-High-42167-Must-gather collects sandboxed operator logs[Serial]", func() {
+		g.Skip("mustgather test must be done manually")
 
 		type counts struct {
 			audits           int
@@ -1044,6 +1047,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 
 	// author: tbuskey@redhat.com
 	g.It("Longduration-Author:tbuskey-High-53583-upgrade osc operator by changing subscription [Disruptive][Serial]", func() {
+		g.Skip("Upgrade tests should be manually done")
 
 		var (
 			subscriptionUpgrade            = subscription
@@ -1474,6 +1478,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	g.It("Author:vvoronko-High-68930-deploy peerpod with type annotation", func() {
+		g.Skip("Skipping 68930 until it is fixed 240905")
 
 		oc.SetupProject()
 
@@ -1514,6 +1519,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	g.It("Author:vvoronko-High-69018-deploy peerpod with default vcpu and memory", func() {
+		g.Skip("Skipping 69018 until it is fixed 240905")
 
 		oc.SetupProject()
 
@@ -1628,7 +1634,7 @@ var _ = g.Describe("[sig-kata] Kata [Serial]", func() {
 	})
 
 	g.It("Author:tbuskey-Medium-70824-Catalog upgrade osc operator [Disruptive]", func() {
-
+		g.Skip("Upgrade tests should be manually done")
 		upgradeCatalog := UpgradeCatalogDescription{
 			name:        "osc-config-upgrade-catalog",
 			namespace:   "default",
