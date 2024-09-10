@@ -442,7 +442,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Cannot get the port-forward result"))
+		exutil.AssertWaitPollNoErr(errWait, "Cannot get the port-forward result")
 	})
 
 	// author: jitli@redhat.com
@@ -826,8 +826,14 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition.apiextensions.k8s.io "nginxolm75218s.cache.example.com" is invalid: spec.scope: Invalid value: "Cluster": field is immutable`))
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 18*time.Second, false, func(ctx context.Context) (bool, error) {
+			message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+			if !strings.Contains(message, `CustomResourceDefinition.apiextensions.k8s.io "nginxolm75218s.cache.example.com" is invalid: spec.scope: Invalid value: "Cluster": field is immutable`) {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Unexpected results message: %v", message))
 
 		exutil.By("disabled crd upgrade safety check An existing stored version of the CRD is removed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore","preflight":{"crdUpgradeSafety":{"disabled":true}}}}`, "--type=merge").Execute()
