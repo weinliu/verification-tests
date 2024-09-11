@@ -1052,7 +1052,7 @@ EOF'`, etcConfigYaml, etcConfigYamlbak, valCfg)
 		e2e.Logf("Userdatadir %v be empty.", userDataDir)
 		getlogErr := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
 			chkContentOutput, chkContentErr = runSSHCommand(fqdnName, user, chkContentGlobalDatadirCmd)
-			if chkContentErr == nil && strings.TrimSpace(chkContentOutput) == "" {
+			if chkContentErr == nil && strings.TrimSpace(chkContentOutput) != "" {
 				e2e.Logf("Globaldatadir %v not empty, it is restored :: %v", globalDataDir, chkContentOutput)
 				return true, nil
 			}
@@ -1602,7 +1602,7 @@ apiServer:
 		exutil.By("2. Check Micoroshift log rotation default values")
 		configOutput, configErr := getMicroshiftConfig(fqdnName, chkConfigCmd, "apiServer.auditLog")
 		exutil.AssertWaitPollNoErr(configErr, fmt.Sprintf("Failed to verify Microshift config: %v", configErr))
-		o.Expect(configOutput).To(o.ContainSubstring(`"maxFileAge":0,"maxFileSize":0,"maxFiles":0,"profile":"Default"`))
+		o.Expect(configOutput).To(o.ContainSubstring(`"maxFileAge":0,"maxFileSize":200,"maxFiles":10,"profile":"Default"`))
 
 		exutil.By("3. Set audit profile to Invalid profile")
 		etcConfigInval := "apiServer:\n  auditLog:\n    maxFileAge: inval\n    maxFileSize: invali\n    maxFiles: inval\n"
