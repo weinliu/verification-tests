@@ -3492,15 +3492,32 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: pewang@redhat.com
 	// https://issues.redhat.com/browse/STOR-994
 	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-storage/3141-prevent-volume-mode-conversion
+	// GA from 4.17 (Kubernetes 1.30)
 	// OCP-60487 - [CSI-Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion
-	g.It("NonHyperShiftHOST-ROSA-OSD-Longduration-NonPreRelease-Author:pewang-Medium-60487-[CSI-Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion [Disruptive]", func() {
+	g.It("Author:pewang-ROSA-OSD-Medium-60487-[CSI-Driver] [Snapshot] should prevent unauthorised users from converting the volume mode when enable the prevent-volume-mode-conversion", func() {
 
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip if CSISnapshot CO is not enabled
+		if !isEnabledCapability(oc, "CSISnapshot") {
+			g.Skip("Skip for CSISnapshot capability is not enabled on the test cluster!")
+		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, getvCenterVersionErr := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(getvCenterVersionErr).NotTo(o.HaveOccurred())
+			esxiVersion, getEsxiVersionErr := mo.getSpecifiedMetricValue("vsphere_esxi_version_total", `data.result.0.metric.version`)
+			o.Expect(getEsxiVersionErr).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") || !versionIsAbove(esxiVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
+
 		var (
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -3521,41 +3538,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)))
 				pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimStorageClassName(storageClass.name))
 				myPod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
-				csiSnapShotControllerOperator := newDeployment(setDeploymentName("csi-snapshot-controller-operator"), setDeploymentNamespace("openshift-cluster-storage-operator"), setDeploymentApplabel("app=csi-snapshot-controller-operator"))
-				csiSnapShotController := newDeployment(setDeploymentName("csi-snapshot-controller"), setDeploymentNamespace("openshift-cluster-storage-operator"), setDeploymentApplabel("app=csi-snapshot-controller"))
-				csiDriverController := newDeployment(setDeploymentName("aws-ebs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=aws-ebs-csi-driver-controller"))
-
-				// TODO: When prevent-volume-mode-conversion enabled by default remove the step
-				// This feature still TP 4.14, prevent-volume-mode-conversion enabled by default when it is GA (maybe 4.15)
-				exutil.By(`Enable the "prevent-volume-mode-conversion" for csi-provisioner and csi-snapshot-controller`)
-				defer waitCSOhealthy(oc.AsAdmin())
-				defer csiSnapShotController.waitReady(oc.AsAdmin())
-				defer csiDriverController.waitReady(oc.AsAdmin())
-
-				setSpecifiedCSIDriverManagementState(oc, provisioner, "Unmanaged")
-				defer setSpecifiedCSIDriverManagementState(oc, provisioner, "Managed")
-				patchResourceAsAdmin(oc, "", "clusterversions/version", `[{"op":"add","path":"/spec/overrides","value":[{"kind":"Deployment","group":"apps","name":"csi-snapshot-controller-operator","namespace":"openshift-cluster-storage-operator","unmanaged":true}]}]`, "json")
-				defer patchResourceAsAdmin(oc, "", "clusterversions/version", `[{"op":"remove","path":"/spec/overrides"}]`, "json")
-
-				originReplicasNum := csiSnapShotControllerOperator.getReplicasNum(oc)
-				csiSnapShotControllerOperator.scaleReplicas(oc.AsAdmin(), "0")
-				defer csiSnapShotControllerOperator.scaleReplicas(oc.AsAdmin(), originReplicasNum)
-
-				// Add '--prevent-volume-mode-conversion' startup parameter for csi-provisioner and csi-snapshot-controller
-				// As the ebs-csi-driver-controller deployment is fixed template by operator so used hard code(provisioner container index and args index) here
-				// https://github.com/openshift/aws-ebs-csi-driver-operator/blob/master/assets/controller.yaml#L123-L137
-				patchResourceAsAdmin(oc, "openshift-cluster-csi-drivers", "deployment/aws-ebs-csi-driver-controller", `[{"op":"add","path":"/spec/template/spec/containers/2/args/11","value":"--prevent-volume-mode-conversion"}]`, "json")
-				defer patchResourceAsAdmin(oc, "openshift-cluster-csi-drivers", "deployment/aws-ebs-csi-driver-controller", `[{"op":"remove","path":"/spec/template/spec/containers/2/args/11"}]`, "json")
-
-				// As the csi-snapshot-controller deployment is fixed template by operator so used hard code(csi_controller container index and args index) here
-				// https://github.com/openshift/cluster-csi-snapshot-controller-operator/blob/master/assets/csi_controller_deployment.yaml#L32-L48
-				patchResourceAsAdmin(oc, "openshift-cluster-storage-operator", "deployment/csi-snapshot-controller", `[{"op":"add","path":"/spec/template/spec/containers/0/args/6","value":"--prevent-volume-mode-conversion"}]`, "json")
-				defer patchResourceAsAdmin(oc, "openshift-cluster-storage-operator", "deployment/csi-snapshot-controller", `[{"op":"remove","path":"/spec/template/spec/containers/0/args/6"}]`, "json")
-
-				// Make sure the csi driver recover healthy again
-				csiDriverController.waitReady(oc.AsAdmin())
-				csiSnapShotController.waitReady(oc.AsAdmin())
-				waitCSOhealthy(oc.AsAdmin())
 
 				exutil.By(`Create a csi storageclass with "volumeBindingMode: Immediate"`)
 				storageClass.create(oc)
@@ -3573,9 +3555,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 				// Check the volumesnapshotcontent should have the SourceVolumeMode field from 4.14
 				// https://github.com/kubernetes-csi/external-snapshotter/pull/665
-				// TODO: Check the field is immutable when it is made in the future (Maybe 4.15)
+				// Check the "sourceVolumeMode" field is immutable
 				// https://github.com/kubernetes-csi/external-snapshotter/pull/670
 				o.Expect(strings.EqualFold(volumesnapshot.getContentSourceVolumeMode(oc), "Block")).Should(o.BeTrue())
+				immutableErrMsg, patchErr := oc.AsAdmin().Run("patch").Args("VolumeSnapshotContent", volumesnapshot.getContentName(oc), "-p", `{"spec":{"sourceVolumeMode": "Filesystem"}}`, "--type=merge").Output()
+				o.Expect(patchErr).Should(o.HaveOccurred())
+				o.Expect(immutableErrMsg).Should(o.ContainSubstring(`sourceVolumeMode is immutable`))
 
 				exutil.By(`Create a restored pvc with volumeMode: "Filesystem"`)
 				pvcRestore.capacity = pvcOri.capacity
