@@ -8,6 +8,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -218,6 +219,68 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
+	// author: chaoyang@redhat.com
+	// OCP-75823 - [CSI-Driver] check the storage volume attach failure alert [Serial]
+	g.It("Author:chaoyang-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-NonPreRelease-Medium-75823-[CSI-Driver] check the storage volume attach failure alert [Serial]", func() {
+
+		scenarioSupportProvisioners := []string{"efs.csi.aws.com"}
+
+		var (
+			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner = range supportProvisioners {
+			if provisioner == "efs.csi.aws.com" {
+				exutil.By("# Patch clustercsidriver/efs.csi.aws.com to turning on efs csi metrics")
+				patchResourceAsAdmin(oc, "", "clustercsidriver/efs.csi.aws.com", `[{"op":"replace","path":"/spec/driverConfig","value":{"driverType":"AWS","aws":{"efsVolumeMetrics":{"state":"RecursiveWalk"}}}}]`, "json")
+				efsMetric, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clustercsidriver/efs.csi.aws.com", "-o=jsonpath={.spec.driverConfig.aws.efsVolumeMetrics.state}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("Now the efsMetric status is %s", efsMetric)
+				//Disable efs csi metrics, otherwise it will take much resource.
+				defer func() {
+					patchResourceAsAdmin(oc, "", "clustercsidriver/efs.csi.aws.com", `[{"op":"replace","path":"/spec/driverConfig","value":{"driverType":"AWS","aws":{"efsVolumeMetrics":{"state":"Disabled"}}}}]`, "json")
+					waitCSOhealthy(oc.AsAdmin())
+				}()
+
+			}
+
+			// Set the resource definition for the scenario
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pvc.namespace = oc.Namespace()
+			pod.namespace = pvc.namespace
+
+			exutil.By("#. Create pvc with the preset csi storageclass")
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create the pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Get the metric value about kubelet_volume_stats_capacity_bytes")
+			//If pvc.namespace exist, metric kubelet_volume_stats_capacity_bytes has values reported from efs csi driver
+			mo := newMonitor(oc.AsAdmin())
+			o.Eventually(func() string {
+				metricValueNamespace, _ := mo.getSpecifiedMetricValue("kubelet_volume_stats_capacity_bytes", "data.result")
+				return metricValueNamespace
+			}, 120*time.Second, 5*time.Second).Should(o.ContainSubstring(pvc.namespace))
+
+		}
+	})
+
 })
 
 func checkVolumeTypeCountSum(oc *exutil.CLI, provisioner string, storageClassTemplate string, pvcTemplate string) {
