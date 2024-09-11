@@ -1711,3 +1711,54 @@ func clusterSanityCheckMicroShift(oc *exutil.CLI) error {
 	e2e.Logf("Cluster sanity check passed")
 	return nil
 }
+
+// getPendingCSRs retrieves all pending CSRs and returns a list of their names
+func getPendingCSRs(oc *exutil.CLI) ([]string, error) {
+	output := getResourceToBeReady(oc, asAdmin, withoutNamespace, "csr")
+	o.Expect(output).NotTo(o.BeEmpty())
+
+	// Convert the output to a string and split it into lines
+	outputStr := string(output)
+	lines := strings.Split(outputStr, "\n")
+
+	var pendingCSRs []string
+
+	// Filter for CSRs with status "Pending" and extract the CSR name
+	for _, line := range lines {
+		if strings.Contains(line, "Pending") {
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				pendingCSRs = append(pendingCSRs, fields[0]) // Append CSR name to the list
+			}
+		}
+	}
+
+	// If no pending CSRs were found, return an empty list and no error
+	return pendingCSRs, nil
+}
+
+func getResourceWithKubeconfig(oc *exutil.CLI, newKubeconfig string, waitForError bool, getResource ...string) (string, error) {
+	var output string
+	var err error
+
+	args := append([]string{newKubeconfig}, getResource...)
+
+	pollErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+		output, err = oc.AsAdmin().WithoutNamespace().WithoutKubeconf().Run("--kubeconfig").Args(args...).Output()
+		if err != nil {
+			if waitForError {
+				return false, nil
+			}
+			return true, err
+		}
+		return true, nil // Success
+	})
+
+	if pollErr != nil {
+		if waitForError {
+			return "", fmt.Errorf("timed out waiting for `%v` command to succeed: %w :: and error is `%v`", getResource, pollErr, err)
+		}
+		return "", pollErr
+	}
+	return output, err
+}

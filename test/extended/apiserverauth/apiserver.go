@@ -6590,4 +6590,207 @@ metadata:
 			o.Expect(out).Should(o.ContainSubstring("denied the request: Validation failed"), fmt.Sprintf("admission webhook \"validationwebhook.validationwebhook.svc\" denied the request: Validation failed with changeAllowed: %s", param))
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-High-70396-[Apiserver] Add users with different client certificates to access the API Server as cluster-admin [Disruptive]", func() {
+		var (
+			dirname           = "/tmp/-OCP-70396-ca/"
+			csrNameDev        = "ocpdev-access"
+			fqdnName, port    = getApiServerFQDNandPort(oc, false)
+			apiserverCrt      = dirname + "ocp-apiserver-cert.crt"
+			customerCustomCas = dirname + "customer-custom-cas.crt"
+			patch             = `[{"op": "add", "path": "/spec/clientCA", "value":{"name":"customer-cas-custom"}}]`
+			patchToRecover    = `[{"op": "replace", "path": "/spec/clientCA", "value":}]`
+			users             = map[string]struct {
+				username      string
+				cert          string
+				key           string
+				csr           string
+				customerKey   string
+				customerCrt   string
+				newKubeconfig string
+			}{
+				"dev": {"ocpdev", dirname + "ocpdev.crt", dirname + "ocpdev.key", dirname + "ocpdev.csr", "", "", dirname + "ocpdev"},
+				"tw":  {"ocptw", dirname + "ocptw.crt", dirname + "ocptw.key", dirname + "ocptw.csr", dirname + "customer-ca-ocptw.key", dirname + "customer-ca-ocptw.crt", dirname + "ocptw"},
+				"qe":  {"ocpqe", dirname + "ocpqe.crt", dirname + "ocpqe.key", dirname + "ocpqe.csr", dirname + "customer-ca-ocpqe.key", dirname + "customer-ca-ocpqe.crt", dirname + "ocpqe"},
+			}
+		)
+
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1. Creating the client certificate for ocpdev using the internal OpenShift CA")
+		exutil.By("1.1 Creating a CSR for the client certificate using the openssl client")
+		userDetails, _ := users["dev"]
+		opensslCmd := fmt.Sprintf(`openssl req -nodes -newkey rsa:4096 -keyout %s -subj "/O=system:admin/CN=%s" -out %s`, userDetails.key, userDetails.username, userDetails.csr)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.2 Read the CSR file and encode it in base64")
+		csrData, err := os.ReadFile(userDetails.csr)
+		if err != nil {
+			e2e.Failf("Failed to read CSR file: %v", err)
+		}
+		csrBase64 := base64.StdEncoding.EncodeToString(csrData)
+
+		exutil.By("1.3 Submit the CSR to OpenShift in order to sign it with the internal CA")
+		csrYAML := fmt.Sprintf(`apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: ocpdev-access
+spec:
+  signerName: kubernetes.io/kube-apiserver-client
+  groups:
+  - system:authenticated
+  request: %s
+  usages:
+  - client auth
+`, csrBase64)
+
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", "default", "-f", "-").InputString(csrYAML).Output()
+		_, submitCsrErr := oc.WithoutNamespace().NotShowInfo().AsAdmin().Run("create").Args("-n", "default", "-f", "-").InputString(csrYAML).Output()
+		o.Expect(submitCsrErr).NotTo(o.HaveOccurred())
+
+		exutil.By("1.4 Approve the certificate pending request")
+		getCsr, getCsrErr := getPendingCSRs(oc)
+		o.Expect(getCsrErr).NotTo(o.HaveOccurred())
+		appCsrErr := oc.WithoutNamespace().AsAdmin().Run("adm").Args("certificate", "approve", getCsr[0]).Execute()
+		o.Expect(appCsrErr).NotTo(o.HaveOccurred())
+
+		exutil.By("1.5 Get CSR certificate after approved")
+		certBase := getResourceToBeReady(oc, asAdmin, withoutNamespace, "csr", csrNameDev, `-o=jsonpath={.status.certificate}`)
+		o.Expect(certBase).NotTo(o.BeEmpty())
+
+		// Decode the base64 encoded certificate
+		certDecoded, certDecodedErr := base64.StdEncoding.DecodeString(string(certBase))
+		o.Expect(certDecodedErr).NotTo(o.HaveOccurred())
+
+		// Write the decoded certificate to a file
+		csrDevCrtErr := os.WriteFile(userDetails.cert, certDecoded, 0644)
+		o.Expect(csrDevCrtErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Certificate saved to %s\n", userDetails.cert)
+
+		exutil.By("2. Creating the client certificate for user ocptw using the customer-signer-custom self-signed CA")
+		exutil.By("2.1 Create one self-signed CA using the openssl client")
+		userDetails, _ = users["tw"]
+		opensslOcptwCmd := fmt.Sprintf(`openssl genrsa -out %s 4096`, userDetails.customerKey)
+		_, err = exec.Command("bash", "-c", opensslOcptwCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		opensslOcptwCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s -sha256 -days 9999 -out %s -subj "/OU=openshift/CN=customer-signer-custom"`, userDetails.customerKey, userDetails.customerCrt)
+		_, err = exec.Command("bash", "-c", opensslOcptwCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.2 Create CSR for ocptw's client cert")
+		opensslOcptwCmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:4096 -keyout %s -subj "/O=system:admin/CN=%s" -out %s`, userDetails.key, userDetails.username, userDetails.csr)
+		_, err = exec.Command("bash", "-c", opensslOcptwCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.3 Sign CSR for ocptw")
+		opensslOcptwCmd = fmt.Sprintf(`openssl x509 -extfile <(printf "extendedKeyUsage = clientAuth") -req -in %s -CA %s -CAkey %s -CAcreateserial -out %s -days 9999 -sha256`, userDetails.csr, userDetails.customerCrt, userDetails.customerKey, userDetails.cert)
+		_, err = exec.Command("bash", "-c", opensslOcptwCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By(`3. Creating the client certificate for ocpqe using the customer-signer-custom-2 self-signed CA and using group “system:admin” for username “ocpqe”.`)
+		exutil.By("3.1 Create one self-signed CA using the openssl client for user ocpqe")
+		userDetails, _ = users["qe"]
+		opensslOcpqeCmd := fmt.Sprintf(`openssl genrsa -out %s 4096`, userDetails.customerKey)
+		_, err = exec.Command("bash", "-c", opensslOcpqeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		opensslOcpqeCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s -sha256 -days 9999 -out %s -subj "/OU=openshift/CN=customer-signer-custom-2"`, userDetails.customerKey, userDetails.customerCrt)
+		_, err = exec.Command("bash", "-c", opensslOcpqeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2 Create CSR for ocpqe's client cert")
+		opensslOcpqeCmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:4096 -keyout %s -subj "/O=system:admin/CN=ocpqe" -out %s`, userDetails.key, userDetails.csr)
+		_, err = exec.Command("bash", "-c", opensslOcpqeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.3 Sign CSR for ocpqe")
+		opensslOcpqeCmd = fmt.Sprintf(`openssl x509 -extfile <(printf "extendedKeyUsage = clientAuth") -req -in %s -CA %s -CAkey %s -CAcreateserial -out %s -days 9999 -sha256`, userDetails.csr, userDetails.customerCrt, userDetails.customerKey, userDetails.cert)
+		_, err = exec.Command("bash", "-c", opensslOcpqeCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Creating the kubeconfig files for ocpdev, ocptw and ocpqe")
+		opensslOcpdevCmd := fmt.Sprintf(`openssl s_client -showcerts -connect %s:%s </dev/null 2>/dev/null|openssl x509 -outform PEM > %s`, fqdnName, port, apiserverCrt)
+		_, err = exec.Command("bash", "-c", opensslOcpdevCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		i := 1
+		for _, userDetails := range users {
+			exutil.By(fmt.Sprintf("4.%d Create kubeconfig for user %s", i, userDetails.username))
+			err = oc.AsAdmin().WithoutNamespace().WithoutKubeconf().Run("--kubeconfig").Args(userDetails.newKubeconfig, "config", "set-credentials", userDetails.username, "--client-certificate="+userDetails.cert, "--client-key="+userDetails.key, "--embed-certs=true").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			err = oc.AsAdmin().WithoutNamespace().WithoutKubeconf().Run("--kubeconfig").Args(userDetails.newKubeconfig, "config", "set-cluster", "openshift-cluster-dev", "--certificate-authority="+apiserverCrt, "--embed-certs=true", "--server=https://"+fqdnName+":"+port).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			err = oc.AsAdmin().WithoutNamespace().WithoutKubeconf().Run("--kubeconfig").Args(userDetails.newKubeconfig, "config", "set-context", "openshift-dev", "--cluster=openshift-cluster-dev", "--namespace=default", "--user="+userDetails.username).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			err = oc.AsAdmin().WithoutNamespace().WithoutKubeconf().Run("--kubeconfig").Args(userDetails.newKubeconfig, "config", "use-context", "openshift-dev").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			i = i + 1
+			exutil.By(fmt.Sprintf("4.%d Accessing the cluster with the new kubeconfig files for user %s", i, userDetails.username))
+			if userDetails.username == "ocpdev" {
+				_, err = getResourceWithKubeconfig(oc, userDetails.newKubeconfig, true, "whoami")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				_, err = getResourceWithKubeconfig(oc, userDetails.newKubeconfig, false, "whoami")
+				o.Expect(err).To(o.HaveOccurred())
+			}
+			i = i + 1
+		}
+
+		exutil.By("5. Create the client-ca ConfigMap")
+		caCmd := fmt.Sprintf(`cat %s %s > %s`, users["tw"].customerCrt, users["qe"].customerCrt, customerCustomCas)
+		_, err = exec.Command("bash", "-c", caCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "customer-cas-custom", "-n", "openshift-config").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "customer-cas-custom", "-n", "openshift-config", fmt.Sprintf(`--from-file=ca-bundle.crt=%s`, customerCustomCas)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6. Patching apiserver")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patchToRecover).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		i = 1
+		for _, userDetails := range users {
+			exutil.By(fmt.Sprintf("7.%d Accessing the cluster again with the new kubeconfig files for user %s", i, userDetails.username))
+			output, err := getResourceWithKubeconfig(oc, userDetails.newKubeconfig, true, "whoami")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring(userDetails.username))
+			i = i + 1
+
+			//Try to do other stuff like listing pods, nodes, etc. we will see that we don’t have access to that. That’s expected since in a default OCP installation we don’t have RBAC rules for the system:admin group.
+			exutil.By(fmt.Sprintf("7.%d, Try to do other stuff like listing pods, nodes before applying RBAC policy", i))
+			_, err = getResourceWithKubeconfig(oc, userDetails.newKubeconfig, false, "get", "pods")
+			o.Expect(err).To(o.HaveOccurred())
+
+			_, err = getResourceWithKubeconfig(oc, userDetails.newKubeconfig, false, "get", "nodes")
+			o.Expect(err).To(o.HaveOccurred())
+			i = i + 1
+		}
+
+		exutil.By("8. Configure users in the system:admin group as cluster admins")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-admin", "system:admin").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-admin", "system:admin").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		i = 1
+		for _, userDetails := range users {
+			exutil.By(fmt.Sprintf("8.%d, Try again stuff like listing pods, nodes after applying RBAC policy", i))
+			_, err = getResourceWithKubeconfig(oc, userDetails.newKubeconfig, true, "get", "pod", "-n", "openshift-apiserver")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			_, err = getResourceWithKubeconfig(oc, userDetails.newKubeconfig, true, "get", "nodes")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			i = i + 1
+		}
+	})
 })
