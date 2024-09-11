@@ -1195,7 +1195,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		var newDhcpOptionsID, currentDhcpOptionsID string
 		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
-		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("example73762a.com example73762b.com example73762c.com")
+		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("EXAMple73762A.com example73762b.com eXaMpLe73762C.COM")
 		if err != nil {
 			g.Skip("The credential is insufficient to perform create dhcpOptions operation, skip the cases!!")
 		}
@@ -1233,7 +1233,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		o.Expect(readyStatus).Should(o.Equal("True"))
 		internalDNS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machineNameOfMachineSet, "-o=jsonpath={.status.addresses[?(@.type==\"InternalDNS\")].address}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(internalDNS, "example73762a.com") && strings.Contains(internalDNS, "example73762b.com") && strings.Contains(internalDNS, "example73762c.com")).To(o.BeTrue())
+		o.Expect(strings.Contains(internalDNS, "EXAMple73762A.com") && strings.Contains(internalDNS, "example73762b.com") && strings.Contains(internalDNS, "eXaMpLe73762C.COM")).To(o.BeTrue())
 	})
 
 	//author zhsun@redhat.com
