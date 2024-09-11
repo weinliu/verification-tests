@@ -18,12 +18,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	"github.com/blang/semver"
-	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
-	"github.com/tidwall/gjson"
-
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"github.com/tidwall/gjson"
+	gcpcrm "google.golang.org/api/cloudresourcemanager/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -123,6 +123,65 @@ func getRoute53HostedZoneID(awsConfig aws.Config, hostedZoneName string) string 
 		}
 	}
 	return strings.TrimPrefix(hostedZoneID, "/hostedzone/")
+}
+
+// Add or remove the IAM Policy Binding from GCP resource. Set the argument 'add' to true to add the binding, or false to remove it.
+func updateIamPolicyBinding(crmService *gcpcrm.Service, resource, role, member string, add bool) {
+	policy, err := crmService.Projects.GetIamPolicy(resource, &gcpcrm.GetIamPolicyRequest{}).Do()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if add {
+		policy.Bindings = append(policy.Bindings, &gcpcrm.Binding{
+			Role:    role,
+			Members: []string{member},
+		})
+	} else {
+		removeMember(policy, role, member)
+	}
+	_, err = crmService.Projects.SetIamPolicy(resource, &gcpcrm.SetIamPolicyRequest{Policy: policy}).Do()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// removeMember removes a member from a role binding in a GCP IAM policy
+// xref: https://cloud.google.com/iam/docs/samples/iam-modify-policy-remove-member#iam_modify_policy_remove_member-go
+func removeMember(policy *gcpcrm.Policy, role, member string) {
+	bindings := policy.Bindings
+	bindingIndex, memberIndex := -1, -1
+	for bIdx := range bindings {
+		if bindings[bIdx].Role != role {
+			continue
+		}
+		bindingIndex = bIdx
+		for mIdx := range bindings[bindingIndex].Members {
+			if bindings[bindingIndex].Members[mIdx] != member {
+				continue
+			}
+			memberIndex = mIdx
+			break
+		}
+	}
+	if bindingIndex == -1 {
+		e2e.Logf("Role %v not found. Member not removed.", role)
+		return
+	}
+	if memberIndex == -1 {
+		e2e.Logf("Role %v found. Member not found.", role)
+		return
+	}
+
+	members := removeIdx(bindings[bindingIndex].Members, memberIndex)
+	bindings[bindingIndex].Members = members
+	if len(members) == 0 {
+		bindings = removeIdx(bindings, bindingIndex)
+		policy.Bindings = bindings
+	}
+	e2e.Logf("Role '%v' found. Member '%v' removed.", role, member)
+}
+
+// removeIdx removes arr[idx] from an array
+// xref: https://cloud.google.com/iam/docs/samples/iam-modify-policy-remove-member#iam_modify_policy_remove_member-go
+func removeIdx[T any](arr []T, idx int) []T {
+	return append(arr[:idx], arr[idx+1:]...)
 }
 
 // Get the parent domain. "a.b.c"'s parent domain is "b.c"

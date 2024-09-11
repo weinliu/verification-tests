@@ -19,6 +19,8 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	gcpcrm "google.golang.org/api/cloudresourcemanager/v1"
+	gcpiam "google.golang.org/api/iam/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -933,6 +935,170 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			_ = oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "-l", controllerLabel, "-n", controllerNamespace, "--list").Execute()
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for 65132's certificate to become Ready")
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ConnectedOnly-High-62946-Use Google workload identity federation as ambient credential in GCP STS env for ACME dns01 cloudDNS solver to generate certificate [Serial]", func() {
+		const (
+			serviceAccountPrefix = "test-private-62946-dns01-"
+			controllerNamespace  = "cert-manager"
+			controllerLabel      = "app.kubernetes.io/name=cert-manager"
+			issuerName           = "google-clouddns-ambient"
+			certName             = "certificate-from-dns01-clouddns"
+			stsSecretName        = "gcp-sts-creds"
+		)
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "httpsProxy") || strings.Contains(output, "httpProxy") {
+			g.Skip("This case can run in STS proxy env. Handling proxy env needs to use cert-manager flag '--dns01-recursive-nameservers-only', which is already covered in OCP-63555. For simplicity, skipping proxy configured cluster for this case.")
+		}
+
+		exutil.SkipIfPlatformTypeNot(oc, "GCP")
+		if !exutil.IsSTSCluster(oc) {
+			g.Skip("Skip for non-STS cluster")
+		}
+
+		exutil.By("create the GCP IAM and CloudResourceManager client")
+		// Note that in Prow CI, the credentials source is automatically pre-configured to by the step 'openshift-extended-test'
+		// See https://github.com/openshift/release/blob/69b2b9c4f28adcfcc5b9ff4820ecbd8d2582a3d7/ci-operator/step-registry/openshift-extended/test/openshift-extended-test-commands.sh#L43
+		iamService, err := gcpiam.NewService(context.Background())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		crmService, err := gcpcrm.NewService(context.Background())
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("prepare some configs for following WorkloadIdentity authentication")
+		// get GCP project ID from cluster
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(projectID).NotTo(o.BeEmpty())
+		e2e.Logf("project ID: %s", projectID)
+
+		// retrieve WorkloadIdentity pool ID from OIDC Provider
+		oidcProvider, err := exutil.GetOIDCProvider(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		poolID := strings.TrimSuffix(strings.Split(oidcProvider, "/")[1], "-oidc") // trim 'storage.googleapis.com/poolID-oidc' to 'poolID'
+
+		// retrieve projectNumber from project
+		project, err := crmService.Projects.Get(projectID).Do()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		projectNumber := strconv.FormatInt(project.ProjectNumber, 10) // convert int64 to string
+
+		// construct resource identifier
+		identifier := fmt.Sprintf("//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s", projectNumber, poolID)
+		e2e.Logf("constructed resource identifier: %s", identifier)
+
+		exutil.By("create a GCP service account")
+		serviceAccountName := serviceAccountPrefix + getRandomString(4)
+		request := &gcpiam.CreateServiceAccountRequest{
+			AccountId: serviceAccountName,
+			ServiceAccount: &gcpiam.ServiceAccount{
+				DisplayName: "dns01-solver service account for cert-manager",
+			},
+		}
+		result, err := iamService.Projects.ServiceAccounts.Create("projects/"+projectID, request).Do()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("cleanup the created GCP service account")
+			_, err = iamService.Projects.ServiceAccounts.Delete(result.Name).Do()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("add IAM policy binding with role 'dns.admin' to GCP project")
+		projectRole := "roles/dns.admin"
+		projectMember := fmt.Sprintf("serviceAccount:%s", result.Email)
+		updateIamPolicyBinding(crmService, projectID, projectRole, projectMember, true)
+		defer func() {
+			e2e.Logf("cleanup the added IAM policy binding from GCP project")
+			updateIamPolicyBinding(crmService, projectID, projectRole, projectMember, false)
+		}()
+
+		exutil.By("link cert-manager service account to GCP service account with role 'iam.workloadIdentityUser'")
+		resource := fmt.Sprintf("projects/-/serviceAccounts/%s", result.Email)
+		serviceAccoutRole := "roles/iam.workloadIdentityUser"
+		serviceAccoutMember := fmt.Sprintf("principal:%s/subject/system:serviceaccount:cert-manager:cert-manager", identifier)
+		serviceAccountPolicy, err := iamService.Projects.ServiceAccounts.GetIamPolicy(resource).Do()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		serviceAccountPolicy.Bindings = append(serviceAccountPolicy.Bindings, &gcpiam.Binding{
+			Role:    serviceAccoutRole,
+			Members: []string{serviceAccoutMember},
+		})
+		_, err = iamService.Projects.ServiceAccounts.SetIamPolicy(resource, &gcpiam.SetIamPolicyRequest{Policy: serviceAccountPolicy}).Do()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Opt not to use defer here to remove the IAM policy binding from the service account, as it will be cleaned up along with the service account deletion.
+
+		exutil.By("create the GCP STS config secret manually")
+		credContent := `{
+			"type": "external_account",
+			"audience": "%s/providers/%s",
+			"subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+			"token_url": "https://sts.googleapis.com/v1/token",
+			"service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/%s:generateAccessToken",
+			"credential_source": {
+				"file": "/var/run/secrets/openshift/serviceaccount/token",
+				"format": {
+					"type": "text"
+				}
+			}
+		}`
+		credContent = fmt.Sprintf(credContent, identifier, poolID, resource)
+		err = oc.AsAdmin().Run("create").Args("-n", "cert-manager", "secret", "generic", stsSecretName, "--from-literal=service_account.json="+credContent).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("cleanup the created GCP STS secret")
+			err := oc.AsAdmin().Run("delete").Args("-n", "cert-manager", "secret", stsSecretName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("patch the subscription to inject CLOUD_CREDENTIALS_SECRET_NAME env")
+		oldPodList, err := exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchPath := `{"spec":{"config":{"env":[{"name":"CLOUD_CREDENTIALS_SECRET_NAME","value":"` + stsSecretName + `"}]}}}`
+		err = oc.AsAdmin().Run("patch").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("un-patch the subscription")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patchPath = `{"spec":{"config":{"env":[]}}}`
+			err = oc.AsAdmin().Run("patch").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+		}()
+		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+
+		exutil.By("create a clusterissuer with Google Clould DNS as dns01 solver")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-clouddns-ambient-credential.yaml")
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "PROJECT_ID=" + projectID}
+		exutil.ApplyClusterResourceFromTemplate(oc, params...)
+		defer func() {
+			e2e.Logf("delete the clusterissuer")
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuer", issuerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, "", "clusterissuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
+
+		exutil.By("create a certificate")
+		baseDomain := getBaseDomain(oc)
+		dnsZone, err := getParentDomain(baseDomain)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		dnsName := getRandomString(4) + "." + dnsZone
+
+		certFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 	})
 
 	// author: yuewu@redhat.com
