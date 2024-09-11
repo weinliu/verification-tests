@@ -38,7 +38,6 @@ type monitoringStackDescription struct {
 const (
 	subName    = "observability-operator"
 	ogName     = "observability-operator-og"
-	csName     = "observability-operator-catalog"
 	namespace  = "openshift-observability-operator"
 	monSvcName = "hypershift-monitoring-stack-prometheus"
 )
@@ -291,6 +290,8 @@ func deleteMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD 
 	}
 }
 func deleteOperator(oc *exutil.CLI) {
+	g.By("Removing servicemoitor")
+	errSm := oc.AsAdmin().WithoutNamespace().Run("delete").Args("servicemonitors.monitoring.coreos.com", "observability-operator", "-n", namespace).Execute()
 	g.By("Removing ClusterServiceVersion " + csvName)
 	errCsv := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterserviceversions", csvName, "-n", namespace).Execute()
 	g.By("Removing Subscription " + subName)
@@ -298,7 +299,7 @@ func deleteOperator(oc *exutil.CLI) {
 	g.By("Removing OperatorGroup " + ogName)
 	errOg := oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", ogName, "-n", namespace).Execute()
 	g.By("Removing Namespace " + namespace)
-	errNs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", namespace).Execute()
+	errNs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", namespace, "--force").Execute()
 	crds, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--api-group=monitoring.rhobs", "-o", "name").Output()
 	if err != nil {
 		e2e.Logf("err %v, crds %v", err, crds)
@@ -307,6 +308,7 @@ func deleteOperator(oc *exutil.CLI) {
 		errCRD := oc.AsAdmin().WithoutNamespace().Run("delete").Args(crda...).Execute()
 		o.Expect(errCRD).NotTo(o.HaveOccurred())
 	}
+	o.Expect(errSm).NotTo(o.HaveOccurred())
 	o.Expect(errCsv).NotTo(o.HaveOccurred())
 	o.Expect(errSub).NotTo(o.HaveOccurred())
 	o.Expect(errOg).NotTo(o.HaveOccurred())

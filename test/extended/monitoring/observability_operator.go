@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	o "github.com/onsi/gomega"
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -17,6 +18,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		region     string
 	)
 	g.BeforeEach(func() {
+		baseCapSet, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].spec.capabilities.baselineCapabilitySet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if baseCapSet == "None" {
+			g.Skip("Skip the COO tests for basecapset is none")
+		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		clID, region = getClusterDetails(oc)
 		g.By("Install Observability Operator and check if it is successfully installed") //57234-Observability Operator installation on OCP hypershift management
