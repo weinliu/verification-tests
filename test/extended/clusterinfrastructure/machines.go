@@ -655,7 +655,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		}
 		g.By("Update machineset with publicIP: true")
 		switch iaasPlatform {
-		case clusterinfra.AWS, clusterinfra.Azure:
+		case clusterinfra.AWS:
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"publicIP": true}}}}}}`, "--type=merge").Output()
 			if publicZone == "" && iaasPlatform == clusterinfra.Azure {
 				o.Expect(msg).To(o.ContainSubstring("publicIP is not allowed in Azure disconnected installation with publish strategy as internal"))
@@ -665,6 +665,24 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 				err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas": 1}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+			}
+		case clusterinfra.Azure:
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"publicIP": true}}}}}}`, "--type=merge").Output()
+			if publicZone == "" && iaasPlatform == clusterinfra.Azure {
+				o.Expect(msg).To(o.ContainSubstring("publicIP is not allowed in Azure disconnected installation with publish strategy as internal"))
+			} else {
+				o.Expect(err).NotTo(o.HaveOccurred())
+				//to scale up machineset with publicIP: true
+				//OutboundRules for VMs with public IpConfigurations with capi installation cannot provision publicIp(Limitation Azure)
+				err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas": 1}}`, "--type=merge").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+
+				g.By("Check machineset with publicIP: true is not allowed for Azure")
+				status, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(strings.Contains(status, "NicWithPublicIpCannotReferencePoolWithOutboundRule"))
 			}
 		case clusterinfra.GCP:
 			network, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].network}").Output()
