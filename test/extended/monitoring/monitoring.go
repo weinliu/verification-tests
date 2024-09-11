@@ -2778,6 +2778,11 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			exampleApp = filepath.Join(monitoringBaseDir, "example-app.yaml")
 		)
+		exutil.By("confirm the alert existed")
+		// % oc -n openshift-monitoring get prometheusrules prometheus-k8s-prometheus-rules -ojsonpath='{.spec.groups[].rules[?(@.alert=="PrometheusKubernetesListWatchFailures")]}' |jq
+		cmd := "-ojsonpath={.spec.groups[].rules[?(@.alert==\"PrometheusKubernetesListWatchFailures\")]}"
+		checkYamlconfig(oc, "openshift-monitoring", "prometheusrules", "prometheus-k8s-prometheus-rules", cmd, `"alert":"PrometheusKubernetesListWatchFailures"`, true)
+
 		exutil.By("create a namespace and deploy example-app")
 		oc.SetupProject()
 		ns := oc.Namespace()
@@ -2787,12 +2792,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/cluster-monitoring-").Execute()
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/cluster-monitoring=true").Execute()
 
-		exutil.By("check logs in prometheus pod")
-		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus", "prometheus", `cannot list resource \"pods\" in API group \"\" in the namespace \"`+ns+`\"`, true)
+		exutil.By("confirm prometheus pod is ready")
+		assertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
 
 		exutil.By("check the alert is triggered")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusKubernetesListWatchFailures"}'`, token, `"alertname":"PrometheusKubernetesListWatchFailures"`, 3*uwmLoadTime)
+
+		exutil.By("check logs in prometheus pod")
+		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus", "prometheus", `cannot list resource \"pods\" in API group \"\" in the namespace \"`+ns+`\"`, true)
 	})
 
 	// author: tagao@redhat.com
