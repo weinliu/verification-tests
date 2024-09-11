@@ -30,10 +30,8 @@ describe('(OCP-74049, OCP-73875 Network_Observability) Prometheus datasource onl
 
     it('(OCP-74049, aramesha, Network_Observability), prom dataSource only', { tags: ['Network_Observability'] }, function () {
         netflowPage.visit()
-        // verify overview tab
-        cy.get('li.overviewTabButton').should('exist').click()
-        cy.wait(2000)
-        cy.get('#overview-flex').should('not.be.empty')
+        
+        cy.checkNetflowTraffic("Disabled")
 
         // verify only prom and auto dataSource is enabled in query options
         cy.get('#filter-toolbar-search-filters').contains('Query options').click();
@@ -43,15 +41,7 @@ describe('(OCP-74049, OCP-73875 Network_Observability) Prometheus datasource onl
         cy.get('#dataSource-auto').should('not.be.disabled')
         cy.get('#filter-toolbar-search-filters').contains('Query options').click();
 
-        // verify netflow traffic page is disabled
-        cy.get('li.tableTabButton > button').should('exist').should('have.class', 'pf-m-aria-disabled')
-
-        // verify topology view
-        cy.get('li.topologyTabButton').should('exist').click()
-        cy.wait(1000)
-        cy.get('#drawer').should('not.be.empty')
-
-        // verify resource scop is not observed with prom dataSource
+        // verify resource scope is not observed with prom dataSource
         cy.byTestID("show-view-options-button").should('exist').click().then(views => {
             cy.contains('Display options').should('exist').click()
             // set one display to test with

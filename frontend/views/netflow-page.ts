@@ -1,3 +1,4 @@
+import { project } from "../views/netobserv"
 
 export const netflowPage = {
     visit: () => {
@@ -18,6 +19,11 @@ export const netflowPage = {
         })
         cy.byTestID('no-results-found').should('not.exist')
         cy.get('#overview-container').should('exist')
+    },
+    visitDeveloper: () => {
+        cy.clearLocalStorage()
+        cy.switchPerspective('Developer');
+        cy.visit(`/dev-monitoring/ns/${project}/netflow-traffic`)
     },
     toggleFullScreen: () => {
         cy.byTestID(genSelectors.moreOpts).should('exist').click().then(moreOpts => {
@@ -286,20 +292,26 @@ Cypress.Commands.add('visitNetflowTrafficTab', (page) => {
     cy.checkNetflowTraffic()
 });
 
-Cypress.Commands.add('checkNetflowTraffic', () => {
+Cypress.Commands.add('checkNetflowTraffic', (loki = "Enabled") => {
     // overview panels
     cy.get('li.overviewTabButton').should('exist').click()
     cy.wait(2000)
     cy.checkPanel(overviewSelectors.defaultPanels)
 
     // table view
-    cy.get('li.tableTabButton').should('exist').click()
-    cy.wait(1000)
-    cy.byTestID("table-composable").should('exist')
+    if (loki == "Disabled") {
+        // verify netflow traffic page is disabled
+        cy.get('li.tableTabButton > button').should('exist').should('have.class', 'pf-m-aria-disabled')
+    }
+    else if (loki == "Enabled") {
+        cy.get('li.tableTabButton').should('exist').click()
+        cy.wait(1000)
+        cy.byTestID("table-composable").should('exist')
+    }
 
     // topology view
     cy.get('li.topologyTabButton').should('exist').click()
-    cy.wait(1000)
+    cy.wait(2000)
     cy.get('#drawer').should('not.be.empty')
 });
 
@@ -316,7 +328,7 @@ declare global {
             checkPerformance(page: string, loadTime: number, memoryUsage: number): Chainable<Element>
             changeQueryOption(name: string): Chainable<Element>
             visitNetflowTrafficTab(page: string): Chainable<Element>
-            checkNetflowTraffic(): Chainable<Element>
+            checkNetflowTraffic(loki?: string): Chainable<Element>
         }
     }
 }
