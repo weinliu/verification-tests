@@ -1809,7 +1809,7 @@ func getHivecontrollersPod(oc *exutil.CLI, namespace string) string {
 }
 
 func getTestOCPImage() string {
-	testImageVersion := "4.16"
+	testImageVersion := "4.18"
 	testOCPImage, err := exutil.GetLatestNightlyImage(testImageVersion)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if testOCPImage == "" {
