@@ -1038,7 +1038,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			lvmClusterState, _ := lvmCluster.getLvmClusterStatus(oc)
 			return lvmClusterState
 		}, 120*time.Second, 5*time.Second).Should(o.Equal("Failed"))
-		errMsg := "at least 1 valid device is required if DeviceSelector paths or optionalPaths are specified"
+		errMsg := "there were no available devices to create it"
 		o.Eventually(func() string {
 			errorReason, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", lvmCluster.name, "-n", "openshift-storage", "-ojsonpath={.status.deviceClassStatuses[*].nodeStatus[*].reason}").Output()
 			e2e.Logf("LVMCluster resource error reason: " + errorReason)
