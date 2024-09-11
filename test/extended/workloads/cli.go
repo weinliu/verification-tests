@@ -2573,6 +2573,49 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(outputWarning).To(o.ContainSubstring("could also match lower priority resource customtasks72217.example.com"))
 		o.Expect(outputWarning).To(o.ContainSubstring("could also match lower priority resource crontabs72217.stable.example.com"))
 	})
+
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-High-75997-Make sure images with different tag but same layers could be mirrored correctly", func() {
+		customResourceBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageMirrorList := filepath.Join(customResourceBaseDir, "config-images-75997.txt")
+
+		exutil.By("Create new namespace")
+		oc.SetupProject()
+		ns75997 := oc.Namespace()
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   ns75997,
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		sedCmd := fmt.Sprintf(`sed -i 's/localhost:5000/%s/g' %s`, serInfo.serviceName, imageMirrorList)
+		e2e.Logf("Check sed cmd %s description:", sedCmd)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		extractTmpDirName := "/tmp/case75997"
+		err = os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+			output, err1 := oc.WithoutNamespace().Run("image").Args("mirror", "--insecure", "-a", extractTmpDirName+"/.dockerconfigjson", "-f", imageMirrorList).Output()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			if !strings.Contains(output, "hello-openshift:arm-amd-latest") && !strings.Contains(output, "hello-openshift:arm-amd-1.2.0") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "oc image mirror fails even after waiting for about 120 seconds")
+	})
 })
 
 // ClientVersion ...
