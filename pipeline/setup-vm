@@ -115,13 +115,13 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
             BUILD_CMD="make -f ci/prow.Makefile patch build"
         fi
     else
-        if [ "${JENKINS_AGENT}" == 'goc417' ]; then
-            git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
-        else
-            BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
-            BUILD_CMD="make -f ci/prow.Makefile patch build"
-            git clone --depth=1 git@github.com:openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk --branch ${BRANCH}
-        fi
+        #if [ "${JENKINS_AGENT}" == 'goc417' ]; then
+        #    git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
+        #else
+        BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
+        BUILD_CMD="make -f ci/prow.Makefile patch build"
+        git clone --depth=1 git@github.com:openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk --branch ${BRANCH}
+        #fi
     fi
     cd ${WORKSPACE}/osdk
     echo "buid command is [${BUILD_CMD}]"

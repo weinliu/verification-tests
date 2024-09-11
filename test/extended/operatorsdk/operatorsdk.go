@@ -28,13 +28,15 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	var makeCLI = NewMakeCLI()
 	var mvnCLI = NewMVNCLI()
 	var oc = exutil.NewCLIWithoutNamespace("default")
-	var ocpversion = "4.16"
-	var ocppreversion = "4.15"
+	var ocpversion = "4.18"
+	var ocppreversion = "4.17"
 	var upstream = false
 
-	g.BeforeEach(func() {
-		g.Skip("OperatorSDK is deprecated since OCP 4.16, so skip it")
-	})
+	/*
+		g.BeforeEach(func() {
+			g.Skip("OperatorSDK is deprecated since OCP 4.16, so skip it")
+		})
+	*/
 
 	// author: jfan@redhat.com
 	g.It("VMonly-Author:jfan-High-37465-SDK olm improve olm related sub commands", func() {
@@ -919,10 +921,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("Author:xzha-High-52126-Sync 1.28 to downstream", func() {
+	g.It("Author:xzha-High-52126-Sync 1.29 to downstream", func() {
 		operatorsdkCLI.showInfo = true
 		output, _ := operatorsdkCLI.Run("version").Args().Output()
-		o.Expect(output).To(o.ContainSubstring("v1.28"))
+		o.Expect(output).To(o.ContainSubstring("v1.29"))
 	})
 
 	// author: chuo@redhat.com
@@ -5028,7 +5030,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("Check the default init image")
 		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("pod", "quay-io-olmqe-upgradeoperator-bundle-v0-1", "-o=jsonpath={.spec.initContainers[*].image}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("docker.io/library/busybox:1.36.0"))
+		o.Expect(output).To(o.ContainSubstring("registry.access.redhat.com/ubi8:8.9"))
 
 		output, err = operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
 		if err != nil {
