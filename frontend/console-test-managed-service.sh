@@ -40,8 +40,8 @@ export NO_COLOR=1
 ls -ltr
 echo "triggering tests"
 set -x
-if [[ ${SHARED_DIR}/cluster-type == 'rosa' ]] ; then
+if grep -q "rosa" "${SHARED_DIR}/cluster-type"; then
   yarn run test-cypress-console-rosa
-elif [[ ${SHARED_DIR}/cluster-type == 'osd' ]]; then
+elif grep -q "osd" "${SHARED_DIR}/cluster-type"; then
   yarn run test-cypress-console-osd
 fi
