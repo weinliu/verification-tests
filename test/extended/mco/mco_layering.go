@@ -625,7 +625,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in master node %s after the extension is installed", workerNode.GetName())
 		logger.Infof("Current rpm-ostree status in worker node after extension:\n%s\n", wStatus)
-		o.Expect(wStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+		o.Expect(wStatus).To(o.MatchRegexp("(?s)LayeredPackages:.*usbguard"),
 			"Status in worker node %s is not reporting the Layered %s package", workerNode.GetName(), extensionRpmName)
 
 		wDeployment, err = workerNode.GetBootedOsTreeDeployment(true)
@@ -646,7 +646,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in master node %s after the extension is installed", masterNode.GetName())
 		logger.Infof("Current rpm-ostree status in master node:\n%s\n", mStatus)
-		o.Expect(mStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+		o.Expect(mStatus).To(o.MatchRegexp("(?s)LayeredPackages:.*usbguard"),
 			"Status in master node %s is not reporting the Layered %s package", workerNode.GetName(), extensionRpmName)
 
 		mDeployment, err = masterNode.GetBootedOsTreeDeployment(true)
@@ -702,7 +702,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in worker node %s after deleting custom osImage", workerNode.GetName())
 		logger.Infof("Current rpm-ostree status in worker node after deleting custom osImage:\n%s\n", wStatus)
-		o.Expect(wStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+		o.Expect(wStatus).To(o.MatchRegexp("(?s)LayeredPackages:.*usbguard"),
 			"Status in worker node %s is not reporting the Layered %s package after deleting custom osImage", workerNode.GetName(), extensionRpmName)
 		o.Expect(wStatus).NotTo(o.ContainSubstring(digestedImage),
 			"Status in worker node %s is reporting the custom osImage, but it shouldn't because custom osImage was deleted", workerNode.GetName(), extensionRpmName)
@@ -716,7 +716,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in master node %s after deleting custom osIMage", masterNode.GetName())
 		logger.Infof("Current rpm-ostree status in master node:\n%s\n", mStatus)
-		o.Expect(mStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+		o.Expect(mStatus).To(o.MatchRegexp("(?s)LayeredPackages:.*usbguard"),
 			"Status in master node %s is not reporting the Layered %s package after deleting custom osImage", workerNode.GetName(), extensionRpmName)
 		o.Expect(mStatus).NotTo(o.ContainSubstring(digestedImage),
 			"Status in master node %s is reporting the custom osImage, but it shouldn't because custom osImage was deleted", workerNode.GetName(), extensionRpmName)
