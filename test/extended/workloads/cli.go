@@ -871,7 +871,8 @@ var _ = g.Describe("[sig-cli] Workloads test oc works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		imageDigest := strings.Replace(string(imageD), "\n", "", -1)
 
-		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "--command=oc", "--to="+extractTmpDirName, "--insecure", "--from="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev@"+imageDigest).Outputs()
+		createEmptyAuth(extractTmpDirName + "/emptyauth.json")
+		_, outErr, err := oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "--command=oc", "--to="+extractTmpDirName, "--insecure", "--from="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev@"+imageDigest, "-a", extractTmpDirName+"/emptyauth.json").Outputs()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(outErr).To(o.ContainSubstring("access to the requested resource is not authorized"))
 
@@ -880,7 +881,7 @@ var _ = g.Describe("[sig-cli] Workloads test oc works well", func() {
 		sedCmd := fmt.Sprintf(`sed -i 's/localhost:5000/%s/g' %s`, serInfo.serviceName, icspConfig)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "--command=oc", "--icsp-file="+icspConfig, "--to="+extractTmpDirName, "--insecure", "--from="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev@"+imageDigest).Output()
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "--command=oc", "--icsp-file="+icspConfig, "--to="+extractTmpDirName, "--insecure", "--from="+serInfo.serviceName+"/openshift-release-dev/ocp-v4.0-art-dev@"+imageDigest, "-a", extractTmpDirName+"/emptyauth.json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err := exec.Command("bash", "-c", "stat "+extractTmpDirName+"/oc").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

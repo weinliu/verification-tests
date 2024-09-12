@@ -2307,3 +2307,14 @@ func checkImageRegistryPodNum(oc *exutil.CLI) bool {
 	}
 	return true
 }
+
+func createEmptyAuth(authfilepath string) {
+	authF, err := os.Create(authfilepath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer authF.Close()
+	authContent := fmt.Sprintf(`{}`)
+	authW := bufio.NewWriter(authF)
+	_, werr := authW.WriteString(authContent)
+	authW.Flush()
+	o.Expect(werr).NotTo(o.HaveOccurred())
+}
