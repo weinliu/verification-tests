@@ -331,9 +331,16 @@ var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 		g.By("Make sure when exceed limit should failed to create pod")
 		err = oc.Run("start-build").Args("ruby-sample-build", "-n", ns11111).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		buildOut, err := oc.Run("describe").Args("build", "-n", ns11111).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(buildOut, "Failed creating build pod")).To(o.BeTrue())
-		o.Expect(strings.Contains(buildOut, "maximum cpu usage per Pod")).To(o.BeTrue())
+
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			buildOut, err := oc.Run("describe").Args("build", "-n", ns11111).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(buildOut, "Failed creating build pod") && strings.Contains(buildOut, "maximum cpu usage per Pod") {
+				e2e.Logf("Found the expected information about the limit")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "timeout wait for prune deploymentconfig dry run")
 	})
 })
