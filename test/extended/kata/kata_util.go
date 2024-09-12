@@ -1579,10 +1579,11 @@ func getPeerPodLimit(oc *exutil.CLI, opNamespace string) (podLimit string) {
 func getPeerPodMetadataInstanceType(oc *exutil.CLI, opNamespace, podName, provider string) (string, error) {
 	metadataCurl := map[string][]string{
 		"aws":   {"http://169.254.169.254/latest/meta-data/instance-type"},
-		"azure": {"-H", "Metadata:true", "--noproxy", "\"*\"", "\"http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2023-07-01&format=text\""},
+		"azure": {"-H", "Metadata:true", "\\*", "http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2023-07-01&format=text"},
 	}
 	podCmd := []string{"-n", opNamespace, podName, "--", "curl", "-s"}
-	return oc.WithoutNamespace().AsAdmin().Run("exec").Args(append(podCmd, metadataCurl[provider]...)...).Output()
+	msg, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(append(podCmd, metadataCurl[provider]...)...).Output()
+	return msg, err
 }
 
 func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace string) (msg string, err error, imageID string) {

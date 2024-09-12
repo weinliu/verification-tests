@@ -1478,7 +1478,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:vvoronko-High-68930-deploy peerpod with type annotation", func() {
-		g.Skip("Skipping 68930 until it is fixed 240905")
 
 		oc.SetupProject()
 
@@ -1512,14 +1511,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
 		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
-		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed rsh to pod %v to provide metadata", podName))
-		o.Expect(actualSize).To(o.Equal(instanceSize[provider]), fmt.Sprintf("Instance size don't match provided annotations"))
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed rsh to pod %v to provide metadata: %v", podName, err))
+		o.Expect(actualSize).To(o.Equal(instanceSize[provider]), fmt.Sprintf("Instance size don't match provided annotations: %v", err))
 
 		g.By("SUCCESS - Podvm with required instance type was launched")
 	})
 
 	g.It("Author:vvoronko-High-69018-deploy peerpod with default vcpu and memory", func() {
-		g.Skip("Skipping 69018 until it is fixed 240905")
 
 		oc.SetupProject()
 
@@ -1553,8 +1551,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		actualSize, err := getPeerPodMetadataInstanceType(oc, podNs, podName, provider)
 		e2e.Logf("Podvm with required instance type %v was launched as %v", instanceSize[provider], actualSize)
-		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed rsh to pod %v to provide metadata", podName))
-		o.Expect(actualSize).To(o.Equal(instanceSize[provider]), fmt.Sprintf("Instance size don't match provided annotations"))
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed rsh to pod %v to provide metadata: %v", podName, err))
+		o.Expect(actualSize).To(o.Equal(instanceSize[provider]), fmt.Sprintf("Instance size don't match provided annotations: %v", err))
 
 		g.By("SUCCESS - Podvm with required instance type was launched")
 	})
