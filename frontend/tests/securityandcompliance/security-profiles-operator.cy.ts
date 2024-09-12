@@ -19,6 +19,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc delete rawselinuxprofiles --all -n openshift-security-profiles`, { failOnNonZeroExit: false });
     cy.adminCLI(`oc delete mutatingwebhookconfiguration spo-mutating-webhook-configuration -n openshift-security-profiles`, { failOnNonZeroExit: true });
     cy.adminCLI(`oc delete project openshift-security-profiles`, { timeout: 600000, failOnNonZeroExit: true });
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OCP-50400,xiyuan,Security_and_Compliance) Install the Security Profiles Operator through GUI and check metrics on GUI',{tags:['@smoke','@e2e','admin','@osd-ccs','@rosa']}, () => {

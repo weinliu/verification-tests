@@ -19,6 +19,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc delete compliancescan --all -n openshift-compliance`, { failOnNonZeroExit: false });
     cy.adminCLI(`oc delete pb --all -n openshift-compliance`, {  timeout: 60000, failOnNonZeroExit: true });
     cy.adminCLI(`oc delete project openshift-compliance`, { timeout: 60000, failOnNonZeroExit: true });
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OCP-59410,xiyuan,Security_and_Compliance) Install the Compliance Operator through web console',{tags:['@smoke','@e2e','admin','@osd-ccs','@rosa']}, () => {

@@ -13,6 +13,7 @@ describe('Operators related features', () => {
   after(() => {
     cy.adminCLI(`oc delete fileintegrity --all -n openshift-file-integrity`, { failOnNonZeroExit: true });
     cy.adminCLI(`oc delete project openshift-file-integrity`, { timeout: 60000, failOnNonZeroExit: true });
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OCP-59412,xiyuan,Security_and_Compliance) Install the file integrity operator through web console',{tags:['@smoke','@e2e','admin','@osd-ccs','@rosa']}, () => {
