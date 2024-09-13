@@ -378,4 +378,49 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		defer capiMachineSetAWS.deleteCapiMachineSet(oc)
 		capiMachineSetAWS.createCapiMachineSet(oc)
 	})
+
+	g.It("Author:huliu-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-76088-[CAPI] New machine can join cluster when VPC has custom DHCP option set [Disruptive][Slow]", func() {
+		g.By("Check if cluster api on this platform is supported")
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
+		skipForCAPINotExist(oc)
+
+		g.By("Create a new dhcpOptions")
+		var newDhcpOptionsID, currentDhcpOptionsID string
+		clusterinfra.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("capi76088-CAPI.com")
+		if err != nil {
+			g.Skip("The credential is insufficient to perform create dhcpOptions operation, skip the cases!!")
+		}
+		defer func() {
+			err := awsClient.DeleteDhcpOptions(newDhcpOptionsID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("Associate the VPC with the new dhcpOptionsId")
+		machineName := clusterinfra.ListMasterMachineNames(oc)[0]
+		instanceID, err := awsClient.GetAwsInstanceID(machineName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		currentDhcpOptionsID, err = awsClient.GetDhcpOptionsIDOfVpc(vpcID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			err := awsClient.AssociateDhcpOptions(vpcID, currentDhcpOptionsID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = awsClient.AssociateDhcpOptions(vpcID, newDhcpOptionsID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create capi machineset")
+		cluster.createCluster(oc)
+		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
+		awsMachineTemplate.createAWSMachineTemplate(oc)
+
+		capiMachineSetAWS.name = "capi-machineset-76088"
+		defer waitForCapiMachinesDisapper(oc, capiMachineSetAWS.name)
+		defer capiMachineSetAWS.deleteCapiMachineSet(oc)
+		capiMachineSetAWS.createCapiMachineSet(oc)
+	})
 })
