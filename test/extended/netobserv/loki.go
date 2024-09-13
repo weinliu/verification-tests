@@ -3,6 +3,7 @@ package netobserv
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -76,15 +77,17 @@ func (l lokiStack) deployLokiStack(oc *exutil.CLI) error {
 
 	for i := 0; i < lokistack.NumField(); i++ {
 		if lokistack.Field(i).Interface() != "" {
-			if lokistack.Type().Field(i).Name != "StorageType" || lokistack.Type().Field(i).Name != "Template" {
-				parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, lokistack.Field(i).Interface()))
+			if lokistack.Type().Field(i).Name == "StorageType" {
+				if lokistack.Field(i).Interface() == "odf" || lokistack.Field(i).Interface() == "minio" {
+					parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, "s3"))
+				} else {
+					parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, lokistack.Field(i).Interface()))
+				}
 			} else {
-				if lokistack.Type().Field(i).Name == "StorageType" {
-					if lokistack.Field(i).Interface() == "odf" || lokistack.Field(i).Interface() == "minio" {
-						parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, "s3"))
-					} else {
-						parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, lokistack.Field(i).Interface()))
-					}
+				if lokistack.Type().Field(i).Name == "Template" {
+					continue
+				} else {
+					parameters = append(parameters, fmt.Sprintf("%s=%s", lokistack.Type().Field(i).Name, lokistack.Field(i).Interface()))
 				}
 			}
 		}
@@ -110,4 +113,13 @@ func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
 func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 	Resource{"lokistack", l.Name, l.Namespace}.clear(oc)
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", "-n", l.Namespace, "-l", "app.kubernetes.io/instance="+l.Name).Execute()
+}
+
+// Get OIDC provider for the cluster
+func getOIDC(oc *exutil.CLI) (string, error) {
+	oidc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication.config", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(oidc, "https://"), nil
 }

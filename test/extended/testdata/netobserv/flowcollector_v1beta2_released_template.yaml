@@ -18,6 +18,12 @@ objects:
           cacheMaxFlows: 100000
           privileged: "${{EBPFPrivileged}}"
           features: "${{EBPFeatures}}"
+          metrics:
+            enable: "${{EBPFMetrics}}"
+            server:
+              port: 9400
+              tls:
+                type: "${EBPFMetricServerTLSType}"
       processor:
         multiClusterDeployment: "${{MultiClusterDeployment}}"
         addZone: "${{AddZone}}"
@@ -45,6 +51,9 @@ objects:
       loki:
         mode: "${LokiMode}"
         enable: "${{LokiEnable}}"
+        lokiStack:
+          name: ${LokistackName}
+          namespace: ${LokiNamespace}
         manual:
           authToken: Forward
           querierUrl: "${LokiURL}"
@@ -91,8 +100,12 @@ parameters:
     value: 15s
   - name: EBPFPrivileged
     value: "false"
+  - name: EBPFMetrics
+    value: "true"
   - name: FLPMetricServerTLSType
     value: "Auto"
+  - name: EBPFMetricServerTLSType
+    value: "Disabled"
   - name: MultiClusterDeployment
     value: "false"
   - name: AddZone
@@ -100,9 +113,11 @@ parameters:
   - name: LogType
     value: "Flows"
   - name: LokiMode
-    value: "Manual"
+    value: "LokiStack"
   - name: LokiEnable
     value: "true"
+  - name: LokistackName
+    value: lokistack
   - name: LokiURL
     value: "https://lokistack-gateway-http.netobserv.svc.cluster.local:8080/api/logs/v1/network/"
   - name: LokiTLSCertName

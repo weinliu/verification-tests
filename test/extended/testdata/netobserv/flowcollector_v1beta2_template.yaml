@@ -63,6 +63,7 @@ objects:
         enable: "${{LokiEnable}}"
         lokiStack:
           name: ${LokistackName}
+          namespace: ${LokiNamespace}
         manual:
           authToken: Forward
           querierUrl: "${LokiURL}"

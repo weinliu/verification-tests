@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -15,10 +18,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
+	"google.golang.org/api/cloudresourcemanager/v1"
+	"google.golang.org/api/iam/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 const (
@@ -28,22 +37,23 @@ const (
 	queryRangePath = "/loki/api/v1/query_range"
 )
 
-// S3Credential defines the s3 credentials
-type S3Credential struct {
+// s3Credential defines the s3 credentials
+type s3Credential struct {
 	Region          string
 	AccessKeyID     string
 	SecretAccessKey string
 	Endpoint        string //the endpoint of s3 service
 }
 
-func getAWSCredentialFromCluster(oc *exutil.CLI) S3Credential {
+type resource struct {
+	kind      string
+	name      string
+	namespace string
+}
+
+func getAWSCredentialFromCluster(oc *exutil.CLI) s3Credential {
 	region, err := exutil.GetAWSClusterRegion(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// default to region us-east-2
-	if region == "" {
-		region = "us-east-2"
-	}
 
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	defer os.RemoveAll(dirname)
@@ -58,7 +68,7 @@ func getAWSCredentialFromCluster(oc *exutil.CLI) S3Credential {
 	secretAccessKey, err := os.ReadFile(dirname + "/aws_secret_access_key")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	cred := S3Credential{Region: region, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
+	cred := s3Credential{Region: region, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
 	return cred
 }
 
@@ -119,7 +129,7 @@ func createSecretForMinIOBucket(oc *exutil.CLI, bucketName, secretName, ns, minI
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/access_key_id", "--from-file=access_key_secret="+dirname+"/secret_access_key", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
 }
 
-func createS3Bucket(client *s3.Client, bucketName string, cred S3Credential) error {
+func createS3Bucket(client *s3.Client, bucketName string, cred s3Credential) error {
 	// check if the bucket exists or not
 	// if exists, clear all the objects in the bucket
 	// if not, create the bucket
@@ -273,7 +283,7 @@ func createSecretForAzureContainer(oc *exutil.CLI, bucketName, secretName, ns st
 	return err
 }
 
-func getODFCreds(oc *exutil.CLI) S3Credential {
+func getODFCreds(oc *exutil.CLI) s3Credential {
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	defer os.RemoveAll(dirname)
 	err := os.MkdirAll(dirname, 0777)
@@ -288,10 +298,10 @@ func getODFCreds(oc *exutil.CLI) S3Credential {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	endpoint := "http://" + getRouteAddress(oc, "openshift-storage", "s3")
-	return S3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
+	return s3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
 }
 
-func getMinIOCreds(oc *exutil.CLI, ns string) S3Credential {
+func getMinIOCreds(oc *exutil.CLI, ns string) s3Credential {
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	defer os.RemoveAll(dirname)
 	err := os.MkdirAll(dirname, 0777)
@@ -306,20 +316,20 @@ func getMinIOCreds(oc *exutil.CLI, ns string) S3Credential {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	endpoint := "http://" + getRouteAddress(oc, ns, "minio")
-	return S3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
+	return s3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
 }
 
-// initialize an aws s3 client with aws credential
+// initialize a s3 client with credential
 // TODO: add an option to initialize a new client with STS
-func newAWSS3Client(cred S3Credential) *s3.Client {
+func newS3Client(cred s3Credential) *s3.Client {
 	var err error
 	var cfg aws.Config
 	if len(cred.Endpoint) > 0 {
 		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 			return aws.Endpoint{
-				PartitionID:       "aws",
 				URL:               cred.Endpoint,
 				HostnameImmutable: true,
+				Source:            aws.EndpointSourceCustom,
 			}, nil
 		})
 		// For ODF and Minio, they're deployed in OCP clusters
@@ -336,7 +346,8 @@ func newAWSS3Client(cred S3Credential) *s3.Client {
 		cfg, err = config.LoadDefaultConfig(context.TODO(),
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cred.AccessKeyID, cred.SecretAccessKey, "")),
 			config.WithEndpointResolverWithOptions(customResolver),
-			config.WithHTTPClient(httpClient))
+			config.WithHTTPClient(httpClient),
+			config.WithRegion("auto"))
 	} else {
 		// aws s3
 		cfg, err = config.LoadDefaultConfig(context.TODO(),
@@ -395,29 +406,59 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	switch l.StorageType {
 	case "s3":
 		{
-			cred := getAWSCredentialFromCluster(oc)
-			client := newAWSS3Client(cred)
-			err = createS3Bucket(client, l.BucketName, cred)
-			if err != nil {
-				return err
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				region, err := exutil.GetAWSClusterRegion(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
+				iamClient := newIamClient(cfg)
+				stsClient := newStsClient(cfg)
+				awsAccountID, _ := getAwsAccount(stsClient)
+				oidcName, err := getOIDC(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				lokiIAMRoleName := l.Name + "-" + exutil.GetRandomString()
+				roleArn := createIAMRoleForLokiSTSDeployment(iamClient, oidcName, awsAccountID, l.Namespace, l.Name, lokiIAMRoleName)
+				os.Setenv("LOKI_ROLE_NAME_ON_STS", lokiIAMRoleName)
+				patchLokiOperatorWithAWSRoleArn(oc, "loki-operator", "openshift-operators-redhat", roleArn)
+				var s3AssumeRoleName string
+				defer func() {
+					deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
+				}()
+				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.Name)
+				createS3ObjectStorageBucketWithSTS(cfg, stsClient, s3AssumeRoleArn, l.BucketName)
+				createObjectStorageSecretOnAWSSTSCluster(oc, region, l.StorageSecret, l.BucketName, l.Namespace)
+			} else {
+				cred := getAWSCredentialFromCluster(oc)
+				client := newS3Client(cred)
+				err = createS3Bucket(client, l.BucketName, cred)
+				if err != nil {
+					return err
+				}
+				err = createSecretForAWSS3Bucket(oc, l.BucketName, l.StorageSecret, l.Namespace)
 			}
-			err = createSecretForAWSS3Bucket(oc, l.BucketName, l.StorageSecret, l.Namespace)
 		}
 	case "azure":
 		{
-			accountName, accountKey, err1 := exutil.GetAzureStorageAccountFromCluster(oc)
-			if err1 != nil {
-				return fmt.Errorf("can't get azure storage account from cluster: %v", err1)
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				if !readAzureCredentials() {
+					g.Skip("Azure Credentials not found. Skip case!")
+				} else {
+					performManagedIdentityAndSecretSetupForAzureWIF(oc, l.Name, l.Namespace, l.BucketName, l.StorageSecret)
+				}
+			} else {
+				accountName, accountKey, err1 := exutil.GetAzureStorageAccountFromCluster(oc)
+				if err1 != nil {
+					return fmt.Errorf("can't get azure storage account from cluster: %v", err1)
+				}
+				client, err2 := exutil.NewAzureContainerClient(oc, accountName, accountKey, l.BucketName)
+				if err2 != nil {
+					return err2
+				}
+				err = exutil.CreateAzureStorageBlobContainer(client)
+				if err != nil {
+					return err
+				}
+				err = createSecretForAzureContainer(oc, l.BucketName, l.StorageSecret, l.Namespace)
 			}
-			client, err2 := exutil.NewAzureContainerClient(oc, accountName, accountKey, l.BucketName)
-			if err2 != nil {
-				return err2
-			}
-			err = exutil.CreateAzureStorageBlobContainer(client)
-			if err != nil {
-				return err
-			}
-			err = createSecretForAzureContainer(oc, l.BucketName, l.StorageSecret, l.Namespace)
 		}
 	case "gcs":
 		{
@@ -427,7 +468,31 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 			if err != nil {
 				return err
 			}
-			err = createSecretForGCSBucket(oc, l.BucketName, l.StorageSecret, l.Namespace)
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				clusterName := getInfrastructureName(oc)
+				gcsSAName := generateServiceAccountNameForGCS(clusterName)
+				os.Setenv("LOGGING_GCS_SERVICE_ACCOUNT_NAME", gcsSAName)
+				projectNumber, err1 := getGCPProjectNumber(projectID)
+				if err1 != nil {
+					return fmt.Errorf("can't get GCP project number: %v", err1)
+				}
+				poolID, err2 := getPoolID(oc)
+				if err2 != nil {
+					return fmt.Errorf("can't get pool ID: %v", err2)
+				}
+				sa, err3 := createServiceAccountOnGCP(projectID, gcsSAName)
+				if err3 != nil {
+					return fmt.Errorf("can't create service account: %v", err3)
+				}
+				os.Setenv("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL", sa.Email)
+				err4 := grantPermissionsToGCPServiceAccount(poolID, projectID, projectNumber, l.Namespace, l.Name, sa.Email)
+				if err4 != nil {
+					return fmt.Errorf("can't add roles to the serviceaccount: %v", err4)
+				}
+				err = createSecretForGCSBucketWithSTS(oc, projectNumber, poolID, sa.Email, l.Namespace, l.StorageSecret, l.BucketName)
+			} else {
+				err = createSecretForGCSBucket(oc, l.BucketName, l.StorageSecret, l.Namespace)
+			}
 		}
 	case "swift":
 		{
@@ -442,9 +507,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 		}
 	case "odf":
 		{
-			cred := getODFCreds(oc)
-			client := newAWSS3Client(cred)
-			err = createS3Bucket(client, l.BucketName, cred)
+			err = createObjectBucketClaim(oc, l.Namespace, l.BucketName)
 			if err != nil {
 				return err
 			}
@@ -453,7 +516,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newAWSS3Client(cred)
+			client := newS3Client(cred)
 			err = createS3Bucket(client, l.BucketName, cred)
 			if err != nil {
 				return err
@@ -465,25 +528,75 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 }
 
 func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
-	Resource{"secret", l.StorageSecret, l.Namespace}.clear(oc)
+	resource{"secret", l.StorageSecret, l.Namespace}.clear(oc)
 	var err error
 	switch l.StorageType {
 	case "s3":
 		{
-			cred := getAWSCredentialFromCluster(oc)
-			client := newAWSS3Client(cred)
-			err = deleteS3Bucket(client, l.BucketName)
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				region, err := exutil.GetAWSClusterRegion(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
+				iamClient := newIamClient(cfg)
+				stsClient := newStsClient(cfg)
+				var s3AssumeRoleName string
+				defer func() {
+					deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
+				}()
+				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.Name)
+				if checkIfS3bucketExistsWithSTS(cfg, stsClient, s3AssumeRoleArn, l.BucketName) {
+					deleteS3bucketWithSTS(cfg, stsClient, s3AssumeRoleArn, l.BucketName)
+				}
+				deleteIAMroleonAWS(iamClient, os.Getenv("LOKI_ROLE_NAME_ON_STS"))
+				os.Unsetenv("LOKI_ROLE_NAME_ON_STS")
+			} else {
+				cred := getAWSCredentialFromCluster(oc)
+				client := newS3Client(cred)
+				err = deleteS3Bucket(client, l.BucketName)
+			}
 		}
 	case "azure":
 		{
-			accountName, accountKey, err1 := exutil.GetAzureStorageAccountFromCluster(oc)
-			o.Expect(err1).NotTo(o.HaveOccurred())
-			client, err2 := exutil.NewAzureContainerClient(oc, accountName, accountKey, l.BucketName)
-			o.Expect(err2).NotTo(o.HaveOccurred())
-			err = exutil.DeleteAzureStorageBlobContainer(client)
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				resourceGroup, err := getResourceGroupOnAzure(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				azureSubscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
+				cred := createNewDefaultAzureCredential()
+				deleteManagedIdentityOnAzure(cred, azureSubscriptionID, resourceGroup, l.Name)
+				deleteAzureStorageAccount(cred, azureSubscriptionID, resourceGroup, os.Getenv("LOKI_OBJECT_STORAGE_STORAGE_ACCOUNT"))
+				os.Unsetenv("LOKI_OBJECT_STORAGE_STORAGE_ACCOUNT")
+			} else {
+				accountName, accountKey, err1 := exutil.GetAzureStorageAccountFromCluster(oc)
+				o.Expect(err1).NotTo(o.HaveOccurred())
+				client, err2 := exutil.NewAzureContainerClient(oc, accountName, accountKey, l.BucketName)
+				o.Expect(err2).NotTo(o.HaveOccurred())
+				err = exutil.DeleteAzureStorageBlobContainer(client)
+			}
 		}
 	case "gcs":
 		{
+			if exutil.IsWorkloadIdentityCluster(oc) {
+				sa := os.Getenv("LOGGING_GCS_SERVICE_ACCOUNT_NAME")
+				if sa == "" {
+					e2e.Logf("LOGGING_GCS_SERVICE_ACCOUNT_NAME is not set, no need to delete the serviceaccount")
+				} else {
+					os.Unsetenv("LOGGING_GCS_SERVICE_ACCOUNT_NAME")
+					email := os.Getenv("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL")
+					if email == "" {
+						e2e.Logf("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL is not set, no need to delete the policies")
+					} else {
+						os.Unsetenv("LOGGING_GCS_SERVICE_ACCOUNT_EMAIL")
+						projectID, errGetID := exutil.GetGcpProjectID(oc)
+						o.Expect(errGetID).NotTo(o.HaveOccurred())
+						projectNumber, _ := getGCPProjectNumber(projectID)
+						poolID, _ := getPoolID(oc)
+						err = removePermissionsFromGCPServiceAccount(poolID, projectID, projectNumber, l.Namespace, l.Name, email)
+						o.Expect(err).NotTo(o.HaveOccurred())
+						err = removeServiceAccountFromGCP("projects/" + projectID + "/serviceAccounts/" + email)
+						o.Expect(err).NotTo(o.HaveOccurred())
+					}
+				}
+			}
 			err = exutil.DeleteGCSBucket(l.BucketName)
 		}
 	case "swift":
@@ -495,18 +608,34 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 		}
 	case "odf":
 		{
-			cred := getODFCreds(oc)
-			client := newAWSS3Client(cred)
-			err = deleteS3Bucket(client, l.BucketName)
+			err = deleteObjectBucketClaim(oc, l.Namespace, l.BucketName)
 		}
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newAWSS3Client(cred)
+			client := newS3Client(cred)
 			err = deleteS3Bucket(client, l.BucketName)
 		}
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func useExtraObjectStorage(oc *exutil.CLI) string {
+	if checkODF(oc) {
+		e2e.Logf("use the existing ODF storage service")
+		return "odf"
+	}
+	ready, err := checkMinIO(oc, minioNS)
+	if ready {
+		e2e.Logf("use existing MinIO storage service")
+		return "minio"
+	}
+	if strings.Contains(err.Error(), "No resources found") || strings.Contains(err.Error(), "not found") {
+		e2e.Logf("deploy MinIO and use this MinIO as storage service")
+		deployMinIO(oc)
+		return "minio"
+	}
+	return ""
 }
 
 // return the storage type per different platform
@@ -531,13 +660,7 @@ func getStorageType(oc *exutil.CLI) string {
 		}
 	default:
 		{
-			if checkODF(oc) {
-				return "odf"
-			}
-			if checkMinIO(oc, minioNS) {
-				return "minio"
-			}
-			return ""
+			return useExtraObjectStorage(oc)
 		}
 	}
 }
@@ -568,10 +691,13 @@ func checkODF(oc *exutil.CLI) bool {
 	return svcFound
 }
 
-func checkMinIO(oc *exutil.CLI, ns string) bool {
+// checkMinIO
+func checkMinIO(oc *exutil.CLI, ns string) (bool, error) {
 	podReady, svcFound := false, false
 	pod, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "app=minio"})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return false, err
+	}
 	if len(pod.Items) > 0 && pod.Items[0].Status.Phase == "Running" {
 		podReady = true
 	}
@@ -579,5 +705,472 @@ func checkMinIO(oc *exutil.CLI, ns string) bool {
 	if err == nil {
 		svcFound = true
 	}
-	return podReady && svcFound
+	return podReady && svcFound, err
+}
+
+func deployMinIO(oc *exutil.CLI) {
+	// create namespace
+	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), minioNS, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", minioNS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	// create secret
+	_, err = oc.AdminKubeClient().CoreV1().Secrets(minioNS).Get(context.Background(), minioSecret, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", minioSecret, "-n", minioNS, "--from-literal=access_key_id="+getRandomString(), "--from-literal=secret_access_key=passwOOrd"+getRandomString()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	// deploy minIO
+	deployTemplate := exutil.FixturePath("testdata", "logging", "minIO", "deploy.yaml")
+	deployFile, err := processTemplate(oc, "-n", minioNS, "-f", deployTemplate, "-p", "NAMESPACE="+minioNS, "NAME=minio", "SECRET_NAME="+minioSecret)
+	defer os.Remove(deployFile)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().Run("apply").Args("-f", deployFile, "-n", minioNS).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// wait for minio to be ready
+	for _, rs := range []string{"deployment", "svc", "route"} {
+		resource{rs, "minio", minioNS}.WaitForResourceToAppear(oc)
+	}
+	WaitForDeploymentPodsToBeReady(oc, minioNS, "minio")
+}
+
+func removeMinIO(oc *exutil.CLI) {
+	deleteNamespace(oc, minioNS)
+}
+
+// WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
+func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
+	var selectors map[string]string
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				e2e.Logf("Waiting for deployment/%s to appear\n", name)
+				return false, nil
+			}
+			return false, err
+		}
+		selectors = deployment.Spec.Selector.MatchLabels
+		if deployment.Status.AvailableReplicas == *deployment.Spec.Replicas && deployment.Status.UpdatedReplicas == *deployment.Spec.Replicas {
+			e2e.Logf("Deployment %s available (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
+			return true, nil
+		}
+		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
+		return false, nil
+	})
+	if err != nil && len(selectors) > 0 {
+		var labels []string
+		for k, v := range selectors {
+			labels = append(labels, k+"="+v)
+		}
+		label := strings.Join(labels, ",")
+		_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label).Execute()
+		podStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[*].status.conditions}").Output()
+		containerStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", label, "-ojsonpath={.items[*].status.containerStatuses}").Output()
+		e2e.Failf("deployment %s is not ready:\nconditions: %s\ncontainer status: %s", name, podStatus, containerStatus)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not available", name))
+}
+
+func (r resource) WaitForResourceToAppear(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
+		if err != nil {
+			msg := fmt.Sprintf("%v", output)
+			if strings.Contains(msg, "NotFound") {
+				return false, nil
+			}
+			return false, err
+		}
+		e2e.Logf("Find %s %s", r.kind, r.name)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %s/%s is not appear", r.kind, r.name))
+}
+
+func generateServiceAccountNameForGCS(clusterName string) string {
+	// Service Account should be between 6-30 characters long
+	name := clusterName + getRandomString()
+	return name
+}
+
+// To read Azure subscription json file from local disk.
+// Also injects ENV vars needed to perform certain operations on Managed Identities.
+func readAzureCredentials() bool {
+	var azureCredFile string
+	envDir, present := os.LookupEnv("CLUSTER_PROFILE_DIR")
+	if present {
+		azureCredFile = filepath.Join(envDir, "osServicePrincipal.json")
+	} else {
+		authFileLocation, present := os.LookupEnv("AZURE_AUTH_LOCATION")
+		if present {
+			azureCredFile = authFileLocation
+		}
+	}
+	if len(azureCredFile) > 0 {
+		fileContent, err := os.ReadFile(azureCredFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		subscriptionID := gjson.Get(string(fileContent), `azure_subscription_id`).String()
+		if subscriptionID == "" {
+			subscriptionID = gjson.Get(string(fileContent), `subscriptionId`).String()
+		}
+		os.Setenv("AZURE_SUBSCRIPTION_ID", subscriptionID)
+
+		tenantID := gjson.Get(string(fileContent), `azure_tenant_id`).String()
+		if tenantID == "" {
+			tenantID = gjson.Get(string(fileContent), `tenantId`).String()
+		}
+		os.Setenv("AZURE_TENANT_ID", tenantID)
+
+		clientID := gjson.Get(string(fileContent), `azure_client_id`).String()
+		if clientID == "" {
+			clientID = gjson.Get(string(fileContent), `clientId`).String()
+		}
+		os.Setenv("AZURE_CLIENT_ID", clientID)
+
+		clientSecret := gjson.Get(string(fileContent), `azure_client_secret`).String()
+		if clientSecret == "" {
+			clientSecret = gjson.Get(string(fileContent), `clientSecret`).String()
+		}
+		os.Setenv("AZURE_CLIENT_SECRET", clientSecret)
+		return true
+	}
+	return false
+}
+
+func getGCPProjectNumber(projectID string) (string, error) {
+	crmService, err := cloudresourcemanager.NewService(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	project, err := crmService.Projects.Get(projectID).Do()
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(project.ProjectNumber, 10), nil
+}
+
+func getPoolID(oc *exutil.CLI) (string, error) {
+	// pool_id="$(oc get authentication cluster -o json | jq -r .spec.serviceAccountIssuer | sed 's/.*\/\([^\/]*\)-oidc/\1/')"
+	issuer, err := getOIDC(oc)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Split(strings.Split(issuer, "/")[1], "-oidc")[0], nil
+}
+
+func createServiceAccountOnGCP(projectID, name string) (*iam.ServiceAccount, error) {
+	e2e.Logf("start to creating serviceaccount on GCP")
+	ctx := context.Background()
+	service, err := iam.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("iam.NewService: %w", err)
+	}
+
+	request := &iam.CreateServiceAccountRequest{
+		AccountId: name,
+		ServiceAccount: &iam.ServiceAccount{
+			DisplayName: "Service Account for " + name,
+		},
+	}
+	account, err := service.Projects.ServiceAccounts.Create("projects/"+projectID, request).Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create serviceaccount: %w", err)
+	}
+	e2e.Logf("Created service account: %v", account)
+	return account, nil
+}
+
+func grantPermissionsToGCPServiceAccount(poolID, projectID, projectNumber, lokiNS, lokiStackName, serviceAccountEmail string) error {
+	gcsRoles := []string{
+		"roles/iam.workloadIdentityUser",
+		"roles/storage.objectAdmin",
+	}
+	subjects := []string{
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName,
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName + "-ruler",
+	}
+
+	for _, role := range gcsRoles {
+		err := addBinding(projectID, "serviceAccount:"+serviceAccountEmail, role)
+		if err != nil {
+			return fmt.Errorf("error adding role %s to %s: %v", role, serviceAccountEmail, err)
+		}
+		for _, sub := range subjects {
+			err := addBinding(projectID, "principal://iam.googleapis.com/projects/"+projectNumber+"/locations/global/workloadIdentityPools/"+poolID+"/subject/"+sub, role)
+			if err != nil {
+				return fmt.Errorf("error adding role %s to %s: %v", role, sub, err)
+			}
+		}
+	}
+	return nil
+}
+
+// ref: https://github.com/GoogleCloudPlatform/golang-samples/blob/main/iam/quickstart/quickstart.go
+func addBinding(projectID, member, role string) error {
+	crmService, err := cloudresourcemanager.NewService(context.Background())
+	if err != nil {
+		return fmt.Errorf("cloudresourcemanager.NewService: %v", err)
+	}
+
+	policy, err := getPolicy(crmService, projectID)
+	if err != nil {
+		return fmt.Errorf("error getting policy: %v", err)
+	}
+
+	// Find the policy binding for role. Only one binding can have the role.
+	var binding *cloudresourcemanager.Binding
+	for _, b := range policy.Bindings {
+		if b.Role == role {
+			binding = b
+			break
+		}
+	}
+
+	if binding != nil {
+		// If the binding exists, adds the member to the binding
+		binding.Members = append(binding.Members, member)
+	} else {
+		// If the binding does not exist, adds a new binding to the policy
+		binding = &cloudresourcemanager.Binding{
+			Role:    role,
+			Members: []string{member},
+		}
+		policy.Bindings = append(policy.Bindings, binding)
+	}
+	return setPolicy(crmService, projectID, policy)
+}
+
+// getPolicy gets the project's IAM policy
+func getPolicy(crmService *cloudresourcemanager.Service, projectID string) (*cloudresourcemanager.Policy, error) {
+	request := new(cloudresourcemanager.GetIamPolicyRequest)
+	policy, err := crmService.Projects.GetIamPolicy(projectID, request).Do()
+	if err != nil {
+		return nil, err
+	}
+	return policy, nil
+}
+
+// setPolicy sets the project's IAM policy
+func setPolicy(crmService *cloudresourcemanager.Service, projectID string, policy *cloudresourcemanager.Policy) error {
+	request := new(cloudresourcemanager.SetIamPolicyRequest)
+	request.Policy = policy
+	_, err := crmService.Projects.SetIamPolicy(projectID, request).Do()
+	return err
+}
+
+func createObjectBucketClaim(oc *exutil.CLI, ns, name string) error {
+	template := exutil.FixturePath("testdata", "logging", "odf", "objectBucketClaim.yaml")
+	obc := resource{"objectbucketclaims", name, ns}
+
+	err := obc.applyFromTemplate(oc, "-f", template, "-n", ns, "-p", "NAME="+name, "NAMESPACE="+ns)
+	if err != nil {
+		return err
+	}
+	obc.WaitForResourceToAppear(oc)
+	resource{"objectbuckets", "obc-" + ns + "-" + name, ns}.WaitForResourceToAppear(oc)
+	assertResourceStatus(oc, "objectbucketclaims", name, ns, "{.status.phase}", "Bound")
+	return nil
+}
+
+func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error {
+	parameters = append(parameters, "-n", r.namespace)
+	file, err := processTemplate(oc, parameters...)
+	defer os.Remove(file)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
+	output, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", r.namespace).Output()
+	if err != nil {
+		return fmt.Errorf(output)
+	}
+	r.WaitForResourceToAppear(oc)
+	return nil
+}
+
+// Assert the status of a resource
+func assertResourceStatus(oc *exutil.CLI, kind, name, namespace, jsonpath, exptdStatus string) {
+	parameters := []string{kind, name, "-o", "jsonpath=" + jsonpath}
+	if namespace != "" {
+		parameters = append(parameters, "-n", namespace)
+	}
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
+		if err != nil {
+			return false, err
+		}
+		if strings.Compare(status, exptdStatus) != 0 {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s value for %s is not %s", kind, name, jsonpath, exptdStatus))
+}
+
+func createSecretForGCSBucketWithSTS(oc *exutil.CLI, projectNumber, poolID, serviceAccountEmail, ns, name, bucketName string) error {
+	providerName := "projects/" + projectNumber + "/locations/global/workloadIdentityPools/" + poolID + "/providers/" + poolID
+	audience, err := getGCPAudience(providerName)
+	if err != nil {
+		return err
+	}
+	key := `{
+		"universe_domain": "googleapis.com",
+		"type": "external_account",
+		"audience": "//iam.googleapis.com/` + providerName + `",
+		"subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+		"token_url": "https://sts.googleapis.com/v1/token",
+		"credential_source": {
+			"file": "/var/run/secrets/storage/serviceaccount/token",
+			"format": {
+				"type": "text"
+			}
+		},
+		"service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/` + serviceAccountEmail + `:generateAccessToken"
+	}`
+
+	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, name,
+		"--from-literal=bucketname="+bucketName, "--from-literal=audience="+audience, "--from-literal=key.json="+key).Execute()
+}
+
+func getGCPAudience(providerName string) (string, error) {
+	ctx := context.Background()
+	service, err := iam.NewService(ctx)
+
+	if err != nil {
+		return "", fmt.Errorf("iam.NewService: %w", err)
+	}
+	audience, err := service.Projects.Locations.WorkloadIdentityPools.Providers.Get(providerName).Do()
+	if err != nil {
+		return "", fmt.Errorf("can't get audience: %v", err)
+	}
+	return audience.Oidc.AllowedAudiences[0], nil
+
+}
+
+// delete the objects in the cluster
+func (r resource) clear(oc *exutil.CLI) error {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, r.kind, r.name).Output()
+	if err != nil {
+		errstring := fmt.Sprintf("%v", msg)
+		if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") {
+			return nil
+		}
+		return err
+	}
+	err = r.WaitUntilResourceIsGone(oc)
+	return err
+}
+
+func (r resource) WaitUntilResourceIsGone(oc *exutil.CLI) error {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
+		if err != nil {
+			errstring := fmt.Sprintf("%v", output)
+			if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") {
+				return true, nil
+			}
+			return true, err
+		}
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("can't remove %s/%s in %s project", r.kind, r.name, r.namespace)
+	}
+	return nil
+}
+
+func removePermissionsFromGCPServiceAccount(poolID, projectID, projectNumber, lokiNS, lokiStackName, serviceAccountEmail string) error {
+	gcsRoles := []string{
+		"roles/iam.workloadIdentityUser",
+		"roles/storage.objectAdmin",
+	}
+	subjects := []string{
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName,
+		"system:serviceaccount:" + lokiNS + ":" + lokiStackName + "-ruler",
+	}
+
+	for _, role := range gcsRoles {
+		err := removeMember(projectID, "serviceAccount:"+serviceAccountEmail, role)
+		if err != nil {
+			return fmt.Errorf("error removing role %s from %s: %v", role, serviceAccountEmail, err)
+		}
+		for _, sub := range subjects {
+			err := removeMember(projectID, "principal://iam.googleapis.com/projects/"+projectNumber+"/locations/global/workloadIdentityPools/"+poolID+"/subject/"+sub, role)
+			if err != nil {
+				return fmt.Errorf("error removing role %s from %s: %v", role, sub, err)
+			}
+		}
+	}
+	return nil
+}
+
+func removeServiceAccountFromGCP(name string) error {
+	ctx := context.Background()
+	service, err := iam.NewService(ctx)
+	if err != nil {
+		return fmt.Errorf("iam.NewService: %w", err)
+	}
+	_, err = service.Projects.ServiceAccounts.Delete(name).Do()
+	if err != nil {
+		return fmt.Errorf("can't remove service account: %v", err)
+	}
+	return nil
+}
+
+// removeMember removes the member from the project's IAM policy
+func removeMember(projectID, member, role string) error {
+	crmService, err := cloudresourcemanager.NewService(context.Background())
+	if err != nil {
+		return fmt.Errorf("cloudresourcemanager.NewService: %v", err)
+	}
+	policy, err := getPolicy(crmService, projectID)
+	if err != nil {
+		return fmt.Errorf("error getting policy: %v", err)
+	}
+	// Find the policy binding for role. Only one binding can have the role.
+	var binding *cloudresourcemanager.Binding
+	var bindingIndex int
+	for i, b := range policy.Bindings {
+		if b.Role == role {
+			binding = b
+			bindingIndex = i
+			break
+		}
+	}
+
+	if len(binding.Members) == 1 && binding.Members[0] == member {
+		// If the member is the only member in the binding, removes the binding
+		last := len(policy.Bindings) - 1
+		policy.Bindings[bindingIndex] = policy.Bindings[last]
+		policy.Bindings = policy.Bindings[:last]
+	} else {
+		// If there is more than one member in the binding, removes the member
+		var memberIndex int
+		var exist bool
+		for i, mm := range binding.Members {
+			if mm == member {
+				memberIndex = i
+				exist = true
+				break
+			}
+		}
+		if exist {
+			last := len(policy.Bindings[bindingIndex].Members) - 1
+			binding.Members[memberIndex] = binding.Members[last]
+			binding.Members = binding.Members[:last]
+		}
+	}
+
+	return setPolicy(crmService, projectID, policy)
+}
+
+func deleteObjectBucketClaim(oc *exutil.CLI, ns, name string) error {
+	obc := resource{"objectbucketclaims", name, ns}
+	err := obc.clear(oc)
+	if err != nil {
+		return err
+	}
+	return obc.WaitUntilResourceIsGone(oc)
 }

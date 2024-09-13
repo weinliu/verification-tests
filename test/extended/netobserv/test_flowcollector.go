@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		lokiPackageName = "loki-operator"
 		ls              *lokiStack
 		Lokiexisting    = false
-		lokiSource      = CatalogSourceObjects{"stable-6.0", catsrc.Name, catsrc.Namespace}
+		lokiSource      = CatalogSourceObjects{"stable", catsrc.Name, catsrc.Namespace}
 		LO              = SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
 			Namespace:     lokiNS,
