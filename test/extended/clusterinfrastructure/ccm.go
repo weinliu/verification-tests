@@ -526,6 +526,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-NonHyperShiftHOST-High-73119-Create Internal LB service on aws/gcp/azure", func() {
+		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 
 		ccmBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "ccm")
