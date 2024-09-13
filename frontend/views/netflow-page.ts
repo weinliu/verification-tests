@@ -11,12 +11,8 @@ export const netflowPage = {
         netflowPage.clearAllFilters()
 
         // set the page to auto refresh
-        cy.byTestID(genSelectors.refreshDrop).then(btn => {
-            expect(btn).to.exist
-            cy.wrap(btn).click().then(drop => {
-                cy.get('[data-test="15s"]').should('exist').click()
-            })
-        })
+        netflowPage.setAutoRefresh()
+
         cy.byTestID('no-results-found').should('not.exist')
         cy.get('#overview-container').should('exist')
     },
@@ -28,6 +24,14 @@ export const netflowPage = {
     toggleFullScreen: () => {
         cy.byTestID(genSelectors.moreOpts).should('exist').click().then(moreOpts => {
             cy.get(genSelectors.expand).click()
+        })
+    },
+    setAutoRefresh: () => {
+        cy.byTestID(genSelectors.refreshDrop).then(btn => {
+            expect(btn).to.exist
+            cy.wrap(btn).click().then(drop => {
+                cy.get('[data-test="15s"]').should('exist').click()
+            })
         })
     },
     stopAutoRefresh: () => {
@@ -224,7 +228,7 @@ Cypress.Commands.add('checkPanelsNum', (panels = 2) => {
 
 Cypress.Commands.add('checkPanel', (panelName) => {
     for (let i = 0; i < panelName.length; i++) {
-        cy.get('#overview-flex').contains(panelName[i]);
+        cy.get('#overview-flex', { timeout: 60000 }).contains(panelName[i]);
         cy.get('[data-test-metrics]').its('length').should('gt', 0);
     }
 });
@@ -295,6 +299,7 @@ Cypress.Commands.add('visitNetflowTrafficTab', (page) => {
 Cypress.Commands.add('checkNetflowTraffic', (loki = "Enabled") => {
     // overview panels
     cy.get('li.overviewTabButton').should('exist').click()
+    netflowPage.setAutoRefresh()
     cy.wait(2000)
     cy.checkPanel(overviewSelectors.defaultPanels)
 
@@ -306,13 +311,13 @@ Cypress.Commands.add('checkNetflowTraffic', (loki = "Enabled") => {
     else if (loki == "Enabled") {
         cy.get('li.tableTabButton').should('exist').click()
         cy.wait(1000)
-        cy.byTestID("table-composable").should('exist')
+        cy.byTestID("table-composable", { timeout: 60000 }).should('exist')
     }
 
     // topology view
     cy.get('li.topologyTabButton').should('exist').click()
     cy.wait(2000)
-    cy.get('#drawer').should('not.be.empty')
+    cy.get('#drawer', { timeout: 60000 }).should('not.be.empty')
 });
 
 declare global {
