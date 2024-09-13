@@ -119,6 +119,28 @@ else
       export QE_BASTION_SSH_USER=${bastion_ssh_user}
     fi
   fi
+
+  #setup kubeadmin information
+  CONSOLE_FULL=${FLEXYURLBASE}${BUILD_NUM_FOR_CONF}"/consoleFull"
+  ret_code=`curl -s -k ${CONSOLE_FULL} -o ./consoleFull  -w "%{http_code}" || true `
+  if [ "${ret_code}" == "000" ]; then
+    echo "there is problem to access jenkins server to get consoleFull. sleep 10s and try it again"
+    sleep 10
+    ret_code=`curl -s -k ${CONSOLE_FULL} -o ./consoleFull  -w "%{http_code}" || true `
+    if [ "${ret_code}" == "000" ]; then
+      echo "there is still problem to access jenkins server to get consoleFull. treate it as no consoleFull to continue the testing"
+    fi
+  fi
+  if [ "${ret_code}" == "404" ]; then
+    echo "there is no consoleFull provided by installation job. continue to test. if you need it, please contact with installation team about why no file."
+  fi
+  if [ "${ret_code}" == "200" ]; then
+    kubeadmin_passwd=`cat ./consoleFull|grep "Login to the console with user"|awk -F "password: " '{print $2}'| sed 's/\"//g'`
+    if [ "W${kubeadmin_passwd}W" != "WW" ]; then
+      export QE_KUBEADMIN_PASSWORD=${kubeadmin_passwd}
+    fi
+  fi
+
 fi
 if ! [ -e "/root/gce.key" ]; then
     echo "the gce authentication file does not exit"
