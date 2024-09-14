@@ -425,13 +425,13 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clustercatalog.Create(oc)
 
 		exutil.By("port-forward the catalogd-catalogserver")
-		cmd1, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/catalogd-catalogserver", "6920:80", "-n", "openshift-catalogd").Background()
+		cmd1, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/catalogd-catalogserver", "6920:443", "-n", "openshift-catalogd").Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer cmd1.Process.Kill()
 
 		exutil.By("get the index content through http service off cluster")
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 100*time.Second, false, func(ctx context.Context) (bool, error) {
-			checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:6920/catalogs/clustercatalog-69202/all.json").Output()
+			checkOutput, err := exec.Command("bash", "-c", "curl -k https://127.0.0.1:6920/catalogs/clustercatalog-69202/all.json").Output()
 			if err != nil {
 				e2e.Logf("failed to execute the curl: %s. Trying again", err)
 				return false, nil
