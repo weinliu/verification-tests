@@ -3043,7 +3043,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK Run bundle support large FBC index [Serial]", func() {
+	g.It("Author:jitli-VMonly-ConnectedOnly-High-52364-SDK Run bundle not support large FBC index since OCP4.14 [Serial]", func() {
 
 		exutil.SkipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
@@ -3051,41 +3051,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("Run bundle with large FBC index (size >3M)")
 		defer operatorsdkCLI.Run("cleanup").Args("upgradefbc", "-n", oc.Namespace()).Output()
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/operatorhubio/catalog:latest", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
-
-		exutil.By("Run bundle with large FBC index (size >3M) that contains the bundle message")
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring(`bundle \"upgradefbc.v0.0.1\" already exists in the index image`))
-
-	})
-
-	// author: jitli@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jitli-High-52514-SDK-Run bundle upgrade support large FBC index [Slow]", func() {
-
-		exutil.SkipOnProxyCluster(oc)
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		exutil.By("Run bundle with large FBC index (size >3M)")
-		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
-
-		exutil.By("Run bundle-upgrade operator")
-		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
-		waitErr := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeindex.v0.0.2", "-n", oc.Namespace()).Output()
-			if strings.Contains(msg, "Succeeded") {
-				e2e.Logf("upgrade to 0.0.2 success")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("upgradeindex upgrade failed in %s ", oc.Namespace()))
+		o.Expect(output).To(o.ContainSubstring("Too long: must have at most 1048576 bytes"))
 
 	})
 
