@@ -85,6 +85,17 @@ func (rf *RemoteFile) fetchTextContent() error {
 	return nil
 }
 
+// PushNewOwner modifies the remote file's owners, setting the provided new owner using `sudo chown newowner`
+func (rf *RemoteFile) PushNewOwner(newowner string) error {
+	logger.Infof("Push owner %s to file %s in node %s", newowner, rf.fullPath, rf.node.GetName())
+	_, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("sudo chown %s %s", newowner, rf.fullPath))
+	if err != nil {
+		logger.Errorf("Error: %s", err)
+		return err
+	}
+	return nil
+}
+
 // PushNewPermissions modifies the remote file's permissions, setting the provided new permissions using `chmod newperm`
 func (rf *RemoteFile) PushNewPermissions(newperm string) error {
 	logger.Infof("Push permissions %s to file %s in node %s", newperm, rf.fullPath, rf.node.GetName())

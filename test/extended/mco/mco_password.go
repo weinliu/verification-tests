@@ -433,6 +433,58 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		checkAuthorizedKeyInNode(mcp.GetCoreOsNodesOrFail()[0], initialKeys)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonPreRelease-High-75552-apply ssh keys when root owns .ssh [Disruptive]", func() {
+		var (
+			node         = mcp.GetSortedNodesOrFail()[0]
+			authKeysdDir = NewRemoteFile(node, "/home/core/.ssh/authorized_keys.d")
+			sshDir       = NewRemoteFile(node, "/home/core/.ssh")
+			mcName       = "tc-75552-ssh"
+			key          = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDf7nk9SKloQktDuu0DFDrWv8zRROnxKT04DQdz0RRWXwKyQWFbXi2t7MPkYHb+H7BfuCF8gd3BsfZbGenmRpHrm99bjbZWV6tyyyOWac88RGDXwTeSdcdgZoVDIQfW0S4/y7DP6uo6QGyZEh+s+VTGg8gcqm9L2GkjlA943UWUTyRIVQdex8qbtKdAI0NqYtAzuf1zYDGBob5/BdjT856dF7dDCJG36+d++VRXcyhE+SYxGdEC+OgYwRXjz3+J7XixvTAeY4DdGQOeppjOC/E+0TXh5T0m/+LfCJQCClSYvuxIKPkiMvmNHY4q4lOZUL1/FKIS2pn0P6KsqJ98JvqV mco_test2@redhat.com`
+
+			user = ign32PaswdUser{Name: "core", SSHAuthorizedKeys: []string{key}}
+		)
+
+		exutil.By("Get currently configured authorizedkeys in the cluster")
+		currentMc, err := mcp.GetConfiguredMachineConfig()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the current configuration for %s pool", mcp.GetName())
+
+		initialKeys, err := currentMc.GetAuthorizedKeysByUserAsList("core")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the current authorizedkeys for user 'core' in %s pool", mcp.GetName())
+
+		logger.Infof("Number of initially configured AuthorizedKeys: %d", len(initialKeys))
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the authorized keys file from the node")
+		o.Expect(authKeysdDir.Rm("-rf")).To(o.Succeed(),
+			"Error removing %s", authKeysdDir)
+		logger.Infof("OK!\n")
+
+		exutil.By("Set root as the owner of the .ssh directory")
+		o.Expect(sshDir.PushNewOwner("root:root")).To(o.Succeed(),
+			"Error setting root owner in  %s", sshDir)
+		logger.Infof("OK!\n")
+
+		// For debugging purpose
+		s, _ := node.DebugNodeWithChroot("ls", "-larth", "/home/core/.ssh")
+		logger.Infof("list /home/core/.ssh: \n %s", s)
+
+		exutil.By("Create a new MC to deploy new authorized keys")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
+		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[%s]`, MarshalOrFail(user))}
+		mc.skipWaitForMcp = true
+
+		defer mc.delete()
+		mc.create()
+
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that all expected keys are present and with the right permissions and owners")
+		// This function checks the owners and the permissions in the .ssh and authorized_keys.d directories
+		checkAuthorizedKeyInNode(mcp.GetCoreOsNodesOrFail()[0], append(initialKeys, key))
+		logger.Infof("OK!\n")
+	})
 })
 
 // getPasswdValidator returns the commands that need to be executed in an interactive expect shell to validate that a user can login
