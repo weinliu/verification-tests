@@ -96,7 +96,7 @@ if not modifedFiles:
 lines=[]
 for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
     print("Search the updated cases for "+filename)
-    diffcommands = 'git diff {} {} -- {} | grep -E "g.It|g.Describe"'.format(commit1, commit2, filename.strip(os.linesep))
+    diffcommands = 'git diff {} {} -- {} | grep -E "g.It|g.Describe|g.When|g.Context"'.format(commit1, commit2, filename.strip(os.linesep))
     # print(diffcommands)
     process = subprocess.Popen(diffcommands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
@@ -119,6 +119,10 @@ importance = ["Critical", "High", "Medium", "Low"]
 
 patternDescribe = re.compile(r'^\+.*g\.Describe\("([^"]+)"', re.MULTILINE)
 desContent = patternDescribe.findall(content)
+patternContext = re.compile(r'^\+.*g\.Context\("([^"]+)"', re.MULTILINE)
+ctxContent = patternContext.findall(content)
+patternWhen = re.compile(r'^\+.*g\.When\("([^"]+)"', re.MULTILINE)
+whenContent = patternWhen.findall(content)
 
 patternIt = re.compile(r'^\+\s+(g\.It|g\.DescribeTable)\(\".*\"', re.MULTILINE)
 itContent = []
@@ -128,10 +132,37 @@ for itIter in itIters:
 
 displayDesc = "\n".join(desContent)
 displayIt = "\n".join(itContent)
+displayCtx = "\n".join(ctxContent)
+displayWhen = "\n".join(whenContent)
 print("Des:\n{} \n\n".format(displayDesc))
 print("it:\n{} \n\n".format(displayIt))
+print("Context:\n{} \n\n".format(displayCtx))
+print("When:\n{} \n\n".format(displayWhen))
 
 errList = []
+for gctx in ctxContent:
+    for frameworkLabel in frameworkLabels:
+        if frameworkLabel in gctx:
+            errList.append("g.Context \"{}\" has framework label \"{}\", and it should in \
+framework labels parts of title, not in g.Context\n".format(gctx, frameworkLabel))
+    for sub in subteam:
+        if sub in gctx:
+            errList.append("g.Context \"{}\" has subteam {}, please remove it because \
+it should be in g.Describe even it is your own subteam because currently \
+there is no way to check if it is your subteam or not. thanks to understand it \n".format(gctx, sub))
+
+
+for gwhen in whenContent:
+    for frameworkLabel in frameworkLabels:
+        if frameworkLabel in gwhen:
+            errList.append("g.When \"{}\" has framework label \"{}\", and it should in \
+framework labels parts of title, not in g.When\n".format(gwhen, frameworkLabel))
+    for sub in subteam:
+        if sub in gwhen:
+            errList.append("g.When \"{}\" has subteam {}, please remove it because \
+it should be in g.Describe even it is your own subteam because currently \
+there is no way to check if it is your subteam or not. thanks to understand it \n".format(gwhen, sub))
+
 for des in desContent:
     sigSub = des.split()
     if len(sigSub) >= 2:
@@ -198,12 +229,13 @@ for it in itContent:
         errList.append("the {} has no case title, please check the title\n".format(spec))
 
 if len(errList) > 0:
+    gKeyWord = "g.Describe or g.It"
     errList.append("""
 Note:
 We know it is new rule and the existing code does not follow it.
-So, for existing code, you do not need dedicated PR to udpate g.Describe or g.It/g.DescribeTable.
-Only when you modify the exiting g.Describe and g.It/g.DescribeTable for some other reasons or make new g.Describe and g.It/g.DescribeTable, please follow it.
-""")
+So, for existing code, you do not need dedicated PR to udpate {}.
+Only when you modify the exiting {} for some other reasons or make new {}, please follow it.
+""".format(gKeyWord, gKeyWord, gKeyWord))
     errs = "\n".join(errList)
     print("\nthe errors: \n{}\n".format(errs))
     exit(1)
