@@ -4340,7 +4340,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-53309 - [CSI-Driver] [CSI Clone] Clone volume support different storage class
 	g.It("ARO-Author:chaoyang-Low-53309-[CSI-Driver] [CSI Clone] [Filesystem] Clone volume support different storage class", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "file.csi.azure.com"}
+		// TODO: file.csi.azure.com sometimes meet issue, tracked by https://issues.redhat.com/browse/OCPQE-25429
+		//scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "file.csi.azure.com"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
 
 		// Set the resource template for the scenario
 		var (
