@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -425,4 +426,93 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	})
 
+	g.It("Author:chaoyang-NonHyperShiftHOST-OSD_CCS-High-75889-[GCE-PD-CSI] Customer tags could be added on the pd persistent volumes", func() {
+
+		infraPlatformStatus, getInfraErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath={.status.platformStatus.gcp}").Output()
+		o.Expect(getInfraErr).ShouldNot(o.HaveOccurred())
+		if !gjson.Get(infraPlatformStatus, `resourceTags`).Exists() {
+			g.Skip("Skipped: No resourceTags set by installer, not satisfy the test scenario!!!")
+		}
+
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			storageClassParameters = map[string]string{
+				"resource-tags": "openshift-qe/test.chao/123456",
+			}
+
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		// Set the resource definition for the scenario
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner("pd.csi.storage.gke.io"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+
+		exutil.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		exutil.By("# Create a pvc with the created csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		exutil.By("# Check pd volume info from backend")
+		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+
+		getCredentialFromCluster(oc)
+		var pdVolumeInfoJSONMap map[string]interface{}
+		pdVolumeInfoJSONMap = getPdVolumeInfoFromGCP(oc, pvName, "--zone="+pvc.getVolumeNodeAffinityAvailableZones(oc)[0])
+		e2e.Logf("The pd volume info is: %v.", pdVolumeInfoJSONMap)
+		// TODO: Currently the gcloud CLI could not get the tags info for pd volumes, try sdk laster
+		// o.Expect(fmt.Sprint(pdVolumeInfoJSONMap["tags"])).Should(o.ContainSubstring("test.chao: 123456"))
+
+	})
+
+	g.It("Author:chaoyang-NonHyperShiftHOST-OSD_CCS-High-75998-[GCE-PD-CSI] No volume is provisioned with not existed customer tag", func() {
+
+		infraPlatformStatus, getInfraErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath={.status.platformStatus.gcp}").Output()
+		o.Expect(getInfraErr).ShouldNot(o.HaveOccurred())
+		if !gjson.Get(infraPlatformStatus, `resourceTags`).Exists() {
+			g.Skip("Skipped: No resourceTags set by installer, not satisfy the test scenario!!!")
+		}
+
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			storageClassParameters = map[string]string{
+				"resource-tags": "openshift-qe/test.notExist/123456",
+			}
+
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		// Set the resource definition for the scenario
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner("pd.csi.storage.gke.io"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+
+		exutil.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		exutil.By("# Create a pvc with the created csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("# Check pvc should stuck at Pending status and no volume is provisioned")
+		o.Consistently(func() string {
+			pvcState, _ := pvc.getStatus(oc)
+			return pvcState
+		}, 60*time.Second, 10*time.Second).Should(o.ContainSubstring("Pending"))
+		o.Eventually(func() bool {
+			pvcEvent, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+			return strings.Contains(pvcEvent, "PERMISSION_DENIED")
+		}, 180*time.Second, 10*time.Second).Should(o.BeTrue())
+	})
 })
