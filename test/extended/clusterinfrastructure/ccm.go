@@ -464,6 +464,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 		if azureCloudName == "AzureStackCloud" || azureCloudName == "AzureUSGovernmentCloud" {
 			g.Skip("Skip for ASH and azure Gov due to we didn't create container registry on them!")
 		}
+		if exutil.IsSTSCluster(oc) {
+			g.Skip("Skip on STS cluster, as MSI not available")
+		}
 		exutil.By("Create RoleAssignments for resourcegroup")
 		infrastructureID := clusterinfra.GetInfrastructureName(oc)
 		identityName := infrastructureID + "-identity"
