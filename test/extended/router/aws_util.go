@@ -63,7 +63,7 @@ func getAwsAccount(stsClient *sts.Client) string {
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	awsAccount := aws.ToString(result.Account)
-	e2e.Logf("The crrent AWS account is: %v\n", awsAccount)
+	e2e.Logf("The current AWS account is: %v", awsAccount)
 	return awsAccount
 }
 
@@ -92,12 +92,13 @@ func iamCreateRole(iamClient *iam.Client, trustPolicy string, roleName string) s
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	roleArn := aws.ToString(result.Role.Arn)
-	e2e.Logf("The created role ARN is: %v\n", roleArn)
+	e2e.Logf("The created role ARN is: %v", roleArn)
 	return roleArn
 }
 
 // AWS IAM PutRolePolicy (== aws iam put-role-policy)
 func iamPutRolePolicy(iamClient *iam.Client, permissionPolicy string, policyName string, roleName string) {
+	e2e.Logf("To put/attach role policy %v to the role %v......", policyName, roleName)
 	_, err := iamClient.PutRolePolicy(context.TODO(), &iam.PutRolePolicyInput{
 		PolicyDocument: aws.String(string(permissionPolicy)),
 		PolicyName:     aws.String(policyName),
@@ -113,6 +114,7 @@ func iamPutRolePolicy(iamClient *iam.Client, permissionPolicy string, policyName
 // AWS IAM DeleteRole (== aws iam delete-role)
 // Before attempting to delete a role, remove the attached items: Inline policies ( DeleteRolePolicy )
 func iamDeleteRole(iamClient *iam.Client, roleName string) {
+	e2e.Logf("To delete the role %v......", roleName)
 	_, err := iamClient.DeleteRole(context.TODO(), &iam.DeleteRoleInput{
 		RoleName: aws.String(roleName),
 	})
@@ -124,6 +126,7 @@ func iamDeleteRole(iamClient *iam.Client, roleName string) {
 
 // AWS IAM DeleteRolePolicy (== aws iam delete-role-policy)
 func iamDeleteRolePolicy(iamClient *iam.Client, policyName string, roleName string) {
+	e2e.Logf("To delete the inline policy %v from role %v......", policyName, roleName)
 	_, err := iamClient.DeleteRolePolicy(context.TODO(), &iam.DeleteRolePolicyInput{
 		PolicyName: aws.String(policyName),
 		RoleName:   aws.String(roleName),

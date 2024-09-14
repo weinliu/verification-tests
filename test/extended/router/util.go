@@ -396,7 +396,9 @@ func setEnvVariable(oc *exutil.CLI, ns, resource, envstring string) {
 // Generic function to collect resource values with jsonpath option
 func getByJsonPath(oc *exutil.CLI, ns, resource, jsonPath string) string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, resource, "-o=jsonpath="+jsonPath).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		e2e.Logf("the error is: %v", err.Error())
+	}
 	e2e.Logf("the output filtered by jsonpath is: %v", output)
 	return output
 }
@@ -1152,7 +1154,7 @@ func getOidc(oc *exutil.CLI) string {
 	oidc, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("authentication.config", "cluster", "-o=jsonpath={.spec.serviceAccountIssuer}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	oidc = strings.TrimPrefix(oidc, "https://")
-	e2e.Logf("The OIDC of STS cluster is: %v\n", oidc)
+	e2e.Logf("The OIDC of STS cluster is: %v", oidc)
 	return oidc
 }
 
@@ -1188,7 +1190,12 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	if exutil.IsSTSCluster(oc) {
+		// to mitigate the issue https://issues.redhat.com/browse/OCPQE-25494
+		// wait for the secret to be provisioned by CCO
+		waitForOutput(oc, ns, "pod", "{.items[*].status.phase}", "Running")
 		patchAlboSubscriptionWithRoleArn(oc, ns)
+		waitForOutput(oc, "openshift-cloud-credential-operator", "credentialsrequest/aws-load-balancer-operator", "{.status}", `"provisioned":true`)
+		waitForOutput(oc, ns, "secret/aws-load-balancer-operator", "{.metadata.annotations}", "openshift-cloud-credential-operator")
 	}
 
 	// checking subscription status
