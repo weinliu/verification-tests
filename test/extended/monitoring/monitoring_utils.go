@@ -474,3 +474,12 @@ func ensurePodRemainsReady(oc *exutil.CLI, podName string, namespace string, tim
 	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get the pod %s in namespace %s", podName, namespace)
 	o.Expect(strings.Contains(output, "Running")).To(o.BeTrue(), "Pod %s did not remain Ready within the given timeout", podName)
 }
+
+// getAllRunningPodsWithLabel get array of all running pods for a given namespace and label
+func getAllRunningPodsWithLabel(oc *exutil.CLI, namespace string, label string) ([]string, error) {
+	pods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", label, "--field-selector=status.phase=Running").Template("{{range .items}}{{.metadata.name}}{{\" \"}}{{end}}").Output()
+	if len(pods) == 0 {
+		return []string{}, err
+	}
+	return strings.Split(pods, " "), err
+}

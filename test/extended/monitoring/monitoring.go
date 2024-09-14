@@ -2294,18 +2294,28 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		// this step is aim to give time to monitoring-plugin pods loading
-		exutil.By("check monitoring-plugin container usage")
-		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=sum(rate(container_cpu_usage_seconds_total{container="monitoring-plugin",namespace="openshift-monitoring"}[5m]))'`, token, `"value"`, uwmLoadTime)
+		exutil.By("check monitoring-plugin pods are ready")
+		podCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=monitoring-plugin").Output()
+			if err != nil || strings.Contains(output, "Terminating") {
+				e2e.Logf("pods not ready: \n%v", output)
+				return false, nil
+			}
+			if err != nil || strings.Contains(output, "ContainerCreating") {
+				e2e.Logf("pods not ready: \n%v", output)
+				return false, nil
+			}
+			e2e.Logf("pods are ready: \n%v", output)
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(podCheck, "some monitoring-plugin pods are not ready!")
 
 		exutil.By("get monitoring-plugin pod name")
-		monitoringPluginPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
+		monitoringPluginPodNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check monitoring-plugin pod config")
 		e2e.Logf("monitoringPluginPodNames: %v", monitoringPluginPodNames)
-		e2e.Logf(oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=monitoring-plugin", "--no-headers").Output())
 		for _, pod := range monitoringPluginPodNames {
 			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
 			cmd := "-ojsonpath={.spec.nodeSelector}"
