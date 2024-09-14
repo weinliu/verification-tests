@@ -221,8 +221,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: chaoyang@redhat.com
-	// OCP-75823 - [CSI-Driver] check the storage volume attach failure alert [Serial]
-	g.It("Author:chaoyang-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-NonPreRelease-Medium-75823-[CSI-Driver] check the storage volume attach failure alert [Serial]", func() {
+	// OCP-75823 - [CSI-Driver] Tuning on EFS CSI usage metrics [Serial]
+	g.It("Author:chaoyang-NonHyperShiftHOST-ROSA-OSD_CCS-NonPreRelease-Medium-75823-[CSI-Driver] Tuning on EFS CSI usage metrics [Serial]", func() {
 
 		scenarioSupportProvisioners := []string{"efs.csi.aws.com"}
 
