@@ -313,6 +313,15 @@ func createResourceFromFile(oc *exutil.CLI, ns, file string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// to use createResourceFromFile function to create resources from files like web-server-rc.yaml and web-server-signed-rc.yaml
+func createResourceFromWebServerRC(oc *exutil.CLI, ns, file, srvrcInfo string) []string {
+	createResourceFromFile(oc, ns, file)
+	err := waitForPodWithLabelReady(oc, ns, "name="+srvrcInfo)
+	exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+	srvPodList := getPodListByLabel(oc, ns, "name="+srvrcInfo)
+	return srvPodList
+}
+
 // For admin user to create/delete resources in the specified namespace from the file (not template)
 // oper, should be create or delete
 func operateResourceFromFile(oc *exutil.CLI, oper, ns, file string) {
@@ -1481,6 +1490,53 @@ func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration 
 	return result
 }
 
+// used to execute a command for some times on the external client, the return is a list of counters for successfully get the expected output list
+// for example, if one expected item is matched for one time, the mathcing counter will be increased by 1, which is useful to test http cookie cases
+func repeatCmdOnExternalClient(cmd string, expectOutput []string, duration time.Duration, repeatTimes int) []int {
+	result := []int{}
+	successCurlCount := 0
+	matchedCount := 0
+	for i := 0; i < len(expectOutput); i++ {
+		result = append(result, 0)
+	}
+	waitErr := wait.Poll(5*time.Second, duration*time.Second, func() (bool, error) {
+		isMatch := false
+		output, err := exec.Command("bash", "-c", cmd).Output()
+		if err != nil {
+			e2e.Logf("failed to execute cmd %v successfully on the external client, retrying...", cmd)
+			return false, nil
+		}
+		successCurlCount++
+		e2e.Logf("executed cmd %s for %v times on the external client, attempted to %v times...", cmd, successCurlCount, repeatTimes)
+		for i := 0; i < len(expectOutput); i++ {
+			searchInfo := regexp.MustCompile(expectOutput[i]).FindStringSubmatch(string(output))
+			if len(searchInfo) > 0 {
+				isMatch = true
+				matchedCount++
+				result[i] = result[i] + 1
+				break
+			}
+		}
+
+		if isMatch {
+			e2e.Logf("successfully executed cmd %s successfully for %v times on the external client, expect %v times...", cmd, matchedCount, repeatTimes)
+			if matchedCount == repeatTimes {
+				return true, nil
+			} else {
+				return false, nil
+			}
+		} else {
+			// if after executed the cmd, but could not get a output in the expectOutput list, decrease the successfully executed times
+			successCurlCount--
+			e2e.Logf("failed to find a match, checking the outout: %s", string(output))
+			return false, nil
+		}
+	})
+	e2e.Logf("the result is: %v", result)
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully for the desired times"))
+	return result
+}
+
 // this function is to check whether given string is present or not in a list
 func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, searchString string) {
 	if shouldContain {
@@ -1625,6 +1681,12 @@ func addExtraParametersToYamlFile(originalFile, flagPara, AddedContent string) s
 	}
 	os.WriteFile(newFile, []byte(newFileContent), 0644)
 	return newFile
+}
+
+func updateFilebySedCmd(file, toBeReplaced, newContent string) {
+	sedCmd := fmt.Sprintf(`sed -i'' -e 's|%s|%s|g' %s`, toBeReplaced, newContent, file)
+	_, err := exec.Command("bash", "-c", sedCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // this function returns IPv6 and IPv4 on dual stack and main IP in case of single stack (v4 or v6)

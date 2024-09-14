@@ -17,6 +17,176 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 	var oc = exutil.NewCLI("routes", exutil.KubeConfigPath())
 
+	// bugzilla: 1368525
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Medium-10207-NetworkEdge Should use the same cookies for secure and insecure access when insecureEdgeTerminationPolicy set to allow for edge route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure"
+			fileDir             = "/tmp/OCP-10207-cookie"
+		)
+
+		exutil.By("1.0: Prepare file folder and file for testing")
+		defer os.RemoveAll(fileDir)
+		err := os.MkdirAll(fileDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		updateFilebySedCmd(testPodSvc, "replicas: 1", "replicas: 2")
+
+		exutil.By("2.0: Deploy a project with two server pods and the service")
+		project1 := oc.Namespace()
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+
+		exutil.By("3.0: Create an edge route with insecure_policy Allow")
+		routehost := "edge10207" + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "edge", "route-edge10207", unSecSvcName, []string{"--hostname=" + routehost, "--insecure-policy=Allow"})
+		waitForOutput(oc, project1, "route/route-edge10207", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("4.0: Curl the edge route for two times, one with saving the cookie for the second server")
+		waitForOutsideCurlContains("https://"+routehost, "-k", "Hello-OpenShift "+srvPodList[0]+" http-8080")
+		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-10207", "Hello-OpenShift "+srvPodList[1]+" http-8080")
+
+		exutil.By("5.0: Curl the edge route with the cookie, expect forwarding to the second server")
+		curlCmdWithCookie := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-10207", "https://"+routehost)
+		expectOutput := []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		result := repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
+		o.Expect(result[1]).To(o.Equal(6))
+
+		exutil.By("6.0: Patch the edge route with Redirect tls insecureEdgeTerminationPolicy, then curl the edge route with the cookie, expect forwarding to the second server")
+		patchResourceAsAdmin(oc, project1, "route/route-edge10207", "{\"spec\":{\"tls\": {\"insecureEdgeTerminationPolicy\":\"Redirect\"}}}")
+		curlCmdWithCookie = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-kSL -b "+fileDir+"/cookie-10207", "http://"+routehost)
+		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
+		o.Expect(result[1]).To(o.Equal(6))
+	})
+
+	// merge OCP-11042(NetworkEdge NetworkEdge Disable haproxy hash based sticky session for edge termination routes) to OCP-11130
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-11130-NetworkEdge Enable/Disable haproxy cookies based sticky session for edge termination routes", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure"
+			fileDir             = "/tmp/OCP-11130-cookie"
+		)
+
+		exutil.By("1.0: Prepare file folder and file for testing")
+		defer os.RemoveAll(fileDir)
+		err := os.MkdirAll(fileDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		updateFilebySedCmd(testPodSvc, "replicas: 1", "replicas: 2")
+
+		exutil.By("2.0: Deploy a project with two server pods and the service")
+		project1 := oc.Namespace()
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+
+		exutil.By("3.0: Create an edge route")
+		routehost := "edge11130" + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "edge", "route-edge11130", unSecSvcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/route-edge11130", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("4.0: Curl the edge route, make sure saving the cookie for server 1")
+		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-11130", "Hello-OpenShift "+srvPodList[0]+" http-8080")
+
+		exutil.By("5.0: Curl the edge route, make sure could get response from server 2")
+		curlCmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k", "https://"+routehost)
+		expectOutput := []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		result := repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
+		o.Expect(result[0]).To(o.Equal(1))
+
+		exutil.By("6.0: Curl the edge route with the cookie, expect all are forwarded to the server 1")
+		curlCmdWithCookie := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-11130", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
+		o.Expect(result[0]).To(o.Equal(6))
+
+		// Disable haproxy hash based sticky session for edge termination routes
+		exutil.By("7.0: Annotate the edge route with haproxy.router.openshift.io/disable_cookies=true")
+		_, err = oc.Run("annotate").WithoutNamespace().Args("-n", project1, "route/route-edge11130", "haproxy.router.openshift.io/disable_cookies=true", "--overwrite").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("8.0: Curl the edge route, and save the cookie for the backend server")
+		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-11130", "Hello-OpenShift")
+
+		exutil.By("9.0: Curl the edge route with the cookie, expect forwarding to the two server")
+		curlCmdWithCookie = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-11130", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 10)
+		o.Expect(result[0] > 1).To(o.BeTrue())
+		o.Expect(result[1] > 1).To(o.BeTrue())
+		o.Expect(result[0] + result[1]).To(o.Equal(10))
+	})
+
+	// merge OCP-15874(NetworkEdge can set cookie name for reencrypt routes by annotation) to OCP-15873
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-15873-NetworkEdge can set cookie name for edge/reen routes by annotation", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure1"
+			secSvcName          = "service-secure1"
+			fileDir             = "/tmp/OCP-15873-cookie"
+		)
+
+		exutil.By("1.0: Prepare file folder and file for testing")
+		defer os.RemoveAll(fileDir)
+		err := os.MkdirAll(fileDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		updateFilebySedCmd(testPodSvc, "replicas: 1", "replicas: 2")
+
+		exutil.By("2.0: Deploy a project with two server pods and the service")
+		project1 := oc.Namespace()
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+
+		exutil.By("3.0: Create an edge route")
+		routehost := "edge15873" + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "edge", "route-edge15873", unSecSvcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/route-edge15873", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("4.0: Set the cookie name by route annotation with router.openshift.io/cookie_name=2-edge_cookie")
+		_, err = oc.Run("annotate").WithoutNamespace().Args("-n", project1, "route/route-edge15873", "router.openshift.io/cookie_name=2-edge_cookie", "--overwrite").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5.0: Curl the edge route, and check the Set-Cookie header is set")
+		curlCmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -v", "https://"+routehost)
+		expectOutput := []string{"set-cookie: 2-edge_cookie=[0-9a-z]+"}
+		result := repeatCmdOnExternalClient(curlCmd, expectOutput, 30, 1)
+		o.Expect(result[0]).To(o.Equal(1))
+
+		exutil.By("6.0: Curl the edge route, saving the cookie for one server")
+		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-15873", "Hello-OpenShift "+srvPodList[1]+" http-8080")
+
+		exutil.By("7.0: Curl the edge route with the cookie, expect all are forwarded to the desired server")
+		curlCmdWithCookie := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-15873", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
+		o.Expect(result[1]).To(o.Equal(6))
+
+		// test for NetworkEdge can set cookie name for reencrypt routes by annotation
+		exutil.By("8.0: Create a reencrypt route")
+		routehost = "reen15873" + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "reencrypt", "route-reen15873", secSvcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/route-reen15873", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("9.0: Set the cookie name by route annotation with router.openshift.io/cookie_name=_reen-cookie3")
+		_, err = oc.Run("annotate").WithoutNamespace().Args("-n", project1, "route/route-reen15873", "router.openshift.io/cookie_name=_reen-cookie3", "--overwrite").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("10.0: Curl the reencrypt route, and check the Set-Cookie header is set")
+		curlCmd = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -v", "https://"+routehost)
+		expectOutput = []string{"set-cookie: _reen-cookie3=[0-9a-z]+"}
+		result = repeatCmdOnExternalClient(curlCmd, expectOutput, 30, 1)
+		o.Expect(result[0]).To(o.Equal(1))
+
+		exutil.By("11.0: Curl the reen route, saving the cookie for one server")
+		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-15873", "Hello-OpenShift "+srvPodList[1]+" https-8443")
+
+		exutil.By("12.0: Curl the reen route with the cookie, expect all are forwarded to the desired server")
+		curlCmdWithCookie = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-15873", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift +" + srvPodList[0] + " +https-8443", "Hello-OpenShift +" + srvPodList[1] + " +https-8443"}
+		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
+		o.Expect(result[1]).To(o.Equal(6))
+	})
+
 	// author: aiyengar@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-Medium-42230-route can be configured to whitelist more than 61 ips/CIDRs", func() {
 		var (
