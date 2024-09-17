@@ -78,7 +78,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			Template:    flowFixturePath,
 		}
 		flow.CreateFlowcollector(oc)
-		flow.WaitForFlowcollectorReady(oc)
 	})
 	g.AfterEach(func() {
 		flow.DeleteFlowcollector(oc)

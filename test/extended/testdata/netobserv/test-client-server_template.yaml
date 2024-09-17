@@ -37,7 +37,7 @@ objects:
             capabilities:
               drop: ["ALL"]
               privileged: false
-          image: quay.io/rhn_support_memodi/nginx-alpine:test
+          image: quay.io/openshifttest/nginx-alpine:latest
           imagePullPolicy: IfNotPresent
           env:
           - name: CREATE_LARGE_BLOB_FILES
