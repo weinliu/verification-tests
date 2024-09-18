@@ -93,12 +93,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 	// author: miyadav@redhat.com
 	g.It("Author:miyadav-NonHyperShiftHOST-High-60147-[clusterInfra] check machineapi and clusterautoscaler as optional operator", func() {
 		g.By("Check capability shows operator is optional")
-		capability, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities}").Output()
+		capability, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(capability).To(o.ContainSubstring("MachineAPI"))
 
 		//This condition is for clusters installed with baseline capabilties set to NONE
-		if strings.Contains(capability, "enabledCapabilities") {
+		if strings.Contains(capability, "MachineAPI") {
 			g.By("Check cluster-autoscaler has annotation to confirm optional status")
 			annotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cluster-autoscaler", "-o=jsonpath={.metadata.annotations}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -113,6 +112,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 			annotation, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-api", "-o=jsonpath={.metadata.annotations}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(annotation).To(o.ContainSubstring("\"capability.openshift.io/name\":\"MachineAPI\""))
+		} else {
+			g.Skip("MachineAPI not enabled so co machine-api/cluster-autoscaler wont be present to check annotations")
 		}
 
 	})
