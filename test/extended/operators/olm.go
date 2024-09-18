@@ -6657,7 +6657,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-25760, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-25760-Operator upgrades does not fail after change the channel", func() {
+	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-Medium-25760-Operator upgrades does not fail after change the channel", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
