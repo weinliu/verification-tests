@@ -106,6 +106,28 @@ func (mcp *MachineConfigPool) IsEmpty() bool {
 	return numNodes == 0
 }
 
+// GetMaxUnavailable gets the value of maxUnavailable
+func (mcp *MachineConfigPool) GetMaxUnavailableInt() (int, error) {
+	maxUnavailableString, err := mcp.Get(`{.spec.maxUnavailable}`)
+	if err != nil {
+		return -1, err
+	}
+
+	if maxUnavailableString == "" {
+		logger.Infof("maxUnavailable not configured in mcp %s, default value is 1", mcp.GetName())
+		return 1, nil
+	}
+
+	maxUnavailableInt, convErr := strconv.Atoi(maxUnavailableString)
+
+	if convErr != nil {
+		logger.Errorf("Error converting maxUnavailableString to integer: %s", convErr)
+		return -1, convErr
+	}
+
+	return maxUnavailableInt, nil
+}
+
 // SetMaxUnavailable sets the value for maxUnavailable
 func (mcp *MachineConfigPool) SetMaxUnavailable(maxUnavailable int) {
 	logger.Infof("patch mcp %v, change spec.maxUnavailable to %d", mcp.name, maxUnavailable)

@@ -277,6 +277,59 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		testContainerFile([]ContainerFile{}, tmpNamespaceName, mcp, checkers)
 	})
 
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-72003-OCB Opting into on-cluster builds must respect maxUnavailable setting. Workers.[Disruptive]", func() {
+		// Remove this "skip" checks once the functionality to disable OCL is implemented
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
+		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
+
+		var (
+			moscName    = "test-" + GetCurrentTestPolarionIDNumber()
+			wMcp        = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			workerNodes = wMcp.GetSortedNodesOrFail()
+		)
+
+		exutil.By("Configure maxUnavailable if worker pool has more than 2 nodes")
+		if len(workerNodes) > 2 {
+			wMcp.SetMaxUnavailable(2)
+			defer wMcp.RemoveMaxUnavailable()
+		}
+
+		maxUnavailable := exutil.OrFail[int](wMcp.GetMaxUnavailableInt())
+		logger.Infof("Current maxUnavailable value %d", maxUnavailable)
+		logger.Infof("OK!\n")
+
+		exutil.By("Configure OCB functionality for the new worker MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, wMcp.GetName(), nil)
+		defer DisableOCL(mosc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Configure OCB functionality for the new worker MCP")
+		o.Eventually(wMcp.GetUpdatingStatus, "15m", "15s").Should(o.Equal("True"),
+			"The worker MCP did not start updating")
+		logger.Infof("OK!\n")
+
+		exutil.By("Poll the nodes sorted by the order they are updated")
+		updatedNodes := wMcp.GetSortedUpdatedNodes(maxUnavailable)
+		for _, n := range updatedNodes {
+			logger.Infof("updated node: %s created: %s zone: %s", n.GetName(), n.GetOrFail(`{.metadata.creationTimestamp}`), n.GetOrFail(`{.metadata.labels.topology\.kubernetes\.io/zone}`))
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for the configuration to be applied in all nodes")
+		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that nodes were updated in the right order")
+		rightOrder := checkUpdatedLists(workerNodes, updatedNodes, maxUnavailable)
+		o.Expect(rightOrder).To(o.BeTrue(), "Expected update order %s, but found order %s", workerNodes, updatedNodes)
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the MachineOSConfig resource")
+		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		logger.Infof("OK!\n")
+	})
+
 })
 
 func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
