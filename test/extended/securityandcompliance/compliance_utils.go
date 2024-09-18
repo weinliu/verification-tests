@@ -1204,6 +1204,18 @@ func assertCompliancescanDone(oc *exutil.CLI, namespace string, parameters ...st
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The compliance scan not finished in the limited timer"))
 }
 
+func checkRuleCountMatch(oc *exutil.CLI, ns string, scanName string) {
+	ccrNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ccr", "-l", "compliance.openshift.io/scan-name="+scanName, "-n", ns, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	ccrCount := len(strings.Fields(ccrNames))
+	checkCount, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("scan", scanName, "-n", ns, "-o=jsonpath={.metadata.annotations.compliance\\.openshift\\.io/check-count}").Output()
+	o.Expect(errGet).NotTo(o.HaveOccurred())
+	checkCountInt, errInt := strconv.Atoi(checkCount)
+	o.Expect(errInt).NotTo(o.HaveOccurred())
+	o.Expect(ccrCount).Should(o.Equal(checkCountInt), fmt.Sprintf("The actual ccr count %d NOT equals to checkcount in the annotation %d", ccrCount, checkCountInt))
+
+}
+
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
 	errCo := wait.Poll(20*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)

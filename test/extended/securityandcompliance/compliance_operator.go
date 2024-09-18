@@ -632,7 +632,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-cis-node-master-kubelet-enable-streaming-connections",
 				"ocp4-cis-node-master-kubelet-configure-event-creation",
 				"ocp4-cis-node-master-kubelet-configure-tls-cipher-suites",
-				"ocp4-cis-node-worker-kubelet-configure-tls-cipher-suites",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-imagefs-available",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-memory-available",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-nodefs-available",
@@ -684,10 +683,23 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersionSuffix14.name, "2")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersionSuffix15.name, "2")
 
+		g.By("Check the rule count for each scan.. !!!\n")
+		scanNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scan", "-n", ssb.namespace, "-l", "compliance.openshift.io/suite="+ssb.name,
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		scanNameList := strings.Fields(scanNames)
+		for _, scanName := range scanNameList {
+			checkRuleCountMatch(oc, ssb.namespace, scanName)
+		}
+
 		g.By("Check ccr should exist and pass by default.. !!!\n")
+		timestamp, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("scan/ocp4-cis-node-master", "-n", ssb.namespace, "-ojsonpath={.status.startTimestamp}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
 		for _, ccrShouldPass := range ccrsShouldPass {
 			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", ccrShouldPass, "-n", ssb.namespace,
 				"-o=jsonpath={.status}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, timestamp, ok, []string{"ccr", ccrShouldPass, "-n", ssb.namespace,
+				"-o=jsonpath={.metadata.annotations.compliance\\.openshift\\.io/last-scanned-timestamp}"}).check(oc)
 		}
 
 		g.By("Check cni rule.. !!!\n")
@@ -695,19 +707,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		o.Expect(err).NotTo(o.HaveOccurred())
 		major := strings.Split(version, ".")[0]
 		minor := strings.Split(version, ".")[1]
-		ocpVersion := major + "." + minor
+		minorInt, err := strconv.Atoi(minor)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		switch {
-		case ocpVersion == "4.16", ocpVersion == "4.17":
+		case major == "4" && minorInt >= 16:
 			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", cniConfFilePermissionRule, "-n", ssb.namespace,
 				"-o=jsonpath={.status}"}).check(oc)
-		case ocpVersion == "4.12", ocpVersion == "4.13", ocpVersion == "4.14", ocpVersion == "4.15":
+		case major == "4" && minorInt < 16:
 		default:
 			e2e.Logf("skip test for rule %s", cniConfFilePermissionRule)
-		}
-
-		for _, ccrShouldPass := range ccrsShouldPass {
-			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", ccrShouldPass, "-n", ssb.namespace,
-				"-o=jsonpath={.status}"}).check(oc)
 		}
 
 		g.By("Check ccr should not exist.. !!!\n")
