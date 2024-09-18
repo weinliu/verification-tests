@@ -52,6 +52,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-NonHyperShiftHOST-High-43307-cloud-controller-manager clusteroperator should be in Available state", func() {
+		g.By("Check cluster does not have basecap set as None")
+		baseCapSet, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].spec.capabilities.baselineCapabilitySet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if baseCapSet == "None" {
+			g.Skip("Skip test when ccm co is not available")
+		}
+
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/cloud-controller-manager", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
@@ -522,6 +529,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-NonHyperShiftHOST-Low-70682-Trust bundle CA configmap should have ownership annotations", func() {
+		g.By("Check cluster does not have basecap set as None")
+		baseCapSet, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].spec.capabilities.baselineCapabilitySet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if baseCapSet == "None" {
+			g.Skip("Skip test when ccm co is not available")
+		}
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "ccm-trusted-ca", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("Cloud Compute / Cloud Controller Manager"))
@@ -633,6 +646,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-NonHyperShiftHOST-Medium-69871-Cloud Controller Manager Operator metrics should only be available via https", func() {
+		g.By("Check cluster does not have basecap set as None")
+		baseCapSet, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].spec.capabilities.baselineCapabilitySet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if baseCapSet == "None" {
+			g.Skip("Skip test when ccm co is not available")
+		}
 		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "k8s-app=cloud-manager-operator", "-n", "openshift-cloud-controller-manager-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
