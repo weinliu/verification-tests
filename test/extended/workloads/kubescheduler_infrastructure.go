@@ -802,4 +802,141 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 		o.Expect(podInfoerr).To(o.HaveOccurred())
 		o.Expect(podInfoStatus).Should(o.ContainSubstring("pods \"priorityh19892\" not found"))
 	})
+
+	// author: knarra@redhat.com
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-High-14479-pod will be scheduled to the node which matches node affinity", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		deployNodeAffinity := filepath.Join(buildPruningBaseDir, "node-affinity-required-case14479.yaml")
+
+		// Retreive all worker nodes
+		exutil.By("Get all nodes in the cluster")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Names are %v", nodeName)
+		node := strings.Fields(nodeName)
+
+		// Create test project
+		g.By("Create test project")
+		oc.SetupProject()
+
+		// Add label to the node
+		g.By("Add label to the node")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node[0], "key14479-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node[0], "key14479=value14479").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Check if node is a outposts node and adjust the pod yaml
+		checkOutpostsNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(checkOutpostsNode, "node-role.kubernetes.io/outposts") {
+			deployNodeAffinity = filepath.Join(buildPruningBaseDir, "node-affinity-required-case14479-outposts.yaml")
+		}
+
+		exutil.By("Set namespace privileged")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+
+		// Create node-affinity-required-case14479 pods
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", deployNodeAffinity, "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployNodeAffinity, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify pod is running and it is scheduled on node0")
+
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "node-affinity-required-case14479", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			e2e.Logf("output is %s", output)
+			if strings.Contains("Running", output) {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod is still not running even after 3 minutes"))
+
+		nodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "node-affinity-required-case14479", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("NodeName is %s", nodeName)
+		if nodeName != node[0] {
+			e2e.Failf("Pod is not running on node0, which is not expected")
+		}
+	})
+
+	// author: knarra@redhat.com
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-High-14488-pod will still run on the node if labels on the node change and affinity rules no longer met IgnoredDuringExecution", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		nodeAffinityRequiredCase := filepath.Join(buildPruningBaseDir, "node-affinity-required-case14488.yaml")
+
+		// Retreive all worker nodes
+		exutil.By("Get all nodes in the cluster")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Names are %v", nodeName)
+		node := strings.Fields(nodeName)
+
+		// Create test project
+		g.By("Create test project")
+		oc.SetupProject()
+
+		// Add label to the node
+		g.By("Add label to the node")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node[0], "key14488-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node[0], "key14488=value14488").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Check if node is a outposts node and adjust the pod yaml
+		checkOutpostsNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(checkOutpostsNode, "node-role.kubernetes.io/outposts") {
+			nodeAffinityRequiredCase = filepath.Join(buildPruningBaseDir, "node-affinity-required-case14488-outposts.yaml")
+		}
+
+		exutil.By("Set namespace privileged")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+
+		// Add node selector to project
+		defer func() {
+			patchYamlToRestore := `[{"op": "remove", "path": "/metadata/annotations/openshift.io~1node-selector", "value":""}]`
+			e2e.Logf("Removing annotation from the user created project")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("namespace", oc.Namespace(), "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		patchYamlTraceAll := `[{"op": "add", "path": "/metadata/annotations/openshift.io~1node-selector", "value":""}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("namespace", oc.Namespace(), "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Create node-affinity-required-case14488 pods
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", nodeAffinityRequiredCase, "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", nodeAffinityRequiredCase, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify pod is running and it is scheduled on node0")
+
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "node-affinity-required-case14488", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			e2e.Logf("output is %s", output)
+			if strings.Contains("Running", output) {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod is still not running even after 3 minutes"))
+
+		nodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "node-affinity-required-case14488", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("NodeName is %s", nodeName)
+		if nodeName != node[0] {
+			e2e.Failf("Pod is not running on node0, which is not expected")
+		}
+	})
+
 })
