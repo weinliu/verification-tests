@@ -12,11 +12,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	awsCred "github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -82,19 +80,18 @@ func readDefaultSDKExternalConfigurations(ctx context.Context, region string) aw
 	return cfg
 }
 
+// initialize a s3 client with credential
+func newS3Client(cfg aws.Config) *s3.Client {
+	return s3.NewFromConfig(cfg)
+}
+
 // new AWS STS client
 func newStsClient(cfg aws.Config) *sts.Client {
-	if !checkAWSCredentials() {
-		g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
-	}
 	return sts.NewFromConfig(cfg)
 }
 
 // Create AWS IAM client
 func newIamClient(cfg aws.Config) *iam.Client {
-	if !checkAWSCredentials() {
-		g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
-	}
 	return iam.NewFromConfig(cfg)
 }
 
@@ -203,8 +200,8 @@ func deleteIAMroleonAWS(iamClient *iam.Client, roleName string) {
 }
 
 // Create role_arn required for Loki deployment on STS clusters
-func createIAMRoleForLokiSTSDeployment(iamClient *iam.Client, oidcName, awsAccountID, lokiNamespace, lokiStackName, roleName string) string {
-	policyArn := "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+func createIAMRoleForLokiSTSDeployment(iamClient *iam.Client, oidcName, awsAccountID, partition, lokiNamespace, lokiStackName, roleName string) string {
+	policyArn := "arn:" + partition + ":iam::aws:policy/AmazonS3FullAccess"
 
 	lokiTrustPolicy := `{
 		"Version": "2012-10-17",
@@ -212,7 +209,7 @@ func createIAMRoleForLokiSTSDeployment(iamClient *iam.Client, oidcName, awsAccou
 			{
 				"Effect": "Allow",
 				"Principal": {
-					"Federated": "arn:aws:iam::%s:oidc-provider/%s"
+					"Federated": "arn:%s:iam::%s:oidc-provider/%s"
 				},
 				"Action": "sts:AssumeRoleWithWebIdentity",
 				"Condition": {
@@ -226,47 +223,9 @@ func createIAMRoleForLokiSTSDeployment(iamClient *iam.Client, oidcName, awsAccou
 			}
 		]
 	}`
-	lokiTrustPolicy = fmt.Sprintf(lokiTrustPolicy, awsAccountID, oidcName, oidcName, lokiNamespace, lokiStackName, lokiNamespace, lokiStackName)
+	lokiTrustPolicy = fmt.Sprintf(lokiTrustPolicy, partition, awsAccountID, oidcName, oidcName, lokiNamespace, lokiStackName, lokiNamespace, lokiStackName)
 	roleArn := createIAMRoleOnAWS(iamClient, lokiTrustPolicy, roleName, policyArn)
 	return roleArn
-}
-
-// Creates S3 bucket storage with STS
-func createS3ObjectStorageBucketWithSTS(cfg aws.Config, stsClient *sts.Client, s3roleArn, bucketName string) {
-	// Check if bucket exists, if yes delete it
-	if checkIfS3bucketExistsWithSTS(cfg, stsClient, s3roleArn, bucketName) {
-		e2e.Logf("Bucket already exists. Deleting bucket")
-		deleteS3bucketWithSTS(cfg, stsClient, s3roleArn, bucketName)
-	}
-
-	result, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
-		RoleArn:         &s3roleArn,
-		RoleSessionName: aws.String("logging_loki_sts_s3flow"),
-	})
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Creating S3 client with assumed role
-	s3Client := s3.NewFromConfig(cfg, func(options *s3.Options) {
-		options.Credentials = awsCred.NewStaticCredentialsProvider(
-			*result.Credentials.AccessKeyId,
-			*result.Credentials.SecretAccessKey,
-			*result.Credentials.SessionToken,
-		)
-	})
-
-	// Define the input for CreateBucket operation
-	createBucketInput := &s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
-	}
-
-	// Check if the region is us-east-1, do not specify a location constraint
-	if cfg.Region != "us-east-1" {
-		createBucketInput.CreateBucketConfiguration = &s3Types.CreateBucketConfiguration{
-			LocationConstraint: s3Types.BucketLocationConstraint(cfg.Region),
-		}
-	}
-	_, err = s3Client.CreateBucket(context.TODO(), createBucketInput)
-	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create bucket: "+bucketName)
 }
 
 // Creates Loki object storage secret on AWS STS cluster
@@ -301,141 +260,6 @@ func validatesIfLogsArePushedToS3Bucket(s3Client *s3.Client, bucketName string, 
 	exutil.AssertWaitPollNoErr(err, "Timed out...No data is available under the bucket: "+bucketName)
 }
 
-// This is an API operation that allows you to request temporary security credentials for accessing AWS
-// resources by assuming an IAM (Identity and Access Management) role
-func createS3AssumeRole(stsClient *sts.Client, iamClient *iam.Client, lokistackName string) (string, string) {
-	_, AWS_USER_ARN := getAwsAccount(stsClient)
-	assumeRoleName := lokistackName + "-" + exutil.GetRandomString()
-
-	policyArn := "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-
-	s3trustPolicy := `{
-		"Version": "2012-10-17",
-		"Statement": [
-			{
-				"Effect": "Allow",
-				"Principal": {
-					"Service": "s3.amazonaws.com",
-					"AWS": "%s"
-				},
-				"Action": "sts:AssumeRole"
-			}
-		]
-	}`
-	s3trustPolicy = fmt.Sprintf(s3trustPolicy, AWS_USER_ARN)
-
-	s3roleArn := createIAMRoleOnAWS(iamClient, s3trustPolicy, assumeRoleName, policyArn)
-	// Waiting for a bit since it takes some time for the role creation to be propogated on AWS env.
-	time.Sleep(10 * time.Second)
-	return s3roleArn, assumeRoleName
-}
-
-func patchLokiOperatorWithAWSRoleArn(oc *exutil.CLI, packageName, lokiNamespace, roleArn string) {
-	roleArnPatchConfig := `{
-		"spec": {
-		  "config": {
-			"env": [
-			  {
-				"name": "ROLEARN",
-				"value": "%s"
-			  }
-			]
-		  }
-		}
-	  }`
-
-	oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("patch").Args("sub", packageName, "-n", lokiNamespace, "-p", fmt.Sprintf(roleArnPatchConfig, roleArn), "--type=merge").Execute()
-	waitForPodReadyWithLabel(oc, loNS, "name=loki-operator-controller-manager")
-}
-
-// Checks if a specific bucket exists under AWS S3 service
-func checkIfS3bucketExistsWithSTS(cfg aws.Config, stsClient *sts.Client, s3assumeRoleArn string, bucketName string) bool {
-	assumeRoleInput := &sts.AssumeRoleInput{
-		RoleArn:         &s3assumeRoleArn,
-		RoleSessionName: aws.String("checks3WithAssumeRole"),
-	}
-
-	assumeRoleOutput, err := stsClient.AssumeRole(context.Background(), assumeRoleInput)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Creating S3 client with assumed role
-	s3Client := s3.NewFromConfig(cfg, func(options *s3.Options) {
-		options.Credentials = awsCred.NewStaticCredentialsProvider(
-			*assumeRoleOutput.Credentials.AccessKeyId,
-			*assumeRoleOutput.Credentials.SecretAccessKey,
-			*assumeRoleOutput.Credentials.SessionToken,
-		)
-	})
-
-	// Check if the bucket exists
-	_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-		Bucket: &bucketName,
-	})
-	if err != nil {
-		if msg, errCode := err.(*s3Types.NoSuchBucket); errCode {
-			// Bucket does not exist
-			e2e.Logf("Bucket does not exist: %s", msg)
-			return false
-		} else {
-			e2e.Logf("Some other error accessing S3..Going ahead with bucket creation")
-			return false
-		}
-	}
-	// Bucket exists
-	return true
-}
-
-// Deletes a specific bucket's contents (if any) and the bucket itself within AWS S3
-func deleteS3bucketWithSTS(cfg aws.Config, stsClient *sts.Client, s3assumeRoleArn string, bucketName string) {
-	assumeRoleOutput, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
-		RoleArn:         aws.String(s3assumeRoleArn),
-		RoleSessionName: aws.String("AssumeRoleSession"),
-	})
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Creating S3 client with assumed role
-	s3Client := s3.NewFromConfig(cfg, func(options *s3.Options) {
-		options.Credentials = awsCred.NewStaticCredentialsProvider(
-			*assumeRoleOutput.Credentials.AccessKeyId,
-			*assumeRoleOutput.Credentials.SecretAccessKey,
-			*assumeRoleOutput.Credentials.SessionToken,
-		)
-	})
-
-	// List objects in the bucket
-	listObjectsOutput, err := s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucketName),
-	})
-	o.Expect(err).NotTo(o.HaveOccurred(), "Error listing bucket objects...")
-
-	if len(listObjectsOutput.Contents) != 0 {
-		// Delete each object individually
-		for _, obj := range listObjectsOutput.Contents {
-			_, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-				Bucket: &bucketName,
-				Key:    obj.Key,
-			})
-			o.Expect(err).NotTo(o.HaveOccurred(), "Error deleting bucket objects...")
-		}
-	}
-
-	// Delete the bucket
-	_, err = s3Client.DeleteBucket(context.TODO(), &s3.DeleteBucketInput{
-		Bucket: &bucketName,
-	})
-	if err != nil {
-		// If the bucket isn't empty, it will return an error
-		if msg, errCode := err.(*s3Types.NoSuchBucket); errCode {
-			e2e.Logf("Bucket does not exist: %s", msg)
-		} else {
-			e2e.Failf("Some Error deleting the bucket" + bucketName)
-		}
-	} else {
-		e2e.Logf("Bucket deleted successfully")
-	}
-
-}
-
 // cloudWatchSpec the basic object which describe all common test options
 type cloudwatchSpec struct {
 	awsRoleName      string
@@ -443,13 +267,14 @@ type cloudwatchSpec struct {
 	awsRegion        string
 	awsPolicyName    string
 	awsPolicyArn     string
+	awsPartition     string //The partition in which the resource is located, valid when the cluster is STS, ref: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html#arns-syntax
 	collectorSAName  string // the service account for collector pod to use
 	cwClient         *cloudwatchlogs.Client
 	groupName        string // the strategy for grouping logstreams, for example: '{.log_type||"none"}'
 	hasMaster        bool   // wether the cluster has master nodes or not
 	iamClient        *iam.Client
 	logTypes         []string //default: "['infrastructure','application', 'audit']"
-	nodes            []string // Cluster Nodes Names
+	nodes            []string // Cluster Nodes Names, required when checking infrastructure/audit logs and strict=true
 	ovnEnabled       bool     // if ovn is enabled
 	secretName       string   // the name of the secret for the collector to use
 	secretNamespace  string   // the namespace where the collector pods to be deployed
@@ -462,9 +287,6 @@ type cloudwatchSpec struct {
 // Set the default values to the cloudwatchSpec Object, you need to change the default in It if needs
 func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 	var err error
-	if len(cw.nodes) == 0 {
-		cw.nodes = getNodeNames(oc, "kubernetes.io/os=linux")
-	}
 	if checkNetworkType(oc) == "ovnkubernetes" {
 		cw.ovnEnabled = true
 	}
@@ -490,6 +312,12 @@ func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
 		}
 	}
 	if cw.stsEnabled {
+		//Note: AWS China is not added, and the partition is `aws-cn`.
+		if strings.HasPrefix(cw.awsRegion, "us-gov") {
+			cw.awsPartition = "aws-us-gov"
+		} else {
+			cw.awsPartition = "aws"
+		}
 		//Create IAM roles for cloudwatch
 		cw.createIAMCloudwatchRole(oc)
 	}
@@ -517,9 +345,6 @@ func (cw *cloudwatchSpec) newIamClient() {
 func (cw *cloudwatchSpec) newIamRole(oc *exutil.CLI) {
 	oidcProvider, e := getOIDC(oc)
 	o.Expect(e).NotTo(o.HaveOccurred())
-	if !checkAWSCredentials() {
-		g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
-	}
 	awscfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(cw.awsRegion))
 	o.Expect(err).NotTo(o.HaveOccurred(), "failed to load AWS configuration")
 	stsClient := sts.NewFromConfig(awscfg)
@@ -530,7 +355,7 @@ func (cw *cloudwatchSpec) newIamRole(oc *exutil.CLI) {
    {
      "Effect": "Allow",
      "Principal": {
-       "Federated": "arn:aws:iam::%s:oidc-provider/%s"
+       "Federated": "arn:%s:iam::%s:oidc-provider/%s"
      },
      "Action": "sts:AssumeRoleWithWebIdentity",
      "Condition": {
@@ -541,7 +366,7 @@ func (cw *cloudwatchSpec) newIamRole(oc *exutil.CLI) {
    }
  ]
 }`
-	trustPolicy = fmt.Sprintf(trustPolicy, accountID, oidcProvider, oidcProvider, cw.secretNamespace, cw.collectorSAName)
+	trustPolicy = fmt.Sprintf(trustPolicy, cw.awsPartition, accountID, oidcProvider, oidcProvider, cw.secretNamespace, cw.collectorSAName)
 	cw.awsRoleArn = iamCreateRole(cw.iamClient, trustPolicy, cw.awsRoleName)
 }
 
@@ -559,11 +384,11 @@ func (cw *cloudwatchSpec) newIamPolicy() {
             "logs:PutLogEvents",
             "logs:PutRetentionPolicy"
          ],
-         "Resource": "arn:aws:logs:*:*:*"
+         "Resource": "arn:%s:logs:*:*:*"
      }
    ]
 }`
-	cw.awsPolicyArn = iamCreatePolicy(cw.iamClient, mgmtPolicy, cw.awsPolicyName)
+	cw.awsPolicyArn = iamCreatePolicy(cw.iamClient, fmt.Sprintf(mgmtPolicy, cw.awsPartition), cw.awsPolicyName)
 }
 
 func (cw *cloudwatchSpec) createIAMCloudwatchRole(oc *exutil.CLI) {
@@ -761,7 +586,6 @@ func (cw *cloudwatchSpec) getLogStreamNames(groupName string, streamPrefix strin
 func (cw *cloudwatchSpec) checkInfraContainerLogs(strict bool) bool {
 	var (
 		infraLogGroupNames []string
-		expectedStreams    []string
 		logStreams         []string
 	)
 	logGroupNames, err := cw.getLogGroupNames("")
@@ -783,9 +607,6 @@ func (cw *cloudwatchSpec) checkInfraContainerLogs(strict bool) bool {
 	}
 	e2e.Logf("the log group names for infra container logs are %v", infraLogGroupNames)
 
-	for _, node := range cw.nodes {
-		expectedStreams = append(expectedStreams, node+".openshift-")
-	}
 	// get all the log streams under the log groups
 	for _, group := range infraLogGroupNames {
 		streams, _ := cw.getLogStreamNames(group, "")
@@ -798,9 +619,13 @@ func (cw *cloudwatchSpec) checkInfraContainerLogs(strict bool) bool {
 
 	// when strict=true, return ture if we can find podLogStream for all nodes
 	if strict {
-		for _, expectedStream := range expectedStreams {
-			if !containSubstring(logStreams, expectedStream) {
-				e2e.Logf("can't find log stream %s", expectedStream)
+		if len(cw.nodes) == 0 {
+			e2e.Logf("node name is empty, please get node names at first")
+			return false
+		}
+		for _, node := range cw.nodes {
+			if !containSubstring(logStreams, node+".openshift-") {
+				e2e.Logf("can't find log stream %s", node+".openshift-")
 				return false
 			}
 		}
@@ -816,7 +641,6 @@ func (cw *cloudwatchSpec) checkInfraContainerLogs(strict bool) bool {
 func (cw *cloudwatchSpec) checkInfraNodeLogs(strict bool) bool {
 	var (
 		infraLogGroupNames []string
-		expectedStreams    []string
 		logStreams         []string
 	)
 	logGroupNames, err := cw.getLogGroupNames("")
@@ -835,11 +659,6 @@ func (cw *cloudwatchSpec) checkInfraNodeLogs(strict bool) bool {
 	}
 	e2e.Logf("the infra node log group names are %v", infraLogGroupNames)
 
-	//stream name: ip-10-0-152-69.journal.system
-	for _, node := range cw.nodes {
-		expectedStreams = append(expectedStreams, strings.Split(node, ".")[0]+".journal.system")
-	}
-
 	// get all the log streams under the log groups
 	for _, group := range infraLogGroupNames {
 		streams, _ := cw.getLogStreamNames(group, "")
@@ -852,9 +671,15 @@ func (cw *cloudwatchSpec) checkInfraNodeLogs(strict bool) bool {
 	e2e.Logf("the infrastructure node log streams: %v", logStreams)
 	// when strict=true, return ture if we can find log streams from all nodes
 	if strict {
-		for _, expectedStream := range expectedStreams {
-			if !contain(logStreams, expectedStream) {
-				e2e.Logf("can't find log stream %s", expectedStream)
+		if len(cw.nodes) == 0 {
+			e2e.Logf("node name is empty, please get node names at first")
+			return false
+		}
+		//stream name: ip-10-0-152-69.journal.system
+		for _, node := range cw.nodes {
+			streamName := strings.Split(node, ".")[0] + ".journal.system"
+			if !contain(logStreams, streamName) {
+				e2e.Logf("can't find log stream %s", streamName)
 				return false
 			}
 		}
@@ -907,6 +732,10 @@ func (cw *cloudwatchSpec) auditLogsFound(strict bool) bool {
 
 	// when strict=true, return ture if we can find podLogStream for all nodes
 	if strict {
+		if len(cw.nodes) == 0 {
+			e2e.Logf("node name is empty, please get node names at first")
+			return false
+		}
 		for _, expectedStream := range cw.nodes {
 			if !contain(logStreams, expectedStream) {
 				return false

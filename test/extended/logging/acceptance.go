@@ -25,6 +25,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipBaselineCaps(oc, "None")
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 		CLO = SubscriptionObjects{
@@ -218,6 +219,9 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		clf.createServiceAccount(oc)
 		cw.createClfSecret(oc)
 		clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
+		nodes, err := clf.getCollectorNodeNames(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cw.nodes = append(cw.nodes, nodes...)
 
 		g.By("Check logs in Cloudwatch")
 		o.Expect(cw.logsFound()).To(o.BeTrue())

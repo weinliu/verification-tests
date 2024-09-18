@@ -92,6 +92,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf.createServiceAccount(oc)
 			cw.createClfSecret(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
+			nodes, err := clf.getCollectorNodeNames(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			cw.nodes = append(cw.nodes, nodes...)
 
 			g.By("Check logs in Cloudwatch")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
@@ -208,11 +211,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf.createServiceAccount(oc)
 			cw.createClfSecret(oc)
 			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
+			nodes, err := clf.getCollectorNodeNames(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			cw.nodes = append(cw.nodes, nodes...)
 
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			g.By("Create log producer")
 			appProj1 := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cw.selAppNamespaces = []string{appProj1}
 			if !cw.hasMaster {

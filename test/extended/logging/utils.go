@@ -571,7 +571,7 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
 	output, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", r.namespace).Output()
 	if err != nil {
-		return fmt.Errorf(output)
+		return fmt.Errorf("can't apply resource: %s", output)
 	}
 	r.WaitForResourceToAppear(oc)
 	return nil
@@ -813,6 +813,16 @@ func (clf *clusterlogforwarder) delete(oc *exutil.CLI) {
 
 func (clf *clusterlogforwarder) waitForCollectorPodsReady(oc *exutil.CLI) {
 	WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
+}
+
+func (clf *clusterlogforwarder) getCollectorNodeNames(oc *exutil.CLI) ([]string, error) {
+	var nodes []string
+	pods, err := oc.AdminKubeClient().CoreV1().Pods(clf.namespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=collector,app.kubernetes.io/instance=" + clf.name})
+	for _, pod := range pods.Items {
+		nodes = append(nodes, pod.Spec.NodeName)
+	}
+	return nodes, err
+
 }
 
 type logFileMetricExporter struct {
@@ -1438,18 +1448,6 @@ func getInfrastructureName(oc *exutil.CLI) string {
 	return infrastructureName
 }
 
-// return the nodeNames
-func getNodeNames(oc *exutil.CLI, nodeLabel string) []string {
-	var nodeNames []string
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", nodeLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
-	if err == nil {
-		nodeNames = strings.Split(output, " ")
-	} else {
-		e2e.Logf("Warning: failed to get nodes names ")
-	}
-	return nodeNames
-}
-
 func getDataFromKafkaConsumerPod(oc *exutil.CLI, kafkaNS, consumerPod string) ([]LogEntity, error) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", kafkaNS, consumerPod, "--since=30s", "--tail=30").Output()
 	if err != nil {
@@ -1463,20 +1461,6 @@ func getDataFromKafkaConsumerPod(oc *exutil.CLI, kafkaNS, consumerPod string) ([
 			return nil, nil
 		}
 		logs = append(logs, log)
-	}
-	return logs, nil
-}
-
-func getDataFromKafkaByLogType(oc *exutil.CLI, kafkaNS, consumerPod, logType string) ([]LogEntity, error) {
-	data, err := getDataFromKafkaConsumerPod(oc, kafkaNS, consumerPod)
-	if err != nil {
-		return nil, err
-	}
-	var logs []LogEntity
-	for _, log := range data {
-		if log.LogType == logType {
-			logs = append(logs, log)
-		}
 	}
 	return logs, nil
 }
@@ -1845,14 +1829,12 @@ func checkCiphers(oc *exutil.CLI, tlsVer string, ciphers []string, server string
 
 		if strings.Contains(string(result), ":error:") {
 			errorStr := strings.Split(string(result), ":")[5]
-			e2e.Logf("NOT SUPPORTED (%s)\n", errorStr)
-			return fmt.Errorf(errorStr)
+			return fmt.Errorf("error: NOT SUPPORTED (%s)", errorStr)
 		} else if strings.Contains(string(result), fmt.Sprintf("Cipher is %s", cipher)) || strings.Contains(string(result), "Cipher    :") {
 			e2e.Logf("SUPPORTED")
 		} else {
-			e2e.Logf("UNKNOWN RESPONSE")
 			errorStr := string(result)
-			return fmt.Errorf(errorStr)
+			return fmt.Errorf("error: UNKNOWN RESPONSE %s", errorStr)
 		}
 
 		time.Sleep(delay)
@@ -1879,14 +1861,12 @@ func checkTLSVer(oc *exutil.CLI, tlsVer string, server string, caFile string, cl
 
 	if strings.Contains(string(result), ":error:") {
 		errorStr := strings.Split(string(result), ":")[5]
-		e2e.Logf("NOT SUPPORTED (%s)\n", errorStr)
-		return fmt.Errorf(errorStr)
+		return fmt.Errorf("error: NOT SUPPORTED (%s)", errorStr)
 	} else if strings.Contains(string(result), "Cipher is ") || strings.Contains(string(result), "Cipher    :") {
 		e2e.Logf("SUPPORTED")
 	} else {
-		e2e.Logf("UNKNOWN RESPONSE")
 		errorStr := string(result)
-		return fmt.Errorf(errorStr)
+		return fmt.Errorf("error: UNKNOWN RESPONSE %s", errorStr)
 	}
 
 	return nil

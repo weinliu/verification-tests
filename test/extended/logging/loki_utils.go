@@ -80,9 +80,7 @@ func getMinIOCreds(oc *exutil.CLI, ns string) s3Credential {
 	return s3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
 }
 
-// initialize a s3 client with credential
-// TODO: add an option to initialize a new client with STS
-func newS3Client(cred s3Credential) *s3.Client {
+func generateS3Config(cred s3Credential) aws.Config {
 	var err error
 	var cfg aws.Config
 	if len(cred.Endpoint) > 0 {
@@ -116,10 +114,10 @@ func newS3Client(cred s3Credential) *s3.Client {
 			config.WithRegion(cred.Region))
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return s3.NewFromConfig(cfg)
+	return cfg
 }
 
-func createS3Bucket(client *s3.Client, bucketName string, cred s3Credential) error {
+func createS3Bucket(client *s3.Client, bucketName, region string) error {
 	// check if the bucket exists or not
 	// if exists, clear all the objects in the bucket
 	// if not, create the bucket
@@ -143,11 +141,11 @@ func createS3Bucket(client *s3.Client, bucketName string, cred s3Credential) err
 		using `LocationConstraint: types.BucketLocationConstraint("us-east-1")` gets error `InvalidLocationConstraint`.
 		Here remove the configration when the region is us-east-1
 	*/
-	if len(cred.Region) == 0 || cred.Region == "us-east-1" {
+	if len(region) == 0 || region == "us-east-1" {
 		_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName})
 		return err
 	}
-	_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName, CreateBucketConfiguration: &types.CreateBucketConfiguration{LocationConstraint: types.BucketLocationConstraint(cred.Region)}})
+	_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName, CreateBucketConfiguration: &types.CreateBucketConfiguration{LocationConstraint: types.BucketLocationConstraint(region)}})
 	return err
 }
 
@@ -200,28 +198,13 @@ func emptyS3Bucket(client *s3.Client, bucketName string) error {
 }
 
 // createSecretForAWSS3Bucket creates a secret for Loki to connect to s3 bucket
-func createSecretForAWSS3Bucket(oc *exutil.CLI, bucketName, secretName, ns string) error {
+func createSecretForAWSS3Bucket(oc *exutil.CLI, bucketName, secretName, ns string, cred s3Credential) error {
 	if len(secretName) == 0 {
 		return fmt.Errorf("secret name shouldn't be empty")
 	}
-	cred := getAWSCredentialFromCluster(oc)
-	dirname := "/tmp/" + oc.Namespace() + "-creds"
-	err := os.MkdirAll(dirname, 0777)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	defer os.RemoveAll(dirname)
-	f1, err1 := os.Create(dirname + "/aws_access_key_id")
-	o.Expect(err1).NotTo(o.HaveOccurred())
-	defer f1.Close()
-	_, err = f1.WriteString(cred.AccessKeyID)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	f2, err2 := os.Create(dirname + "/aws_secret_access_key")
-	o.Expect(err2).NotTo(o.HaveOccurred())
-	defer f2.Close()
-	_, err = f2.WriteString(cred.SecretAccessKey)
-	o.Expect(err).NotTo(o.HaveOccurred())
 
 	endpoint := "https://s3." + cred.Region + ".amazonaws.com"
-	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/aws_access_key_id", "--from-file=access_key_secret="+dirname+"/aws_secret_access_key", "--from-literal=region="+cred.Region, "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
+	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-literal=access_key_id="+cred.AccessKeyID, "--from-literal=access_key_secret="+cred.SecretAccessKey, "--from-literal=region="+cred.Region, "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
 }
 
 func createSecretForODFBucket(oc *exutil.CLI, bucketName, secretName, ns string) error {
@@ -239,20 +222,11 @@ func createSecretForODFBucket(oc *exutil.CLI, bucketName, secretName, ns string)
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/AWS_ACCESS_KEY_ID", "--from-file=access_key_secret="+dirname+"/AWS_SECRET_ACCESS_KEY", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
 }
 
-func createSecretForMinIOBucket(oc *exutil.CLI, bucketName, secretName, ns, minIONS string) error {
+func createSecretForMinIOBucket(oc *exutil.CLI, bucketName, secretName, ns string, cred s3Credential) error {
 	if len(secretName) == 0 {
 		return fmt.Errorf("secret name shouldn't be empty")
 	}
-	dirname := "/tmp/" + oc.Namespace() + "-creds"
-	defer os.RemoveAll(dirname)
-	err := os.MkdirAll(dirname, 0777)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+minioSecret, "-n", minIONS, "--confirm", "--to="+dirname).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	endpoint := "http://minio." + minIONS + ".svc:9000"
-	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/access_key_id", "--from-file=access_key_secret="+dirname+"/secret_access_key", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
+	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-literal=access_key_id="+cred.AccessKeyID, "--from-literal=access_key_secret="+cred.SecretAccessKey, "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+cred.Endpoint, "-n", ns).Execute()
 }
 
 func getGCPProjectNumber(projectID string) (string, error) {
@@ -637,6 +611,25 @@ func useExtraObjectStorage(oc *exutil.CLI) string {
 	return ""
 }
 
+func patchLokiOperatorWithAWSRoleArn(oc *exutil.CLI, subName, subNamespace, roleArn string) {
+	roleArnPatchConfig := `{
+		"spec": {
+		  "config": {
+			"env": [
+			  {
+				"name": "ROLEARN",
+				"value": "%s"
+			  }
+			]
+		  }
+		}
+	  }`
+
+	err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("patch").Args("sub", subName, "-n", subNamespace, "-p", fmt.Sprintf(roleArnPatchConfig, roleArn), "--type=merge").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForPodReadyWithLabel(oc, loNS, "name=loki-operator-controller-manager")
+}
+
 // return the storage type per different platform
 func getStorageType(oc *exutil.CLI) string {
 	platform := exutil.CheckPlatform(oc)
@@ -690,34 +683,40 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	switch l.storageType {
 	case "s3":
 		{
+			var cfg aws.Config
+			region, err := exutil.GetAWSClusterRegion(oc)
+			if err != nil {
+				return err
+			}
 			if exutil.IsWorkloadIdentityCluster(oc) {
-				region, err := exutil.GetAWSClusterRegion(oc)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
+				if !checkAWSCredentials() {
+					g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
+				}
+				partition := "aws"
+				if strings.HasPrefix(region, "us-gov") {
+					partition = "aws-us-gov"
+				}
+				cfg = readDefaultSDKExternalConfigurations(context.TODO(), region)
 				iamClient := newIamClient(cfg)
 				stsClient := newStsClient(cfg)
 				awsAccountID, _ := getAwsAccount(stsClient)
 				oidcName, err := getOIDC(oc)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				lokiIAMRoleName := l.name + "-" + exutil.GetRandomString()
-				roleArn := createIAMRoleForLokiSTSDeployment(iamClient, oidcName, awsAccountID, l.namespace, l.name, lokiIAMRoleName)
+				roleArn := createIAMRoleForLokiSTSDeployment(iamClient, oidcName, awsAccountID, partition, l.namespace, l.name, lokiIAMRoleName)
 				os.Setenv("LOKI_ROLE_NAME_ON_STS", lokiIAMRoleName)
 				patchLokiOperatorWithAWSRoleArn(oc, "loki-operator", loNS, roleArn)
-				var s3AssumeRoleName string
-				defer func() {
-					deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
-				}()
-				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.name)
-				createS3ObjectStorageBucketWithSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName)
 				createObjectStorageSecretOnAWSSTSCluster(oc, region, l.storageSecret, l.bucketName, l.namespace)
 			} else {
 				cred := getAWSCredentialFromCluster(oc)
-				client := newS3Client(cred)
-				err = createS3Bucket(client, l.bucketName, cred)
-				if err != nil {
-					return err
-				}
-				err = createSecretForAWSS3Bucket(oc, l.bucketName, l.storageSecret, l.namespace)
+				cfg = generateS3Config(cred)
+				err = createSecretForAWSS3Bucket(oc, l.bucketName, l.storageSecret, l.namespace, cred)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			client := newS3Client(cfg)
+			err = createS3Bucket(client, l.bucketName, region)
+			if err != nil {
+				return err
 			}
 		}
 	case "azure":
@@ -800,12 +799,13 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newS3Client(cred)
-			err = createS3Bucket(client, l.bucketName, cred)
+			cfg := generateS3Config(cred)
+			client := newS3Client(cfg)
+			err = createS3Bucket(client, l.bucketName, "")
 			if err != nil {
 				return err
 			}
-			err = createSecretForMinIOBucket(oc, l.bucketName, l.storageSecret, l.namespace, minioNS)
+			err = createSecretForMinIOBucket(oc, l.bucketName, l.storageSecret, l.namespace, cred)
 		}
 	}
 	return err
@@ -850,6 +850,7 @@ func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
 	}
 }
 
+/*
 // update existing lokistack CR
 // if template is specified, then run command `oc process -f template -p patches | oc apply -f -`
 // if template is not specified, then run command `oc patch lokistack/${l.name} -p patches`
@@ -876,6 +877,7 @@ func (l lokiStack) update(oc *exutil.CLI, template string, patches ...string) {
 		e2e.Failf("error updating lokistack: %v", err)
 	}
 }
+*/
 
 func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 	resource{"lokistack", l.name, l.namespace}.clear(oc)
@@ -888,27 +890,23 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	switch l.storageType {
 	case "s3":
 		{
+			var cfg aws.Config
 			if exutil.IsWorkloadIdentityCluster(oc) {
 				region, err := exutil.GetAWSClusterRegion(oc)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
+				cfg = readDefaultSDKExternalConfigurations(context.TODO(), region)
 				iamClient := newIamClient(cfg)
-				stsClient := newStsClient(cfg)
-				var s3AssumeRoleName string
-				defer func() {
-					deleteIAMroleonAWS(iamClient, s3AssumeRoleName)
-				}()
-				s3AssumeRoleArn, s3AssumeRoleName := createS3AssumeRole(stsClient, iamClient, l.name)
-				if checkIfS3bucketExistsWithSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName) {
-					deleteS3bucketWithSTS(cfg, stsClient, s3AssumeRoleArn, l.bucketName)
-				}
 				deleteIAMroleonAWS(iamClient, os.Getenv("LOKI_ROLE_NAME_ON_STS"))
 				os.Unsetenv("LOKI_ROLE_NAME_ON_STS")
+				err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", "loki-operator", "-n", loNS, "-p", `[{"op": "remove", "path": "/spec/config"}]`, "--type=json").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				waitForPodReadyWithLabel(oc, loNS, "name=loki-operator-controller-manager")
 			} else {
 				cred := getAWSCredentialFromCluster(oc)
-				client := newS3Client(cred)
-				err = deleteS3Bucket(client, l.bucketName)
+				cfg = generateS3Config(cred)
 			}
+			client := newS3Client(cfg)
+			err = deleteS3Bucket(client, l.bucketName)
 		}
 	case "azure":
 		{
@@ -968,7 +966,8 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
-			client := newS3Client(cred)
+			cfg := generateS3Config(cred)
+			client := newS3Client(cfg)
 			err = deleteS3Bucket(client, l.bucketName)
 		}
 	}
@@ -1465,9 +1464,11 @@ func deployMinIO(oc *exutil.CLI) {
 	WaitForDeploymentPodsToBeReady(oc, minioNS, "minio")
 }
 
+/*
 func removeMinIO(oc *exutil.CLI) {
 	deleteNamespace(oc, minioNS)
 }
+*/
 
 // queryAlertManagerForLokiAlerts() queries user-workload alert-manager if isUserWorkloadAM parameter is true.
 // All active alerts should be returned when querying Alert Managers
@@ -1576,16 +1577,16 @@ func (l lokiStack) validateExternalObjectStorageForLogs(oc *exutil.CLI, tenants 
 	case "s3":
 		{
 			// For Amazon S3
-			var s3Client *s3.Client
+			var cfg aws.Config
 			if exutil.IsSTSCluster(oc) {
 				region, err := exutil.GetAWSClusterRegion(oc)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				cfg := readDefaultSDKExternalConfigurations(context.TODO(), region)
-				s3Client = s3.NewFromConfig(cfg)
+				cfg = readDefaultSDKExternalConfigurations(context.TODO(), region)
 			} else {
 				cred := getAWSCredentialFromCluster(oc)
-				s3Client = newS3Client(cred)
+				cfg = generateS3Config(cred)
 			}
+			s3Client := newS3Client(cfg)
 			validatesIfLogsArePushedToS3Bucket(s3Client, l.bucketName, tenants)
 		}
 	case "azure":
