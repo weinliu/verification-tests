@@ -78,9 +78,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("patch the ingress to use default ingressclass")
 		patchResourceAsUser(oc, oc.Namespace(), "ingress/ingress-with-class", "{\"spec\":{\"ingressClassName\": \"openshift-default\"}}")
 		exutil.By("ensure one route is created from the ingress")
-		output, err = oc.Run("get").Args("route").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("ingress-with-class"))
+		waitForOutput(oc, oc.Namespace(), "route", "{.items[*].metadata.name}", "ingress-with-class")
 
 		// bug:- 1820075
 		exutil.By("Confirm the address field is getting populated with the Router domain details")
