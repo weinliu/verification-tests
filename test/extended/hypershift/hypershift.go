@@ -34,7 +34,7 @@ import (
 	"k8s.io/kubernetes/test/utils/format"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
+	"github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
@@ -111,73 +111,52 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		checkSubstring(res, []string{"200"})
 	})
 
-	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings[Serial][Slow]", func() {
-		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while 43272 is for AWS - skipping test ...")
+	// author: heli@redhat.com fxie@redhat.com
+	// test run duration: ~25min
+	g.It("Author:heli-HyperShiftMGMT-Longduration-NonPreRelease-Critical-43272-Critical-43829-Test cluster autoscaler via hostedCluster autoScaling settings [Serial]", func() {
+		if iaasPlatform != "aws" && iaasPlatform != "azure" {
+			g.Skip("Skip due to incompatible platform")
 		}
 
-		g.By("create a nodepool")
-		npCount := 1
-		npName := "jz-43272-test-01"
+		var (
+			npCount            = 1
+			npName             = "jz-43272-test-01"
+			autoScalingMax     = "3"
+			autoScalingMin     = "1"
+			workloadTemplate   = filepath.Join(hypershiftTeamBaseDir, "workload.yaml")
+			parsedWorkloadFile = "ocp-43272-workload-template.config"
+		)
+
+		exutil.By("create a nodepool")
 		defer func() {
 			hostedcluster.deleteNodePool(npName)
 			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check all nodes ready error")
 		}()
-
-		hostedcluster.createAwsNodePool(npName, npCount)
+		switch iaasPlatform {
+		case "aws":
+			hostedcluster.createAwsNodePool(npName, npCount)
+		case "azure":
+			hostedcluster.createAdditionalAzureNodePool(npName, npCount)
+		}
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
+		o.Expect(hostedcluster.isNodepoolAutosaclingEnabled(npName)).Should(o.BeFalse())
 
-		g.By("enable the nodepool to be autoscaling")
-		//remove replicas and set autoscaling max:4, min:1
-		autoScalingMax := "2"
-		autoScalingMin := "1"
+		exutil.By("enable the nodepool to be autoscaling")
 		hostedcluster.setNodepoolAutoScale(npName, autoScalingMax, autoScalingMin)
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready after setting autoscaling error")
+		o.Expect(hostedcluster.isNodepoolAutosaclingEnabled(npName)).Should(o.BeTrue())
 
-		g.By("create a job as workload in the hosted cluster")
-		workloadTemplate := filepath.Join(hypershiftTeamBaseDir, "workload.yaml")
-
-		// workload is deployed on guest cluster default namespace, and will be cleared in the end
+		exutil.By("create a job as workload in the hosted cluster")
 		wl := workload{
 			name:      "workload",
 			namespace: "default",
 			template:  workloadTemplate,
 		}
-
-		//create workload
-		parsedWorkloadFile := "ocp-43272-workload-template.config"
 		defer wl.delete(oc, hostedcluster.getHostedClusterKubeconfigFile(), parsedWorkloadFile)
-		wl.create(oc, hostedcluster.getHostedClusterKubeconfigFile(), parsedWorkloadFile)
+		wl.create(oc, hostedcluster.getHostedClusterKubeconfigFile(), parsedWorkloadFile, "--local")
 
-		g.By("check nodepool is autosacled to max")
+		exutil.By("check nodepool is auto-scaled to max")
 		o.Eventually(hostedcluster.pollCheckNodepoolCurrentNodes(npName, autoScalingMax), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool autoscaling max error")
-	})
-
-	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-43829-Test autoscaling status in nodePool conditions[Serial]", func() {
-		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while 43829 is for AWS - skipping test ...")
-		}
-
-		g.By("create a nodepool")
-		npCount := 2
-		npName := "jz-43829-test-01"
-		defer func() {
-			hostedcluster.deleteNodePool(npName)
-			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check all nodes ready error")
-		}()
-
-		hostedcluster.createAwsNodePool(npName, npCount)
-		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
-		o.Expect(hostedcluster.isNodepoolAutosaclingEnabled(npName)).ShouldNot(o.BeTrue())
-
-		g.By("enable the nodepool to be autoscaling")
-		autoScalingMax := "4"
-		autoScalingMin := "1"
-		hostedcluster.setNodepoolAutoScale(npName, autoScalingMax, autoScalingMin)
-		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready after setting autoscaling error")
-		o.Expect(hostedcluster.isNodepoolAutosaclingEnabled(npName)).Should(o.BeTrue())
 	})
 
 	// author: heli@redhat.com

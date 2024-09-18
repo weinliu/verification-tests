@@ -68,3 +68,17 @@ spec:
 	}
 	return patch, nil
 }
+
+type azureNodepoolImageType string
+
+const (
+	azureNodepoolImageTypeMarketplace azureNodepoolImageType = "AzureMarketplace"
+	azureNodepoolImageTypeId          azureNodepoolImageType = "ImageID"
+)
+
+type azureMarketplaceImage struct {
+	Offer     string `param:"marketplace-offer"`
+	Publisher string `param:"marketplace-publisher"`
+	SKU       string `param:"marketplace-sku"`
+	Version   string `param:"marketplace-version"`
+}

@@ -73,8 +73,12 @@ type workload struct {
 	template  string
 }
 
-func (wl *workload) create(oc *exutil.CLI, kubeconfig, parsedTemplate string) {
-	err := wl.applyResourceFromTemplate(oc, kubeconfig, parsedTemplate, "--ignore-unknown-parameters=true", "-f", wl.template, "-p", "NAME="+wl.name, "NAMESPACE="+wl.namespace)
+func (wl *workload) create(oc *exutil.CLI, kubeconfig, parsedTemplate string, extraParams ...string) {
+	params := []string{
+		"--ignore-unknown-parameters=true", "-f", wl.template, "-p", "NAME=" + wl.name, "NAMESPACE=" + wl.namespace,
+	}
+	params = append(params, extraParams...)
+	err := wl.applyResourceFromTemplate(oc, kubeconfig, parsedTemplate, params...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

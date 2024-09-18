@@ -120,9 +120,10 @@ func (a *AWSNodePool) CreateAWSNodePool() {
 
 type AzureNodePool struct {
 	NodePool
-	ImageId      string `param:"image-id"`
-	RootDiskSize *int   `param:"root-disk-size"`
-	SubnetId     string `param:"nodepool-subnet-id"`
+	MarketplaceImage *azureMarketplaceImage
+	ImageId          string `param:"image-id"`
+	RootDiskSize     *int   `param:"root-disk-size"`
+	SubnetId         string `param:"nodepool-subnet-id"`
 }
 
 func NewAzureNodePool(name, clusterName, namespace string) *AzureNodePool {
@@ -152,6 +153,11 @@ func (a *AzureNodePool) WithRootDiskSize(rootDiskSize *int) *AzureNodePool {
 
 func (a *AzureNodePool) WithNodeCount(nodeCount *int) *AzureNodePool {
 	a.NodeCount = nodeCount
+	return a
+}
+
+func (a *AzureNodePool) WithMarketplaceImage(marketplaceImage *azureMarketplaceImage) *AzureNodePool {
+	a.MarketplaceImage = marketplaceImage
 	return a
 }
 

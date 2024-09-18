@@ -24,6 +24,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/client-go/util/retry"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/utils/ptr"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
@@ -295,6 +296,48 @@ func (h *hostedCluster) createAwsInPlaceNodePool(name string, nodeCount int, dir
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }
 
+func (h *hostedCluster) getAzureNodePoolImageType(npName string) azureNodepoolImageType {
+	return azureNodepoolImageType(doOcpReq(h.oc, OcpGet, true, "np", npName, "-n", h.namespace, "-o=jsonpath={.spec.platform.azure.image.azureImageType}"))
+}
+
+func (h *hostedCluster) getAzureDefaultNodePoolImageType() azureNodepoolImageType {
+	return h.getAzureNodePoolImageType(h.name)
+}
+
+func (h *hostedCluster) getAzureNodePoolImageId(npName string) string {
+	return doOcpReq(h.oc, OcpGet, true, "np", npName, "-n", h.namespace, "-o=jsonpath={.spec.platform.azure.image.imageID}")
+}
+
+func (h *hostedCluster) getAzureDefaultNodePoolImageId() string {
+	return h.getAzureNodePoolImageId(h.name)
+}
+
+func (h *hostedCluster) getAzureNodePoolMarketplaceImage(npName string) *azureMarketplaceImage {
+	return &azureMarketplaceImage{
+		Offer:     doOcpReq(h.oc, OcpGet, true, "np", npName, "-n", h.namespace, "-o=jsonpath={.spec.platform.azure.image.azureMarketplace.offer}"),
+		Publisher: doOcpReq(h.oc, OcpGet, true, "np", npName, "-n", h.namespace, "-o=jsonpath={.spec.platform.azure.image.azureMarketplace.publisher}"),
+		SKU:       doOcpReq(h.oc, OcpGet, true, "np", npName, "-n", h.namespace, "-o=jsonpath={.spec.platform.azure.image.azureMarketplace.sku}"),
+		Version:   doOcpReq(h.oc, OcpGet, true, "np", npName, "-n", h.namespace, "-o=jsonpath={.spec.platform.azure.image.azureMarketplace.version}"),
+	}
+}
+
+func (h *hostedCluster) getAzureDefaultNodePoolMarketplaceImage() *azureMarketplaceImage {
+	return h.getAzureNodePoolMarketplaceImage(h.name)
+}
+
+func (h *hostedCluster) createAdditionalAzureNodePool(name string, nodeCount int) {
+	np := NewAzureNodePool(name, h.name, h.namespace).WithNodeCount(ptr.To(nodeCount)).WithSubnetId(h.getAzureSubnetId())
+	switch imageType := h.getAzureDefaultNodePoolImageType(); imageType {
+	case azureNodepoolImageTypeId:
+		np.WithImageId(h.getAzureDefaultNodePoolImageId())
+	case azureNodepoolImageTypeMarketplace:
+		np.WithMarketplaceImage(h.getAzureDefaultNodePoolMarketplaceImage())
+	default:
+		e2e.Failf("Unknown Azure Nodepool image type: %s", imageType)
+	}
+	np.CreateAzureNodePool()
+}
+
 func (h *hostedCluster) deleteNodePool(name string) {
 	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpDelete).Args("--ignore-not-found", "nodepool", "-n", h.namespace, name).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -334,11 +377,11 @@ func (h *hostedCluster) pollCheckHostedClustersNodePoolReady(name string) func()
 
 func (h *hostedCluster) setNodepoolAutoScale(name, max, min string) {
 	removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
-	autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, max, min)
+	autoscaleConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, max, min)
 
 	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, "--type=json", "-p", removeNpConfig).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	_, err = h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, autoscalConfig, "--type=merge").Output()
+	_, err = h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, autoscaleConfig, "--type=merge").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }
 
