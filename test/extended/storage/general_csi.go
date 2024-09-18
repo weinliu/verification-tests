@@ -3540,7 +3540,24 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				myPod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 				exutil.By(`Create a csi storageclass with "volumeBindingMode: Immediate"`)
-				storageClass.create(oc)
+				if isAwsLocalZoneCluster(oc) {
+					myNode := getOneSchedulableWorker(getAllNodesInfo(oc))
+					labelExpressions := []map[string]interface{}{
+						{
+							"key":    "topology.ebs.csi.aws.com/zone",
+							"values": []string{myNode.availableZone},
+						},
+					}
+					matchLabelExpressions := []map[string]interface{}{
+						{"matchLabelExpressions": labelExpressions},
+					}
+					extraParameters := map[string]interface{}{
+						"allowedTopologies": matchLabelExpressions,
+					}
+					storageClass.createWithExtraParameters(oc, extraParameters)
+				} else {
+					storageClass.create(oc)
+				}
 				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 				exutil.By("Create a Block pvc with the csi storageclass and wait it bounds with provisioned volume")
