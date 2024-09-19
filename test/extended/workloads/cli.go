@@ -2617,6 +2617,24 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "oc image mirror fails even after waiting for about 120 seconds")
 	})
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-Medium-76150-Make sure oc debug node has set HOST env var", func() {
+		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Create new namespace")
+		oc.SetupProject()
+		project76150 := oc.Namespace()
+		exutil.By("Set namespace as privileged namespace")
+		exutil.SetNamespacePrivileged(oc, project76150)
+		filePath, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+mnodeName, "-n", project76150, "-o=yaml").OutputToFile(getRandomString() + "workload-debug.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		regV1 := checkFileContent(filePath, "name: HOST")
+		regV2 := checkFileContent(filePath, "value: /host")
+		if regV1 && regV2 {
+			e2e.Logf("Found the expected host env setting for debug pod")
+		} else {
+			e2e.Failf("Don't find the host env set for debug pod")
+		}
+	})
 })
 
 // ClientVersion ...

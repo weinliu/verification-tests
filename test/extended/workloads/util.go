@@ -2318,3 +2318,16 @@ func createEmptyAuth(authfilepath string) {
 	authW.Flush()
 	o.Expect(werr).NotTo(o.HaveOccurred())
 }
+
+func checkFileContent(filename string, expectedStr string) bool {
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		e2e.Failf("failed to read the file ")
+	}
+	s := string(b)
+	if strings.Contains(s, expectedStr) {
+		return true
+	} else {
+		return false
+	}
+}
