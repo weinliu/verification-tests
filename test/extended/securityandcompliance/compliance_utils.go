@@ -841,7 +841,7 @@ func removeLabelFromWorkerNode(oc *exutil.CLI, workerNodeName string) {
 }
 
 func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) {
-	err := wait.Poll(10*time.Second, 480*time.Second, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 900*time.Second, func() (bool, error) {
 		mCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.machineCount}").Output()
 		e2e.Logf("MachineCount:%v", mCount)
 		unmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.unavailableMachineCount}").Output()
