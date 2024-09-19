@@ -343,11 +343,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pvc.deleteAsAdmin(oc)
 		pvc.waitStatusAsExpected(oc, "Bound")
 
-		exutil.By("# Create a pvc with the preset csi storageclass")
-		pvc.create(oc)
-		defer pvc.deleteAsAdmin(oc)
-		pvc.waitStatusAsExpected(oc, "Bound")
-
 		exutil.By("# Check pd volume info from backend")
 		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
 
