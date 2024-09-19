@@ -329,6 +329,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 				oldCoreOsBootImaget, err := tmpConfigMap.GetDataValue(ms.GetName())
 				if err != nil {
 					logger.Warnf("Not checking boot image for machineset %s. No data found in the temporary configmap. %s", ms.GetName(), tmpConfigMap.PrettyString())
+					continue // We don't want to fail the test case. The new could have been added by any other test case and we don't want to collide with other test cases
 				}
 				logger.Infof("Old coreOsBootImage: %s", oldCoreOsBootImaget)
 
