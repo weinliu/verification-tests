@@ -6657,11 +6657,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-25760, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-Medium-25760-Operator upgrades does not fail after change the channel", func() {
+	g.It("Author:kuiwang-ConnectedOnly-Medium-25760-Operator upgrades does not fail after change the channel", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
+		}
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		o.Expect(errFips).NotTo(o.HaveOccurred())
+		if strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
 		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -6680,18 +6689,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 25760 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vchannel-crdv2-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv25760",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "nginx-ok-v25760",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
+				operatorPackage:        "nginx-ok-v25760",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
-				startingCSV:            "windup-operator.0.0.4",
+				startingCSV:            "nginx-ok-v25760.v0.0.1",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
