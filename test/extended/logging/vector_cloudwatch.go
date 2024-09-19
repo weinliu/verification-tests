@@ -44,14 +44,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			infraName = getInfrastructureName(oc)
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Critical-51977-Vector logs to Cloudwatch group by namespaceName and groupPrefix", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-76074-Forward logs to Cloudwatch group by namespaceName and groupPrefix", func() {
 			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
 			cw := cloudwatchSpec{
 				collectorSAName: "cloudwatch-" + getRandomString(),
 				secretNamespace: clfNS,
-				secretName:      "logging-51977-" + getRandomString(),
-				groupName:       "logging-51977-" + infraName + `.{.kubernetes.namespace_name||.log_type||"none-typed-logs"}`,
+				secretName:      "logging-76074-" + getRandomString(),
+				groupName:       "logging-76074-" + infraName + `.{.kubernetes.namespace_name||.log_type||"none-typed-logs"}`,
 				logTypes:        []string{"infrastructure", "application", "audit"},
 			}
 			defer cw.deleteResources(oc)
@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 
 			clf := clusterlogforwarder{
-				name:                      "clf-51977",
+				name:                      "clf-76074",
 				namespace:                 clfNS,
 				templateFile:              template,
 				secretName:                cw.secretName,
@@ -101,14 +101,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-High-51978-Vector Forward logs to Cloudwatch using namespaceUUID and groupPrefix", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-76075-Forward logs to Cloudwatch using namespaceUUID and groupPrefix", func() {
 			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
 			cw := cloudwatchSpec{
 				collectorSAName: "cloudwatch-" + getRandomString(),
 				secretNamespace: clfNS,
-				secretName:      "logging-51978-" + getRandomString(),
-				groupName:       "logging-51978-" + infraName + `.{.kubernetes.namespace_id||.log_type||"none-typed-logs"}`,
+				secretName:      "logging-76075-" + getRandomString(),
+				groupName:       "logging-76075-" + infraName + `.{.kubernetes.namespace_id||.log_type||"none-typed-logs"}`,
 				logTypes:        []string{"infrastructure", "application", "audit"},
 			}
 			defer cw.deleteResources(oc)
@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
 			}
 			clf := clusterlogforwarder{
-				name:                      "clf-51978",
+				name:                      "clf-76075",
 				namespace:                 clfNS,
 				templateFile:              template,
 				secretName:                cw.secretName,

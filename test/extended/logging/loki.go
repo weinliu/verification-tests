@@ -180,7 +180,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		//Author: kbharti@redhat.com (GitHub: kabirbhartiRH)
-		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-48608-Loki Operator-Reconcile and re-create objects on accidental user deletes[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-High-48608-Loki Operator-Reconcile and re-create objects on accidental user deletes[Serial]", func() {
 			objectStorage := getStorageType(oc)
 			if len(objectStorage) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")

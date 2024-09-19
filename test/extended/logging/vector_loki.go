@@ -225,7 +225,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -413,7 +413,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-48646-High-49486-Deploy lokistack under different namespace and Vector Forward logs to LokiStack using CLF with gateway[Serial]", func() {
+		g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-Medium-48646-Medium-49486-Deploy lokistack under different namespace and Vector Forward logs to LokiStack using CLF with gateway[Serial]", func() {
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -478,7 +478,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lc.waitForLogsAppearByProject("application", appProj)
 		})
 
-		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-Medium-54663-Medium-48628-CLO Loki Integration-CLF works when send logs to lokistack and Expose Loki metrics to Prometheus[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-Medium-54663-Medium-48628-unique cluster identifier in all type of the log record and Expose Loki metrics to Prometheus[Serial]", func() {
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -647,7 +647,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		//author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-High-61968-Vector should support multiline error detection.[Serial][Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-74945-New filter detectMultilineException test[Serial][Slow]", func() {
 			multilineLogTypes := map[string][]string{
 				"java":   {javaExc, complexJavaExc, nestedJavaExc},
 				"go":     {goExc, goOnGaeExc, goSignalExc, goHTTP},
@@ -683,13 +683,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
-				name:          "loki-61968",
+				name:          "loki-74945",
 				namespace:     loggingNS,
 				tSize:         "1x.demo",
 				storageType:   s,
-				storageSecret: "storage-secret-61968",
+				storageSecret: "storage-secret-74945",
 				storageClass:  sc,
-				bucketName:    "logging-loki-61968-" + getInfrastructureName(oc),
+				bucketName:    "logging-loki-74945-" + getInfrastructureName(oc),
 				template:      lokiStackTemplate,
 			}
 			defer ls.removeObjectStorage(oc)
@@ -703,11 +703,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			exutil.By("create a CLF to test forward to lokistack")
 			clf := clusterlogforwarder{
-				name:                      "instance-61968",
+				name:                      "instance-74945",
 				namespace:                 loggingNS,
-				serviceAccountName:        "logcollector-61968",
+				serviceAccountName:        "logcollector-74945",
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-				secretName:                "lokistack-secret-61968",
+				secretName:                "lokistack-secret-74945",
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
@@ -727,7 +727,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("create some pods to generate multiline error")
 			multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
 			for k := range multilineLogTypes {
-				ns := "multiline-log-" + k + "-61968"
+				ns := "multiline-log-" + k + "-74945"
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
 				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -746,7 +746,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for k, v := range multilineLogTypes {
 				g.By("check " + k + " logs\n")
 				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-					appLogs, err := lc.searchByNamespace("application", "multiline-log-"+k+"-61968")
+					appLogs, err := lc.searchByNamespace("application", "multiline-log-"+k+"-74945")
 					if err != nil {
 						return false, err
 					}
@@ -759,7 +759,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				for _, log := range v {
 					var messages []string
 					err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
-						dataInLoki, _ := lc.queryRange("application", "{kubernetes_namespace_name=\"multiline-log-"+k+"-61968\"}", len(v)*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
+						dataInLoki, _ := lc.queryRange("application", "{kubernetes_namespace_name=\"multiline-log-"+k+"-74945\"}", len(v)*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
 						lokiLog := extractLogEntities(dataInLoki)
 						var messages []string
 						for _, log := range lokiLog {
@@ -1065,7 +1065,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48489-Vector Forward logs to Grafana Loki using HTTPS", func() {
+		g.It("Author:qitang-CPaasrunOnly-Critical-75298-Forward to Loki with default labelKeys", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1092,7 +1092,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder to forward logs to the external Loki instance")
 			clf := clusterlogforwarder{
-				name:                   "clf-48489",
+				name:                   "clf-75298",
 				namespace:              clfNS,
 				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-external-loki-with-secret.yaml"),
 				secretName:             sct.name,
@@ -1101,26 +1101,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:     "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			inputRefs := "[\"application\"]"
-			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS="+inputRefs)
+			clf.create(oc, "LOKI_URL="+lokiURL, "INPUTREFS=[\"application\"]", `TUNING={"compression": "snappy", "deliveryMode": "AtLeastOnce", "maxWrite": "10M"}`)
 
-			g.By(fmt.Sprintf("Search for the %s project logs in Loki", appProj))
+			exutil.By("check logs in grafana loki")
 			lc := newLokiClient(lokiURL).withBasicAuth(lokiUsername, lokiPassword).retry(5)
-			g.By("Searching for Application Logs in Loki")
-			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			lc.waitForLogsAppearByProject("", appProj)
+
+			exutil.By("Check configurations in collector pods")
+			expectedConfigs := []string{
+				`compression = "snappy"`,
+				`[sinks.output_loki_server.batch]
+max_bytes = 10000000`,
+				`[sinks.output_loki_server.buffer]
+type = "disk"
+when_full = "block"
+max_size = 268435488`,
+			}
+			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", expectedConfigs...)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
-				appLogs, err := lc.searchByNamespace("", appProj)
-				if err != nil {
-					return false, err
-				}
-				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "failed searching for application logs in Loki")
-			e2e.Logf("Application Logs Query is a success")
+			o.Expect(result).Should(o.BeTrue())
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48490-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.labels.test", func() {
@@ -1744,7 +1743,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Critical-54526-LokiStack Cluster Logging comply with the custom tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-ConnectedOnly-Medium-54526-Forwarding to lokistack comply with the custom tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
 
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -2444,7 +2443,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		oc.SetupProject()
 	})
 
-	g.It("CPaasrunOnly-Author:qitang-High-65193-Controlling log flow rates per container from selected containers by containerLimit.[Serial][Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-76114-Controlling log flow rates per container from selected containers by containerLimit.[Serial][Slow]", func() {
 		if !validateInfraForLoki(oc) {
 			g.Skip("Current platform not supported!")
 		}
@@ -2476,13 +2475,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		exutil.By("deploy loki stack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
-			name:          "lokistack-65193",
+			name:          "lokistack-76114",
 			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   s,
-			storageSecret: "storage-secret-65193",
+			storageSecret: "storage-secret-76114",
 			storageClass:  sc,
-			bucketName:    "logging-loki-65193-" + getInfrastructureName(oc),
+			bucketName:    "logging-loki-76114-" + getInfrastructureName(oc),
 			template:      lokiStackTemplate,
 		}
 
@@ -2496,11 +2495,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:                      "instance-65193",
+			name:                      "instance-76114",
 			namespace:                 loggingNS,
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-			serviceAccountName:        "logcollector-65193",
-			secretName:                "lokistack-secret-65193",
+			serviceAccountName:        "logcollector-76114",
+			secretName:                "lokistack-secret-76114",
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
@@ -2574,7 +2573,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		}
 	})
 
-	g.It("CPaasrunOnly-Author:qitang-High-65194-Controlling the flow rate per destination to selected outputs.[Serial][Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-76115-Controlling the flow rate per destination to selected outputs.[Serial][Slow]", func() {
 		if !validateInfraForLoki(oc) {
 			g.Skip("Current platform not supported!")
 		}
@@ -2589,13 +2588,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		exutil.By("deploy loki stack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
-			name:          "lokistack-65194",
+			name:          "lokistack-76115",
 			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   s,
-			storageSecret: "storage-secret-65194",
+			storageSecret: "storage-secret-76115",
 			storageClass:  sc,
-			bucketName:    "logging-loki-65194-" + getInfrastructureName(oc),
+			bucketName:    "logging-loki-76115-" + getInfrastructureName(oc),
 			template:      lokiStackTemplate,
 		}
 
@@ -2618,11 +2617,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:                      "instance-65194",
+			name:                      "instance-76115",
 			namespace:                 loggingNS,
-			serviceAccountName:        "logcollector-65194",
+			serviceAccountName:        "logcollector-76115",
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-			secretName:                "lokistack-secret-65194",
+			secretName:                "lokistack-secret-76115",
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
@@ -2676,7 +2675,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		}
 	})
 
-	g.It("CPaasrunOnly-Author:qitang-High-65195-Controlling log flow rates - different output with different rate", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-65195-Controlling log flow rates - different output with different rate", func() {
 		exutil.By("Create pod to generate some logs")
 		appProj := oc.Namespace()
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "RATE=3000").Execute()
@@ -3595,7 +3594,7 @@ spec:
 		e2e.Logf("Alert LokistackSchemaUpgradesRequired is firing...")
 	})
 
-	g.It("CPaasrunOnly-Author:kbharti-High-70685-Validate support for blocking queries on Loki[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Medium-70685-Validate support for blocking queries on Loki[Serial]", func() {
 
 		g.By("Create 3 application generator projects")
 		oc.SetupProject()

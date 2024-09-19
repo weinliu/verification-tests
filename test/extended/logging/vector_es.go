@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, "No Event Router logs found when using vector as log collector.")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-53995-Vector Collect OVN audit logs", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Critical-53995-Vector Collect OVN audit logs", func() {
 			g.By("Check the network type for the test")
 			networkType := checkNetworkType(oc)
 			if !strings.Contains(networkType, "ovnkubernetes") {
@@ -170,9 +170,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-52129-Vector Send JSON logs from containers in the same pod to separate indices", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-76073-Send logs from containers in the same pod to separate indices", func() {
 			app := oc.Namespace()
-			containerName := "log-52129-" + getRandomString()
+			containerName := "log-76073-" + getRandomString()
 			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -184,7 +184,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				version:    "7",
 				serverName: "external-es",
 				httpSSL:    true,
-				secretName: "json-log-52129",
+				secretName: "json-log-76073",
 				loggingNS:  esProj,
 			}
 			defer ees.remove(oc)
@@ -193,53 +193,54 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("create clusterlogforwarder")
 			clf := clusterlogforwarder{
-				name:                   "clf-52129",
-				namespace:              esProj,
-				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
-				secretName:             ees.secretName,
-				collectApplicationLogs: true,
-				serviceAccountName:     "clf-" + getRandomString(),
+				name:                      "clf-76073",
+				namespace:                 esProj,
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
+				secretName:                ees.secretName,
+				collectApplicationLogs:    true,
+				collectInfrastructureLogs: true,
+				collectAuditLogs:          true,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX=app-{.kubernetes.container_name||.log_type||\"none\"}", "INPUT_REFS=[\"application\"]")
-			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "parse-json-logs", "type": "parse"}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["parse-json-logs"]}]`
-			clf.update(oc, "", patch, "--type=json")
-			clf.waitForCollectorPodsReady(oc)
+			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX={.kubernetes.container_name||.log_type||\"none\"}", "INPUT_REFS=[\"application\"]")
 
+			// for container logs, they're indexed by container name
+			// for non-container logs, they're indexed by log_type
 			g.By("check indices in externale ES")
-			ees.waitForIndexAppear(oc, "app-"+containerName+"-0")
-			ees.waitForIndexAppear(oc, "app-"+containerName+"-1")
-			ees.waitForIndexAppear(oc, "app-"+containerName+"-2")
+			ees.waitForIndexAppear(oc, containerName+"-0")
+			ees.waitForIndexAppear(oc, containerName+"-1")
+			ees.waitForIndexAppear(oc, containerName+"-2")
+			ees.waitForIndexAppear(oc, "cluster-logging-operator") // infra container logs
+			ees.waitForIndexAppear(oc, "infrastructure")
+			ees.waitForIndexAppear(oc, "audit")
 
 			queryContainerLog := func(container string) string {
 				return "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \"" + container + "\"}}}"
 			}
 
-			// in index app-$containerName-0, only logs in container $containerName-0 are stored in it, and json logs are parsed
-			log0 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-0"))
+			// in index app-$containerName-0, only logs in container $containerName-0 are stored in it
+			log0 := ees.searchDocByQuery(oc, containerName+"-0", queryContainerLog(containerName+"-0"))
 			o.Expect(len(log0.Hits.DataHits) > 0).To(o.BeTrue())
-			o.Expect(log0.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
-			log01 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-1"))
+			log01 := ees.searchDocByQuery(oc, containerName+"-0", queryContainerLog(containerName+"-1"))
 			o.Expect(len(log01.Hits.DataHits) == 0).To(o.BeTrue())
-			log02 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-2"))
+			log02 := ees.searchDocByQuery(oc, containerName+"-0", queryContainerLog(containerName+"-2"))
 			o.Expect(len(log02.Hits.DataHits) == 0).To(o.BeTrue())
 
-			// in index app-$containerName-1, only logs in container $containerName-1 are stored in it, and json logs are parsed
-			log1 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-1"))
+			// in index app-$containerName-1, only logs in container $containerName-1 are stored in it
+			log1 := ees.searchDocByQuery(oc, containerName+"-1", queryContainerLog(containerName+"-1"))
 			o.Expect(len(log1.Hits.DataHits) > 0).To(o.BeTrue())
-			o.Expect(log1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
-			log10 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-0"))
+			log10 := ees.searchDocByQuery(oc, containerName+"-1", queryContainerLog(containerName+"-0"))
 			o.Expect(len(log10.Hits.DataHits) == 0).To(o.BeTrue())
-			log12 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-2"))
+			log12 := ees.searchDocByQuery(oc, containerName+"-1", queryContainerLog(containerName+"-2"))
 			o.Expect(len(log12.Hits.DataHits) == 0).To(o.BeTrue())
 
-			// in index app-$app-project, only logs in container $containerName-2 are stored in it, and json logs are parsed
-			log2 := ees.searchDocByQuery(oc, "app-"+containerName+"-2", queryContainerLog(containerName+"-2"))
+			// in index app-$app-project, only logs in container $containerName-2 are stored in it
+			log2 := ees.searchDocByQuery(oc, containerName+"-2", queryContainerLog(containerName+"-2"))
 			o.Expect(len(log2.Hits.DataHits) > 0).To(o.BeTrue())
-			o.Expect(log2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
-			log20 := ees.searchDocByQuery(oc, "app-"+containerName+"-2", queryContainerLog(containerName+"-0"))
+			log20 := ees.searchDocByQuery(oc, containerName+"-2", queryContainerLog(containerName+"-0"))
 			o.Expect(len(log20.Hits.DataHits) == 0).To(o.BeTrue())
-			log21 := ees.searchDocByQuery(oc, "app-"+containerName+"-2", queryContainerLog(containerName+"-1"))
+			log21 := ees.searchDocByQuery(oc, containerName+"-2", queryContainerLog(containerName+"-1"))
 			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
 		})
 
@@ -294,9 +295,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48591-Vector ClusterLogForwarder Label all messages with same tag", func() {
-
-			g.By("Create external Elasticsearch instance")
+		g.It("Author:qitang-CPaasrunOnly-Medium-74947-New filter openshiftLabels testing", func() {
+			exutil.By("Create Elasticsearch")
 			esProj := oc.Namespace()
 			ees := externalES{
 				namespace:  esProj,
@@ -307,16 +307,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
-			g.By("Create project for app logs and deploy the log generator app")
+			exutil.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
 			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Create ClusterLogForwarder instance")
+			exutil.By("Create ClusterLogForwarder")
 			clf := clusterlogforwarder{
-				name:                      "clf-48591",
+				name:                      "clf-74947",
 				namespace:                 esProj,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
@@ -328,20 +328,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=http://"+getRouteAddress(oc, ees.namespace, ees.serverName)+":80", "ES_VERSION="+ees.version)
 
-			g.By("Check logs in external ES")
+			exutil.By("Check logs in ES")
 			ees.waitForIndexAppear(oc, "app")
 			ees.waitForIndexAppear(oc, "infra")
 			ees.waitForIndexAppear(oc, "audit")
 
-			g.By("Add pipeline labels to the ClusterLogForwarder instance")
-			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "test-label", "type": "openshiftLabels", "openshiftLabels": {"logging-labels":"test-labels"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["test-label"]}]`
+			exutil.By("Add new filter to the ClusterLogForwarder")
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "openshift-labels", "type": "openshiftLabels", "openshiftLabels": {"label-test": "ocp-74947", "clf/observability.openshift.io": "logging-74947"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["openshift-labels"]}]`
 			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
 
-			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
-			WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
-
-			g.By("Check logs with pipeline label in external ES")
-			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging-labels\": \"test-labels\"}}}"
+			exutil.By("Check logs with label in ES")
+			checkLog := `{"size": 1, "sort": [{"@timestamp": {"order":"desc"}}], "query": {"bool": {"must": [{"match": {"openshift.labels.label-test": "ocp-74947"}},{"match": {"openshift.labels.clf_observability_openshift_io": "logging-74947"}}]}}}`
 			indexName := []string{"app", "infra", "audit"}
 			for i := 0; i < len(indexName); i++ {
 				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
@@ -351,7 +349,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					}
 					return false, nil
 				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No %s logs found with pipeline label in extranl ES", indexName[i]))
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No %s logs found with label in extranl ES", indexName[i]))
 			}
 
 		})
@@ -480,7 +478,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-46920-High-55396-Vector ClusterLogForwarder forward logs to Elasticsearch secure forward and alert rule CollectorNodeDown testing", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-55396-alert rule CollectorNodeDown testing", func() {
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
 			ees := externalES{
@@ -503,7 +501,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create ClusterLogForwarder instance")
 			clf := clusterlogforwarder{
-				name:                      "clf-46920",
+				name:                      "clf-55396",
 				namespace:                 esProj,
 				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-https.yaml"),
 				secretName:                ees.secretName,
@@ -619,54 +617,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				collectInfrastructureLogs: true,
 				serviceAccountName:        "test-clf-" + getRandomString(),
 				enableMonitoring:          true,
-			}
-			defer clf.delete(oc)
-			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
-
-			g.By("Check logs in external ES")
-			ees.waitForIndexAppear(oc, "app")
-			ees.waitForIndexAppear(oc, "infra")
-			ees.waitForIndexAppear(oc, "audit")
-
-		})
-
-		g.It("CPaasrunOnly-Author:ikanse-Medium-55201-Medium-47758-Vector Forward logs to external Elasticsearch with username password mTLS ES 8.x", func() {
-
-			g.By("Create external Elasticsearch instance")
-			esProj := oc.Namespace()
-			ees := externalES{
-				namespace:  esProj,
-				version:    "8",
-				serverName: "elasticsearch-server",
-				httpSSL:    true,
-				clientAuth: true,
-				userAuth:   true,
-				username:   "user1",
-				password:   getRandomString(),
-				secretName: "ees-47758",
-				loggingNS:  esProj,
-			}
-			defer ees.remove(oc)
-			ees.deploy(oc)
-
-			g.By("Create project for app logs and deploy the log generator app")
-			oc.SetupProject()
-			appProj := oc.Namespace()
-			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Create ClusterLogForwarder instance")
-			clf := clusterlogforwarder{
-				name:                      "clf-47758",
-				namespace:                 esProj,
-				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-userauth-mtls.yaml"),
-				secretName:                ees.secretName,
-				waitForPodReady:           true,
-				collectApplicationLogs:    true,
-				collectAuditLogs:          true,
-				collectInfrastructureLogs: true,
-				serviceAccountName:        "test-clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
@@ -915,7 +865,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 		})
 
 		//author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Critical-51740-Vector Preserve k8s Common Labels", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-51740-Vector Preserve k8s Common Labels", func() {
 			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			labels := map[string]string{
 				"app.kubernetes.io/name":       "test",
@@ -1010,6 +960,76 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 			o.Expect(reflect.DeepEqual(processedLabels, k8sLabelsInLoki)).Should(o.BeTrue())
 			flatLabelsInLoki := lokiLog[0].Kubernetes.FlatLabels
 			o.Expect(len(flatLabelsInLoki) == 0).Should(o.BeTrue())
+		})
+
+		g.It("Author:qitang-CPaasrunOnly-Critical-74927-Forward logs to elasticsearch 8.x.", func() {
+			exutil.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{
+				namespace:  esProj,
+				version:    "8",
+				serverName: "elasticsearch-server",
+				httpSSL:    true,
+				clientAuth: true,
+				userAuth:   true,
+				username:   "user1",
+				password:   getRandomString(),
+				secretName: "ees-74927",
+				loggingNS:  esProj,
+			}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			exutil.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			loglabeltemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Create ClusterLogForwarder")
+			clf := clusterlogforwarder{
+				name:                      "clf-74927",
+				namespace:                 esProj,
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-userauth-mtls.yaml"),
+				secretName:                ees.secretName,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				serviceAccountName:        "test-clf-" + getRandomString(),
+			}
+			defer clf.delete(oc)
+			clf.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version, "INDEX=logging-74927.{.log_type||\"none-typed-logs\"}-write",
+				`TUNING={"compression": "zlib", "deliveryMode": "AtLeastOnce", "maxRetryDuration": 30, "maxWrite": "20M", "minRetryDuration": 10}`)
+			clf.update(oc, "", `[{"op": "add", "path": "/spec/outputs/0/rateLimit", value: {"maxRecordsPerSecond": 5000}}]`, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
+
+			exutil.By("Check logs in ES")
+			ees.waitForIndexAppear(oc, "logging-74927.application-write")
+			ees.waitForIndexAppear(oc, "logging-74927.infrastructure-write")
+			ees.waitForIndexAppear(oc, "logging-74927.audit-write")
+
+			exutil.By("Check configurations in collector pods")
+			expectedConfigs := []string{
+				`[transforms.output_es_created_by_user_throttle]
+type = "throttle"
+inputs = ["pipeline_forward_to_external_es_viaqdedot_2"]
+window_secs = 1
+threshold = 5000`,
+				`compression = "zlib"`,
+				`[sinks.output_es_created_by_user.batch]
+max_bytes = 20000000`,
+				`[sinks.output_es_created_by_user.buffer]
+type = "disk"
+when_full = "block"
+max_size = 268435488`,
+				`[sinks.output_es_created_by_user.request]
+retry_initial_backoff_secs = 10
+retry_max_duration_secs = 30`,
+			}
+			result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", expectedConfigs...)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(result).Should(o.BeTrue())
 		})
 
 	})

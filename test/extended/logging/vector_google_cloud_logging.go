@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Critical-53731-Forward logs to Google Cloud Logging using different logName for each log type and using Service Account authentication.", func() {
+	g.It("Author:qitang-CPaasrunOnly-High-53731-Forward logs to GCL using different logName for each log type and using Service Account authentication.", func() {
 		g.By("Create log producer")
 		appProj := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")

@@ -568,7 +568,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("Author:qitang-CPaasrunOnly-High-71035-Forward logs to Splunk indexes by kubernetes.labels", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-71035-Forward logs to Splunk indexes by kubernetes.labels", func() {
 			exutil.By("create log producer")
 			appProj := oc.Namespace()
 			josnLogTemplate := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")

@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author anli@redhat.com
-		g.It("CPaasrunOnly-Author:anli-Critical-61253-vector forward logs to fluentdserver over http - mtls", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-61253-vector forward logs to fluentdserver over http - mtls", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()

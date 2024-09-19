@@ -38,20 +38,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-49369-Vector Forward logs to kafka topic via Mutual Chained certificates[Serial][Slow]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-49369-Vector Forward logs to kafka topic via Mutual Chained certificates", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
+
+			kafkaNS := "openshift-kafka-" + getRandomString()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", kafkaNS, "--wait=false").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kafkaNS).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			kafka := kafka{
-				namespace:      loggingNS,
+				namespace:      kafkaNS,
 				kafkasvcName:   "kafka",
 				zoosvcName:     "zookeeper",
 				authtype:       "plaintext-ssl",
 				pipelineSecret: "kafka-vector",
 				collectorType:  "vector",
-				loggingNS:      loggingNS,
+				loggingNS:      appProj,
 			}
 			g.By("Deploy zookeeper")
 			defer kafka.removeZookeeper(oc)
@@ -64,7 +69,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder")
 			clf := clusterlogforwarder{
 				name:                   "clf-49369",
-				namespace:              loggingNS,
+				namespace:              appProj,
 				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-kafka-no-auth.yaml"),
 				secretName:             kafka.pipelineSecret,
 				waitForPodReady:        true,
@@ -87,22 +92,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-52420-Vector Forward logs to kafka using SASL plaintext[Serial][Slow]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-52420-Vector Forward logs to kafka using SASL plaintext", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
+			kafkaNS := "openshift-kafka-" + getRandomString()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", kafkaNS, "--wait=false").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kafkaNS).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Deploy zookeeper")
 			kafka := kafka{
-				namespace:      loggingNS,
+				namespace:      kafkaNS,
 				kafkasvcName:   "kafka",
 				zoosvcName:     "zookeeper",
 				authtype:       "sasl-plaintext",
 				pipelineSecret: "vector-kafka",
 				collectorType:  "vector",
-				loggingNS:      loggingNS,
+				loggingNS:      appProj,
 			}
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
@@ -114,7 +123,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder")
 			clf := clusterlogforwarder{
 				name:                   "clf-52420",
-				namespace:              loggingNS,
+				namespace:              appProj,
 				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-kafka-with-auth.yaml"),
 				secretName:             kafka.pipelineSecret,
 				waitForPodReady:        true,
@@ -142,22 +151,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 
-		g.It("CPaasrunOnly-WRS-Author:ikanse-Critical-52496-Vector Forward logs to kafka using SASL SSL[Serial][Slow]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-WRS-Critical-52496-Vector Forward logs to kafka using SASL SSL", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
+			kafkaNS := "openshift-kafka-" + getRandomString()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", kafkaNS, "--wait=false").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kafkaNS).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Deploy zookeeper")
 			kafka := kafka{
-				namespace:      loggingNS,
+				namespace:      kafkaNS,
 				kafkasvcName:   "kafka",
 				zoosvcName:     "zookeeper",
 				authtype:       "sasl-ssl",
 				pipelineSecret: "vector-kafka",
 				collectorType:  "vector",
-				loggingNS:      loggingNS,
+				loggingNS:      appProj,
 			}
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
@@ -169,7 +182,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create clusterlogforwarder/instance")
 			clf := clusterlogforwarder{
 				name:                   "clf-52496",
-				namespace:              loggingNS,
+				namespace:              appProj,
 				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-kafka-with-auth.yaml"),
 				secretName:             kafka.pipelineSecret,
 				waitForPodReady:        true,

@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author gkarager@redhat.com
-		g.It("CPaasrunOnly-Author:gkarager-Medium-60699-Vector-Forward logs to syslog(RFCRFCThirtyOneSixtyFour)", func() {
+		g.It("Author:gkarager-CPaasrunOnly-High-60699-Vector-Forward logs to syslog(RFCRFCThirtyOneSixtyFour)", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.checkData(oc, true, "infra.log")
 		})
 
-		g.It("Author:gkarager-CPaasrunOnly-Critical-61479-Vector-Forward logs to syslog(tls)", func() {
+		g.It("Author:gkarager-CPaasrunOnly-WRS-Critical-61479-Vector-Forward logs to syslog(tls)", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.checkData(oc, true, "infra.log")
 		})
 
-		g.It("Author:gkarager-CPaasrunOnly-WRS-High-61477-Vector-Forward logs to syslog - mtls with private key passphrase", func() {
+		g.It("Author:gkarager-CPaasrunOnly-High-61477-Vector-Forward logs to syslog - mtls with private key passphrase", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -260,7 +260,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			g.By("Check for errors in collector pod logs.")
 			e2e.Logf("Wait for a minute before the collector logs are generated.")
 			time.Sleep(60 * time.Second)
-			collectorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=app.kubernetes.io/component=collector").Output()
+			collectorLogs, err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("logs").Args("-n", clf.namespace, "--selector=app.kubernetes.io/component=collector").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(collectorLogs, "Error trying to connect")).ShouldNot(o.BeTrue(), "Unable to connect to the external Syslog server.")
 
@@ -276,7 +276,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-tls/ca-bundle.crt"`
 			rsyslog.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-71143-Collect or exclude audit logs.", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-71143-Collect or exclude audit logs.", func() {
 			exutil.By("Deploy rsyslog server")
 			syslogProj := oc.Namespace()
 			rsyslog := rsyslog{

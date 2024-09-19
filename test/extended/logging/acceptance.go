@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("Author:qitang-WRS-CPaasrunBoth-Critical-53817-vector to lokistack[Slow][Serial]", func() {
+	g.It("Author:qitang-WRS-CPaasrunBoth-Critical-74397-Forward logs to lokistack.[Slow][Serial]", func() {
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
 		s := getStorageType(oc)
@@ -71,13 +71,13 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("deploy loki stack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
-			name:          "loki-53817",
+			name:          "loki-74397",
 			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   s,
-			storageSecret: "storage-secret-53817",
+			storageSecret: "storage-secret-74397",
 			storageClass:  sc,
-			bucketName:    "logging-loki-53817-" + getInfrastructureName(oc),
+			bucketName:    "logging-loki-74397-" + getInfrastructureName(oc),
 			template:      lokiStackTemplate,
 		}
 		defer ls.removeObjectStorage(oc)
@@ -100,11 +100,11 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:                      "clf-53817",
+			name:                      "clf-74397",
 			namespace:                 loggingNS,
-			serviceAccountName:        "logcollector-53817",
+			serviceAccountName:        "logcollector-74397",
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-			secretName:                "lokistack-secret-53817",
+			secretName:                "lokistack-secret-74397",
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
@@ -168,7 +168,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
 	})
 
-	g.It("Author:ikanse-CPaasrunBoth-ConnectedOnly-Critical-51974-Vector Forward logs to Cloudwatch by logtype", func() {
+	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-74926-Forward logs to cloudwatch.", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "aws" {
 			g.Skip("Skip for the platform is not AWS!!!")
@@ -177,10 +177,10 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		clfNS := oc.Namespace()
 		cw := cloudwatchSpec{
 			collectorSAName: "cloudwatch-" + getRandomString(),
-			groupName:       "logging-51974-" + getInfrastructureName(oc) + `.{.log_type||"none-typed-logs"}`,
+			groupName:       "logging-74926-" + getInfrastructureName(oc) + `.{.log_type||"none-typed-logs"}`,
 			logTypes:        []string{"infrastructure", "application", "audit"},
 			secretNamespace: clfNS,
-			secretName:      "logging-51974-" + getRandomString(),
+			secretName:      "logging-74926-" + getRandomString(),
 		}
 		cw.init(oc)
 		defer cw.deleteResources(oc)
@@ -204,7 +204,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			template = filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml")
 		}
 		clf := clusterlogforwarder{
-			name:                      "clf-51974",
+			name:                      "clf-74926",
 			namespace:                 clfNS,
 			secretName:                cw.secretName,
 			templateFile:              template,
@@ -218,17 +218,33 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		defer clf.delete(oc)
 		clf.createServiceAccount(oc)
 		cw.createClfSecret(oc)
-		clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName)
+		clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName, `TUNING={"compression": "snappy", "deliveryMode": "AtMostOnce", "maxRetryDuration": 20, "maxWrite": "10M", "minRetryDuration": 5}`)
+
 		nodes, err := clf.getCollectorNodeNames(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cw.nodes = append(cw.nodes, nodes...)
 
 		g.By("Check logs in Cloudwatch")
 		o.Expect(cw.logsFound()).To(o.BeTrue())
+
+		exutil.By("check tuning in collector configurations")
+		expectedConfigs := []string{
+			`compression = "snappy"`,
+			`[sinks.output_cloudwatch.batch]
+max_bytes = 10000000`,
+			`[sinks.output_cloudwatch.buffer]
+when_full = "drop_newest"`,
+			`[sinks.output_cloudwatch.request]
+retry_initial_backoff_secs = 5
+retry_max_duration_secs = 20`,
+		}
+		result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", expectedConfigs...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).Should(o.BeTrue())
 	})
 
 	//author qitang@redhat.com
-	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-53691-Forward logs to GCL using Service Account authentication.", func() {
+	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-74924-Forward logs to GCL", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform != "gcp" {
 			g.Skip("Skip for the platform is not GCP!!!")
@@ -247,16 +263,16 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
 			projectID: projectID,
-			logName:   getInfrastructureName(oc) + "-53691",
+			logName:   getInfrastructureName(oc) + "-74924",
 		}
 		defer gcl.removeLogs()
-		gcpSecret := resource{"secret", "gcp-secret-53691", clfNS}
+		gcpSecret := resource{"secret", "gcp-secret-74924", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clf := clusterlogforwarder{
-			name:                      "clf-53691",
+			name:                      "clf-74924",
 			namespace:                 clfNS,
 			secretName:                gcpSecret.name,
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "googleCloudLogging.yaml"),
@@ -283,7 +299,10 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		exutil.AssertWaitPollNoErr(err, "can't find app logs from project/"+appProj)
 
 		// Check tuning options for GCL under collector configMap
-		checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", "[sinks.output_gcp_logging.batch]", "[sinks.output_gcp_logging.buffer]", "[sinks.output_gcp_logging.request]", "retry_initial_backoff_secs = 10", "retry_max_duration_secs = 20")
+		expectedConfigs := []string{"[sinks.output_gcp_logging.batch]", "[sinks.output_gcp_logging.buffer]", "[sinks.output_gcp_logging.request]", "retry_initial_backoff_secs = 10", "retry_max_duration_secs = 20"}
+		result, err := checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", expectedConfigs...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).Should(o.BeTrue())
 	})
 
 	//author anli@redhat.com
