@@ -990,6 +990,10 @@ func GetDataFromConfigMap(oc *exutil.CLI, namespace, name string) (map[string]st
 		return nil, err
 	}
 
+	if dataJSON == "" {
+		return data, nil
+	}
+
 	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
 		return nil, err
 	}

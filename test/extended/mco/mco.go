@@ -3573,9 +3573,6 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the image registry certificates")
 
-		o.Expect(imageRegistryCerts).NotTo(o.BeEmpty(),
-			"Error. No image registry certificates found!!")
-
 		for certFile, certValue := range imageRegistryCerts {
 			logger.Infof("Checking Certfile: %s", certFile)
 
@@ -3635,6 +3632,14 @@ nulla pariatur.`
 			}, "1m", "10s").
 				Should(o.Succeed(),
 					"The file %s in node %s does not contain the right certificate.", rfCert.GetFullPath(), node.GetName())
+			logger.Infof("OK!\n")
+		}
+
+		// If there is no certificate configured, we check that the controlleconfig has empty data
+		if len(imageRegistryCerts) == 0 {
+			exutil.By("No certificates configured. Check that ControllerConfig has empty certificates too")
+			o.Eventually(cc.GetImageRegistryBundleData, "30s", "10s").Should(o.BeEmpty(),
+				"There are no certificates configured in 'image-registry-ca' configmap but ControllerConfig is not showing empty data")
 			logger.Infof("OK!\n")
 		}
 	})
