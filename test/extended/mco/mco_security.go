@@ -174,16 +174,17 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			userCABundleCertFile       = "/etc/pki/ca-trust/source/anchors/openshift-config-user-ca-bundle.crt"
 			kubeCloudCertFile          = "/etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"
 			ignitionConfig             = "3.4.0"
+			node                       = mcp.GetSortedNodesOrFail()[0]
 		)
 
 		logger.Infof("Using pool %s for testing", mcp.GetName())
 
 		exutil.By("Getting initial status")
-		rfUserCA := NewRemoteFile(mcp.GetNodesOrFail()[0], userCABundleCertFile)
+		rfUserCA := NewRemoteFile(node, userCABundleCertFile)
 		o.Expect(rfUserCA.Fetch()).To(o.Succeed(), "Error getting the initial user CA bundle content")
 		initialUserCAContent := rfUserCA.GetTextContent()
 
-		rfCloudCA := NewRemoteFile(mcp.GetNodesOrFail()[0], kubeCloudCertFile)
+		rfCloudCA := NewRemoteFile(node, kubeCloudCertFile)
 		o.Expect(rfCloudCA.Fetch()).To(o.Succeed(), "Error getting the initial cloud CA bundle content")
 		initialCloudCAContent := rfCloudCA.GetTextContent()
 
@@ -260,12 +261,12 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			certContent += proxyConfigMap.GetDataValueOrFail(certFileKey)
 		}
 
-		EventuallyFileExistsInNode(userCABundleCertFile, certContent, mcp.GetNodesOrFail()[0], "3m", "20s")
+		EventuallyFileExistsInNode(userCABundleCertFile, certContent, node, "3m", "20s")
 
 		logger.Infof("OK!\n")
 
 		exutil.By(fmt.Sprintf(`Check that the "%s" is CA trusted. Command update-ca-trust was executed when the file was added`, userCABundleCertFile))
-		o.Eventually(BundleFileIsCATrusted, "5m", "20s").WithArguments(userCABundleCertFile, mcp.GetNodesOrFail()[0]).Should(
+		o.Eventually(BundleFileIsCATrusted, "5m", "20s").WithArguments(userCABundleCertFile, node).Should(
 			o.BeTrue(), "The %s file was not ca-trusted. It seems that the update-ca-trust command was not executed after updating the file", userCABundleCertFile)
 		logger.Infof("OK!\n")
 
@@ -298,7 +299,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 				"The file %s is not served in the ignition config", kubeCloudCertFile)
 
 			logger.Infof("Check that the file has the right content in the nodes")
-			EventuallyFileExistsInNode(kubeCloudCertFile, kubeCloudCertContent, mcp.GetNodesOrFail()[0], "3m", "20s")
+			EventuallyFileExistsInNode(kubeCloudCertFile, kubeCloudCertContent, node, "3m", "20s")
 
 		} else {
 			logger.Infof("No KubeCloud cert was configured and it was not possible to define a new one, we skip the cloudCA validation")
