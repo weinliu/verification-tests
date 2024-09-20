@@ -1861,7 +1861,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		}
 
 		g.By("Check default profiles name.. !!!\n")
-
+		// The supported profiles are different for different archs.
+		// Details seen from: https://docs.openshift.com/container-platform/latest/security/compliance_operator/co-scans/compliance-operator-supported-profiles.html#compliance-supported-profiles_compliance-operator-supported-profiles
 		profilesByArch := map[architecture.Architecture][]string{
 			architecture.S390X: {
 				"ocp4-cis",
@@ -1873,7 +1874,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-moderate",
 				"ocp4-moderate-node",
 				"ocp4-moderate-node-rev-4",
-				"ocp4-moderate-rev-4"},
+				"ocp4-moderate-rev-4",
+				"ocp4-pci-dss",
+				"ocp4-pci-dss-3-2",
+				"ocp4-pci-dss-4-0",
+				"ocp4-pci-dss-node",
+				"ocp4-pci-dss-node-3-2",
+				"ocp4-pci-dss-node-4-0"},
 			architecture.PPC64LE: {
 				"ocp4-cis",
 				"ocp4-cis-1-4",
@@ -1887,8 +1894,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-moderate-rev-4",
 				"ocp4-pci-dss",
 				"ocp4-pci-dss-3-2",
+				"ocp4-pci-dss-4-0",
 				"ocp4-pci-dss-node",
-				"ocp4-pci-dss-node-3-2"},
+				"ocp4-pci-dss-node-3-2",
+				"ocp4-pci-dss-node-4-0"},
 			architecture.AMD64: {
 				"ocp4-cis",
 				"ocp4-cis-1-4",
@@ -1909,8 +1918,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-nerc-cip-node",
 				"ocp4-pci-dss",
 				"ocp4-pci-dss-3-2",
+				"ocp4-pci-dss-4-0",
 				"ocp4-pci-dss-node",
 				"ocp4-pci-dss-node-3-2",
+				"ocp4-pci-dss-node-4-0",
 				"ocp4-stig",
 				"ocp4-stig-node",
 				"ocp4-stig-node-v1r1",
@@ -3877,10 +3888,28 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			route1 = "myedge" + getRandomString()
 			ssb    = scanSettingBindingDescription{
 				name:            "pci-dss-test" + getRandomString(),
-				namespace:       "",
+				namespace:       subD.namespace,
 				profilekind1:    "Profile",
 				profilename1:    "ocp4-pci-dss",
 				profilename2:    "ocp4-pci-dss-node",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			ssbWithVersion32 = scanSettingBindingDescription{
+				name:            "pci-dss-3-2-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-pci-dss-3-2",
+				profilename2:    "ocp4-pci-dss-node-3-2",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			ssbWithVersion40 = scanSettingBindingDescription{
+				name:            "pci-dss-4-0-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-pci-dss-4-0",
+				profilename2:    "ocp4-pci-dss-node-4-0",
 				scansettingname: "default",
 				template:        scansettingbindingTemplate,
 			}
@@ -3917,19 +3946,51 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		e2e.Logf("%s", msg)
 
 		g.By("Create scansettingbinding !!!\n")
-		ssb.namespace = subD.namespace
-		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+		defer cleanupObjects(oc,
+			objectTableRef{"scansettingbinding", subD.namespace, ssb.name},
+			objectTableRef{"scansettingbinding", subD.namespace, ssbWithVersion32.name},
+			objectTableRef{"scansettingbinding", subD.namespace, ssbWithVersion40.name})
 		ssb.create(oc)
+		ssbWithVersion32.create(oc)
+		ssbWithVersion40.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithVersion32.name, ok, []string{"scansettingbinding", "-n", ssbWithVersion32.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbWithVersion40.name, ok, []string{"scansettingbinding", "-n", ssbWithVersion40.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
 		g.By("Check ComplianceSuite status !!!\n")
 		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
+		checkComplianceSuiteStatus(oc, ssbWithVersion32.name, subD.namespace, "DONE")
+		checkComplianceSuiteStatus(oc, ssbWithVersion40.name, subD.namespace, "DONE")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
+		subD.complianceSuiteName(oc, ssbWithVersion32.name)
+		subD.complianceSuiteName(oc, ssbWithVersion40.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbWithVersion32.name, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbWithVersion40.name, "NON-COMPLIANT INCONSISTENT")
 		g.By("Check complianceSuite result through exit-code.. !!!\n")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersion32.name, "2")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersion40.name, "2")
+
+		g.By("Diff the failed rules between profiles without suffix and profiles of latest version.. !!!\n")
+		labelCISLatest := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssb.name)
+		labelCISSuffix := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssbWithVersion40.name)
+		failedCcrLatest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISLatest,
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		failedCcrsSuffix, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISSuffix,
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		failedCcrLatestNew := strings.Fields(failedCcrLatest)
+		newFailedCcrsSuffixNew := strings.Fields(strings.ReplaceAll(failedCcrsSuffix, "-4-0", ""))
+		sort.Strings(failedCcrLatestNew)
+		sort.Strings(newFailedCcrsSuffixNew)
+		o.Expect(reflect.DeepEqual(newFailedCcrsSuffixNew, failedCcrLatestNew)).Should(o.BeTrue())
 
 		g.By("ocp-66791 Check whether ocp4-pci-dss-routes-protected-by-tls ccr pass")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
