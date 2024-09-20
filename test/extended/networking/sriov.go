@@ -1120,72 +1120,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 	})
 
-	g.It("Author:memodi-NonPreRelease-Medium-67619-Verify NetObserv flows are seen on SRIOV interfaces [Serial] [Flaky]", func() {
-		var (
-			netobservNS     = "openshift-netobserv-operator"
-			NOPackageName   = "netobserv-operator"
-			catsrc          = netobserv.Resource{Kind: "catsrc", Name: "qe-app-registry", Namespace: "openshift-marketplace"}
-			subscriptionDir = exutil.FixturePath("testdata", "netobserv", "subscription")
-			NOSource        = netobserv.CatalogSourceObjects{Channel: "stable", SourceName: catsrc.Name, SourceNamespace: catsrc.Namespace}
-			// Operator namespace object
-			OperatorNS = netobserv.OperatorNamespace{
-				Name:              netobservNS,
-				NamespaceTemplate: filePath.Join(subscriptionDir, "namespace.yaml"),
-			}
-			baseDir                  = exutil.FixturePath("testdata", "netobserv")
-			flowFixturePath          = filePath.Join(baseDir, "flowcollector_v1beta2_template.yaml")
-			lokiDir                  = filePath.Join(baseDir, "loki")
-			lokipvcFixturePath       = filePath.Join(lokiDir, "loki-pvc.yaml")
-			zeroClickLokiFixturePath = filePath.Join(lokiDir, "0-click-loki.yaml")
-
-			lokiUrl = fmt.Sprintf("http://loki.%s.svc:3100", oc.Namespace())
-		)
-
-		NO := netobserv.SubscriptionObjects{
-			OperatorName:  "netobserv-operator",
-			Namespace:     netobservNS,
-			PackageName:   NOPackageName,
-			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
-			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
-			CatalogSource: &NOSource,
-		}
-
-		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
-		// check if Network Observability Operator is already present
-		NOexisting := netobserv.CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
-
-		// create operatorNS and deploy operator if not present
-		if !NOexisting {
-			OperatorNS.DeployOperatorNamespace(oc)
-			NO.SubscribeOperator(oc)
-			// check if NO operator is deployed
-			netobserv.WaitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
-			NOStatus := netobserv.CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
-			o.Expect((NOStatus)).To(o.BeTrue())
-		}
-
-		g.By("Deploy 0-click loki")
-		_, _, err := exutil.SetupK8SNFSServerAndVolume(oc, 1)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", lokipvcFixturePath, "-p", "NAMESPACE="+oc.Namespace())
-		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", zeroClickLokiFixturePath)
-		waitPodReady(oc, oc.Namespace(), "loki")
-		cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/loki", "3100:3100", "-n", oc.Namespace()).Background()
-		defer cmd.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		flow := netobserv.Flowcollector{
-			Namespace:         oc.Namespace(),
-			Template:          flowFixturePath,
-			LokiMode:          "Monolithic",
-			MonolithicLokiURL: lokiUrl,
-			EBPFPrivileged:    "true",
-		}
-		g.By("Deploy flowcollector")
-		defer flow.DeleteFlowcollector(oc)
-		flow.CreateFlowcollector(oc)
-		flow.WaitForFlowcollectorReady(oc)
-
+	g.Context("NetObserv SRIOV Scenarios", func() {
 		var (
 			networkBaseDir      = exutil.FixturePath("testdata", "networking")
 			sriovBaseDir        = filepath.Join(networkBaseDir, "sriov")
@@ -1203,93 +1138,224 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			ipv4Addr2           = "192.168.122.72"
 			sriovIntf           = "net1"
 			podTempfile         = "sriov-testpod-netobserv-template.yaml"
+			netobservNS         = "openshift-netobserv-operator"
+			NOPackageName       = "netobserv-operator"
+			catsrc              = netobserv.Resource{Kind: "catsrc", Name: "qe-app-registry", Namespace: "openshift-marketplace"}
+			subscriptionDir     = exutil.FixturePath("testdata", "netobserv", "subscription")
+			NOSource            = netobserv.CatalogSourceObjects{Channel: "stable", SourceName: catsrc.Name, SourceNamespace: catsrc.Namespace}
+			// Operator namespace object
+			OperatorNS = netobserv.OperatorNamespace{
+				Name:              netobservNS,
+				NamespaceTemplate: filePath.Join(subscriptionDir, "namespace.yaml"),
+			}
+			baseDir                  = exutil.FixturePath("testdata", "netobserv")
+			flowFixturePath          = filePath.Join(baseDir, "flowcollector_v1beta2_template.yaml")
+			lokiDir                  = filePath.Join(baseDir, "loki")
+			lokipvcFixturePath       = filePath.Join(lokiDir, "loki-pvc.yaml")
+			zeroClickLokiFixturePath = filePath.Join(lokiDir, "0-click-loki.yaml")
+
+			NO = netobserv.SubscriptionObjects{
+				OperatorName:  "netobserv-operator",
+				Namespace:     netobservNS,
+				PackageName:   NOPackageName,
+				Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+				OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
+				CatalogSource: &NOSource,
+			}
+			sriovNetworkAttachTmpFile = filepath.Join(sriovBaseDir, "sriovnetwork-netobserv.yaml")
+			sriovNetwork1             = sriovNetResource{
+				name:      sriovNetDeviceName1,
+				namespace: sriovOpNs,
+				tempfile:  sriovNetworkAttachTmpFile,
+				ip:        ipv4Addr1 + "/24",
+				kind:      "SriovNetwork",
+			}
+			sriovNetwork2 = sriovNetResource{
+				name:      sriovNetDeviceName2,
+				namespace: sriovOpNs,
+				tempfile:  sriovNetworkAttachTmpFile,
+				ip:        ipv4Addr2 + "/24",
+				kind:      "SriovNetwork",
+			}
+
+			podTempFile1 = filepath.Join(sriovBaseDir, podTempfile)
+			testPod1     = sriovPod{
+				name:         podName1,
+				namespace:    sriovOpNs,
+				tempfile:     podTempFile1,
+				ipv4addr:     ipv4Addr1,
+				intfname:     sriovIntf,
+				intfresource: sriovNetDeviceName1,
+				pingip:       ipv4Addr2,
+			}
+			testPod2 = sriovPod{
+				name:         podName2,
+				namespace:    sriovOpNs,
+				tempfile:     podTempFile1,
+				ipv4addr:     ipv4Addr2,
+				intfname:     sriovIntf,
+				intfresource: sriovNetDeviceName2,
+				pingip:       ipv4Addr1,
+			}
+			flow netobserv.Flowcollector
 		)
+		g.BeforeEach(func() {
+			lokiUrl := fmt.Sprintf("http://loki.%s.svc:3100", oc.Namespace())
+			flow = netobserv.Flowcollector{
+				Namespace:         oc.Namespace(),
+				Template:          flowFixturePath,
+				LokiMode:          "Monolithic",
+				MonolithicLokiURL: lokiUrl,
+				EBPFPrivileged:    "true",
+			}
 
-		g.By("1) ####### Check openshift-sriov-network-operator is running well ##########")
-		chkSriovOperatorStatus(oc, sriovOpNs)
+			g.By("####### Check openshift-sriov-network-operator is running well ##########")
+			// assuming SRIOV Operator will be present in the cluster.
+			// also assuming SRIOVOperatorConfig is applied in OCP versions >= 4.16
+			chkSriovOperatorStatus(oc, sriovOpNs)
+			g.By("Check the deviceID if exist on the cluster worker")
+			if !checkDeviceIDExist(oc, sriovOpNs, deviceID) {
+				g.Skip("the cluster do not contain the sriov card. skip this testing!")
+			}
 
-		g.By("Check the deviceID if exist on the cluster worker")
-		if !checkDeviceIDExist(oc, sriovOpNs, deviceID) {
-			g.Skip("the cluster do not contain the sriov card. skip this testing!")
-		}
+			g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
+			// check if Network Observability Operator is already present
+			NOexisting := netobserv.CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
 
-		g.By("2) ####### Create sriov network policy to create VF ############")
-		defer rmSriovNetworkPolicy(oc, sriovNetPolicyName, sriovOpNs)
-		result := initVF(oc, sriovNetPolicyName, deviceID, pfName, vendorID, sriovOpNs, vfNum)
-		// if the deviceid is not exist on the worker, skip this
-		if !result {
-			g.Skip(fmt.Sprintf("This nic which has deviceID %s is not found on this cluster!!!", deviceID))
-		}
+			// create operatorNS and deploy operator if not present
+			if !NOexisting {
+				OperatorNS.DeployOperatorNamespace(oc)
+				NO.SubscribeOperator(oc)
+				// check if NO operator is deployed
+				netobserv.WaitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
+				NOStatus := netobserv.CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
+				o.Expect((NOStatus)).To(o.BeTrue())
+			}
+			g.By("Deploy 0-click loki")
+			_, _, err := exutil.SetupK8SNFSServerAndVolume(oc, 1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", lokipvcFixturePath, "-p", "NAMESPACE="+oc.Namespace())
+			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", zeroClickLokiFixturePath)
+			waitPodReady(oc, oc.Namespace(), "loki")
+		})
 
-		g.By("3) ######### Create sriov network attachment ############")
+		g.AfterEach(func() {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "loki", "-n", oc.Namespace()).Execute()
+			o.Expect(err).ToNot(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", "loki-store", "-n", oc.Namespace()).Execute()
+			o.Expect(err).ToNot(o.HaveOccurred())
+		})
 
-		e2e.Logf("create sriov network attachment via template")
-		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, "sriovnetwork-netobserv.yaml")
-		sriovNetwork1 := sriovNetResource{
-			name:      sriovNetDeviceName1,
-			namespace: sriovOpNs,
-			tempfile:  sriovNetworkAttachTmpFile,
-			ip:        ipv4Addr1 + "/24",
-			kind:      "SriovNetwork",
-		}
-		sriovNetwork2 := sriovNetResource{
-			name:      sriovNetDeviceName2,
-			namespace: sriovOpNs,
-			tempfile:  sriovNetworkAttachTmpFile,
-			ip:        ipv4Addr2 + "/24",
-			kind:      "SriovNetwork",
-		}
+		g.When("Agents are up prior to SRIOV interfaces", func() {
+			g.It("Author:memodi-NonPreRelease-Medium-67619-Verify NetObserv flows are seen on SRIOV interfaces [Serial]", func() {
+				g.By("Deploy flowcollector")
+				defer flow.DeleteFlowcollector(oc)
+				flow.CreateFlowcollector(oc)
+				flow.WaitForFlowcollectorReady(oc)
 
-		defer sriovNetwork1.delete(oc)
-		sriovNetwork1.create(oc, "TARGETNS="+sriovOpNs, "SRIOVNETNAME="+sriovNetwork1.name, "SRIOVNETPOLICY="+sriovNetPolicyName, "IPSUBNET="+sriovNetwork1.ip)
+				g.By("####### Create sriov network policy to create VF ############")
+				defer rmSriovNetworkPolicy(oc, sriovNetPolicyName, sriovOpNs)
+				result := initVF(oc, sriovNetPolicyName, deviceID, pfName, vendorID, sriovOpNs, vfNum)
+				// if the deviceid is not exist on the worker, skip this
+				if !result {
+					g.Skip(fmt.Sprintf("This nic which has deviceID %s is not found on this cluster!!!", deviceID))
+				}
+				g.By("######### Create sriov network attachment ############")
 
-		defer sriovNetwork2.delete(oc)
-		sriovNetwork2.create(oc, "TARGETNS="+sriovOpNs, "SRIOVNETNAME="+sriovNetwork2.name, "SRIOVNETPOLICY="+sriovNetPolicyName, "IPSUBNET="+sriovNetwork2.ip)
+				e2e.Logf("create sriov network attachment via template")
 
-		g.By("4) ########### Create Pod and attach sriov interface using cli ##########")
-		podTempFile1 := filepath.Join(sriovBaseDir, podTempfile)
-		testPod1 := sriovPod{
-			name:         podName1,
-			namespace:    sriovOpNs,
-			tempfile:     podTempFile1,
-			ipv4addr:     ipv4Addr1,
-			intfname:     sriovIntf,
-			intfresource: sriovNetDeviceName1,
-			pingip:       ipv4Addr2,
-		}
-		defer testPod1.deletePod(oc)
-		exutil.ApplyNsResourceFromTemplate(oc, testPod1.namespace, "--ignore-unknown-parameters=true", "-f", testPod1.tempfile, "-p", "PODNAME="+testPod1.name, "SRIOVNETNAME="+testPod1.intfresource, "PING_IP="+testPod1.pingip)
-		testPod1.waitForPodReady(oc)
-		intfInfo1 := testPod1.getSriovIntfonPod(oc)
-		o.Expect(intfInfo1).Should(o.MatchRegexp(testPod1.intfname))
-		o.Expect(intfInfo1).Should(o.MatchRegexp(testPod1.ipv4addr))
-		e2e.Logf("Check pod %s sriov interface and ip address PASS.", testPod1.name)
-		testPod2 := sriovPod{
-			name:         podName2,
-			namespace:    sriovOpNs,
-			tempfile:     podTempFile1,
-			ipv4addr:     ipv4Addr2,
-			intfname:     sriovIntf,
-			intfresource: sriovNetDeviceName2,
-			pingip:       ipv4Addr1,
-		}
-		defer testPod2.deletePod(oc)
-		exutil.ApplyNsResourceFromTemplate(oc, testPod2.namespace, "--ignore-unknown-parameters=true", "-f", testPod2.tempfile, "-p", "PODNAME="+testPod2.name, "SRIOVNETNAME="+testPod2.intfresource, "PING_IP="+testPod2.pingip)
-		testPod2.waitForPodReady(oc)
-		intfInfo2 := testPod2.getSriovIntfonPod(oc)
-		o.Expect(intfInfo2).Should(o.MatchRegexp(testPod2.intfname))
-		o.Expect(intfInfo2).Should(o.MatchRegexp(testPod2.ipv4addr))
-		e2e.Logf("Check pod %s sriov interface and ip address PASS.", testPod2.name)
+				defer sriovNetwork1.delete(oc)
+				sriovNetwork1.create(oc, "TARGETNS="+sriovOpNs, "SRIOVNETNAME="+sriovNetwork1.name, "SRIOVNETPOLICY="+sriovNetPolicyName, "IPSUBNET="+sriovNetwork1.ip)
 
-		// sleep for 30 sec for flowlogs to be ingested in Loki
-		time.Sleep(30 * time.Second)
-		lokilabels := netobserv.Lokilabels{
-			App: "netobserv-flowcollector",
-		}
-		interfaceParam := fmt.Sprintf("\"\\\"Interfaces\\\":.*%s.*\"", testPod2.intfname)
-		parameters := []string{interfaceParam}
-		flowRecords, err := lokilabels.GetMonolithicLokiFlowLogs("http://localhost:3100", time.Now(), parameters...)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(flowRecords)).To(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
+				defer sriovNetwork2.delete(oc)
+				sriovNetwork2.create(oc, "TARGETNS="+sriovOpNs, "SRIOVNETNAME="+sriovNetwork2.name, "SRIOVNETPOLICY="+sriovNetPolicyName, "IPSUBNET="+sriovNetwork2.ip)
+
+				g.By("########### Create Pod and attach sriov interface using cli ##########")
+				defer testPod1.deletePod(oc)
+				exutil.ApplyNsResourceFromTemplate(oc, testPod1.namespace, "--ignore-unknown-parameters=true", "-f", testPod1.tempfile, "-p", "PODNAME="+testPod1.name, "SRIOVNETNAME="+testPod1.intfresource, "PING_IP="+testPod1.pingip)
+				testPod1.waitForPodReady(oc)
+				intfInfo1 := testPod1.getSriovIntfonPod(oc)
+				o.Expect(intfInfo1).Should(o.MatchRegexp(testPod1.intfname))
+				o.Expect(intfInfo1).Should(o.MatchRegexp(testPod1.ipv4addr))
+				e2e.Logf("Check pod %s sriov interface and ip address PASS.", testPod1.name)
+				defer testPod2.deletePod(oc)
+				exutil.ApplyNsResourceFromTemplate(oc, testPod2.namespace, "--ignore-unknown-parameters=true", "-f", testPod2.tempfile, "-p", "PODNAME="+testPod2.name, "SRIOVNETNAME="+testPod2.intfresource, "PING_IP="+testPod2.pingip)
+				testPod2.waitForPodReady(oc)
+				intfInfo2 := testPod2.getSriovIntfonPod(oc)
+				o.Expect(intfInfo2).Should(o.MatchRegexp(testPod2.intfname))
+				o.Expect(intfInfo2).Should(o.MatchRegexp(testPod2.ipv4addr))
+				e2e.Logf("Check pod %s sriov interface and ip address PASS.", testPod2.name)
+
+				// sleep for 30 sec for flowlogs to be ingested in Loki
+				time.Sleep(30 * time.Second)
+				cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/loki", "3100:3100", "-n", oc.Namespace()).Background()
+				defer cmd.Process.Kill()
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				lokilabels := netobserv.Lokilabels{
+					App: "netobserv-flowcollector",
+				}
+				interfaceParam := fmt.Sprintf("\"\\\"Interfaces\\\":.*%s.*\"", testPod2.intfname)
+				parameters := []string{interfaceParam}
+				flowRecords, err := lokilabels.GetMonolithicLokiFlowLogs("http://localhost:3100", time.Now(), parameters...)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(flowRecords)).To(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
+			})
+		})
+		g.When("SRIOV interfaces are up prior to agents", func() {
+			g.It("Author:memodi-NonPreRelease-Medium-67619-Verify NetObserv flows are seen on SRIOV interfaces [Serial]", func() {
+				g.By("####### Create sriov network policy to create VF ############")
+				defer rmSriovNetworkPolicy(oc, sriovNetPolicyName, sriovOpNs)
+				result := initVF(oc, sriovNetPolicyName, deviceID, pfName, vendorID, sriovOpNs, vfNum)
+				// if the deviceid is not exist on the worker, skip this
+				if !result {
+					g.Skip(fmt.Sprintf("This nic which has deviceID %s is not found on this cluster!!!", deviceID))
+				}
+
+				g.By("######### Create sriov network attachment ############")
+				e2e.Logf("create sriov network attachment via template")
+				defer sriovNetwork1.delete(oc)
+				sriovNetwork1.create(oc, "TARGETNS="+sriovOpNs, "SRIOVNETNAME="+sriovNetwork1.name, "SRIOVNETPOLICY="+sriovNetPolicyName, "IPSUBNET="+sriovNetwork1.ip)
+
+				defer sriovNetwork2.delete(oc)
+				sriovNetwork2.create(oc, "TARGETNS="+sriovOpNs, "SRIOVNETNAME="+sriovNetwork2.name, "SRIOVNETPOLICY="+sriovNetPolicyName, "IPSUBNET="+sriovNetwork2.ip)
+
+				g.By("########### Create Pod and attach sriov interface using cli ##########")
+				defer testPod1.deletePod(oc)
+				exutil.ApplyNsResourceFromTemplate(oc, testPod1.namespace, "--ignore-unknown-parameters=true", "-f", testPod1.tempfile, "-p", "PODNAME="+testPod1.name, "SRIOVNETNAME="+testPod1.intfresource, "PING_IP="+testPod1.pingip)
+				testPod1.waitForPodReady(oc)
+				intfInfo1 := testPod1.getSriovIntfonPod(oc)
+				o.Expect(intfInfo1).Should(o.MatchRegexp(testPod1.intfname))
+				o.Expect(intfInfo1).Should(o.MatchRegexp(testPod1.ipv4addr))
+				e2e.Logf("Check pod %s sriov interface and ip address PASS.", testPod1.name)
+				defer testPod2.deletePod(oc)
+				exutil.ApplyNsResourceFromTemplate(oc, testPod2.namespace, "--ignore-unknown-parameters=true", "-f", testPod2.tempfile, "-p", "PODNAME="+testPod2.name, "SRIOVNETNAME="+testPod2.intfresource, "PING_IP="+testPod2.pingip)
+				testPod2.waitForPodReady(oc)
+				intfInfo2 := testPod2.getSriovIntfonPod(oc)
+				o.Expect(intfInfo2).Should(o.MatchRegexp(testPod2.intfname))
+				o.Expect(intfInfo2).Should(o.MatchRegexp(testPod2.ipv4addr))
+				e2e.Logf("Check pod %s sriov interface and ip address PASS.", testPod2.name)
+
+				g.By("Deploy flowcollector")
+				defer flow.DeleteFlowcollector(oc)
+				flow.CreateFlowcollector(oc)
+				flow.WaitForFlowcollectorReady(oc)
+
+				// sleep for 30 sec for flowlogs to be ingested in Loki
+				time.Sleep(30 * time.Second)
+				cmd, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/loki", "3100:3100", "-n", oc.Namespace()).Background()
+				defer cmd.Process.Kill()
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				lokilabels := netobserv.Lokilabels{
+					App: "netobserv-flowcollector",
+				}
+				interfaceParam := fmt.Sprintf("\"\\\"Interfaces\\\":.*%s.*\"", testPod2.intfname)
+				parameters := []string{interfaceParam}
+				flowRecords, err := lokilabels.GetMonolithicLokiFlowLogs("http://localhost:3100", time.Now(), parameters...)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(flowRecords)).To(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
+			})
+		})
 	})
 })

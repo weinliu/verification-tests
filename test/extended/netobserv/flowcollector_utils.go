@@ -144,7 +144,7 @@ func (lokilabels Lokilabels) GetMonolithicLokiFlowLogs(lokiRoute string, startTi
 		var qErr error
 		res, qErr = lc.searchLogsInLoki("", lokiQuery)
 		if qErr != nil {
-			e2e.Logf("\ngot error %v when getting %s logs for query: %s\n", qErr, lokiQuery)
+			e2e.Logf("\ngot error %v when getting logs for query: %s\n", qErr, lokiQuery)
 			return false, qErr
 		}
 

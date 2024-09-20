@@ -344,7 +344,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 			buf, _ := io.ReadAll(resp.Body) // nolint
 			e2e.Logf("Error response from server: %s %s (%v), attempts remaining: %d", resp.Status, string(buf), err, attempts)
 			if err := resp.Body.Close(); err != nil {
-				e2e.Logf("error closing body", err)
+				e2e.Logf("error closing body %v", err)
 			}
 			continue
 		}
@@ -357,7 +357,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			e2e.Logf("error closing body", err)
+			e2e.Logf("error closing body %v", err)
 		}
 	}()
 	return io.ReadAll(resp.Body)
