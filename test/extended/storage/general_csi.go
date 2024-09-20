@@ -3540,12 +3540,22 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				myPod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 				exutil.By(`Create a csi storageclass with "volumeBindingMode: Immediate"`)
-				if isAwsLocalZoneCluster(oc) {
-					myNode := getOneSchedulableWorker(getAllNodesInfo(oc))
+				allNodesInfo := getAllNodesInfo(oc)
+				allSchedulableLinuxWorkers := getSchedulableLinuxWorkers(allNodesInfo)
+
+				if len(allSchedulableLinuxWorkers) < 1 {
+					g.Skip("Skip for no schedulable linux workers!!!")
+				}
+
+				allWorkers := getWorkersList(oc)
+				// AWS localzone/wavelength/outposts/rosa-classic have worker with different specified taints
+				// uses the Immediate provision may pick a zone which only has worker with taints made the its consumer pod 'FailedScheduling'
+				// It is also helpful when the picked zone node has some issue caused unschedulable, we exclude the zone by allowedTopologies
+				if len(allSchedulableLinuxWorkers) < len(allWorkers) {
 					labelExpressions := []map[string]interface{}{
 						{
 							"key":    "topology.ebs.csi.aws.com/zone",
-							"values": []string{myNode.availableZone},
+							"values": []string{allSchedulableLinuxWorkers[0].availableZone},
 						},
 					}
 					matchLabelExpressions := []map[string]interface{}{
