@@ -2755,6 +2755,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-47044-High-74104-Verify the moderate profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		ssbModerate := "ssb-moderate-" + getRandomString()
 
 		g.By("Check the annotations for all profiles exists .. !!!\n")
@@ -2821,6 +2823,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:xiyuan-High-50524-The instructions should be available for all rules in high profiles [Serial][Slow]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		ssbHigh := "ssb-high-" + getRandomString()
 
 		g.By("Check moderate profiles .. !!!\n")
@@ -6432,6 +6436,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-45414-Verify the nodeSelector and tolerations are configurable for result server pod [Slow][Disruptive]", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		if exutil.IsSNOCluster(oc) || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("Skipped: Skip test for SNO/Compact clusters")
 		}
@@ -6657,6 +6663,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 	// author: xiyuan@redhat.com
 	g.It("CPaasrunOnly-Author:xiyuan-High-71325-compliance operator should pass DAST test", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_compliance_v1alpha1.yaml")
 		policyFile := filepath.Join(buildPruningBaseDir, "rapidast/customscan.policy")
 
