@@ -1163,6 +1163,7 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router", "awslb")
 	operatorGroup := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 	subscription := filepath.Join(buildPruningBaseDir, "subscription-src-qe.yaml")
+	subSTS := filepath.Join(buildPruningBaseDir, "subscription-src-qe-sts.yaml")
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
 	ns := "aws-load-balancer-operator"
 	deployName := "deployment/aws-load-balancer-operator-controller-manager"
@@ -1185,17 +1186,20 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 		sedCmd := fmt.Sprintf(`sed -i'' -e 's/qe-app-registry/redhat-operators/g' %s`, subscription)
 		_, err := exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		sedCmd = fmt.Sprintf(`sed -i'' -e 's/qe-app-registry/redhat-operators/g' %s`, subSTS)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
 	if exutil.IsSTSCluster(oc) {
-		// to mitigate the issue https://issues.redhat.com/browse/OCPQE-25494
-		// wait for the secret to be provisioned by CCO
-		waitForOutput(oc, ns, "pod", "{.items[*].status.phase}", "Running")
-		patchAlboSubscriptionWithRoleArn(oc, ns)
-		waitForOutput(oc, "openshift-cloud-credential-operator", "credentialsrequest/aws-load-balancer-operator", "{.status}", `"provisioned":true`)
-		waitForOutput(oc, ns, "secret/aws-load-balancer-operator", "{.metadata.annotations}", "openshift-cloud-credential-operator")
+		e2e.Logf("Updating and applying subcripton with Role ARN on STS cluster")
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|fakeARN-for-albo|%s|g' %s`, os.Getenv("ALBO_ROLE_ARN"), subSTS)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subSTS).Output()
+		e2e.Logf("err %v, msg %v", err, msg)
+	} else {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
+		e2e.Logf("err %v, msg %v", err, msg)
 	}
 
 	// checking subscription status
@@ -1228,13 +1232,6 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 		e2e.Logf("The logs of albo deployment: %v", output)
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
-}
-
-func patchAlboSubscriptionWithRoleArn(oc *exutil.CLI, ns string) {
-	e2e.Logf("patching the ALBO subcripton with Role ARN on STS cluster")
-	jsonPatch := fmt.Sprintf(`[{"op":"add","path":"/spec/config","value":{"env":[{"name":"ROLEARN","value":%s}]}}]`, os.Getenv("ALBO_ROLE_ARN"))
-	_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", ns, "sub/aws-load-balancer-operator", "-p", jsonPatch, "--type=json").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func patchAlbControllerWithRoleArn(oc *exutil.CLI, ns string) {
