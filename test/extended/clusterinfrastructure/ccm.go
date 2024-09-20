@@ -446,6 +446,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 		}
 		currentSecret, err := oc.AsAdmin().WithoutNamespace().NotShowInfo().Run("get").Args("secret", secretName, jsonString, "-n", "kube-system").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		if currentSecret == "" {
+			g.Skip("The password jsonString is not the defined one, skip the case!")
+		}
 		ccmPodNameStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cloud-controller-manager").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ccmPodNames := strings.Split(ccmPodNameStr, " ")
