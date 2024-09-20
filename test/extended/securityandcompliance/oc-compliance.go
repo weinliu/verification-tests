@@ -185,12 +185,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 		case architecture.PPC64LE:
 			subD.getProfileName(oc, "ocp4-pci-dss")
 			subD.getProfileName(oc, "ocp4-pci-dss-node")
+			subD.getProfileName(oc, "ocp4-pci-dss-node-3-2")
+			subD.getProfileName(oc, "ocp4-pci-dss-node-4-0")
 		case architecture.AMD64:
 			subD.getProfileName(oc, "ocp4-e8")
 			subD.getProfileName(oc, "ocp4-nerc-cip")
 			subD.getProfileName(oc, "ocp4-nerc-cip-node")
 			subD.getProfileName(oc, "ocp4-pci-dss")
 			subD.getProfileName(oc, "ocp4-pci-dss-node")
+			subD.getProfileName(oc, "ocp4-pci-dss-node-3-2")
+			subD.getProfileName(oc, "ocp4-pci-dss-node-4-0")
 			subD.getProfileName(oc, "rhcos4-e8")
 			subD.getProfileName(oc, "rhcos4-moderate")
 			subD.getProfileName(oc, "rhcos4-nerc-cip")
@@ -204,12 +208,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 		assertCheckProfileControls(oc, subD.namespace, "ocp4-moderate-node", "AU-12.*c")
 		switch arch {
 		case architecture.PPC64LE:
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.3")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.2")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node-4-0", "10.3.2")
 		case architecture.AMD64:
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-e8", "NIST-800-53")
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-high-node", "CIP-007-3.*R5.1.1")
 			assertCheckProfileControls(oc, subD.namespace, "ocp4-nerc-cip", "PCI-DSS")
-			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.3")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node", "Req-10.5.2")
+			assertCheckProfileControls(oc, subD.namespace, "ocp4-pci-dss-node-4-0", "10.3.2")
 			assertCheckProfileControls(oc, subD.namespace, "rhcos4-high", "CIP-003-8.*R3")
 		default:
 			e2e.Logf("Architecture %s is not supported", arch.String())
