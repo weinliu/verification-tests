@@ -2172,7 +2172,10 @@ spec:
 		o.Expect(out).Should(o.ContainSubstring(serviceName), "Service object is not listed as expected")
 
 		exutil.By("8) Check for error 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to unreachable service.")
-		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		currentKAStatus = getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if !(reflect.DeepEqual(currentKAStatus, KAStatusBefore) || reflect.DeepEqual(currentKAStatus, kubeApiserverCoStatus)) {
+			e2e.Failf("Test Failed: kube-apiserver operator status is changed!")
+		}
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
 
 		exutil.By("9) Creation of additional webhooks that holds unknown service defintions.")
