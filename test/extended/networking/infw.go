@@ -1013,9 +1013,9 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 		firstMasterNode, err := exutil.GetFirstMasterNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		sshcmd := "ssh -o ConnectTimeout=1 " + nodeList.Items[0].Name
-		err = sshRunCmd(firstMasterNode, "", sshcmd)
-		o.Expect(err).To(o.HaveOccurred())
+		sshcmd := "ssh -o ConnectTimeout=1 core@" + nodeList.Items[0].Name
+		sshOutput, _ := exutil.DebugNodeWithChroot(oc, firstMasterNode, "/bin/bash", "-c", sshcmd)
+		o.Expect(strings.Contains(sshOutput, "Connection timed out")).Should(o.BeTrue())
 
 		//get corresponding infw daemon pod for targeted worker
 		infwDaemon := getinfwDaemonForNode(oc, nodeList.Items[0].Name)
