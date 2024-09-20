@@ -30,7 +30,7 @@ if not modifiedFiles:
     print("no files are modified")
     sys.exit(0)
 
-fileChangedPattern = re.compile('^frontend/(tests.*)')
+fileChangedPattern = re.compile('^frontend/(tests.*.cy.ts)')
 modifiedTests = []
 for filename in modifiedFiles.decode("utf-8").strip(os.linesep).split():
     match = fileChangedPattern.match(filename)
