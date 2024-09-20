@@ -1278,3 +1278,31 @@ func getResouceCnt(oc *exutil.CLI, resource string, keyword string) int {
 	nsCntint, _ := strconv.Atoi(string(cnt))
 	return nsCntint
 }
+
+// clusterOperatorHealthcheck check abnormal operators
+func clusterOperatorHealthcheck(oc *exutil.CLI, waitTime int) {
+	var (
+		coLogs []byte
+		errCmd error
+	)
+	e2e.Logf("Check the abnormal operators")
+	errCo := wait.Poll(30*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		coLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(getRandomString() + "-costatus.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err == nil {
+			cmd := fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
+			coLogs, errCmd = exec.Command("bash", "-c", cmd).Output()
+			o.Expect(errCmd).NotTo(o.HaveOccurred())
+			if len(coLogs) > 0 {
+				return false, nil
+			}
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	if errCo != nil {
+		e2e.Logf("coLogs: %s", coLogs)
+	}
+	exutil.AssertWaitPollNoErr(errCmd, fmt.Sprintf("Failed to cluster health check::Abnormal cluster operators found: %s", coLogs))
+}

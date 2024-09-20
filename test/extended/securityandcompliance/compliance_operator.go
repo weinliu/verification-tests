@@ -3673,6 +3673,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NotApplied", ok, []string{"complianceremediations",
 			csuiteD.scanname + "-audit-rules-dac-modification-chmod", "-n", csuiteD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
 
+		g.By("ClusterOperator should be healthy before applying remediation")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Apply remediation by patching rule.. !!!\n")
 		patch := fmt.Sprintf("{\"spec\":{\"apply\":true}}")
 		patchResource(oc, asAdmin, withoutNamespace, "complianceremediations", csuiteD.scanname+"-audit-rules-dac-modification-chmod", "-n", csuiteD.namespace, "--type", "merge", "-p", patch)
@@ -3701,6 +3704,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Check worker machineconfigpool status.. !!!\n")
 		checkMachineConfigPoolStatus(oc, csuiteD.nodeSelector)
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Rerun scan using oc-compliance plugin.. !!!\n")
 		_, err1 := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", csuiteD.name, "-n", csuiteD.namespace).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
@@ -3722,6 +3728,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			csuite.scanname + "-no-empty-passwords", "-n", csuite.namespace, "-o=jsonpath={.status}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			csuiteCD.scanname + "-chronyd-or-ntpd-specify-multiple-servers", "-n", csuiteCD.namespace, "-o=jsonpath={.status}"}).check(oc)
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Verify the ntp settings from node contents.. !!!\n")
 		contList := []string{"server 0.pool.ntp.org minpoll 4 maxpoll 10", "server 1.pool.ntp.org minpoll 4 maxpoll 10", "server 2.pool.ntp.org minpoll 4 maxpoll 10", "server 3.pool.ntp.org minpoll 4 maxpoll 10"}
@@ -4249,6 +4258,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, "WriteRequestBodies", ok, []string{"complianceremediations",
 			"ocp4-audit-tailored-audit-profile-set", "-n", subD.namespace, "-o=jsonpath={.spec.current.object.spec.audit.profile}"}).check(oc)
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Rerun the scan and check result... !!")
 		_, err := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4353,6 +4365,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-cis-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4366,6 +4381,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-cis", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check all rules with autoremations PASS !!!\n")
 		result, err := oc.AsAdmin().Run("get").Args("ccr", "-n", subD.namespace, "-l", "compliance.openshift.io/automated-remediation=,compliance.openshift.io/check-status=FAIL").Output()
@@ -4462,6 +4480,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-pci-dss-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4476,6 +4497,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-pci-dss", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check all rules with autoremations PASS !!!\n")
 		result, err := oc.AsAdmin().Run("get").Args("ccr", "-n", subD.namespace, "-l", "compliance.openshift.io/automated-remediation=,compliance.openshift.io/check-status=FAIL").Output()
@@ -4565,12 +4589,20 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
+
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
+		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-l", "compliance.openshift.io/suite="+ssbHigh, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if crResult != "" {
 			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.readyMachineCount}"}).check(oc)
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
+
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crMissingDependencies, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l", "compliance.openshift.io/has-unmet-dependencies=",
@@ -4589,6 +4621,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger the third round of rescan if needed !!!\n")
 		crMissingDependencies, err = oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l", "compliance.openshift.io/has-unmet-dependencies=",
 			"-o=jsonpath={.items[*].metadata.name}").Output()
@@ -4600,6 +4635,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkComplianceSuiteStatus(oc, ssbHigh, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
 		}
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
@@ -4712,6 +4750,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crMissingDependencies, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l",
 			"compliance.openshift.io/has-unmet-dependencies=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -4730,6 +4771,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger the third round of rescan if needed !!!\n")
 		crMissingDependencies, err = oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l",
 			"compliance.openshift.io/has-unmet-dependencies=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -4742,6 +4786,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkComplianceSuiteStatus(oc, ssbNercCip, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbNercCip, "NON-COMPLIANT INCONSISTENT")
 		}
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check rules and remediation status !!!\n")
 		checkComplianceSuiteStatus(oc, ssbNercCip, subD.namespace, "DONE")
@@ -4850,12 +4897,20 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
+
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
+		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-l", "compliance.openshift.io/suite="+ssbModerate, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if crResult != "" {
 			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.readyMachineCount}"}).check(oc)
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
+
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crMissingDependencies, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l", "compliance.openshift.io/has-unmet-dependencies=",
@@ -4874,6 +4929,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger the third round of rescan if needed !!!\n")
 		crMissingDependencies, err = oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l", "compliance.openshift.io/has-unmet-dependencies=",
 			"-o=jsonpath={.items[*].metadata.name}").Output()
@@ -4887,6 +4945,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkComplianceSuiteStatus(oc, ssbModerate, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
 		}
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
@@ -5825,6 +5886,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crMissingDependencies, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l",
 			"compliance.openshift.io/has-unmet-dependencies=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -5843,6 +5907,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger the third round of rescan if needed !!!\n")
 		crMissingDependencies, err = oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l",
 			"compliance.openshift.io/has-unmet-dependencies=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -5856,6 +5923,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkComplianceSuiteStatus(oc, ssbStig, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbStig, "NON-COMPLIANT INCONSISTENT")
 		}
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
@@ -6451,6 +6521,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger another round of rescan if needed !!!\n")
 		crMissingDependencies, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l",
 			"compliance.openshift.io/has-unmet-dependencies=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -6469,6 +6542,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
+		g.By("ClusterOperator should be healthy before running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
+
 		g.By("Trigger the third round of rescan if needed !!!\n")
 		crMissingDependencies, err = oc.AsAdmin().Run("get").Args("complianceremediation", "-n", subD.namespace, "-l",
 			"compliance.openshift.io/has-unmet-dependencies=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -6481,6 +6557,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkComplianceSuiteStatus(oc, ssbE8, subD.namespace, "DONE")
 			subD.complianceSuiteResult(oc, ssbE8, "NON-COMPLIANT INCONSISTENT")
 		}
+
+		g.By("ClusterOperator should be healthy after running rescan")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
@@ -6714,6 +6793,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		ssb.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check whether ClusterOperator is healthy")
+		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check test results !!!\n")
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
