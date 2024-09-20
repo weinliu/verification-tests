@@ -163,27 +163,25 @@ ipaddresses.ipam.cluster.x-k8s.io`
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-NonHyperShiftHost-Low-75986-[CAPI]-vspherecluster reconciliation should not fail [Disruptive]", func() {
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.VSphere)
+	g.It("Author:miyadav-NonHyperShiftHOST-Medium-76078-[capi] Should not be able to remove Infrastructure Cluster resources [Disruptive]", func() {
 		skipForCAPINotExist(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.GCP, clusterinfra.VSphere)
+		g.By("Check Infracluster")
 
-		g.By("get vsphereCluster resource name in openshift-cluster-api namespace")
-		vsphereCluster, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("vspherecluster", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].spec.identityRef.name}").Output()
+		iaasPlatform := clusterinfra.CheckPlatform(oc)
+		clusterID := clusterinfra.GetInfrastructureName(oc)
+
+		infraObj, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(strings.ToUpper(iaasPlatform.String())+"Cluster", "-n", clusterAPINamespace, "-o", "jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Delete vsphereCluster in openshift-cluster-api namespace")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("vspherecluster", vsphereCluster, "-n", clusterAPINamespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if infraObj == clusterID {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(strings.ToUpper(iaasPlatform.String())+"Cluster", infraObj, "-n", clusterAPINamespace).Output()
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(msg).To(o.ContainSubstring("denied request: InfraCluster resources with metadata.name corresponding to the cluster infrastructureName cannot be deleted."))
+		} else {
+			g.Skip("We are not worried if infrastructure is not same as clusterId...")
+		}
 
-		g.By("Check vsphereCluster is reconciled")
-		err = wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
-			vsphereClusterDetails, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("vspherecluster", "-n", clusterAPINamespace).Output()
-			if strings.Contains(vsphereClusterDetails, vsphereCluster) {
-				return true, nil
-			}
-			e2e.Logf("Continue to look for vspherecluster reconciliation...")
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "vspherecluster reconciliation has failed , this could be an error/bug")
 	})
+
 })
