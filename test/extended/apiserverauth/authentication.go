@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: xxia@redhat.com
 	// It is destructive case, will make co/authentical Available=False for a while, so adding [Disruptive]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:xxia-Medium-29917-Deleted authentication resources can come back immediately [Disruptive]", func() {
+	g.It("Author:xxia-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-29917-Deleted authentication resources can come back immediately [Disruptive]", func() {
 		// Temporarily skip for sno env. Will follow up to investigate robust enhancement.
 		exutil.SkipForSNOCluster(oc)
 		g.By("Delete namespace openshift-authentication")
@@ -158,7 +158,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: pmali@redhat.com
 	// It is destructive case, will make co/authentical Available=False for a while, so adding [Disruptive]
 
-	g.It("NonHyperShiftHOST-Author:pmali-High-33390-Network Stability check every level of a managed route [Disruptive] [Flaky]", func() {
+	g.It("Author:pmali-NonHyperShiftHOST-High-33390-Network Stability check every level of a managed route [Disruptive] [Flaky]", func() {
 		g.By("Check pods under openshift-authentication namespace is available")
 		err := wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-authentication").Output()
@@ -254,7 +254,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: ytripath@redhat.com
-	g.It("NonPreRelease-Longduration-Author:ytripath-Medium-20804-Support ConfigMap injection controller [Disruptive] [Slow]", func() {
+	g.It("Author:ytripath-NonPreRelease-Longduration-Medium-20804-Support ConfigMap injection controller [Disruptive] [Slow]", func() {
 		oc.SetupProject()
 
 		// Check the pod service-ca is running in namespace openshift-service-ca
@@ -353,7 +353,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
-	g.It("WRS-ConnectedOnly-Author:rugong-Medium-20052-New field forbiddenSysctls for SCC", func() {
+	g.It("Author:rugong-WRS-ConnectedOnly-Medium-20052-V-ACS.01-New field forbiddenSysctls for SCC", func() {
 		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -430,7 +430,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
-	g.It("WRS-ConnectedOnly-Author:rugong-Medium-20050-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
+	g.It("Author:rugong-WRS-ConnectedOnly-Medium-20050-V-ACS.01-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
 		// In 4.11 and above, we should use SCC "restricted-v2"
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -464,7 +464,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change oauth cluster and the case execution duration is greater than 5 min, so adding [Disruptive] and [NonPreRelease]
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:rugong-Medium-22434-RequestHeader IDP consumes header values from requests of auth proxy [Disruptive]", func() {
+	g.It("Author:rugong-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-22434-RequestHeader IDP consumes header values from requests of auth proxy [Disruptive]", func() {
 		configMapPath, err := os.MkdirTemp("/tmp/", "tmp_22434")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(configMapPath)
@@ -663,7 +663,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// Adding the NonHyperShiftHOST label because developers appear to not fix the known bug https://issues.redhat.com/browse/OCPBUGS-3873
-	g.It("WRS-NonHyperShiftHOST-Author:rugong-Low-37697-Allow Users To Manage Their Own Tokens", func() {
+	g.It("Author:rugong-WRS-NonHyperShiftHOST-Low-37697-V-BR.06-Allow Users To Manage Their Own Tokens", func() {
 		oc.SetupProject()
 		user1Name := oc.Username()
 		userOauthAccessTokenYamlPath, err := os.MkdirTemp("/tmp/", "tmp_37697")
@@ -724,7 +724,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: gkarager@redhat.com
-	g.It("NonHyperShiftHOST-Author:gkarager-Medium-49757-Missing content in default RBAC role, rolebinding, clusterrole and clusterrolebinding can be restored automatically when apiserver restarts [Disruptive]", func() {
+	g.It("Author:gkarager-NonHyperShiftHOST-Medium-49757-Missing content in default RBAC role, rolebinding, clusterrole and clusterrolebinding can be restored automatically when apiserver restarts [Disruptive]", func() {
 		tmpCaseFilePath, err := os.MkdirTemp("/tmp/", "tmp_49757")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpCaseFilePath)
@@ -853,7 +853,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("WRS-ConnectedOnly-Author:yinzhou-LEVEL0-High-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
+	g.It("Author:yinzhou-WRS-ConnectedOnly-LEVEL0-High-10662-V-ACS.01-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy", func() {
 		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -908,7 +908,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: gkarager@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:gkarager-Medium-55213-Upgrade should succeed when custom SCC is created with readOnlyRootFilesystem set to true", func() {
+	g.It("Author:gkarager-NonPreRelease-PreChkUpgrade-Medium-55213-Upgrade should succeed when custom SCC is created with readOnlyRootFilesystem set to true", func() {
 		g.By("Create a custom SCC that has `readOnlyRootFilesystem: true`")
 		baseDir := exutil.FixturePath("testdata", "apiserverauth")
 		customSCC := filepath.Join(baseDir, "custom_scc.yaml")
@@ -918,7 +918,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("WRS-Author:yinzhou-Medium-55675-Group member should not lose rights after other members join the group", func() {
+	g.It("Author:yinzhou-WRS-Medium-55675-V-BR.06-Group member should not lose rights after other members join the group", func() {
 		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -962,7 +962,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: dmukherj@redhat.com
-	g.It("WRS-ConnectedOnly-Author:dmukherj-LEVEL0-High-47941-User should not be allowed to create privileged ephemeral container without required privileges", func() {
+	g.It("Author:dmukherj-WRS-ConnectedOnly-LEVEL0-High-47941-V-BR.06-User should not be allowed to create privileged ephemeral container without required privileges", func() {
 		// ToDo: if we can implement multiple users in external OIDC clusters in future, undo the skip.
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1040,7 +1040,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-LEVEL0-High-22470-The basic challenge will be shown when user pass the X-CSRF-TOKEN http header", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-LEVEL0-High-22470-The basic challenge will be shown when user pass the X-CSRF-TOKEN http header", func() {
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if isExternalOIDCCluster {
