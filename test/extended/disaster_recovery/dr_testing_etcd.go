@@ -173,13 +173,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("static-pod-resources"))
 
-		g.By("Restart the kubelet service on all control plane hosts")
-		for i := 0; i < len(masterNodeList); i++ {
-			_, _ = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl restart kubelet.service", privateKeyForBastion, userForBastion)
-
-		}
-
-		g.By("Wait for all the kubelet service on all control plane hosts are ready")
+		g.By("Wait for the api server to come up after restore operation.")
 		for i := 0; i < len(masterNodeList); i++ {
 			err := wait.Poll(20*time.Second, 900*time.Second, func() (bool, error) {
 				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNodeList[i]).Output()
@@ -194,6 +188,12 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "the kubelet is not recovered to normal")
+		}
+
+		g.By("Restart the kubelet service on all control plane hosts")
+		for i := 0; i < len(masterNodeList); i++ {
+			_, _ = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl restart kubelet.service", privateKeyForBastion, userForBastion)
+
 		}
 		defer checkOperator(oc, "etcd")
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": null}}")).Execute()
