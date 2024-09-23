@@ -27,6 +27,11 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 	g.JustBeforeEach(func() {
 		// Skip if no machineset
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)
+		if exutil.CheckPlatform(oc) == AWSPlatform {
+			skipIfNoTechPreview(oc)
+		}
 
 		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		machineConfiguration = GetMachineConfiguration(oc.AsAdmin())
@@ -34,8 +39,6 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74238-BootImages not updated by default [Disruptive]", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-
 		var (
 			fakeImageName            = "fake-coreos-bootimage-name"
 			duplicatedMachinesetName = "cloned-tc-74238"
@@ -66,9 +69,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74240-ManagedBootImages on GCP. Restore All MachineSet images [Disruptive]", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74240-ManagedBootImages. Restore All MachineSet images [Disruptive]", func() {
 		var (
 			fakeImageName = "fake-coreos-bootimage-name"
 
@@ -77,6 +78,9 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 			clonedMSName               = "cloned-tc-74240"
 			clonedWrongBootImageMSName = "cloned-tc-74240-wrong-boot-image"
 			clonedOwnedMSName          = "cloned-tc-74240-owned"
+
+			platform = exutil.CheckPlatform(oc)
+			region   = getCurrentRegionOrFail(oc)
 		)
 
 		exutil.By("Opt-in boot images update")
@@ -113,7 +117,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		exutil.By("All machinesets should use the right boot image")
 		for _, ms := range NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail() {
 			logger.Infof("Checking boot image in machineset %s", ms.GetName())
-			currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
+			currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(platform, region, *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
 			logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
 			o.Eventually(ms.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 				"%s was NOT updated to use the right boot image", ms)
@@ -134,7 +138,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		exutil.By("All machinesets should use the right boot image except the one with an owner")
 		for _, ms := range NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail() {
 			logger.Infof("Checking boot image in machineset %s", ms.GetName())
-			currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
+			currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(platform, region, *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
 			logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
 			o.Expect(err).NotTo(o.HaveOccurred(),
 				"Error getting the currently configured coreos boot image")
@@ -142,6 +146,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 			if ms.GetName() == clonedOwnedMSName {
 				o.Consistently(ms.GetCoreOsBootImage, "15s", "5s").Should(o.Equal(fakeImageName),
 					"%s was patched and it is using the right boot image. Machinesets with owners should NOT be patched.", ms)
+
 			} else {
 				o.Eventually(ms.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 					"%s was NOT updated to use the right boot image", ms)
@@ -162,9 +167,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74239-ManagedBootImages on GCP. Restore Partial MachineSet images [Disruptive]", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74239-ManagedBootImages. Restore Partial MachineSet images [Disruptive]", func() {
 		var (
 			fakeImageName = "fake-coreos-bootimage-name"
 
@@ -175,6 +178,9 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 			clonedMSLabelOwnedName = "cloned-tc-74240-label-owned"
 			labelName              = "test"
 			labelValue             = "update"
+
+			platform = exutil.CheckPlatform(oc)
+			region   = getCurrentRegionOrFail(oc)
 		)
 
 		exutil.By("Opt-in boot images update")
@@ -226,7 +232,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("The labeled machineset without owner should be updated")
-		currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
+		currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(platform, region, *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
 		logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
 
 		o.Eventually(clonedMSLabel.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
@@ -256,9 +262,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74764-ManagedBootImages on GCP. Delete machineset when error [Disruptive]", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74764-ManagedBootImages. Delete machineset when error [Disruptive]", func() {
 		var (
 			machineConfiguration = GetMachineConfiguration(oc.AsAdmin())
 			machineSet           = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
@@ -329,9 +333,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74751-ManagedBootImages on GCP. Fix errors [Disruptive]", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
-
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74751-ManagedBootImages. Fix errors [Disruptive]", func() {
 		var (
 			coreosBootimagesCM          = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "coreos-bootimages")
 			machineConfiguration        = GetMachineConfiguration(oc.AsAdmin())
@@ -343,6 +345,9 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 			expectedFailedMessageRegexp = regexp.QuoteMeta("Error(s): error syncing MAPI MachineSet " +
 				clonedMSName +
 				": failed to fetch arch during machineset sync: invalid architecture value found in annotation: kubernetes.io/arch=" + fakearch)
+
+			platform = exutil.CheckPlatform(oc)
+			region   = getCurrentRegionOrFail(oc)
 		)
 		exutil.By("Opt-in boot images update")
 
@@ -410,7 +415,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that the boot image was updated")
-		currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
+		currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(platform, region, *machineSet.GetArchitectureOrFail(), coreosBootimagesCM)
 		logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
 
 		o.Eventually(clonedMS.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
@@ -472,9 +477,12 @@ func DuplicateMachineSetWithCustomBootImage(ms MachineSet, newBootImage, newName
 }
 
 // getCoreOsBootImageFromConfigMap look for the configured coreOs boot image in given configmap
-func getCoreOsBootImageFromConfigMap(platform string, arch architecture.Architecture, coreosBootimagesCM *ConfigMap) (string, error) {
-	// transform amd64 naming to x86_64 naming
-	stringArch := convertArch(arch)
+func getCoreOsBootImageFromConfigMap(platform, region string, arch architecture.Architecture, coreosBootimagesCM *ConfigMap) (string, error) {
+	var (
+		coreOsBootImagePath string
+		// transform amd64 naming to x86_64 naming
+		stringArch = convertArch(arch)
+	)
 
 	logger.Infof("Looking for coreos boot image for architecture %s in %s", stringArch, coreosBootimagesCM)
 
@@ -483,7 +491,20 @@ func getCoreOsBootImageFromConfigMap(platform string, arch architecture.Architec
 		return "", err
 	}
 	parsedStream := gjson.Parse(streamJSON)
-	currentCoreOsBootImage := parsedStream.Get(fmt.Sprintf(`architectures.%s.images.%s.name`, stringArch, platform)).String()
+
+	switch platform {
+	case AWSPlatform:
+		if region == "" {
+			return "", fmt.Errorf("Region is empty for platform %s. The region is mandatory if we want to get the boot image value", platform)
+		}
+		coreOsBootImagePath = fmt.Sprintf(`.architectures.%s.images.%s.regions."%s".image`, stringArch, platform, region)
+	case GCPPlatform:
+		coreOsBootImagePath = fmt.Sprintf(`architectures.%s.images.%s.name`, stringArch, platform)
+	default:
+		return "", fmt.Errorf("Machineset.GetCoreOsBootImage method is only supported for GCP and AWS platforms")
+	}
+
+	currentCoreOsBootImage := parsedStream.Get(coreOsBootImagePath).String()
 
 	if currentCoreOsBootImage == "" {
 		logger.Warnf("The coreos boot image for architecture %s in %s IS EMPTY", stringArch, coreosBootimagesCM)
@@ -492,8 +513,8 @@ func getCoreOsBootImageFromConfigMap(platform string, arch architecture.Architec
 	return currentCoreOsBootImage, nil
 }
 
-func getCoreOsBootImageFromConfigMapOrFail(platform string, arch architecture.Architecture, coreosBootimagesCM *ConfigMap) string {
-	image, err := getCoreOsBootImageFromConfigMap(platform, arch, coreosBootimagesCM)
+func getCoreOsBootImageFromConfigMapOrFail(platform, region string, arch architecture.Architecture, coreosBootimagesCM *ConfigMap) string {
+	image, err := getCoreOsBootImageFromConfigMap(platform, region, arch, coreosBootimagesCM)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the boot image from %s for platform %s and arch %s", coreosBootimagesCM, platform, arch)
 	return image
 }

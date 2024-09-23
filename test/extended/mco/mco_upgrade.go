@@ -234,7 +234,11 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-PreChkUpgrade-NonPreRelease-High-70813-ManagedBootImages update boot image of machineset [Serial]", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform)
+		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)
+		if exutil.CheckPlatform(oc) == AWSPlatform {
+			skipIfNoTechPreview(oc)
+		}
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 		SkipIfNoFeatureGate(oc.AsAdmin(), "ManagedBootImages")
 
@@ -315,7 +319,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		for _, ms := range allMachineSets {
 			logger.Infof("Checking machineset %s", ms.GetName())
 			if ms.GetName() == clonedMS.GetName() {
-				currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), *ms.GetArchitectureOrFail(), coreosBootimagesCM)
+				currentCoreOsBootImage := getCoreOsBootImageFromConfigMapOrFail(exutil.CheckPlatform(oc), getCurrentRegionOrFail(oc), *ms.GetArchitectureOrFail(), coreosBootimagesCM)
 				logger.Infof("Current coreOsBootImage: %s", currentCoreOsBootImage)
 				logger.Infof("Machineset %s should be updated", ms.GetName())
 

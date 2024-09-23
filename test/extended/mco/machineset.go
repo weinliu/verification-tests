@@ -305,10 +305,12 @@ func (ms MachineSet) GetCoreOsBootImage() (string, error) {
 	// currently we only support testing the coresOs boot image in GCP platform.
 	coreOsBootImagePath := ""
 	switch p := exutil.CheckPlatform(ms.oc); p {
+	case "aws":
+		coreOsBootImagePath = `{.spec.template.spec.providerSpec.value.ami.id}`
 	case "gcp":
 		coreOsBootImagePath = `{.spec.template.spec.providerSpec.value.disks[0].image}`
 	default:
-		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP infrastructure")
+		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP and AWS infrastructure")
 	}
 
 	return ms.Get(coreOsBootImagePath)
