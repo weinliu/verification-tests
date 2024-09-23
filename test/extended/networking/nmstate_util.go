@@ -158,17 +158,12 @@ func checkNmstateCR(oc *exutil.CLI, namespace string) (bool, error) {
 		e2e.Logf("nmstate-webhook pod did not transition to ready state %v", err)
 		return false, err
 	}
-	err = waitForPodWithLabelReady(oc, namespace, "component=kubernetes-nmstate-cert-manager")
-	if err != nil {
-		e2e.Logf("nmstate-cert-manager pod did not transition to ready state %v", err)
-		return false, err
-	}
 	err = waitForPodWithLabelReady(oc, namespace, "app=nmstate-console-plugin")
 	if err != nil {
 		e2e.Logf("nmstate-console-plugin pod did not transition to ready state %v", err)
 		return false, err
 	}
-	e2e.Logf("nmstate-handler, nmstate-webhook, nmstate-cert-manager and nmstate-console-plugin pods created successfully")
+	e2e.Logf("nmstate-handler, nmstate-webhook and nmstate-console-plugin pods created successfully")
 	return true, nil
 }
 
