@@ -103,8 +103,8 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		// Install metallb on vSphere and baremetal but skip on all platforms
 		exutil.By("Check the platform if it is suitable for running the test")
 		platform := exutil.CheckPlatform(oc)
-		if !(isPlatformSuitable(oc)) || !strings.Contains(platform, "vsphere") || !strings.Contains(platform, "baremetal") {
-			g.Skip("These cases can only be run on networking team's private RDU cluster, vSphere and BM, skip for other envrionment!!!")
+		if !(strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")) {
+			g.Skip("These cases can only be run on networking team's private RDU BM cluster, vSphere and IPI/UPI BM, skip for other envrionment!!!")
 		}
 
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
