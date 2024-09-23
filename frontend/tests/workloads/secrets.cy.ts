@@ -50,7 +50,7 @@ describe('Workload Secrets test', () => {
     cy.get('code').should('contain','{"auths":{"quay.io":{"username":"testuser","password":"testpassword","auth":"dGVzdHVzZXI6dGVzdHBhc3N3b3Jk","email":"test@redhat.com"}}}');
   });
 
-  it('(OCP-73150,yapei)Passwords entered on the console are obfuscated', {tags: ['e2e','@osd-ccs','@rosa', '@wrs','V-BR.15']}, () => {
+  it('(OCP-73150,yapei)Passwords entered on the console are obfuscated', {tags: ['@userinterface','@e2e','@osd-ccs','@rosa', '@wrs','V-BR.15']}, () => {
     // input[type="password"] will make characters masked
     Pages.gotoImagePullSecretCreation(project_name);
     cy.get('input[data-test="image-secret-password"]')
