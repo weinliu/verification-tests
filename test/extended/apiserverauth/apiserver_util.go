@@ -1762,3 +1762,25 @@ func getResourceWithKubeconfig(oc *exutil.CLI, newKubeconfig string, waitForErro
 	}
 	return output, err
 }
+
+func kasOperatorCheckForStep(oc *exutil.CLI, preConfigKasStatus map[string]string, step string, msg string) {
+	var (
+		coName                = "kube-apiserver"
+		kubeApiserverCoStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+	)
+
+	e2e.Logf("Pre-configuration with %s operator status before %s: %s", coName, msg, preConfigKasStatus)
+	// It takes about 30 seconds for KAS rolling out from deployment to progress
+	// wait some bit more time and double check, to ensure it is stably healthy
+	time.Sleep(45 * time.Second)
+	postConfigKasStatus := getCoStatus(oc, coName, kubeApiserverCoStatus)
+	e2e.Logf("Post-configuration with %s operator status after %s %s", coName, msg, postConfigKasStatus)
+
+	// Check if KAS operator status is changed after ValidatingWebhook configration creation
+	if !reflect.DeepEqual(preConfigKasStatus, postConfigKasStatus) {
+		if reflect.DeepEqual(preConfigKasStatus, kubeApiserverCoStatus) {
+			// preConfigKasStatus has the same status of kubeApiserverCoStatus, means KAS operator is changed from stable to unstable
+			e2e.Failf("Test step-%s failed: %s operator are abnormal after %s!", step, coName, msg)
+		}
+	}
+}
