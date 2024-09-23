@@ -28,7 +28,7 @@ describe('(OCP-74049, OCP-73875 Network_Observability) Prometheus datasource onl
         Operator.createFlowcollector(project, "LokiDisabled")
     })
 
-    it('(OCP-74049, aramesha, Network_Observability), prom dataSource only', { tags: ['Network_Observability'] }, function () {
+    it('(OCP-74049, aramesha, Network_Observability), Verify Prom dataSource in Administrator view as cluster-admin user', function () {
         netflowPage.visit()
         
         cy.checkNetflowTraffic("Disabled")
@@ -49,8 +49,28 @@ describe('(OCP-74049, OCP-73875 Network_Observability) Prometheus datasource onl
             cy.byTestID('resource').should('not.exist')
         })
     })
-    after("after all tests are done", function () {
-        Operator.deleteFlowCollector()
+
+    it('(OCP-73876, aramesha, Network_Observability), Verify prom dataSource in Administrator view as non-cluster-admin user', function () {
+        // Add user to netobserv-metrics-reader role to view metrics
+        cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-monitoring-view ${Cypress.env('LOGIN_USERNAME')}`)
+
+        // Add edit role to user for netobserv NS
+        cy.adminCLI(`oc adm policy add-role-to-user edit ${Cypress.env('LOGIN_USERNAME')} -n ${project}`)
+
+        // Remove user from cluster-admin role
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
+
+        cy.wait(5000)
+
+        netflowPage.visit()
+
+        cy.checkNetflowTraffic("Disabled")
+    }) 
+    after("after all tests are done", function () {
+        cy.adminCLI(`oc delete clusterRoleBinding cluster-monitoring-view`)
+        cy.adminCLI(`oc adm policy remove-role-from-user edit ${Cypress.env('LOGIN_USERNAME')} -n ${project}`)
+        
+        // Delete flowcollector
+        cy.adminCLI(`oc delete flowcollector cluster`)
     })
 })
