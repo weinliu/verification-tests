@@ -1,5 +1,0 @@
-[aos-devel-4.11]
-name=aos-devel-4.11
-baseurl=http://download.eng.bos.redhat.com/rcm-guest/puddles/RHAOS/plashets/4.11-el8/stream/building/x86_64/os/
-enabled=1
-gpgcheck=0

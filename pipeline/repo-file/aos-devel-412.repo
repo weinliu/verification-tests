@@ -1,5 +1,0 @@
-[aos-devel-4.12]
-name=aos-devel-4.12
-baseurl=https://ocp-artifacts.hosts.prod.psi.rdu2.redhat.com/pub/RHOCP/plashets/4.12/stream/el8/latest/x86_64/os/
-enabled=1
-gpgcheck=0

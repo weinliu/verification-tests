@@ -38,7 +38,6 @@ else
 fi
 
 sudo rm -f /etc/yum.repos.d/redhat_offcial.repo /etc/yum.repos.d/localdev-rhel-8-baseos-rpms.repo /etc/yum.repos.d/google-cloud-sdk.repo /etc/yum.repos.d/azure-cli.repo
-#sudo cp ${WORKBUILDDIR}/pipeline/repo-file/aos-devel-$NIGHTLYFLAG.repo /etc/yum.repos.d/puddle.repo
 sudo cp -f ${WORKBUILDDIR}/pipeline/repo-file/rhel9.3-baseos.repo /etc/yum.repos.d/rhel9.3-baseos.repo
 sudo ls -lrt /etc/yum.repos.d/
 sudo yum-config-manager --enable rhel9.3-baseos

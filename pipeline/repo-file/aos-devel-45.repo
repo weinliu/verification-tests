@@ -1,6 +1,0 @@
-[aos-devel-4.5]
-name=aos-devel-4.5
-baseurl=http://download.eng.bos.redhat.com/rcm-guest/puddles/RHAOS/plashets/4.5/building/x86_64/os/
-enabled=1
-gpgcheck=0
-
