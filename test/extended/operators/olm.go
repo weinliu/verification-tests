@@ -6659,11 +6659,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-25760, author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-Medium-25760-Operator upgrades does not fail after change the channel", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipForSNOCluster(oc)
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
-		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
