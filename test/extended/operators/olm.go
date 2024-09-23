@@ -6533,6 +6533,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			g.Skip("skip for ask cluster")
 		}
 		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
@@ -6547,8 +6549,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		if infra == "SingleReplica" {
 			g.Skip("it is not supported")
 		}
-		exutil.SkipBaselineCaps(oc, "None")
-		exutil.SkipForSNOCluster(oc)
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
@@ -6574,7 +6574,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 24382 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vschema-crdv1",
+				address:     "quay.io/olmqe/olm-dep:vschema-crdv3",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
