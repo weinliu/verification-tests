@@ -4757,14 +4757,15 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpPath)
-
 		tmpBasePath := exutil.FixturePath("testdata", "operatorsdk", "ocp-49960-data")
-		exutil.By("Get the external bundle validator")
-		command := "wget -P " + tmpPath + " http://virt-openshift-05.lab.eng.nay.redhat.com/jitli/testdata/validator-poc"
-		wgetOutput, err := exec.Command("bash", "-c", command).Output()
+
+		exutil.By("Get the external bundle validator from container image")
+		podmanCLI := container.NewPodmanCLI()
+		podmanCLI.ExecCommandPath = tmpPath
+		podmanOutput, err := podmanCLI.Run("run").Args("--rm", "-v", tmpPath+":/tmp:z", "quay.io/openshifttest/validator-poc:v1", "cp", "/opt/validator-poc", "/tmp/validator-poc").Output()
 		if err != nil {
-			e2e.Logf(string(wgetOutput))
-			e2e.Failf("Fail to wget the validator-poc %v", err)
+			e2e.Logf(string(podmanOutput))
+			e2e.Failf("Fail to get the validator-poc from container image %v", err)
 		}
 		exvalidator := filepath.Join(tmpPath, "validator-poc")
 		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
