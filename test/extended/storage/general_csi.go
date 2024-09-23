@@ -4563,7 +4563,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-60598 - [BYOK] Pre-defined storageclass should contain the user-managed encryption key which specified when installation
 	// OCP-60599 - [BYOK] storageclass without specifying user-managed encryption key or other key should work well
 	// https://issues.redhat.com/browse/OCPBU-13
-	g.It("ROSA-OSD_CCS-ARO-Author:pewang-LEVEL0-High-60598-High-60599-[CSI-Driver] [BYOK] Pre-defined storageclass and user defined storageclass should provision volumes as expected", func() {
+	g.It("Author:pewang-ROSA-OSD_CCS-ARO-LEVEL0-High-60598-High-60599-V-CM.04-[CSI-Driver] [BYOK] Pre-defined storageclass and user defined storageclass should provision volumes as expected", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -4674,7 +4674,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 	// author: pewang@redhat.com
 	// OCP-60600 - [BYOK] Pre-defined default storageclass should react properly when removing/update the user-managed encryption key in ClusterCSIDriver
-	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-60600-[CSI-Driver] [BYOK] Pre-defined default storageclass should react properly when removing/update the user-managed encryption key in ClusterCSIDriver [Disruptive]", func() {
+	g.It("Author:pewang-ROSA-OSD_CCS-ARO-High-60600-V-CM.04-[CSI-Driver] [BYOK] Pre-defined default storageclass should react properly when removing/update the user-managed encryption key in ClusterCSIDriver [Disruptive]", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
