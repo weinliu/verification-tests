@@ -1739,4 +1739,136 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		exutil.By("17.2 From a third node, NOT be able to access node1:nodePort")
 		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
 	})
+
+	g.It("Author:asood-High-75899-Validate L2 and L3 Pod2Egress traffic in shared and local gateway mode", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnCRDL2dualStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
+			udnCRDL2SingleStack       = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_singlestack_template.yaml")
+			udnCRDL3dualStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_dualstack2_template.yaml")
+			udnCRDL3SingleStack       = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			udnNadtemplate            = filepath.Join(buildPruningBaseDir, "udn/udn_nad_template.yaml")
+			testPodFile               = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			mtu                 int32 = 1300
+			pingIPv4Cmd               = "ping -c 2 8.8.8.8"
+			pingIPv6Cmd               = "ping6 -c 2 2001:4860:4860::8888"
+			udnNS                     = []string{}
+			pingCmds                  = []string{}
+		)
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Obtain first namespace and create three others")
+		udnNS = append(udnNS, oc.Namespace())
+		for i := 0; i < 3; i++ {
+			oc.SetupProject()
+			udnNS = append(udnNS, oc.Namespace())
+		}
+
+		var cidr, ipv4cidr, ipv6cidr []string
+		var prefix, ipv4prefix, ipv6prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+			prefix = 24
+			pingCmds = append(pingCmds, pingIPv4Cmd)
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+				prefix = 64
+				pingCmds = append(pingCmds, pingIPv6Cmd)
+			} else {
+				ipv4cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+				ipv4prefix = 24
+				ipv6cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+				ipv6prefix = 64
+				pingCmds = append(pingCmds, pingIPv4Cmd)
+				pingCmds = append(pingCmds, pingIPv6Cmd)
+			}
+		}
+
+		exutil.By("2. Create CRD for UDN in first two namespaces")
+		udnResourcename := []string{"l2-network-" + udnNS[0], "l3-network-" + udnNS[1]}
+		udnDSTemplate := []string{udnCRDL2dualStack, udnCRDL3dualStack}
+		udnSSTemplate := []string{udnCRDL2SingleStack, udnCRDL3SingleStack}
+
+		udncrd := make([]udnCRDResource, 2)
+		for i := 0; i < 2; i++ {
+			if ipStackType == "dualstack" {
+				udncrd[i] = udnCRDResource{
+					crdname:    udnResourcename[i],
+					namespace:  udnNS[i],
+					role:       "Primary",
+					mtu:        mtu,
+					IPv4cidr:   ipv4cidr[i],
+					IPv4prefix: ipv4prefix,
+					IPv6cidr:   ipv6cidr[i],
+					IPv6prefix: ipv6prefix,
+					template:   udnDSTemplate[i],
+				}
+				switch i {
+				case 0:
+					udncrd[0].createLayer2DualStackUDNCRD(oc)
+				case 1:
+					udncrd[1].createUdnCRDDualStack(oc)
+				}
+
+			} else {
+				udncrd[i] = udnCRDResource{
+					crdname:   udnResourcename[i],
+					namespace: udnNS[i],
+					role:      "Primary",
+					mtu:       mtu,
+					cidr:      cidr[i],
+					prefix:    prefix,
+					template:  udnSSTemplate[i],
+				}
+				switch i {
+				case 0:
+					udncrd[0].createLayer2SingleStackUDNCRD(oc)
+				case 1:
+					udncrd[1].createUdnCRDSingleStack(oc)
+				}
+			}
+
+			err := waitUDNCRDApplied(oc, udnNS[i], udncrd[i].crdname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		exutil.By("3. Create NAD for UDN in last two namespaces")
+		udnNADResourcename := []string{"l2-network-" + udnNS[2], "l3-network-" + udnNS[3]}
+		topology := []string{"layer2", "layer3"}
+		udnnad := make([]udnNetDefResource, 2)
+		for i := 0; i < 2; i++ {
+			udnnad[i] = udnNetDefResource{
+				nadname:             udnNADResourcename[i],
+				namespace:           udnNS[i+2],
+				nad_network_name:    udnNADResourcename[i],
+				topology:            topology[i],
+				subnet:              "",
+				mtu:                 mtu,
+				net_attach_def_name: fmt.Sprintf("%s/%s", udnNS[i+2], udnNADResourcename[i]),
+				role:                "primary",
+				template:            udnNadtemplate,
+			}
+			if ipStackType == "dualstack" {
+				udnnad[i].subnet = fmt.Sprintf("%s,%s", ipv4cidr[i], ipv6cidr[i])
+			} else {
+				udnnad[i].subnet = cidr[i]
+			}
+			udnnad[i].createUdnNad(oc)
+		}
+
+		exutil.By("4. Create replica pods in namespaces")
+		for _, ns := range udnNS {
+			e2e.Logf("Validating in %s namespace", ns)
+			createResourceFromFile(oc, ns, testPodFile)
+			err := waitForPodWithLabelReady(oc, ns, "name=test-pods")
+			exutil.AssertWaitPollNoErr(err, "Pods with label name=test-pods not ready")
+			testpodNSNames := getPodName(oc, ns, "name=test-pods")
+			CurlPod2PodPassUDN(oc, ns, testpodNSNames[0], ns, testpodNSNames[1])
+			for _, pingCmd := range pingCmds {
+				pingResponse, err := execCommandInSpecificPod(oc, ns, testpodNSNames[0], pingCmd)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(strings.Contains(pingResponse, "0% packet loss")).To(o.BeTrue())
+			}
+		}
+	})
 })
