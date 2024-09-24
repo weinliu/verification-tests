@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.checkData(oc, true, "infra.log")
 		})
 
-		g.It("Author:gkarager-CPaasrunOnly-WRS-Critical-61479-Vector-Forward logs to syslog(tls)", func() {
+		g.It("Author:gkarager-CPaasrunOnly-WRS-Critical-61479-VA-IAC.03-Vector-Forward logs to syslog(tls)", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -172,7 +172,7 @@ ca_file = "/var/run/ocp-collector/secrets/rsyslog-mtls/ca-bundle.crt"`
 			o.Expect(result).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-62527-Collector External syslog output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-62527-Collector External syslog output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
 
 			g.By("Configure the global tlsSecurityProfile to use custom profile")
 			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()

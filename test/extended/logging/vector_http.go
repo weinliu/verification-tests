@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author anli@redhat.com
-		g.It("Author:anli-CPaasrunOnly-Medium-61253-vector forward logs to fluentdserver over http - mtls", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-61253-VA-IAC.03-vector forward logs to fluentdserver over http - mtls", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -82,7 +82,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:anli-High-60933-vector Forward logs to fluentd over http - https", func() {
+		g.It("Author:anli-CPaasrunOnly-High-60933-vector Forward logs to fluentd over http - https", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-60926-vector Forward logs to fluentd over http - http", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-60926-vector Forward logs to fluentd over http - http", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -164,7 +164,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Medium-60936-vector Forward logs to fluentd over http - TLSSkipVerify", func() {
+		g.It("Author:anli-CPaasrunOnly-Medium-60936-vector Forward logs to fluentd over http - TLSSkipVerify", func() {
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -218,7 +218,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentdS.checkData(oc, true, "infra.log")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-61567-Collector-External HTTP output sink Fluentd complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-61567-Collector-External HTTP output sink Fluentd complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
 
 			g.By("Configure the global tlsSecurityProfile to use Old profile")
 			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
@@ -316,7 +316,7 @@ ca_file = "/var/run/ocp-collector/secrets/to-fluentd-60933/ca-bundle.crt"`
 			fluentdS.checkData(oc, true, "app.log")
 		})
 
-		g.It("CPaasrunOnly-Author:anli-Critical-65131-mCLF Inputs.receiver.http over http with default values", func() {
+		g.It("Author:anli-CPaasrunOnly-Critical-65131-VA-IAC.03 mCLF Inputs.receiver.http over http with default values", func() {
 			clfNS := oc.Namespace()
 			fluentdNS := clfNS
 
