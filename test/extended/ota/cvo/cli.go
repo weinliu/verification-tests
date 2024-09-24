@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -95,15 +96,16 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 		exutil.By("Get expected release image for the test")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		latest4NightlyMultiImage, err := exutil.GetLatest4PreviewImage("multi")
+
+		minorVer, err := strconv.Atoi(strings.Split(clusterVersion, ".")[1])
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(latest4NightlyMultiImage).NotTo(o.BeEmpty())
-		if !strings.Contains(latest4NightlyMultiImage, clusterVersion) {
-			g.Skip("There is not expected release image for the test")
-		}
+		stream := fmt.Sprintf("4-stable-multi/latest?in=>4.%s.0-0+<4.%s.0-0", minorVer, minorVer+1)
+		latest4StableMultiImage, err := exutil.GetLatest4StableImageByStream("multi", stream)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(latest4StableMultiImage).NotTo(o.BeEmpty())
 
 		exutil.By("Extract all manifests from the specified release payload")
-		extractedManifest, err := extractIncludedManifestWithInstallcfg(oc, false, cfgFile, latest4NightlyMultiImage, "")
+		extractedManifest, err := extractIncludedManifestWithInstallcfg(oc, false, cfgFile, latest4StableMultiImage, "")
 		defer func() { o.Expect(os.RemoveAll(extractedManifest)).NotTo(o.HaveOccurred()) }()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -130,23 +132,18 @@ var _ = g.Describe("[sig-updates] OTA oc should", func() {
 		fakeReleasePayload := "quay.io/openshift-release-dev/ocp-release@sha256:fd96300600f9585e5847f5855ca14e2b3cafbce12aefe3b3f52c5da10c466666"
 
 		exutil.By("Get expected release image for the test")
-		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		latest4StableImage, err := exutil.GetLatest4StableImage()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		latest4PreviewImage, err := exutil.GetLatest4PreviewImage("amd64")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(latest4PreviewImage).NotTo(o.BeEmpty())
-		if !strings.Contains(latest4PreviewImage, clusterVersion) {
-			g.Skip("There is not expected release image for the test")
-		}
+		o.Expect(latest4StableImage).NotTo(o.BeEmpty())
 
 		exutil.By("Check the error msg is about the wrong cloud type")
-		_, err = extractIncludedManifestWithInstallcfg(oc, true, cfgFile, latest4PreviewImage, "aws")
+		_, err = extractIncludedManifestWithInstallcfg(oc, true, cfgFile, latest4StableImage, "aws")
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).To(o.ContainSubstring("error: --cloud \"aws\" set"))
 		o.Expect(err.Error()).To(o.ContainSubstring("has \"gcp\""))
 
 		exutil.By("Check the error msg is about wrong format of baselineCapabilitySet")
-		_, err = extractIncludedManifestWithInstallcfg(oc, true, badFile, latest4PreviewImage, "")
+		_, err = extractIncludedManifestWithInstallcfg(oc, true, badFile, latest4StableImage, "")
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).To(o.ContainSubstring("error: unrecognized baselineCapabilitySet \"none\""))
 

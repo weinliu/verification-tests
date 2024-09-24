@@ -78,25 +78,26 @@ func GetLatest4StableImage() (string, error) {
 	return latestImage, nil
 }
 
-func GetLatest4PreviewImage(arch string) (latestImage string, err error) {
-	url := map[string]string{
-		"amd64": "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-dev-preview/latest",
-		"arm64": "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-dev-preview-arm64/latest",
-		"multi": "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-dev-preview-multi/latest",
-	}
+// GetLatest4StableImageByStream to get the latest 4-stable OCP image from a specifed releasestream link
+// GetLatest4StableImageByStream("multi", "4-stable-multi/latest?in=>4.16.0-0+<4.17.0-0")
+// GetLatest4StableImageByStream("amd64", "4-stable/latest")
+func GetLatest4StableImageByStream(arch string, stream string) (latestImage string, err error) {
+	url := fmt.Sprintf("https://%s.ocp.releases.ci.openshift.org/api/v1/releasestream/%s", arch, stream)
 	var resp *http.Response
 	var body []byte
-	resp, err = http.Get(url[arch])
+	resp, err = http.Get(url)
 	if err != nil {
-		err = fmt.Errorf("fail to get url %v, error: %v", url[arch], err)
+		err = fmt.Errorf("fail to get url %s, error: %v", url, err)
 		return "", err
 	}
 	body, err = io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		err = fmt.Errorf("fail to parse the result, error: %v", err)
+		return "", err
 	}
 	latestImage = gjson.Get(string(body), `pullSpec`).String()
+	e2e.Logf("The latest 4-stable OCP image is %s", latestImage)
 	return latestImage, err
 }
 
