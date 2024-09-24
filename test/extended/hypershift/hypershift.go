@@ -102,7 +102,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:heli-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
+	// deprecated: it is covered by console team https://github.com/openshift/openshift-tests-private/blob/master/frontend/console-test-frontend-hypershift.sh#L32-L35
+	g.It("Author:heli-ROSA-OSD_CCS-DEPRECATED-HyperShiftMGMT-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
 		var bashClient = NewCmdClient()
 		console, psw := hostedcluster.getHostedclusterConsoleInfo()
 		parms := fmt.Sprintf("curl -u admin:%s %s  -k  -LIs -o /dev/null -w %s ", psw, console, "%{http_code}")
@@ -230,10 +231,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-ROSA-Author:heli-Critical-45801-Critical-45821-Test fault resilient HA-capable etcd under network partition[Disruptive]", func() {
+	g.It("Author:heli-HyperShiftMGMT-ROSA-Critical-45801-Critical-45821-Test fault resilient HA-capable etcd under network partition[Disruptive]", func(ctx context.Context) {
 		if !hostedcluster.isCPHighlyAvailable() {
 			g.Skip("this is for hosted cluster HA mode , skip test run")
 		}
+
+		exutil.SkipOnAKSNess(ctx, oc, false)
 
 		g.By("find leader and get mapping between etcd pod name and node name")
 		etcdNodeMap := hostedcluster.getEtcdNodeMapping()
