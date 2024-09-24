@@ -8,12 +8,17 @@ objects:
   metadata:
     name: "${NAME}"
   spec:
-    installNamespace: "${INSTALLNAMESPACE}"
-    serviceAccount:
-      name: "${SANAME}"
-    packageName: "${PACKAGE}"
-    channel: "${CHANNEL}"
-    upgradeConstraintPolicy: "${POLICY}"
+    install:
+      namespace: "${INSTALLNAMESPACE}"
+      serviceAccount:
+        name: "${SANAME}"
+    source:
+      sourceType: "${SOURCETYPE}"
+      catalog:
+        packageName: "${PACKAGE}"
+        channels:
+          - "${CHANNEL}"
+        upgradeConstraintPolicy: "${POLICY}"
 parameters:
 - name: NAME
 - name: INSTALLNAMESPACE
@@ -21,5 +26,7 @@ parameters:
 - name: CHANNEL
 - name: SANAME
 - name: POLICY
-  value: "Enforce"
+  value: "CatalogProvided"
+- name: SOURCETYPE
+  value: "Catalog"
 

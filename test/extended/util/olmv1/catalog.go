@@ -35,7 +35,7 @@ func (clustercatalog *ClusterCatalogDescription) Create(oc *exutil.CLI) {
 	e2e.Logf("=========Create clustercatalog %v=========", clustercatalog.Name)
 	err := clustercatalog.CreateWithoutCheck(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	clustercatalog.WaitCatalogStatus(oc, "Unpacked", 0)
+	clustercatalog.WaitCatalogStatus(oc, "true", "Serving", 0)
 	clustercatalog.GetcontentURL(oc)
 }
 
@@ -66,10 +66,12 @@ func (clustercatalog *ClusterCatalogDescription) CreateWithoutCheck(oc *exutil.C
 	return err
 }
 
-func (clustercatalog *ClusterCatalogDescription) WaitCatalogStatus(oc *exutil.CLI, status string, consistentTime int) {
+func (clustercatalog *ClusterCatalogDescription) WaitCatalogStatus(oc *exutil.CLI, status string, conditionType string, consistentTime int) {
 	e2e.Logf("========= check clustercatalog %v status is %s =========", clustercatalog.Name, status)
+
+	jsonpath := fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].status}`, conditionType)
 	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-		output, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.phase}")
+		output, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", jsonpath)
 		if err != nil {
 			e2e.Logf("output is %v, error is %v, and try next", output, err)
 			return false, nil
@@ -88,7 +90,7 @@ func (clustercatalog *ClusterCatalogDescription) WaitCatalogStatus(oc *exutil.CL
 	if consistentTime != 0 {
 		e2e.Logf("make sure clustercatalog %s status is %s consistently for %ds", clustercatalog.Name, status, consistentTime)
 		o.Consistently(func() string {
-			output, _ := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.phase}")
+			output, _ := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", jsonpath)
 			return strings.ToLower(output)
 		}, time.Duration(consistentTime)*time.Second, 5*time.Second).Should(o.ContainSubstring(strings.ToLower(status)),
 			"clustercatalog %s status is not %s", clustercatalog.Name, status)
@@ -97,15 +99,15 @@ func (clustercatalog *ClusterCatalogDescription) WaitCatalogStatus(oc *exutil.CL
 
 func (clustercatalog *ClusterCatalogDescription) GetcontentURL(oc *exutil.CLI) {
 	e2e.Logf("=========Get clustercatalog %v contentURL =========", clustercatalog.Name)
-	route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-catalogserver", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
+	route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-service", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
 	if err != nil && !strings.Contains(route, "NotFound") {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	if route == "" || err != nil {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "reencrypt", "--service=catalogd-catalogserver", "-n", "openshift-catalogd").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "reencrypt", "--service=catalogd-service", "-n", "openshift-catalogd").Output()
 		e2e.Logf("output is %v, error is %v", output, err)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-			route, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-catalogserver", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
+			route, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-service", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()
 			if err != nil {
 				e2e.Logf("output is %v, error is %v, and try next", route, err)
 				return false, nil
@@ -116,12 +118,12 @@ func (clustercatalog *ClusterCatalogDescription) GetcontentURL(oc *exutil.CLI) {
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(errWait, "get route catalogd-catalogserver failed")
+		exutil.AssertWaitPollNoErr(errWait, "get route catalogd-service failed")
 	}
-	o.Expect(route).To(o.ContainSubstring("catalogd-catalogserver-openshift-catalogd"))
+	o.Expect(route).To(o.ContainSubstring("catalogd-service-openshift-catalogd"))
 	contentURL, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.contentURL}")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	clustercatalog.ContentURL = strings.Replace(contentURL, "catalogd-catalogserver.openshift-catalogd.svc", route, 1)
+	clustercatalog.ContentURL = strings.Replace(contentURL, "catalogd-service.openshift-catalogd.svc", route, 1)
 	e2e.Logf("clustercatalog contentURL is %s", clustercatalog.ContentURL)
 }
 

@@ -8,15 +8,21 @@ objects:
   metadata:
     name: "${NAME}"
   spec:
-    installNamespace: "${INSTALLNAMESPACE}"
-    serviceAccount:
-      name: "${SANAME}"
-    packageName: "${PACKAGE}"
+    install:
+      namespace: "${INSTALLNAMESPACE}"
+      serviceAccount:
+        name: "${SANAME}"
+    source:
+      sourceType: "${SOURCETYPE}"
+      catalog:
+        packageName: "${PACKAGE}"
 parameters:
 - name: NAME
 - name: INSTALLNAMESPACE
 - name: PACKAGE
 - name: SANAME
+- name: SOURCETYPE
+  value: "Catalog"
 
 
 

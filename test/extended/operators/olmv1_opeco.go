@@ -19,7 +19,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
+var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("olmv1-opeco"+getRandomString(), exutil.KubeConfigPath())
@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		pollInterval, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.spec.source.image.pollInterval}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(pollInterval)).To(o.ContainSubstring("20s"))
-		clustercatalog.WaitCatalogStatus(oc, "Unpacked", 0)
+		clustercatalog.WaitCatalogStatus(oc, "true", "Serving", 0)
 
 		exutil.By("Collect the initial image status information")
 		lastPollAttempt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastPollAttempt}").Output()
@@ -169,7 +169,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-69124-check the clustercatalog source type before created", func() {
+	g.It("Author:jitli-DEPRECATED-ConnectedOnly-High-69124-check the clustercatalog source type before created", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir             = exutil.FixturePath("testdata", "olm", "v1")
@@ -252,10 +252,11 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Check the image is updated without wait but the resolvedSource is still the same and won't unpack again")
-		statusOutput, err := olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.phase}")
+		jsonpath := fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].status}`, "Serving")
+		statusOutput, err := olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", jsonpath)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(statusOutput, "Unpacked") {
-			e2e.Failf("status is %v, not Unpacked", statusOutput)
+		if !strings.Contains(statusOutput, "True") {
+			e2e.Failf("status is %v, not Serving", statusOutput)
 		}
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
@@ -346,7 +347,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:xzha-High-70817-catalogd support setting a pull secret", func() {
+	g.It("Author:xzha-VMonly-DEPRECATED-ConnectedOnly-High-70817-catalogd support setting a pull secret", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -393,14 +394,14 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("2) Create clustercatalog")
 		defer clustercatalog.Delete(oc)
 		clustercatalog.CreateWithoutCheck(oc)
-		clustercatalog.WaitCatalogStatus(oc, "Failing", 30)
+		clustercatalog.WaitCatalogStatus(oc, "false", "Serving", 30)
 		conditions, _ := olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.conditions}")
 		o.Expect(conditions).To(o.ContainSubstring("error fetching image"))
 		o.Expect(conditions).To(o.ContainSubstring("401 Unauthorized"))
 
 		exutil.By("3) Patch the clustercatalog")
 		patchResource(oc, asAdmin, withoutNamespace, "clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pullSecret":"secret-70817-quay"}}}}`, "--type=merge")
-		clustercatalog.WaitCatalogStatus(oc, "Unpacked", 0)
+		clustercatalog.WaitCatalogStatus(oc, "true", "Serving", 0)
 
 		exutil.By("4) install clusterextension")
 		defer clusterextension.Delete(oc)
@@ -424,8 +425,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		defer clustercatalog.Delete(oc)
 		clustercatalog.Create(oc)
 
-		exutil.By("port-forward the catalogd-catalogserver")
-		cmd1, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/catalogd-catalogserver", "6920:443", "-n", "openshift-catalogd").Background()
+		exutil.By("port-forward the catalogd-service")
+		cmd1, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/catalogd-service", "6920:443", "-n", "openshift-catalogd").Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer cmd1.Process.Kill()
 
@@ -533,9 +534,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		}
 
 		exutil.By("update version to be >=1.0.2")
-		clusterextension.Patch(oc, `{"spec":{"version":">=1.0.2"}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": ">=1.0.2"}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
 			if !strings.Contains(resolvedBundle, "v1.0.3") {
 				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.0.3, and try next", resolvedBundle)
 				return false, nil
@@ -576,7 +577,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		}
 
 		exutil.By("update channel to candidate-v3.1")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v3.1"}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v3.1"]}}}}`)
 
 		exutil.By("Check if ChannelDeprecated status and messages still exist")
 		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "False", 0)
@@ -654,7 +655,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		saCrb.Create(oc)
 
 		exutil.By("Examine the service to confirm that the annotations are present")
-		describe, err := oc.WithoutNamespace().AsAdmin().Run("describe").Args("service", "catalogd-catalogserver", "-n", "openshift-catalogd").Output()
+		describe, err := oc.WithoutNamespace().AsAdmin().Run("describe").Args("service", "catalogd-service", "-n", "openshift-catalogd").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(describe).To(o.ContainSubstring("service.beta.openshift.io/serving-cert-secret-name: catalogserver-cert"))
 
@@ -734,7 +735,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("Update the version to 1.0.2, check changed from Namespaced to Cluster")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -750,7 +751,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
 
 		exutil.By("Update the version to 1.0.3, check changed from Cluster to Namespaced")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
 
@@ -810,7 +811,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("update the version to 1.0.2, report messages and upgrade safety fail")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -821,7 +822,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`calculating schema diff for CRD version "v1alpha1"`))
 
 		exutil.By("disabled crd upgrade safety check, it will not affect spec.scope: Invalid value: Cluster")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore","preflight":{"crdUpgradeSafety":{"disabled":true}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -836,7 +837,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Unexpected results message: %v", message))
 
 		exutil.By("disabled crd upgrade safety check An existing stored version of the CRD is removed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore","preflight":{"crdUpgradeSafety":{"disabled":true}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -845,7 +846,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`must have exactly one version marked as storage version, status.storedVersions[0]: Invalid value: "v1alpha1": must appear in spec.versions`))
 
 		exutil.By("disabled crd upgrade safety successfully")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.5","upgradeConstraintPolicy":"Ignore","preflight":{"crdUpgradeSafety":{"disabled":true}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
@@ -908,7 +909,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("upgrade will be prevented if An existing stored version of the CRD is removed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -917,7 +918,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75122s.cache.example.com failed upgrade safety validation. "NoStoredVersionRemoved" validation failed: stored version "v1alpha1" removed`))
 
 		exutil.By("upgrade will be allowed if A new version of the CRD is added with no modifications to existing versions")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
@@ -929,7 +930,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.3-nginxolm75122 successfully"))
 
 		exutil.By("upgrade will be prevented if An existing served version of the CRD is removed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
@@ -992,7 +993,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("upgrade will be prevented if A new required field is added to an existing version of the CRD")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1001,7 +1002,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec": new required fields added: [requiredfield2]`))
 
 		exutil.By("upgrade will be prevented if An existing field is removed from an existing version of the CRD")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1011,7 +1012,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: calculating schema diff for CRD version "v1alpha1"`))
 
 		exutil.By("upgrade will be prevented if An existing field type is changed in an existing version of the CRD")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1020,7 +1021,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field" has unknown change, refusing to determine that change is safe`))
 
 		exutil.By("upgrade will be allowed if An existing required field is changed to optional in an existing version")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.8","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.8","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
@@ -1083,7 +1084,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("upgrade will be prevented if A new default value is added to a field that did not previously have a default value")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1092,7 +1093,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field": new value added as default when previously no default value existed: &JSON{Raw:*[34 100 101 102 97 117 108 116 45 115 116 114 105 110 103 45 106 105 116 108 105 34],}`))
 
 		exutil.By("upgrade will be prevented if The default value of a field is changed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1101,7 +1102,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultenum": default value has been changed from [34 118 97 108 117 101 49 34] to [34 118 97 108 117 101 51 34]`))
 
 		exutil.By("upgrade will be prevented if An existing default value of a field is removed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1161,7 +1162,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("upgrade will be prevented if New enum restrictions are added to an existing field which did not previously have enum restrictions")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1177,7 +1178,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
 		exutil.By("upgrade will be prevented if Existing enum values from an existing field are removed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.5","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
@@ -1186,7 +1187,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75515s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.enumfield": enum values removed: ["value2"]`))
 
 		exutil.By("upgrade will be allowed if Adding new enum values to the list of allowed enum values in a field")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
@@ -1250,7 +1251,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 
 		exutil.By("upgrade will be prevented if The minimum value of an existing field is increased in an existing version and The maximum value of an existing field is decreased in an existing version")
 		exutil.By("Check minimum & maximum")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.2","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1260,7 +1261,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring("minimum constraint increased from 10 to 20"))
 
 		exutil.By("Check minLength & maxLength")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.3","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1270,7 +1271,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring("minimum length constraint increased from 3 to 9"))
 
 		exutil.By("Check minProperties & maxProperties")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.4","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.4","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1280,7 +1281,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring("minimum properties constraint increased from 2 to 3"))
 
 		exutil.By("Check minItems & maxItems")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.5","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1290,7 +1291,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring("minimum items constraint increased from 2 to 3"))
 
 		exutil.By("upgrade will be prevented if Minimum or maximum field constraints are added to a field that did not previously have constraints")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.6","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -1300,7 +1301,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(message).To(o.ContainSubstring(`version "v1alpha1", field "^.spec.field1": minimum constraint added when one did not exist previously: 10`))
 
 		exutil.By("upgrade will be Allowed if The minimum value of an existing field is decreased in an existing version & The maximum value of an existing field is increased in an existing version")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"version":"1.0.7","upgradeConstraintPolicy":"Ignore"}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.7","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterextension.WaitClusterExtensionCondition(oc, "Resolved", "True", 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
@@ -1337,7 +1338,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clustercatalog1.Create(oc)
 
 		exutil.By("Get the gzip response")
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "passthrough", "passthrough75441", "--service=catalogd-catalogserver", "-n", "openshift-catalogd").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "passthrough", "passthrough75441", "--service=catalogd-service", "-n", "openshift-catalogd").Execute()
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("route", "passthrough75441", "-n", "openshift-catalogd").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "passthrough75441", "-o", "jsonpath={..spec.host}", "-n", "openshift-catalogd").Output()

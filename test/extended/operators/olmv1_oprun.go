@@ -15,7 +15,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
+var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLIWithoutNamespace("default")
@@ -438,7 +438,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 				Channel:                 "alpha",
 				Version:                 ">=0.0.1",
 				InstallNamespace:        ns,
-				UpgradeConstraintPolicy: "Ignore",
+				UpgradeConstraintPolicy: "SelfCertified",
 				SaName:                  sa,
 				Template:                clusterextensionTemplate,
 			}
@@ -457,7 +457,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 				Channel:                 "alpha",
 				Version:                 ">=0.0.1",
 				InstallNamespace:        ns,
-				UpgradeConstraintPolicy: "Ignore",
+				UpgradeConstraintPolicy: "SelfCertified",
 				SaName:                  sa,
 				Template:                clusterextensionTemplate,
 			}
@@ -511,14 +511,14 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		defer ceWBH.Delete(oc)
 		ceWBH.CreateWithoutCheck(oc)
 		ceWBH.CheckClusterExtensionCondition(oc, "Installed", "message", "webhookDefinitions are not supported", 10, 180, 0)
-		ceWBH.CheckClusterExtensionCondition(oc, "Installed", "reason", "InstallationFailed", 10, 180, 0)
+		ceWBH.CheckClusterExtensionCondition(oc, "Installed", "reason", "Failed", 10, 180, 0)
 		ceWBH.Delete(oc)
 
 		exutil.By("check non all ns mode fails to be installed.")
 		defer ceNAN.Delete(oc)
 		ceNAN.CreateWithoutCheck(oc)
 		ceNAN.CheckClusterExtensionCondition(oc, "Installed", "message", "do not support targeting all namespaces", 10, 180, 0)
-		ceNAN.CheckClusterExtensionCondition(oc, "Installed", "reason", "InstallationFailed", 10, 180, 0)
+		ceNAN.CheckClusterExtensionCondition(oc, "Installed", "reason", "Failed", 10, 180, 0)
 		ceNAN.Delete(oc)
 
 	})
@@ -657,9 +657,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		exutil.By("update version to be >=1.0.1")
-		clusterextension.Patch(oc, `{"spec":{"version":">=1.0.1"}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": ">=1.0.1"}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
 			if !strings.Contains(resolvedBundle, "v1.0.2") {
 				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.0.2, and try next", resolvedBundle)
 				return false, nil
@@ -672,9 +672,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		}
 
 		exutil.By("update channel to be candidate-v1.1")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle}")
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
 			if !strings.Contains(resolvedBundle, "v1.1.0") {
 				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.1.0, and try next", resolvedBundle)
 				return false, nil
@@ -682,7 +682,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			return true, nil
 		})
 		if errWait != nil {
-			olmv1util.GetNoEmpty(oc, "clusterextensiono", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
 			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundle is not v1.1.0")
 		}
 	})
@@ -736,8 +736,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Create(oc)
 		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.0.2"))
 
-		exutil.By("3) Attempt to update to channel candidate-v2.1 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v2.1"}}`)
+		exutil.By("3) Attempt to update to channel candidate-v2.1 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v2.1"]}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
 			if strings.Contains(message, "error upgrading") {
@@ -746,10 +746,13 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			}
 			return false, nil
 		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+		}
 		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
 
-		exutil.By("4) Attempt to update to channel candidate-v0.1 with Enforce policy, that should success")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v0.1"}}`)
+		exutil.By("4) Attempt to update to channel candidate-v0.1 with CatalogProvided policy, that should success")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v0.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if strings.Contains(clusterextension.ResolvedBundle, "0.1.0") {
@@ -760,8 +763,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx74108 0.1.0 is not installed")
 
-		exutil.By("5) Attempt to update to channel candidate-v1.0 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.0"}}`)
+		exutil.By("5) Attempt to update to channel candidate-v1.0 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.0"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
 			if strings.Contains(message, "error upgrading") {
@@ -772,8 +775,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
 
-		exutil.By("6) update policy to Ignore, upgrade should success")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		exutil.By("6) update policy to SelfCertified, upgrade should success")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if strings.Contains(clusterextension.ResolvedBundle, "1.0.2") {
@@ -784,9 +787,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx74108 1.0.2 is not installed")
 
-		exutil.By("7) Attempt to update to channel candidate-v1.1 with Enforce policy, that should success")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.1"}}`)
+		exutil.By("7) Attempt to update to channel candidate-v1.1 with CatalogProvided policy, that should success")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "CatalogProvided"}}}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if strings.Contains(clusterextension.ResolvedBundle, "1.1.0") {
@@ -797,8 +800,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx74108 0.1.0 is not installed")
 
-		exutil.By("8) Attempt to update to channel candidate-v1.2 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.2"}}`)
+		exutil.By("8) Attempt to update to channel candidate-v1.2 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.2"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
 			if strings.Contains(message, "error upgrading") {
@@ -809,8 +812,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
 
-		exutil.By("9) update policy to Ignore, upgrade should success")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		exutil.By("9) update policy to SelfCertified, upgrade should success")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if strings.Contains(clusterextension.ResolvedBundle, "1.2.0") {
@@ -821,9 +824,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx74108 1.2.0 is not installed")
 
-		exutil.By("10) Attempt to update to channel candidate-v2.0 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v2.0"}}`)
+		exutil.By("10) Attempt to update to channel candidate-v2.0 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "CatalogProvided"}}}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v2.0"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
 			if strings.Contains(message, "error upgrading") {
@@ -834,8 +837,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
 
-		exutil.By("11) Attempt to update to channel candidate-v2.1 with Enforce policy, that should success")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v2.1"}}`)
+		exutil.By("11) Attempt to update to channel candidate-v2.1 with CatalogProvided policy, that should success")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v2.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if strings.Contains(clusterextension.ResolvedBundle, "2.1.1") {
@@ -846,9 +849,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx74108 2.1.1 is not installed")
 
-		exutil.By("8) downgrade to version 1.0.1 with Ignore policy, that should work")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1.0","version":"1.0.1"}}`)
+		exutil.By("8) downgrade to version 1.0.1 with SelfCertified policy, that should work")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.0"],"version":"1.0.1"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if strings.Contains(clusterextension.ResolvedBundle, "1.0.1") {
@@ -857,6 +860,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			}
 			return false, nil
 		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+		}
 		exutil.AssertWaitPollNoErr(errWait, "nginx74108 1.0.1 is not installed")
 
 	})
@@ -1037,22 +1043,22 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		status, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
 		o.Expect(status).To(o.ContainSubstring("True"))
 		reason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
-		o.Expect(reason).To(o.ContainSubstring("Success"))
+		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
 		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
 		o.Expect(status).To(o.ContainSubstring("True"))
 		reason, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].reason}`)
-		o.Expect(reason).To(o.ContainSubstring("UnpackSuccess"))
+		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
 		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].status}`)
 		o.Expect(status).To(o.ContainSubstring("True"))
 		reason, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].reason}`)
-		o.Expect(reason).To(o.ContainSubstring("Success"))
-		installedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.installedBundle.version}`)
+		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
+		installedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.install.bundle.version}`)
 		o.Expect(installedBundleVersion).To(o.ContainSubstring("2.1.0"))
-		installedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.installedBundle.name}`)
+		installedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.install.bundle.name}`)
 		o.Expect(installedBundleName).To(o.ContainSubstring("nginx75501.v2.1.0"))
-		resolvedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolvedBundle.version}`)
+		resolvedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolution.bundle.version}`)
 		o.Expect(resolvedBundleVersion).To(o.ContainSubstring("2.1.0"))
-		resolvedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolvedBundle.name}`)
+		resolvedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolution.bundle.name}`)
 		o.Expect(resolvedBundleName).To(o.ContainSubstring("nginx75501.v2.1.0"))
 
 		clusterextension.Delete(oc)
@@ -1065,7 +1071,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			unpackedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
 			unpackedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].reason}`)
 			unpackedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].message}`)
-			if !strings.Contains(unpackedStatus, "False") || !strings.Contains(unpackedReason, "UnpackFailed") || !strings.Contains(unpackedMessage, "error fetching image") {
+			if !strings.Contains(unpackedStatus, "False") || !strings.Contains(unpackedReason, "Failed") || !strings.Contains(unpackedMessage, "error fetching image") {
 				return false, nil
 			}
 			return true, nil
@@ -1083,7 +1089,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
 			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
 			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].message}`)
-			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "ResolutionFailed") || !strings.Contains(resolvedMessage, "no package") {
+			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
 				return false, nil
 			}
 			return true, nil
@@ -1101,7 +1107,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
 			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
 			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].message}`)
-			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "ResolutionFailed") || !strings.Contains(resolvedMessage, "no package") {
+			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
 				return false, nil
 			}
 			return true, nil
@@ -1163,8 +1169,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Create(oc)
 		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.0.1"))
 
-		exutil.By("3) Attempt to update to version 0.0.2 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"version":"0.0.2"}}`)
+		exutil.By("3) Attempt to update to version 0.0.2 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "0.0.2"}}}}`)
 		/*
 			errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 				message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
@@ -1176,8 +1182,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			})
 			exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.0.2 should not be installed")
 
-			exutil.By("4) change UpgradeConstraintPolicy to be Ignore, that should work")
-			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)*/
+			exutil.By("4) change UpgradeConstraintPolicy to be SelfCertified, that should work")
+			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"SelfCertified"}}`)*/
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "0.0.2") {
@@ -1190,15 +1196,15 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 
 		clusterextension.Delete(oc)
 
-		exutil.By("5) Install version 0.1.0 with Enforce policy, that should work")
+		exutil.By("5) Install version 0.1.0 with CatalogProvided policy, that should work")
 		clusterextension.Channel = "candidate-v0.1"
 		clusterextension.Version = "0.1.0"
-		clusterextension.UpgradeConstraintPolicy = "Enforce"
+		clusterextension.UpgradeConstraintPolicy = "CatalogProvided"
 		clusterextension.Create(oc)
 		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.1.0"))
 
-		exutil.By("6) Attempt to update to version 0.2.0 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"version":"0.2.0","channel":"candidate-v0.2"}}`)
+		exutil.By("6) Attempt to update to version 0.2.0 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"0.2.0","channels":["candidate-v0.2"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
 			if !strings.Contains(message, "error upgrading") {
@@ -1209,8 +1215,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.2.0 should not be installed")
 
-		exutil.By("7) Install version 0.2.0 with Ignore policy, that should work")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		exutil.By("7) Install version 0.2.0 with SelfCertified policy, that should work")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "0.2.0") {
@@ -1221,9 +1227,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx69193 0.2.0 is not installed")
 
-		exutil.By("8) Install version 0.2.2 with Enforce policy, that should work")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
-		clusterextension.Patch(oc, `{"spec":{"version":"0.2.2"}}`)
+		exutil.By("8) Install version 0.2.2 with CatalogProvided policy, that should work")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "CatalogProvided"}}}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "0.2.2"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "0.2.2") {
@@ -1285,8 +1291,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Create(oc)
 		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.2.2"))
 
-		exutil.By("3) Attempt to update to version 1.0.0 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"channel":"candidate-v1", "version":"1.0.0"}}`)
+		exutil.By("3) Attempt to update to version 1.0.0 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels":["candidate-v1"], "version":"1.0.0"}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
 			if !strings.Contains(message, "error upgrading") {
@@ -1297,8 +1303,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.0.0 should not be installed")
 
-		exutil.By("4) change UpgradeConstraintPolicy to be Ignore, that should work")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		exutil.By("4) change UpgradeConstraintPolicy to be SelfCertified, that should work")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "1.0.0") {
@@ -1309,9 +1315,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.0.0 is not installed")
 
-		exutil.By("5) change UpgradeConstraintPolicy to be Enforce, attempt to update to version 1.0.1, that should work")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Enforce"}}`)
-		clusterextension.Patch(oc, `{"spec":{"version":"1.0.1"}}`)
+		exutil.By("5) change UpgradeConstraintPolicy to be CatalogProvided, attempt to update to version 1.0.1, that should work")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "CatalogProvided"}}}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "1.0.1"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "1.0.1") {
@@ -1323,7 +1329,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.0.1 is not installed")
 
 		exutil.By("6) attempt to update to version 1.2.1, that should work")
-		clusterextension.Patch(oc, `{"spec":{"version":"1.2.1"}}`)
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "1.2.1"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "1.2.1") {
@@ -1334,8 +1340,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx70719 1.2.1 is not installed")
 
-		exutil.By("7) Attempt to update to version 2.0.0 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"version":"2.0.0"}}`)
+		exutil.By("7) Attempt to update to version 2.0.0 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "2.0.0"}}}}`)
 		/*
 			errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 				message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
@@ -1347,8 +1353,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			})
 			exutil.AssertWaitPollNoErr(errWait, "nginx70719 2.0.0 should not be installed")
 
-			exutil.By("8) Install version 2.0.0 with Ignore policy, that should work")
-			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)*/
+			exutil.By("8) Install version 2.0.0 with SelfCertified policy, that should work")
+			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"SelfCertified"}}`)*/
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "2.0.0") {
@@ -1411,8 +1417,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		defer clusterextension.Delete(oc)
 		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("2.2.1"))
 
-		exutil.By("3) Attempt to downgrade to version 2.0.0 with Enforce policy, that should fail")
-		clusterextension.Patch(oc, `{"spec":{"version":"2.0.0"}}`)
+		exutil.By("3) Attempt to downgrade to version 2.0.0 with CatalogProvided policy, that should fail")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "2.0.0"}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions[*].message}")
 			if !strings.Contains(message, "error upgrading") {
@@ -1423,8 +1429,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "nginx70723 2.0.0 should not be installed")
 
-		exutil.By("4) change UpgradeConstraintPolicy to be Ignore, that should work")
-		clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"Ignore"}}`)
+		exutil.By("4) change UpgradeConstraintPolicy to be SelfCertified, that should work")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
 			if !strings.Contains(clusterextension.ResolvedBundle, "2.0.0") {

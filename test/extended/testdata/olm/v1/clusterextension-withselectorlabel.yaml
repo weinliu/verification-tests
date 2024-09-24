@@ -8,16 +8,21 @@ objects:
   metadata:
     name: "${NAME}"
   spec:
-    catalogSelector:
-      matchLabels:
-        "${LABELKEY}": "${LABELVALUE}"
-    installNamespace: "${INSTALLNAMESPACE}"
-    serviceAccount:
-      name: "${SANAME}"
-    packageName: "${PACKAGE}"
-    channel: "${CHANNEL}"
-    version: "${VERSION}"
-    upgradeConstraintPolicy: "${POLICY}"
+    install:
+      namespace: "${INSTALLNAMESPACE}"
+      serviceAccount:
+        name: "${SANAME}"
+    source:
+      sourceType: "${SOURCETYPE}"
+      catalog:
+        packageName: "${PACKAGE}"
+        channels:
+          - "${CHANNEL}"
+        version: "${VERSION}"
+        selector:
+          matchLabels:
+            "${LABELKEY}": "${LABELVALUE}"
+        upgradeConstraintPolicy: "${POLICY}"
 parameters:
 - name: NAME
 - name: INSTALLNAMESPACE
@@ -26,9 +31,11 @@ parameters:
 - name: VERSION
 - name: SANAME
 - name: POLICY
-  value: "Enforce"
+  value: "CatalogProvided"
 - name: LABELVALUE
   # suggest to use case id
 - name: LABELKEY
   value: "olmv1-test"
+- name: SOURCETYPE
+  value: "Catalog"
 

@@ -24,6 +24,7 @@ type ClusterExtensionDescription struct {
 	UpgradeConstraintPolicy string
 	LabelKey                string // default is olmv1-test
 	LabelValue              string // suggest to use case id
+	SourceType              string
 	Template                string
 	InstalledBundle         string
 	ResolvedBundle          string
@@ -67,6 +68,9 @@ func (clusterextension *ClusterExtensionDescription) CreateWithoutCheck(oc *exut
 	}
 	if len(clusterextension.LabelValue) > 0 {
 		paremeters = append(paremeters, "LABELVALUE="+clusterextension.LabelValue)
+	}
+	if len(clusterextension.SourceType) > 0 {
+		paremeters = append(paremeters, "SOURCETYPE="+clusterextension.SourceType)
 	}
 	err := exutil.ApplyClusterResourceFromTemplateWithError(oc, paremeters...)
 	return err
@@ -154,7 +158,7 @@ func (clusterextension *ClusterExtensionDescription) GetClusterExtensionMessage(
 func (clusterextension *ClusterExtensionDescription) WaitResolvedBundleVersion(oc *exutil.CLI, version string) {
 
 	e2e.Logf("========= wait clusterextension %v resolvedBundle version is %s =========", clusterextension.Name, version)
-	jsonpath := fmt.Sprintf("jsonpath={.status.resolvedBundle.version}")
+	jsonpath := "jsonpath={.status.resolution.bundle.version}"
 	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", jsonpath)
 		if err != nil {
@@ -197,14 +201,14 @@ func (clusterextension *ClusterExtensionDescription) GetClusterExtensionField(oc
 func (clusterextension *ClusterExtensionDescription) GetBundleResource(oc *exutil.CLI) {
 	e2e.Logf("=========Get clusterextension %v BundleResource =========", clusterextension.Name)
 
-	installedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.installedBundle.name}")
+	installedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.install.bundle.name}")
 	if err != nil {
 		Get(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterextension.InstalledBundle = installedBundle
 
-	resolvedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolvedBundle.name}")
+	resolvedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
 	if err != nil {
 		Get(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
 	}
