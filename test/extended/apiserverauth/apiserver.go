@@ -2259,6 +2259,8 @@ spec:
 			g.Skip("This is not a SNO cluster, skip.")
 		}
 
+		kubeApiserverCoStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		exutil.By("2) Get a master node.")
 		masterNode, getFirstMasterNodeErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(getFirstMasterNodeErr).NotTo(o.HaveOccurred())
@@ -2275,16 +2277,22 @@ spec:
 		o.Expect(output).Should(o.ContainSubstring("->"))
 		exutil.By("3.3) Check linked file exists.")
 		o.Expect(output).Should(o.ContainSubstring("kube-apiserver-pod.yaml"))
+		re := regexp.MustCompile(`kube-apiserver-pod-(\d+)`)
+		matches := re.FindStringSubmatch(output)
+		if len(matches) <= 1 {
+			e2e.Failf("No match last-known-good config file for kube-apiserver found!")
+		}
+		lastGoodRevision, _ := strconv.Atoi(matches[1])
+		o.Expect(lastGoodRevision).To(o.BeNumerically(">", 0))
 
 		exutil.By("4) Check cluster operator kube-apiserver is normal, not degraded, and does not contain abnormal statuses.")
-		state, checkClusterOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-apiserver", "-o", "jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
-		o.Expect(checkClusterOperatorConditionErr).NotTo(o.HaveOccurred())
-		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 
-		exutil.By("5) Check kubeapiserver operator is normal, not degraded, and does not contain abnormal statuses.")
-		state, checkKubeapiserverOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver.operator", "cluster", "-o", "jsonpath={.status.nodeStatuses[?(@.lastFailedRevisionErrors)]}").Output()
-		o.Expect(checkKubeapiserverOperatorConditionErr).NotTo(o.HaveOccurred())
-		o.Expect(state).Should(o.BeEmpty())
+		exutil.By("5) Check the currentRevision kube-apiserver should be the same with last-known-good pointing.")
+		kasOperatorCurrentRevision, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver.operator", "cluster", "-o", "jsonpath={.status.nodeStatuses[0].currentRevision}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		n, _ := strconv.Atoi(kasOperatorCurrentRevision)
+		o.Expect(n).To(o.Equal(lastGoodRevision))
 	})
 
 	// author: dpunia@redhat.com
