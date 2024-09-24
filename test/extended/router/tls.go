@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	var oc = exutil.NewCLI("router-tls", exutil.KubeConfigPath())
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-LEVEL0-Critical-43300-enable client certificate with optional policy", func() {
+	g.It("Author:hongli-WRS-LEVEL0-Critical-43300-V-ACS.05-enable client certificate with optional policy", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		cmFile := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-Medium-43301-enable client certificate with required policy", func() {
+	g.It("Author:hongli-WRS-Medium-43301-V-ACS.05-enable client certificate with required policy", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		cmFile := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
@@ -87,7 +87,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-43284-setting tlssecurityprofile to TLSv1.3", func() {
+	g.It("Author:mjoseph-WRS-Critical-43284-V-CM.01-setting tlssecurityprofile to TLSv1.3", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
