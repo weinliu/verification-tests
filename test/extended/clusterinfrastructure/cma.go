@@ -99,4 +99,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CMA", func() 
 		curlOutputHttps, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", "openshift-cluster-machine-approver", "-i", "--", "curl", url_https).Output()
 		o.Expect(curlOutputHttps).To(o.ContainSubstring("SSL certificate problem"))
 	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-HyperShiftMGMT-Medium-45695-MachineApprover is usable with CAPI for guest cluster", func() {
+		exutil.By("Check disable-status-controller should be in guest cluster machine-approver")
+		guestClusterName, guestClusterKube, hostedClusterNS := exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		maGrgs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "machine-approver", "-o=jsonpath={.spec.template.spec.containers[0].args}", "-n", hostedClusterNS+"-"+guestClusterName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(maGrgs).Should(o.ContainSubstring("disable-status-controller"))
+		o.Expect(maGrgs).Should(o.ContainSubstring("apigroup=cluster.x-k8s.io"))
+		o.Expect(maGrgs).Should(o.ContainSubstring("workload-cluster-kubeconfig=/etc/kubernetes/kubeconfig/kubeconfig"))
+
+		exutil.By("Check CO machine-approver is disabled")
+		checkCO, err := oc.AsAdmin().SetGuestKubeconf(guestClusterKube).AsGuestKubeconf().Run("get").Args("co").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(checkCO).ShouldNot(o.ContainSubstring("machine-approver"))
+	})
 })
