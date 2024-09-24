@@ -261,6 +261,15 @@ type httpserverPodResourceNode struct {
 	template      string
 }
 
+// struct for using nncp to create VF on sriov node
+type VRFResource struct {
+	name     string
+	intfname string
+	nodename string
+	tableid  int
+	template string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -4054,4 +4063,20 @@ func SkipIfNoFeatureGate(oc *exutil.CLI, featuregate string) {
 	if !enabled {
 		g.Skip(fmt.Sprintf("Featuregate %s is not enabled in this cluster", featuregate))
 	}
+}
+
+// Create VF policy through NMstate
+func (vrf *VRFResource) createVRF(oc *exutil.CLI) error {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", vrf.template, "-p", "NAME="+vrf.name, "INTFNAME="+vrf.intfname, "NODENAME="+vrf.nodename, "TABLEID="+strconv.Itoa(int(vrf.tableid)))
+		if err1 != nil {
+			e2e.Logf("Creating VRF on the node failed :%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("fail to create VRF on the node %v", vrf.name)
+	}
+	return nil
 }

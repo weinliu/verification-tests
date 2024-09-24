@@ -5302,6 +5302,112 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 		o.Expect(strings.Contains(output, "default ")).Should(o.BeTrue())
 
 	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-ConnectedOnly-High-75830-[rducluster] [Multi-NIC] EgressIP should work in VRF mode. [Disruptive]", func() {
+
+		// for customer bug: https://issues.redhat.com/browse/OCPBUGS-38267
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		nmstateCRTemplate := filepath.Join(buildPruningBaseDir, "nmstate", "nmstate-cr-template.yaml")
+		VRFTemplate := filepath.Join(buildPruningBaseDir, "nmstate", "nncp-vrf-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		if len(workers) < 1 {
+			g.Skip("Need at least 1 worker for the test, when there is none, skip the case!!")
+		}
+		egressNode := workers[0]
+
+		exutil.By("\n 1. Install nmstate operator and create nmstate CR \n")
+		installNMstateOperator(oc)
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, "openshift-nmstate")
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		exutil.By("\n 2. Create VRF on egress node by nmstate \n")
+		vrf := VRFResource{
+			name:     "vrf-75830",
+			intfname: "enp1s0",
+			nodename: egressNode,
+			tableid:  1083,
+			template: VRFTemplate,
+		}
+
+		defer deleteNNCP(oc, vrf.name)
+		vrf.createVRF(oc)
+		exutil.By("\n 2.1 Verify VRF is created \n")
+		nncpErr1 := checkNNCPStatus(oc, vrf.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "VRF creation failed")
+		e2e.Logf("SUCCESS - VRF is created")
+
+		exutil.By("3. Apply EgressLabel Key to egress node, create an egressIP object, verify egressIP is assigned \n")
+		exutil.By("3.1. Apply EgressLabel Key to egress node \n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+
+		exutil.By("3.2. Create one egressip object, verify egressIP is assigned\n")
+		dstCIDR := "172.22.0.0/24"
+		freeIPs := findFreeIPsForCIDRs(oc, egressNode, dstCIDR, 1)
+		egressIP := freeIPs[0]
+		egressip1 := egressIPResource1{
+			name:          "egressip-75830",
+			template:      egressIP2Template,
+			egressIP1:     egressIP,
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+
+		exutil.By("4. Get the namespace, create a test pod in it, label namespace and test pod to match namespaceSelector and podSelector of egressIP object \n")
+		ns1 := oc.Namespace()
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		exutil.By("4.1. Apply a label to the namespace \n")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4.2. Apply label to test pod in the namespace\n")
+		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. Start tcpdump on egress node \n")
+		exutil.SetNamespacePrivileged(oc, ns1)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s", vrf.intfname)
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+egressNode, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		exutil.AssertWaitPollNoErr(err, "FAILED to start tcmpdump on the egress node\n")
+
+		//Wait 5 seconds to let the tcpdump ready for capturing traffic
+		time.Sleep(5 * time.Second)
+
+		exutil.By("6. Ping outside from the test pod \n")
+		externalIP := "172.22.0.1"
+		pingCmd := fmt.Sprintf("ping -c4 %s", externalIP)
+		e2eoutput.RunHostCmd(pod1.namespace, pod1.name, pingCmd)
+
+		exutil.By("7. Check if captured packets has egressIP as its sourceIP \n")
+		cmdTcpdump.Wait()
+		e2e.Logf(" \n\n\n The captured packet from tcpdump: \n %s \n\n\n", cmdOutput.String())
+		o.Expect(strings.Contains(cmdOutput.String(), "IP "+egressIP+" > "+externalIP+": ICMP echo request")).To(o.BeTrue())
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC Basic", func() {
