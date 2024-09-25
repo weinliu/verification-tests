@@ -2585,10 +2585,19 @@ spec:
 
 		exutil.By("7) Update pod, expect 200 HTTP response status")
 		authHeader := fmt.Sprintf(`Authorization: Bearer %s`, token)
-		command := fmt.Sprintf("curl -X PUT %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json' -d '%s'", url, "%{http_code}", authHeader, podJSON)
+		command := fmt.Sprintf("curl -sS -X PUT %s -o /dev/null -w '%%{http_code}' -k -H '%s' -H 'Content-Type: application/json' -d '%s'", url, authHeader, podJSON)
 		updatePodStatusRawOutput, err := exec.Command("bash", "-c", command).Output()
-		updatePodStatusOutput := string(updatePodStatusRawOutput)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		var updatePodStatusOutput string
+		if err != nil {
+			// Accessing url from pod if url not accessible outside of cluster
+			podsList := getPodsListByLabel(oc.AsAdmin(), oc.Namespace(), "deployment=frontend-1")
+			exutil.AssertPodToBeReady(oc, podsList[0], oc.Namespace())
+			updatePodStatusOutput = ExecCommandOnPod(oc.NotShowInfo(), podsList[0], oc.Namespace(), command)
+		} else {
+			updatePodStatusOutput = string(updatePodStatusRawOutput)
+			updatePodStatusOutput = strings.TrimSpace(updatePodStatusOutput)
+		}
+		// Expect the output to be just "200"
 		o.Expect(updatePodStatusOutput).To(o.Equal("200"))
 
 		exutil.By(fmt.Sprintf("8) Get pod %s", pod))
@@ -2596,10 +2605,17 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("9) Delete pod, expect 405 HTTP response status")
-		command = fmt.Sprintf("curl -X DELETE %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json'", url, "%{http_code}", authHeader)
+		command = fmt.Sprintf("curl -sS -X DELETE %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json'", url, "%{http_code}", authHeader)
 		deletePodStatusRawOutput, err := exec.Command("bash", "-c", command).Output()
-		deletePodStatusOutput := string(deletePodStatusRawOutput)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		var deletePodStatusOutput string
+		if err != nil {
+			podsList := getPodsListByLabel(oc.AsAdmin(), oc.Namespace(), "deployment=frontend-1")
+			exutil.AssertPodToBeReady(oc, podsList[0], oc.Namespace())
+			deletePodStatusOutput = ExecCommandOnPod(oc.NotShowInfo(), podsList[0], oc.Namespace(), command)
+		} else {
+			deletePodStatusOutput = string(deletePodStatusRawOutput)
+			deletePodStatusOutput = strings.TrimSpace(deletePodStatusOutput)
+		}
 		o.Expect(deletePodStatusOutput).To(o.Equal("405"))
 	})
 
