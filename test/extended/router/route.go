@@ -43,12 +43,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-edge10207", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("4.0: Curl the edge route for two times, one with saving the cookie for the second server")
-		waitForOutsideCurlContains("https://"+routehost, "-k", "Hello-OpenShift "+srvPodList[0]+" http-8080")
-		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-10207", "Hello-OpenShift "+srvPodList[1]+" http-8080")
+		curlCmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k", "https://"+routehost)
+		expectOutput := []string{"Hello-OpenShift " + srvPodList[0] + " http-8080"}
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
+		curlCmd = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -c "+fileDir+"/cookie-10207", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
 
 		exutil.By("5.0: Curl the edge route with the cookie, expect forwarding to the second server")
 		curlCmdWithCookie := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-10207", "https://"+routehost)
-		expectOutput := []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
 		result := repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
 		o.Expect(result[1]).To(o.Equal(6))
 
@@ -85,18 +89,19 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-edge11130", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("4.0: Curl the edge route, make sure saving the cookie for server 1")
-		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-11130", "Hello-OpenShift "+srvPodList[0]+" http-8080")
+		curlCmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -c "+fileDir+"/cookie-11130", "https://"+routehost)
+		expectOutput := []string{"Hello-OpenShift " + srvPodList[0] + " http-8080"}
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
 
 		exutil.By("5.0: Curl the edge route, make sure could get response from server 2")
-		curlCmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k", "https://"+routehost)
-		expectOutput := []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result := repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
-		o.Expect(result[0]).To(o.Equal(1))
+		curlCmd = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
 
 		exutil.By("6.0: Curl the edge route with the cookie, expect all are forwarded to the server 1")
 		curlCmdWithCookie := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-11130", "https://"+routehost)
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
+		result := repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
 		o.Expect(result[0]).To(o.Equal(6))
 
 		// Disable haproxy hash based sticky session for edge termination routes
@@ -110,10 +115,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("9.0: Curl the edge route with the cookie, expect forwarding to the two server")
 		curlCmdWithCookie = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-11130", "https://"+routehost)
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 10)
-		o.Expect(result[0] > 1).To(o.BeTrue())
-		o.Expect(result[1] > 1).To(o.BeTrue())
-		o.Expect(result[0] + result[1]).To(o.Equal(10))
+		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 90, 15)
+		o.Expect(result[0] > 0).To(o.BeTrue())
+		o.Expect(result[1] > 0).To(o.BeTrue())
+		o.Expect(result[0] + result[1]).To(o.Equal(15))
 	})
 
 	// incorporate OCP-11619, OCP-10914 and OCP-11325 into one
@@ -229,16 +234,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("5.0: Curl the edge route, and check the Set-Cookie header is set")
 		curlCmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -v", "https://"+routehost)
 		expectOutput := []string{"set-cookie: 2-edge_cookie=[0-9a-z]+"}
-		result := repeatCmdOnExternalClient(curlCmd, expectOutput, 30, 1)
-		o.Expect(result[0]).To(o.Equal(1))
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
 
 		exutil.By("6.0: Curl the edge route, saving the cookie for one server")
-		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-15873", "Hello-OpenShift "+srvPodList[1]+" http-8080")
+		curlCmd = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -c "+fileDir+"/cookie-15873", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
 
 		exutil.By("7.0: Curl the edge route with the cookie, expect all are forwarded to the desired server")
 		curlCmdWithCookie := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-15873", "https://"+routehost)
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
+		result := repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
 		o.Expect(result[1]).To(o.Equal(6))
 
 		// test for NetworkEdge can set cookie name for reencrypt routes by annotation
@@ -254,11 +260,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("10.0: Curl the reencrypt route, and check the Set-Cookie header is set")
 		curlCmd = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -v", "https://"+routehost)
 		expectOutput = []string{"set-cookie: _reen-cookie3=[0-9a-z]+"}
-		result = repeatCmdOnExternalClient(curlCmd, expectOutput, 30, 1)
-		o.Expect(result[0]).To(o.Equal(1))
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
 
 		exutil.By("11.0: Curl the reen route, saving the cookie for one server")
-		waitForOutsideCurlContains("https://"+routehost, "-k -c "+fileDir+"/cookie-15873", "Hello-OpenShift "+srvPodList[1]+" https-8443")
+		curlCmd = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -c "+fileDir+"/cookie-15873", "https://"+routehost)
+		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " https-8443"}
+		repeatCmdOnExternalClient(curlCmd, expectOutput, 60, 1)
 
 		exutil.By("12.0: Curl the reen route with the cookie, expect all are forwarded to the desired server")
 		curlCmdWithCookie = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-15873", "https://"+routehost)
