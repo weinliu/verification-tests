@@ -116,6 +116,86 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(result[0] + result[1]).To(o.Equal(10))
 	})
 
+	// incorporate OCP-11619, OCP-10914 and OCP-11325 into one
+	// Test case creater: bmeng@redhat.com - OCP-11619-Limit the number of TCP connection per IP in specified time period
+	// Test case creater: yadu@redhat.com - OCP-10914: Protect from ddos by limiting TCP concurrent connection for route
+	// Test case creater: hongli@redhat.com - OCP-11325: Limit the number of http request per ip
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-11619-Limit the number of TCP connection per IP in specified time period", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+		)
+
+		exutil.By("1. Create a server and client pod")
+		baseDomain := getBaseDomain(oc)
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		createResourceFromFile(oc, project1, clientPod)
+		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
+
+		exutil.By("2. Create a passthrough route in the project")
+		createRoute(oc, project1, "passthrough", "mypass", "service-secure", []string{})
+		output := getRoutes(oc, project1)
+		o.Expect(output).To(o.ContainSubstring("mypass"))
+
+		exutil.By("3. Check the reachability of the passthrough route")
+		cmdOnPod := []string{cltPodName, "-n", project1, "--", "curl", "-k", "https://mypass-" + project1 + ".apps." + baseDomain, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, cmdOnPod, "Hello-OpenShift", 30, 1)
+
+		exutil.By("4. Annotate the route to limit the TCP nums per ip and verify")
+		setAnnotation(oc, project1, "route/mypass", "haproxy.router.openshift.io/rate-limit-connections=true")
+		setAnnotation(oc, project1, "route/mypass", "haproxy.router.openshift.io/rate-limit-connections.rate-tcp=2")
+		findAnnotation := getAnnotation(oc, project1, "route", "mypass")
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`haproxy.router.openshift.io/rate-limit-connections: "true"`))
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`haproxy.router.openshift.io/rate-limit-connections.rate-tcp: "2"`))
+
+		exutil.By("5. Verify the haproxy configuration to ensure the tcp rate limit is configured")
+		podName := getNewRouterPod(oc, "default")
+		backendName := "be_tcp:" + project1 + ":mypass"
+		output2 := readHaproxyConfig(oc, podName, backendName, "-A10", "src_conn_rate")
+		o.Expect(output2).To(o.ContainSubstring(`tcp-request content reject if { src_conn_rate ge 2 }`))
+
+		// OCP-10914: Protect from ddos by limiting TCP concurrent connection for route
+		exutil.By("6. Expose a service in the project")
+		createRoute(oc, project1, "http", "service-unsecure", "service-unsecure", []string{})
+		output = getRoutes(oc, project1)
+		o.Expect(output).To(o.ContainSubstring("service-unsecure"))
+
+		exutil.By("7. Check the reachability of the http route")
+		cmdOnPod1 := []string{cltPodName, "-n", project1, "--", "curl", "-k", "http://service-unsecure-" + project1 + ".apps." + baseDomain, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, cmdOnPod1, "Hello-OpenShift", 30, 1)
+
+		exutil.By("8. Annotate the route to limit the concurrent TCP connections rate and verify")
+		setAnnotation(oc, project1, "route/service-unsecure", "haproxy.router.openshift.io/rate-limit-connections=true")
+		setAnnotation(oc, project1, "route/service-unsecure", "haproxy.router.openshift.io/rate-limit-connections.concurrent-tcp=2")
+		findAnnotation = getAnnotation(oc, project1, "route", "service-unsecure")
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`haproxy.router.openshift.io/rate-limit-connections: "true"`))
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`haproxy.router.openshift.io/rate-limit-connections.concurrent-tcp: "2"`))
+
+		exutil.By("9. Verify the haproxy configuration to ensure the tcp rate limit is configured")
+		backendName1 := "be_http:" + project1 + ":service-unsecure"
+		output3 := readHaproxyConfig(oc, podName, backendName1, "-A10", "src_conn_cur")
+		o.Expect(output3).To(o.ContainSubstring(`tcp-request content reject if { src_conn_cur ge  2 }`))
+
+		// OCP-11325: Limit the number of http request per ip
+		exutil.By("10. Annotate the route to limit the http request nums per ip and verify")
+		setAnnotation(oc, project1, "route/service-unsecure", "haproxy.router.openshift.io/rate-limit-connections.concurrent-tcp-")
+		setAnnotation(oc, project1, "route/service-unsecure", "haproxy.router.openshift.io/rate-limit-connections.rate-http=3")
+		findAnnotation = getAnnotation(oc, project1, "route", "service-unsecure")
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`haproxy.router.openshift.io/rate-limit-connections: "true"`))
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`haproxy.router.openshift.io/rate-limit-connections.rate-http: "3"`))
+
+		exutil.By("11. Verify the haproxy configuration to ensure the http rate limit is configured")
+		output4 := readHaproxyConfig(oc, podName, backendName1, "-A10", "src_http_req_rate")
+		o.Expect(output4).To(o.ContainSubstring(`tcp-request content reject if { src_http_req_rate ge 3 }`))
+	})
+
 	// merge OCP-15874(NetworkEdge can set cookie name for reencrypt routes by annotation) to OCP-15873
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-15873-NetworkEdge can set cookie name for edge/reen routes by annotation", func() {
 		var (
