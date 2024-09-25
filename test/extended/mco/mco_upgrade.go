@@ -353,4 +353,28 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		logger.Infof("OK!\n")
 	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-Critical-76216-Scale up nodes after upgrade [Disruptive]", func() {
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+		var (
+			machineSet   = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
+			clonedMSName = "cloned-tc-76216-scaleup"
+		)
+
+		exutil.By("Clone the first machineset")
+		clonedMS, err := machineSet.Duplicate(clonedMSName)
+		defer clonedMS.Delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating %s", machineSet)
+		logger.Infof("Successfully created %s machineset", clonedMS.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the updated machineset can be scaled without problems")
+		defer wMcp.waitForComplete()
+		defer clonedMS.ScaleTo(0)
+		o.Expect(clonedMS.ScaleTo(1)).To(o.Succeed(),
+			"Error scaling up MachineSet %s", clonedMS.GetName())
+		logger.Infof("Waiting %s machineset for being ready", clonedMS)
+		o.Eventually(clonedMS.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", clonedMS.GetName())
+		logger.Infof("OK!\n")
+	})
+
 })
