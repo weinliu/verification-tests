@@ -1922,9 +1922,10 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		if !isEnabledCapability(oc, "ImageRegistry") {
 			g.Skip("Skipped: cluster does not have imageRegistry installed")
 		}
-		// Skip case on arm64 hypershift hosted cluster
-		if exutil.IsHypershiftHostedCluster(oc) {
-			architecture.SkipNonAmd64SingleArch(oc)
+		ocPlatform := checkOcPlatform(oc)
+		serverPlatform := architecture.ClusterArchitecture(oc)
+		if ocPlatform != serverPlatform.String() {
+			g.Skip(fmt.Sprintf("Skip for oc and cluster platform mismatch : %s  %s", ocPlatform, serverPlatform.String()))
 		}
 
 		g.By("Create new namespace")

@@ -2331,3 +2331,20 @@ func checkFileContent(filename string, expectedStr string) bool {
 		return false
 	}
 }
+
+func checkOcPlatform(oc *exutil.CLI) string {
+	ocVersion, err := oc.Run("version").Args("--client", "-o", "yaml").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(ocVersion, "amd64") {
+		return "amd64"
+	} else if strings.Contains(ocVersion, "arm64") {
+		return "arm64"
+	} else if strings.Contains(ocVersion, "s390x") {
+		return "s390x"
+	} else if strings.Contains(ocVersion, "ppc64le") {
+		return "ppc64le"
+	} else {
+		return "Unknown platform"
+	}
+
+}
