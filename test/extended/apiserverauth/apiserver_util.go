@@ -1658,6 +1658,13 @@ func gatherSosreports(fqdnName string, user string, sosReportCmd string, tmpdir 
 }
 
 func clusterSanityCheck(oc *exutil.CLI) error {
+	statusNode, errNode := getResource(oc, asAdmin, withoutNamespace, "node")
+	if errNode != nil {
+		e2e.Logf("Error fetching Node Status: %s :: %s", statusNode, errNode.Error())
+		if strings.ContainsAny(errNode.Error(), "Unable to connect to the server: net/http: TLS handshake timeout") {
+			e2e.Failf("Cluster Not accessible, may be env issue issue or network disruption")
+		}
+	}
 	statusCO, errCO := getResource(oc, asAdmin, withoutNamespace, "co")
 	if errCO != nil {
 		e2e.Logf("Error fetching Cluster Operators Status: %s :: %s", statusCO, errCO.Error())
@@ -1693,6 +1700,14 @@ func clusterSanityCheck(oc *exutil.CLI) error {
 }
 
 func clusterSanityCheckMicroShift(oc *exutil.CLI) error {
+	statusNode, errNode := getResource(oc, asAdmin, withoutNamespace, "node")
+	if errNode != nil {
+		e2e.Logf("Error fetching Node Status: %s :: %s", statusNode, errNode.Error())
+		if strings.ContainsAny(errNode.Error(), "Unable to connect to the server: net/http: TLS handshake timeout") {
+			e2e.Failf("Cluster Not accessible, may be env issue issue or network disruption")
+		}
+	}
+
 	project_ns := exutil.GetRandomString()
 	errCreateNs := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", project_ns).Execute()
 	if errCreateNs != nil {
