@@ -6,7 +6,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
   const params = {
     ns68180: 'testproject-68180',
     ns50153: 'testproject-50153',
-    operatorName: 'Red Hat Streams for Apache Kafka',
+    operatorName: 'Streams for Apache Kafka',
     operatorPkgName: "amq-streams",
     crName: 'kfakasample'
   }
