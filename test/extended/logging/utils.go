@@ -203,7 +203,7 @@ func (so *SubscriptionObjects) setCatalogSourceObjects(oc *exutil.CLI) {
 	}
 }
 
-// SubscribeOperator is used to subcribe the CLO and EO
+// SubscribeOperator is used to deploy operators
 func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 	// check if the namespace exists, if it doesn't exist, create the namespace
 	if so.OperatorPodLabel == "" {
@@ -303,7 +303,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			return false, nil
 		}
 		if len(pods.Items) == 0 {
-			e2e.Logf("Waiting for pod with label %s to appear\n", "name="+so.OperatorName)
+			e2e.Logf("Waiting for pod with label %s to appear\n", so.OperatorPodLabel)
 			return false, nil
 		}
 		ready := true

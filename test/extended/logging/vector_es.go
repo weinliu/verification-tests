@@ -203,7 +203,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX={.kubernetes.container_name||.log_type||\"none\"}", "INPUT_REFS=[\"application\"]")
+			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX={.kubernetes.container_name||.log_type||\"none\"}")
 
 			// for container logs, they're indexed by container name
 			// for non-container logs, they're indexed by log_type
@@ -211,7 +211,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ees.waitForIndexAppear(oc, containerName+"-0")
 			ees.waitForIndexAppear(oc, containerName+"-1")
 			ees.waitForIndexAppear(oc, containerName+"-2")
-			ees.waitForIndexAppear(oc, "cluster-logging-operator") // infra container logs
+			ees.waitForIndexAppear(oc, "kube-") // infra container logs
 			ees.waitForIndexAppear(oc, "infrastructure")
 			ees.waitForIndexAppear(oc, "audit")
 
