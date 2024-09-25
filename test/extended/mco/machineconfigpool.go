@@ -255,11 +255,13 @@ func (mcp *MachineConfigPool) pollUpdatedStatus() func() string {
 	return mcp.Poll(`{.status.conditions[?(@.type=="Updated")].status}`)
 }
 
-func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
+func (mcp *MachineConfigPool) estimateWaitDuration() time.Duration {
 	var (
-		totalNodes   int
-		masterAdjust = 1.0
-		snoModifier  = 0
+		totalNodes           int
+		masterAdjust         = 1.0
+		snoModifier          = 0.0
+		emptyMCPWaitDuration = 2.0
+		minutesDuration      = 1 * time.Minute
 	)
 
 	o.Eventually(func() int {
@@ -272,10 +274,12 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 	},
 		"5m", "5s").Should(o.BeNumerically(">=", 0), fmt.Sprintf("machineCount field has no value in MCP %s", mcp.name))
 
-	// If the pool has no node configured, we wait at least 1 minute.
-	// There are tests that create pools with 0 nodes and wait for the pool to be updated. They cant wait 0 minutes.
+	// If the pool has no node configured, we wait at least 2.0 minute.
+	// There are tests that create pools with 0 nodes and wait for the pools to be updated. They cant wait 0 minutes.
+	// We wait 2.0 minutes and not 1 minute because many functions do not poll immediately and they wait a 1 minute interval before starting to poll.
+	// If we wait less than this interval the wait function will always fail
 	if totalNodes == 0 {
-		return 1
+		return time.Duration(emptyMCPWaitDuration * float64(minutesDuration))
 	}
 
 	if mcp.IsMaster() {
@@ -287,7 +291,7 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 		snoModifier = 3
 	}
 
-	return int(float64(totalNodes*mcp.MinutesWaitingPerNode)*masterAdjust) + snoModifier
+	return time.Duration(((float64(totalNodes*mcp.MinutesWaitingPerNode) * masterAdjust) + snoModifier) * float64(minutesDuration))
 }
 
 // SetWaitingTimeForKernelChange increases the time that the MCP will wait for the update to be executed
@@ -531,7 +535,7 @@ func (mcp *MachineConfigPool) GetSortedNodesOrFail() []Node {
 // GetSortedUpdatedNodes returns the list of the UpdatedNodes sorted by the time when they started to be updated.
 // If maxUnavailable>0, then the function will fail if more that maxUpdatingNodes are being updated at the same time
 func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
-	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+	timeToWait := mcp.estimateWaitDuration()
 	logger.Infof("Waiting %s in pool %s for all nodes to start updating.", timeToWait, mcp.name)
 
 	poolNodes, errget := mcp.GetNodes()
@@ -654,7 +658,7 @@ func (mcp *MachineConfigPool) GetUnreconcilableNodesOrFail() []Node {
 
 // WaitForNotDegradedStatus waits until MCP is not degraded, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
-	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+	timeToWait := mcp.estimateWaitDuration()
 	logger.Infof("Waiting %s for MCP %s status to be not degraded.", timeToWait, mcp.name)
 
 	immediate := false
@@ -680,12 +684,12 @@ func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 
 // WaitForUpdatedStatus waits until MCP is rerpoting updated status, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForUpdatedStatus() error {
-	return mcp.waitForConditionStatus("Updated", "True", time.Duration(mcp.estimateWaitTimeInMinutes())*time.Minute, 1*time.Minute, false)
+	return mcp.waitForConditionStatus("Updated", "True", mcp.estimateWaitDuration(), 1*time.Minute, false)
 }
 
 // WaitImmediateForUpdatedStatus waits until MCP is rerpoting updated status, if the condition times out the returned error is != nil. It starts checking immediately.
 func (mcp MachineConfigPool) WaitImmediateForUpdatedStatus() error {
-	return mcp.waitForConditionStatus("Updated", "True", time.Duration(mcp.estimateWaitTimeInMinutes())*time.Minute, 1*time.Minute, true)
+	return mcp.waitForConditionStatus("Updated", "True", mcp.estimateWaitDuration(), 1*time.Minute, true)
 }
 
 // WaitForUpdatingStatus waits until MCP is rerpoting updating status, if the condition times out the returned error is != nil
@@ -745,7 +749,7 @@ func (mcp MachineConfigPool) WaitForMachineCount(expectedMachineCount int, timeT
 }
 
 func (mcp *MachineConfigPool) waitForComplete() {
-	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+	timeToWait := mcp.estimateWaitDuration()
 	logger.Infof("Waiting %s for MCP %s to be completed.", timeToWait, mcp.name)
 
 	immediate := false
@@ -1015,7 +1019,7 @@ func (mcp *MachineConfigPool) GetConfiguredMachineConfig() (*MachineConfig, erro
 // SanityCheck returns an error if the MCP is Degraded or Updating.
 // We can't use WaitForUpdatedStatus or WaitForNotDegradedStatus because they always wait the interval. In a sanity check we want a fast response.
 func (mcp *MachineConfigPool) SanityCheck() error {
-	timeToWait := (time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute) / 13
+	timeToWait := mcp.estimateWaitDuration() / 13
 	logger.Infof("Waiting %s for MCP %s to be completed.", timeToWait.Round(time.Second), mcp.name)
 
 	const trueStatus = "True"
@@ -1118,7 +1122,7 @@ func (mcp *MachineConfigPool) CaptureAllNodeLogsBeforeRestart() (map[string]stri
 	c := make(chan nodeLogs)
 	var wg sync.WaitGroup
 
-	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+	timeToWait := mcp.estimateWaitDuration()
 
 	logger.Infof("Waiting %s until all nodes nodes %s MCP are restarted and their logs are captured before restart", timeToWait.String(), mcp.GetName())
 

@@ -1726,7 +1726,7 @@ nulla pariatur.`
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNode := mcp.GetSortedNodesOrFail()[0]
 
-		o.Eventually(workerNode.IsCordoned, fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
+		o.Eventually(workerNode.IsCordoned, mcp.estimateWaitDuration().String(), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
 
 		searchRegexp := fmt.Sprintf("(?s)%s: initiating cordon", workerNode.GetName())
 		if !workerNode.IsEdgeOrFail() {
@@ -2391,7 +2391,7 @@ nulla pariatur.`
 		exutil.By("Check that the MCD logs are tracing the new kernel argument")
 		// We don't know if the selected node will be updated first or last, so we have to wait
 		// the same time we would wait for the mcp to be updated. Aprox.
-		timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+		timeToWait := mcp.estimateWaitDuration()
 		logger.Infof("waiting time: %s", timeToWait.String())
 		o.Expect(workerNode.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())).To(
 			o.MatchRegexp(expectedLogArg1Regex),
@@ -4836,7 +4836,7 @@ desiredState:
 
 		exutil.By("Check that all nodes are updated but the manually cordoned one")
 		numNodes := len(nodes)
-		waitDuration := fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes())
+		waitDuration := mcp.estimateWaitDuration().String()
 		o.Eventually(mcp.getUpdatedMachineCount, waitDuration, "15s").Should(o.Equal(numNodes-1),
 			"All nodes but one should be udated. %d total nodes, expecting %d to be updated", numNodes, numNodes-1)
 
@@ -4889,7 +4889,7 @@ func checkDegraded(mcp *MachineConfigPool, expectedMessage, expectedReason, degr
 	}
 
 	exutil.By("Wait until MCP becomes degraded")
-	o.EventuallyWithOffset(offset, mcp, fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "30s").Should(BeDegraded(),
+	o.EventuallyWithOffset(offset, mcp, mcp.estimateWaitDuration().String(), "30s").Should(BeDegraded(),
 		"The '%s' MCP should become degraded when we try to create an invalid MC, but it didn't.", mcp.GetName())
 	o.EventuallyWithOffset(offset, mcp.getDegradedMachineCount, "5m", "30s").Should(o.Equal(expectedNumDegradedMachines),
 		"The '%s' MCP should report '%d' degraded machine count, but it doesn't.", expectedNumDegradedMachines, mcp.GetName())
