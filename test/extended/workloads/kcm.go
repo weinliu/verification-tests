@@ -772,6 +772,40 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 		}
 	})
 
+	g.It("Author:yinzhou-Longduration-ROSA-OSD_CCS-ARO-Medium-76130-make sure kcm should not restart when processing StatefulSet with spec.podManagementPolicy is Parallel [Serial]", func() {
+		exutil.By("Get the restart count for KCM")
+		kcmRestartOriginNum, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=kube-controller-manager", "-o=jsonpath={.items[*].status.containerStatuses[?(@.name==\"kube-controller-manager\")].restartCount}", "-n", "openshift-kube-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create the statefulset with spec.podManagementPolicy is Parallel and with pvc setting")
+		appBaseDir := exutil.FixturePath("testdata", "workloads")
+		appStatefulset := filepath.Join(appBaseDir, "statefulset-76130.yaml")
+
+		err = oc.Run("create").Args("-f", appStatefulset, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
+			replicasNum, repErr := oc.Run("get").Args("statefulset/web", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}").Output()
+			o.Expect(repErr).NotTo(o.HaveOccurred())
+			availableReplicasNum, availabelErr := oc.Run("get").Args("statefulset/web", "-n", oc.Namespace(), "-o=jsonpath={.status.availableReplicas}").Output()
+			o.Expect(availabelErr).NotTo(o.HaveOccurred())
+			eventsStr, err := oc.Run("get").Args("events", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(replicasNum, availableReplicasNum) || strings.Contains(eventsStr, "exceed max volume count") {
+				e2e.Logf("Check the stateful pods are available or has reached the system volume limit\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The statefulset is not available even wait for 12 mins"))
+
+		exutil.By("Get the restart count for KCM again")
+		kcmRestartSecondNum, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=kube-controller-manager", "-o=jsonpath={.items[*].status.containerStatuses[?(@.name==\"kube-controller-manager\")].restartCount}", "-n", "openshift-kube-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if matched, _ := regexp.MatchString(kcmRestartSecondNum, kcmRestartOriginNum); !matched {
+			e2e.Failf("KCM restarted when processing StatefulSet with spec.podManagementPolicy is Parallel")
+		}
+	})
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
