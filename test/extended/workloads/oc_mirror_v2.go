@@ -1866,4 +1866,133 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed, when kubevirtContainer set to true for a release that does not have this image")
 
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-75366-show operator on error logs and skip bundle when related image associated failed [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case75366"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-75366.yaml")
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch the first registry app")
+		serInfo := registry.createregistry(oc)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "15G", "/var/lib/registry")
+
+		exutil.By("Start m2d")
+		waitErr := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+			mirrorToDiskOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(mirrorToDiskOutput, "Operator bundles: [nginxmirror6.v1.1.0]") && !strings.Contains(mirrorToDiskOutput, "Operators: [nginxmirror6]") {
+				e2e.Logf("Can't find the bundles and operators information")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed")
+
+		exutil.By("Start d2m")
+		waitErr = wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+			diskToMirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(diskToMirrorOutput, "Operator bundles: [nginxmirror6.v1.1.0]") && !strings.Contains(diskToMirrorOutput, "Operators: [nginxmirror6]") {
+				e2e.Logf("Can't find the bundles and operators information")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror still failed")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(60*time.Second, 300*time.Second, func() (bool, error) {
+			mirrorToMirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(mirrorToMirrorOutput, "Operator bundles: [nginxmirror6.v1.1.0]") && !strings.Contains(mirrorToMirrorOutput, "Operators: [nginxmirror6]") {
+				e2e.Logf("Can't find the bundles and operators information")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Low-72920-support head-only for catalog [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case72920"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72920.yaml")
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch the first registry app")
+		serInfo := registry.createregistry(oc)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "15G", "/var/lib/registry")
+
+		exutil.By("Start m2d")
+		waitErr := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+			m2dOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(m2dOutput, "images to copy 10") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed")
+
+		exutil.By("Start d2m")
+		waitErr = wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+			d2mOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(d2mOutput, "images to copy 10") {
+				e2e.Logf("Failed to find the image num")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror still failed")
+
+		exutil.By("Start m2m")
+		waitErr = wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+			m2mOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--workspace", "file://"+dirname+"/m2m", "docker://"+serInfo.serviceName+"/m2m", "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirro2mirror failed, retrying...")
+				return false, nil
+			}
+			if !strings.Contains(m2mOutput, "images to copy 11") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed")
+	})
 })
