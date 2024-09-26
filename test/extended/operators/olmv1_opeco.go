@@ -19,7 +19,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
+var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("olmv1-opeco"+getRandomString(), exutil.KubeConfigPath())
