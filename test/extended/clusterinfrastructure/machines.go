@@ -1530,4 +1530,32 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 			return false
 		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(o.BeTrue())
 	})
+
+	// author: huliu@redhat.com
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-76367-[MAPI] Allow creating Nutanix worker VMs with GPUs [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
+		// skip zones other than Development-GPU
+		zones, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(zones, "Development-GPU") {
+			g.Skip(fmt.Sprintf("this case can be only run in Development-GPU zone, but is's %s", zones))
+		}
+		g.By("Create a new machineset")
+		machinesetName := infrastructureName + "-76367"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with gpus")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"gpus":[{"type":"Name","name":"Tesla T4 compute"}]}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with gpus")
+		gpus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.gpus}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("gpus:%s", gpus)
+		o.Expect(strings.Contains(gpus, "Tesla T4 compute")).To(o.BeTrue())
+	})
 })
