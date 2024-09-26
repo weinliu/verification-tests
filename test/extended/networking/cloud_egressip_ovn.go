@@ -6,6 +6,7 @@ import (
 	"net"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -3399,56 +3400,105 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			g.Skip("Skip for non-supported auto scaling machineset platforms!!")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
-		exutil.By("Create a new machineset with 2 nodes")
+		exutil.By("Get an existing worker node.")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Need at least 1 worker node, skip the test as the requirement was not fulfilled.")
+		}
+		workerNode := nodeList.Items[0].Name
+
+		exutil.By("Get namespace")
+		ns := oc.Namespace()
+		exutil.By("Create a test pod on non-egress node\n")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns,
+			nodename:  workerNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod1.name)
+
+		exutil.By("Apply egress label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a new machineset with 3 nodes")
 		clusterinfra.SkipConditionally(oc)
 		infrastructureName := clusterinfra.GetInfrastructureName(oc)
 		machinesetName := infrastructureName + "-61344"
-		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 2}
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 3}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
-		clusterinfra.WaitForMachinesRunning(oc, 2, machinesetName)
+		clusterinfra.WaitForMachinesRunning(oc, 3, machinesetName)
 		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
 		nodeName0 := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
 		nodeName1 := clusterinfra.GetNodeNameFromMachine(oc, machineName[1])
+		nodeName2 := clusterinfra.GetNodeNameFromMachine(oc, machineName[2])
 
-		exutil.By("Apply EgressLabel Key to one node. \n")
-		// No defer here, as this node will be deleted explicitly in the following step.
+		exutil.By("Apply EgressLabel Key to two nodes \n")
+		// No defer here for  nodeName0, as this node will be deleted explicitly in the following step.
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName0, egressNodeLabel, "true")
-
-		exutil.By("Create an egressip object\n")
-		freeIPs := findFreeIPs(oc, nodeName0, 1)
-		o.Expect(len(freeIPs)).Should(o.Equal(1))
-		egressip1 := egressIPResource1{
-			name:          "egressip-61344",
-			template:      egressIP1Template,
-			egressIP1:     freeIPs[0],
-			nsLabelKey:    "org",
-			nsLabelValue:  "qe",
-			podLabelKey:   "color",
-			podLabelValue: "pink",
-		}
-		egressip1.createEgressIPObject2(oc)
-		defer egressip1.deleteEgressIPObject1(oc)
-		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
-
-		exutil.By("Apply egess label to another worker node.\n")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeName1, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName1, egressNodeLabel, "true")
 
+		exutil.By("Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, nodeName0, 2)
+		egressip1 := egressIPResource1{
+			name:      "egressip-61344",
+			template:  egressIP1Template,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject1(oc)
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
+
+		exutil.By("Apply egess label to another worker node.\n")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeName2, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeName2, egressNodeLabel, "true")
+
 		exutil.By("Remove the first egress node.\n")
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("machines.machine.openshift.io", machineName[0], "-n", "openshift-machine-api").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("machines.machine.openshift.io", machineName[0], "-n", "openshift-machine-api").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		exutil.By("Verify egressIP was moved to second egress node.\n")
 		o.Eventually(func() bool {
 			egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
-			return len(egressIPMaps) == 1 && egressIPMaps[0]["node"] == nodeName1
+			return len(egressIPMaps) == 2 && egressIPMaps[0]["node"] != nodeName0 && egressIPMaps[1]["node"] != nodeName0
 		}, "120s", "10s").Should(o.BeTrue(), "egressIP was not migrated to correct workers!!")
+
+		exutil.By("Get ovn pod of the node where the test pod resides on\n")
+		ovnPod := ovnkubeNodePod(oc, workerNode)
+
+		exutil.By("Get lsp_addresses\n")
+		lsp_address_cmd := `ovn-nbctl lsp-list transit_switch | while read guid name; do printf  "${name}"; ovn-nbctl lsp-get-addresses "${guid}"; done `
+		lsp_address, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnPod, "northd", lsp_address_cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(lsp_address)
+
+		exutil.By("Get logical_router_policy for podIP\n")
+		pod1IP := getPodIPv4(oc, ns, pod1.name)
+		lrp_cmd := fmt.Sprintf(`ovn-nbctl --format=csv --data=bare --no-heading --columns=match,nexthops find logical_router_policy | grep  %s |awk -F, '{print $2}'`, pod1IP)
+		lrp, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnPod, "northd", lrp_cmd)
+		e2e.Logf("Nexthops for podIP:\n %s", lrp)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(lrp) > 0).To(o.BeTrue())
+
+		re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+		nexthopIPs := re.FindAllString(lrp, -1)
+		o.Expect(len(nexthopIPs) == 2).To(o.BeTrue())
+
+		exutil.By("Verify nextHops are in lsp_addresses")
+		o.Expect(strings.Contains(lsp_address, nexthopIPs[0])).To(o.BeTrue())
+		o.Expect(strings.Contains(lsp_address, nexthopIPs[1])).To(o.BeTrue())
+
 	})
 
 	// author: huirwang@redhat.com
