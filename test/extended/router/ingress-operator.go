@@ -1498,4 +1498,100 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("command terminated with exit code 1"))
 	})
+
+	// OCPBUGS-29373
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-75908-http2 connection coalescing component routing should not be broken with single certificate [Disruptive]", func() {
+		var (
+			dirname  = "/tmp/OCP-75908-ca/"
+			validity = 30
+			caSubj   = "/CN=NE-Test-Root-CA"
+			caCrt    = dirname + "75908-ca.crt"
+			caKey    = dirname + "75908-ca.key"
+			usrCrt   = dirname + "75908-usr.crt"
+			usrKey   = dirname + "75908-usr.key"
+			usrCsr   = dirname + "75908-usr.csr"
+		)
+
+		exutil.By("1.0: skip for http2 not enabled clusters")
+		routerpod := getNewRouterPod(oc, "default")
+		disableHttp2 := readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_HTTP2")
+		if !strings.Contains(disableHttp2, "false") {
+			g.Skip("OCPBUGS-29373 occur on ROSA/OSD cluster, skip for http2 not enabled clusters!")
+		}
+
+		exutil.By("2.0: Get some info including hostnames of console/oauth route for the testing")
+		appsDomain := "apps." + getBaseDomain(oc)
+		consoleRoute := getByJsonPath(oc, "openshift-console", "route/console", "{.spec.host}")
+		oauthRoute := getByJsonPath(oc, "openshift-authentication", "route/oauth-openshift", "{.spec.host}")
+		defaultRoute := "foo." + appsDomain
+		ingressOperatorPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")[0]
+		backupComponentRoutes := getByJsonPath(oc, "default", "ingresses.config.openshift.io/cluster", "{.spec.componentRoutes}")
+		defaultComponentRoutes := fmt.Sprintf(`[{"op":"replace", "path":"/spec/componentRoutes", "value":%s}]`, backupComponentRoutes)
+
+		exutil.By("3.0: Use openssl to create the certification and key")
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.1: Create a new self-signed CA including the ca certification and ca key")
+		opensslCmd := fmt.Sprintf(`openssl req -x509 -newkey rsa:2048 -days %d -keyout %s -out %s -nodes -subj %s`, validity, caKey, caCrt, caSubj)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2: Create the user CSR and the user key")
+		opensslCmd = fmt.Sprintf(`openssl req -newkey rsa:2048 -nodes -keyout %s  -out %s -subj "/CN=*.%s"`, usrKey, usrCsr, appsDomain)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.3: Create the user certification")
+		opensslCmd = fmt.Sprintf(`openssl x509 -extfile <(printf "subjectAltName = DNS.1:%s,DNS.2:%s") -req -in %s -CA %s -CAkey %s -CAcreateserial -out %s -days %d`, consoleRoute, oauthRoute, usrCsr, caCrt, caKey, usrCrt, validity)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4.0: Create the custom secret on the cluster with the created user certification and user key")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "secret", "custom-cert75908").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-config", "secret", "tls", "custom-cert75908", "--cert="+usrCrt, "--key="+usrKey).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("created"))
+
+		exutil.By("5.0: path the ingress with the console route host and the custom secret")
+		patchContent := fmt.Sprintf(`
+spec:
+  componentRoutes:
+  - hostname: %s
+    name: console
+    namespace: openshift-console
+    servingCertKeyPairSecret:
+      name: custom-cert75908
+`, consoleRoute)
+		defer patchGlobalResourceAsAdmin(oc, "ingresses.config.openshift.io/cluster", defaultComponentRoutes)
+		patchResourceAsAdminAnyType(oc, "default", "ingresses.config.openshift.io/cluster", patchContent, "merge")
+
+		exutil.By("6.0: Check the console route has HTTP/2 enabled")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat cert_config.map").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`console.pem [alpn h2,http/1.1] ` + consoleRoute))
+
+		exutil.By("7.0: Check console certificate has different SHA1 Fingerprint with OAuth certificate and default certificate, by using openssl command")
+		curlCmd := []string{"-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "curl", "https://" + consoleRoute + "/headers", "-kI", "--connect-timeout", "10"}
+		opensslConnectCmd := fmt.Sprintf(`openssl s_client -connect %s:443 </dev/null 2>/dev/null | openssl x509 -sha1 -in /dev/stdin -noout -fingerprint`, consoleRoute)
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
+		consoleOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "bash", "-c", opensslConnectCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		curlCmd = []string{"-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "curl", "https://" + oauthRoute + "/headers", "-kI", "--connect-timeout", "10"}
+		opensslConnectCmd = fmt.Sprintf(`openssl s_client -connect %s:443 </dev/null 2>/dev/null | openssl x509 -sha1 -in /dev/stdin -noout -fingerprint`, oauthRoute)
+		adminRepeatCmd(oc, curlCmd, "403", 30, 1)
+		oauthOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "bash", "-c", opensslConnectCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		curlCmd = []string{"-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "curl", "https://" + defaultRoute + "/headers", "-kI", "--connect-timeout", "10"}
+		opensslConnectCmd = fmt.Sprintf(`openssl s_client -connect %s:443 </dev/null 2>/dev/null | openssl x509 -sha1 -in /dev/stdin -noout -fingerprint`, defaultRoute)
+		adminRepeatCmd(oc, curlCmd, "503", 30, 1)
+		defaultOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "bash", "-c", opensslConnectCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		o.Expect(consoleOutput).NotTo(o.ContainSubstring(oauthOutput))
+		o.Expect(oauthOutput).To(o.ContainSubstring(defaultOutput))
+	})
 })
