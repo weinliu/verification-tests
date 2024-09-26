@@ -17,6 +17,70 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 	var oc = exutil.NewCLI("router-tls", exutil.KubeConfigPath())
 
+	// also includes OCP-25665/25666/25668/25703
+	// author: hongli@redhat.com
+	g.It("Author:hongli-WRS-ROSA-OSD_CCS-ARO-Critical-25702-V-BR.12-the tlsSecurityProfile in ingresscontroller can be updated", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp25702",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("create custom IC without tls profile config (Intermediate is default)")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		// OCP-25703
+		exutil.By("check default TLS config and it should be same to Intermediate profile")
+		newrouterpod := getRouterPod(oc, ingctrl.name)
+		env := readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
+		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.2`))
+		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERSUITES=TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256`))
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERS=ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384`))
+
+		// OCP-25665
+		exutil.By("patch custom IC with tls profile Old and check the config")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{"spec":{"tlsSecurityProfile":{"type":"Old"}}}`)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		env = readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
+		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.1`))
+		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERSUITES=TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256`))
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERS=ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA256:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA`))
+
+		// OCP-25666
+		exutil.By("patch custom IC with tls profile Intermidiate and check the config")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{"spec":{"tlsSecurityProfile":{"type":"Intermediate"}}}`)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
+		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		env = readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
+		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.2`))
+		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERSUITES=TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256`))
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERS=ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384`))
+
+		// OCP-25668
+		exutil.By("patch custom IC with tls profile Custom and check the config")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{"spec":{"tlsSecurityProfile":{"type":"Custom","custom":{"ciphers":["DHE-RSA-AES256-GCM-SHA384","ECDHE-ECDSA-AES256-GCM-SHA384"],"minTLSVersion":"VersionTLS12"}}}}`)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "4")
+		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		env = readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
+		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.2`))
+		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERS=DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384`))
+	})
+
 	// author: hongli@redhat.com
 	g.It("Author:hongli-WRS-LEVEL0-Critical-43300-V-ACS.05-enable client certificate with optional policy", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
