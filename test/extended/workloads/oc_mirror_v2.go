@@ -1995,4 +1995,85 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed")
 	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75422-Verify Skip deletion of operator catalog image in delete feature [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case75422"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-75422.yaml")
+		imageDeleteYamlFileF := filepath.Join(ocmirrorBaseDir, "config-75422-delete.yaml")
+
+		exutil.By("Skopeo oci to localhost")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-bts-operator-catalog@sha256:866f0212eab7bc70cc7fcf7ebdbb4dfac561991f6d25900bd52f33cd90846adf oci://%s  --remove-signatures --insecure-policy", dirname+"/ibm-catalog")
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			_, err := exec.Command("bash", "-c", command).Output()
+			if err != nil {
+				e2e.Logf("copy failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		waitErr = wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for skip deletion of operator catalog image in delete feature failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for skip deletion of operator catalog image in delete feature failed, retrying...")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror for skip deletion of operator catalog image in delete feature failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for skip deletion of operator catalog image in delete feature failed")
+
+		exutil.By("Generate delete image file")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "--generate", "--workspace", "file://"+dirname, "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false", "--src-tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Validate delete-images yaml file does not contain any thing with respect to catalog index image")
+		deleteImagesYamlOutput, err := exec.Command("bash", "-c", fmt.Sprintf("cat %s", dirname+"/working-dir/delete/delete-images.yaml")).Output()
+		if err != nil {
+			e2e.Failf("Error is %v", err)
+		}
+		e2e.Logf("deleteImagesYamlOutput is %s", deleteImagesYamlOutput)
+
+		catalogIndexDetails := []string{"registry.redhat.io/redhat/redhat-operator-index:v4.15", "registry.redhat.io/redhat/certified-operator-index:v4.15", "registry.redhat.io/redhat/community-operator-index:v4.15", "ibm-catalog"}
+		for _, catalogIndex := range catalogIndexDetails {
+			o.Expect(deleteImagesYamlOutput).ShouldNot(o.ContainSubstring(catalogIndex), "UnExpected Catalog Index Found")
+		}
+
+	})
+
 })
