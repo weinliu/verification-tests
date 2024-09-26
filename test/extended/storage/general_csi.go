@@ -3522,7 +3522,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate            = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
 		)
 
@@ -3533,47 +3532,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 				// Set the resource definition for the test scenario
-				storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner(provisioner))
-				pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimVolumemode("Block"))
+				storageClassName := getPresetStorageClassListByProvisioner(oc, cloudProvider, provisioner)[0]
+				pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClassName), setPersistentVolumeClaimVolumemode("Block"))
+				podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 				volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)))
-				pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+				pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimVolumemode("Filesystem"), setPersistentVolumeClaimStorageClassName(storageClassName))
 				myPod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
-				exutil.By(`Create a csi storageclass with "volumeBindingMode: Immediate"`)
-				allNodesInfo := getAllNodesInfo(oc)
-				allSchedulableLinuxWorkers := getSchedulableLinuxWorkers(allNodesInfo)
-
-				if len(allSchedulableLinuxWorkers) < 1 {
-					g.Skip("Skip for no schedulable linux workers!!!")
-				}
-
-				allWorkers := getWorkersList(oc)
-				// AWS localzone/wavelength/outposts/rosa-classic have worker with different specified taints
-				// uses the Immediate provision may pick a zone which only has worker with taints made the its consumer pod 'FailedScheduling'
-				// It is also helpful when the picked zone node has some issue caused unschedulable, we exclude the zone by allowedTopologies
-				if len(allSchedulableLinuxWorkers) < len(allWorkers) {
-					labelExpressions := []map[string]interface{}{
-						{
-							"key":    "topology.ebs.csi.aws.com/zone",
-							"values": []string{allSchedulableLinuxWorkers[0].availableZone},
-						},
-					}
-					matchLabelExpressions := []map[string]interface{}{
-						{"matchLabelExpressions": labelExpressions},
-					}
-					extraParameters := map[string]interface{}{
-						"allowedTopologies": matchLabelExpressions,
-					}
-					storageClass.createWithExtraParameters(oc, extraParameters)
-				} else {
-					storageClass.create(oc)
-				}
-				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
-
-				exutil.By("Create a Block pvc with the csi storageclass and wait it bounds with provisioned volume")
+				exutil.By("Create a Block pvc with the csi storageclass and pod consume the volume")
 				pvcOri.create(oc)
 				defer pvcOri.deleteAsAdmin(oc)
-				pvcOri.waitStatusAsExpected(oc, "Bound")
+				podOri.create(oc)
+				defer podOri.deleteAsAdmin(oc)
+				podOri.waitReady(oc)
 
 				exutil.By("Create volumesnapshot for the pvc and wait for it becomes ready to use")
 				volumesnapshot.create(oc)
@@ -3595,11 +3566,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				defer pvcRestore.deleteAsAdmin(oc)
 
 				exutil.By(`The pvc should stuck at "Pending" status and be provisioned failed of "does not have permission to do so"`)
+				myPod.create(oc)
+				defer myPod.deleteAsAdmin(oc)
 				o.Eventually(func() bool {
 					msg, _ := pvcRestore.getDescription(oc)
-					return strings.Contains(msg, `failed to provision volume with StorageClass "`+storageClass.name+`": error getting handle for DataSource Type VolumeSnapshot by Name `+volumesnapshot.name+`: requested volume `+
+					return strings.Contains(msg, `failed to provision volume with StorageClass "`+storageClassName+`": error getting handle for DataSource Type VolumeSnapshot by Name `+volumesnapshot.name+`: requested volume `+
 						pvcRestore.namespace+`/`+pvcRestore.name+` modifies the mode of the source volume but does not have permission to do so. snapshot.storage.kubernetes.io/allow-volume-mode-change annotation is not present on snapshotcontent`)
-				}, 30*time.Second, 3*time.Second).Should(o.BeTrue())
+				}, 120*time.Second, 10*time.Second).Should(o.BeTrue())
 				o.Consistently(func() string {
 					pvcStatus, _ := pvcRestore.getStatus(oc)
 					return pvcStatus
@@ -3608,8 +3581,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				exutil.By(`Adding annotation [snapshot.storage.kubernetes.io/allow-volume-mode-change="true"] to the volumesnapshot's content by admin user the restored volume should be provisioned successfully and could be consumed by pod`)
 				addAnnotationToSpecifiedResource(oc.AsAdmin(), "", "volumesnapshotcontent/"+volumesnapshot.getContentName(oc), `snapshot.storage.kubernetes.io/allow-volume-mode-change=true`)
 				pvcRestore.waitStatusAsExpected(oc, "Bound")
-				myPod.create(oc)
-				defer myPod.deleteAsAdmin(oc)
 				myPod.waitReady(oc)
 
 				exutil.By("Check the restored changed mode volume could be written and read data")
