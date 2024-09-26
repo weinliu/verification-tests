@@ -170,6 +170,18 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 			e2e.Failf("Packagemanifest %s is not available", so.PackageName)
 		}
 	}
+	//check channel
+	args = append(args, `-ojsonpath={.items[?(@.metadata.name=="`+so.PackageName+`")].status.channels[*].name}`)
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
+	channels := strings.Split(output, " ")
+	if !contain(channels, so.CatalogSource.Channel) {
+		e2e.Logf("Find channels %v from packagemanifest/%s", channels, so.PackageName)
+		if so.SkipCaseWhenFailed {
+			g.Skip(fmt.Sprintf("Skip the case for packagemanifest/%s doesn't have target channel %s", so.PackageName, so.CatalogSource.Channel))
+		} else {
+			e2e.Failf("Packagemanifest %s doesn't have target channel %s", so.PackageName, so.CatalogSource.Channel)
+		}
+	}
 }
 
 // setCatalogSourceObjects set the default values of channel, source namespace and source name if they're not specified
@@ -188,8 +200,22 @@ func (so *SubscriptionObjects) setCatalogSourceObjects(oc *exutil.CLI) {
 	if so.CatalogSource.SourceName != "" {
 		so.waitForPackagemanifestAppear(oc, true)
 	} else {
-		catsrc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", so.CatalogSource.SourceNamespace, "qe-app-registry").Output()
-		if catsrc != "" && !(strings.Contains(catsrc, "NotFound")) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", so.CatalogSource.SourceNamespace, "-ojsonpath={.items[*].metadata.name}").Output()
+		if err != nil {
+			e2e.Logf("can't list catalog source in project %s: %v", so.CatalogSource.SourceNamespace, err)
+		}
+		catsrcs := strings.Split(output, " ")
+		if contain(catsrcs, "auto-release-app-registry") {
+			if contain(catsrcs, "redhat-operators") {
+				// do not subscribe source auto-release-app-registry as we want to test GAed logging in auto release jobs
+				so.CatalogSource.SourceName = "redhat-operators"
+				so.waitForPackagemanifestAppear(oc, true)
+			} else {
+				if so.SkipCaseWhenFailed {
+					g.Skip("skip the case because the cluster doesn't have proper catalog source for logging")
+				}
+			}
+		} else if contain(catsrcs, "qe-app-registry") {
 			so.CatalogSource.SourceName = "qe-app-registry"
 			so.waitForPackagemanifestAppear(oc, true)
 		} else {
@@ -261,7 +287,13 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 			so.setCatalogSourceObjects(oc)
 			//create subscription object
 			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+so.CatalogSource.Channel, "SOURCE="+so.CatalogSource.SourceName, "SOURCE_NAMESPACE="+so.CatalogSource.SourceNamespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				if so.SkipCaseWhenFailed {
+					g.Skip("hit error when processing subscription template: " + err.Error() + ", skip the case")
+				} else {
+					e2e.Failf("hit error when processing subscription template: %v", err)
+				}
+			}
 			defer os.Remove(subscriptionFile)
 			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 60*time.Second, true, func(context.Context) (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
@@ -273,6 +305,13 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 				}
 				return true, nil
 			})
+			if err != nil {
+				if so.SkipCaseWhenFailed {
+					g.Skip("hit error when creating subscription, skip the case")
+				} else {
+					e2e.Failf("hit error when creating subscription")
+				}
+			}
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
 			// check status in subscription
 			err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
